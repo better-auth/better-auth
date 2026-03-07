@@ -1099,6 +1099,48 @@ describe("stripe", () => {
 		);
 	});
 
+	it("should delete stale local subscriptions when Stripe cancel lookup returns resource_missing", async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-stale-cancel@email.com",
+			"cus_grouped_stale_cancel",
+		);
+
+		const staleSubscription = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_stale_cancel",
+				stripeSubscriptionId: "sub_stale_cancel",
+				status: "active",
+			},
+		});
+
+		mockStripe.subscriptions.retrieve.mockRejectedValueOnce(
+			Object.assign(new Error("No such subscription"), {
+				code: "resource_missing",
+				statusCode: 404,
+			}),
+		);
+
+		const res = await client.subscription.cancel({
+			group: "default",
+			returnUrl: "/account",
+			fetchOptions: { headers },
+		});
+
+		expect(res.error?.code).toBe("SUBSCRIPTION_NOT_FOUND");
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+
+		const deleted = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: staleSubscription.id }],
+		});
+		expect(deleted).toBeNull();
+	});
+
 	it('should allow restoring the legacy "default" group explicitly', async () => {
 		vi.clearAllMocks();
 
@@ -6383,6 +6425,72 @@ describe("stripe", () => {
 			});
 
 			expect(restoreRes.error?.status).toBe(400);
+		});
+
+		it("should map stale Stripe restore lookups to SUBSCRIPTION_NOT_FOUND", async () => {
+			vi.clearAllMocks();
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "restore-stale@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "restore-stale@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const staleSubscription = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_restore_stale",
+					stripeSubscriptionId: "sub_restore_stale",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: true,
+					canceledAt: new Date(),
+				},
+			});
+
+			mockStripe.subscriptions.retrieve.mockRejectedValueOnce(
+				Object.assign(new Error("No such subscription"), {
+					code: "resource_missing",
+					statusCode: 404,
+				}),
+			);
+
+			const restoreRes = await client.subscription.restore({
+				fetchOptions: { headers },
+			});
+
+			expect(restoreRes.error?.code).toBe("SUBSCRIPTION_NOT_FOUND");
+			expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+
+			const stillPresent = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: staleSubscription.id }],
+			});
+			expect(stillPresent).not.toBeNull();
 		});
 	});
 

@@ -50,6 +50,35 @@ function getUrl(ctx: GenericEndpointContext, url: string) {
 	}`;
 }
 
+function isStripeResourceMissingError(error: unknown): boolean {
+	if (!error || typeof error !== "object") {
+		return false;
+	}
+	const stripeError = error as { code?: string; statusCode?: number };
+	return (
+		stripeError.code === "resource_missing" || stripeError.statusCode === 404
+	);
+}
+
+async function retrieveStripeSubscriptionOrNull(
+	ctx: GenericEndpointContext,
+	stripeClient: Stripe,
+	subscriptionId: string,
+	scope: string,
+) {
+	try {
+		return await stripeClient.subscriptions.retrieve(subscriptionId);
+	} catch (error) {
+		if (isStripeResourceMissingError(error)) {
+			ctx.context.logger.warn(
+				`Stripe subscription ${subscriptionId} not found during ${scope}`,
+			);
+			return null;
+		}
+		throw error;
+	}
+}
+
 /**
  * Resolves a Stripe price ID from a lookup key.
  * @internal
@@ -1345,10 +1374,13 @@ export const cancelSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
-			const activeSubscription = await client.subscriptions.retrieve(
+			const activeSubscription = await retrieveStripeSubscriptionOrNull(
+				ctx,
+				client,
 				subscription.stripeSubscriptionId,
+				"cancel",
 			);
-			if (!isActiveOrTrialing(activeSubscription)) {
+			if (!activeSubscription || !isActiveOrTrialing(activeSubscription)) {
 				/**
 				 * If the subscription is not active, delete the stale DB record.
 				 * This is a rare case and should not happen.
@@ -1551,17 +1583,29 @@ export const restoreSubscription = (options: StripeOptions) => {
 						},
 					],
 				});
-				const releasedSub = await client.subscriptions.retrieve(
+				const releasedSub = await retrieveStripeSubscriptionOrNull(
+					ctx,
+					client,
 					subscription.stripeSubscriptionId,
+					"restore schedule release",
 				);
+				if (!releasedSub) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					);
+				}
 				return ctx.json(releasedSub);
 			}
 
 			// Handle pending cancellation
-			const activeSubscription = await client.subscriptions.retrieve(
+			const activeSubscription = await retrieveStripeSubscriptionOrNull(
+				ctx,
+				client,
 				subscription.stripeSubscriptionId,
+				"restore",
 			);
-			if (!isActiveOrTrialing(activeSubscription)) {
+			if (!activeSubscription || !isActiveOrTrialing(activeSubscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
