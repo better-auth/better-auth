@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import type { StripeOptions, StripePlan, Subscription } from "./types";
 
-export const DEFAULT_SUBSCRIPTION_GROUP = "default";
+const DEFAULT_SUBSCRIPTION_GROUP = "default";
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],
