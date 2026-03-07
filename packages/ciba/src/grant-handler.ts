@@ -44,13 +44,6 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 			});
 		}
 
-		const client = await validateClientCredentials(
-			ctx,
-			opts,
-			clientId,
-			clientSecret,
-		);
-
 		const cibaRequest = await findCibaRequest(ctx, authReqId);
 		if (!cibaRequest) {
 			throw new APIError("BAD_REQUEST", {
@@ -59,6 +52,16 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 				error: "invalid_grant",
 			});
 		}
+
+		// Validate client credentials with the stored scopes
+		const scopes = cibaRequest.scope.split(" ");
+		const client = await validateClientCredentials(
+			ctx,
+			opts,
+			clientId,
+			clientSecret,
+			scopes,
+		);
 
 		if (cibaRequest.clientId !== clientId) {
 			throw new APIError("BAD_REQUEST", {
@@ -127,8 +130,6 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 						error: "invalid_request",
 					});
 				}
-
-				const scopes = cibaRequest.scope.split(" ");
 
 				// Inject resource into ctx.body for checkResource()
 				if (cibaRequest.resource) {

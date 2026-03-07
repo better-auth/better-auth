@@ -571,7 +571,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						grant_type: z.string().min(1),
+						grant_type: z.string().trim().min(1),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
 						code: z.string().optional(),

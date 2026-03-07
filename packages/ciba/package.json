@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/ciba",
-  "version": "1.0.0",
+  "version": "1.5.1-beta.3",
   "description": "Client Initiated Backchannel Authentication (CIBA) plugin for Better Auth",
   "type": "module",
   "license": "MIT",

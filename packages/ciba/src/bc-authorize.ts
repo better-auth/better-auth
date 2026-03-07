@@ -284,13 +284,15 @@ async function resolveUserFromIdTokenHint(
 ): Promise<{ id: string } | null> {
 	let sub: string | undefined;
 
-	// Try asymmetric verification via JWKS (jwt plugin)
 	const jwtPlugin = ctx.context.getPlugin("jwt");
-	if (jwtPlugin?.options) {
+	const jwtOpts = jwtPlugin?.options;
+	const expectedIssuer = jwtOpts?.jwt?.issuer ?? ctx.context.baseURL;
+
+	// Try asymmetric verification via JWKS (jwt plugin)
+	if (jwtOpts) {
 		try {
 			const header = decodeJwtHeader(idTokenHint);
 			if (header?.kid) {
-				const jwtOpts = jwtPlugin.options;
 				let keys: Array<{
 					id: string;
 					publicKey: string;
@@ -311,7 +313,7 @@ async function resolveUserFromIdTokenHint(
 					const alg = key.alg ?? jwtOpts.jwks?.keyPairConfig?.alg ?? "EdDSA";
 					const cryptoKey = await importJWK(publicKey, alg);
 					const { payload } = await jwtVerify(idTokenHint, cryptoKey, {
-						issuer: jwtOpts.jwt?.issuer ?? ctx.context.baseURL,
+						issuer: expectedIssuer,
 						audience: clientId,
 					});
 					sub = payload.sub as string | undefined;
@@ -329,7 +331,7 @@ async function resolveUserFromIdTokenHint(
 				idTokenHint,
 				new TextEncoder().encode(ctx.context.secret),
 				{
-					issuer: ctx.context.baseURL,
+					issuer: expectedIssuer,
 					audience: clientId,
 				},
 			);
