@@ -60,12 +60,14 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 				);
 			}
 
+			const isServerRequest = !ctx.request;
+
 			const session = ctx.context.session;
-			const additionalFields = parseSessionInput(
-				ctx.context.options,
-				body,
-				"update",
-			);
+			const additionalFields = (() => {
+				// Skip field `input` validation for server requests.
+				if (isServerRequest) return body;
+				return parseSessionInput(ctx.context.options, body, "update");
+			})();
 
 			if (Object.keys(additionalFields).length === 0) {
 				throw APIError.fromStatus("BAD_REQUEST", {
