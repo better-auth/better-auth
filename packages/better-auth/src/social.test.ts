@@ -6,6 +6,7 @@ import type {
 	GoogleProfile,
 	MicrosoftEntraIDProfile,
 	RailwayProfile,
+	TelegramProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
@@ -2172,5 +2173,172 @@ describe("Railway Provider", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("railway");
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
+	});
+});
+
+describe("Telegram Provider", async () => {
+	beforeAll(() => {
+		mswServer.use(
+			http.post(
+				"https://oauth.telegram.org/token",
+				async ({ request }) => {
+					const authHeader = request.headers.get("authorization");
+					expect(authHeader).toMatch(/^Basic /);
+
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+					expect(params.get("grant_type")).toBe("authorization_code");
+					expect(params.get("code")).toBeDefined();
+					expect(params.get("redirect_uri")).toBeDefined();
+
+					const codeVerifier = params.get("code_verifier");
+					expect(codeVerifier).not.toBeNull();
+					expect(codeVerifier).not.toBe("");
+
+					const telegramProfile: TelegramProfile = {
+						sub: "123456789",
+						name: "Telegram User",
+						preferred_username: "tguser",
+						picture: "https://t.me/i/userpic/320/photo.jpg",
+						phone_number: "+1234567890",
+					};
+					const idToken = await signJWT(
+						telegramProfile,
+						DEFAULT_SECRET,
+					);
+
+					return HttpResponse.json({
+						access_token: "telegram_access_token",
+						token_type: "Bearer",
+						expires_in: 3600,
+						id_token: idToken,
+					});
+				},
+			),
+		);
+	});
+
+	it("should configure Telegram provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				telegram: {
+					clientId: "telegram-test-bot-id",
+					clientSecret: "telegram-test-bot-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const telegramProvider = ctx.socialProviders.find(
+			(p) => p.id === "telegram",
+		);
+
+		expect(telegramProvider).toBeDefined();
+		expect(telegramProvider?.id).toBe("telegram");
+		expect(telegramProvider?.name).toBe("Telegram");
+	});
+
+	it("should initiate Telegram OAuth flow with PKCE", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				telegram: {
+					clientId: "telegram-test-bot-id",
+					clientSecret: "telegram-test-bot-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "telegram",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("oauth.telegram.org/auth");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("scope")).toContain("openid");
+		expect(authUrl.searchParams.get("scope")).toContain("profile");
+		expect(authUrl.searchParams.get("scope")).toContain("phone");
+
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+	});
+
+	it("should complete Telegram OAuth flow and create user", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					telegram: {
+						clientId: "telegram-test-bot-id",
+						clientSecret: "telegram-test-bot-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "telegram",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toBeDefined();
+		const state =
+			new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/telegram", {
+			query: {
+				state,
+				code: "telegram_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(
+					cookies.get("better-auth.session_token")?.value,
+				).toBeDefined();
+
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data).toBeDefined();
+		expect(session.data?.user.name).toBe("Telegram User");
+		expect(session.data?.user.email).toBe("+1234567890@telegram.local");
+		expect(session.data?.user.image).toBe(
+			"https://t.me/i/userpic/320/photo.jpg",
+		);
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("telegram");
+		expect(accounts[0]?.accountId).toBe("123456789");
 	});
 });
