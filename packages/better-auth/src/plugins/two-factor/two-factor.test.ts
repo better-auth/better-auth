@@ -1394,6 +1394,45 @@ describe("twoFactorCookieMaxAge", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8424
+ */
+describe("twoFactorTable option", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				twoFactorTable: "custom_two_factor",
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should use custom table name for two factor data", async () => {
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const twoFactorRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [
+				{
+					field: "userId",
+					value: (await auth.api.getSession({ headers }))?.user.id as string,
+				},
+			],
+		});
+		expect(twoFactorRecord).toBeDefined();
+		expect(twoFactorRecord?.secret).toBeDefined();
+	});
+});
+
 describe("OTP storage modes", async () => {
 	describe("hashed OTP storage", async () => {
 		let OTP = "";
