@@ -32,8 +32,12 @@ export function toNextJsHandler(
 		| ((request: Request) => Promise<Response>),
 ) {
 	const handler = async (request: Request) => {
-		request = toPlainRequest(request);
-		return "handler" in auth ? auth.handler(request) : auth(request);
+		const hasBody =
+			request.method !== "GET" &&
+			request.method !== "HEAD" &&
+			request.body != null;
+		const effectiveRequest = hasBody ? toPlainRequest(request) : request;
+		return "handler" in auth ? auth.handler(effectiveRequest) : auth(effectiveRequest);
 	};
 	return {
 		GET: handler,
