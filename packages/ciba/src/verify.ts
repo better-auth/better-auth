@@ -1,7 +1,7 @@
 import { getClient } from "@better-auth/oauth-provider";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
-import { findCibaRequest, getOAuthOpts } from "./utils";
+import { deleteCibaRequest, findCibaRequest, getOAuthOpts } from "./utils";
 
 /**
  * GET /ciba/verify — Returns non-sensitive metadata for the approval UI.
@@ -50,6 +50,19 @@ export function createCibaVerify() {
 				oauthOpts,
 				cibaRequest.clientId,
 			);
+			if (!client) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "OAuth client not found",
+					error: "invalid_request",
+				});
+			}
+			if (client.disabled) {
+				await deleteCibaRequest(ctx, authReqId);
+				throw new APIError("BAD_REQUEST", {
+					error_description: "OAuth client has been disabled",
+					error: "invalid_request",
+				});
+			}
 
 			let parsedAuthorizationDetails: unknown;
 			if (cibaRequest.authorizationDetails) {
@@ -65,7 +78,7 @@ export function createCibaVerify() {
 
 			return ctx.json({
 				auth_req_id: cibaRequest.authReqId,
-				client_name: client?.name,
+				client_name: client.name,
 				scope: cibaRequest.scope,
 				binding_message: cibaRequest.bindingMessage,
 				authorization_details: parsedAuthorizationDetails,

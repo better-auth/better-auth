@@ -182,6 +182,20 @@ export function createBcAuthorize(options: CibaOptions) {
 				}
 			}
 
+			let parsedAuthorizationDetails: unknown;
+			if (ctx.body.authorization_details) {
+				try {
+					parsedAuthorizationDetails = JSON.parse(
+						ctx.body.authorization_details,
+					);
+				} catch {
+					throw new APIError("BAD_REQUEST", {
+						error_description: "authorization_details must be valid JSON",
+						error: "invalid_request",
+					});
+				}
+			}
+
 			// Generate auth_req_id (~190-bit entropy)
 			const authReqId = generateRandomString(32, "A-Z", "a-z", "0-9");
 
@@ -209,24 +223,8 @@ export function createBcAuthorize(options: CibaOptions) {
 				},
 			});
 
-			// Build approval URL and notify user (fire-and-forget)
 			const baseURL = ctx.context.baseURL;
 			const approvalUrl = `${baseURL}${approvalPage}?auth_req_id=${encodeURIComponent(authReqId)}`;
-
-			// Parse authorization_details early so malformed JSON is a protocol error, not a 500
-			let parsedAuthorizationDetails: unknown;
-			if (ctx.body.authorization_details) {
-				try {
-					parsedAuthorizationDetails = JSON.parse(
-						ctx.body.authorization_details,
-					);
-				} catch {
-					throw new APIError("BAD_REQUEST", {
-						error_description: "authorization_details must be valid JSON",
-						error: "invalid_request",
-					});
-				}
-			}
 
 			options
 				.sendNotification(
