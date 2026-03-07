@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { CareersPageClient } from "./careers-client";
 import { createMetadata } from "@/lib/metadata";
+import { CareersPageClient } from "./careers-client";
 
 export const metadata: Metadata = createMetadata({
 	title: "Careers",

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { createMetadata } from "@/lib/metadata";
 import { FrameworkContent } from "./_components/framework-content";
 import { InfrastructureContent } from "./_components/infrastructure-content";
-import { createMetadata } from "@/lib/metadata";
 
 const tabs = {
 	framework: {

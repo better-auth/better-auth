@@ -7,9 +7,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
 import { Callout } from "@/components/ui/callout";
+import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
 import { cn } from "@/lib/utils";
-import { createMetadata } from "@/lib/metadata";
 
 function formatDate(date: Date) {
 	return new Date(date).toLocaleDateString("en-US", {
@@ -298,21 +298,21 @@ export async function generateMetadata({
 	const ogImage = image || ogUrl;
 
 	return createMetadata({
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
+		title,
+		description,
+		openGraph: {
+			title,
+			description,
 			type: "article",
-      images: [ogImage],
-    },
-    twitter: {
+			images: [ogImage],
+		},
+		twitter: {
 			card: "summary_large_image" as const,
 			title,
-      description,
-      images: [ogImage],
-    },
-  });
+			description,
+			images: [ogImage],
+		},
+	});
 }
 
 export function generateStaticParams() {

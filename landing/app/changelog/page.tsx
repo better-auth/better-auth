@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
-import { ChangelogContent } from "./changelog-content";
 import { createMetadata } from "@/lib/metadata";
+import { ChangelogContent } from "./changelog-content";
 
 export const dynamic = "force-static";
 
