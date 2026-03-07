@@ -226,7 +226,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 		: never;
 
 export type InferRoutes<
-	API extends Record<string, Endpoint>,
+	API extends Record<string, unknown>,
 	ClientOpts extends BetterAuthClientOptions,
 > = MergeRoutes<InferRoute<API, ClientOpts>>;
 
