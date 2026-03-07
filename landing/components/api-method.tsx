@@ -48,7 +48,9 @@ export const APIMethod = ({
 	children,
 	noResult,
 	requireSession,
+	requireHeaders,
 	requireBearerToken,
+	headersComment,
 	note,
 	clientOnlyNote,
 	serverOnlyNote,
@@ -73,6 +75,16 @@ export const APIMethod = ({
 	 * @default false
 	 */
 	requireBearerToken?: boolean;
+	/**
+	 * If enabled, we will add `headers` to the fetch options without assuming the request is backed by a session.
+	 *
+	 * @default false
+	 */
+	requireHeaders?: boolean;
+	/**
+	 * A custom comment to display above the generated `headers` line when `requireHeaders` is enabled.
+	 */
+	headersComment?: string;
 	/**
 	 * The HTTP method to the endpoint
 	 *
@@ -152,7 +164,9 @@ export const APIMethod = ({
 		props,
 		method: method ?? "GET",
 		requireSession: requireSession ?? false,
+		requireHeaders: requireHeaders ?? false,
 		requireBearerToken: requireBearerToken ?? false,
+		headersComment,
 		forceAsQuery,
 		forceAsParam,
 		forceAsBody,
@@ -768,7 +782,9 @@ function shouldServerUseQueryParams(
 function createServerBody({
 	props,
 	requireSession,
+	requireHeaders,
 	requireBearerToken,
+	headersComment,
 	method,
 	forceAsBody,
 	forceAsParam,
@@ -776,7 +792,9 @@ function createServerBody({
 }: {
 	props: Property[];
 	requireSession: boolean;
+	requireHeaders: boolean;
 	requireBearerToken: boolean;
+	headersComment: string | undefined;
 	method: string;
 	forceAsQuery: boolean | undefined;
 	forceAsParam: boolean | undefined;
@@ -840,6 +858,11 @@ function createServerBody({
 	if (requireSession) {
 		fetchOptions +=
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
+	} else if (requireHeaders) {
+		fetchOptions += `\n    // ${
+			headersComment ||
+			"Pass the current request headers so Better Auth can read and set cookies."
+		}\n    headers: await headers(),`;
 	}
 
 	if (requireBearerToken) {

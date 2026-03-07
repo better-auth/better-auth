@@ -159,10 +159,15 @@ const authClient = createAuthClient({
 
 When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will return an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. You can check using `in` instead to check if `twoFactorRedirect` is set to `true`.
 
+`authClient.twoFactor.*` handles cookies automatically in the browser. If you continue the 2FA flow with `auth.api.*` on the server, you must pass the relevant headers so Better Auth can read the current 2FA state and set the resulting 2FA/session cookies. The generated examples below use `await headers()` for this, but in other frameworks you should pass the equivalent incoming request headers.
+
+If you chain multiple `auth.api.*` calls in the same server flow, make sure you forward the cookies from the previous auth response into the next call.
+
 ```ts title="sign-in.ts"
 import { auth } from "@/lib/auth"
 
-const response = await auth.api.signInEmail({
+const { headers: responseHeaders, response } = await auth.api.signInEmail({
+	returnHeaders: true,
 	body: {
 		email: "test@test.com",
 		password: "test",
@@ -170,6 +175,7 @@ const response = await auth.api.signInEmail({
 });
 
 if ("twoFactorRedirect" in response) {
+	// Forward the cookies from responseHeaders into the next auth.api 2FA call.
 	// Handle the 2FA verification in place
 }
 ```
@@ -252,7 +258,12 @@ By default the issuer for TOTP is set to the app name provided in the auth confi
 
 After the user has entered their 2FA code, you can verify it using `twoFactor.verifyTotp` method. `Better Auth` follows standard practice by accepting TOTP codes from one period before and one after the current code, ensuring users can authenticate even with minor time delays on their end.
 
-<APIMethod path="/two-factor/verify-totp" method="POST">
+<APIMethod
+  path="/two-factor/verify-totp"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
 type verifyTOTP = {
     /**
@@ -292,11 +303,16 @@ export const auth = betterAuth({
 
 #### Sending OTP
 
-Sending an OTP is done by calling the `twoFactor.sendOtp` function. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
+Sending an OTP is done by calling the `authClient.twoFactor.sendOtp` function on the client or `auth.api.sendTwoFactorOTP` on the server. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
 
-<APIMethod path="/two-factor/send-otp" method="POST">
+<APIMethod
+  path="/two-factor/send-otp"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
-type send2FaOTP = {
+type sendTwoFactorOTP = {
     /**
      * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
      */
@@ -311,11 +327,16 @@ if (data) {
 
 #### Verifying OTP
 
-After the user has entered their OTP code, you can verify it
+After the user has entered their OTP code, you can verify it using `authClient.twoFactor.verifyOtp` on the client or `auth.api.verifyTwoFactorOTP` on the server.
 
-<APIMethod path="/two-factor/verify-otp" method="POST">
+<APIMethod
+  path="/two-factor/verify-otp"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
-type verifyOTP = {
+type verifyTwoFactorOTP = {
     /**
      * The otp code to verify. 
      */
@@ -364,7 +385,12 @@ When you generate backup codes, the old backup codes will be deleted and new one
 You can now allow users to provide a backup code as an account recovery method.
 
 
-<APIMethod path="/two-factor/verify-backup-code" method="POST">
+<APIMethod
+  path="/two-factor/verify-backup-code"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
 type verifyBackupCode = {
     /**

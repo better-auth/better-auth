@@ -395,7 +395,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.send2FaOTP`
+			 * `auth.api.sendTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.sendOtp`
@@ -411,7 +411,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.verifyOTP`
+			 * `auth.api.verifyTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.verifyOtp`
