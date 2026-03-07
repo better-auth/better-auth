@@ -921,8 +921,8 @@ describe("stripe", () => {
 		vi.clearAllMocks();
 
 		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
-			"grouped-subscriptionid-target@email.com",
-			"cus_grouped_subscriptionid_target",
+			"grouped-subscription-id-target@email.com",
+			"cus_grouped_subscription_id_target",
 		);
 
 		await ctx.adapter.create({
@@ -931,7 +931,7 @@ describe("stripe", () => {
 				plan: "starter",
 				group: "core",
 				referenceId: userId,
-				stripeCustomerId: "cus_grouped_subscriptionid_target",
+				stripeCustomerId: "cus_grouped_subscription_id_target",
 				stripeSubscriptionId: "sub_core_targeted",
 				status: "active",
 				cancelAtPeriodEnd: true,
@@ -944,7 +944,7 @@ describe("stripe", () => {
 				plan: "analytics",
 				group: "analytics",
 				referenceId: userId,
-				stripeCustomerId: "cus_grouped_subscriptionid_target",
+				stripeCustomerId: "cus_grouped_subscription_id_target",
 				stripeSubscriptionId: "sub_analytics_other",
 				status: "active",
 			},
@@ -964,7 +964,7 @@ describe("stripe", () => {
 		expect(cancelRes.error).toBeNull();
 		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
-				customer: "cus_grouped_subscriptionid_target",
+				customer: "cus_grouped_subscription_id_target",
 				flow_data: {
 					type: "subscription_cancel",
 					subscription_cancel: {
