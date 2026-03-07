@@ -663,6 +663,62 @@ describe("expo", async () => {
 		expect(proxyUrl.searchParams.has("authorizationURL")).toBe(true);
 		expect(proxyUrl.searchParams.has("oauthState")).toBe(false);
 	});
+
+	it("should set signed state cookie in browser context via expo-authorization-proxy (database strategy)", async () => {
+		fn.mockClear();
+
+		const expoWebBrowser = await import("expo-web-browser");
+		const { parseSetCookieHeader } = await import("../src/client");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockImplementationOnce(
+			async (proxyURL, to, webBrowserOptions) => {
+				const proxyUrlStr = String(proxyURL);
+				const proxyUrl = new URL(proxyUrlStr);
+
+				// Verify database strategy doesn't include oauthState
+				expect(proxyUrl.searchParams.has("oauthState")).toBe(false);
+
+				// Extract state from the authorizationURL parameter
+				const authorizationURL = proxyUrl.searchParams.get("authorizationURL");
+				expect(authorizationURL).toBeTruthy();
+				const authUrl = new URL(authorizationURL!);
+				const stateFromUrl = authUrl.searchParams.get("state");
+				expect(stateFromUrl).toBeTruthy();
+
+				// Call the proxy endpoint
+				const res = await auth.handler(
+					new Request(proxyUrlStr, { method: "GET" }),
+				);
+
+				expect(res.status).toBe(302);
+
+				// Verify signed state cookie is set
+				const setCookie = res.headers.get("set-cookie");
+				expect(setCookie).toBeTruthy();
+
+				const cookieMap = parseSetCookieHeader(setCookie!);
+				const stateCookie = [...cookieMap.entries()].find(
+					([name]) => name.includes(".state") && !name.includes("oauth_state"),
+				);
+
+				expect(stateCookie).toBeTruthy();
+				// The signed cookie value should contain the state
+				expect(stateCookie![1].value).toContain(stateFromUrl);
+
+				fn(proxyURL, to, webBrowserOptions);
+				return {
+					type: "success",
+					url: "better-auth://?cookie=better-auth.session_token=dummy",
+				};
+			},
+		);
+
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+		expect(fn).toHaveBeenCalled();
+	});
 });
 
 describe("expo with cookieCache", async () => {
