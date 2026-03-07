@@ -192,6 +192,33 @@ describe("team", async () => {
 		expect(teamNames).toContain("Marketing Team");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8307
+	 */
+	it("should include team members in getFullOrganization response", async () => {
+		const organization = await client.organization.getFullOrganization({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const teams = organization.data?.teams;
+		expect(teams).toBeDefined();
+
+		for (const team of teams!) {
+			expect(team.members).toBeDefined();
+			expect(Array.isArray(team.members)).toBe(true);
+		}
+
+		const devTeam = teams!.find((t) => t.name === "Development Team");
+		expect(devTeam).toBeDefined();
+		expect(devTeam!.members.length).toBeGreaterThanOrEqual(1);
+		const firstMember = devTeam!.members[0]!;
+		expect(firstMember).toHaveProperty("teamId");
+		expect(firstMember).toHaveProperty("userId");
+		expect(firstMember.teamId).toBe(devTeam!.id);
+	});
+
 	it("should get all teams", async () => {
 		const teamsResponse = await client.organization.listTeams({
 			fetchOptions: { headers },
