@@ -292,7 +292,7 @@ export const auth = betterAuth({
 
 #### Sending OTP
 
-Sending an OTP is done by calling the `twoFactor.sendOtp` function on the client or `auth.api.sendTwoFactorOTP` on the server. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
+Sending an OTP is done by calling the `authClient.twoFactor.sendOtp` function on the client or `auth.api.sendTwoFactorOTP` on the server. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
 
 <APIMethod path="/two-factor/send-otp" method="POST">
 ```ts
