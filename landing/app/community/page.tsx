@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { getCommunityStats } from "@/lib/community-stats";
 import { CommunityPageClient } from "./community-client";
+import { createMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createMetadata({
 	title: "Community",
 	description:
 		"Join the Better Auth community — contributors, Discord members, and ecosystem stats.",
-};
+});
 
 export const revalidate = 21600; // Revalidate every 6 hours
 
