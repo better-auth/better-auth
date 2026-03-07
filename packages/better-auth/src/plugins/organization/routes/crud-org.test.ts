@@ -112,8 +112,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(403);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.code,
 		);
 	});
 
@@ -127,8 +127,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
 		);
 	});
 
@@ -443,5 +443,33 @@ describe("organization hooks", async () => {
 			headers,
 		});
 		expect(afterCreateTeam).toHaveBeenCalled();
+	});
+
+	it("should allow internal organization creation when disabled for users", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					allowUserToCreateOrganization: false,
+				}),
+			],
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "internal@test.com",
+				password: "password",
+				name: "Internal User",
+			},
+		});
+
+		const internalOrg = await auth.api.createOrganization({
+			body: {
+				name: "Internal Org",
+				slug: "internal-org",
+				userId: newUser.user.id,
+			},
+		});
+		expect(internalOrg).toBeDefined();
+		expect(internalOrg?.name).toBe("Internal Org");
 	});
 });

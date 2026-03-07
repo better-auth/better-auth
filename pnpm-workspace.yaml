@@ -1,24 +1,54 @@
 packages:
   - packages/**
+  - landing
   - docs
-  - demo/*
   - e2e/**
   - test
 
+blockExoticSubdeps: true
+
 catalog:
-  '@better-fetch/fetch': 1.1.18
-  better-call: 1.1.5
-  tsdown: ^0.17.2
+  '@better-auth/utils': 0.3.1
+  '@better-fetch/fetch': 1.1.21
+  better-call: 2.0.2
+  tsdown: 0.21.0-beta.2
   typescript: ^5.9.3
 
 catalogs:
   react19:
-    '@types/react': ^19.2.0
-    '@types/react-dom': ^19.2.0
-    react: ^19.2.1
-    react-dom: ^19.2.1
+    '@types/react': ^19.2.14
+    '@types/react-dom': ^19.2.3
+    react: ^19.2.4
+    react-dom: ^19.2.4
+  tailwind:
+    '@tailwindcss/postcss': ^4.2.1
+    '@tailwindcss/vite': ^4.2.1
+    tailwindcss: ^4.2.1
+    tailwindcss-animate: ^1.0.7
   vitest:
-    '@vitest/coverage-v8': ^4.0.15
-    vitest: ^4.0.15
+    '@vitest/coverage-istanbul': ^4.0.18
+    '@vitest/ui': ^4.0.18
+    vitest: ^4.0.18
 
-neverBuiltDependencies: []
+linkWorkspacePackages: true
+
+minimumReleaseAge: 0
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@swc/core'
+  - '@tsparticles/engine'
+  - better-sqlite3
+  - esbuild
+  - less
+  - msw
+  - prisma
+  - protobufjs
+  - sharp
+  - workerd
+
+trustPolicy: no-downgrade
+
+trustPolicyIgnoreAfter: 43200

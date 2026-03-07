@@ -1,9 +1,8 @@
 import type { BetterAuthOptions } from "../../types";
-import type { Prettify } from "../../types/helper";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import type {
-	DBAdapterSchemaCreation as AdapterSchemaCreation,
-	CustomAdapter as CoreCustomAdapter,
+	CleanedWhere,
+	CustomAdapter,
 	DBAdapterFactoryConfig,
 	JoinConfig,
 	DBTransactionAdapter as TransactionAdapter,
@@ -43,7 +42,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	 *
 	 * If the config has defined `debugLogs` as `false`, no logs will be shown.
 	 */
-	debugLog: (...args: any[]) => void;
+	debugLog: (...args: unknown[]) => void;
 	/**
 	 * Get the model name which is expected to be saved in the database based on the user's schema.
 	 */
@@ -97,65 +96,37 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	}) => DBFieldAttribute;
 	// The following functions are exposed primarily for the purpose of having wrapper adapters.
 	transformInput: (
-		data: Record<string, any>,
+		data: Record<string, unknown>,
 		defaultModelName: string,
 		action: "create" | "update",
 		forceAllowId?: boolean | undefined,
-	) => Promise<Record<string, any>>;
+	) => Promise<Record<string, unknown>>;
 	transformOutput: (
-		data: Record<string, any>,
+		data: Record<string, unknown>,
 		defaultModelName: string,
 		select?: string[] | undefined,
 		joinConfig?: JoinConfig | undefined,
-	) => Promise<Record<string, any>>;
+	) => Promise<Record<string, unknown>>;
 	transformWhereClause: <W extends Where[] | undefined>({
 		model,
 		where,
+		action,
 	}: {
 		where: W;
 		model: string;
+		action:
+			| "create"
+			| "update"
+			| "findOne"
+			| "findMany"
+			| "updateMany"
+			| "delete"
+			| "deleteMany"
+			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;
-
-/**
- * @deprecated Use `CustomAdapter` from `@better-auth/core/db/adapter` instead.
- */
-export interface CustomAdapter extends Omit<CoreCustomAdapter, "createSchema"> {
-	createSchema?:
-		| ((props: {
-				/**
-				 * The file the user may have passed in to the `generate` command as the expected schema file output path.
-				 */
-				file?: string;
-				/**
-				 * The tables from the user's Better-Auth instance schema.
-				 */
-				tables: BetterAuthDBSchema;
-		  }) => Promise<AdapterSchemaCreation>)
-		| undefined;
-}
-
-/**
- * @deprecated Use `CleanedWhere` from `@better-auth/core/db/adapter` instead.
- */
-export type CleanedWhere = Prettify<Required<Where>>;
 
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
 	printDebugLogs: () => void;
 };
-
-/**
- * @deprecated Use `AdapterFactoryOptions` instead. This export will be removed in a future version.
- */
-export type CreateAdapterOptions = AdapterFactoryOptions;
-
-/**
- * @deprecated Use `AdapterFactoryConfig` instead. This export will be removed in a future version.
- */
-export type AdapterConfig = AdapterFactoryConfig;
-
-/**
- * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in a future version.
- */
-export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;

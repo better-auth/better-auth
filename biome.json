@@ -32,7 +32,10 @@
             "style": "separatedType"
           }
         },
-        "useNodejsImportProtocol": "error"
+        "useNodejsImportProtocol": "error",
+        "useConst": "error",
+        "noRestrictedTypes": "off",
+        "noRestrictedGlobals": "off"
       },
       "recommended": false,
       "suspicious": {
@@ -76,6 +79,51 @@
         "indentStyle": "space",
         "indentWidth": 2
       }
+    },
+    {
+      "includes": ["packages/**/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedTypes": {
+              "level": "error",
+              "options": {
+                "types": {
+                  "Buffer": {
+                    "message": "Buffer is deprecated. Use `Uint8Array` instead.",
+                    "use": "Uint8Array"
+                  }
+                }
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "Buffer": "Buffer is deprecated. Use `Uint8Array` instead."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/test/**",
+        "**/__tests__/**",
+        "packages/sso/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedTypes": "off",
+            "noRestrictedGlobals": "off"
+          }
+        }
+      }
     }
   ],
   "files": {
@@ -84,6 +132,7 @@
       "!**/dist",
       "!**/coverage",
       "!**/build",
+      "!**/demo/electron/out",
       "!**/.next",
       "!**/.svelte-kit",
       "!**/.contentlayer",
@@ -95,7 +144,8 @@
       "!**/dev/cloudflare/drizzle",
       "!**/playwright-report",
       "!**/.output",
-      "!**/.tmp"
+      "!**/.tmp",
+      "!**/tmp-docs-fetch"
     ]
   }
 }

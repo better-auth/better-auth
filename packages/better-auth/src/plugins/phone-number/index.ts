@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { RequiredPhoneNumberOptions } from "./routes";
@@ -15,6 +15,14 @@ import { schema } from "./schema";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
 export type { PhoneNumberOptions, UserWithPhoneNumber };
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"phone-number": {
+			creator: typeof phoneNumber;
+		};
+	}
+}
 
 export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 	const opts = {
@@ -36,9 +44,10 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 					matcher: (ctx) =>
 						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
 					handler: createAuthMiddleware(async (_ctx) => {
-						throw new APIError("BAD_REQUEST", {
-							message: PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_CANNOT_BE_UPDATED,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_CANNOT_BE_UPDATED,
+						);
 					}),
 				},
 			],
@@ -62,10 +71,11 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				pathMatcher(path) {
 					return path.startsWith("/phone-number");
 				},
-				window: 60 * 1000,
+				window: 60,
 				max: 10,
 			},
 		],
+		options,
 		$ERROR_CODES: PHONE_NUMBER_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

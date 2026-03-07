@@ -49,12 +49,13 @@ export const captchaFox = async ({
 	});
 
 	if (!response.data || response.error) {
-		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE);
+		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
 	}
 
 	if (!response.data.success) {
 		return middlewareResponse({
-			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED,
+			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
+			code: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.code,
 			status: 403,
 		});
 	}

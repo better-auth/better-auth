@@ -17,6 +17,7 @@ export interface ClientStore {
 export type ClientAtomListener = {
 	matcher: (path: string) => boolean;
 	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
+	callback?: (path: string) => void;
 };
 
 /**
@@ -114,4 +115,14 @@ export interface BetterAuthClientPlugin {
 	 * plugin or any plugin the user might have added.
 	 */
 	atomListeners?: ClientAtomListener[] | undefined;
+	/**
+	 * The error codes returned by the plugin
+	 */
+	$ERROR_CODES?: Record<
+		string,
+		{
+			code: string;
+			message: string;
+		}
+	>;
 }

@@ -21,6 +21,20 @@ export interface GenericOAuthConfig {
 	 */
 	discoveryUrl?: string | undefined;
 	/**
+	 * The expected issuer identifier for validation.
+	 * If not provided but discoveryUrl is set, it will be fetched from the discovery document.
+	 * When set, the callback validates that the `iss` parameter matches this value.
+	 * @see https://datatracker.ietf.org/doc/html/rfc9207
+	 */
+	issuer?: string | undefined;
+	/**
+	 * When true, requires the `iss` parameter in callbacks if an issuer is configured.
+	 * This provides stricter security but may break with older OAuth servers
+	 * that don't support issuer identification.
+	 * @default false
+	 */
+	requireIssuerValidation?: boolean | undefined;
+	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
 	 */
@@ -63,7 +77,17 @@ export interface GenericOAuthConfig {
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
-	prompt?: ("none" | "login" | "consent" | "select_account") | undefined;
+	prompt?:
+		| (
+				| "none"
+				| "login"
+				| "create"
+				| "consent"
+				| "select_account"
+				| "select_account consent"
+				| "login consent"
+		  )
+		| undefined;
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange)
 	 * @default false

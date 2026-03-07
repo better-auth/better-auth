@@ -1,4 +1,4 @@
-import { APIError } from "better-call";
+import { isAPIError } from "./is-api-error";
 
 export const getEndpointResponse = async <T>(ctx: {
 	context: {
@@ -15,7 +15,7 @@ export const getEndpointResponse = async <T>(ctx: {
 		}
 		return (await returned.clone().json()) as T;
 	}
-	if (returned instanceof APIError) {
+	if (isAPIError(returned)) {
 		return null;
 	}
 	return returned as T;

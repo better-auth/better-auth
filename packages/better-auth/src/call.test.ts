@@ -3,13 +3,14 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { getEndpoints, router } from "./api";
 import { createAuthClient } from "./client";
 import { init } from "./context/init";
 import { bearer } from "./plugins";
+import { isAPIError } from "./utils/is-api-error";
 
 describe("call", async () => {
 	const q = z.optional(
@@ -33,6 +34,38 @@ describe("call", async () => {
 				},
 				async (ctx) => {
 					return ctx.json({ success: ctx.query?.message || "true" });
+				},
+			),
+			testVirtual: createAuthEndpoint(
+				{
+					method: "GET",
+				},
+				async (ctx) => {
+					return "ok";
+				},
+			),
+			testServerScoped: createAuthEndpoint(
+				"/test-server-scoped",
+				{
+					method: "GET",
+					metadata: {
+						scope: "server",
+					},
+				},
+				async (ctx) => {
+					return "ok";
+				},
+			),
+			testHTTPScoped: createAuthEndpoint(
+				"/test-http-scoped",
+				{
+					method: "GET",
+					metadata: {
+						scope: "http",
+					},
+				},
+				async (ctx) => {
+					return "ok";
 				},
 			),
 			testCookies: createAuthEndpoint(
@@ -152,7 +185,7 @@ describe("call", async () => {
 								message: "from chained hook 1",
 							});
 						}
-						if (ctx.context.returned instanceof APIError) {
+						if (isAPIError(ctx.context.returned)) {
 							throw ctx.error("BAD_REQUEST", {
 								message: "from after hook",
 							});
@@ -167,7 +200,7 @@ describe("call", async () => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (ctx.context.returned instanceof APIError) {
+						if (isAPIError(ctx.context.returned)) {
 							const returned = ctx.context.returned;
 							const message = returned.message;
 							throw new APIError("BAD_REQUEST", {
@@ -233,6 +266,11 @@ describe("call", async () => {
 		expect(response).toMatchObject({
 			success: "true",
 		});
+	});
+
+	it("should call server scoped endpoint", async () => {
+		const response = await api.testServerScoped();
+		expect(response).toBe("ok");
 	});
 
 	it("should set cookies", async () => {
@@ -339,7 +377,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 
 				expect(e.status).toBe("FOUND");
 				expect(e.headers.get("Location")).toBe("/test");
@@ -354,7 +392,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("FOUND");
 				expect(e.headers.get("Location")).toBe("/test");
 				expect(e.headers.get("key")).toBe("value");
@@ -369,7 +407,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from after hook");
 			});
@@ -383,7 +421,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from chained hook 2");
 			});

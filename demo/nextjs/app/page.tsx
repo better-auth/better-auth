@@ -1,7 +1,8 @@
-import { Suspense } from "react";
-import { SignInButton, SignInFallback } from "@/components/sign-in-btn";
+import { headers } from "next/headers";
+import EntryButton from "@/components/entry-button";
+import { auth } from "@/lib/auth";
 
-const features = [
+const features: { name: string; link: string }[] = [
 	{
 		name: "Email & Password",
 		link: "https://www.better-auth.com/docs/authentication/email-password",
@@ -38,17 +39,37 @@ const features = [
 		name: "Session Management",
 		link: "https://www.better-auth.com/docs/concepts/session-management",
 	},
+	{
+		name: "Multiple Session",
+		link: "https://www.better-auth.com/docs/plugins/multi-session",
+	},
+	{
+		name: "Stripe Integration",
+		link: "https://www.better-auth.com/docs/plugins/stripe",
+	},
+	{
+		name: "Last Login Method",
+		link: "https://www.better-auth.com/docs/plugins/last-login-method",
+	},
+	{
+		name: "OAuth Provider",
+		link: "https://www.better-auth.com/docs/plugins/oauth-provider",
+	},
 ];
 
-export default async function Home() {
+export default async function Page() {
+	const session = await auth.api.getSession({
+		headers: await headers(),
+	});
+
 	return (
-		<div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar px-6 md:px-0">
+		<div className="min-h-[80vh] flex items-center justify-center overflow-hidden no-visible-scrollbar">
 			<main className="flex flex-col gap-4 row-start-2 items-center justify-center">
 				<div className="flex flex-col gap-1">
-					<h3 className="font-bold text-4xl text-black dark:text-white text-center">
-						Better Auth.
+					<h3 className="text-3xl sm:text-4xl text-black dark:text-white text-center">
+						BETTER-AUTH.
 					</h3>
-					<p className="text-center break-words text-sm md:text-base">
+					<p className="text-center wrap-break-word text-sm md:text-base">
 						Official demo to showcase{" "}
 						<a
 							href="https://better-auth.com"
@@ -60,9 +81,9 @@ export default async function Home() {
 						features and capabilities. <br />
 					</p>
 				</div>
-				<div className="md:w-10/12 w-full flex flex-col gap-4">
+				<div className="max-w-xl w-full flex flex-col gap-4">
 					<div className="flex flex-col gap-3 pt-2 flex-wrap">
-						<div className="border-y py-2 border-dotted bg-secondary/60 opacity-80">
+						<div className="border p-2 border-dashed bg-secondary/70">
 							<div className="text-xs flex items-center gap-2 justify-center text-muted-foreground">
 								<span className="text-center">
 									All features on this demo are implemented with Better Auth
@@ -82,11 +103,10 @@ export default async function Home() {
 							))}
 						</div>
 					</div>
-					{/* @ts-ignore */}
-					<Suspense fallback={<SignInFallback />}>
-						{/* @ts-ignore */}
-						<SignInButton />
-					</Suspense>
+
+					<div className="flex items-center justify-center">
+						<EntryButton session={session} />
+					</div>
 				</div>
 			</main>
 		</div>

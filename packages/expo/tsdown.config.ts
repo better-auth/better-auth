@@ -13,5 +13,7 @@ export default defineConfig({
 		"expo-linking",
 		"expo-constants",
 	],
+	platform: "neutral",
+	sourcemap: true,
 	treeshake: true,
 });

@@ -127,6 +127,7 @@ export interface TiktokOptions extends ProviderOptions {
 }
 
 export const tiktok = (options: TiktokOptions) => {
+	const tokenEndpoint = "https://open.tiktokapis.com/v2/oauth/token/";
 	return {
 		id: "tiktok",
 		name: "TikTok",
@@ -151,7 +152,7 @@ export const tiktok = (options: TiktokOptions) => {
 					clientKey: options.clientKey,
 					clientSecret: options.clientSecret,
 				},
-				tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -162,7 +163,7 @@ export const tiktok = (options: TiktokOptions) => {
 						options: {
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+						tokenEndpoint,
 						authentication: "post",
 						extraParams: {
 							client_key: options.clientKey,
@@ -197,10 +198,10 @@ export const tiktok = (options: TiktokOptions) => {
 				user: {
 					email: profile.data.user.email || profile.data.user.username,
 					id: profile.data.user.open_id,
-					name: profile.data.user.display_name || profile.data.user.username,
+					name:
+						profile.data.user.display_name || profile.data.user.username || "",
 					image: profile.data.user.avatar_large_url,
-					/** @note Tiktok does not provide emailVerified or even email*/
-					emailVerified: profile.data.user.email ? true : false,
+					emailVerified: false,
 				},
 				data: profile,
 			};
