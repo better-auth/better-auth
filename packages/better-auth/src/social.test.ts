@@ -6,6 +6,7 @@ import type {
 	GoogleProfile,
 	MicrosoftEntraIDProfile,
 	RailwayProfile,
+	TelegramProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
@@ -2172,5 +2173,271 @@ describe("Railway Provider", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("railway");
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
+	});
+});
+
+describe("Telegram Provider", async () => {
+	const rsaKeyPair = await generateKeyPair("RS256");
+	const rsaJwk = await exportJWK(rsaKeyPair.publicKey);
+	const telegramKid = "test-telegram-kid";
+	rsaJwk.kid = telegramKid;
+	rsaJwk.alg = "RS256";
+	rsaJwk.use = "sig";
+
+	beforeAll(() => {
+		mswServer.use(
+			http.post("https://oauth.telegram.org/token", async ({ request }) => {
+				const body = await request.text();
+				const params = new URLSearchParams(body);
+
+				// Verify PKCE code_verifier is present
+				const codeVerifier = params.get("code_verifier");
+				expect(codeVerifier).not.toBeNull();
+				expect(codeVerifier).not.toBe("");
+
+				const profile: TelegramProfile = {
+					iss: "https://oauth.telegram.org",
+					aud: "telegram-test-client-id",
+					sub: "telegram_user_123",
+					iat: Math.floor(Date.now() / 1000),
+					exp: Math.floor(Date.now() / 1000) + 3600,
+					id: 123456789,
+					name: "Telegram User",
+					preferred_username: "telegramuser",
+					picture: "https://t.me/i/userpic/320/user.jpg",
+				};
+
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "telegram_access_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+	});
+
+	it("should configure Telegram provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				telegram: {
+					clientId: "telegram-test-client-id",
+					clientSecret: "telegram-test-client-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const telegramProvider = ctx.socialProviders.find(
+			(p) => p.id === "telegram",
+		);
+
+		expect(telegramProvider).toBeDefined();
+		expect(telegramProvider?.id).toBe("telegram");
+		expect(telegramProvider?.name).toBe("Telegram");
+	});
+
+	it("should initiate Telegram OAuth flow with PKCE", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				telegram: {
+					clientId: "telegram-test-client-id",
+					clientSecret: "telegram-test-client-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "telegram",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("oauth.telegram.org/auth");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("scope")).toContain("openid");
+		expect(authUrl.searchParams.get("scope")).toContain("profile");
+
+		// Verify PKCE parameters are present
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+	});
+
+	it("should use preferred_username as fallback for name", async () => {
+		mswServer.use(
+			http.post("https://oauth.telegram.org/token", async () => {
+				const profile: TelegramProfile = {
+					iss: "https://oauth.telegram.org",
+					aud: "telegram-test-client-id",
+					sub: "telegram_user_456",
+					iat: Math.floor(Date.now() / 1000),
+					exp: Math.floor(Date.now() / 1000) + 3600,
+					id: 987654321,
+					preferred_username: "coolbot",
+					// No name field
+					picture: "https://t.me/i/userpic/320/user2.jpg",
+				};
+
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "telegram_access_token_2",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					telegram: {
+						clientId: "telegram-test-client-id",
+						clientSecret: "telegram-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "telegram",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/telegram", {
+			query: { state, code: "telegram_test_code_2" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.name).toBe("coolbot");
+	});
+
+	it("should support id token sign in", async () => {
+		const telegramProfile: Partial<TelegramProfile> = {
+			sub: "tg-id-token-user-101",
+			name: "IdToken Telegram User",
+			id: 444555666,
+			preferred_username: "idtokenuser",
+			picture: "https://t.me/i/userpic/320/idtoken.jpg",
+		};
+
+		const idToken = await new SignJWT(
+			telegramProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: telegramKid })
+			.setIssuedAt()
+			.setIssuer("https://oauth.telegram.org")
+			.setAudience("telegram-test-client-id-token")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get("https://oauth.telegram.org/.well-known/jwks.json", async () => {
+				return HttpResponse.json({
+					keys: [rsaJwk],
+				});
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					telegram: {
+						clientId: "telegram-test-client-id-token",
+						clientSecret: "telegram-test-client-secret-id-token",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "telegram",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as {
+			token: string;
+			user: { name: string };
+		};
+		expect(data.token).toBeDefined();
+		expect(data.user.name).toBe("IdToken Telegram User");
+	});
+
+	it("should return false when disableIdTokenSignIn is true", async () => {
+		const telegramProfile: Partial<TelegramProfile> = {
+			sub: "tg-disabled-user",
+			name: "Disabled User",
+		};
+
+		const idToken = await new SignJWT(
+			telegramProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: telegramKid })
+			.setIssuedAt()
+			.setIssuer("https://oauth.telegram.org")
+			.setAudience("telegram-test-client-disabled")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get("https://oauth.telegram.org/.well-known/jwks.json", async () => {
+				return HttpResponse.json({
+					keys: [rsaJwk],
+				});
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					telegram: {
+						clientId: "telegram-test-client-disabled",
+						clientSecret: "telegram-test-client-secret-disabled",
+						disableIdTokenSignIn: true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "telegram",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.error?.status).toBe(401);
 	});
 });
