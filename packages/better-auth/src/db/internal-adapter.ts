@@ -1212,5 +1212,6 @@ export const createInternalAdapter = (
 			}
 			return data as Verification;
 		},
+		refreshUserSessions,
 	};
 };
