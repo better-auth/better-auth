@@ -35,9 +35,13 @@ export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const grantType: GrantType | undefined = ctx.body?.grant_type;
+	const grantType: string | undefined = ctx.body?.grant_type;
 
-	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
+	if (
+		opts.grantTypes &&
+		grantType &&
+		!opts.grantTypes.includes(grantType as GrantType)
+	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported grant_type ${grantType}`,
 			error: "unsupported_grant_type",
@@ -56,11 +60,27 @@ export async function tokenEndpoint(
 				error_description: "missing required grant_type",
 				error: "unsupported_grant_type",
 			});
-		default:
+		default: {
+			// Dispatch to custom grant type handlers registered by plugins (e.g. CIBA)
+			const handlers = (ctx.context as Record<string, unknown>)
+				.customGrantTypeHandlers as
+				| Record<
+						string,
+						(
+							ctx: GenericEndpointContext,
+							opts: OAuthOptions<Scope[]>,
+						) => Promise<Response>
+				  >
+				| undefined;
+			const handler = handlers?.[grantType];
+			if (handler) {
+				return handler(ctx, opts);
+			}
 			throw new APIError("BAD_REQUEST", {
 				error_description: `unsupported grant_type ${grantType}`,
 				error: "unsupported_grant_type",
 			});
+		}
 	}
 }
 
@@ -322,7 +342,7 @@ async function createRefreshToken(
  * Checks the resource parameter, if provided,
  * and returns a valid audience based on the request
  */
-async function checkResource(
+export async function checkResource(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	scopes: string[],
@@ -362,7 +382,7 @@ async function checkResource(
 	return audience?.length === 1 ? audience.at(0) : audience;
 }
 
-async function createUserTokens(
+export async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
