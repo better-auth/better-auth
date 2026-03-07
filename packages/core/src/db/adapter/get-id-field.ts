@@ -3,6 +3,7 @@ import type { BetterAuthOptions } from "../../types";
 import { generateId as defaultGenerateId } from "../../utils/id";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
+import { createIsNumberIdModel } from "./is-number-id-model";
 
 export const initGetIdField = ({
 	usePlural,
@@ -24,6 +25,8 @@ export const initGetIdField = ({
 		schema,
 	});
 
+	const isNumberIdModel = createIsNumberIdModel(options);
+
 	const idField = ({
 		customModelName,
 		forceAllowId,
@@ -31,7 +34,8 @@ export const initGetIdField = ({
 		customModelName?: string;
 		forceAllowId?: boolean;
 	}) => {
-		const useNumberId = options.advanced?.database?.generateId === "serial";
+		const model = getDefaultModelName(customModelName ?? "id");
+		const useNumberId = isNumberIdModel(model);
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		const shouldGenerateId: boolean = (() => {
@@ -48,7 +52,6 @@ export const initGetIdField = ({
 			}
 		})();
 
-		const model = getDefaultModelName(customModelName ?? "id");
 		return {
 			type: useNumberId ? "number" : "string",
 			required: shouldGenerateId ? true : false,

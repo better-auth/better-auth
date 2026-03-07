@@ -6,6 +6,7 @@ import {
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
+	perModelNumberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
@@ -30,6 +31,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		perModelNumberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
 	],
