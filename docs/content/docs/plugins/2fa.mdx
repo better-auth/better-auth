@@ -292,11 +292,11 @@ export const auth = betterAuth({
 
 #### Sending OTP
 
-Sending an OTP is done by calling the `twoFactor.sendOtp` function. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
+Sending an OTP is done by calling the `twoFactor.sendOtp` function on the client or `auth.api.sendTwoFactorOTP` on the server. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
 
 <APIMethod path="/two-factor/send-otp" method="POST">
 ```ts
-type send2FaOTP = {
+type sendTwoFactorOTP = {
     /**
      * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
      */
@@ -311,11 +311,11 @@ if (data) {
 
 #### Verifying OTP
 
-After the user has entered their OTP code, you can verify it
+After the user has entered their OTP code, you can verify it using `authClient.twoFactor.verifyOtp` on the client or `auth.api.verifyTwoFactorOTP` on the server.
 
 <APIMethod path="/two-factor/verify-otp" method="POST">
 ```ts
-type verifyOTP = {
+type verifyTwoFactorOTP = {
     /**
      * The otp code to verify. 
      */
