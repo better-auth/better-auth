@@ -2399,6 +2399,160 @@ describe("SAML SSO with custom fields", () => {
 	});
 });
 
+describe("additionalData is encoded in SAML RelayState and passed to provisionUser", async () => {
+	// Each callback test gets its own isolated auth instance so users created
+	// in one test don't interfere with provider-linking in another.
+	const SAML_PROVIDER_CONFIG = {
+		issuer: "http://localhost:8081",
+		domain: "http://localhost:8081",
+		samlConfig: {
+			entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+			cert: certificate,
+			callbackUrl: "http://localhost:3000/dashboard",
+			wantAssertionsSigned: false,
+			signatureAlgorithm: "sha256",
+			digestAlgorithm: "sha256",
+			idpMetadata: { metadata: idpMetadata },
+			spMetadata: { metadata: spMetadata },
+			identifierFormat:
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		},
+	} as const;
+
+	it("should encode additionalData in the SAML RelayState URL parameter", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: { ...SAML_PROVIDER_CONFIG, providerId: "saml-relay-encode" },
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-relay-encode",
+				callbackURL: "http://localhost:3000/dashboard",
+				additionalData: { tenantId: "acme", role: "admin" },
+			},
+			returnHeaders: true,
+		});
+
+		const relayState = new URL(signInRes.response.url).searchParams.get(
+			"RelayState",
+		);
+		expect(relayState).toBeTruthy();
+		// Should be an opaque signed token, not a raw URL
+		expect(relayState).not.toContain("http");
+	});
+
+	it("should pass additionalData to provisionUser via SAML callback endpoint", async () => {
+		const provisionUserFn = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ provisionUser: provisionUserFn })],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: { ...SAML_PROVIDER_CONFIG, providerId: "saml-cb-additional" },
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-cb-additional",
+				callbackURL: "http://localhost:3000/dashboard",
+				additionalData: { tenantId: "acme", role: "admin" },
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: { SAMLResponse: samlResponse.samlResponse, RelayState: relayState },
+			headers: { Cookie: signInRes.headers.get("set-cookie") ?? "" },
+			params: { providerId: "saml-cb-additional" },
+			asResponse: true,
+		});
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(provisionUserFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalData: { tenantId: "acme", role: "admin" },
+			}),
+		);
+		// Internal state fields must not bleed into additionalData
+		const callArg = provisionUserFn.mock.calls[0]?.[0];
+		expect(callArg?.additionalData).not.toHaveProperty("callbackURL");
+		expect(callArg?.additionalData).not.toHaveProperty("codeVerifier");
+		expect(callArg?.additionalData).not.toHaveProperty("expiresAt");
+	});
+
+	it("should pass additionalData to provisionUser via ACS endpoint", async () => {
+		const provisionUserFn = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ provisionUser: provisionUserFn })],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: { ...SAML_PROVIDER_CONFIG, providerId: "saml-acs-additional" },
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-acs-additional",
+				callbackURL: "http://localhost:3000/dashboard",
+				additionalData: { tenantId: "acs-tenant" },
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-additional",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Cookie: signInRes.headers.get("set-cookie") ?? "",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayState,
+					}),
+				},
+			),
+		);
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(provisionUserFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalData: { tenantId: "acs-tenant" },
+			}),
+		);
+	});
+});
+
 import { safeJsonParse } from "./utils";
 
 describe("safeJsonParse", () => {

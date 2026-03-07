@@ -1391,3 +1391,133 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 		expect(session.data?.user.email).toBe("userinfo-only@test.com");
 	});
 });
+
+describe("additionalData is passed through to provisionUser (OIDC)", async () => {
+	const provisionUserFn = vi.fn();
+	const server = new OAuth2Server();
+
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					provisionUser: provisionUserFn,
+				}),
+				organization(),
+			],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.on("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "additional-data-oidc@localhost.com",
+				name: "Additional Data User",
+				sub: "additional-data-oidc-sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token: any) => {
+			token.payload.email = "additional-data-oidc@localhost.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Additional Data User";
+			token.payload.picture = "https://test.com/picture.png";
+		});
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop();
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should pass additionalData to provisionUser on new-user OIDC sign-in and exclude internal state fields", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "oidc-additional-data",
+			},
+			headers,
+		});
+
+		provisionUserFn.mockClear();
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "user@localhost.com",
+			callbackURL: "/dashboard",
+			additionalData: { tenantId: "acme", role: "admin" },
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		await simulateOAuthFlow(res.url, signInHeaders);
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(provisionUserFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalData: { tenantId: "acme", role: "admin" },
+			}),
+		);
+
+		// Internal state fields must not bleed into additionalData
+		const callArg = provisionUserFn.mock.calls[0]?.[0];
+		expect(callArg?.additionalData).not.toHaveProperty("callbackURL");
+		expect(callArg?.additionalData).not.toHaveProperty("codeVerifier");
+		expect(callArg?.additionalData).not.toHaveProperty("expiresAt");
+	});
+});

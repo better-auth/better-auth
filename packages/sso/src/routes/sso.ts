@@ -1016,6 +1016,13 @@ const signInSSOBodySchema = z.object({
 				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 		})
 		.optional(),
+	additionalData: z
+		.record(z.string(), z.unknown())
+		.meta({
+			description:
+				"Additional data to pass through the SSO flow. Available in provisionUser on callback.",
+		})
+		.optional(),
 	providerType: z.enum(["oidc", "saml"]).optional(),
 });
 
@@ -1281,8 +1288,15 @@ export const signInSSO = (options?: SSOOptions) => {
 					ctx,
 					undefined,
 					options?.redirectURI?.trim()
-						? { ssoProviderId: provider.providerId }
-						: false,
+						? {
+								ssoProviderId: provider.providerId,
+								...(ctx.body.additionalData
+									? { additionalData: ctx.body.additionalData }
+									: {}),
+							}
+						: ctx.body.additionalData
+							? { additionalData: ctx.body.additionalData }
+							: false,
 				);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
@@ -1414,7 +1428,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				const { state: relayState } = await generateRelayState(
 					ctx,
 					undefined,
-					false,
+					ctx.body.additionalData || false,
 				);
 
 				const shouldSaveRequest =
@@ -1766,6 +1780,9 @@ async function handleOIDCCallback(
 			userInfo,
 			token: tokenResponse,
 			provider,
+			additionalData: stateData?.additionalData as
+				| Record<string, unknown>
+				| undefined,
 		});
 	}
 
@@ -2414,6 +2431,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					user: user as User & Record<string, any>,
 					userInfo,
 					provider,
+					additionalData: relayState?.additionalData as
+						| Record<string, unknown>
+						| undefined,
 				});
 			}
 
@@ -2930,6 +2950,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					user: user as User & Record<string, any>,
 					userInfo,
 					provider,
+					additionalData: relayState?.additionalData as
+						| Record<string, unknown>
+						| undefined,
 				});
 			}
 
