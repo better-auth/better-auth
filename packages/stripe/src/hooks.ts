@@ -5,9 +5,10 @@ import type Stripe from "stripe";
 import { subscriptionMetadata } from "./metadata";
 import type { CustomerType, StripeOptions, Subscription } from "./types";
 import {
-	isActiveOrTrialing,
+	hasSubscriptionGroup,
 	isPendingCancel,
 	isStripePendingCancel,
+	normalizeSubscriptionGroup,
 	resolvePlanItem,
 	resolveQuantity,
 } from "./utils";
@@ -38,6 +39,33 @@ async function findReferenceByStripeCustomerId(
 	return null;
 }
 
+/**
+ * Find a unique subscription matching the given group.
+ * @returns the subscription if exactly one matches,
+ *          `null` if multiple match (ambiguous — caller should stop processing),
+ *          `undefined` if none match (caller should try the next lookup strategy).
+ */
+function resolveUniqueSubscriptionForGroup(
+	ctx: GenericEndpointContext,
+	subscriptions: Subscription[],
+	group: string,
+	scope: string,
+) {
+	const matchingSubscriptions = subscriptions.filter((subscription) =>
+		hasSubscriptionGroup(subscription, group),
+	);
+	if (matchingSubscriptions.length === 1) {
+		return matchingSubscriptions[0]!;
+	}
+	if (matchingSubscriptions.length > 1) {
+		ctx.context.logger.warn(
+			`Stripe webhook warning: Multiple subscriptions found for ${scope} in group ${group}`,
+		);
+		return null;
+	}
+	return undefined;
+}
+
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
@@ -62,6 +90,7 @@ export async function onCheckoutSessionCompleted(
 
 		const { item: subscriptionItem, plan } = resolved;
 		if (plan) {
+			const group = normalizeSubscriptionGroup(plan.group);
 			const checkoutMeta = subscriptionMetadata.get(checkoutSession?.metadata);
 			const referenceId =
 				checkoutSession?.client_reference_id || checkoutMeta.referenceId;
@@ -85,6 +114,7 @@ export async function onCheckoutSessionCompleted(
 					update: {
 						...trial,
 						plan: plan.name.toLowerCase(),
+						group,
 						status: subscription.status,
 						updatedAt: new Date(),
 						periodStart: new Date(subscriptionItem.current_period_start * 1000),
@@ -212,6 +242,7 @@ export async function onSubscriptionCreated(
 			);
 			return;
 		}
+		const group = normalizeSubscriptionGroup(plan.group);
 
 		const seats = resolveQuantity(
 			subscriptionCreated.items.data,
@@ -236,6 +267,7 @@ export async function onSubscriptionCreated(
 				...trial,
 				...(plan.limits ? { limits: plan.limits } : {}),
 				referenceId,
+				group,
 				stripeCustomerId,
 				stripeSubscriptionId: subscriptionCreated.id,
 				status: subscriptionCreated.status,
@@ -284,10 +316,11 @@ export async function onSubscriptionUpdated(
 		}
 
 		const { item: subscriptionItem, plan } = resolved;
-
-		const { subscriptionId } = subscriptionMetadata.get(
-			subscriptionUpdated.metadata,
-		);
+		const {
+			subscriptionId,
+			referenceId: metadataReferenceId,
+			group: metadataGroup,
+		} = subscriptionMetadata.get(subscriptionUpdated.metadata);
 		const customerId = subscriptionUpdated.customer?.toString();
 		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
@@ -295,27 +328,67 @@ export async function onSubscriptionUpdated(
 				? [{ field: "id", value: subscriptionId }]
 				: [{ field: "stripeSubscriptionId", value: subscriptionUpdated.id }],
 		});
-		if (!subscription) {
-			const subs = await ctx.context.adapter.findMany<Subscription>({
-				model: "subscription",
-				where: [{ field: "stripeCustomerId", value: customerId }],
-			});
-			if (subs.length > 1) {
-				const activeSub = subs.find((sub: Subscription) =>
-					isActiveOrTrialing(sub),
-				);
-				if (!activeSub) {
+		let group = normalizeSubscriptionGroup(
+			plan?.group || metadataGroup || subscription?.group,
+		);
+		if (!subscription && customerId) {
+			const customerSubscriptions =
+				await ctx.context.adapter.findMany<Subscription>({
+					model: "subscription",
+					where: [{ field: "stripeCustomerId", value: customerId }],
+				});
+			const matchingSubscription =
+				plan || metadataGroup
+					? resolveUniqueSubscriptionForGroup(
+							ctx,
+							customerSubscriptions,
+							group,
+							`customerId ${customerId}`,
+						)
+					: customerSubscriptions.length === 1
+						? customerSubscriptions[0]
+						: customerSubscriptions.length > 1
+							? null
+							: undefined;
+			if (matchingSubscription === null) {
+				if (!plan && !metadataGroup) {
 					ctx.context.logger.warn(
-						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
+						`Stripe webhook warning: Multiple subscriptions found for customerId ${customerId}`,
 					);
-					return;
 				}
-				subscription = activeSub;
-			} else {
-				subscription = subs[0]!;
+				return;
+			}
+			if (matchingSubscription) {
+				subscription = matchingSubscription;
+				group = normalizeSubscriptionGroup(subscription.group);
 			}
 		}
-
+		const reference =
+			metadataReferenceId && customerId
+				? { referenceId: metadataReferenceId, customerType: "user" as const }
+				: customerId
+					? await findReferenceByStripeCustomerId(ctx, options, customerId)
+					: null;
+		if (!subscription && reference) {
+			const groupedSubscriptions =
+				await ctx.context.adapter.findMany<Subscription>({
+					model: "subscription",
+					where: [{ field: "referenceId", value: reference.referenceId }],
+				});
+			const matchingSubscription = resolveUniqueSubscriptionForGroup(
+				ctx,
+				groupedSubscriptions,
+				group,
+				`referenceId ${reference.referenceId}`,
+			);
+			if (matchingSubscription === null) {
+				return;
+			}
+			if (matchingSubscription) {
+				subscription = matchingSubscription;
+				group = normalizeSubscriptionGroup(subscription.group);
+			}
+		}
 		const seats = plan
 			? resolveQuantity(
 					subscriptionUpdated.items.data,
@@ -331,48 +404,82 @@ export async function onSubscriptionUpdated(
 						trialEnd: new Date(subscriptionUpdated.trial_end * 1000),
 					}
 				: {};
-
-		const updatedSubscription = await ctx.context.adapter.update<Subscription>({
-			model: "subscription",
-			update: {
-				...trial,
-				...(plan
-					? {
-							plan: plan.name.toLowerCase(),
-							limits: plan.limits,
-						}
-					: {}),
-				updatedAt: new Date(),
-				status: subscriptionUpdated.status,
-				periodStart: new Date(subscriptionItem.current_period_start * 1000),
-				periodEnd: new Date(subscriptionItem.current_period_end * 1000),
-				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
-				cancelAt: subscriptionUpdated.cancel_at
-					? new Date(subscriptionUpdated.cancel_at * 1000)
-					: null,
-				canceledAt: subscriptionUpdated.canceled_at
-					? new Date(subscriptionUpdated.canceled_at * 1000)
-					: null,
-				endedAt: subscriptionUpdated.ended_at
-					? new Date(subscriptionUpdated.ended_at * 1000)
-					: null,
-				seats,
-				stripeSubscriptionId: subscriptionUpdated.id,
-				billingInterval: subscriptionItem.price.recurring?.interval,
-				stripeScheduleId: subscriptionUpdated.schedule
-					? typeof subscriptionUpdated.schedule === "string"
-						? subscriptionUpdated.schedule
-						: subscriptionUpdated.schedule.id
-					: null,
-			},
-			where: [
-				{
-					field: "id",
-					value: subscription.id,
+		const update = {
+			...trial,
+			group,
+			...(plan
+				? {
+						plan: plan.name.toLowerCase(),
+						limits: plan.limits,
+					}
+				: {}),
+			updatedAt: new Date(),
+			status: subscriptionUpdated.status,
+			periodStart: new Date(subscriptionItem.current_period_start * 1000),
+			periodEnd: new Date(subscriptionItem.current_period_end * 1000),
+			cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
+			cancelAt: subscriptionUpdated.cancel_at
+				? new Date(subscriptionUpdated.cancel_at * 1000)
+				: null,
+			canceledAt: subscriptionUpdated.canceled_at
+				? new Date(subscriptionUpdated.canceled_at * 1000)
+				: null,
+			endedAt: subscriptionUpdated.ended_at
+				? new Date(subscriptionUpdated.ended_at * 1000)
+				: null,
+			seats,
+			stripeSubscriptionId: subscriptionUpdated.id,
+			billingInterval: subscriptionItem.price.recurring?.interval,
+			stripeScheduleId: subscriptionUpdated.schedule
+				? typeof subscriptionUpdated.schedule === "string"
+					? subscriptionUpdated.schedule
+					: subscriptionUpdated.schedule.id
+				: null,
+		};
+		const previousStatus = subscription?.status;
+		let updatedSubscription: Subscription | null = null;
+		if (subscription) {
+			updatedSubscription = await ctx.context.adapter.update<Subscription>({
+				model: "subscription",
+				update,
+				where: [
+					{
+						field: "id",
+						value: subscription.id,
+					},
+				],
+			});
+		} else {
+			if (!plan) {
+				ctx.context.logger.warn(
+					`Stripe webhook warning: No matching plan found for priceId: ${subscriptionItem.price.id}`,
+				);
+				return;
+			}
+			if (!reference || !customerId) {
+				ctx.context.logger.warn(
+					`Stripe webhook warning: No reference found for updated subscription ${subscriptionUpdated.id}`,
+				);
+				return;
+			}
+			const created = (await ctx.context.adapter.create({
+				model: "subscription",
+				data: {
+					...update,
+					plan: plan.name.toLowerCase(),
+					referenceId: reference.referenceId,
+					group,
+					stripeCustomerId: customerId,
 				},
-			],
-		});
+			})) as Subscription;
+			updatedSubscription = created;
+			subscription = created;
+		}
+		if (!subscription) {
+			return;
+		}
 		const isNewCancellation =
+			!!previousStatus &&
 			subscriptionUpdated.status === "active" &&
 			isStripePendingCancel(subscriptionUpdated) &&
 			!isPendingCancel(subscription);
@@ -387,19 +494,19 @@ export async function onSubscriptionUpdated(
 		}
 		await options.subscription.onSubscriptionUpdate?.({
 			event,
-			subscription: updatedSubscription || subscription,
+			subscription: updatedSubscription ?? subscription,
 		});
 		if (plan) {
 			if (
 				subscriptionUpdated.status === "active" &&
-				subscription.status === "trialing" &&
+				previousStatus === "trialing" &&
 				plan.freeTrial?.onTrialEnd
 			) {
 				await plan.freeTrial.onTrialEnd({ subscription }, ctx);
 			}
 			if (
 				subscriptionUpdated.status === "incomplete_expired" &&
-				subscription.status === "trialing" &&
+				previousStatus === "trialing" &&
 				plan.freeTrial?.onTrialExpired
 			) {
 				await plan.freeTrial.onTrialExpired(subscription, ctx);

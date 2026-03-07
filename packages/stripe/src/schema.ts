@@ -13,6 +13,11 @@ export const subscriptions = {
 				type: "string",
 				required: true,
 			},
+			group: {
+				type: "string",
+				required: false,
+				fieldName: "group_key",
+			},
 			stripeCustomerId: {
 				type: "string",
 				required: false,

@@ -289,9 +289,13 @@ await authClient.subscription.upgrade({
 This will create a Checkout Session and redirect the user to the Stripe Checkout page.
 
 <Callout type="info">
-The plugin only supports one active or trialing subscription per reference ID (user or organization) at a time. Multiple concurrent subscriptions for the same reference ID are not supported.
+The plugin supports one active or trialing subscription per `referenceId + group` lane in plugin-managed flows. Plans without an explicit `group` use the implicit `"default"` group.
 
-If the user already has an active subscription, you **must** provide the `subscriptionId` parameter when upgrading. Otherwise, a new subscription may be created alongside the existing one, resulting in duplicate billing.
+Subscriptions in different groups can coexist for the same reference ID. Inside the same group, an upgrade reuses the active subscription when there is a single match.
+
+The implicit `"default"` group is only used when a specific group is being matched. Omitting `group` from list/cancel/restore does **not** mean `"default"`; it means the request is unscoped across all groups for that `referenceId`.
+
+If multiple active or trialing subscriptions exist in the same group, you **must** provide `subscriptionId` when upgrading. Otherwise, the request is rejected as ambiguous.
 </Callout>
 
 > **Important:** The `successUrl` parameter will be internally modified to handle race conditions between checkout completion and webhook processing. The plugin creates an intermediate redirect that ensures subscription status is properly updated before redirecting to your success page.
@@ -361,6 +365,11 @@ type listActiveSubscriptions = {
      */
     referenceId?: string = '123'
     /**
+     * Optional subscription group to filter by.
+     * Plans without a group use "default".
+     */
+    group?: string = 'analytics'
+    /**
      * The type of customer for billing. (Default: "user")
      */
     customerType?: "user" | "organization"
@@ -375,6 +384,10 @@ const activeSubscription = subscriptions.find(
 const projectLimit = subscriptions?.limits?.projects || 0;
 ```
 </APIMethod>
+
+When `group` is omitted, the endpoint returns active and trialing subscriptions across all groups for that `referenceId`.
+
+To filter only the implicit default lane, pass `group: "default"`. This matches both subscriptions explicitly stored with `group = "default"` and legacy rows where `group` is missing.
 
 Make sure to provide `authorizeReference` in your plugin config to authorize the reference ID
 
@@ -415,6 +428,11 @@ type cancelSubscription = {
      */
     referenceId?: string = 'org_123'
     /**
+     * Optional subscription group to target when subscriptionId is not provided.
+     * Plans without a group use "default".
+     */
+    group?: string = 'analytics'
+    /**
      * The type of customer for billing. (Default: "user")
      */
     customerType?: "user" | "organization"
@@ -431,6 +449,10 @@ type cancelSubscription = {
 </APIMethod>
 
 This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
+
+If `subscriptionId` is omitted, the plugin selects the active or trialing subscription by `referenceId + group`. If `group` is omitted, the request is unscoped across all groups for that `referenceId`; if multiple groups are active, or if multiple subscriptions exist in the same group, the request is rejected and you must provide `subscriptionId`.
+
+To target only the implicit default lane, pass `group: "default"`.
 
 <Callout type="info">
 **Understanding Cancellation States**
@@ -465,6 +487,11 @@ type restoreSubscription = {
      */
     referenceId?: string = '123'
     /**
+     * Optional subscription group to target when subscriptionId is not provided.
+     * Plans without a group use "default".
+     */
+    group?: string = 'analytics'
+    /**
      * The type of customer for billing. (Default: "user")
      */
     customerType?: "user" | "organization"
@@ -482,6 +509,10 @@ This endpoint handles two cases:
 - **Pending cancellation**: Sets `cancelAtPeriodEnd` to `false` and clears `cancelAt` / `canceledAt`, so the subscription continues to renew.
 - **Pending plan change** (via `scheduleAtPeriodEnd`): Releases the Stripe subscription schedule and clears `stripeScheduleId`, so the current plan remains unchanged.
 </Callout>
+
+If `subscriptionId` is omitted, restore uses the same `referenceId + group` targeting rules as cancel.
+
+To target only the implicit default lane, pass `group: "default"`.
 
 
 #### Creating Billing Portal Sessions
@@ -520,6 +551,8 @@ type createBillingPortal = {
 }
 ```
 </APIMethod>
+
+The billing portal is customer-wide. It is not filtered to a specific subscription group.
 <Callout type="info" >
 For supported locales, see the [IETF language tag documentation](https://docs.stripe.com/js/appendix/supported_locales).
 </Callout>
@@ -739,6 +772,12 @@ Table Name: `subscription`
       description: "The Stripe subscription ID",
       isOptional: true
     },
+    {
+      name: "group",
+      type: "string",
+      description: "The subscription group. Plans without a configured group use the implicit 'default' group.",
+      isOptional: true
+    },
     { 
       name: "status", 
       type: "string", 
@@ -872,7 +911,7 @@ stripe({
 | `annualDiscountPriceId`   | `string`   | A price ID for annual billing.                               |
 | `annualDiscountLookupKey` | `string`   | The Stripe price lookup key for annual billing.              |
 | `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
-| `group`                   | `string`   | A group name for categorizing plans.                         |
+| `group`                   | `string`   | Defines the subscription lane for the plan. Plugin-managed flows allow one active or trialing subscription per `referenceId + group`. Omitted plans use `"default"`. |
 | `seatPriceId`             | `string`   | Per-seat billing price ID. Requires the `organization` plugin. |
 | `lineItems`               | `LineItem[]` | Additional line items to include in the checkout session.   |
 | `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |

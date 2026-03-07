@@ -123,10 +123,16 @@ describe("stripe - metadata helpers", () => {
 
 	it("subscriptionMetadata.set protects internal fields", () => {
 		const result = subscriptionMetadata.set(
-			{ userId: "u1", subscriptionId: "s1", referenceId: "r1" },
-			{ subscriptionId: "fake" },
+			{
+				userId: "u1",
+				subscriptionId: "s1",
+				referenceId: "r1",
+				group: "default",
+			},
+			{ subscriptionId: "fake", group: "fake-group" },
 		);
 		expect(result.subscriptionId).toBe("s1");
+		expect(result.group).toBe("default");
 	});
 
 	it("subscriptionMetadata.get extracts typed fields", () => {
@@ -134,11 +140,13 @@ describe("stripe - metadata helpers", () => {
 			userId: "u1",
 			subscriptionId: "s1",
 			referenceId: "r1",
+			group: "default",
 			extra: "ignored",
 		});
 		expect(result.userId).toBe("u1");
 		expect(result.subscriptionId).toBe("s1");
 		expect(result.referenceId).toBe("r1");
+		expect(result.group).toBe("default");
 		expect(result).not.toHaveProperty("extra");
 	});
 });
@@ -225,6 +233,24 @@ describe("stripe", () => {
 			],
 		},
 	} satisfies StripeOptions;
+	const groupedStripeOptions = {
+		...stripeOptions,
+		subscription: {
+			enabled: true,
+			plans: [
+				{
+					priceId: "price_group_core",
+					name: "starter",
+					group: "core",
+				},
+				{
+					priceId: "price_group_analytics",
+					name: "analytics",
+					group: "analytics",
+				},
+			],
+		},
+	} satisfies StripeOptions;
 
 	const testUser = {
 		email: "test@email.com",
@@ -250,6 +276,56 @@ describe("stripe", () => {
 	});
 
 	const memory = memoryAdapter(data);
+
+	async function createSignedInGroupedUser(
+		email: string,
+		stripeCustomerId?: string,
+	) {
+		const instance = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(groupedStripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await instance.auth.$context;
+		const userRes = await instance.client.signUp.email(
+			{
+				...testUser,
+				email,
+			},
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await instance.client.signIn.email(
+			{
+				...testUser,
+				email,
+			},
+			{
+				throw: true,
+				onSuccess: instance.sessionSetter(headers),
+			},
+		);
+		if (stripeCustomerId) {
+			await ctx.adapter.update({
+				model: "user",
+				update: { stripeCustomerId },
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+		}
+		return {
+			...instance,
+			ctx,
+			headers,
+			userId: userRes.user.id,
+		};
+	}
 
 	it("should create a customer on sign up", async () => {
 		const { client, auth } = await getTestInstance(
@@ -581,6 +657,651 @@ describe("stripe", () => {
 			},
 		});
 		expect(listAfterRes.data?.length).toBeGreaterThan(0);
+	});
+
+	it("should allow parallel subscriptions in different groups and filter list by group", async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-list@email.com",
+		);
+
+		const starterUpgrade = await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+		expect(starterUpgrade.error).toBeNull();
+
+		const analyticsUpgrade = await client.subscription.upgrade({
+			plan: "analytics",
+			fetchOptions: { headers },
+		});
+		expect(analyticsUpgrade.error).toBeNull();
+
+		const subscriptions = await ctx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userId }],
+		});
+		expect(subscriptions).toHaveLength(2);
+		expect(subscriptions.map((sub) => sub.group).sort()).toEqual([
+			"analytics",
+			"core",
+		]);
+
+		for (const subscription of subscriptions) {
+			await ctx.adapter.update({
+				model: "subscription",
+				update: {
+					status: "active",
+					periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+				},
+				where: [{ field: "id", value: subscription.id }],
+			});
+		}
+
+		const allSubscriptions = await client.subscription.list({
+			fetchOptions: { headers },
+		});
+		expect(allSubscriptions.data?.map((sub) => sub.group).sort()).toEqual([
+			"analytics",
+			"core",
+		]);
+
+		const groupedSubscriptions = await client.subscription.list({
+			query: { group: "core" },
+			fetchOptions: { headers },
+		});
+		expect(groupedSubscriptions.data).toHaveLength(1);
+		expect(groupedSubscriptions.data?.[0]?.group).toBe("core");
+	});
+
+	it("should reject cancel when multiple active groups exist and no target is provided", async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-cancel@email.com",
+			"cus_grouped_cancel",
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				group: "core",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_cancel",
+				stripeSubscriptionId: "sub_core_cancel",
+				status: "active",
+			},
+		});
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "analytics",
+				group: "analytics",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_cancel",
+				stripeSubscriptionId: "sub_analytics_cancel",
+				status: "active",
+			},
+		});
+
+		const res = await client.subscription.cancel({
+			returnUrl: "/account",
+			fetchOptions: { headers },
+		});
+		expect(res.error?.code).toBe("AMBIGUOUS_SUBSCRIPTION_GROUP");
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should reject cancel with group only when multiple active subscriptions exist in that group", async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-duplicate-cancel@email.com",
+			"cus_grouped_duplicate",
+		);
+
+		for (const stripeSubscriptionId of ["sub_core_dup_1", "sub_core_dup_2"]) {
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					group: "core",
+					referenceId: userId,
+					stripeCustomerId: "cus_grouped_duplicate",
+					stripeSubscriptionId,
+					status: "active",
+				},
+			});
+		}
+
+		const res = await client.subscription.cancel({
+			group: "core",
+			returnUrl: "/account",
+			fetchOptions: { headers },
+		});
+		expect(res.error?.code).toBe("AMBIGUOUS_SUBSCRIPTION_TARGET");
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should reject upgrading across groups when subscriptionId points at another group", async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"cross-group-upgrade@email.com",
+			"cus_cross_group",
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				group: "core",
+				referenceId: userId,
+				stripeCustomerId: "cus_cross_group",
+				stripeSubscriptionId: "sub_core_upgrade",
+				status: "active",
+				periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+			},
+		});
+
+		const res = await client.subscription.upgrade({
+			plan: "analytics",
+			subscriptionId: "sub_core_upgrade",
+			fetchOptions: { headers },
+		});
+		expect(res.error?.code).toBe("SUBSCRIPTION_GROUP_MISMATCH");
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should reject upgrading a group when multiple active subscriptions exist in that group", async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"group-upgrade-ambiguity@email.com",
+			"cus_group_upgrade_ambiguity",
+		);
+
+		for (const stripeSubscriptionId of [
+			"sub_core_upgrade_1",
+			"sub_core_upgrade_2",
+		]) {
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					group: "core",
+					referenceId: userId,
+					stripeCustomerId: "cus_group_upgrade_ambiguity",
+					stripeSubscriptionId,
+					status: "active",
+					periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+				},
+			});
+		}
+
+		const res = await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+		expect(res.error?.code).toBe("AMBIGUOUS_SUBSCRIPTION_TARGET");
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should allow explicit subscriptionId to bypass group ambiguity for cancel and restore", async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-subscriptionid-target@email.com",
+			"cus_grouped_subscriptionid_target",
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				group: "core",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_subscriptionid_target",
+				stripeSubscriptionId: "sub_core_targeted",
+				status: "active",
+				cancelAtPeriodEnd: true,
+				canceledAt: new Date(),
+			},
+		});
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "analytics",
+				group: "analytics",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_subscriptionid_target",
+				stripeSubscriptionId: "sub_analytics_other",
+				status: "active",
+			},
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{ id: "sub_core_targeted", status: "active" },
+				{ id: "sub_analytics_other", status: "active" },
+			],
+		});
+
+		const cancelRes = await client.subscription.cancel({
+			subscriptionId: "sub_core_targeted",
+			returnUrl: "/account",
+			fetchOptions: { headers },
+		});
+
+		expect(cancelRes.error).toBeNull();
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer: "cus_grouped_subscriptionid_target",
+				flow_data: {
+					type: "subscription_cancel",
+					subscription_cancel: {
+						subscription: "sub_core_targeted",
+					},
+				},
+			}),
+		);
+
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_core_targeted",
+					status: "active",
+					cancel_at_period_end: true,
+					cancel_at: null,
+				},
+				{
+					id: "sub_analytics_other",
+					status: "active",
+					cancel_at_period_end: false,
+					cancel_at: null,
+				},
+			],
+		});
+		mockStripe.subscriptions.update.mockResolvedValueOnce({
+			id: "sub_core_targeted",
+			status: "active",
+			cancel_at_period_end: false,
+			cancel_at: null,
+		});
+
+		const restoreRes = await client.subscription.restore({
+			subscriptionId: "sub_core_targeted",
+			fetchOptions: { headers },
+		});
+
+		expect(restoreRes.error).toBeNull();
+		expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+			"sub_core_targeted",
+			{ cancel_at_period_end: false },
+		);
+	});
+
+	it('should treat missing group as "default" when listing subscriptions', async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-default-list@email.com",
+			"cus_grouped_default_list",
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_default_list",
+				stripeSubscriptionId: "sub_default_list",
+				status: "active",
+			},
+		});
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				group: "core",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_default_list",
+				stripeSubscriptionId: "sub_core_list",
+				status: "active",
+			},
+		});
+
+		const allSubscriptions = await client.subscription.list({
+			fetchOptions: { headers },
+		});
+		expect(allSubscriptions.data).toHaveLength(2);
+
+		const defaultSubscriptions = await client.subscription.list({
+			query: { group: "default" },
+			fetchOptions: { headers },
+		});
+		expect(defaultSubscriptions.data).toHaveLength(1);
+		expect(defaultSubscriptions.data?.[0]?.stripeSubscriptionId).toBe(
+			"sub_default_list",
+		);
+	});
+
+	it('should allow canceling the legacy "default" group explicitly', async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-default-cancel@email.com",
+			"cus_grouped_default_cancel",
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_default_cancel",
+				stripeSubscriptionId: "sub_default_cancel",
+				status: "active",
+			},
+		});
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "analytics",
+				group: "analytics",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_default_cancel",
+				stripeSubscriptionId: "sub_analytics_cancel_default_test",
+				status: "active",
+			},
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_default_cancel",
+					status: "active",
+				},
+				{
+					id: "sub_analytics_cancel_default_test",
+					status: "active",
+				},
+			],
+		});
+
+		const res = await client.subscription.cancel({
+			group: "default",
+			returnUrl: "/account",
+			fetchOptions: { headers },
+		});
+
+		expect(res.error).toBeNull();
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer: "cus_grouped_default_cancel",
+				flow_data: {
+					type: "subscription_cancel",
+					subscription_cancel: {
+						subscription: "sub_default_cancel",
+					},
+				},
+			}),
+		);
+	});
+
+	it('should allow restoring the legacy "default" group explicitly', async () => {
+		vi.clearAllMocks();
+
+		const { client, ctx, headers, userId } = await createSignedInGroupedUser(
+			"grouped-default-restore@email.com",
+			"cus_grouped_default_restore",
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_default_restore",
+				stripeSubscriptionId: "sub_default_restore",
+				status: "active",
+				cancelAtPeriodEnd: true,
+				canceledAt: new Date(),
+			},
+		});
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "analytics",
+				group: "analytics",
+				referenceId: userId,
+				stripeCustomerId: "cus_grouped_default_restore",
+				stripeSubscriptionId: "sub_analytics_restore_default_test",
+				status: "active",
+			},
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_default_restore",
+					status: "active",
+					cancel_at_period_end: true,
+					cancel_at: null,
+				},
+				{
+					id: "sub_analytics_restore_default_test",
+					status: "active",
+					cancel_at_period_end: false,
+					cancel_at: null,
+				},
+			],
+		});
+		mockStripe.subscriptions.update.mockResolvedValueOnce({
+			id: "sub_default_restore",
+			status: "active",
+			cancel_at_period_end: false,
+			cancel_at: null,
+		});
+
+		const res = await client.subscription.restore({
+			group: "default",
+			fetchOptions: { headers },
+		});
+
+		expect(res.error).toBeNull();
+		expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+			"sub_default_restore",
+			{ cancel_at_period_end: false },
+		);
+	});
+
+	it('should allow ungrouped plans to be listed via group "default"', async () => {
+		vi.clearAllMocks();
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "ungrouped-default-query@email.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "ungrouped-default-query@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+			},
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+
+		const defaultSubscriptions = await client.subscription.list({
+			query: { group: "default" },
+			fetchOptions: { headers },
+		});
+
+		expect(defaultSubscriptions.error).toBeNull();
+		expect(defaultSubscriptions.data).toHaveLength(1);
+		expect(defaultSubscriptions.data?.[0]?.plan).toBe("starter");
+	});
+
+	it("should update only the matching group row during webhook fallback resolution", async () => {
+		vi.clearAllMocks();
+
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(groupedStripeOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "grouped-webhook-fallback@email.com",
+				stripeCustomerId: "cus_grouped_webhook_fallback",
+			},
+		});
+
+		const coreSubscription = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				group: "core",
+				stripeCustomerId: "cus_grouped_webhook_fallback",
+				stripeSubscriptionId: "sub_grouped_core_existing",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		const analyticsSubscription = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				group: "analytics",
+				stripeCustomerId: "cus_grouped_webhook_fallback",
+				status: "incomplete",
+				plan: "analytics",
+			},
+		});
+
+		const webhookEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_grouped_analytics_from_webhook",
+					customer: "cus_grouped_webhook_fallback",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: { id: "price_group_analytics", recurring: { interval: "month" } },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					current_period_start: Math.floor(Date.now() / 1000),
+					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...groupedStripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+			},
+		};
+
+		const testOptions = {
+			...groupedStripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const { auth: webhookAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{ disableTestUser: true },
+		);
+		const webhookCtx = await webhookAuth.$context;
+
+		const response = await webhookAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(webhookEvent),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+
+		const updatedAnalyticsSub = await webhookCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: analyticsSubscription.id }],
+		});
+		const untouchedCoreSub = await webhookCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: coreSubscription.id }],
+		});
+
+		expect(updatedAnalyticsSub).toMatchObject({
+			id: analyticsSubscription.id,
+			group: "analytics",
+			status: "active",
+			stripeSubscriptionId: "sub_grouped_analytics_from_webhook",
+		});
+		expect(untouchedCoreSub).toMatchObject({
+			id: coreSubscription.id,
+			group: "core",
+			stripeSubscriptionId: "sub_grouped_core_existing",
+			status: "active",
+		});
 	});
 
 	it("should handle subscription webhook events", async () => {
