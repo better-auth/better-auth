@@ -40,6 +40,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 							"authorization_code",
 							"client_credentials",
 							"refresh_token",
+							"urn:openid:params:grant-type:ciba",
 						]),
 					)
 					.default(["authorization_code"])
@@ -253,6 +254,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 							"authorization_code",
 							"client_credentials",
 							"refresh_token",
+							"urn:openid:params:grant-type:ciba",
 						]),
 					)
 					.default(["authorization_code"])
@@ -505,6 +507,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 								"authorization_code",
 								"client_credentials",
 								"refresh_token",
+								"urn:openid:params:grant-type:ciba",
 							]),
 						)
 						.optional(),
@@ -559,6 +562,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 								"authorization_code",
 								"client_credentials",
 								"refresh_token",
+								"urn:openid:params:grant-type:ciba",
 							]),
 						)
 						.optional(),
