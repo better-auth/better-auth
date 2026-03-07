@@ -18,6 +18,13 @@ export function authServerMetadata(
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
+		backchannel_authentication_endpoint?: string;
+		backchannel_token_delivery_modes_supported?: (
+			| "poll"
+			| "ping"
+			| "push"
+		)[];
+		backchannel_user_code_parameter_supported?: boolean;
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
@@ -61,6 +68,12 @@ export function authServerMetadata(
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
+		backchannel_authentication_endpoint:
+			overrides?.backchannel_authentication_endpoint,
+		backchannel_token_delivery_modes_supported:
+			overrides?.backchannel_token_delivery_modes_supported,
+		backchannel_user_code_parameter_supported:
+			overrides?.backchannel_user_code_parameter_supported,
 	};
 	return metadata;
 }

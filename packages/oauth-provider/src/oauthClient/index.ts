@@ -36,11 +36,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.optional(),
 				grant_types: z
 					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
+						z.string().min(1),
 					)
 					.default(["authorization_code"])
 					.optional(),
@@ -249,11 +245,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.optional(),
 				grant_types: z
 					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
+						z.string().min(1),
 					)
 					.default(["authorization_code"])
 					.optional(),
@@ -501,11 +493,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
 					grant_types: z
 						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
+							z.string().min(1),
 						)
 						.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
@@ -555,11 +543,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
 					grant_types: z
 						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
+							z.string().min(1),
 						)
 						.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),

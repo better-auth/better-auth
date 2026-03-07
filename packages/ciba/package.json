@@ -1,0 +1,82 @@
+{
+  "name": "@better-auth/ciba",
+  "version": "1.0.0",
+  "description": "Client Initiated Backchannel Authentication (CIBA) plugin for Better Auth",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/ciba",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/ciba"
+  },
+  "author": "Gustavo Valverde",
+  "keywords": [
+    "auth",
+    "ciba",
+    "backchannel",
+    "oauth",
+    "oidc",
+    "ai-agents",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "jose": "^6.1.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
+    "better-auth": "workspace:*",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:"
+  }
+}

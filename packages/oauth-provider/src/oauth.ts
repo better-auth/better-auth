@@ -571,11 +571,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						grant_type: z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
+						grant_type: z.string().min(1),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
 						code: z.string().optional(),
@@ -584,6 +580,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						refresh_token: z.string().optional(),
 						resource: z.string().optional(),
 						scope: z.string().optional(),
+						auth_req_id: z.string().optional(),
 					}),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -602,6 +599,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														"authorization_code",
 														"client_credentials",
 														"refresh_token",
+														"urn:openid:params:grant-type:ciba",
 													],
 													description: "OAuth2 grant type",
 												},
@@ -1125,11 +1123,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						grant_types: z
 							.array(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
+								z.string().min(1),
 							)
 							.default(["authorization_code"])
 							.optional(),
