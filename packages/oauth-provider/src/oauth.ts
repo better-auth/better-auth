@@ -1122,9 +1122,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
-							.array(
-								z.string().min(1),
-							)
+							.array(z.string().min(1))
 							.default(["authorization_code"])
 							.optional(),
 						response_types: z

@@ -87,7 +87,7 @@ export const ciba = (options: CibaOptions) => {
 							| undefined;
 						if (!body || typeof body !== "object") return;
 
-						const baseURL = ctx.context.baseURL;
+						const baseURL = (ctx.context as any).baseURL as string;
 
 						body.backchannel_authentication_endpoint = `${baseURL}/oauth2/bc-authorize`;
 						body.backchannel_token_delivery_modes_supported = deliveryModes;

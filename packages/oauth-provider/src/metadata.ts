@@ -19,11 +19,7 @@ export function authServerMetadata(
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
 		backchannel_authentication_endpoint?: string;
-		backchannel_token_delivery_modes_supported?: (
-			| "poll"
-			| "ping"
-			| "push"
-		)[];
+		backchannel_token_delivery_modes_supported?: ("poll" | "ping" | "push")[];
 		backchannel_user_code_parameter_supported?: boolean;
 	},
 ) {
