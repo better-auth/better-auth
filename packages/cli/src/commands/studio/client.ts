@@ -47,7 +47,7 @@ export async function runTunnel(ws: WebSocket, options: TunnelClientOptions) {
 		} catch (_: unknown) {
 			void _;
 		}
-		// Server sends ready as first message (plain JSON). Unwrap JSON-RPC result if present.
+
 		const msg =
 			parsed &&
 			typeof parsed === "object" &&

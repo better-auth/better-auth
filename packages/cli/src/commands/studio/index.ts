@@ -18,8 +18,7 @@ import {
 import { handleLogin } from "../login";
 import { runTunnel } from "./client";
 
-const TUNNEL_BASE_URL =
-	process.env.BETTER_AUTH_TUNNEL_URL || "https://tunnel.better-auth.com";
+const TUNNEL_BASE_URL = "https://tunnel.better-auth.com";
 const HEARTBEAT_INTERVAL = 25_000;
 
 async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
@@ -135,7 +134,6 @@ async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
 			return;
 		}
 		shuttingDown = true;
-		s1.stop();
 		console.log(chalk.dim("\n  Disconnecting..."));
 		await cleanup();
 		if (ws.readyState === WebSocket.OPEN) {

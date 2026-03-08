@@ -90,7 +90,8 @@
 				"prettier",
 				"prompts",
 				"yocto-spinner",
-				"zod"
+				"zod",
+				"ws"
 			],
 			"project": ["src/**/*.ts", "test/**/*.ts"]
 		},
