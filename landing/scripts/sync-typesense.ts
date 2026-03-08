@@ -20,12 +20,17 @@ const client = new Client({
 		},
 	],
 	apiKey: process.env.TYPESENSE_ADMIN_API_KEY!,
-	connectionTimeoutSeconds: 60 * 15,
+	connectionTimeoutSeconds: 30,
 });
 
 void sync(client, {
 	typesenseCollectionName: "better-auth-docs",
 	documents: records,
-}).then(() => {
-	console.log(`search updated: ${records.length} records`);
-});
+})
+	.then(() => {
+		console.log(`search updated: ${records.length} records`);
+	})
+	.catch((error) => {
+		console.error("Failed to sync Typesense index:", error);
+		process.exitCode = 1;
+	});

@@ -43,13 +43,15 @@ const DEFAULT_PANEL_WIDTH = 400;
 const MIN_PANEL_WIDTH = 320;
 const MAX_PANEL_WIDTH = 640;
 
+const chatTransport = new DefaultChatTransport({
+	api: "/api/docs/chat",
+});
+
 export function AIChat({ children }: { children: ReactNode }) {
 	const [open, setOpen] = useState(false);
 	const chat = useChat({
 		id: "ai-chat",
-		transport: new DefaultChatTransport({
-			api: "/api/docs/chat",
-		}),
+		transport: chatTransport,
 	});
 
 	// Support ?askai= URL param
@@ -475,6 +477,8 @@ function Message({
 
 	// Remove Inkeep citation markers like (1), (2) etc.
 	markdown = markdown.replace(/\(\d+\)/g, "");
+	// Remove stray backslashes used as line breaks by Inkeep
+	markdown = markdown.replace(/^\s*\\\s*$/gm, "");
 
 	// Fix incomplete code blocks
 	const codeBlockCount = (markdown.match(/```/g) || []).length;
@@ -492,7 +496,7 @@ function Message({
 			>
 				{roleName[message.role] ?? "unknown"}
 			</p>
-			<div className="text-xs prose prose-xs max-w-none [&_pre]:!text-[11px]">
+			<div className="text-sm prose prose-sm max-w-none [&_pre]:!text-[11px]">
 				<Markdown text={markdown} />
 			</div>
 			{message.role === "assistant" && message.id && !isStreaming && (

@@ -23,24 +23,35 @@ import { Client } from "typesense";
 import { useTypesenseSearch } from "typesense-fumadocs-adapter/client";
 import { usePages } from "@/app/docs/provider";
 
-const serverUrl = new URL(process.env.NEXT_PUBLIC_TYPESENSE_SERVER_URL!);
-
-const typesenseClient = new Client({
-	nodes: [
-		{
-			host: serverUrl.hostname,
-			port:
-				Number(serverUrl.port) || (serverUrl.protocol === "https:" ? 443 : 80),
-			protocol: serverUrl.protocol.replace(":", ""),
-		},
-	],
-	apiKey: process.env.NEXT_PUBLIC_TYPESENSE_SEARCH_API_KEY!,
-});
+const typesenseClient = (() => {
+	const url = process.env.NEXT_PUBLIC_TYPESENSE_SERVER_URL;
+	const apiKey = process.env.NEXT_PUBLIC_TYPESENSE_SEARCH_API_KEY;
+	if (!url || !apiKey) {
+		// Return a dummy client so the app works without Typesense configured
+		return new Client({
+			nodes: [{ host: "localhost", port: 8108, protocol: "http" }],
+			apiKey: "dummy",
+		});
+	}
+	const serverUrl = new URL(url);
+	return new Client({
+		nodes: [
+			{
+				host: serverUrl.hostname,
+				port:
+					Number(serverUrl.port) ||
+					(serverUrl.protocol === "https:" ? 443 : 80),
+				protocol: serverUrl.protocol.replace(":", ""),
+			},
+		],
+		apiKey,
+	});
+})();
 
 export default function CustomSearchDialog(props: SharedProps) {
 	const { search, setSearch, query } = useTypesenseSearch({
 		typesenseCollectionName: "better-auth-docs",
-		client: typesenseClient,
+		client: typesenseClient!,
 	});
 	const pages = usePages();
 	const router = useRouter();
