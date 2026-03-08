@@ -4,7 +4,7 @@ import { Client } from "typesense";
 import type { DocumentRecord } from "typesense-fumadocs-adapter";
 import { sync } from "typesense-fumadocs-adapter";
 
-const filePath = ".next/server/app/static.json.body";
+const filePath = ".next/server/app/api/docs/static.json.body";
 const content = fs.readFileSync(filePath);
 const records = JSON.parse(content.toString()) as DocumentRecord[];
 
