@@ -301,6 +301,16 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/0-Sandy.png",
 		},
 	},
+  {
+    name: "better-auth-usos",
+    url: "https://github.com/qamarq/better-auth-usos",
+    description: "USOS plugin for Better Auth - allows students to authenticate using their university credentials via the USOS API. Using oauth 1a.",
+    author: {
+      name: "qamarq",
+      github: "qamarq",
+      avatar: "https://github.com/qamarq.png"
+    }
+  }
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);
