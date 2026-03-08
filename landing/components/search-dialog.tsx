@@ -33,7 +33,15 @@ const typesenseClient = (() => {
 			apiKey: "dummy",
 		});
 	}
-	const serverUrl = new URL(url);
+	let serverUrl: URL;
+	try {
+		serverUrl = new URL(url);
+	} catch {
+		return new Client({
+			nodes: [{ host: "localhost", port: 8108, protocol: "http" }],
+			apiKey: "dummy",
+		});
+	}
 	return new Client({
 		nodes: [
 			{

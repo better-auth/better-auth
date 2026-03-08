@@ -353,6 +353,7 @@ function PanelInput() {
 		if (!input.trim() || isLoading) return;
 		void sendMessage({ text: input });
 		setInput("");
+		requestAnimationFrame(adjustHeight);
 	};
 
 	const handleDragStart = useCallback(
@@ -510,10 +511,12 @@ function Message({
 		}
 	}
 
-	// Remove Inkeep citation markers like (1), (2) etc.
-	markdown = markdown.replace(/\(\d+\)/g, "");
-	// Remove stray backslashes used as line breaks by Inkeep
-	markdown = markdown.replace(/^\s*\\\s*$/gm, "");
+	if (message.role === "assistant") {
+		// Remove Inkeep citation markers like (1), (2) etc.
+		markdown = markdown.replace(/\(\d+\)/g, "");
+		// Remove stray backslashes used as line breaks by Inkeep
+		markdown = markdown.replace(/^\s*\\\s*$/gm, "");
+	}
 
 	// Fix incomplete code blocks
 	const codeBlockCount = (markdown.match(/```/g) || []).length;

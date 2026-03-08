@@ -4,11 +4,26 @@ import { Client } from "typesense";
 import type { DocumentRecord } from "typesense-fumadocs-adapter";
 import { sync } from "typesense-fumadocs-adapter";
 
+const url = process.env.NEXT_PUBLIC_TYPESENSE_SERVER_URL;
+const adminKey = process.env.TYPESENSE_ADMIN_API_KEY;
+
+if (!url || !adminKey) {
+	console.log("Typesense env vars not set, skipping sync.");
+	process.exit(0);
+}
+
+if (process.env.VERCEL && process.env.VERCEL_GIT_COMMIT_REF !== "main") {
+	console.log(
+		`Branch is "${process.env.VERCEL_GIT_COMMIT_REF}", skipping sync.`,
+	);
+	process.exit(0);
+}
+
 const filePath = ".next/server/app/api/docs/static.json.body";
 const content = fs.readFileSync(filePath);
 const records = JSON.parse(content.toString()) as DocumentRecord[];
 
-const serverUrl = new URL(process.env.NEXT_PUBLIC_TYPESENSE_SERVER_URL!);
+const serverUrl = new URL(url);
 
 const client = new Client({
 	nodes: [
@@ -19,7 +34,7 @@ const client = new Client({
 			protocol: serverUrl.protocol.replace(":", ""),
 		},
 	],
-	apiKey: process.env.TYPESENSE_ADMIN_API_KEY!,
+	apiKey: adminKey,
 	connectionTimeoutSeconds: 30,
 });
 
