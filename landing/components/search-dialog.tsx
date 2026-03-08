@@ -150,7 +150,7 @@ function LoadingSearchIcon() {
 		<Search
 			className={
 				isLoading
-					? "size-5 animate-pulse text-foreground duration-200"
+					? "size-5 animate-pulse text-foreground duration-400"
 					: "size-5 text-fd-muted-foreground"
 			}
 		/>
