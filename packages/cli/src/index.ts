@@ -12,6 +12,7 @@ import { upgrade } from "./commands/upgrade";
 import { getPackageInfo } from "./utils/get-package-info";
 
 import "dotenv/config";
+import { studio } from "./commands/studio";
 
 // handle exit
 process.on("SIGINT", () => process.exit(0));
@@ -37,6 +38,7 @@ async function main() {
 		.addCommand(info)
 		.addCommand(login)
 		.addCommand(logout)
+		.addCommand(studio)
 		.addCommand(mcp)
 		.addCommand(upgrade)
 		.version(cliVersion)

@@ -56,3 +56,14 @@ export const spawnCommand = (cmd: string, cwd: string = process.cwd()) =>
 		});
 		child.on("error", reject);
 	});
+
+export function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function getInfraBaseURL(): string {
+	if (process.env.BETTER_AUTH_INFRA_URL) {
+		return process.env.BETTER_AUTH_INFRA_URL.replace(/\/$/, "");
+	}
+	return "http://localhost:3001";
+}
