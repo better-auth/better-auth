@@ -268,6 +268,39 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/ramiras123.png",
 		},
 	},
+	{
+		name: "better-auth-razorpay",
+		url: "https://github.com/iamjasonkendrick/better-auth-razorpay",
+		description:
+			"Razorpay payment plugin for Better Auth — integrates Razorpay payments, webhooks, and subscription flows.",
+		author: {
+			name: "iamjasonkendrick",
+			github: "iamjasonkendrick",
+			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "better-auth-payu",
+		url: "https://github.com/iamjasonkendrick/better-auth-payu",
+		description:
+			"PayU payment plugin for Better Auth — integrates PayU payments, webhooks, and subscription flows.",
+		author: {
+			name: "iamjasonkendrick",
+			github: "iamjasonkendrick",
+			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "better-auth-invite-plugin",
+		url: "https://github.com/0-Sandy/better-auth-invite-plugin",
+		description:
+			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
+		author: {
+			name: "Sandy",
+			github: "0-Sandy",
+			avatar: "https://github.com/0-Sandy.png",
+		},
+	},
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);

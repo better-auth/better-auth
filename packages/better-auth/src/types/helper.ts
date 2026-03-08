@@ -29,7 +29,12 @@ export type RequiredKeysOf<BaseType extends object> = Exclude<
 	undefined
 >;
 
-export type HasRequiredKeys<BaseType extends object> =
-	RequiredKeysOf<BaseType> extends never ? false : true;
+export type HasRequiredKeys<BaseType> = 0 extends 1 & BaseType
+	? false
+	: [BaseType] extends [object]
+		? RequiredKeysOf<BaseType & object> extends never
+			? false
+			: true
+		: false;
 
 export type StripEmptyObjects<T extends object> = { [K in keyof T]: T[K] };

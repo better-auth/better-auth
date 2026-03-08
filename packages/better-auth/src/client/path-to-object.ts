@@ -3,7 +3,7 @@ import type {
 	ClientFetchOption,
 } from "@better-auth/core";
 import type { BetterFetchResponse } from "@better-fetch/fetch";
-import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
+import type { Endpoint, InputContext } from "better-call";
 import type {
 	HasRequiredKeys,
 	Prettify,
@@ -86,34 +86,55 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
-export type InferCtx<
-	C extends InputContext<any, any>,
+type InferCtxQuery<
+	C extends InputContext<any, any, any, any, any, any>,
 	FetchOptions extends ClientFetchOption,
-> =
-	C["body"] extends Record<string, any>
+> = 0 extends 1 & C["query"]
+	? {
+			query?: Record<string, any> | undefined;
+			fetchOptions?: FetchOptions | undefined;
+		}
+	: [C["query"]] extends [Record<string, any>]
+		? {
+				query: C["query"];
+				fetchOptions?: FetchOptions | undefined;
+			}
+		: [C["query"]] extends [Record<string, any> | undefined]
+			? {
+					query?: C["query"] | undefined;
+					fetchOptions?: FetchOptions | undefined;
+				}
+			: {
+					fetchOptions?: FetchOptions | undefined;
+				};
+
+export type InferCtx<
+	C extends InputContext<any, any, any, any, any, any>,
+	FetchOptions extends ClientFetchOption,
+> = 0 extends 1 & C["body"]
+	? // body is `any` — skip body intersection so fetchOptions stays typed
+		InferCtxQuery<C, FetchOptions>
+	: [C["body"]] extends [Record<string, any>]
 		? C["body"] & {
 				fetchOptions?: FetchOptions | undefined;
 			}
-		: C["query"] extends Record<string, any>
-			? {
-					query: C["query"];
-					fetchOptions?: FetchOptions | undefined;
-				}
-			: C["query"] extends Record<string, any> | undefined
-				? {
-						query?: C["query"] | undefined;
-						fetchOptions?: FetchOptions | undefined;
-					}
-				: {
-						fetchOptions?: FetchOptions | undefined;
-					};
+		: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
 export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 	API extends Record<string, infer T>
-		? T extends Endpoint
-			? T["options"]["metadata"] extends
+		? T extends Endpoint<
+				any,
+				any,
+				any,
+				any,
+				any,
+				infer R,
+				infer Meta,
+				infer ErrorSchema
+			>
+			? [Meta] extends [
 					| {
 							isAction: false;
 					  }
@@ -125,12 +146,23 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 					  }
 					| {
 							scope: "server";
-					  }
+					  },
+				]
 				? {}
 				: PathToObject<
 						T["path"],
-						T extends (ctx: infer C) => infer R
-							? C extends InputContext<any, any>
+						T extends (ctx: infer _C) => any
+							? Extract<
+									_C,
+									InputContext<any, any, any, any, any, any>
+								> extends infer C extends InputContext<
+									any,
+									any,
+									any,
+									any,
+									any,
+									any
+								>
 								? <
 										FetchOptions extends ClientFetchOption<
 											Partial<C["body"]> & Record<string, any>,
@@ -159,7 +191,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 												]
 									) => Promise<
 										BetterFetchResponse<
-											T["options"]["metadata"] extends {
+											Meta extends {
 												CUSTOM_SESSION: boolean;
 											}
 												? NonNullable<Awaited<R>>
@@ -169,15 +201,17 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 															session: InferSessionFromClient<COpts>;
 														} | null
 													: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>,
-											T["options"]["error"] extends StandardSchemaV1
-												? // InferOutput
-													NonNullable<
-														T["options"]["error"]["~standard"]["types"]
-													>["output"]
-												: {
+											0 extends 1 & ErrorSchema
+												? {
 														code?: string | undefined;
 														message?: string | undefined;
-													},
+													}
+												: [ErrorSchema] extends [Record<string, any>]
+													? ErrorSchema
+													: {
+															code?: string | undefined;
+															message?: string | undefined;
+														},
 											FetchOptions["throw"] extends true
 												? true
 												: COpts["fetchOptions"] extends { throw: true }
@@ -192,7 +226,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 		: never;
 
 export type InferRoutes<
-	API extends Record<string, Endpoint>,
+	API extends Record<string, unknown>,
 	ClientOpts extends BetterAuthClientOptions,
 > = MergeRoutes<InferRoute<API, ClientOpts>>;
 

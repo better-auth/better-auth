@@ -37,9 +37,11 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 								>
 									{release.title || release.tag}
 								</Link>
-								<span className="text-[10px] font-mono text-foreground/30 px-1.5 py-0.5 border border-foreground/[0.08] bg-foreground/[0.015]">
-									{release.tag}
-								</span>
+								{release.title && release.title !== release.tag && (
+									<span className="text-[10px] font-mono text-foreground/30 px-1.5 py-0.5 border border-foreground/[0.08] bg-foreground/[0.015]">
+										{release.tag}
+									</span>
+								)}
 							</div>
 							<time className="text-[11px] font-mono text-neutral-400 dark:text-neutral-500 shrink-0 ml-4">
 								{release.date}
@@ -56,7 +58,7 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 											className="text-base font-medium tracking-tight text-neutral-800 dark:text-neutral-200 mt-4 mb-2"
 											{...props}
 										>
-											{children?.toString().split("date=")[0].trim()}
+											{children}
 										</h2>
 									),
 									h3: ({ children, ...props }) => (
@@ -64,7 +66,7 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 											className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1.5 pb-1 border-b border-dashed border-foreground/[0.06]"
 											{...props}
 										>
-											{children?.toString()?.trim()}
+											{children}
 										</h3>
 									),
 									p: (props) => (
@@ -76,7 +78,7 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 									ul: (props) => <ul className="space-y-0.5 my-1" {...props} />,
 									li: (props) => (
 										<li
-											className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-foreground/25"
+											className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-foreground/50"
 											{...props}
 										/>
 									),

@@ -30,6 +30,7 @@ export interface AtlassianOptions extends ProviderOptions<AtlassianProfile> {
 }
 
 export const atlassian = (options: AtlassianOptions) => {
+	const tokenEndpoint = "https://auth.atlassian.com/oauth/token";
 	return {
 		id: "atlassian",
 		name: "Atlassian",
@@ -70,7 +71,7 @@ export const atlassian = (options: AtlassianOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://auth.atlassian.com/oauth/token",
+				tokenEndpoint,
 			});
 		},
 
@@ -83,7 +84,7 @@ export const atlassian = (options: AtlassianOptions) => {
 							clientId: options.clientId,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://auth.atlassian.com/oauth/token",
+						tokenEndpoint,
 					});
 				},
 

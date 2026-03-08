@@ -377,7 +377,7 @@ function RoleCard({
 								key={req}
 								className="flex items-start gap-2 text-[11px] text-foreground/45 group-hover:text-foreground/55 transition-colors duration-300"
 							>
-								<span className="text-foreground/25 mt-px font-mono text-[9px] leading-none select-none shrink-0">
+								<span className="text-foreground/50 mt-px font-mono text-[9px] leading-none select-none shrink-0">
 									+
 								</span>
 								<span>{req}</span>
@@ -420,11 +420,11 @@ export function CareersPageClient() {
 	>(null);
 
 	return (
-		<div className="relative h-full overflow-x-hidden pt-14 lg:pt-0">
-			<div className="relative text-foreground h-full">
-				<div className="flex flex-col lg:flex-row h-full">
+		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
+			<div className="relative text-foreground lg:h-full">
+				<div className="flex flex-col lg:h-full lg:flex-row">
 					{/* Left side */}
-					<div className="hidden lg:block relative w-full lg:w-[30%] border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -432,7 +432,7 @@ export function CareersPageClient() {
 					</div>
 
 					{/* Right side */}
-					<div className="relative w-full lg:w-[70%] overflow-y-auto overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
 						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-10">
 							{/* Mobile header */}
 							<div className="flex lg:hidden items-center gap-1.5">

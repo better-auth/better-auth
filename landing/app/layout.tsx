@@ -1,9 +1,10 @@
 import { GeistPixelSquare } from "geist/font/pixel";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
+import type { Metadata } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
-import { CommandMenuProvider } from "@/components/command-menu";
 import { StaggeredNavFiles } from "@/components/landing/staggered-nav-files";
 import { Providers } from "@/components/providers";
 
@@ -17,12 +18,35 @@ const fontMono = Geist_Mono({
 	variable: "--font-mono",
 });
 
-export const metadata = {
+export const metadata: Metadata = {
+	metadataBase: new URL(
+		process.env.VERCEL_URL
+			? `https://${process.env.VERCEL_URL}`
+			: process.env.NODE_ENV === "production"
+				? "https://better-auth.com"
+				: (process.env.NEXT_PUBLIC_URL ?? "http://localhost:3000"),
+	),
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",
 	},
 	description: "The Most Comprehensive Authentication Framework",
+	icons: {
+		icon: [
+			{ url: "/favicon/favicon.ico", sizes: "any" },
+			{
+				url: "/favicon/favicon-32x32.png",
+				sizes: "32x32",
+				type: "image/png",
+			},
+			{
+				url: "/favicon/favicon-16x16.png",
+				sizes: "16x16",
+				type: "image/png",
+			},
+		],
+		apple: "/favicon/apple-touch-icon.png",
+	},
 	openGraph: {
 		images: ["/og.png"],
 	},
@@ -36,25 +60,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 	return (
 		<html lang="en" suppressHydrationWarning>
 			<head>
-				<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
-				<link
-					rel="icon"
-					type="image/png"
-					sizes="32x32"
-					href="/favicon/favicon-32x32.png"
-				/>
-				<link
-					rel="icon"
-					type="image/png"
-					sizes="16x16"
-					href="/favicon/favicon-16x16.png"
-				/>
-				<link
-					rel="apple-touch-icon"
-					sizes="180x180"
-					href="/favicon/apple-touch-icon.png"
-				/>
-				<link rel="manifest" href="/favicon/site.webmanifest" />
 				<script
 					dangerouslySetInnerHTML={{
 						__html: `
@@ -87,19 +92,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				)}
 			</head>
 			<body
-				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased overflow-x-hidden`}
+				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased`}
 				suppressHydrationWarning
 			>
 				<Providers>
-					<CommandMenuProvider>
-						<div className="relative h-dvh overflow-x-hidden">
-							<StaggeredNavFiles />
-							<div className="absolute inset-0 overflow-y-auto overflow-x-hidden">
-								{children}
-							</div>
-						</div>
-					</CommandMenuProvider>
+					<div className="relative min-h-dvh">
+						<StaggeredNavFiles />
+						{children}
+					</div>
 				</Providers>
+				<Analytics />
 			</body>
 		</html>
 	);

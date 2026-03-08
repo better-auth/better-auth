@@ -2,14 +2,6 @@ import type { ClassValue } from "clsx";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-const ASSET_BASE_URL =
-	process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-
-export function getSrc(path: string): string {
-	const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-	return ASSET_BASE_URL ? `${ASSET_BASE_URL}${normalizedPath}` : normalizedPath;
-}
-
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
@@ -27,3 +19,11 @@ export function mergeRefs<T>(
 		});
 	};
 }
+
+export const baseUrl =
+	process.env.NODE_ENV === "development" ||
+	(!process.env.VERCEL_PROJECT_PRODUCTION_URL && !process.env.VERCEL_URL)
+		? new URL("http://localhost:3000")
+		: new URL(
+				`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL}`,
+			);

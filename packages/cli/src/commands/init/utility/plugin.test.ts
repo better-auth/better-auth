@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { PluginConfig } from "../configs/temp-plugins.config";
 import { tempPluginsConfig } from "../configs/temp-plugins.config";
 import type { GetArgumentsFn } from "../generate-auth";

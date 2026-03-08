@@ -100,7 +100,7 @@ export const nextCookies = () => {
 									path: value.path,
 								} as const;
 								try {
-									cookieHelper.set(key, decodeURIComponent(value.value), opts);
+									cookieHelper.set(key, value.value, opts);
 								} catch {
 									// this will fail if the cookie is being set on server component
 								}
