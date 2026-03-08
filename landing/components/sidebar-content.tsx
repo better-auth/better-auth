@@ -28,7 +28,9 @@ import { Icons } from "./icons";
 
 export interface SubpageItem {
 	title: string;
-	href: string;
+	href?: string;
+	group?: boolean;
+	icon?: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 }
 
 export interface ListItem {
