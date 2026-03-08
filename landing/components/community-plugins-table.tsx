@@ -290,6 +290,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/iamjasonkendrick.png",
 		},
 	},
+	{
+		name: "better-auth-invite-plugin",
+		url: "https://github.com/0-Sandy/better-auth-invite-plugin",
+		description:
+			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
+		author: {
+			name: "Sandy",
+			github: "0-Sandy",
+			avatar: "https://github.com/0-Sandy.png",
+		},
+	},
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);
