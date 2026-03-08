@@ -33,35 +33,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			url: url("/"),
 			priority: 1,
 		},
-    {
-      url: url("/blog"),
-      priority: 0.9,
-    },
-    {
+		{
+			url: url("/blog"),
+			priority: 0.9,
+		},
+		{
 			url: url("/careers"),
 			priority: 0.7,
 		},
-    {
+		{
 			url: url("/changelog"),
 			priority: 0.7,
 		},
-    {
+		{
 			url: url("/community"),
 			priority: 0.7,
 		},
-    {
+		{
 			url: url("/enterprise"),
 			priority: 0.7,
 		},
-    {
+		{
 			url: url("/legal/terms"),
 			priority: 0.3,
 		},
-    {
+		{
 			url: url("/legal/privacy"),
 			priority: 0.3,
 		},
-    {
+		{
 			url: url("/products/framework"),
 			priority: 0.7,
 		},
