@@ -433,10 +433,12 @@ function SidebarItemWithSubpages({
 function SubpageLink({
 	href,
 	active,
+	icon,
 	children,
 }: {
 	href: string;
 	active: boolean;
+	icon?: ReactNode;
 	children: ReactNode;
 }) {
 	return (
@@ -450,6 +452,7 @@ function SubpageLink({
 					: "text-foreground/55 hover:text-foreground/80 hover:bg-foreground/3",
 			)}
 		>
+			{icon && <span className="size-4 shrink-0">{icon}</span>}
 			<span className="truncate">{children}</span>
 		</Link>
 	);
