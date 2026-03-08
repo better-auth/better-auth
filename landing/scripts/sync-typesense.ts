@@ -12,7 +12,12 @@ if (!url || !adminKey) {
 	process.exit(0);
 }
 
-if (process.env.VERCEL && process.env.VERCEL_GIT_COMMIT_REF !== "main") {
+if (!process.env.VERCEL) {
+	console.log("Not running on Production build, skipping sync.");
+	process.exit(0);
+}
+
+if (process.env.VERCEL_GIT_COMMIT_REF !== "main") {
 	console.log(
 		`Branch is "${process.env.VERCEL_GIT_COMMIT_REF}", skipping sync.`,
 	);
