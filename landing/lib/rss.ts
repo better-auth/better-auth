@@ -30,7 +30,7 @@ export function getRSS() {
 					: page.data.image
 				: undefined,
 			link: url.startsWith("/") ? `${baseUrl}${url.slice(1)}` : url,
-			date: new Date(page.data.lastModified ?? page.data.date),
+			date: new Date(page.data.date),
 			author: page.data.author
 				? [
 						{
