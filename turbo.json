@@ -14,6 +14,13 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "env": [
+        "NEXT_PUBLIC_TYPESENSE_SERVER_URL",
+        "NEXT_PUBLIC_TYPESENSE_SEARCH_API_KEY",
+        "TYPESENSE_ADMIN_API_KEY",
+        "INKEEP_API_KEY",
+        "GITHUB_TOKEN"
+      ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "clean": {},
