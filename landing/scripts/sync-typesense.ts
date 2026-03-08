@@ -20,6 +20,10 @@ if (process.env.VERCEL && process.env.VERCEL_GIT_COMMIT_REF !== "main") {
 }
 
 const filePath = ".next/server/app/api/docs/static.json.body";
+if (!fs.existsSync(filePath)) {
+	console.log("Build output not found, run 'pnpm build' first. Skipping sync.");
+	process.exit(0);
+}
 const content = fs.readFileSync(filePath);
 const records = JSON.parse(content.toString()) as DocumentRecord[];
 
