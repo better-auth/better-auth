@@ -55,7 +55,7 @@ export function AIChat({ children }: { children: ReactNode }) {
 	});
 
 	// Support ?askai= URL param
-	useEffect(() => {
+	const handleAskAiParam = useEffectEvent(() => {
 		const params = new URLSearchParams(window.location.search);
 		const aiQuery = params.get("askai");
 		if (aiQuery) {
@@ -68,6 +68,10 @@ export function AIChat({ children }: { children: ReactNode }) {
 				: window.location.pathname;
 			window.history.replaceState({}, "", newUrl);
 		}
+	});
+
+	useEffect(() => {
+		handleAskAiParam();
 	}, []);
 
 	return (
@@ -112,8 +116,11 @@ export function AIChatPanel() {
 	const startWidth = useRef(panelWidth);
 	useAIChatHotKey();
 
+	// Mobile: lock body scroll when panel is open
 	useEffect(() => {
 		if (!open) return;
+		const mq = window.matchMedia("(max-width: 1023px)");
+		if (!mq.matches) return;
 		document.body.style.overflow = "hidden";
 		return () => {
 			document.body.style.overflow = "";
@@ -158,7 +165,7 @@ export function AIChatPanel() {
 			{/* Panel */}
 			<div
 				className={cn(
-					"overflow-hidden z-200 bg-background text-foreground",
+					"overflow-hidden overscroll-contain z-200 bg-background text-foreground",
 					"[--ai-chat-width:400px]",
 					// Mobile
 					"max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:h-[80dvh] max-lg:border-t max-lg:shadow-[0_-8px_50px_0px_rgba(0,0,0,0.12)] max-lg:dark:shadow-[0_-8px_50px_0px_rgba(255,255,255,0.07)]",
@@ -238,23 +245,51 @@ function PanelMessages({ className, ...props }: ComponentProps<"div">) {
 		if (!containerRef.current) return;
 		const container = containerRef.current;
 
-		const observer = new ResizeObserver(() => {
+		const scrollToBottom = () => {
 			container.scrollTo({
 				top: container.scrollHeight,
 				behavior: "instant",
 			});
-		});
+		};
 
-		const element = container.firstElementChild;
-		if (element) observer.observe(element);
-		return () => observer.disconnect();
+		// Observe size changes on all current and future children
+		const resizeObserver = new ResizeObserver(scrollToBottom);
+		const observeChildren = () => {
+			resizeObserver.disconnect();
+			for (const child of container.children) {
+				resizeObserver.observe(child);
+			}
+		};
+
+		observeChildren();
+
+		// Re-attach when children are added/removed
+		const mutationObserver = new MutationObserver(observeChildren);
+		mutationObserver.observe(container, { childList: true });
+
+		// Prevent scroll chaining to body on desktop
+		const onWheel = (e: WheelEvent) => {
+			const { scrollTop, scrollHeight, clientHeight } = container;
+			const atTop = scrollTop <= 0 && e.deltaY < 0;
+			const atBottom = scrollTop + clientHeight >= scrollHeight && e.deltaY > 0;
+			if (atTop || atBottom) {
+				e.preventDefault();
+			}
+		};
+		container.addEventListener("wheel", onWheel, { passive: false });
+
+		return () => {
+			resizeObserver.disconnect();
+			mutationObserver.disconnect();
+			container.removeEventListener("wheel", onWheel);
+		};
 	}, []);
 
 	return (
 		<div
 			ref={containerRef}
 			className={cn(
-				"overflow-y-auto min-w-0 min-h-0 flex flex-col py-4",
+				"ai-chat-messages overflow-y-auto overscroll-contain min-w-0 min-h-0 flex flex-col py-4",
 				className,
 			)}
 			style={{
