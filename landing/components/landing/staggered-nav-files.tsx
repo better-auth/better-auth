@@ -1,10 +1,11 @@
 "use client";
 
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import DarkPng from "../../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../../public/branding/better-auth-logo-light.png";
@@ -161,7 +162,7 @@ export function StaggeredNavFiles() {
 				>
 					<Link
 						href="/"
-						className="flex items-center gap-1 px-4 lg:px-7 py-3 transition-colors duration-150"
+						className="flex items-center gap-1 px-4 py-3 transition-colors duration-150"
 					>
 						<div className="flex flex-col gap-2 w-full">
 							<LogoContextMenu
@@ -191,11 +192,32 @@ export function StaggeredNavFiles() {
 						className="flex items-center gap-1 px-4 py-3 transition-colors duration-150"
 					>
 						<Logo />
-						<p className="select-none font-mono text-sm uppercase tracking-wider">
+						<p className="select-none font-mono text-base uppercase">
 							BETTER-AUTH.
 						</p>
 					</Link>
-					<div className="flex items-center">
+					<div className="flex items-center gap-1 pr-2">
+						{isDocs && (
+							<button
+								type="button"
+								onClick={() => {
+									window.dispatchEvent(
+										new KeyboardEvent("keydown", {
+											key: "k",
+											metaKey: true,
+											bubbles: true,
+										}),
+									);
+								}}
+								className="flex items-center justify-center size-8 text-foreground/50 hover:text-foreground/80 transition-colors"
+								aria-label="Search"
+							>
+								<Search className="size-4" />
+							</button>
+						)}
+						<div className="flex items-center justify-center size-8 text-foreground/50 [&_button]:text-foreground/50 [&_button:hover]:text-foreground/80">
+							<ThemeToggle />
+						</div>
 						<button
 							type="button"
 							onClick={() => {
@@ -216,7 +238,7 @@ export function StaggeredNavFiles() {
 									}
 								}
 							}}
-							className="flex items-center justify-center px-4 py-3 text-foreground/75 dark:text-foreground/60 hover:text-foreground/85 transition-colors"
+							className="flex items-center justify-center size-8 text-foreground/75 dark:text-foreground/60 hover:text-foreground/85 transition-colors"
 						>
 							{mobileMenuOpen ? (
 								<svg
