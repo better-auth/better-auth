@@ -2365,6 +2365,7 @@ export function HeroReadMe({
 											muted
 											playsInline
 											className="w-full h-auto -mt-[2px] dark:block hidden"
+											suppressHydrationWarning
 										/>
 										<video
 											src={"/demo-light.mp4"}
@@ -2373,6 +2374,7 @@ export function HeroReadMe({
 											muted
 											playsInline
 											className="w-full h-auto -mt-[2px] dark:hidden"
+											suppressHydrationWarning
 										/>
 									</div>
 								</div>
