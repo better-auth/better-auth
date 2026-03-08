@@ -5,7 +5,6 @@ import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
-import { CommandMenuProvider } from "@/components/command-menu";
 import { StaggeredNavFiles } from "@/components/landing/staggered-nav-files";
 import { Providers } from "@/components/providers";
 
@@ -97,12 +96,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				suppressHydrationWarning
 			>
 				<Providers>
-					<CommandMenuProvider>
-						<div className="relative min-h-dvh">
-							<StaggeredNavFiles />
-							{children}
-						</div>
-					</CommandMenuProvider>
+					<div className="relative min-h-dvh">
+						<StaggeredNavFiles />
+						{children}
+					</div>
 				</Providers>
 				<Analytics />
 			</body>
