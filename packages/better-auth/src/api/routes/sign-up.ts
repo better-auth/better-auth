@@ -178,254 +178,273 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			return runWithTransaction(ctx.context.adapter, async () => {
-				if (
-					!ctx.context.options.emailAndPassword?.enabled ||
-					ctx.context.options.emailAndPassword?.disableSignUp
-				) {
-					throw APIError.from("BAD_REQUEST", {
-						message: "Email and password sign up is not enabled",
-						code: "EMAIL_PASSWORD_SIGN_UP_DISABLED",
-					});
-				}
-				const body = ctx.body as any as User & {
-					password: string;
-					callbackURL?: string | undefined;
-					rememberMe?: boolean | undefined;
-				} & {
-					[key: string]: any;
-				};
-				const {
-					name,
-					email,
-					password,
-					image,
-					callbackURL: _callbackURL,
-					rememberMe,
-					...rest
-				} = body;
-				const isValidEmail = z.email().safeParse(email);
-
-				if (!isValidEmail.success) {
-					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
-				}
-
-				if (!password || typeof password !== "string") {
-					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
-				}
-
-				const minPasswordLength = ctx.context.password.config.minPasswordLength;
-				if (password.length < minPasswordLength) {
-					ctx.context.logger.error("Password is too short");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-					);
-				}
-
-				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-				if (password.length > maxPasswordLength) {
-					ctx.context.logger.error("Password is too long");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-					);
-				}
-				const shouldReturnGenericDuplicateResponse =
-					ctx.context.options.emailAndPassword.autoSignIn === false ||
-					ctx.context.options.emailAndPassword.requireEmailVerification;
-				const additionalUserFields = parseUserInput(
-					ctx.context.options,
-					rest,
-					"create",
-				);
-				const normalizedEmail = email.toLowerCase();
-				const dbUser =
-					await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
-				if (dbUser?.user) {
-					ctx.context.logger.info(
-						`Sign-up attempt for existing email: ${email}`,
-					);
-					if (shouldReturnGenericDuplicateResponse) {
-						/**
-						 * Hash the password to reduce timing differences
-						 * between existing and non-existing emails.
-						 */
-						await ctx.context.password.hash(password);
-						if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
-							await ctx.context.runInBackgroundOrAwait(
-								ctx.context.options.emailAndPassword.onExistingUserSignUp(
-									{ user: dbUser.user },
-									ctx.request,
-								),
-							);
-						}
-						const now = new Date();
-						const generatedId =
-							ctx.context.generateId({ model: "user" }) || generateId();
-						const coreFields = {
-							name,
-							email: normalizedEmail,
-							emailVerified: false,
-							image: image || null,
-							createdAt: now,
-							updatedAt: now,
-						};
-
-						const customSyntheticUser =
-							ctx.context.options.emailAndPassword?.customSyntheticUser;
-
-						let syntheticUser: Record<string, unknown>;
-						if (customSyntheticUser) {
-							// Extract only user-defined additionalFields (not plugin fields)
-							const additionalFieldKeys = Object.keys(
-								ctx.context.options.user?.additionalFields ?? {},
-							);
-							const additionalFields: Record<string, unknown> = {};
-							for (const key of additionalFieldKeys) {
-								if (key in additionalUserFields) {
-									additionalFields[key] = additionalUserFields[key];
-								}
-							}
-							syntheticUser = customSyntheticUser({
-								coreFields,
-								additionalFields,
-								id: generatedId,
-							});
-						} else {
-							syntheticUser = {
-								...coreFields,
-								...additionalUserFields,
-								id: generatedId,
-							};
-						}
-
-						return ctx.json({
-							token: null,
-							user: parseUserOutput(
-								ctx.context.options,
-								syntheticUser as User,
-							) as User<O["user"], O["plugins"]>,
+			let pendingVerificationEmail: {
+				user: User;
+				url: string;
+				token: string;
+			} | null = null;
+			const response = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					if (
+						!ctx.context.options.emailAndPassword?.enabled ||
+						ctx.context.options.emailAndPassword?.disableSignUp
+					) {
+						throw APIError.from("BAD_REQUEST", {
+							message: "Email and password sign up is not enabled",
+							code: "EMAIL_PASSWORD_SIGN_UP_DISABLED",
 						});
 					}
-					throw APIError.from(
-						"UNPROCESSABLE_ENTITY",
-						BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
-					);
-				}
-				/**
-				 * Hash the password
-				 *
-				 * This is done prior to creating the user
-				 * to ensure that any plugin that
-				 * may break the hashing should break
-				 * before the user is created.
-				 */
-				const hash = await ctx.context.password.hash(password);
-				let createdUser: User;
-				try {
-					createdUser = await ctx.context.internalAdapter.createUser({
-						email: normalizedEmail,
+					const body = ctx.body as any as User & {
+						password: string;
+						callbackURL?: string | undefined;
+						rememberMe?: boolean | undefined;
+					} & {
+						[key: string]: any;
+					};
+					const {
 						name,
+						email,
+						password,
 						image,
-						...additionalUserFields,
-						emailVerified: false,
-					});
-					if (!createdUser) {
+						callbackURL: _callbackURL,
+						rememberMe,
+						...rest
+					} = body;
+					const isValidEmail = z.email().safeParse(email);
+
+					if (!isValidEmail.success) {
+						throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+					}
+
+					if (!password || typeof password !== "string") {
 						throw APIError.from(
 							"BAD_REQUEST",
+							BASE_ERROR_CODES.INVALID_PASSWORD,
+						);
+					}
+
+					const minPasswordLength =
+						ctx.context.password.config.minPasswordLength;
+					if (password.length < minPasswordLength) {
+						ctx.context.logger.error("Password is too short");
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+						);
+					}
+
+					const maxPasswordLength =
+						ctx.context.password.config.maxPasswordLength;
+					if (password.length > maxPasswordLength) {
+						ctx.context.logger.error("Password is too long");
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+						);
+					}
+					const shouldReturnGenericDuplicateResponse =
+						ctx.context.options.emailAndPassword.autoSignIn === false ||
+						ctx.context.options.emailAndPassword.requireEmailVerification;
+					const additionalUserFields = parseUserInput(
+						ctx.context.options,
+						rest,
+						"create",
+					);
+					const normalizedEmail = email.toLowerCase();
+					const dbUser =
+						await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
+					if (dbUser?.user) {
+						ctx.context.logger.info(
+							`Sign-up attempt for existing email: ${email}`,
+						);
+						if (shouldReturnGenericDuplicateResponse) {
+							/**
+							 * Hash the password to reduce timing differences
+							 * between existing and non-existing emails.
+							 */
+							await ctx.context.password.hash(password);
+							if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
+								await ctx.context.runInBackgroundOrAwait(
+									ctx.context.options.emailAndPassword.onExistingUserSignUp(
+										{ user: dbUser.user },
+										ctx.request,
+									),
+								);
+							}
+							const now = new Date();
+							const generatedId =
+								ctx.context.generateId({ model: "user" }) || generateId();
+							const coreFields = {
+								name,
+								email: normalizedEmail,
+								emailVerified: false,
+								image: image || null,
+								createdAt: now,
+								updatedAt: now,
+							};
+
+							const customSyntheticUser =
+								ctx.context.options.emailAndPassword?.customSyntheticUser;
+
+							let syntheticUser: Record<string, unknown>;
+							if (customSyntheticUser) {
+								// Extract only user-defined additionalFields (not plugin fields)
+								const additionalFieldKeys = Object.keys(
+									ctx.context.options.user?.additionalFields ?? {},
+								);
+								const additionalFields: Record<string, unknown> = {};
+								for (const key of additionalFieldKeys) {
+									if (key in additionalUserFields) {
+										additionalFields[key] = additionalUserFields[key];
+									}
+								}
+								syntheticUser = customSyntheticUser({
+									coreFields,
+									additionalFields,
+									id: generatedId,
+								});
+							} else {
+								syntheticUser = {
+									...coreFields,
+									...additionalUserFields,
+									id: generatedId,
+								};
+							}
+
+							return ctx.json({
+								token: null,
+								user: parseUserOutput(
+									ctx.context.options,
+									syntheticUser as User,
+								) as User<O["user"], O["plugins"]>,
+							});
+						}
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
+						);
+					}
+					/**
+					 * Hash the password
+					 *
+					 * This is done prior to creating the user
+					 * to ensure that any plugin that
+					 * may break the hashing should break
+					 * before the user is created.
+					 */
+					const hash = await ctx.context.password.hash(password);
+					let createdUser: User;
+					try {
+						createdUser = await ctx.context.internalAdapter.createUser({
+							email: normalizedEmail,
+							name,
+							image,
+							...additionalUserFields,
+							emailVerified: false,
+						});
+						if (!createdUser) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+							);
+						}
+					} catch (e) {
+						if (isDevelopment()) {
+							ctx.context.logger.error("Failed to create user", e);
+						}
+						if (isAPIError(e)) {
+							throw e;
+						}
+						ctx.context.logger?.error("Failed to create user", e);
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
 							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 						);
 					}
-				} catch (e) {
-					if (isDevelopment()) {
-						ctx.context.logger.error("Failed to create user", e);
-					}
-					if (isAPIError(e)) {
-						throw e;
-					}
-					ctx.context.logger?.error("Failed to create user", e);
-					throw APIError.from(
-						"UNPROCESSABLE_ENTITY",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
-					);
-				}
-				if (!createdUser) {
-					throw APIError.from(
-						"UNPROCESSABLE_ENTITY",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
-					);
-				}
-				await ctx.context.internalAdapter.linkAccount({
-					userId: createdUser.id,
-					providerId: "credential",
-					accountId: createdUser.id,
-					password: hash,
-				});
-				const shouldSendVerificationEmail =
-					ctx.context.options.emailVerification?.sendOnSignUp ??
-					ctx.context.options.emailAndPassword.requireEmailVerification;
-				if (shouldSendVerificationEmail) {
-					const token = await createEmailVerificationToken(
-						ctx.context.secret,
-						createdUser.email,
-						undefined,
-						ctx.context.options.emailVerification?.expiresIn,
-					);
-					const callbackURL = body.callbackURL
-						? encodeURIComponent(body.callbackURL)
-						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-
-					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
-						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-								ctx.request,
-							),
+					if (!createdUser) {
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 						);
 					}
-				}
+					await ctx.context.internalAdapter.linkAccount({
+						userId: createdUser.id,
+						providerId: "credential",
+						accountId: createdUser.id,
+						password: hash,
+					});
+					const shouldSendVerificationEmail =
+						ctx.context.options.emailVerification?.sendOnSignUp ??
+						ctx.context.options.emailAndPassword.requireEmailVerification;
+					if (shouldSendVerificationEmail) {
+						const token = await createEmailVerificationToken(
+							ctx,
+							createdUser.email,
+							undefined,
+							ctx.context.options.emailVerification?.expiresIn,
+						);
+						const callbackURL = body.callbackURL
+							? encodeURIComponent(body.callbackURL)
+							: encodeURIComponent("/");
+						const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+						pendingVerificationEmail = {
+							user: createdUser,
+							url,
+							token,
+						};
+					}
 
-				if (shouldReturnGenericDuplicateResponse) {
+					if (shouldReturnGenericDuplicateResponse) {
+						return ctx.json({
+							token: null,
+							user: parseUserOutput(ctx.context.options, createdUser) as User<
+								O["user"],
+								O["plugins"]
+							>,
+						});
+					}
+
+					const session = await ctx.context.internalAdapter.createSession(
+						createdUser.id,
+						rememberMe === false,
+					);
+					if (!session) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
+					}
+					await setSessionCookie(
+						ctx,
+						{
+							session,
+							user: createdUser,
+						},
+						rememberMe === false,
+					);
 					return ctx.json({
-						token: null,
+						token: session.token,
 						user: parseUserOutput(ctx.context.options, createdUser) as User<
 							O["user"],
 							O["plugins"]
 						>,
 					});
-				}
+				},
+			);
 
-				const session = await ctx.context.internalAdapter.createSession(
-					createdUser.id,
-					rememberMe === false,
+			// Send verification email after transaction committed, so the token exists in the DB
+			if (
+				pendingVerificationEmail &&
+				ctx.context.options.emailVerification?.sendVerificationEmail
+			) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.options.emailVerification.sendVerificationEmail(
+						pendingVerificationEmail,
+						ctx.request,
+					),
 				);
-				if (!session) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-					);
-				}
-				await setSessionCookie(
-					ctx,
-					{
-						session,
-						user: createdUser,
-					},
-					rememberMe === false,
-				);
-				return ctx.json({
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, createdUser) as User<
-						O["user"],
-						O["plugins"]
-					>,
-				});
-			});
+			}
+			return response;
 		},
 	);
