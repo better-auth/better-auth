@@ -35,17 +35,6 @@ export function createMetadata(override: Metadata): Metadata {
 			],
 			apple: "/favicon/apple-touch-icon.png",
 		},
-		alternates: {
-			types: {
-				"application/rss+xml": [
-					{
-						title: "Better Auth Blog",
-						url: "https://better-auth.com/blog/rss.xml",
-					},
-				],
-			},
-			...override.alternates,
-		},
 	};
 }
 

@@ -18,6 +18,16 @@ export const metadata: Metadata = createMetadata({
 		title: "Blog - Better Auth",
 		description,
 	},
+	alternates: {
+		types: {
+			"application/rss+xml": [
+				{
+					title: "Better Auth Blog",
+					url: "https://better-auth.com/blog/rss.xml",
+				},
+			],
+		},
+	}	,
 });
 
 export default function BlogLayout({
