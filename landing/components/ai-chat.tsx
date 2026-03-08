@@ -560,8 +560,8 @@ function useAIChatHotKey() {
 			setOpen(false);
 			e.preventDefault();
 		}
-		if (e.key === "i" && (e.metaKey || e.ctrlKey) && !open) {
-			setOpen(true);
+		if (e.key === "i" && (e.metaKey || e.ctrlKey)) {
+			setOpen(!open);
 			e.preventDefault();
 		}
 	});
