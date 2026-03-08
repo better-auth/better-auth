@@ -934,6 +934,12 @@ importers:
       three:
         specifier: ^0.183.1
         version: 0.183.2
+      typesense:
+        specifier: ^3.0.2
+        version: 3.0.2(@babel/runtime@7.28.6)
+      typesense-fumadocs-adapter:
+        specifier: ^0.3.0
+        version: 0.3.0(315bbd73201b0530b183e3c1250d4415)
       unist-util-visit:
         specifier: ^5.1.0
         version: 5.1.0
@@ -959,6 +965,9 @@ importers:
       '@types/three':
         specifier: ^0.183.1
         version: 0.183.1
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
       tailwindcss:
         specifier: ^4
         version: 4.2.1
@@ -12485,6 +12494,10 @@ packages:
     resolution: {integrity: sha512-/3ER20CTTbahrCrpYfPn7Xavv9diBROZpoXGVZDWMw4b/X4uuUwAC0ki85tgsdMRONURyIJbcOvS94QsUBYPbQ==}
     hasBin: true
 
+  loglevel@1.9.2:
+    resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
+    engines: {node: '>= 0.6.0'}
+
   long@2.4.0:
     resolution: {integrity: sha512-ijUtjmO/n2A5PaosNG9ZGDsQ3vxJg7ZW8vsY8Kp0f2yIZWhSJvjmegV7t+9RPQKxKrvj8yKGehhS+po14hPLGQ==}
     engines: {node: '>=0.6'}
@@ -16039,6 +16052,22 @@ packages:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  typesense-fumadocs-adapter@0.3.0:
+    resolution: {integrity: sha512-IfvGUp4p8nmVa+jVE90C7OIGejGijByenaMl5aAe78iUEyxru2Kqv8sqV5BE8lL3YbUxPaIbKGOI7zUBB+dhfA==}
+    peerDependencies:
+      fumadocs-core: ^16.0.0
+      fumadocs-ui: ^16.0.0
+      react: '>=19.0.0'
+      react-dom: '>=19.0.0'
+      typescript: '>=5'
+      typesense: '>=2.1.0'
+
+  typesense@3.0.2:
+    resolution: {integrity: sha512-MNspMeIdhcyH0lDVwJX2rVBB3DSXbE1t3k318JC1e1AL1/sRyovi44Aze7n9JzRxnAoFnlhkIB3kWgWGIEozbQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@babel/runtime': ^7.23.2
 
   ua-parser-js@1.0.41:
     resolution: {integrity: sha512-LbBDqdIC5s8iROCUjMbW1f5dJQTEFB1+KO9ogbvlb3nm9n4YHa5p4KTvFPWvh2Hs8gZMBuiB1/8+pdfe/tDPug==}
@@ -29617,6 +29646,8 @@ snapshots:
       yargs: 15.4.1
     optional: true
 
+  loglevel@1.9.2: {}
+
   long@2.4.0:
     optional: true
 
@@ -35073,6 +35104,24 @@ snapshots:
   typescript@5.6.1-rc: {}
 
   typescript@5.9.3: {}
+
+  typesense-fumadocs-adapter@0.3.0(315bbd73201b0530b183e3c1250d4415):
+    dependencies:
+      fumadocs-core: 16.6.7(@mdx-js/mdx@3.1.1)(@oramacloud/client@2.1.4)(@tanstack/react-router@1.163.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(algoliasearch@5.46.2)(lucide-react@0.575.0(react@19.2.4))(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
+      fumadocs-ui: 16.6.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(fumadocs-core@16.6.7(@mdx-js/mdx@3.1.1)(@oramacloud/client@2.1.4)(@tanstack/react-router@1.163.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(algoliasearch@5.46.2)(lucide-react@0.575.0(react@19.2.4))(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6))(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+      typescript: 5.9.3
+      typesense: 3.0.2(@babel/runtime@7.28.6)
+
+  typesense@3.0.2(@babel/runtime@7.28.6):
+    dependencies:
+      '@babel/runtime': 7.28.6
+      axios: 1.13.5
+      loglevel: 1.9.2
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - debug
 
   ua-parser-js@1.0.41:
     optional: true
