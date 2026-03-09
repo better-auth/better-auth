@@ -183,15 +183,7 @@ function MobileDrawerPanel() {
 					<div className="flex-1 text-left">
 						<DrawerTitle className="text-xs font-medium">AI Chat</DrawerTitle>
 						<DrawerDescription className="text-[10px]">
-							Powered by{" "}
-							<a
-								href="https://inkeep.com"
-								target="_blank"
-								rel="noreferrer noopener"
-								className="underline hover:text-foreground transition-colors"
-							>
-								Inkeep AI
-							</a>
+							Better Auth docs assistant
 						</DrawerDescription>
 					</div>
 					<DrawerClose
@@ -287,15 +279,7 @@ function PanelHeader() {
 			<div className="flex-1">
 				<p className="text-sm font-medium">AI Chat</p>
 				<p className="text-[10px] text-muted-foreground">
-					Powered by{" "}
-					<a
-						href="https://inkeep.com"
-						target="_blank"
-						rel="noreferrer noopener"
-						className="underline hover:text-foreground transition-colors"
-					>
-						Inkeep AI
-					</a>
+					Better Auth docs assistant
 				</p>
 			</div>
 			<button
@@ -393,6 +377,7 @@ function PanelMessages({ className, ...props }: ComponentProps<"div">) {
 							messageIndex={index}
 						/>
 					))}
+					<ThinkingIndicator />
 				</div>
 			)}
 		</div>
@@ -558,6 +543,27 @@ function PanelInput({ autoFocus = false }: { autoFocus?: boolean }) {
 	);
 }
 
+// ─── Thinking Indicator ──────────────────────────────────────────────────────
+
+function ThinkingIndicator() {
+	const { status, messages } = useChatContext();
+	const lastMessage = messages.at(-1);
+	const hasNoText =
+		!lastMessage ||
+		lastMessage.role !== "assistant" ||
+		!lastMessage.parts?.some((p) => p.type === "text" && p.text.length > 0);
+
+	if (status !== "submitted" && !(status === "streaming" && hasNoText))
+		return null;
+
+	return (
+		<div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+			<Loader2 className="size-3 animate-spin" />
+			<span>Looking through docs...</span>
+		</div>
+	);
+}
+
 // ─── Message ─────────────────────────────────────────────────────────────────
 
 const roleName: Record<string, string> = {
@@ -585,13 +591,6 @@ function Message({
 		if (part.type === "text") {
 			markdown += part.text;
 		}
-	}
-
-	if (message.role === "assistant") {
-		// Remove Inkeep citation markers like (1), (2) etc.
-		markdown = markdown.replace(/\(\d+\)/g, "");
-		// Remove stray backslashes used as line breaks by Inkeep
-		markdown = markdown.replace(/^\s*\\\s*$/gm, "");
 	}
 
 	// Fix incomplete code blocks
