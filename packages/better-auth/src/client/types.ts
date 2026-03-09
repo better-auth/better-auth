@@ -20,22 +20,25 @@ export type {
 	BetterAuthClientPlugin,
 };
 
+type InferPluginEndpoints<Plugins> =
+	Plugins extends Array<infer Pl>
+		? UnionToIntersection<
+				Pl extends {
+					$InferServerPlugin: infer Plug;
+				}
+					? Plug extends {
+							endpoints: infer Endpoints;
+						}
+						? Endpoints
+						: {}
+					: {}
+			>
+		: {};
+
 export type InferClientAPI<O extends BetterAuthClientOptions> = InferRoutes<
 	O["plugins"] extends Array<any>
-		? Auth["api"] &
-				(O["plugins"] extends Array<infer Pl>
-					? UnionToIntersection<
-							Pl extends {
-								$InferServerPlugin: infer Plug;
-							}
-								? Plug extends {
-										endpoints: infer Endpoints;
-									}
-									? Endpoints
-									: {}
-								: {}
-						>
-					: {})
+		? Omit<Auth["api"], keyof InferPluginEndpoints<O["plugins"]>> &
+				InferPluginEndpoints<O["plugins"]>
 		: Auth["api"],
 	O
 >;
