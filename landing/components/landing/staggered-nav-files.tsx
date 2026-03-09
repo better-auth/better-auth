@@ -546,7 +546,7 @@ export function StaggeredNavFiles() {
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="GitHub"
 										>
 											<svg
@@ -565,7 +565,7 @@ export function StaggeredNavFiles() {
 											href="https://discord.gg/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Discord"
 										>
 											<svg
@@ -584,7 +584,7 @@ export function StaggeredNavFiles() {
 											href="https://reddit.com/r/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Reddit"
 										>
 											<svg
@@ -605,7 +605,7 @@ export function StaggeredNavFiles() {
 											href="https://x.com/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="X"
 										>
 											<svg
@@ -624,7 +624,7 @@ export function StaggeredNavFiles() {
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="npm"
 										>
 											<svg
