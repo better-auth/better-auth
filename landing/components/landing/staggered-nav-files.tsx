@@ -130,6 +130,17 @@ export function StaggeredNavFiles() {
 		};
 	}, [mobileMenuOpen]);
 
+	useEffect(() => {
+		const mql = window.matchMedia("(min-width: 1024px)");
+		const handler = () => {
+			if (mql.matches) {
+				setMobileMenuOpen(false);
+			}
+		};
+		mql.addEventListener("change", handler);
+		return () => mql.removeEventListener("change", handler);
+	}, []);
+
 	const openProducts = () => {
 		clearTimeout(productsTimeout.current);
 		setProductsOpen(true);
