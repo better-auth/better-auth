@@ -926,7 +926,7 @@ export function StaggeredNavFiles() {
 															className={cn(
 																"flex items-center gap-2.5 px-5 py-3.5 transition-colors font-mono text-base uppercase tracking-wider",
 																isActive(section.href!)
-																	? "text-foreground"
+																	? "text-foreground bg-foreground/4"
 																	: "text-foreground/75 dark:text-foreground/60 hover:text-foreground",
 															)}
 														>
