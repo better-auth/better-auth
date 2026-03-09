@@ -7,7 +7,7 @@ import babelPresetTypeScript from "@babel/preset-typescript";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
-import { getTsconfig } from "get-tsconfig";
+import { getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
@@ -118,10 +118,19 @@ function collectReferencesAliases(
 		if (visited.has(refTsconfigPath)) continue;
 		visited.add(refTsconfigPath);
 
-		const refTsconfig = getTsconfig(refTsconfigPath);
-		if (!refTsconfig) continue;
+		if (!fs.existsSync(refTsconfigPath)) continue;
 
-		const refAliases = extractAliases(refTsconfig);
+		let refConfig: Record<string, unknown>;
+		try {
+			refConfig = parseTsconfig(refTsconfigPath) as Record<string, unknown>;
+		} catch {
+			continue;
+		}
+
+		const refAliases = extractAliases({
+			path: refTsconfigPath,
+			config: refConfig as { compilerOptions?: Record<string, unknown> },
+		});
 		for (const [alias, aliasPath] of Object.entries(refAliases)) {
 			if (!(alias in result)) {
 				result[alias] = aliasPath;
