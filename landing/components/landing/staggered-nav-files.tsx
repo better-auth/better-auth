@@ -145,6 +145,10 @@ export function StaggeredNavFiles() {
 		resourcesTimeout.current = setTimeout(() => setResourcesOpen(false), 150);
 	};
 	const isActive = useCallback((href: string) => pathname === href, [pathname]);
+	const isActivePrefix = useCallback(
+		(href: string) => pathname === href || pathname.startsWith(`${href}/`),
+		[pathname],
+	);
 	const isDocs = pathname.startsWith("/docs");
 	const isProductPage =
 		pathname === "/products" || pathname.startsWith("/products/");
@@ -877,7 +881,7 @@ export function StaggeredNavFiles() {
 												...mobileMenuSections
 													.filter((s) =>
 														s.children?.some((item) =>
-															isActive(item.path || item.href),
+															isActivePrefix(item.path || item.href),
 														),
 													)
 													.map((s) => s.name),
@@ -909,7 +913,7 @@ export function StaggeredNavFiles() {
 																		onClick={() => setMobileMenuOpen(false)}
 																		className={cn(
 																			"flex items-center gap-2.5 pl-9 pr-5 py-2.5 transition-colors font-mono text-sm uppercase tracking-wider",
-																			isActive(item.path || item.href)
+																			isActivePrefix(item.path || item.href)
 																				? "text-foreground bg-foreground/4"
 																				: "text-foreground/60 dark:text-foreground/45 hover:text-foreground hover:bg-foreground/3",
 																		)}
