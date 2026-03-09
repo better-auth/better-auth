@@ -52,6 +52,9 @@ jobs:
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
         run: pnpm build
 
+      - name: Public API Check
+        run: pnpm public-api:check
+
       - name: Lint
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
