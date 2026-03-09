@@ -897,4 +897,217 @@ describe("getConfig", async () => {
 		expect(config).not.toBe(null);
 		expect(config?.emailAndPassword?.enabled).toBe(true);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6373
+	 */
+	it("should resolve path aliases from extended tsconfig", async () => {
+		const authPath = path.join(tmpDir, "src", "auth");
+		const dbPath = path.join(tmpDir, "src", "db");
+		await fs.mkdir(authPath, { recursive: true });
+		await fs.mkdir(dbPath, { recursive: true });
+
+		// Create base tsconfig with path aliases
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.base.json"),
+			`{
+				"compilerOptions": {
+					"paths": {
+						"~*": ["./src/*"]
+					}
+				}
+			}`,
+		);
+
+		// Create tsconfig.json that extends base
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"extends": "./tsconfig.base.json"
+			}`,
+		);
+
+		// Create dummy db.ts
+		await fs.writeFile(
+			path.join(dbPath, "db.ts"),
+			`class PrismaClient {
+				constructor() {}
+			}
+			export const db = new PrismaClient()`,
+		);
+
+		// Create auth.ts using the tilde alias
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import {betterAuth} from "better-auth";
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
+			 import {db} from "~db/db";
+
+			 export const auth = betterAuth({
+					database: prismaAdapter(db, {
+							provider: 'sqlite'
+					}),
+					emailAndPassword: {
+						enabled: true,
+					}
+			 })`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "src/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6373
+	 */
+	it("should resolve path aliases from chained extends", async () => {
+		const authPath = path.join(tmpDir, "src", "auth");
+		const dbPath = path.join(tmpDir, "src", "db");
+		await fs.mkdir(authPath, { recursive: true });
+		await fs.mkdir(dbPath, { recursive: true });
+
+		// Create grandparent tsconfig with path aliases
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.root.json"),
+			`{
+				"compilerOptions": {
+					"paths": {
+						"@server/*": ["./src/*"]
+					}
+				}
+			}`,
+		);
+
+		// Create parent tsconfig that extends grandparent
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.base.json"),
+			`{
+				"extends": "./tsconfig.root.json"
+			}`,
+		);
+
+		// Create tsconfig.json that extends parent
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"extends": "./tsconfig.base.json"
+			}`,
+		);
+
+		// Create dummy db.ts
+		await fs.writeFile(
+			path.join(dbPath, "db.ts"),
+			`class PrismaClient {
+				constructor() {}
+			}
+			export const db = new PrismaClient()`,
+		);
+
+		// Create auth.ts using the alias from grandparent
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import {betterAuth} from "better-auth";
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
+			 import {db} from "@server/db/db";
+
+			 export const auth = betterAuth({
+					database: prismaAdapter(db, {
+							provider: 'sqlite'
+					}),
+					emailAndPassword: {
+						enabled: true,
+					}
+			 })`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "src/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6373
+	 */
+	it("should let child paths override parent paths from extends", async () => {
+		const authPath = path.join(tmpDir, "server", "auth");
+		const dbPath = path.join(tmpDir, "server", "db");
+		const oldDbPath = path.join(tmpDir, "old", "db");
+		await fs.mkdir(authPath, { recursive: true });
+		await fs.mkdir(dbPath, { recursive: true });
+		await fs.mkdir(oldDbPath, { recursive: true });
+
+		// Create parent tsconfig with path aliases pointing to old location
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.base.json"),
+			`{
+				"compilerOptions": {
+					"paths": {
+						"@server/*": ["./old/*"]
+					}
+				}
+			}`,
+		);
+
+		// Create child tsconfig that overrides the alias
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"extends": "./tsconfig.base.json",
+				"compilerOptions": {
+					"paths": {
+						"@server/*": ["./server/*"]
+					}
+				}
+			}`,
+		);
+
+		// Create dummy db.ts in the correct (overridden) location
+		await fs.writeFile(
+			path.join(dbPath, "db.ts"),
+			`class PrismaClient {
+				constructor() {}
+			}
+			export const db = new PrismaClient()`,
+		);
+
+		// Create auth.ts
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import {betterAuth} from "better-auth";
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
+			 import {db} from "@server/db/db";
+
+			 export const auth = betterAuth({
+					database: prismaAdapter(db, {
+							provider: 'sqlite'
+					}),
+					emailAndPassword: {
+						enabled: true,
+					}
+			 })`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "server/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+		});
+	});
 });

@@ -66,6 +66,30 @@ function resolveReferencePath(configDir: string, refPath: string): string {
 	return path.resolve(configDir, refPath, "tsconfig.json");
 }
 
+function resolveExtendsPath(configDir: string, extendsValue: string): string {
+	// If it starts with . it's a relative path
+	if (extendsValue.startsWith(".")) {
+		const resolved = path.resolve(configDir, extendsValue);
+		// Add .json extension if not present
+		if (!resolved.endsWith(".json")) {
+			return `${resolved}.json`;
+		}
+		return resolved;
+	}
+	// Otherwise it's a package reference (e.g. "@tsconfig/node20/tsconfig.json")
+	// Try to resolve it from the config directory
+	try {
+		return require.resolve(extendsValue, { paths: [configDir] });
+	} catch {
+		// If resolution fails, try with .json extension
+		try {
+			return require.resolve(`${extendsValue}.json`, { paths: [configDir] });
+		} catch {
+			return path.resolve(configDir, extendsValue);
+		}
+	}
+}
+
 function getPathAliasesRecursive(
 	tsconfigPath: string,
 	visited = new Set<string>(),
@@ -82,10 +106,25 @@ function getPathAliasesRecursive(
 
 	try {
 		const tsConfig = getTsconfigInfo(undefined, tsconfigPath);
-		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
-		const result: Record<string, string> = {};
-
 		const configDir = path.dirname(tsconfigPath);
+
+		// Resolve aliases from extended configs first (as defaults)
+		const result: Record<string, string> = {};
+		if (tsConfig.extends) {
+			const extendsList = Array.isArray(tsConfig.extends)
+				? tsConfig.extends
+				: [tsConfig.extends];
+			for (const extendsValue of extendsList) {
+				const extendsPath = resolveExtendsPath(configDir, extendsValue);
+				const parentAliases = getPathAliasesRecursive(extendsPath, visited);
+				for (const [alias, aliasPath] of Object.entries(parentAliases)) {
+					result[alias] = aliasPath;
+				}
+			}
+		}
+
+		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
+
 		const obj = Object.entries(paths) as [string, string[]][];
 		for (const [alias, aliasPaths] of obj) {
 			for (const aliasedPath of aliasPaths) {
