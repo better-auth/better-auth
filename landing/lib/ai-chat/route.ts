@@ -77,7 +77,6 @@ export async function POST(req: Request) {
 	const docsIndex = getDocsIndex();
 
 	const system = SYSTEM_PROMPT + docsIndex;
-	console.log(system);
 
 	const result = streamText({
 		model: chatModel,
