@@ -58,8 +58,8 @@ const mobileMenuSections: MobileMenuSection[] = [
 
 function DropdownItem({ item }: { item: NavFileItem }) {
 	return (
-		<div className="group/item flex items-center gap-1.5 px-3 py-1.5 hover:bg-foreground/[0.06] transition-colors duration-150 cursor-pointer">
-			<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/75 dark:text-foreground/60 group-hover/item:text-foreground transition-colors duration-150 whitespace-nowrap">
+		<div className="group/item flex w-full min-w-0 items-center gap-1.5 px-3 py-1.5 hover:bg-foreground/[0.06] transition-colors duration-150 cursor-pointer">
+			<span className="block min-w-0 truncate font-mono text-[10px] uppercase tracking-wider text-foreground/75 dark:text-foreground/60 group-hover/item:text-foreground transition-colors duration-150">
 				{item.name}
 			</span>
 		</div>
@@ -541,12 +541,12 @@ export function StaggeredNavFiles() {
 											</Link>
 										</motion.div>
 									))}
-									<div className="border-t border-foreground/[0.06] mt-1 pt-1 flex items-center gap-0.5 px-2.5">
+									<div className="mt-1 grid w-full grid-cols-[repeat(auto-fit,minmax(1.75rem,1fr))] items-center justify-items-center gap-y-0.5 border-t border-foreground/[0.06] px-2 pt-1">
 										<a
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="GitHub"
 										>
 											<svg
@@ -565,7 +565,7 @@ export function StaggeredNavFiles() {
 											href="https://discord.gg/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Discord"
 										>
 											<svg
@@ -584,7 +584,7 @@ export function StaggeredNavFiles() {
 											href="https://reddit.com/r/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Reddit"
 										>
 											<svg
@@ -605,7 +605,7 @@ export function StaggeredNavFiles() {
 											href="https://x.com/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="X"
 										>
 											<svg
@@ -624,7 +624,7 @@ export function StaggeredNavFiles() {
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex shrink-0 items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="npm"
 										>
 											<svg
