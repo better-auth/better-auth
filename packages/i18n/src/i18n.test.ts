@@ -1,3 +1,4 @@
+import { username } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { i18n } from ".";
@@ -263,6 +264,110 @@ describe("i18n plugin", async () => {
 				expect(data).toHaveProperty("session");
 				expect(data).toHaveProperty("user");
 			});
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8492
+	 */
+	describe("before hook error translation", () => {
+		it("should translate errors thrown from plugin before hooks", async () => {
+			const { auth: authWithUsername } = await getTestInstance({
+				plugins: [
+					username(),
+					i18n({
+						translations: {
+							fr: {
+								USERNAME_IS_ALREADY_TAKEN:
+									"Le nom d'utilisateur est déjà pris.",
+								USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+									"L'utilisateur existe déjà.",
+							},
+						},
+						defaultLocale: "fr",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			// Create a user with a username
+			await authWithUsername.api.signUpEmail({
+				body: {
+					email: "test@example.com",
+					username: "testuser",
+					password: "password123",
+					name: "Test User",
+				},
+			});
+
+			// Try to sign up with the same username — this error comes from the
+			// username plugin's before hook
+			const response = await authWithUsername.api.signUpEmail({
+				body: {
+					email: "other@example.com",
+					username: "testuser",
+					password: "password123",
+					name: "Test User 2",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("USERNAME_IS_ALREADY_TAKEN");
+			expect(body.message).toBe("Le nom d'utilisateur est déjà pris.");
+			expect(body.originalMessage).toBe(
+				"Username is already taken. Please try another.",
+			);
+		});
+
+		it("should translate errors from before hooks without asResponse", async () => {
+			const { auth: authWithUsername } = await getTestInstance({
+				plugins: [
+					username(),
+					i18n({
+						translations: {
+							fr: {
+								USERNAME_IS_ALREADY_TAKEN:
+									"Le nom d'utilisateur est déjà pris.",
+							},
+						},
+						defaultLocale: "fr",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			// Create a user with a username
+			await authWithUsername.api.signUpEmail({
+				body: {
+					email: "test2@example.com",
+					username: "testuser2",
+					password: "password123",
+					name: "Test User",
+				},
+			});
+
+			// Try to sign up with the same username — should throw translated error
+			try {
+				await authWithUsername.api.signUpEmail({
+					body: {
+						email: "other2@example.com",
+						username: "testuser2",
+						password: "password123",
+						name: "Test User 2",
+					},
+					headers: {
+						"Accept-Language": "fr",
+					},
+				});
+				expect.unreachable("Should have thrown");
+			} catch (e: any) {
+				expect(e.body?.code).toBe("USERNAME_IS_ALREADY_TAKEN");
+				expect(e.body?.message).toBe("Le nom d'utilisateur est déjà pris.");
+			}
 		});
 	});
 

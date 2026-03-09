@@ -135,6 +135,43 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								endpoint,
 								operationId,
 							);
+
+							/**
+							 * If a before hook threw an APIError, route it
+							 * through after hooks (e.g. i18n translation)
+							 * before returning/throwing the error.
+							 */
+							if (
+								before &&
+								typeof before === "object" &&
+								"_beforeHookError" in before
+							) {
+								const beforeError = before._beforeHookError as APIError;
+								internalContext.context.returned = beforeError;
+								internalContext.context.responseHeaders = beforeError.headers
+									? new Headers(beforeError.headers)
+									: undefined;
+
+								const after = await runAfterHooks(
+									internalContext,
+									afterHooks,
+									endpoint,
+									operationId,
+								);
+
+								const errorToThrow = isAPIError(after.response)
+									? after.response
+									: beforeError;
+
+								if (context?.asResponse) {
+									return toResponse(errorToThrow, {
+										headers: after.headers,
+										status: errorToThrow.statusCode,
+									});
+								}
+								throw errorToThrow;
+							}
+
 							/**
 							 * If `before.context` is returned, it should
 							 * get merged with the original context
@@ -313,15 +350,24 @@ async function runBeforeHooks(
 						returnHeaders: false,
 					}),
 			).catch((e: unknown) => {
-				if (
-					isAPIError(e) &&
-					shouldPublishLog(context.context.logger.level, "debug")
-				) {
-					// inherit stack from errorStack if debug mode is enabled
-					e.stack = e.errorStack;
+				if (isAPIError(e)) {
+					if (shouldPublishLog(context.context.logger.level, "debug")) {
+						// inherit stack from errorStack if debug mode is enabled
+						e.stack = e.errorStack;
+					}
+					return {
+						_beforeHookError: e as APIError,
+					};
 				}
 				throw e;
 			});
+			if (
+				result &&
+				typeof result === "object" &&
+				"_beforeHookError" in result
+			) {
+				return result;
+			}
 			if (result && typeof result === "object") {
 				if ("context" in result && typeof result.context === "object") {
 					const { headers, ...rest } =
@@ -388,7 +434,7 @@ async function runAfterHooks(
 				response: any;
 				headers: Headers;
 			};
-			if (result.headers) {
+			if (result?.headers) {
 				result.headers.forEach((value, key) => {
 					if (!context.context.responseHeaders) {
 						context.context.responseHeaders = new Headers({
@@ -403,7 +449,7 @@ async function runAfterHooks(
 					}
 				});
 			}
-			if (result.response) {
+			if (result?.response) {
 				context.context.returned = result.response;
 			}
 		}
