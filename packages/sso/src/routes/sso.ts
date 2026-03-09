@@ -49,6 +49,7 @@ import {
 } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState, parseRelayState } from "../saml-state";
+import { setSSOState } from "../sso-state";
 import type {
 	OIDCConfig,
 	SAMLAssertionExtract,
@@ -64,7 +65,6 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
-import {setSSOState} from "../sso-state";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -2448,8 +2448,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						| Record<string, unknown>
 						| undefined,
 				});
-				const provisionedUser =
-					await ctx.context.internalAdapter.findUserById(user.id);
+				const provisionedUser = await ctx.context.internalAdapter.findUserById(
+					user.id,
+				);
 				user = provisionedUser ?? user;
 			}
 
@@ -2974,8 +2975,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						| Record<string, unknown>
 						| undefined,
 				});
-				const provisionedUser =
-					await ctx.context.internalAdapter.findUserById(user.id);
+				const provisionedUser = await ctx.context.internalAdapter.findUserById(
+					user.id,
+				);
 				user = provisionedUser ?? user;
 			}
 

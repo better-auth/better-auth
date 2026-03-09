@@ -59,8 +59,6 @@ declare module "@better-auth/core" {
 	}
 }
 
-export { getSSOState } from "./sso-state";
-
 export {
 	computeDiscoveryUrl,
 	type DiscoverOIDCConfigParams,
@@ -79,6 +77,7 @@ export {
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
 } from "./oidc";
+export { getSSOState } from "./sso-state";
 
 const fastValidator = {
 	async validate(xml: string) {

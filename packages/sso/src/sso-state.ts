@@ -1,9 +1,8 @@
 import { defineRequestState } from "@better-auth/core/context";
 
-const {
-    get: _getSSOState,
-    set: setSSOState,
-} = defineRequestState<Record<string, unknown> | undefined>(() => undefined);
+const { get: _getSSOState, set: setSSOState } = defineRequestState<
+	Record<string, unknown> | undefined
+>(() => undefined);
 
 /**
  * Returns the `additionalData` passed by the client at SSO sign-in time.
@@ -14,9 +13,9 @@ const {
  * const data = await getSSOState<{ referralCode?: string }>();
  */
 async function getSSOState<
-    T extends Record<string, unknown> = Record<string, unknown>,
+	T extends Record<string, unknown> = Record<string, unknown>,
 >(): Promise<T | undefined> {
-    return _getSSOState() as Promise<T | undefined>;
+	return _getSSOState() as Promise<T | undefined>;
 }
 
 export { getSSOState, setSSOState };
