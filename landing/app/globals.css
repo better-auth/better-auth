@@ -674,6 +674,14 @@ html:not([data-anchor-scrolling]) {
 	}
 }
 
+/* Hide scrollbar in AI Chat panel */
+.ai-chat-messages {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
 /* Prevent scroll-chaining and hide scrollbars in TOC areas */
 .docs-layout #nd-toc > div {
 	overscroll-behavior-y: contain;
