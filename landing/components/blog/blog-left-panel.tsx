@@ -181,7 +181,7 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 							</svg>
 						</a>
 						<a
-							href="/rss.xml"
+							href="/blog/rss.xml"
 							className="flex items-center gap-1.5 text-foreground/30 hover:text-foreground/70 transition-colors"
 							aria-label="RSS Feed"
 						>
