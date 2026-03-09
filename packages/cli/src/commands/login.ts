@@ -3,6 +3,7 @@ import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import chalk from "chalk";
 import { Command } from "commander";
+import open from "open";
 import { getInfraBaseURL, sleep } from "../utils/helper";
 import {
 	clearStoredToken,
@@ -19,14 +20,17 @@ export const authClient = createAuthClient({
 export async function loginAction() {
 	p.intro(chalk.bgCyan(chalk.black(" Better Auth Login ")));
 
-	await handleLogin();
+	await handleLogin().catch((err) => {
+		p.log.error(err.message ?? "An unknown error occurred");
+		process.exit(1);
+	});
 
 	p.outro(chalk.green("✓ Successfully logged in!"));
 }
 
-export const login = new Command("login").description(
-	"Login to Better Auth Infrastructure",
-);
+export const login = new Command("login")
+	.description("Login to Better Auth Infrastructure")
+	.action(loginAction);
 
 export async function handleLogin() {
 	// Check for existing token

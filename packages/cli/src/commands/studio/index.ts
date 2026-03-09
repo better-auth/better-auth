@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Agent } from "node:https";
+import { rootCertificates } from "node:tls";
 import { confirm, isCancel, outro, spinner, text } from "@clack/prompts";
 import chalk from "chalk";
 import { Command } from "commander";
@@ -22,7 +23,7 @@ import type { RequestContext } from "./client";
 import { runTunnel } from "./client";
 import type { TunnelEvent } from "./schemas";
 
-const TUNNEL_BASE_URL = "https://tunnel.better-auth.com";
+const TUNNEL_BASE_URL = new URL("https://tunnel.better-auth.com");
 const HEARTBEAT_INTERVAL = 25_000;
 
 const studioOptionsSchema = z.object({
@@ -60,11 +61,18 @@ async function resolveApiKey(
 	token: StoredToken,
 	expiry: number | null | undefined,
 	rotateKey: boolean,
-) {
+): Promise<{ apiKey: string; keyWasRotated: boolean; token: StoredToken }> {
 	let currentToken = token;
 	if (expiry !== undefined) {
 		await setStudioKeyRotation(expiry ?? null);
-		currentToken = (await getStoredToken())!;
+		const next = await getStoredToken();
+		if (!next) {
+			outro(
+				"❌ Failed to save settings. Check write access to your config directory.",
+			);
+			process.exit(1);
+		}
+		currentToken = next;
 	}
 
 	let apiKey = currentToken.studio_api_key ?? null;
@@ -77,7 +85,14 @@ async function resolveApiKey(
 			apiKey,
 			currentToken.studio_key_rotation_days ?? null,
 		);
-		currentToken = (await getStoredToken())!;
+		const next = await getStoredToken();
+		if (!next) {
+			outro(
+				"❌ Failed to store studio API key. Check write access to your config directory.",
+			);
+			process.exit(1);
+		}
+		currentToken = next;
 	}
 	return { apiKey, keyWasRotated, token: currentToken };
 }
@@ -108,9 +123,9 @@ function createShutdownHandler(
 ) {
 	let shuttingDown = false;
 	let forceExit = false;
-	return async function shutdown() {
+	return async function shutdown(exitCode = 0) {
 		if (shuttingDown) {
-			if (forceExit) process.exit(0);
+			if (forceExit) process.exit(exitCode);
 			forceExit = true;
 			return;
 		}
@@ -134,7 +149,7 @@ function createShutdownHandler(
 		if (ws.readyState === WebSocket.OPEN) {
 			ws.close(1000, "client disconnect");
 		}
-		process.exit(0);
+		process.exit(exitCode);
 	};
 }
 
@@ -252,6 +267,7 @@ async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
 						"\n  Make sure you're signed in with the same account as the Dashboard.\n",
 					),
 				);
+				await shutdown(1);
 				return;
 			}
 			const payload = (await connectRes.json()) as {
@@ -312,7 +328,7 @@ export const studio = new Command("studio")
 	.option("--rotate-key", "Forces a key rotation immediately.", false)
 	.action(studioAction);
 
-function buildConnectOptions(baseUrl: string, token: string) {
+function buildConnectOptions(baseUrl: URL, token: string) {
 	const wsUrl = new URL(baseUrl);
 	wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
 	wsUrl.pathname = "/connect";
@@ -323,6 +339,7 @@ function buildConnectOptions(baseUrl: string, token: string) {
 }
 
 async function getMkcertAgent(wsUrl: string): Promise<Agent | null> {
+	if (process.env.NODE_ENV !== "development") return null;
 	if (!wsUrl.startsWith("wss://")) return null;
 
 	const https = await import("node:https");
@@ -331,7 +348,8 @@ async function getMkcertAgent(wsUrl: string): Promise<Agent | null> {
 	if (!caPath) return null;
 
 	try {
-		const ca = readFileSync(caPath);
+		const customCa = readFileSync(caPath, "utf-8");
+		const ca = [...rootCertificates, customCa];
 		return new https.Agent({ ca });
 	} catch {
 		return null;

@@ -6,6 +6,11 @@ import * as p from "@clack/prompts";
 const CONFIG_DIR = path.join(os.homedir(), ".better-auth");
 const TOKEN_FILE = path.join(CONFIG_DIR, "token.json");
 
+// Only accessible by the owner
+const CONFIG_DIR_MODE = 0o700;
+// Owner can read & write but not execute
+const TOKEN_FILE_MODE = 0o600;
+
 export function formatUserCode(code: string): string {
 	if (code.length === 8) {
 		return `${code.slice(0, 4)}-${code.slice(4)}`;
@@ -19,7 +24,7 @@ export async function storeToken(token: {
 	scope?: string;
 }): Promise<void> {
 	try {
-		await fs.mkdir(CONFIG_DIR, { recursive: true });
+		await fs.mkdir(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
 		const existing = await getStoredToken();
 		const tokenData: StoredToken = {
 			access_token: token.access_token,
@@ -32,7 +37,11 @@ export async function storeToken(token: {
 				studio_key_rotation_days: existing.studio_key_rotation_days,
 			}),
 		};
-		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), "utf-8");
+		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), {
+			encoding: "utf-8",
+			mode: TOKEN_FILE_MODE,
+		});
+		await fs.chmod(TOKEN_FILE, TOKEN_FILE_MODE);
 	} catch {
 		p.log.warn("Failed to store authentication token locally");
 	}
@@ -62,7 +71,7 @@ export async function setStoredStudioKey(
 	rotationDays?: number | null,
 ): Promise<void> {
 	try {
-		await fs.mkdir(CONFIG_DIR, { recursive: true });
+		await fs.mkdir(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
 		const existing = await getStoredToken();
 		const merged: StoredToken = {
 			...(existing ?? {
@@ -76,7 +85,11 @@ export async function setStoredStudioKey(
 				studio_key_rotation_days: rotationDays,
 			}),
 		};
-		await fs.writeFile(TOKEN_FILE, JSON.stringify(merged, null, 2), "utf-8");
+		await fs.writeFile(TOKEN_FILE, JSON.stringify(merged, null, 2), {
+			encoding: "utf-8",
+			mode: TOKEN_FILE_MODE,
+		});
+		await fs.chmod(TOKEN_FILE, TOKEN_FILE_MODE);
 	} catch {
 		p.log.warn("Failed to store studio API key locally");
 	}
@@ -84,7 +97,7 @@ export async function setStoredStudioKey(
 
 export async function setStudioKeyRotation(days: number | null): Promise<void> {
 	try {
-		await fs.mkdir(CONFIG_DIR, { recursive: true });
+		await fs.mkdir(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
 		const existing = await getStoredToken();
 		const merged: StoredToken = {
 			...(existing ?? {
@@ -94,7 +107,11 @@ export async function setStudioKeyRotation(days: number | null): Promise<void> {
 			}),
 			studio_key_rotation_days: days,
 		};
-		await fs.writeFile(TOKEN_FILE, JSON.stringify(merged, null, 2), "utf-8");
+		await fs.writeFile(TOKEN_FILE, JSON.stringify(merged, null, 2), {
+			encoding: "utf-8",
+			mode: TOKEN_FILE_MODE,
+		});
+		await fs.chmod(TOKEN_FILE, TOKEN_FILE_MODE);
 	} catch {
 		p.log.warn("Failed to store rotation setting locally");
 	}
