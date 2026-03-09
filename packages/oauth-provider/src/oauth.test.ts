@@ -260,18 +260,13 @@ describe("oauth", async () => {
 			vi.unstubAllGlobals();
 		});
 
-		let signInEmailRedirectUri = "";
-		await authClient.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(ctx) {
-					signInEmailRedirectUri = ctx.response.headers.get("Location") || "";
-				},
-			},
-		);
+		const signInResult = await authClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		// After fix: the after hook returns JSON { redirect: true, url } instead
+		// of a 302 redirect, so the browser can navigate cross-origin without CORS errors.
+		const signInEmailRedirectUri = signInResult.data?.url || "";
 		expect(signInEmailRedirectUri).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
@@ -283,6 +278,74 @@ describe("oauth", async () => {
 			},
 		});
 		expect(callbackUrl).toContain("/success");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8503
+	 */
+	it("should return JSON redirect (not 302) after email sign-in in oauth flow to prevent CORS errors", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const headers = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		let loginRedirectUri = "";
+		await authClient.$fetch(data.url, {
+			method: "GET",
+			onError(ctx) {
+				loginRedirectUri = ctx.response.headers.get("Location") || "";
+			},
+		});
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		// Ensure signIn.email returns JSON { redirect: true, url } instead of a 302
+		// redirect. A 302 redirect from a different origin would cause CORS errors
+		// when the browser's fetch automatically follows it cross-origin.
+		let locationHeader = "";
+		const signInResult = await authClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(ctx) {
+					locationHeader = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		expect(locationHeader).toBe("");
+		expect(signInResult.data?.redirect).toBe(true);
+		expect(signInResult.data?.url).toContain(rpBaseUrl);
 	});
 
 	it("should sign in using generic oauth discovery", async ({
@@ -342,18 +405,11 @@ describe("oauth", async () => {
 			vi.unstubAllGlobals();
 		});
 
-		let signInEmailRedirectUri = "";
-		await authClient.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(ctx) {
-					signInEmailRedirectUri = ctx.response.headers.get("Location") || "";
-				},
-			},
-		);
+		const signInResult = await authClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		const signInEmailRedirectUri = signInResult.data?.url || "";
 		expect(signInEmailRedirectUri).toContain(rpBaseUrl);
 
 		let callbackURL = "";
@@ -1152,18 +1208,11 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Check for redirection to /consent after login
-		let signInEmailRedirectUri = "";
-		await serverClient.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(ctx) {
-					signInEmailRedirectUri = ctx.response.headers.get("Location") || "";
-				},
-			},
-		);
+		const signInEmailResult = await serverClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		const signInEmailRedirectUri = signInEmailResult.data?.url || "";
 		expect(signInEmailRedirectUri).toContain("/consent");
 		expect(signInEmailRedirectUri).toContain("prompt=consent");
 	});

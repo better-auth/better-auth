@@ -45,6 +45,11 @@ export const oauthProviderClient = () => {
 							pathname.endsWith("/oauth2/consent") ||
 							pathname.endsWith("/oauth2/continue")
 						) {
+							// Request JSON responses so the server returns
+							// { redirect: true, url } instead of a 302 redirect.
+							// This prevents CORS errors when the browser's fetch API
+							// would otherwise follow the redirect cross-origin.
+							ctx.headers.set("accept", "application/json");
 							ctx.body = JSON.stringify({
 								...body,
 								oauth_query:
