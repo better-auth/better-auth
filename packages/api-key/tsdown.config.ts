@@ -4,7 +4,9 @@ export default defineConfig({
 	dts: { build: true, incremental: true },
 	format: ["esm"],
 	entry: ["./src/index.ts", "./src/client.ts", "./src/types.ts"],
-	external: ["better-auth", "better-call", "@better-fetch/fetch"],
+	deps: {
+		neverBundle: ["better-auth", "better-call", "@better-fetch/fetch"],
+	},
 	sourcemap: true,
 	treeshake: true,
 });
