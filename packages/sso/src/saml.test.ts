@@ -6,7 +6,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
 import type {
@@ -2399,9 +2399,7 @@ describe("SAML SSO with custom fields", () => {
 	});
 });
 
-describe("additionalData is encoded in SAML RelayState and passed to provisionUser", async () => {
-	// Each callback test gets its own isolated auth instance so users created
-	// in one test don't interfere with provider-linking in another.
+describe("SAML SSO with additional data encoded in RelayState", async () => {
 	const SAML_PROVIDER_CONFIG = {
 		issuer: "http://localhost:8081",
 		domain: "http://localhost:8081",
@@ -2417,7 +2415,7 @@ describe("additionalData is encoded in SAML RelayState and passed to provisionUs
 			identifierFormat:
 				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 		},
-	} as const;
+	};
 
 	it("should encode additionalData in the SAML RelayState URL parameter", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
@@ -2550,6 +2548,198 @@ describe("additionalData is encoded in SAML RelayState and passed to provisionUs
 				additionalData: { tenantId: "acs-tenant" },
 			}),
 		);
+	});
+});
+
+describe("provisionUser should complete before user is passed to org provisioning hooks (SAML)", async () => {
+	const SAML_PROVIDER_CONFIG = {
+		issuer: "http://localhost:8081",
+		domain: "http://localhost:8081",
+		samlConfig: {
+			entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+			cert: certificate,
+			callbackUrl: "http://localhost:3000/dashboard",
+			wantAssertionsSigned: false,
+			signatureAlgorithm: "sha256",
+			digestAlgorithm: "sha256",
+			idpMetadata: { metadata: idpMetadata },
+			spMetadata: { metadata: spMetadata },
+			identifierFormat:
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		},
+	};
+
+	it("should pass provisioned (re-fetched) user to org provisioning via SAML callback, not stale user", async () => {
+		let dbRef: any = null;
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					provisionUser: async ({ user }) => {
+						await (dbRef as any).update({
+							model: "user",
+							where: [{ field: "id", value: user.id }],
+							update: { name: "provisioned-user" },
+						});
+					},
+					organizationProvisioning: {
+						getRole: async ({ user }) => {
+							return (user as any).name === "provisioned-user"
+								? "admin"
+								: "member";
+						},
+					},
+				}),
+				organization(),
+			],
+		});
+		dbRef = db;
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "SAML CB Provision Org", slug: "saml-cb-provision-org" },
+			headers,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				...SAML_PROVIDER_CONFIG,
+				providerId: "saml-cb-provision-hooks",
+				organizationId: org?.id,
+			},
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-cb-provision-hooks",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: { SAMLResponse: samlResponse.samlResponse, RelayState: relayState },
+			headers: { Cookie: signInRes.headers.get("set-cookie") ?? "" },
+			params: { providerId: "saml-cb-provision-hooks" },
+			asResponse: true,
+		});
+
+		const fullOrg = await auth.api.getFullOrganization({
+			query: { organizationId: org?.id || "" },
+			headers,
+		});
+
+		const member = fullOrg?.members.find(
+			(m: any) => m.user.email === "test@email.com",
+		);
+
+		// provisionUser updates user name to "provisioned-user" in DB.
+		// After the fix, user is re-fetched before being passed to getRole.
+		// getRole sees user.name === "provisioned-user" → returns "admin".
+		// Without the fix, stale user is passed with original name → "member".
+		expect(member?.role).toBe("admin");
+	});
+
+	it("should pass provisioned (re-fetched) user to org provisioning via SAML ACS endpoint, not stale user", async () => {
+		let dbRef: any = null;
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					provisionUser: async ({ user }) => {
+						await (dbRef as any).update({
+							model: "user",
+							where: [{ field: "id", value: user.id }],
+							update: { name: "provisioned-user" },
+						});
+					},
+					organizationProvisioning: {
+						getRole: async ({ user }) => {
+							return (user as any).name === "provisioned-user"
+								? "admin"
+								: "member";
+						},
+					},
+				}),
+				organization(),
+			],
+		});
+		dbRef = db;
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "SAML ACS Provision Org", slug: "saml-acs-provision-org" },
+			headers,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				...SAML_PROVIDER_CONFIG,
+				providerId: "saml-acs-provision-hooks",
+				organizationId: org?.id,
+			},
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-acs-provision-hooks",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-provision-hooks",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Cookie: signInRes.headers.get("set-cookie") ?? "",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayState,
+					}),
+				},
+			),
+		);
+
+		const fullOrg = await auth.api.getFullOrganization({
+			query: { organizationId: org?.id || "" },
+			headers,
+		});
+
+		const member = fullOrg?.members.find(
+			(m: any) => m.user.email === "test@email.com",
+		);
+
+		// provisionUser updates user name to "provisioned-user" in DB.
+		// After the fix, user is re-fetched before being passed to getRole.
+		// getRole sees user.name === "provisioned-user" → returns "admin".
+		// Without the fix, stale user is passed with original name → "member".
+		expect(member?.role).toBe("admin");
 	});
 });
 
