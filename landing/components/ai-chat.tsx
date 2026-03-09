@@ -165,7 +165,12 @@ function MobileDrawerPanel() {
 	const drawerHeight = vvHeight ? vvHeight * 0.85 : undefined;
 
 	return (
-		<Drawer open={open} onOpenChange={setOpen} repositionInputs={false}>
+		<Drawer
+			open={open}
+			onOpenChange={setOpen}
+			repositionInputs={false}
+			handleOnly
+		>
 			<DrawerContent
 				style={
 					drawerHeight
@@ -357,7 +362,7 @@ function PanelMessages({ className, ...props }: ComponentProps<"div">) {
 		<div
 			ref={containerRef}
 			className={cn(
-				"ai-chat-messages overflow-y-auto overscroll-contain min-w-0 min-h-0 flex flex-col py-4",
+				"ai-chat-messages overflow-y-auto overscroll-contain min-w-0 min-h-0 flex flex-col py-4 select-text",
 				className,
 			)}
 			style={{
