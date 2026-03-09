@@ -1,10 +1,10 @@
 import { GeistPixelSquare } from "geist/font/pixel";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
-import { CommandMenuProvider } from "@/components/command-menu";
 import { StaggeredNavFiles } from "@/components/landing/staggered-nav-files";
 import { Providers } from "@/components/providers";
 
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 		process.env.VERCEL_URL
 			? `https://${process.env.VERCEL_URL}`
 			: process.env.NODE_ENV === "production"
-				? "https://docs.better-auth.com"
+				? "https://better-auth.com"
 				: (process.env.NEXT_PUBLIC_URL ?? "http://localhost:3000"),
 	),
 	title: {
@@ -92,19 +92,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				)}
 			</head>
 			<body
-				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased overflow-x-hidden`}
+				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased`}
 				suppressHydrationWarning
 			>
 				<Providers>
-					<CommandMenuProvider>
-						<div className="relative h-dvh overflow-x-hidden">
-							<StaggeredNavFiles />
-							<div className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain">
-								{children}
-							</div>
-						</div>
-					</CommandMenuProvider>
+					<div className="relative min-h-dvh">
+						<StaggeredNavFiles />
+						{children}
+					</div>
 				</Providers>
+				<Analytics />
 			</body>
 		</html>
 	);

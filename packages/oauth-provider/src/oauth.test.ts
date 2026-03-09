@@ -1368,15 +1368,28 @@ describe("oauth - prompt", async () => {
 });
 
 describe("oauth - config", () => {
-	const port = 3002;
-	const authServerBaseUrl = `http://localhost:${port}`;
-	const authServerUrl = `${authServerBaseUrl}/api/auth`;
+	let port = 3002;
+	let authServerBaseUrl = `http://localhost:${port}`;
+	let authServerUrl = `${authServerBaseUrl}/api/auth`;
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
 	let server: Listener;
 	let oauthClient: OAuthClient | null;
+
+	beforeAll(async () => {
+		const tempServer = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{
+				port: 0,
+			},
+		);
+		port = tempServer.address?.port ?? 3002;
+		authServerBaseUrl = `http://localhost:${port}`;
+		authServerUrl = `${authServerBaseUrl}/api/auth`;
+		await tempServer.close();
+	});
 
 	afterEach(async () => {
 		if (server) {
@@ -1427,6 +1440,79 @@ describe("oauth - config", () => {
 			],
 		});
 	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8017
+	 */
+	it("should preserve form-urlencoded token body when req.body was pre-parsed", async () => {
+		const { auth: authorizationServer, signInWithTestUser } =
+			await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			});
+
+		const { headers } = await signInWithTestUser();
+		const nodeHandler = toNodeHandler(authorizationServer.handler);
+		server = await listen(
+			async (req, res) => {
+				if (req.url?.startsWith("/api/auth/oauth2/token")) {
+					const requestWithParsedBody = req as typeof req & {
+						body?: unknown;
+					};
+					requestWithParsedBody.body = {};
+				}
+				await nodeHandler(req, res);
+			},
+			{
+				port,
+			},
+		);
+
+		const createdClient = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(createdClient?.client_id).toBeDefined();
+		expect(createdClient?.client_secret).toBeDefined();
+
+		const tokenResponse = await fetch(
+			new URL("/api/auth/oauth2/token", server.url),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: createdClient!.client_id,
+					client_secret: createdClient!.client_secret!,
+				}).toString(),
+			},
+		);
+
+		const tokenPayload = (await tokenResponse.json()) as {
+			access_token?: string;
+			token_type?: string;
+			error?: string;
+		};
+		expect(tokenResponse.status).toBe(200);
+		expect(tokenPayload.error).toBeUndefined();
+		expect(tokenPayload.access_token).toBeDefined();
+		expect(tokenPayload.token_type).toBe("Bearer");
+	});
 
 	it.for([
 		{
