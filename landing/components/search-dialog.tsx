@@ -60,6 +60,11 @@ export default function CustomSearchDialog(props: SharedProps) {
 	const { search, setSearch, query } = useTypesenseSearch({
 		typesenseCollectionName: "better-auth-docs",
 		client: typesenseClient!,
+		/**
+		 * Non-legacy mode leaves raw <mark> tags in content at the moment,
+		 * which renders as plain text in fumadocs-ui
+		 */
+		legacy: true,
 	});
 	const pages = usePages();
 	const router = useRouter();
