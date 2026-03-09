@@ -18,6 +18,14 @@ import {
 import { cn } from "@/lib/utils";
 import { Markdown } from "./markdown";
 import { MessageFeedback } from "./message-feedback";
+import {
+	Drawer,
+	DrawerClose,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+} from "./ui/drawer";
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
@@ -108,24 +116,98 @@ export function AIChatTrigger({
 
 // ─── Panel ───────────────────────────────────────────────────────────────────
 
+const LG_BREAKPOINT = 1024;
+
+function useIsDesktop() {
+	const [isDesktop, setIsDesktop] = useState<boolean | undefined>(undefined);
+
+	useEffect(() => {
+		const mql = window.matchMedia(`(min-width: ${LG_BREAKPOINT}px)`);
+		const onChange = () => setIsDesktop(mql.matches);
+		mql.addEventListener("change", onChange);
+		setIsDesktop(mql.matches);
+		return () => mql.removeEventListener("change", onChange);
+	}, []);
+
+	return isDesktop;
+}
+
 export function AIChatPanel() {
+	const isDesktop = useIsDesktop();
+	useAIChatHotKey();
+
+	// SSR / hydration: render nothing until we know the viewport
+	if (isDesktop === undefined) return null;
+
+	return isDesktop ? <DesktopPanel /> : <MobileDrawerPanel />;
+}
+
+function useVisualViewportHeight() {
+	const [height, setHeight] = useState<number | undefined>(undefined);
+
+	useEffect(() => {
+		const vv = window.visualViewport;
+		if (!vv) return;
+		const update = () => setHeight(vv.height);
+		update();
+		vv.addEventListener("resize", update);
+		return () => vv.removeEventListener("resize", update);
+	}, []);
+
+	return height;
+}
+
+function MobileDrawerPanel() {
 	const { open, setOpen } = useAIChat();
+	const vvHeight = useVisualViewportHeight();
+
+	// 85% of the visual viewport (shrinks when keyboard opens)
+	const drawerHeight = vvHeight ? vvHeight * 0.85 : undefined;
+
+	return (
+		<Drawer open={open} onOpenChange={setOpen} repositionInputs={false}>
+			<DrawerContent
+				style={
+					drawerHeight
+						? { height: drawerHeight, maxHeight: drawerHeight }
+						: undefined
+				}
+				className={drawerHeight ? undefined : "h-[85dvh] max-h-[85dvh]"}
+			>
+				<DrawerHeader className="flex flex-row items-center gap-2 border-b">
+					<div className="flex-1 text-left">
+						<DrawerTitle className="text-xs font-medium">AI Chat</DrawerTitle>
+						<DrawerDescription className="text-[10px]">
+							Powered by{" "}
+							<a
+								href="https://inkeep.com"
+								target="_blank"
+								rel="noreferrer noopener"
+								className="underline hover:text-foreground transition-colors"
+							>
+								Inkeep AI
+							</a>
+						</DrawerDescription>
+					</div>
+					<DrawerClose className="p-1 text-muted-foreground hover:text-foreground transition-colors">
+						<X className="size-4" />
+					</DrawerClose>
+				</DrawerHeader>
+				<div className="flex flex-col flex-1 w-full min-h-0 overflow-hidden px-2 pb-3">
+					<PanelMessages className="flex-1" />
+					<PanelInput />
+				</div>
+			</DrawerContent>
+		</Drawer>
+	);
+}
+
+function DesktopPanel() {
+	const { open } = useAIChat();
 	const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
 	const [dragging, setDragging] = useState(false);
 	const startX = useRef(0);
 	const startWidth = useRef(panelWidth);
-	useAIChatHotKey();
-
-	// Mobile: lock body scroll when panel is open
-	useEffect(() => {
-		if (!open) return;
-		const mq = window.matchMedia("(max-width: 1023px)");
-		if (!mq.matches) return;
-		document.body.style.overflow = "hidden";
-		return () => {
-			document.body.style.overflow = "";
-		};
-	}, [open]);
 
 	useEffect(() => {
 		if (!dragging) return;
@@ -153,34 +235,17 @@ export function AIChatPanel() {
 
 	return (
 		<>
-			{/* Mobile overlay */}
-			<div
-				className="fixed inset-0 z-[200] backdrop-blur-xs bg-black/50 lg:hidden"
-				onClick={() => setOpen(false)}
-				onKeyDown={(e) => {
-					if (e.key === "Escape") setOpen(false);
-				}}
-			/>
-
-			{/* Panel */}
 			<div
 				className={cn(
 					"overflow-hidden overscroll-contain z-200 bg-background text-foreground",
-					"[--ai-chat-width:400px]",
-					// Mobile
-					"max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:h-[80dvh] max-lg:border-t max-lg:shadow-[0_-8px_50px_0px_rgba(0,0,0,0.12)] max-lg:dark:shadow-[0_-8px_50px_0px_rgba(255,255,255,0.07)]",
-					// Desktop
-					"lg:fixed lg:top-0 lg:inset-e-0 lg:h-dvh lg:border-s lg:shadow-[-8px_0_24px_-4px_rgba(0,0,0,0.1)] lg:dark:shadow-[-8px_0_30px_-2px_rgba(0,0,0,0.7)]",
+					"fixed top-0 inset-e-0 h-dvh border-s",
+					"shadow-[-8px_0_24px_-4px_rgba(0,0,0,0.1)] dark:shadow-[-8px_0_30px_-2px_rgba(0,0,0,0.7)]",
 				)}
-				style={
-					{
-						"--ai-chat-width": `${panelWidth}px`,
-					} as React.CSSProperties
-				}
+				style={{ width: panelWidth }}
 			>
-				{/* Resize handle (desktop) */}
+				{/* Resize handle */}
 				<div
-					className="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-foreground/10 active:bg-foreground/15 transition-colors hidden lg:block z-10"
+					className="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-foreground/10 active:bg-foreground/15 transition-colors z-10"
 					onMouseDown={(e) => {
 						e.preventDefault();
 						startX.current = e.clientX;
@@ -188,7 +253,10 @@ export function AIChatPanel() {
 						setDragging(true);
 					}}
 				/>
-				<div className="flex flex-col size-full min-h-0 overflow-hidden p-2 pb-3 max-lg:h-full lg:p-3 lg:w-(--ai-chat-width)">
+				<div
+					className="flex flex-col size-full min-h-0 overflow-hidden p-3"
+					style={{ width: panelWidth }}
+				>
 					<PanelHeader />
 					<PanelMessages className="flex-1" />
 					<PanelInput />
@@ -207,9 +275,9 @@ function PanelHeader() {
 	const { setOpen } = useAIChat();
 
 	return (
-		<div className="flex items-center gap-2 border rounded-lg bg-foreground/2 p-2 mb-2">
+		<div className="flex items-center gap-2 border-b px-3 pb-3">
 			<div className="flex-1">
-				<p className="text-xs font-medium mb-1">AI Chat</p>
+				<p className="text-sm font-medium">AI Chat</p>
 				<p className="text-[10px] text-muted-foreground">
 					Powered by{" "}
 					<a
@@ -328,6 +396,7 @@ function PanelMessages({ className, ...props }: ComponentProps<"div">) {
 function PanelInput() {
 	const { status, sendMessage, stop, setMessages, messages, regenerate } =
 		useChatContext();
+	const isDesktop = useIsDesktop();
 	const [input, setInput] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const isLoading = status === "streaming" || status === "submitted";
@@ -419,12 +488,12 @@ function PanelInput() {
 							}}
 							disabled={isLoading}
 							placeholder={isLoading ? "AI is answering..." : "Ask a question"}
-							autoFocus
+							autoFocus={!!isDesktop}
 							rows={1}
 							style={{
 								height: Math.max(inputMinHeight, 38),
 							}}
-							className="flex-1 resize-none text-[13px] bg-transparent pl-3.5 pr-1.5 py-2.5 placeholder:text-muted-foreground focus:outline-none overflow-y-auto"
+							className="flex-1 resize-none text-base lg:text-[13px] bg-transparent pl-3.5 pr-1.5 py-2.5 placeholder:text-muted-foreground focus:outline-none overflow-y-auto"
 						/>
 						<div className="shrink-0 pb-1.5 pr-1.5">
 							{isLoading ? (
