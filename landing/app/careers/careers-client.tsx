@@ -84,6 +84,7 @@ function ApplyDialog({
 					<button
 						type="button"
 						onClick={onClose}
+						aria-label="Close dialog"
 						className="absolute top-4 right-4 text-foreground/50 hover:text-foreground/80 transition-colors"
 					>
 						<svg
@@ -91,6 +92,7 @@ function ApplyDialog({
 							width="14"
 							height="14"
 							viewBox="0 0 24 24"
+							aria-hidden="true"
 						>
 							<path
 								fill="currentColor"
