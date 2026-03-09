@@ -203,7 +203,7 @@ function MobileDrawerPanel() {
 				</DrawerHeader>
 				<div className="flex flex-col flex-1 w-full min-h-0 overflow-hidden px-2 pb-3">
 					<PanelMessages className="flex-1" />
-					<PanelInput />
+					<PanelInput autoFocus={false} />
 				</div>
 			</DrawerContent>
 		</Drawer>
@@ -267,7 +267,7 @@ function DesktopPanel() {
 				>
 					<PanelHeader />
 					<PanelMessages className="flex-1" />
-					<PanelInput />
+					<PanelInput autoFocus />
 				</div>
 			</div>
 
@@ -401,10 +401,9 @@ function PanelMessages({ className, ...props }: ComponentProps<"div">) {
 
 // ─── Panel Input ─────────────────────────────────────────────────────────────
 
-function PanelInput() {
+function PanelInput({ autoFocus = false }: { autoFocus?: boolean }) {
 	const { status, sendMessage, stop, setMessages, messages, regenerate } =
 		useChatContext();
-	const isDesktop = useIsDesktop();
 	const [input, setInput] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const isLoading = status === "streaming" || status === "submitted";
@@ -496,7 +495,7 @@ function PanelInput() {
 							}}
 							disabled={isLoading}
 							placeholder={isLoading ? "AI is answering..." : "Ask a question"}
-							autoFocus={isDesktop !== false}
+							autoFocus={autoFocus}
 							rows={1}
 							style={{
 								height: Math.max(inputMinHeight, 38),
