@@ -75,6 +75,7 @@
     "prettier": "^3.8.1",
     "prompts": "^2.4.2",
     "semver": "^7.7.4",
+    "ws": "^8.19.0",
     "yocto-spinner": "^0.2.3",
     "zod": "^4.3.6"
   },
@@ -83,6 +84,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
     "@types/semver": "^7.7.1",
+    "@types/ws": "^8.18.1",
     "better-sqlite3": "^12.6.2",
     "jiti": "^2.6.1",
     "memfs": "^4.56.10",
