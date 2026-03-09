@@ -19,7 +19,28 @@ declare module "@better-auth/core" {
 	}
 }
 
-export interface MagicLinkOptions {
+type JsonValue =
+	| string
+	| number
+	| boolean
+	| null
+	| JsonValue[]
+	| { [key: string]: JsonValue };
+
+const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
+	z.union([
+		z.string(),
+		z.number(),
+		z.boolean(),
+		z.null(),
+		z.array(jsonSchema),
+		z.record(z.string(), jsonSchema),
+	]),
+);
+
+export interface MagicLinkOptions<
+	DS extends z.ZodType = z.ZodRecord<z.ZodString, typeof jsonSchema>,
+> {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -39,9 +60,19 @@ export interface MagicLinkOptions {
 			email: string;
 			url: string;
 			token: string;
+			additionalData?: z.infer<DS>;
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
+	/**
+	 * Zod schema for the additionalData property of the sendMagicLink function.
+	 * This schema is used to validate and type-safeguard the additional data
+	 * passed to the sign-in endpoint.
+	 *
+	 * @default z.record(z.string(), jsonSchema)
+	 * @see {@link https://zod.dev/basics}
+	 */
+	additionalDataSchema?: DS;
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -113,6 +144,16 @@ const signInMagicLinkBodySchema = z.object({
 		})
 		.optional(),
 });
+const createSignInMagicLinkBodySchema = <DS extends z.ZodType>(
+	additionalDataSchema: DS,
+) =>
+	signInMagicLinkBodySchema.extend({
+		additionalData: additionalDataSchema
+			.meta({
+				description: "Additional data to pass to the sendMagicLink function",
+			})
+			.optional(),
+	});
 const magicLinkVerifyQuerySchema = z.object({
 	token: z.string().meta({
 		description: "Verification token",
@@ -138,12 +179,16 @@ const magicLinkVerifyQuerySchema = z.object({
 		})
 		.optional(),
 });
-export const magicLink = (options: MagicLinkOptions) => {
+export const magicLink = <
+	DS extends z.ZodType<JsonValue> = z.ZodRecord<z.ZodString, typeof jsonSchema>,
+>(
+	options: MagicLinkOptions<DS>,
+) => {
 	const opts = {
 		storeToken: "plain",
 		allowedAttempts: 1,
 		...options,
-	} satisfies MagicLinkOptions;
+	} satisfies MagicLinkOptions<DS>;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -158,6 +203,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 		}
 		return token;
 	}
+
+	const additionalDataSchema = (options.additionalDataSchema ??
+		z.record(z.string(), jsonSchema)) as DS;
 
 	return {
 		id: "magic-link",
@@ -182,7 +230,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 				{
 					method: "POST",
 					requireHeaders: true,
-					body: signInMagicLinkBodySchema,
+					body: createSignInMagicLinkBodySchema(additionalDataSchema),
 					metadata: {
 						openapi: {
 							operationId: "signInWithMagicLink",
@@ -208,7 +256,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, additionalData } = ctx.body;
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
@@ -243,6 +291,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							email,
 							url: url.toString(),
 							token: verificationToken,
+							additionalData,
 						},
 						ctx,
 					);
