@@ -194,7 +194,10 @@ function MobileDrawerPanel() {
 							</a>
 						</DrawerDescription>
 					</div>
-					<DrawerClose className="p-1 text-muted-foreground hover:text-foreground transition-colors">
+					<DrawerClose
+						aria-label="Close"
+						className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+					>
 						<X className="size-4" />
 					</DrawerClose>
 				</DrawerHeader>
@@ -493,7 +496,7 @@ function PanelInput() {
 							}}
 							disabled={isLoading}
 							placeholder={isLoading ? "AI is answering..." : "Ask a question"}
-							autoFocus={!!isDesktop}
+							autoFocus={isDesktop !== false}
 							rows={1}
 							style={{
 								height: Math.max(inputMinHeight, 38),
