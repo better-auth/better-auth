@@ -123,13 +123,15 @@ function createShutdownHandler(
 ) {
 	let shuttingDown = false;
 	let forceExit = false;
-	return async function shutdown(exitCode = 0) {
+	let exitStatus = 0;
+	return async (exitCode: number = 0) => {
 		if (shuttingDown) {
-			if (forceExit) process.exit(exitCode);
+			if (forceExit) process.exit(exitStatus);
 			forceExit = true;
 			return;
 		}
 		shuttingDown = true;
+		exitStatus = exitCode;
 		console.log(chalk.dim("\n  Disconnecting..."));
 		const tunnelId = getTunnelId();
 		if (tunnelId) {
@@ -149,7 +151,7 @@ function createShutdownHandler(
 		if (ws.readyState === WebSocket.OPEN) {
 			ws.close(1000, "client disconnect");
 		}
-		process.exit(exitCode);
+		process.exit(exitStatus);
 	};
 }
 
