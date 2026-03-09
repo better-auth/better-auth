@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { createMetadata } from "@/lib/metadata";
 import { ChangelogContent } from "./changelog-content";
 
 export const dynamic = "force-static";
@@ -148,7 +149,7 @@ export default async function ChangelogPage() {
 	);
 }
 
-export const metadata = {
-	title: "Changelog - Better Auth",
+export const metadata = createMetadata({
+	title: "Changelog",
 	description: "Latest changes, fixes, and updates to Better Auth",
-};
+});

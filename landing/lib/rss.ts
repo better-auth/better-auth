@@ -1,6 +1,6 @@
 import { Feed } from "feed";
+import { baseUrl } from "./metadata";
 import { blogs } from "./source";
-import { baseUrl } from "./utils";
 
 export function getRSS() {
 	const feed = new Feed({
