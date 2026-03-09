@@ -8,7 +8,9 @@ import { Command } from "commander";
 import open from "open";
 import { WebSocket } from "ws";
 import * as z from "zod";
+import { cliVersion } from "../..";
 import { getInfraBaseURL } from "../../utils/helper";
+import type { StoredToken } from "../../utils/storage";
 import {
 	getStoredToken,
 	isStudioKeyExpired,
@@ -16,26 +18,21 @@ import {
 	setStudioKeyRotation,
 } from "../../utils/storage";
 import { handleLogin } from "../login";
+import type { RequestContext } from "./client";
 import { runTunnel } from "./client";
+import type { TunnelEvent } from "./schemas";
 
 const TUNNEL_BASE_URL = "https://tunnel.better-auth.com";
 const HEARTBEAT_INTERVAL = 25_000;
 
-async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
-	const {
-		port = 3000,
-		yes,
-		expiry,
-		rotateKey,
-	} = z
-		.object({
-			port: z.coerce.number().int().min(1).max(65535).optional(),
-			yes: z.boolean().default(false),
-			expiry: z.coerce.number().int().min(0).nullable().optional(),
-			rotateKey: z.boolean().default(false),
-		})
-		.parse({ port: arg0, ...opts });
+const studioOptionsSchema = z.object({
+	port: z.coerce.number().int().min(1).max(65535).optional(),
+	yes: z.boolean().default(false),
+	expiry: z.coerce.number().int().min(0).nullable().optional(),
+	rotateKey: z.boolean().default(false),
+});
 
+async function ensureAuthenticated(yes: boolean) {
 	let token = await getStoredToken();
 	if (!token) {
 		if (!yes) {
@@ -56,47 +53,149 @@ async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
 		outro("❌ You are not logged in. Please login to continue.");
 		process.exit(1);
 	}
+	return token;
+}
 
+async function resolveApiKey(
+	token: StoredToken,
+	expiry: number | null | undefined,
+	rotateKey: boolean,
+) {
+	let currentToken = token;
 	if (expiry !== undefined) {
 		await setStudioKeyRotation(expiry ?? null);
-		token = await getStoredToken();
+		currentToken = (await getStoredToken())!;
 	}
 
-	let apiKey = token?.studio_api_key ?? null;
+	let apiKey = currentToken.studio_api_key ?? null;
 	const keyWasRotated =
-		rotateKey || (apiKey !== null && isStudioKeyExpired(token!));
-	if (keyWasRotated) {
-		apiKey = null;
-	}
+		rotateKey || (apiKey !== null && isStudioKeyExpired(currentToken));
+	if (keyWasRotated) apiKey = null;
 	if (!apiKey) {
 		apiKey = `ba_studio_${randomUUID().replace(/-/g, "")}`;
-		await setStoredStudioKey(apiKey, token?.studio_key_rotation_days ?? null);
-		token = await getStoredToken();
+		await setStoredStudioKey(
+			apiKey,
+			currentToken.studio_key_rotation_days ?? null,
+		);
+		currentToken = (await getStoredToken())!;
 	}
+	return { apiKey, keyWasRotated, token: currentToken };
+}
 
-	let basePath = "/api/auth";
-	if (!yes) {
-		const customBasePath = await text({
-			message: "Enter your base path (or press Enter to use the default)",
-			defaultValue: "/api/auth",
-			placeholder: "/api/auth",
-			validate(value) {
-				if (value && !value.startsWith("/")) {
-					return "Base path must start with a slash";
-				}
-			},
-		});
-		if (isCancel(customBasePath) || !customBasePath) {
-			outro("❌ Operation cancelled.");
+async function getBasePath(yes: boolean): Promise<string> {
+	if (yes) return "/api/auth";
+	const customBasePath = await text({
+		message: "Enter your base path (or press Enter to use the default)",
+		defaultValue: "/api/auth",
+		placeholder: "/api/auth",
+		validate(value) {
+			if (value && !value.startsWith("/")) {
+				return "Base path must start with a slash";
+			}
+		},
+	});
+	if (isCancel(customBasePath) || !customBasePath) {
+		outro("❌ Operation cancelled.");
+		process.exit(1);
+	}
+	return customBasePath;
+}
+
+function createShutdownHandler(
+	ws: WebSocket,
+	token: StoredToken,
+	getTunnelId: () => string | null,
+) {
+	let shuttingDown = false;
+	let forceExit = false;
+	return async function shutdown() {
+		if (shuttingDown) {
+			if (forceExit) process.exit(0);
+			forceExit = true;
+			return;
+		}
+		shuttingDown = true;
+		console.log(chalk.dim("\n  Disconnecting..."));
+		const tunnelId = getTunnelId();
+		if (tunnelId) {
+			try {
+				await fetch(`${getInfraBaseURL()}/api/studio/cleanup`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${token.access_token}`,
+					},
+					body: JSON.stringify({ tunnelId }),
+				});
+			} catch {
+				//
+			}
+		}
+		if (ws.readyState === WebSocket.OPEN) {
+			ws.close(1000, "client disconnect");
+		}
+		process.exit(0);
+	};
+}
+
+const createRequestLogger =
+	(basePath: string) =>
+	(event: TunnelEvent<"response">, ctx: RequestContext) => {
+		const statusColor =
+			event.status < 300
+				? chalk.green
+				: event.status < 400
+					? chalk.yellow
+					: chalk.red;
+		const method = chalk.dim(ctx.method.padEnd(5));
+		const status = statusColor(String(event.status).padStart(3));
+		const path = (event.path.replace(basePath, "") || "/").padEnd(28);
+		const duration = ctx.duration
+			? chalk.dim(String(ctx.duration).padStart(4) + "ms")
+			: "";
+		console.log(`  ${method} ${status}  ${path}  ${duration}`);
+	};
+
+function setupWSHandlers(
+	ws: WebSocket,
+	s: ReturnType<typeof spinner>,
+	heartbeat: ReturnType<typeof setInterval>,
+) {
+	ws.on("open", () => {
+		s.stop(chalk.green("Connected."));
+	});
+	ws.on("error", (err) => {
+		console.error(chalk.red(`  Connection error: ${err.message}`));
+		clearInterval(heartbeat);
+		process.exit(1);
+	});
+	ws.on("close", (code, reason) => {
+		clearInterval(heartbeat);
+		if (code !== 1000) {
+			console.log(
+				chalk.dim(`  Tunnel closed (${code}${reason ? `: ${reason}` : ""})`),
+			);
 			process.exit(1);
 		}
-		basePath = customBasePath;
-	}
+		process.exit(0);
+	});
+}
+
+async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
+	const parsed = studioOptionsSchema.parse({ port: arg0, ...opts });
+	const port = parsed.port ?? 3000;
+	const token = await ensureAuthenticated(parsed.yes);
+	const {
+		apiKey,
+		keyWasRotated,
+		token: currentToken,
+	} = await resolveApiKey(token, parsed.expiry, parsed.rotateKey);
+	const basePath = await getBasePath(parsed.yes);
 
 	const to = `http://localhost:${port}`;
 	const { wsUrl, headers } = buildConnectOptions(
 		TUNNEL_BASE_URL,
-		token!.access_token,
+		currentToken.access_token,
 	);
 
 	const s1 = spinner();
@@ -108,39 +207,7 @@ async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
 	});
 
 	let tunnelId: string | null = null;
-
-	const cleanup = async () => {
-		if (!tunnelId) return;
-		try {
-			await fetch(`${getInfraBaseURL()}/api/studio/cleanup`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${token!.access_token}`,
-				},
-				body: JSON.stringify({ tunnelId }),
-			});
-		} catch {
-			//
-		}
-	};
-
-	let shuttingDown = false;
-	let forceExit = false;
-	const shutdown = async () => {
-		if (shuttingDown) {
-			if (forceExit) process.exit(0);
-			forceExit = true;
-			return;
-		}
-		shuttingDown = true;
-		console.log(chalk.dim("\n  Disconnecting..."));
-		await cleanup();
-		if (ws.readyState === WebSocket.OPEN) {
-			ws.close(1000, "client disconnect");
-		}
-		process.exit(0);
-	};
+	const shutdown = createShutdownHandler(ws, currentToken, () => tunnelId);
 
 	const heartbeat = setInterval(() => {
 		if (ws.readyState !== WebSocket.OPEN) return;
@@ -150,32 +217,32 @@ async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
 	process.on("SIGINT", () => shutdown());
 	process.on("SIGTERM", () => shutdown());
 
+	setupWSHandlers(ws, s1, heartbeat);
+
 	await runTunnel(ws, {
 		to,
 		async onReady(event) {
-			// Handle Ctrl+C
 			if (process.stdin.isTTY) {
 				process.stdin.setRawMode(true);
 				process.stdin.resume();
 				process.stdin.on("data", async (key) => {
-					if (key[0] === 0x03) {
-						await shutdown();
-					}
+					if (key[0] === 0x03) await shutdown();
 				});
 			}
-
 			tunnelId = event.id;
 			const baseUrl = getInfraBaseURL();
-
 			const connectRes = await fetch(`${baseUrl}/api/studio/connect`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${token!.access_token}`,
+					Authorization: `Bearer ${currentToken.access_token}`,
 				},
-				body: JSON.stringify({ tunnelId, basePath, apiKey }),
+				body: JSON.stringify({
+					tunnelId: event.id,
+					basePath,
+					apiKey,
+				}),
 			});
-
 			if (!connectRes.ok) {
 				const msg = (await connectRes.text()) || connectRes.statusText;
 				console.error(chalk.red("  Failed to connect Studio."));
@@ -187,18 +254,16 @@ async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
 				);
 				return;
 			}
-
 			const payload = (await connectRes.json()) as {
 				data: { id: string; slug: string };
 			};
 			const dashboardUrl = `${baseUrl}/${payload.data.slug}`;
-
 			console.log();
 			console.log(
 				[
 					`   ██  ████`,
 					`   ████  ██  ${chalk.bold("Better Auth Studio")}`,
-					`   ██  ████  ${chalk.gray("Beta")}`,
+					`   ██  ████  ${chalk.gray(`v${cliVersion}`)}`,
 				].join("\n"),
 			);
 			console.log();
@@ -223,49 +288,11 @@ async function studioAction(arg0: unknown, opts: Record<string, unknown>) {
 			}
 			console.log();
 			console.log(chalk.dim(`  Press ${chalk.bold("Ctrl+C")} to stop.\n`));
-
 			open(dashboardUrl).catch(() => {
 				console.log(chalk.dim("  Could not open browser automatically."));
 			});
 		},
-		onResponse(event, ctx) {
-			const statusColor =
-				event.status < 300
-					? chalk.green
-					: event.status < 400
-						? chalk.yellow
-						: chalk.red;
-
-			const method = chalk.dim(ctx.method.padEnd(5));
-			const status = statusColor(String(event.status).padStart(3));
-			const path = (event.path.replace(basePath, "") || "/").padEnd(28);
-			const duration = ctx.duration
-				? chalk.dim(String(ctx.duration).padStart(4) + "ms")
-				: "";
-
-			console.log(`  ${method} ${status}  ${path}  ${duration}`);
-		},
-	});
-
-	ws.on("open", () => {
-		s1.stop(chalk.green("Connected."));
-	});
-
-	ws.on("error", (err) => {
-		console.error(chalk.red(`  Connection error: ${err.message}`));
-		clearInterval(heartbeat);
-		process.exit(1);
-	});
-
-	ws.on("close", (code, reason) => {
-		clearInterval(heartbeat);
-		if (code !== 1000) {
-			console.log(
-				chalk.dim(`  Tunnel closed (${code}${reason ? `: ${reason}` : ""})`),
-			);
-			process.exit(1);
-		}
-		process.exit(0);
+		onResponse: createRequestLogger(basePath),
 	});
 
 	await new Promise<void>((resolve) => {
