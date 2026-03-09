@@ -622,6 +622,109 @@ describe("session-refresh", () => {
 		vi.useRealTimers();
 	});
 
+	/**
+	 * https://github.com/better-auth/better-auth/issues/8325
+	 */
+	it("should preserve custom session fields on poll refresh", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+
+		const customSessionData = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+			activationInfo: { isActivated: true, activatedAt: "2024-01-01" },
+			role: "admin",
+		};
+
+		const mockFetch = vi.fn(async () => ({
+			data: customSessionData,
+			error: null,
+		}));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(customSessionData);
+		expect((updatedSession.data as any)?.activationInfo).toEqual({
+			isActivated: true,
+			activatedAt: "2024-01-01",
+		});
+		expect((updatedSession.data as any)?.role).toBe("admin");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should preserve custom session fields on visibilitychange refresh", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+
+		const customSessionData = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+			customField: "custom value",
+		};
+
+		const mockFetch = vi.fn(async () => ({
+			data: customSessionData,
+			error: null,
+		}));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchOnWindowFocus: true,
+				},
+			},
+		});
+
+		manager.init();
+
+		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
+
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(customSessionData);
+		expect((updatedSession.data as any)?.customField).toBe("custom value");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
 	it("should broadcast session update when broadcastSessionUpdate is called with signout", () => {
 		const channel = getGlobalBroadcastChannel();
 		const postSpy = vi.spyOn(channel, "post");
