@@ -12,7 +12,7 @@ describe("isBrowserFetchRequest", () => {
 		).toBe(true);
 	});
 
-	it("returns false for navigations", () => {
+	it("returns false for navigation requests", () => {
 		expect(
 			isBrowserFetchRequest(
 				new Headers({
