@@ -913,7 +913,7 @@ describe("getConfig", async () => {
 			`{
 				"compilerOptions": {
 					"paths": {
-						"~*": ["./src/*"]
+						"@src/*": ["./src/*"]
 					}
 				}
 			}`,
@@ -936,12 +936,12 @@ describe("getConfig", async () => {
 			export const db = new PrismaClient()`,
 		);
 
-		// Create auth.ts using the tilde alias
+		// Create auth.ts using the alias from extended config
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
 			 import {prismaAdapter} from "better-auth/adapters/prisma";
-			 import {db} from "~db/db";
+			 import {db} from "@src/db/db";
 
 			 export const auth = betterAuth({
 					database: prismaAdapter(db, {
