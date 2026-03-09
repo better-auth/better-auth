@@ -59,6 +59,8 @@ declare module "@better-auth/core" {
 	}
 }
 
+export { getSSOState } from "./sso-state";
+
 export {
 	computeDiscoveryUrl,
 	type DiscoverOIDCConfigParams,

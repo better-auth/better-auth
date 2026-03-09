@@ -705,6 +705,31 @@ The `provisionUser` function receives:
 - **provider**: The SSO provider configuration
 - **additionalData**: The `additionalData` object passed by the client at sign-in time (see [Sign In with SSO](#sign-in-with-sso))
 
+### Accessing additionalData in Hooks
+
+You can also access `additionalData` from server-side hooks using `getSSOState`. This works for both OIDC and SAML flows:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso, getSSOState } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [sso()],
+    hooks: {
+        after: createAuthMiddleware(async (ctx) => {
+            const additionalData = await getSSOState<{
+                referralCode?: string;
+            }>();
+            if (additionalData?.referralCode) {
+                // handle referral
+            }
+        }),
+    },
+});
+```
+
+`getSSOState` is a request-scoped accessor — it returns `undefined` outside of an SSO callback request.
+
 ### Organization Provisioning
 
 Organization provisioning automatically manages user memberships in organizations when SSO providers are linked to specific organizations. This is particularly useful for:
