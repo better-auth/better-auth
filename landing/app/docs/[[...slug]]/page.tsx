@@ -23,7 +23,9 @@ import {
 	GenerateAppleJwt,
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
+import { Feedback } from "@/components/feedback/client";
 import { Callout } from "@/components/ui/callout";
+import { onPageFeedbackAction } from "@/lib/github";
 import { createMetadata } from "@/lib/metadata";
 import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
@@ -136,6 +138,7 @@ export default async function Page({
 					}}
 				/>
 			</DocsBody>
+			<Feedback onSendAction={onPageFeedbackAction} />
 		</DocsPage>
 	);
 }
