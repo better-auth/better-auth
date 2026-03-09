@@ -7,10 +7,10 @@ import babelPresetTypeScript from "@babel/preset-typescript";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
+import { getTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
-import { getTsconfigInfo } from "./get-tsconfig-info";
 
 let possiblePaths = [
 	"auth.ts",
@@ -42,132 +42,123 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function resolveReferencePath(configDir: string, refPath: string): string {
-	const resolvedPath = path.resolve(configDir, refPath);
+function extractAliases(tsconfig: {
+	path: string;
+	config: { compilerOptions?: Record<string, unknown> };
+}): Record<string, string> {
+	const { paths = {}, baseUrl } = (tsconfig.config.compilerOptions || {}) as {
+		paths?: Record<string, string[]>;
+		baseUrl?: string;
+	};
+	const result: Record<string, string> = {};
+	const configDir = path.dirname(tsconfig.path);
+	const resolvedBaseUrl = baseUrl
+		? path.resolve(configDir, baseUrl)
+		: configDir;
 
-	// If it ends with .json, treat as direct file reference
-	if (refPath.endsWith(".json")) {
-		return resolvedPath;
-	}
+	const obj = Object.entries(paths) as [string, string[]][];
+	for (const [alias, aliasPaths] of obj) {
+		for (const aliasedPath of aliasPaths) {
+			const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
+			const finalAliasedPath =
+				aliasedPath.slice(-1) === "*" ? aliasedPath.slice(0, -1) : aliasedPath;
 
-	// If the exact path exists and is a file, use it
-	if (fs.existsSync(resolvedPath)) {
-		try {
-			const stats = fs.statSync(resolvedPath);
-			if (stats.isFile()) {
-				return resolvedPath;
-			}
-		} catch {
-			// Fall through to directory handling
+			result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
 		}
 	}
-
-	// Otherwise, assume directory reference
-	return path.resolve(configDir, refPath, "tsconfig.json");
+	return result;
 }
 
-function resolveExtendsPath(configDir: string, extendsValue: string): string {
-	// If it starts with . it's a relative path
-	if (extendsValue.startsWith(".")) {
-		const resolved = path.resolve(configDir, extendsValue);
-		// Add .json extension if not present
-		if (!resolved.endsWith(".json")) {
-			return `${resolved}.json`;
-		}
-		return resolved;
-	}
-	// Otherwise it's a package reference (e.g. "@tsconfig/node20/tsconfig.json")
-	// Try to resolve it from the config directory
+/**
+ * Reads raw tsconfig JSON to get `references` (which get-tsconfig strips out).
+ */
+function readRawTsconfigReferences(
+	tsconfigPath: string,
+): Array<{ path: string }> | undefined {
 	try {
-		return require.resolve(extendsValue, { paths: [configDir] });
+		const text = fs.readFileSync(tsconfigPath, "utf-8");
+		const stripped = text
+			.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
+				g ? "" : m,
+			)
+			.replace(/,(?=\s*[}\]])/g, "");
+		const raw = JSON.parse(stripped);
+		return raw.references;
 	} catch {
-		// If resolution fails, try with .json extension
-		try {
-			return require.resolve(`${extendsValue}.json`, { paths: [configDir] });
-		} catch {
-			return path.resolve(configDir, extendsValue);
-		}
+		return undefined;
 	}
 }
 
-function getPathAliasesRecursive(
+/**
+ * Collect path aliases from tsconfig references recursively.
+ */
+function collectReferencesAliases(
 	tsconfigPath: string,
 	visited = new Set<string>(),
 ): Record<string, string> {
-	if (visited.has(tsconfigPath)) {
-		return {};
-	}
-	visited.add(tsconfigPath);
+	const result: Record<string, string> = {};
+	const refs = readRawTsconfigReferences(tsconfigPath);
+	if (!refs) return result;
 
-	if (!fs.existsSync(tsconfigPath)) {
-		console.warn(`Referenced tsconfig not found: ${tsconfigPath}`);
-		return {};
-	}
+	const configDir = path.dirname(tsconfigPath);
+	for (const ref of refs) {
+		const resolvedRef = path.resolve(configDir, ref.path);
+		let refTsconfigPath: string;
+		if (resolvedRef.endsWith(".json")) {
+			refTsconfigPath = resolvedRef;
+		} else if (
+			fs.existsSync(resolvedRef) &&
+			fs.statSync(resolvedRef).isFile()
+		) {
+			refTsconfigPath = resolvedRef;
+		} else {
+			refTsconfigPath = path.join(resolvedRef, "tsconfig.json");
+		}
 
-	try {
-		const tsConfig = getTsconfigInfo(undefined, tsconfigPath);
-		const configDir = path.dirname(tsconfigPath);
+		if (visited.has(refTsconfigPath)) continue;
+		visited.add(refTsconfigPath);
 
-		// Resolve aliases from extended configs first (as defaults)
-		const result: Record<string, string> = {};
-		if (tsConfig.extends) {
-			const extendsList = Array.isArray(tsConfig.extends)
-				? tsConfig.extends
-				: [tsConfig.extends];
-			for (const extendsValue of extendsList) {
-				const extendsPath = resolveExtendsPath(configDir, extendsValue);
-				const parentAliases = getPathAliasesRecursive(extendsPath, visited);
-				for (const [alias, aliasPath] of Object.entries(parentAliases)) {
-					result[alias] = aliasPath;
-				}
+		const refTsconfig = getTsconfig(refTsconfigPath);
+		if (!refTsconfig) continue;
+
+		const refAliases = extractAliases(refTsconfig);
+		for (const [alias, aliasPath] of Object.entries(refAliases)) {
+			if (!(alias in result)) {
+				result[alias] = aliasPath;
 			}
 		}
 
-		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
-
-		const obj = Object.entries(paths) as [string, string[]][];
-		for (const [alias, aliasPaths] of obj) {
-			for (const aliasedPath of aliasPaths) {
-				const resolvedBaseUrl = path.resolve(configDir, baseUrl);
-				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
-				const finalAliasedPath =
-					aliasedPath.slice(-1) === "*"
-						? aliasedPath.slice(0, -1)
-						: aliasedPath;
-
-				result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
+		// Recurse into nested references
+		const nestedAliases = collectReferencesAliases(refTsconfigPath, visited);
+		for (const [alias, aliasPath] of Object.entries(nestedAliases)) {
+			if (!(alias in result)) {
+				result[alias] = aliasPath;
 			}
 		}
-
-		if (tsConfig.references) {
-			for (const ref of tsConfig.references) {
-				const refPath = resolveReferencePath(configDir, ref.path);
-				const refAliases = getPathAliasesRecursive(refPath, visited);
-				for (const [alias, aliasPath] of Object.entries(refAliases)) {
-					if (!(alias in result)) {
-						result[alias] = aliasPath;
-					}
-				}
-			}
-		}
-
-		return result;
-	} catch (error) {
-		console.warn(`Error parsing tsconfig at ${tsconfigPath}: ${error}`);
-		return {};
 	}
+	return result;
 }
 
 function getPathAliases(cwd: string): Record<string, string> | null {
-	let tsConfigPath = path.join(cwd, "tsconfig.json");
-	if (!fs.existsSync(tsConfigPath)) {
-		tsConfigPath = path.join(cwd, "jsconfig.json");
-	}
-	if (!fs.existsSync(tsConfigPath)) {
+	const configName = fs.existsSync(path.join(cwd, "tsconfig.json"))
+		? "tsconfig.json"
+		: "jsconfig.json";
+	const tsconfig = getTsconfig(cwd, configName);
+	if (!tsconfig) {
 		return null;
 	}
 	try {
-		const result = getPathAliasesRecursive(tsConfigPath);
+		// Extract aliases from the resolved config (handles extends)
+		const result = extractAliases(tsconfig);
+
+		// Also collect aliases from referenced tsconfig files
+		const refAliases = collectReferencesAliases(tsconfig.path);
+		for (const [alias, aliasPath] of Object.entries(refAliases)) {
+			if (!(alias in result)) {
+				result[alias] = aliasPath;
+			}
+		}
+
 		addSvelteKitEnvModules(result);
 		addCloudflareModules(result);
 		return result;
