@@ -35,33 +35,6 @@ Better Auth provides an MCP server so you can use it with any AI model that supp
 
 <AddToCursor />
 
-#### CLI Options
-
-Use the Better Auth CLI to easily add the MCP server to your preferred client:
-
-<Tabs items={["Cursor", "Claude Code", "Open Code", "Manual"]}>
-    <Tab value="Cursor">
-      ```bash title="terminal"
-      npx auth mcp --cursor
-      ```
-    </Tab>
-    <Tab value="Claude Code">
-      ```bash title="terminal"
-      npx auth mcp --claude-code
-      ```
-    </Tab>
-    <Tab value="Open Code">
-      ```bash title="terminal"
-      npx auth mcp --open-code
-      ```
-    </Tab>
-    <Tab value="Manual">
-      ```bash title="terminal"
-      npx auth mcp --manual
-      ```
-    </Tab>
-</Tabs>
-
 #### Manual Configuration
 
 Alternatively, you can manually configure the MCP server for each client:
@@ -69,7 +42,7 @@ Alternatively, you can manually configure the MCP server for each client:
 <Tabs items={["Claude Code", "Open Code", "Manual"]}>
     <Tab value="Claude Code">
       ```bash title="terminal"
-      claude mcp add --transport http better-auth https://mcp.inkeep.com/better-auth/mcp
+      claude mcp add --transport http better-auth https://context7.com/better-auth/better-auth
       ```
     </Tab>
     <Tab value="Open Code">
@@ -79,7 +52,7 @@ Alternatively, you can manually configure the MCP server for each client:
             "mcp": {
                 "better-auth": {
                     "type": "remote",
-                    "url": "https://mcp.inkeep.com/better-auth/mcp",
+                    "url": "https://context7.com/better-auth/better-auth",
                     "enabled": true,
                 }
             }
@@ -90,14 +63,9 @@ Alternatively, you can manually configure the MCP server for each client:
      ```json title="mcp.json"
     {
         "better-auth": {
-            "url": "https://mcp.inkeep.com/better-auth/mcp"
+            "url": "https://context7.com/better-auth/better-auth"
         }
     }
     ```
     </Tab>
 </Tabs>
-
-<Callout>
-We provide a first‑party MCP, powered by [Inkeep](https://inkeep.com). You can alternatively use [`context7`](https://context7.com/) and other MCP providers.
-</Callout>
-
