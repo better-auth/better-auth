@@ -8,7 +8,7 @@ import { checkRateLimit, getClientIP } from "./rate-limit";
 const openrouter = createOpenRouter({
 	apiKey: process.env.OPENROUTER_API_KEY,
 });
-const chatModel = openrouter.chat("moonshotai/kimi-k2.5");
+const chatModel = openrouter.chat("anthropic/claude-sonnet-4");
 
 function buildDocsIndex(): string {
 	const pages = source.getPages();
