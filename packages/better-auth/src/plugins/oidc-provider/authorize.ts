@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
+import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
@@ -28,7 +29,7 @@ export async function authorize(
 	options: OIDCOptions,
 ) {
 	const handleRedirect = (url: string) => {
-		const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
+		const fromFetch = isBrowserFetchRequest(ctx.request?.headers);
 		if (fromFetch) {
 			return ctx.json({
 				redirect: true,
