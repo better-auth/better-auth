@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
 import { Callout } from "@/components/ui/callout";
+import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
 import { cn } from "@/lib/utils";
 
@@ -270,10 +271,10 @@ export async function generateMetadata({
 }) {
 	const { slug } = await params;
 	if (!slug) {
-		return {
+		return createMetadata({
 			title: "Blog - Better Auth",
 			description: "Latest updates, articles, and insights about Better Auth",
-		};
+		});
 	}
 	const page = blogs.getPage(slug);
 	if (!page || page.data.draft) return notFound();
@@ -296,7 +297,7 @@ export async function generateMetadata({
 
 	const ogImage = image || ogUrl;
 
-	return {
+	return createMetadata({
 		title,
 		description,
 		openGraph: {
@@ -311,7 +312,7 @@ export async function generateMetadata({
 			description,
 			images: [ogImage],
 		},
-	};
+	});
 }
 
 export function generateStaticParams() {
