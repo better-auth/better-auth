@@ -797,7 +797,7 @@ export const authClient = createAuthClient({
 ```
 
 <Callout type="info">
-    This will require you to run migrations to add the new `role` table to the database.
+    This will require you to run migrations to add the new `role` table to the database. See the [Schema](#role-optional).
 </Callout>
 
 <Callout type="warning">
@@ -1060,6 +1060,43 @@ And adds one field in the `session` table:
       name: "impersonatedBy",
       type: "string",
       description: "The ID of the admin that is impersonating this session.",
+      isOptional: true,
+    },
+  ]}
+/>
+
+### Role (optional)
+
+When [Dynamic Access Control](#dynamic-access-control) is enabled, add the following fields to the `role` table:
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each role.",
+      isPrimaryKey: true,
+    },
+    {
+      name: "role",
+      type: "string",
+      unique: true,
+      description: "The unique name of the role.",
+    },
+    {
+      name: "permission",
+      type: "string",
+      description: "The permission of the role.",
+    },
+    {
+      name: "createdAt",
+      type: "date",
+      description: "Timestamp when the role was created.",
+    },
+    {
+      name: "updatedAt",
+      type: "date",
+      description: "Timestamp when the role was last updated.",
       isOptional: true,
     },
   ]}
