@@ -78,7 +78,7 @@ const mockElectron = vi.hoisted(() => {
 vi.mock("electron", () => mockElectron);
 
 describe("Electron", () => {
-	const { auth, client, proxyClient, options, storage, customFetchImpl } =
+	const { auth, client, proxyClient, options, customFetchImpl } =
 		testUtils();
 
 	it("should throw error when making requests outside the main process", async ({
