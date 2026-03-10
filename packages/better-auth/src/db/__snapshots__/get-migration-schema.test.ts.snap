@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`index generation for columns added to existing tables > should use CREATE INDEX when adding indexed columns to existing SQLite tables > sqlite create index for added column 1`] = `
+"create index "user_externalId_idx" on "user" ("externalId");
+
+alter table "user" add column "externalId" text;"
+`;
