@@ -117,7 +117,7 @@ export function DocsSidebar() {
 									}}
 								>
 									<section.Icon className="size-4.5" />
-									<span className="grow">{section.title}</span>
+									<span className="grow tracking-normal">{section.title}</span>
 									<ChevronDownIcon
 										className={cn(
 											"h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
