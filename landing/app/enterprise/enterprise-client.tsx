@@ -100,7 +100,7 @@ export function EnterprisePageClient() {
 				const url =
 					process.env.NODE_ENV === "development"
 						? "http://localhost:3001/api/enterprise/contact"
-						: "/api/enterprise/contact";
+						: "https://dash.better-auth.com/api/enterprise/contact";
 				const response = await fetch(url, {
 					method: "POST",
 					body: JSON.stringify({
