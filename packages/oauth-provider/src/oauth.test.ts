@@ -285,6 +285,78 @@ describe("oauth", async () => {
 		expect(callbackUrl).toContain("/success");
 	});
 
+	it("should return a JSON redirect after email sign-in in a fetch-based oauth flow", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const headers = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		let loginRedirectUri = "";
+		await authClient.$fetch(data.url, {
+			method: "GET",
+			onError(ctx) {
+				loginRedirectUri = ctx.response.headers.get("Location") || "";
+			},
+		});
+		expect(loginRedirectUri).toContain("/login");
+
+		vi.stubGlobal("window", {
+			location: {
+				href: "",
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		let signInLocationHeader = "";
+		const signInResponse = await authClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: {
+					"Sec-Fetch-Mode": "cors",
+				},
+				throw: true,
+				onResponse(ctx) {
+					signInLocationHeader = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+
+		expect(signInLocationHeader).toBe("");
+		expect(signInResponse.redirect).toBe(true);
+		expect(signInResponse.url).toContain(
+			`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`,
+		);
+		expect(signInResponse.url).not.toContain(`${authServerBaseUrl}/login`);
+	});
+
 	it("should sign in using generic oauth discovery", async ({
 		onTestFinished,
 	}) => {
