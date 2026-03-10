@@ -86,6 +86,7 @@
 				"better-auth",
 				"c12",
 				"chalk",
+				"get-tsconfig",
 				"open",
 				"prettier",
 				"prompts",

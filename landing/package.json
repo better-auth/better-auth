@@ -7,9 +7,11 @@
     "postinstall": "fumadocs-mdx",
     "dev": "next dev --turbopack --port 3000",
     "build": "next build",
+    "postbuild": "pnpm sync-typesense",
     "start": "next start",
     "lint": "next lint",
-    "lint:fix": "biome check . --fix --unsafe"
+    "lint:fix": "biome check . --fix --unsafe",
+    "sync-typesense": "node scripts/sync-typesense.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
@@ -72,7 +74,10 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "three": "^0.183.1",
+    "typesense": "^3.0.2",
+    "typesense-fumadocs-adapter": "^0.3.0",
     "unist-util-visit": "^5.1.0",
+    "vaul": "^1.1.2",
     "zod": "^4.1.5"
   },
   "devDependencies": {
@@ -82,6 +87,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.183.1",
+    "dotenv": "^17.3.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.7",
     "typescript": "5.9.3"
