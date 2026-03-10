@@ -9,7 +9,6 @@ import { createLogger } from "@better-auth/core/env";
 import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
 import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
-	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
 	CreateIndexBuilder,
@@ -279,7 +278,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
-		| ReturnType<AlterTableBuilder["addIndex"]>
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
@@ -431,10 +429,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 				const builder = db.schema.alterTable(table.table);
 
 				if (field.index) {
-					const index = db.schema
-						.alterTable(table.table)
-						.addIndex(`${table.table}_${fieldName}_idx`);
-					migrations.push(index);
+					const indexName = `${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`;
+					const indexBuilder = db.schema
+						.createIndex(indexName)
+						.on(table.table)
+						.columns([fieldName]);
+					migrations.push(field.unique ? indexBuilder.unique() : indexBuilder);
 				}
 
 				const built = builder.addColumn(fieldName, type, (col) => {
