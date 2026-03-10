@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
@@ -421,5 +422,46 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 				}),
 			]),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8536
+	 */
+	it("should generate valid PostgreSQL CREATE INDEX syntax (not MySQL ALTER TABLE ADD INDEX) for indexed columns added to existing tables", async () => {
+		const config: BetterAuthOptions = {
+			database: schemaPool,
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		// Run the initial migration so tables exist
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		// Add a plugin that introduces an indexed field on an existing table
+		config.plugins = [
+			{
+				id: "test-index",
+				schema: {
+					user: {
+						fields: {
+							externalId: {
+								type: "string",
+								index: true,
+								required: false,
+							},
+						},
+					},
+				},
+			},
+		];
+
+		const { compileMigrations } = await getMigrations(config);
+		const sql = await compileMigrations();
+
+		// Must use PostgreSQL-compatible CREATE INDEX, not MySQL ALTER TABLE ADD INDEX
+		expect(sql).toContain("create index");
+		expect(sql.toLowerCase()).not.toContain("add index");
 	});
 });
