@@ -1102,6 +1102,9 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
+      '@types/bs58':
+        specifier: ^5.0.0
+        version: 5.0.0
       '@types/bun':
         specifier: ^1.3.9
         version: 1.3.9
@@ -1117,6 +1120,9 @@ importers:
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
+      bs58:
+        specifier: ^6.0.0
+        version: 6.0.0
       deepmerge:
         specifier: ^4.3.1
         version: 4.3.1
@@ -1153,6 +1159,9 @@ importers:
       tsdown:
         specifier: 'catalog:'
         version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+      tweetnacl:
+        specifier: ^1.0.3
+        version: 1.0.3
       type-fest:
         specifier: ^5.4.4
         version: 5.4.4
@@ -1614,6 +1623,40 @@ importers:
       tsdown:
         specifier: 'catalog:'
         version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+
+  packages/siwx:
+    dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      '@noble/hashes':
+        specifier: ^2.0.0
+        version: 2.0.1
+      bs58:
+        specifier: ^6.0.0
+        version: 6.0.0
+      tweetnacl:
+        specifier: ^1.0.3
+        version: 1.0.3
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
+    devDependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      better-call:
+        specifier: 'catalog:'
+        version: 2.0.0(zod@4.3.6)
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: catalog:vitest
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.2)(@vitest/ui@4.0.18)(happy-dom@20.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.31.1)(msw@2.12.10(@types/node@25.3.2)(typescript@5.9.3))(sass@1.97.1)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/sso:
     dependencies:
@@ -7810,6 +7853,10 @@ packages:
   '@types/braces@3.0.5':
     resolution: {integrity: sha512-SQFof9H+LXeWNz8wDe7oN5zu7ket0qwMu5vZubW4GCJ8Kkeh6nBWUz87+KTz/G3Kqsrp0j/W253XJb3KMEeg3w==}
 
+  '@types/bs58@5.0.0':
+    resolution: {integrity: sha512-cAw/jKBzo98m6Xz1X5ETqymWfIMbXbu6nK15W4LQYjeHJkVqSmM5PO8Bd9KVHQJ/F4rHcSso9LcjtgCW6TGu2w==}
+    deprecated: This is a stub types definition. bs58 provides its own type definitions, so you do not need this installed.
+
   '@types/bun@1.3.9':
     resolution: {integrity: sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw==}
 
@@ -8719,6 +8766,9 @@ packages:
       bare-abort-controller:
         optional: true
 
+  base-x@5.0.1:
+    resolution: {integrity: sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==}
+
   base64-js@0.0.8:
     resolution: {integrity: sha512-3XSA2cR/h/73EzlXXdU6YNycmYI7+kicTxks4eJg2g39biHR84slg2+des+p7iHYhbRg/udIS4TD53WabcOUkw==}
     engines: {node: '>= 0.4'}
@@ -8908,6 +8958,9 @@ packages:
     resolution: {integrity: sha512-ZC5Bd0LgJXgwGqUknZY/vkUQ04r8NXnJZ3yYi4vDmSiZmC/pdSN0NbNRPxZpbtO4uAfDUAFffO8IZoM3Gj8IkA==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
+
+  bs58@6.0.0:
+    resolution: {integrity: sha512-PD0wEnEYg6ijszw/u8s+iI3H17cTymlrwkKhDhPZq+Sokl3AU4htyBFTjAeNAlCCmg0f53g6ih3jATyCKftTfw==}
 
   bser@2.1.1:
     resolution: {integrity: sha512-gQxTNE/GAfIIrmHLUE3oJyp5FO6HRBfhjnw4/wMmA63ZGDJnWBmgY/lyQBpnDUkGmAhbSe39tx2d/iTOAfglwQ==}
@@ -24370,6 +24423,10 @@ snapshots:
 
   '@types/braces@3.0.5': {}
 
+  '@types/bs58@5.0.0':
+    dependencies:
+      bs58: 6.0.0
+
   '@types/bun@1.3.9':
     dependencies:
       bun-types: 1.3.9
@@ -25509,6 +25566,8 @@ snapshots:
 
   bare-events@2.8.2: {}
 
+  base-x@5.0.1: {}
+
   base64-js@0.0.8: {}
 
   base64-js@1.5.1: {}
@@ -25711,6 +25770,10 @@ snapshots:
       electron-to-chromium: 1.5.302
       node-releases: 2.0.27
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
+
+  bs58@6.0.0:
+    dependencies:
+      base-x: 5.0.1
 
   bser@2.1.1:
     dependencies:
