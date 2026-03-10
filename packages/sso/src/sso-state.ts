@@ -1,21 +1,16 @@
 import { defineRequestState } from "@better-auth/core/context";
+import type { StateData } from "better-auth";
 
-const { get: _getSSOState, set: setSSOState } = defineRequestState<
-	Record<string, unknown> | undefined
->(() => undefined);
+type SSORequestState = StateData & {
+	additionalData?: Record<string, unknown>;
+};
 
-/**
- * Returns the `additionalData` passed by the client at SSO sign-in time.
- * Available in server-side hooks during both OIDC and SAML SSO callbacks.
- * Returns `undefined` outside of an SSO callback request.
- *
- * @example
- * const data = await getSSOState<{ referralCode?: string }>();
- */
-async function getSSOState<
-	T extends Record<string, unknown> = Record<string, unknown>,
->(): Promise<T | undefined> {
-	return _getSSOState() as Promise<T | undefined>;
-}
+const {
+	get: getSSOState,
+	/**
+	 * @internal This is unsafe to be used directly. Use setSSOState instead.
+	 */
+	set: setSSOState,
+} = defineRequestState<SSORequestState | null>(() => null);
 
 export { getSSOState, setSSOState };

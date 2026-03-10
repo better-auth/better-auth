@@ -707,7 +707,7 @@ The `provisionUser` function receives:
 
 ### Accessing additionalData in Hooks
 
-You can also access `additionalData` from server-side hooks using `getSSOState`. This works for both OIDC and SAML flows:
+You can also access `additionalData` and other SSO state from server-side hooks using `getSSOState`. This works for both OIDC and SAML flows:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -717,9 +717,7 @@ const auth = betterAuth({
     plugins: [sso()],
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
-            const additionalData = await getSSOState<{
-                referralCode?: string;
-            }>();
+            const { additionalData } = await getSSOState();
             if (additionalData?.referralCode) {
                 // handle referral
             }

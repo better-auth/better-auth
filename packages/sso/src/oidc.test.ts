@@ -6,6 +6,7 @@ import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import { getSSOState } from "./sso-state";
 
 const server = new OAuth2Server();
 
@@ -1466,7 +1467,7 @@ describe("SSO OIDC with additionalData encoded in state", async () => {
 		return { callbackURL, headers: newHeaders };
 	}
 
-	it("should pass additionalData to provisionUser on new-user OIDC sign-in and exclude internal state fields", async () => {
+	it("should pass additionalData to provisionUser and expose full relay state via getSSOState on new-user OIDC sign-in", async () => {
 		const { headers } = await signInWithTestUser();
 		await auth.api.registerSSOProvider({
 			body: {
@@ -1493,6 +1494,10 @@ describe("SSO OIDC with additionalData encoded in state", async () => {
 		});
 
 		provisionUserFn.mockClear();
+		let capturedSSOState: Awaited<ReturnType<typeof getSSOState>> = null;
+		provisionUserFn.mockImplementationOnce(async () => {
+			capturedSSOState = await getSSOState();
+		});
 
 		const signInHeaders = new Headers();
 		const res = await authClient.signIn.sso({
@@ -1514,11 +1519,13 @@ describe("SSO OIDC with additionalData encoded in state", async () => {
 			}),
 		);
 
-		// Internal state fields must not bleed into additionalData
-		const callArg = provisionUserFn.mock.calls[0]?.[0];
-		expect(callArg?.additionalData).not.toHaveProperty("callbackURL");
-		expect(callArg?.additionalData).not.toHaveProperty("codeVerifier");
-		expect(callArg?.additionalData).not.toHaveProperty("expiresAt");
+		// getSSOState exposes the full relay state including internal fields
+		expect(capturedSSOState).toMatchObject({
+			callbackURL: "/dashboard",
+			additionalData: { tenantId: "acme", role: "admin" },
+		});
+		expect(capturedSSOState).toHaveProperty("expiresAt");
+		expect(capturedSSOState).toHaveProperty("codeVerifier");
 	});
 });
 

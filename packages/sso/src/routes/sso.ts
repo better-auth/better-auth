@@ -1285,20 +1285,14 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				const state = await generateState(
-					ctx,
-					undefined,
-					options?.redirectURI?.trim()
-						? {
-								ssoProviderId: provider.providerId,
-								...(ctx.body.additionalData
-									? { additionalData: ctx.body.additionalData }
-									: {}),
-							}
-						: ctx.body.additionalData
-							? { additionalData: ctx.body.additionalData }
-							: false,
-				);
+				const additionalData: Record<string, any> = {};
+				if (options?.redirectURI?.trim()) {
+					additionalData.ssoProviderId = provider.providerId;
+				}
+				if (ctx.body.additionalData) {
+					additionalData.additionalData = ctx.body.additionalData;
+				}
+				const state = await generateState(ctx, undefined, additionalData);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
@@ -1493,9 +1487,7 @@ async function handleOIDCCallback(
 			`${ctx.context.baseURL}/error`;
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
-	await setSSOState(
-		stateData.additionalData as Record<string, unknown> | undefined,
-	);
+	await setSSOState(stateData);
 	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
 	if (!code || error) {
 		throw ctx.redirect(
@@ -2049,9 +2041,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					relayState = null;
 				}
 			}
-			await setSSOState(
-				relayState?.additionalData as Record<string, unknown> | undefined,
-			);
+			await setSSOState(relayState);
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
@@ -2567,9 +2557,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					relayState = null;
 				}
 			}
-			await setSSOState(
-				relayState?.additionalData as Record<string, unknown> | undefined,
-			);
+			await setSSOState(relayState);
 
 			// If defaultSSO is configured, use it as the provider
 			let provider: SSOProvider<SSOOptions> | null = null;

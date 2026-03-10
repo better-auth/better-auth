@@ -29,6 +29,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { getSSOState } from "./sso-state";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -2440,14 +2441,24 @@ describe("SAML SSO with additional data encoded in RelayState", async () => {
 			"RelayState",
 		);
 		expect(relayState).toBeTruthy();
-		// Should be an opaque signed token, not a raw URL
+		// Should be an opaque signed token, not a raw URL or plaintext data
 		expect(relayState).not.toContain("http");
+		expect(relayState).not.toContain("acme");
+		expect(relayState).not.toContain("tenantId");
 	});
 
-	it("should pass additionalData to provisionUser via SAML callback endpoint", async () => {
+	it("should pass additionalData to provisionUser and expose full relay state via getSSOState via SAML callback endpoint", async () => {
 		const provisionUserFn = vi.fn();
+		let capturedSSOState: Awaited<ReturnType<typeof getSSOState>> = null;
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ provisionUser: provisionUserFn })],
+			plugins: [
+				sso({
+					provisionUser: async (args) => {
+						capturedSSOState = await getSSOState();
+						return provisionUserFn(args);
+					},
+				}),
+			],
 		});
 		const { headers } = await signInWithTestUser();
 		await auth.api.registerSSOProvider({
@@ -2488,17 +2499,28 @@ describe("SAML SSO with additional data encoded in RelayState", async () => {
 				additionalData: { tenantId: "acme", role: "admin" },
 			}),
 		);
-		// Internal state fields must not bleed into additionalData
-		const callArg = provisionUserFn.mock.calls[0]?.[0];
-		expect(callArg?.additionalData).not.toHaveProperty("callbackURL");
-		expect(callArg?.additionalData).not.toHaveProperty("codeVerifier");
-		expect(callArg?.additionalData).not.toHaveProperty("expiresAt");
+
+		// getSSOState exposes the full relay state including internal fields
+		expect(capturedSSOState).toMatchObject({
+			callbackURL: "http://localhost:3000/dashboard",
+			additionalData: { tenantId: "acme", role: "admin" },
+		});
+		expect(capturedSSOState).toHaveProperty("expiresAt");
+		expect(capturedSSOState).toHaveProperty("codeVerifier");
 	});
 
-	it("should pass additionalData to provisionUser via ACS endpoint", async () => {
+	it("should pass additionalData to provisionUser and expose full relay state via getSSOState via ACS endpoint", async () => {
 		const provisionUserFn = vi.fn();
+		let capturedSSOState: Awaited<ReturnType<typeof getSSOState>> = null;
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ provisionUser: provisionUserFn })],
+			plugins: [
+				sso({
+					provisionUser: async (args) => {
+						capturedSSOState = await getSSOState();
+						return provisionUserFn(args);
+					},
+				}),
+			],
 		});
 		const { headers } = await signInWithTestUser();
 		await auth.api.registerSSOProvider({
@@ -2548,6 +2570,14 @@ describe("SAML SSO with additional data encoded in RelayState", async () => {
 				additionalData: { tenantId: "acs-tenant" },
 			}),
 		);
+
+		// getSSOState exposes the full relay state including internal fields
+		expect(capturedSSOState).toMatchObject({
+			callbackURL: "http://localhost:3000/dashboard",
+			additionalData: { tenantId: "acs-tenant" },
+		});
+		expect(capturedSSOState).toHaveProperty("expiresAt");
+		expect(capturedSSOState).toHaveProperty("codeVerifier");
 	});
 });
 
