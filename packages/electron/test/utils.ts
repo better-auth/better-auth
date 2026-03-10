@@ -109,6 +109,7 @@ function getTestInstance(overrideOpts?: BetterAuthOptions) {
 		client,
 		options,
 		customFetchImpl,
+		storage,
 	};
 }
 
@@ -121,6 +122,7 @@ export function testUtils(overrideOpts?: BetterAuthOptions) {
 		vi.useFakeTimers();
 	});
 	afterAll(() => {
+		testInstance.storage.clear();
 		vi.useRealTimers();
 	});
 

@@ -40,6 +40,7 @@ const mockElectron = vi.hoisted(() => {
 			openExternal: vi.fn(),
 		},
 		safeStorage: {
+			isEncryptionAvailable: vi.fn(() => true),
 			encryptString: vi.fn((str: string) =>
 				Buffer.from(str).toString("base64"),
 			),
@@ -77,7 +78,8 @@ const mockElectron = vi.hoisted(() => {
 vi.mock("electron", () => mockElectron);
 
 describe("Electron", () => {
-	const { auth, client, proxyClient, options } = testUtils();
+	const { auth, client, proxyClient, options, storage, customFetchImpl } =
+		testUtils();
 
 	it("should throw error when making requests outside the main process", async ({
 		setProcessType,
@@ -1318,13 +1320,9 @@ describe("Electron", () => {
 		);
 	});
 
-	it("should surface safeStorage errors during encryption", async ({
-		setProcessType,
-	}) => {
+	it("should not store when encryption fails", async ({ setProcessType }) => {
 		setProcessType("browser");
 
-		// Create a user and verification entry that would normally trigger
-		// cookie/session encryption during the token exchange.
 		const { user } = await auth.api.signUpEmail({
 			body: {
 				name: "Sage Storage Test",
@@ -1353,22 +1351,115 @@ describe("Electron", () => {
 			},
 		});
 
-		// Make encryptString throw
-		mockElectron.safeStorage.encryptString.mockImplementationOnce(() => {
+		mockElectron.safeStorage.encryptString.mockImplementation(() => {
 			throw new Error("encryption failed");
 		});
 
-		// Expect the token exchange to surface the error (encryption failure)
-		await expect(
-			client.$fetch("/electron/token", {
-				method: "POST",
-				body: {
-					token: identifier,
-					code_verifier: codeVerifier,
+		const result = await client.$fetch("/electron/token", {
+			method: "POST",
+			body: {
+				token: identifier,
+				code_verifier: codeVerifier,
+				state: "abc",
+			},
+		});
+
+		expect((result.data as any)?.user).toMatchObject({
+			email: "safe-storage@test.com",
+			name: "Sage Storage Test",
+		});
+		// No real session token (we did not persist or use memory when encrypt threw).
+		expect(client.getCookie()).not.toMatch(
+			/better-auth\.session_token=[a-zA-Z0-9_-]{10,}/,
+		);
+	});
+
+	it("should use memory storage when encryption is unavailable", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+		mockElectron.safeStorage.isEncryptionAvailable.mockReturnValue(false);
+
+		const { user } = await auth.api.signUpEmail({
+			body: {
+				name: "Memory Storage Test",
+				email: "memory-storage@test.com",
+				password: "password",
+			},
+		});
+
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = base64Url.encode(
+			await createHash("SHA-256").digest(codeVerifier),
+		);
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge,
+					codeChallengeMethod: "s256",
 					state: "abc",
-				},
-			}),
-		).rejects.toThrow("encryption failed");
+				}),
+				expiresAt: new Date(Date.now() + 300 * 1000),
+			},
+		});
+
+		const result = await client.$fetch("/electron/token", {
+			method: "POST",
+			body: {
+				token: identifier,
+				code_verifier: codeVerifier,
+				state: "abc",
+			},
+		});
+
+		expect((result.data as any)?.user).toMatchObject({
+			email: "memory-storage@test.com",
+			name: "Memory Storage Test",
+		});
+		expect(storage.get("better-auth.cookie")).toBeUndefined();
+		expect(client.getCookie()).toContain("better-auth.session_token=");
+	});
+
+	it("should return null on decrypt failure", async ({ setProcessType }) => {
+		setProcessType("browser");
+
+		const storage = new Map<string, any>([
+			[
+				"better-auth.cookie",
+				Buffer.from('{"session":"old"}').toString("base64"),
+			],
+		]);
+		const clientWithStorage = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+			plugins: [
+				electronClient({
+					...options,
+					storage: {
+						getItem: (name) => storage.get(name) ?? null,
+						setItem: (name, value) => {
+							storage.set(name, value);
+							return true;
+						},
+					},
+				}),
+			],
+		});
+
+		mockElectron.safeStorage.decryptString.mockImplementationOnce(() => {
+			throw new Error(
+				"Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+			);
+		});
+
+		// getCookie() uses getDecrypted internally
+		const cookie = clientWithStorage.getCookie();
+		expect(cookie).toBe("");
 	});
 
 	it("should quit when single instance lock not acquired", async ({
