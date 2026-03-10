@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { blogs, source } from "@/lib/source";
 
-const BASE_URL = "https://www.better-auth.com";
+const BASE_URL = "https://better-auth.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const basePages: MetadataRoute.Sitemap = [
@@ -18,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			priority: 0.8,
 		},
 		{
-			url: `${BASE_URL}/changelogs`,
+			url: `${BASE_URL}/changelog`,
 			lastModified: new Date(),
 			changeFrequency: "weekly",
 			priority: 0.8,
