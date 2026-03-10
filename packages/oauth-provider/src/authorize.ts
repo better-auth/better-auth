@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
@@ -40,8 +41,9 @@ export function formatErrorURL(
 }
 
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+	const fromFetch = isBrowserFetchRequest(ctx.request?.headers);
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
-	if (acceptJson) {
+	if (fromFetch || acceptJson) {
 		return {
 			redirect: true,
 			url: uri.toString(),
