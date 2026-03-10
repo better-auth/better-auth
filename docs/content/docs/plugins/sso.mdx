@@ -717,8 +717,8 @@ const auth = betterAuth({
     plugins: [sso()],
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
-            const { additionalData } = await getSSOState();
-            if (additionalData?.referralCode) {
+            const ssoState = await getSSOState();
+            if (ssoState?.additionalData?.referralCode) {
                 // handle referral
             }
         }),
