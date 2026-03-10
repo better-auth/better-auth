@@ -403,7 +403,6 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 			},
 		];
 		const { toBeAdded, toBeCreated } = await getMigrations(config);
-		console.log(toBeAdded);
 		expect(toBeCreated.length).toBe(0);
 		expect(toBeAdded.length).toBe(2);
 		expect(toBeAdded).toEqual(
@@ -427,7 +426,7 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8536
 	 */
-	it("should generate valid PostgreSQL CREATE INDEX syntax (not MySQL ALTER TABLE ADD INDEX) for indexed columns added to existing tables", async () => {
+	it("should generate valid PostgreSQL CREATE INDEX syntax for indexed columns added to existing tables", async () => {
 		const config: BetterAuthOptions = {
 			database: schemaPool,
 			emailAndPassword: {
@@ -435,11 +434,9 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 			},
 		};
 
-		// Run the initial migration so tables exist
 		const initial = await getMigrations(config);
 		await initial.runMigrations();
 
-		// Add a plugin that introduces an indexed field on an existing table
 		config.plugins = [
 			{
 				id: "test-index",
@@ -458,10 +455,49 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 		];
 
 		const { compileMigrations } = await getMigrations(config);
-		const sql = await compileMigrations();
+		const sql = (await compileMigrations()).toLowerCase();
 
-		// Must use PostgreSQL-compatible CREATE INDEX, not MySQL ALTER TABLE ADD INDEX
 		expect(sql).toContain("create index");
-		expect(sql.toLowerCase()).not.toContain("add index");
+		expect(sql).not.toContain("add index");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8536
+ */
+describe("index generation for columns added to existing tables", () => {
+	it("should use CREATE INDEX when adding indexed columns to existing SQLite tables", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		config.plugins = [
+			{
+				id: "test-index",
+				schema: {
+					user: {
+						fields: {
+							externalId: {
+								type: "string",
+								index: true,
+								required: false,
+							},
+						},
+					},
+				},
+			},
+		];
+
+		const { compileMigrations } = await getMigrations(config);
+		const sql = (await compileMigrations()).toLowerCase();
+
+		expect(sql).toContain("create index");
+		expect(sql).not.toContain("add index");
 	});
 });
