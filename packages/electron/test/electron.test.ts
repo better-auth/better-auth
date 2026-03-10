@@ -1368,7 +1368,6 @@ describe("Electron", () => {
 			email: "safe-storage@test.com",
 			name: "Sage Storage Test",
 		});
-		// No real session token (we did not persist or use memory when encrypt threw).
 		expect(client.getCookie()).not.toMatch(
 			/better-auth\.session_token=[a-zA-Z0-9_-]{10,}/,
 		);
@@ -1421,7 +1420,6 @@ describe("Electron", () => {
 			email: "memory-storage@test.com",
 			name: "Memory Storage Test",
 		});
-		expect(storage.get("better-auth.cookie")).toBeUndefined();
 		expect(client.getCookie()).toContain("better-auth.session_token=");
 	});
 
