@@ -33,7 +33,7 @@ export const getAdditionalFields = <
 	options: O,
 	shouldBePartial: AllPartial = false as AllPartial,
 ) => {
-	let additionalFields = {
+	const additionalFields = {
 		...(options?.schema?.role?.additionalFields || {}),
 	};
 	if (shouldBePartial) {

@@ -37,7 +37,7 @@ export type PermissionExclusive =
 			permission?: never | undefined;
 	  };
 
-export let cacheAllRoles = new Map<
+export const cacheAllRoles = new Map<
 	string,
 	{
 		[x: string]: Role<any> | undefined;

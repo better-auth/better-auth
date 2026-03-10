@@ -363,7 +363,7 @@ export const listRoles = <O extends AdminOptions>(options: O) => {
 				}
 			}
 
-			let conditions: Where[] = [];
+			const conditions: Where[] = [];
 
 			if (canOnlyListOwnRoles) {
 				conditions.push({
@@ -453,7 +453,7 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 				}
 			}
 
-			let conditions: Where[] = [];
+			const conditions: Where[] = [];
 			if (ctx.query?.roleName) {
 				conditions.push({
 					field: "role",
@@ -477,7 +477,7 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 
-			let role = await ctx.context.adapter.findOne<UserRole>({
+			const role = await ctx.context.adapter.findOne<UserRole>({
 				model: "role",
 				where: conditions,
 			});
@@ -602,7 +602,7 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 
-			let role = await ctx.context.adapter.findOne<UserRole>({
+			const role = await ctx.context.adapter.findOne<UserRole>({
 				model: "role",
 				where: [condition],
 			});
@@ -626,12 +626,12 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 				...additionalFields
 			} = ctx.body.data;
 
-			let updateData: Partial<UserRole> = {
+			const updateData: Partial<UserRole> = {
 				...additionalFields,
 			};
 
 			if (ctx.body.data.permission) {
-				let newPermission = ctx.body.data.permission;
+				const newPermission = ctx.body.data.permission;
 
 				await checkForInvalidResources({
 					ac,
