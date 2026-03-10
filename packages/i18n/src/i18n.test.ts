@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { i18n } from ".";
@@ -263,6 +264,60 @@ describe("i18n plugin", async () => {
 				expect(data).toHaveProperty("session");
 				expect(data).toHaveProperty("user");
 			});
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8492
+	 */
+	describe("errors from before hooks are translated", () => {
+		it("should translate APIError thrown from a plugin before hook", async () => {
+			const errorCode = "CUSTOM_BEFORE_HOOK_ERROR";
+			const { auth: authWithBeforeHookPlugin } = await getTestInstance({
+				plugins: [
+					{
+						id: "before-hook-error-plugin",
+						hooks: {
+							before: [
+								{
+									matcher: (ctx) => ctx.path === "/sign-in/email",
+									handler: async () => {
+										throw new APIError("FORBIDDEN", {
+											code: errorCode,
+											message: "Custom before hook error",
+										});
+									},
+								},
+							],
+						},
+					},
+					i18n({
+						translations: {
+							fr: {
+								[errorCode]: "Erreur du hook avant",
+							},
+						},
+						defaultLocale: "fr",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await authWithBeforeHookPlugin.api.signInEmail({
+				body: {
+					email: "test@example.com",
+					password: "password",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe(errorCode);
+			expect(body.message).toBe("Erreur du hook avant");
+			expect(body.originalMessage).toBe("Custom before hook error");
 		});
 	});
 

@@ -129,17 +129,55 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					async () =>
 						runWithEndpointContext(internalContext, async () => {
 							const { beforeHooks, afterHooks } = getHooks(authContext);
-							const before = await runBeforeHooks(
-								internalContext,
-								beforeHooks,
-								endpoint,
-								operationId,
-							);
+							let before:
+								| Awaited<ReturnType<typeof runBeforeHooks>>
+								| undefined;
+							let beforeHookError: APIError | undefined;
+							try {
+								before = await runBeforeHooks(
+									internalContext,
+									beforeHooks,
+									endpoint,
+									operationId,
+								);
+							} catch (e) {
+								if (isAPIError(e)) {
+									beforeHookError = e;
+								} else {
+									throw e;
+								}
+							}
+
+							if (beforeHookError) {
+								/**
+								 * Route before-hook API errors through after hooks so
+								 * plugins like i18n can translate the error message.
+								 */
+								internalContext.asResponse = false;
+								internalContext.returnHeaders = true;
+								internalContext.returnStatus = true;
+								internalContext.context.returned = beforeHookError;
+								const after = await runAfterHooks(
+									internalContext,
+									afterHooks,
+									endpoint,
+									operationId,
+								);
+								const errorToThrow = isAPIError(after.response)
+									? after.response
+									: beforeHookError;
+								if (shouldPublishLog(authContext.logger.level, "debug")) {
+									errorToThrow.stack = errorToThrow.errorStack;
+								}
+								throw errorToThrow;
+							}
+
 							/**
 							 * If `before.context` is returned, it should
 							 * get merged with the original context
 							 */
 							if (
+								before &&
 								"context" in before &&
 								before.context &&
 								typeof before.context === "object"
