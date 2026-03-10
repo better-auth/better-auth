@@ -99,6 +99,7 @@ export const auth = betterAuth({
   <Step title="Set up client-side integration">
     Create or update `src/lib/auth-client.ts`:
 ```typescript
+import { createAuthClient } from "better-auth/react";
 import { dodopaymentsClient } from "@dodopayments/better-auth";
 
 export const authClient = createAuthClient({
@@ -114,26 +115,20 @@ export const authClient = createAuthClient({
 ### Creating a Checkout Session
 
 ```typescript
-const { data: checkout, error } = await authClient.dodopayments.checkout({
+const { data: checkoutSession, error } =
+  await authClient.dodopayments.checkoutSession({
   slug: "premium-plan",
-  customer: {
-    email: "customer@example.com",
-    name: "John Doe",
-  },
-  billing: {
-    city: "San Francisco",
-    country: "US",
-    state: "CA",
-    street: "123 Market St",
-    zipcode: "94103",
-  },
-  referenceId: "order_123",
 });
 
-if (checkout) {
-  window.location.href = checkout.url;
+if (checkoutSession) {
+  window.location.href = checkoutSession.url;
 }
 ```
+
+<Callout type="warn">
+  `authClient.dodopayments.checkout()` is deprecated. Use
+  `authClient.dodopayments.checkoutSession()` for new integrations.
+</Callout>
 
 ### Accessing the Customer Portal
 
