@@ -1,4 +1,8 @@
-import type { BaseURLConfig, DynamicBaseURLConfig } from "@better-auth/core";
+import type {
+	Awaitable,
+	BaseURLConfig,
+	DynamicBaseURLConfig,
+} from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { wildcardMatch } from "./wildcard";
@@ -200,6 +204,58 @@ export function isDynamicBaseURLConfig(
 		"allowedHosts" in config &&
 		Array.isArray(config.allowedHosts)
 	);
+}
+
+/**
+ * Checks if the baseURL config is a per-request function
+ */
+export function isFunctionBaseURLConfig(
+	config: BaseURLConfig | undefined,
+): config is (request: Request) => Awaitable<string> {
+	return typeof config === "function";
+}
+
+/**
+ * True for any config that requires per-request resolution
+ * (either allowedHosts object or function).
+ */
+export function isPerRequestBaseURL(
+	config: BaseURLConfig | undefined,
+): config is DynamicBaseURLConfig | ((request: Request) => Awaitable<string>) {
+	return isDynamicBaseURLConfig(config) || isFunctionBaseURLConfig(config);
+}
+
+/**
+ * Resolves the base URL by calling a user-provided function.
+ *
+ * @param fn The baseURL function from config
+ * @param request The incoming request
+ * @param basePath The base path to append
+ * @returns The resolved base URL with path
+ * @throws BetterAuthError if the function returns a falsy value
+ */
+export async function resolveFunctionBaseURL(
+	fn: (request: Request) => Awaitable<string>,
+	request: Request,
+	basePath: string,
+): Promise<string> {
+	let url: string;
+	try {
+		url = await fn(request);
+	} catch (error) {
+		throw new BetterAuthError(
+			"baseURL function threw an error. " +
+				"Ensure your function returns a valid URL.",
+			{ cause: error },
+		);
+	}
+	if (!url) {
+		throw new BetterAuthError(
+			"baseURL function returned an empty value. " +
+				"Return a valid URL (e.g., 'https://myapp.com').",
+		);
+	}
+	return withPath(url, basePath);
 }
 
 /**
