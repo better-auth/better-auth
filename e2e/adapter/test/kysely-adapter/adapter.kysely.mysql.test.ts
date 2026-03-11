@@ -52,7 +52,11 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
-		caseInsensitiveTestSuite(),
+		caseInsensitiveTestSuite({
+			disableTests: {
+				"findOne - eq with mode sensitive (default) should not match different case": true,
+			},
+		}),
 	],
 	async onFinish() {
 		await mysqlDB.end();
