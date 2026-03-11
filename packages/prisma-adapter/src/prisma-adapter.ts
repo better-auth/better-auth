@@ -232,6 +232,15 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				if (!where || !where.length) return {};
 				const buildSingleCondition = (w: Where) => {
 					const fieldName = getFieldName({ model, field: w.field });
+					const mode = w.mode ?? "sensitive";
+					const isInsensitive =
+						mode === "insensitive" &&
+						(typeof w.value === "string" ||
+							(Array.isArray(w.value) &&
+								w.value.every((v) => typeof v === "string")));
+					const prismaMode = isInsensitive ? "insensitive" : undefined;
+					const modeFilter = prismaMode ? { mode: prismaMode } : {};
+
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {
 						const fieldAttributes = getFieldAttributes({
@@ -259,16 +268,20 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							}
 						}
 						const prismaOp = operatorToPrismaOperator(w.operator);
-						return { [fieldName]: { [prismaOp]: filtered } };
+						return { [fieldName]: { [prismaOp]: filtered, ...modeFilter } };
 					}
 					if (w.operator === "eq" || !w.operator) {
-						return { [fieldName]: w.value };
+						return { [fieldName]: { equals: w.value, ...modeFilter } };
 					}
-					return {
-						[fieldName]: {
-							[operatorToPrismaOperator(w.operator)]: w.value,
-						},
-					};
+
+					if (w.operator === "ne") {
+						return {
+							[fieldName]: { not: { equals: w.value, ...modeFilter } },
+						};
+					}
+
+					const prismaOp = operatorToPrismaOperator(w.operator);
+					return { [fieldName]: { [prismaOp]: w.value, ...modeFilter } };
 				};
 
 				// Special handling for update actions: extract AND conditions with eq operator to root level
