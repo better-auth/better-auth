@@ -275,12 +275,12 @@ export async function resolveFunctionBaseURL(
 			{ cause: error },
 		);
 	}
-	const urlString = typeof url === "string" ? url : url.toString();
-	if (!urlString) {
+	if (!url) {
 		throw new BetterAuthError(
 			"baseURL function returned an empty value. Return a valid URL.",
 		);
 	}
+	const urlString = typeof url === "string" ? url : url.toString();
 	return withPath(urlString, basePath);
 }
 
