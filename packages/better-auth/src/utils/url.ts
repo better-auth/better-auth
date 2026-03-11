@@ -1,4 +1,8 @@
-import type { BaseURLConfig, DynamicBaseURLConfig } from "@better-auth/core";
+import type {
+	BaseURLConfig,
+	BaseURLResolver,
+	DynamicBaseURLConfig,
+} from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { wildcardMatch } from "./wildcard";
@@ -237,6 +241,50 @@ export function isDynamicBaseURLConfig(
 }
 
 /**
+ * Checks if the baseURL config is a per-request resolver function.
+ */
+export function isFunctionBaseURLConfig(
+	config: BaseURLConfig | undefined,
+): config is BaseURLResolver {
+	return typeof config === "function";
+}
+
+/**
+ * True for any config that requires per-request resolution.
+ */
+export function isPerRequestBaseURL(
+	config: BaseURLConfig | undefined,
+): config is DynamicBaseURLConfig | BaseURLResolver {
+	return isDynamicBaseURLConfig(config) || isFunctionBaseURLConfig(config);
+}
+
+/**
+ * Resolves the base URL by calling a user-provided function.
+ */
+export async function resolveFunctionBaseURL(
+	fn: BaseURLResolver,
+	request: Request,
+	basePath: string,
+): Promise<string> {
+	let url: string | URL;
+	try {
+		url = await fn(request);
+	} catch (error) {
+		throw new BetterAuthError(
+			"baseURL function threw an error. Ensure your function returns a valid URL.",
+			{ cause: error },
+		);
+	}
+	const urlString = typeof url === "string" ? url : url.toString();
+	if (!urlString) {
+		throw new BetterAuthError(
+			"baseURL function returned an empty value. Return a valid URL.",
+		);
+	}
+	return withPath(urlString, basePath);
+}
+
+/**
  * Check if a value is a `Request`
  * - `instanceof`: works for native Request instances
  * - `toString`: handles where instanceof check fails but the object is still a
@@ -455,6 +503,10 @@ export function resolveBaseURL(
 	loadEnv?: boolean,
 	trustedProxyHeaders?: boolean,
 ): string | undefined {
+	if (isFunctionBaseURLConfig(config)) {
+		return undefined;
+	}
+
 	if (isDynamicBaseURLConfig(config)) {
 		if (source) {
 			return resolveDynamicBaseURL(
