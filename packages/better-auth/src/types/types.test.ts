@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { describe, expect, expectTypeOf } from "vitest";
-import { createAuthEndpoint, organization, twoFactor } from "../plugins";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { createAuthEndpoint } from "../api";
+import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
 type TestTypeOptions = {
@@ -35,7 +36,6 @@ const createTestTypePlugin = <O extends TestTypeOptions>(options?: O) =>
 	}) satisfies BetterAuthPlugin;
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"test-type-plugin": {
 			creator: Options extends TestTypeOptions
@@ -45,7 +45,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-describe("general types", async (it) => {
+describe("general types", async () => {
 	it("should infer base session", async () => {
 		const { auth } = await getTestInstance();
 		type Session = typeof auth.$Infer.Session;
@@ -177,6 +177,28 @@ describe("general types", async (it) => {
 			userAgent?: string | undefined | null;
 			activeOrganizationId?: string | undefined | null;
 		}>();
+	});
+
+	it("should infer plugin-contributed context from init", async () => {
+		const testUtilsPlugin = {
+			id: "test-utils" as const,
+			init() {
+				return {
+					context: {
+						testValue: 42 as number,
+						testHelper: () => "hello" as string,
+					},
+				};
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth } = await getTestInstance({
+			plugins: [testUtilsPlugin],
+		});
+
+		const context = await auth.$context;
+		expectTypeOf(context.testValue).toEqualTypeOf<number>();
+		expectTypeOf(context.testHelper).toEqualTypeOf<() => string>();
 	});
 
 	it("should infer the same types for empty plugins and no plugins", async () => {

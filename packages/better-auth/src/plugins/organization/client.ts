@@ -11,7 +11,7 @@ import type {
 } from "../../plugins/organization/schema";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { Prettify } from "../../types/helper";
-import type { AccessControl, Role } from "../access";
+import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
@@ -95,22 +95,13 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
+				? ArrayElement<Statements[key]>
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -178,7 +169,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data.permissions ?? data.permission) as any,
+						permissions: data.permissions as any,
 					});
 					return isAuthorized;
 				},
@@ -210,7 +201,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 
 			const activeMember = useAuthQuery<Member>(
-				[$activeMemberSignal],
+				[$activeOrgSignal, $activeMemberSignal],
 				"/organization/get-active-member",
 				$fetch,
 				{
@@ -219,7 +210,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 
 			const activeMemberRole = useAuthQuery<{ role: string }>(
-				[$activeMemberRoleSignal],
+				[$activeOrgSignal, $activeMemberRoleSignal],
 				"/organization/get-active-member-role",
 				$fetch,
 				{
@@ -261,19 +252,32 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path.startsWith("/organization/set-active");
+					return (
+						path.startsWith("/organization/set-active") ||
+						path === "/organization/create" ||
+						path === "/organization/delete" ||
+						path === "/organization/remove-member" ||
+						path === "/organization/leave" ||
+						path === "/organization/accept-invitation"
+					);
 				},
 				signal: "$sessionSignal",
 			},
 			{
 				matcher(path) {
-					return path.includes("/organization/update-member-role");
+					return (
+						path.includes("/organization/update-member-role") ||
+						path.startsWith("/organization/set-active")
+					);
 				},
 				signal: "$activeMemberSignal",
 			},
 			{
 				matcher(path) {
-					return path.includes("/organization/update-member-role");
+					return (
+						path.includes("/organization/update-member-role") ||
+						path.startsWith("/organization/set-active")
+					);
 				},
 				signal: "$activeMemberRoleSignal",
 			},
@@ -307,9 +311,7 @@ export const inferOrgAdditionalFields = <
 	// if we don't remove all other properties we may see assignability issues
 
 	type ExtractClientOnlyFields<T> = {
-		[K in keyof T]: T[K] extends { additionalFields: infer _AF }
-			? T[K]
-			: undefined;
+		[K in keyof T as T[K] extends { additionalFields: any } ? K : never]: T[K];
 	};
 
 	type Schema = O extends Object

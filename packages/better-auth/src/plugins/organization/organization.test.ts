@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -27,10 +27,6 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
-vi.setConfig({
-	testTimeout: 10_000,
-});
-
 describe("organization type", () => {
 	it("empty org type should works", () => {
 		expectTypeOf({} satisfies OrganizationOptions);
@@ -38,7 +34,7 @@ describe("organization type", () => {
 	});
 });
 
-describe("organization", async (it) => {
+describe("organization", async () => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
 			user: {
@@ -272,8 +268,8 @@ describe("organization", async (it) => {
 
 		// This should fail with duplicate slug error
 		expect(organization.error?.status).toBe(400);
-		expect(organization.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+		expect(organization.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN.code,
 		);
 	});
 
@@ -370,7 +366,7 @@ describe("organization", async (it) => {
 		expect(org?.members.length).toBe(1);
 	});
 
-	it.each([
+	it.for([
 		{
 			role: "owner" as const,
 			newUser: {
@@ -687,6 +683,41 @@ describe("organization", async (it) => {
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
 				.message,
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8385
+	 */
+	it("should allow multi-role owner to invite with owner role", async () => {
+		const { headers } = await signInWithTestUser();
+		// Create a fresh org for this test
+		const org = await client.organization.create({
+			name: "multi-role-test-org",
+			slug: "multi-role-test-org",
+			fetchOptions: { headers },
+		});
+		const orgId = org.data!.id;
+		const memberId = org.data!.members[0]!.id;
+
+		// Set the member to have multiple roles including owner
+		const updatedMember = await auth.api.updateMemberRole({
+			headers,
+			body: {
+				organizationId: orgId,
+				role: ["owner", "admin"],
+				memberId,
+			},
+		});
+		expect(updatedMember?.role).toBe("owner,admin");
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "multi-role-invite-test@test.com",
+			role: "owner",
+			fetchOptions: { headers },
+		});
+		expect(invite.error).toBeNull();
+		expect(invite.data?.role).toBe("owner");
 	});
 
 	it("should allow leaving organization", async () => {
@@ -1506,7 +1537,7 @@ describe("invitation expiration and filtering", async () => {
 	});
 });
 
-describe("access control", async (it) => {
+describe("access control", async () => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
@@ -1596,7 +1627,7 @@ describe("access control", async (it) => {
 		// To be removed when `permission` will be removed entirely
 		const canCreateProjectLegacy = await checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["create"],
 			},
 		});
@@ -1632,6 +1663,126 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(res).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7822
+ */
+describe("dynamic access control should merge DB permissions with built-in roles", async () => {
+	// Extend default ac with a custom resource that default roles don't cover
+	const ac = createAccessControl({
+		...defaultStatements,
+		sales: ["create", "read", "update", "delete"],
+	});
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		plugins: [
+			organization({
+				ac,
+				roles: {
+					owner: ownerAc,
+					admin: adminAc,
+					member: memberAc,
+				},
+				dynamicAccessControl: {
+					enabled: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "test-dac",
+			slug: "test-dac",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("should merge DB permissions with built-in role permissions", async () => {
+		// Insert an "owner" role record in DB with only sales permissions.
+		// The built-in ownerAc does NOT have sales at all.
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					sales: ["create", "read", "delete"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		// DB adds sales:delete which the built-in owner doesn't have
+		const salesDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					sales: ["delete"],
+				},
+			},
+		});
+		expect(salesDelete.success).toBe(true);
+
+		// Built-in ownerAc has organization:["update","delete"], which is NOT in the DB record.
+		// Merge should preserve it.
+		const orgDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(orgDelete.success).toBe(true);
+	});
+
+	it("should not lose built-in actions when DB defines partial actions for the same resource", async () => {
+		// Clean up previous test data
+		await db.delete({
+			model: "organizationRole",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+
+		// Built-in ownerAc has organization:["update","delete"].
+		// DB only defines organization:["update"] (missing "delete").
+		// Merge should preserve both actions.
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					organization: ["update"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const orgUpdate = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["update"],
+				},
+			},
+		});
+		expect(orgUpdate.success).toBe(true);
+
+		// "delete" is only in built-in, not in DB -> must still be preserved
+		const orgDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(orgDelete.success).toBe(true);
 	});
 });
 
@@ -2046,7 +2197,7 @@ describe("owner can update roles", async () => {
 		};
 });
 
-describe("types", async (it) => {
+describe("types", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [organization({})],
 	});
@@ -2097,7 +2248,6 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					someRequiredField: {
 						type: "string",
-						required: true,
 					},
 					someOptionalField: {
 						type: "string",
@@ -2105,6 +2255,7 @@ describe("Additional Fields", async () => {
 					},
 					someHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},
@@ -2113,13 +2264,14 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					memberRequiredField: {
 						type: "string",
-						required: true,
 					},
 					memberOptionalField: {
 						type: "string",
+						required: false,
 					},
 					memberHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},
@@ -2128,13 +2280,14 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					teamRequiredField: {
 						type: "string",
-						required: true,
 					},
 					teamOptionalField: {
 						type: "string",
+						required: false,
 					},
 					teamHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},
@@ -2143,13 +2296,14 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					invitationRequiredField: {
 						type: "string",
-						required: true,
 					},
 					invitationOptionalField: {
 						type: "string",
+						required: false,
 					},
 					invitationHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},
@@ -2423,6 +2577,188 @@ describe("Additional Fields", async () => {
 		expect(data.someRequiredField).toBe("hey2");
 		expect(data.someOptionalField).toBe("hey");
 		expect(data.someHiddenField).toBeUndefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7981
+	 */
+	describe("active organization hook refresh", () => {
+		type QueryState<T> = {
+			data: T | null;
+			isPending: boolean;
+			isRefetching: boolean;
+		};
+
+		type QueryAtomLike<T> = {
+			get: () => QueryState<T>;
+			subscribe: (listener: (state: QueryState<T>) => void) => () => void;
+		};
+
+		const startClientSideQuery = () => {
+			const previousWindow = global.window as
+				| (Window & typeof globalThis)
+				| undefined;
+			global.window = {} as unknown as Window & typeof globalThis;
+			return () => {
+				global.window = previousWindow as unknown as Window & typeof globalThis;
+			};
+		};
+
+		const registerActiveOrganizationCleanup = (restoreWindow: () => void) => {
+			onTestFinished(async () => {
+				restoreWindow();
+				await client.organization
+					.setActive({
+						organizationId: org.id,
+						fetchOptions: {
+							headers,
+						},
+					})
+					.catch(() => undefined);
+			});
+		};
+
+		const waitForQueryData = async <T>(
+			query: QueryAtomLike<T>,
+			matches: (data: T) => boolean,
+			triggerFetch = false,
+		) => {
+			return new Promise<T>((resolve, reject) => {
+				let unsubscribe = () => {};
+				const timeoutId = setTimeout(() => {
+					unsubscribe();
+					reject(new Error("Timed out waiting for query data"));
+				}, 1000);
+
+				unsubscribe = query.subscribe((state) => {
+					if (state.isPending || state.isRefetching || state.data === null) {
+						return;
+					}
+					if (!matches(state.data)) {
+						return;
+					}
+					clearTimeout(timeoutId);
+					unsubscribe();
+					resolve(state.data);
+				});
+
+				if (triggerFetch) {
+					query.get();
+				}
+			});
+		};
+
+		it("updates active member when setActive changes organization", async () => {
+			await client.organization.setActive({
+				organizationId: org.id,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const secondOrganization = await auth.api.createOrganization({
+				body: {
+					name: "test-issue-7981",
+					slug: "test-issue-7981",
+					someRequiredField: "issue-7981-required",
+					keepCurrentActiveOrganization: true,
+				},
+				headers,
+			});
+
+			if (!secondOrganization) {
+				throw new Error("Second organization is null");
+			}
+
+			const restoreWindow = startClientSideQuery();
+			registerActiveOrganizationCleanup(restoreWindow);
+
+			const activeMemberQuery = orgClientPlugin.getAtoms(
+				client.$fetch,
+			).activeMember;
+			await waitForQueryData(
+				activeMemberQuery,
+				(member) => member.organizationId === org.id,
+				true,
+			);
+			const switchedMember = waitForQueryData(
+				activeMemberQuery,
+				(member) => member.organizationId === secondOrganization.id,
+			);
+
+			await client.organization.setActive({
+				organizationId: secondOrganization.id,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const updatedMember = await switchedMember;
+			expect(updatedMember.organizationId).toBe(secondOrganization.id);
+		});
+
+		it("updates session and active member when create switches active organization", async () => {
+			await client.organization.setActive({
+				organizationId: org.id,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const restoreWindow = startClientSideQuery();
+			registerActiveOrganizationCleanup(restoreWindow);
+
+			const activeMemberQuery = orgClientPlugin.getAtoms(
+				client.$fetch,
+			).activeMember;
+			const sessionQuery = client.useSession;
+
+			await Promise.all([
+				waitForQueryData(
+					activeMemberQuery,
+					(member) => member.organizationId === org.id,
+					true,
+				),
+				waitForQueryData(
+					sessionQuery,
+					(session) => session.session.activeOrganizationId === org.id,
+					true,
+				),
+			]);
+			await new Promise((resolve) => setTimeout(resolve, 30));
+
+			const switchedMember = waitForQueryData(
+				activeMemberQuery,
+				(member) => member.organizationId !== org.id,
+			);
+			const switchedSession = waitForQueryData(
+				sessionQuery,
+				(session) =>
+					Boolean(session.session.activeOrganizationId) &&
+					session.session.activeOrganizationId !== org.id,
+			);
+
+			const createdOrganization = await client.organization.create({
+				name: "test-issue-7981-create",
+				slug: "test-issue-7981-create",
+				someRequiredField: "issue-7981-create-required",
+				fetchOptions: {
+					headers,
+				},
+			});
+			if (!createdOrganization.data) {
+				throw createdOrganization.error || new Error("Create failed");
+			}
+
+			const [updatedMember, updatedSession] = await Promise.all([
+				switchedMember,
+				switchedSession,
+			]);
+			expect(updatedMember.organizationId).toBe(createdOrganization.data.id);
+			expect(updatedSession.session.activeOrganizationId).toBe(
+				createdOrganization.data.id,
+			);
+		});
 	});
 
 	it("getFullOrganization", async () => {
@@ -2801,8 +3137,7 @@ describe("Additional Fields", async () => {
 				memberHiddenField?: string | undefined;
 				teamId?: string | undefined;
 			};
-		} | null;
-		if (!acceptedInvitation) throw new Error("Accepted invitation is null");
+		};
 		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
 		expect("memberRequiredField" in acceptedInvitation.member).toBeTruthy();
 		expect("memberOptionalField" in acceptedInvitation.member).toBeTruthy();
@@ -2937,7 +3272,7 @@ async function getAtomValue<Result>(
 		| { data: Result; error: null }
 		| { data: null; error: BetterFetchError };
 }
-describe("organization hooks", async (it) => {
+describe("organization hooks", async () => {
 	let hooksCalled: string[] = [];
 
 	const { auth, signInWithTestUser } = await getTestInstance({
@@ -3120,11 +3455,9 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(org.data).toBeDefined();
-		// Note: publicField and secretField use `as any` because endpoint response types
-		// are inferred from adapter return values which include all fields.
-		// The runtime correctly filters returned: false fields.
-		expect((org.data as any).publicField).toBe("public-value");
-		expect((org.data as any).secretField).toBeUndefined();
+		expect(org.data?.publicField).toBe("public-value");
+		// @ts-expect-error secretField has returned: false
+		expect(org.data?.secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg).toBeDefined();
@@ -3157,8 +3490,9 @@ describe("organization additionalFields with returned: false", async () => {
 		expect(orgs.data!.length).toBeGreaterThan(0);
 
 		for (const org of orgs.data!) {
-			expect((org as any).secretField).toBeUndefined();
-			expect((org as any).publicField).toBeDefined();
+			// @ts-expect-error secretField has returned: false
+			expect(org.secretField).toBeUndefined();
+			expect(org.publicField).toBeDefined();
 		}
 	});
 
@@ -3262,8 +3596,9 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(updated.data).toBeDefined();
-		expect((updated.data as any).publicField).toBe("updated-public");
-		expect((updated.data as any).secretField).toBeUndefined();
+		expect(updated.data?.publicField).toBe("updated-public");
+		// @ts-expect-error secretField has returned: false
+		expect(updated.data?.secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg?.secretField).toBe("updated-secret");

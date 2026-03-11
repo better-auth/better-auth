@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
+import type { WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { parseJSON } from "../../client/parser";
@@ -134,7 +135,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			filter?:
 				| {
 						field: string;
-						operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+						operator?: WhereOperator;
 						value: any;
 				  }
 				| undefined;

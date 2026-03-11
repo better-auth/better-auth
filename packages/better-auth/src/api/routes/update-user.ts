@@ -88,9 +88,10 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			};
 
 			if (typeof body !== "object" || Array.isArray(body)) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Body must be an object",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.BODY_MUST_BE_AN_OBJECT,
+				);
 			}
 
 			if (body.email) {
@@ -359,10 +360,7 @@ export const setPassword = createAuthEndpoint(
 				status: true,
 			});
 		}
-		throw APIError.from("BAD_REQUEST", {
-			message: "user already has a password",
-			code: "USER_ALREADY_HAS_PASSWORD",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_ALREADY_SET);
 	},
 );
 
@@ -492,7 +490,7 @@ export const deleteUser = createAuthEndpoint(
 		}
 
 		if (ctx.body.token) {
-			//@ts-expect-error
+			// @ts-expect-error
 			await deleteUserCallback({
 				...ctx,
 				query: {
@@ -519,9 +517,9 @@ export const deleteUser = createAuthEndpoint(
 			});
 			const url = `${
 				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${
-				ctx.body.callbackURL || "/"
-			}`;
+			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
 			await ctx.context.runInBackgroundOrAwait(
 				ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 					{
@@ -542,7 +540,7 @@ export const deleteUser = createAuthEndpoint(
 			const currentAge = new Date(session.session.createdAt).getTime();
 			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
 			const now = Date.now();
-			if (now - currentAge > freshAge * 1000) {
+			if (now - currentAge > freshAge) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.SESSION_EXPIRED);
 			}
 		}
@@ -645,7 +643,9 @@ export const deleteUserCallback = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			`delete-account-${ctx.query.token}`,
+		);
 
 		deleteSessionCookie(ctx);
 
@@ -711,21 +711,6 @@ export const changeEmail = createAuthEndpoint(
 							},
 						},
 					},
-					"422": {
-						description: "Unprocessable Entity. Email already exists",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										message: {
-											type: "string",
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -746,23 +731,53 @@ export const changeEmail = createAuthEndpoint(
 				message: "Email is the same",
 			});
 		}
+
+		/**
+		 * Early config check: ensure at least one email-change flow is
+		 * available for the current session state. Without this, an
+		 * existing-email lookup would return 200 while a non-existing
+		 * email would later throw 400, leaking email existence.
+		 */
+		const canUpdateWithoutVerification =
+			ctx.context.session.user.emailVerified !== true &&
+			ctx.context.options.user.changeEmail.updateEmailWithoutVerification;
+		const canSendConfirmation =
+			ctx.context.session.user.emailVerified &&
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
+		const canSendVerification =
+			ctx.context.options.emailVerification?.sendVerificationEmail;
+
+		if (
+			!canUpdateWithoutVerification &&
+			!canSendConfirmation &&
+			!canSendVerification
+		) {
+			ctx.context.logger.error("Verification email isn't enabled.");
+			throw APIError.fromStatus("BAD_REQUEST", {
+				message: "Verification email isn't enabled",
+			});
+		}
+
 		const existingUser =
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
-			ctx.context.logger.error("Email already exists");
-			throw APIError.from(
-				"UNPROCESSABLE_ENTITY",
-				BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
+			// Simulate token generation to prevent timing attacks
+			await createEmailVerificationToken(
+				ctx.context.secret,
+				ctx.context.session.user.email,
+				newEmail,
+				ctx.context.options.emailVerification?.expiresIn,
 			);
+
+			ctx.context.logger.info("Change email attempt for existing email");
+
+			return ctx.json({ status: true });
 		}
 
 		/**
 		 * If the email is not verified, we can update the email if the option is enabled
 		 */
-		if (
-			ctx.context.session.user.emailVerified !== true &&
-			ctx.context.options.user.changeEmail.updateEmailWithoutVerification
-		) {
+		if (canUpdateWithoutVerification) {
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
@@ -776,7 +791,7 @@ export const changeEmail = createAuthEndpoint(
 					email: newEmail,
 				},
 			});
-			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+			if (canSendVerification) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					newEmail,
@@ -789,7 +804,7 @@ export const changeEmail = createAuthEndpoint(
 					ctx.body.callbackURL || "/"
 				}`;
 				await ctx.context.runInBackgroundOrAwait(
-					ctx.context.options.emailVerification.sendVerificationEmail(
+					canSendVerification(
 						{
 							user: {
 								...ctx.context.session.user,
@@ -811,12 +826,7 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is verified, we need to send a verification email
 		 */
-		const sendConfirmationToOldEmail =
-			ctx.context.session.user.emailVerified &&
-			(ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification);
-
-		if (sendConfirmationToOldEmail) {
+		if (canSendConfirmation) {
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				ctx.context.session.user.email,
@@ -829,28 +839,23 @@ export const changeEmail = createAuthEndpoint(
 			const url = `${
 				ctx.context.baseURL
 			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-			const sendFn =
-				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification;
-			if (sendFn) {
-				await ctx.context.runInBackgroundOrAwait(
-					sendFn(
-						{
-							user: ctx.context.session.user,
-							newEmail: newEmail,
-							url,
-							token,
-						},
-						ctx.request,
-					),
-				);
-			}
+			await ctx.context.runInBackgroundOrAwait(
+				canSendConfirmation(
+					{
+						user: ctx.context.session.user,
+						newEmail: newEmail,
+						url,
+						token,
+					},
+					ctx.request,
+				),
+			);
 			return ctx.json({
 				status: true,
 			});
 		}
 
-		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+		if (!canSendVerification) {
 			ctx.context.logger.error("Verification email isn't enabled.");
 			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
@@ -870,7 +875,7 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 		await ctx.context.runInBackgroundOrAwait(
-			ctx.context.options.emailVerification.sendVerificationEmail(
+			canSendVerification(
 				{
 					user: {
 						...ctx.context.session.user,

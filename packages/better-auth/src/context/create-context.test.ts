@@ -5,6 +5,7 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
+import { getAwaitableValue } from "./helpers";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
@@ -54,12 +55,14 @@ describe("base context creation", () => {
 
 	it("should execute plugins init", async () => {
 		const newBaseURL = "http://test.test";
+		const set = new Set<object>();
 		const res = await initBase({
 			baseURL: "http://localhost:3000",
 			plugins: [
 				{
 					id: "test",
-					init: () => {
+					init: (ctx) => {
+						set.add(ctx);
 						return {
 							context: {
 								baseURL: newBaseURL,
@@ -69,6 +72,8 @@ describe("base context creation", () => {
 				},
 			],
 		});
+		set.add(res);
+		expect(set.size).toBe(1);
 		expect(res.baseURL).toBe(newBaseURL);
 	});
 
@@ -168,12 +173,14 @@ describe("base context creation", () => {
 			],
 		});
 		expect(ctx.socialProviders).toHaveLength(2);
-		const testProvider = ctx.socialProviders.find(
-			(p) => p.id === "test-oauth-provider",
-		);
+		const testProvider = await getAwaitableValue(ctx.socialProviders, {
+			value: "test-oauth-provider",
+		});
 		expect(testProvider).toBeDefined();
 		expect(testProvider?.refreshAccessToken).toBeDefined();
-		const githubProvider = ctx.socialProviders.find((p) => p.id === "github");
+		const githubProvider = await getAwaitableValue(ctx.socialProviders, {
+			value: "github",
+		});
 		expect(githubProvider).toBeDefined();
 	});
 
@@ -516,7 +523,10 @@ describe("base context creation", () => {
 					},
 				},
 			});
-			const github = res.socialProviders.find((p) => p.id === "github");
+
+			const github = await getAwaitableValue(res.socialProviders, {
+				value: "github",
+			});
 			expect(github?.disableImplicitSignUp).toBe(true);
 		});
 	});
@@ -537,6 +547,179 @@ describe("base context creation", () => {
 			expect(res.trustedOrigins).toContain("http://localhost:3000");
 			expect(res.trustedOrigins).toContain("http://example.com");
 			expect(res.trustedOrigins).toContain("http://test.com");
+		});
+	});
+
+	describe("trusted providers", () => {
+		it("should include static trusted providers", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: ["google", "github"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("github");
+		});
+
+		it("should resolve dynamic trusted providers from function", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: async () => ["google", "microsoft"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("microsoft");
+		});
+
+		it("should return empty array when no trusted providers configured", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+			});
+			expect(res.trustedProviders).toEqual([]);
+		});
+
+		it("should pass request to dynamic trustedProviders function", async () => {
+			const trustedProvidersFn = vi.fn((request?: Request) =>
+				Promise.resolve(["google", "github"]),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			await auth.handler(request);
+
+			expect(trustedProvidersFn).toHaveBeenCalledWith(request);
+		});
+
+		it("should re-resolve trustedProviders per request and pass the Request to the resolver", async () => {
+			const trustedProvidersList = ["provider-a", "provider-b"];
+			const trustedProvidersFn = vi.fn((request?: Request) =>
+				Promise.resolve(trustedProvidersList),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			const response = await auth.handler(request);
+			const data = (await response.json()) as { trustedProviders: string[] };
+
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(2);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, request);
+			expect(data.trustedProviders).toEqual(trustedProvidersList);
+		});
+
+		it("should use request-dependent trustedProviders when resolver returns different lists per request", async () => {
+			const trustedProvidersFn = vi.fn((request?: Request) => {
+				if (!request?.url) return Promise.resolve([]);
+				const url = new URL(request.url);
+				return Promise.resolve(
+					url.searchParams.get("variant") === "first"
+						? ["google", "github"]
+						: ["microsoft", "apple"],
+				);
+			});
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const requestFirst = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=first",
+			);
+			const responseFirst = await auth.handler(requestFirst);
+			const dataFirst = (await responseFirst.json()) as {
+				trustedProviders: string[];
+			};
+
+			const requestSecond = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=second",
+			);
+			const responseSecond = await auth.handler(requestSecond);
+			const dataSecond = (await responseSecond.json()) as {
+				trustedProviders: string[];
+			};
+
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(3);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, requestFirst);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(3, requestSecond);
+			expect(dataFirst.trustedProviders).toEqual(["google", "github"]);
+			expect(dataSecond.trustedProviders).toEqual(["microsoft", "apple"]);
 		});
 	});
 
@@ -606,9 +789,9 @@ describe("base context creation", () => {
 			expect(fn).toHaveBeenCalled();
 			const regex = /Misconfiguration detected/;
 			expect(fn).toHaveBeenCalledWith(expect.stringMatching(regex));
-			fn.mockRestore();
 			const id = res.generateId({ model: "user" });
 			expect(id).toBe(false);
+			fn.mockRestore();
 		});
 	});
 
@@ -1602,9 +1785,21 @@ describe("base context creation", () => {
 			});
 
 			expect(ctx.socialProviders).toHaveLength(3);
-			expect(ctx.socialProviders.find((p) => p.id === "github")).toBeDefined();
-			expect(ctx.socialProviders.find((p) => p.id === "google")).toBeDefined();
-			expect(ctx.socialProviders.find((p) => p.id === "discord")).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "github",
+				}),
+			).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "google",
+				}),
+			).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "discord",
+				}),
+			).toBeDefined();
 		});
 
 		it("should handle secondaryStorage configuration", async () => {

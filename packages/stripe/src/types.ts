@@ -75,6 +75,36 @@ export type StripePlan = {
 	 */
 	group?: string | undefined;
 	/**
+	 * Per-seat billing price ID
+	 *
+	 * Requires the `organization` plugin. Member changes
+	 * automatically sync the seat quantity in Stripe.
+	 */
+	seatPriceId?: string | undefined;
+	/**
+	 * Proration behavior when updating this plan's subscription.
+	 *
+	 * Controls how Stripe handles mid-cycle price changes.
+	 * - `create_prorations`: Add proration line items to the next invoice (default)
+	 * - `always_invoice`: Create prorations and immediately invoice
+	 * - `none`: No proration; new price applies at next billing cycle
+	 *
+	 * @default "create_prorations"
+	 * @see https://docs.stripe.com/billing/subscriptions/prorations
+	 */
+	prorationBehavior?:
+		| Stripe.SubscriptionUpdateParams.ProrationBehavior
+		| undefined;
+	/**
+	 * Additional line items to include in the checkout session.
+	 *
+	 * All line items must use the same billing interval as the base price (e.g. all monthly or all yearly).
+	 * Stripe does not support mixed-interval subscriptions via Checkout Sessions.
+	 *
+	 * @see https://docs.stripe.com/billing/subscriptions/mixed-interval#limitations
+	 */
+	lineItems?: Stripe.Checkout.SessionCreateParams.LineItem[] | undefined;
+	/**
 	 * Free trial days
 	 */
 	freeTrial?:
@@ -207,6 +237,17 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number | undefined;
+	/**
+	 * The billing interval for this subscription.
+	 * Indicates how often the subscription is billed.
+	 * @see https://docs.stripe.com/api/plans/object#plan_object-interval
+	 */
+	billingInterval?: "day" | "week" | "month" | "year" | undefined;
+	/**
+	 * Stripe Subscription Schedule ID, present when a scheduled
+	 * plan change is pending for this subscription.
+	 */
+	stripeScheduleId?: string | undefined;
 }
 
 export type SubscriptionOptions = {

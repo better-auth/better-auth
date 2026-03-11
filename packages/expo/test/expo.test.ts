@@ -1,9 +1,6 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
-import {
-	createAuthMiddleware,
-	magicLink,
-	oAuthProxy,
-} from "better-auth/plugins";
+import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";
@@ -179,6 +176,32 @@ describe("expo", async () => {
 		const c = client.getCookie();
 		expect(c).includes("better-auth.session_token");
 	});
+
+	it("should remove expired cookies from store when Max-Age=0", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const prevCookie = JSON.stringify({
+			"better-auth.session_token": { value: "abc123", expires: null },
+			"better-auth.session_data": { value: "xyz789", expires: null },
+		});
+		// Server sends Max-Age=0 to delete the cookies
+		const header =
+			"better-auth.session_token=; Max-Age=0, better-auth.session_data=; Max-Age=0";
+		const result = JSON.parse(getSetCookie(header, prevCookie));
+		expect(result["better-auth.session_token"]).toBeUndefined();
+		expect(result["better-auth.session_data"]).toBeUndefined();
+	});
+
+	it("should remove cookies with past Expires from store", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const prevCookie = JSON.stringify({
+			"better-auth.session_token": { value: "abc123", expires: null },
+		});
+		const pastDate = new Date(Date.now() - 1000).toUTCString();
+		const header = `better-auth.session_token=; Expires=${pastDate}`;
+		const result = JSON.parse(getSetCookie(header, prevCookie));
+		expect(result["better-auth.session_token"]).toBeUndefined();
+	});
+
 	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
 		const header =
 			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
@@ -346,6 +369,106 @@ describe("expo", async () => {
 		expect(originalOrigin).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8404
+	 * @see https://github.com/better-auth/better-auth/issues/7014
+	 */
+	describe("origin override regression", () => {
+		it("should preserve the incoming request instance when headers are mutable", async () => {
+			let originalRequest: Request | undefined;
+			let currentRequest: Request | undefined;
+			const storage = new Map<string, string>();
+			const { client, testUser } = await getTestInstance(
+				{
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							currentRequest = ctx.request;
+						}),
+					},
+					plugins: [
+						{
+							id: "test",
+							async onRequest(request) {
+								originalRequest = request;
+							},
+						},
+						expo(),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (key) => storage.get(key) || null,
+									setItem: async (key, value) => storage.set(key, value),
+								},
+							}),
+						],
+					},
+				},
+			);
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://localhost:3000/callback",
+			});
+			expect(currentRequest).toBe(originalRequest);
+		});
+
+		it("should clone the request when origin header mutation fails", async () => {
+			let origin = null;
+			let originalRequest: Request | undefined;
+			let currentRequest: Request | undefined;
+			const storage = new Map<string, string>();
+			const { client, testUser } = await getTestInstance(
+				{
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							currentRequest = ctx.request;
+							origin = ctx.request?.headers.get("origin");
+						}),
+					},
+					plugins: [
+						{
+							id: "test",
+							async onRequest(request) {
+								originalRequest = request;
+								Object.defineProperty(request.headers, "set", {
+									configurable: true,
+									value: () => {
+										throw new Error("immutable headers");
+									},
+								});
+							},
+						},
+						expo(),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (key) => storage.get(key) || null,
+									setItem: async (key, value) => storage.set(key, value),
+								},
+							}),
+						],
+					},
+				},
+			);
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://localhost:3000/callback",
+			});
+			expect(origin).toBe("better-auth://");
+			expect(currentRequest).toBeDefined();
+			expect(currentRequest).not.toBe(originalRequest);
+		});
+	});
+
 	it("should not modify origin header if origin is set", async () => {
 		const originalOrigin = "test.com";
 		let origin = null;
@@ -392,6 +515,67 @@ describe("expo", async () => {
 			callbackURL: "http://localhost:3000/callback",
 		});
 		expect(origin).toBe(null);
+	});
+
+	it("should not send cookie or expo-origin headers for ID token requests", async () => {
+		let cookieHeader: string | null | undefined = null;
+		let expoOriginHeader: string | null | undefined = null;
+		let originHeader: string | null | undefined = null;
+		const storage = new Map<string, string>();
+
+		// Pre-populate storage with a cookie to verify it's NOT sent
+		storage.set(
+			"better-auth_cookie",
+			JSON.stringify({
+				"better-auth.session_token": {
+					value: "existing-token",
+					expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						cookieHeader = ctx.request?.headers.get("cookie");
+						expoOriginHeader = ctx.request?.headers.get("expo-origin");
+						originHeader = ctx.request?.headers.get("origin");
+					}),
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo()],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		// ID token request - should NOT have cookie or expo-origin headers
+		await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: "fake-id-token",
+			},
+		});
+
+		expect(cookieHeader).toBeNull();
+		expect(expoOriginHeader).toBeNull();
+		expect(originHeader).toBeNull();
 	});
 
 	it("should preserve existing cookies on link-social", async () => {
@@ -466,8 +650,6 @@ describe("expo", async () => {
 	});
 
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
-		fn.mockClear();
-
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -689,8 +871,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should include oauthState param in proxy URL", async () => {
-		fn.mockClear();
-
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -705,8 +885,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should set oauth_state cookie in browser context via expo-authorization-proxy (cookie strategy)", async () => {
-		fn.mockClear();
-
 		const expoWebBrowser = await import("expo-web-browser");
 		const { parseSetCookieHeader } = await import("../src/client");
 
@@ -789,6 +967,7 @@ describe("expo deep link cookie injection", async () => {
 			callbackURL: "myapp:///dashboard",
 		});
 
+		let redirectHandled = false;
 		const { error } = await client.magicLink.verify({
 			query: {
 				token: magicLinkToken,
@@ -796,6 +975,7 @@ describe("expo deep link cookie injection", async () => {
 			},
 			fetchOptions: {
 				onError(context) {
+					redirectHandled = true;
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
 					expect(location).toContain("myapp://");
@@ -807,7 +987,73 @@ describe("expo deep link cookie injection", async () => {
 				},
 			},
 		});
-		expect(error).toBeDefined();
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6810
+ */
+describe("expo deep link cookie injection with wildcard trustedOrigins", async () => {
+	let magicLinkToken = "";
+	const storage = new Map<string, string>();
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				expo(),
+				magicLink({
+					async sendMagicLink({ token }) {
+						magicLinkToken = token;
+					},
+				}),
+			],
+			trustedOrigins: ["myapp://*"],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+						},
+					}),
+					magicLinkClient(),
+				],
+			},
+		},
+	);
+
+	it("should inject cookie into deep link for wildcard trusted origin", async () => {
+		await client.signIn.magicLink({
+			email: "wildcard-test@example.com",
+			callbackURL: "myapp:///dashboard",
+		});
+
+		let redirectHandled = false;
+		const { error } = await client.magicLink.verify({
+			query: {
+				token: magicLinkToken,
+				callbackURL: "myapp:///dashboard",
+			},
+			fetchOptions: {
+				onError(context) {
+					redirectHandled = true;
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("myapp://");
+
+					const url = new URL(location!);
+					const cookie = url.searchParams.get("cookie");
+					expect(cookie).toBeDefined();
+					expect(cookie).toContain("better-auth.session_token");
+				},
+			},
+		});
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
 	});
 });
 
@@ -853,6 +1099,7 @@ describe("expo deep link cookie injection for verify-email", async () => {
 
 		expect(verificationToken).toBeTruthy();
 
+		let redirectHandled = false;
 		const { error } = await client.verifyEmail(
 			{
 				query: {
@@ -862,6 +1109,7 @@ describe("expo deep link cookie injection for verify-email", async () => {
 			},
 			{
 				onError(context) {
+					redirectHandled = true;
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
 					expect(location).toContain("myapp://");
@@ -873,7 +1121,8 @@ describe("expo deep link cookie injection for verify-email", async () => {
 				},
 			},
 		);
-		expect(error).toBeDefined();
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
 	});
 });
 

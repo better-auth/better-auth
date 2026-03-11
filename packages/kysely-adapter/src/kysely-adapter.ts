@@ -8,6 +8,7 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
 	Kysely,
@@ -262,7 +263,13 @@ export const kyselyAdapter = (
 							fieldName,
 							joinModelRef,
 						} of allSelectsStr) {
-							if (keyStr === `_joined_${joinModelRef}_${fieldName}`) {
+							if (
+								keyStr === `_joined_${joinModelRef}_${fieldName}` ||
+								// Edge case to catch capitalized results that derive from snake_case table names
+								// If anyone can identify the cause behind this, please note it here.
+								keyStr ===
+									`_Joined${capitalizeFirstLetter(joinModelRef)}${capitalizeFirstLetter(fieldName)}`
+							) {
 								joinedModelFields[getModelName(joinModel)]![
 									getFieldName({
 										model: joinModel,
@@ -389,7 +396,14 @@ export const kyselyAdapter = (
 									eb.or(or.map((expr: any) => expr(eb))),
 								);
 							}
-							return b.selectAll().as("primary");
+							if (select?.length && select.length > 0) {
+								b = b.select(
+									select.map((field) => getFieldName({ model, field })),
+								);
+							} else {
+								b = b.selectAll();
+							}
+							return b.as("primary");
 						})
 						.selectAll("primary");
 
@@ -432,7 +446,7 @@ export const kyselyAdapter = (
 
 					return row as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy, join }) {
+				async findMany({ model, where, limit, select, offset, sortBy, join }) {
 					const { and, or } = convertWhereClause(model, where);
 					let query: any = db
 						.selectFrom((eb) => {
@@ -475,7 +489,15 @@ export const kyselyAdapter = (
 								);
 							}
 
-							return b.selectAll().as("primary");
+							if (select?.length && select.length > 0) {
+								b = b.select(
+									select.map((field) => getFieldName({ model, field })),
+								);
+							} else {
+								b = b.selectAll();
+							}
+
+							return b.as("primary");
 						})
 						.selectAll("primary");
 

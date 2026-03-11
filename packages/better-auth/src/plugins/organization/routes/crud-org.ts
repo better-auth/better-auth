@@ -110,9 +110,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
 			}
 			if (!user) {
-				return ctx.json(null, {
-					status: 401,
-				});
+				throw APIError.fromStatus("UNAUTHORIZED");
 			}
 			const options = ctx.context.orgOptions;
 			const canCreateOrg =
@@ -162,25 +160,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				userId: __,
 				...orgData
 			} = ctx.body;
-
-			if (options.organizationCreation?.beforeCreate) {
-				const response = await options.organizationCreation.beforeCreate(
-					{
-						organization: {
-							...orgData,
-							createdAt: new Date(),
-						},
-						user,
-					},
-					ctx.request,
-				);
-				if (response && typeof response === "object" && "data" in response) {
-					orgData = {
-						...ctx.body,
-						...response.data,
-					};
-				}
-			}
 
 			if (options?.organizationHooks?.beforeCreateOrganization) {
 				const response =
@@ -278,17 +257,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organization,
 					});
 				}
-			}
-
-			if (options.organizationCreation?.afterCreate) {
-				await options.organizationCreation.afterCreate(
-					{
-						organization,
-						user,
-						member,
-					},
-					ctx.request,
-				);
 			}
 
 			if (options?.organizationHooks?.afterCreateOrganization) {
@@ -574,14 +542,8 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const disableOrganizationDeletion =
-				ctx.context.orgOptions.organizationDeletion?.disabled ||
 				ctx.context.orgOptions.disableOrganizationDeletion;
 			if (disableOrganizationDeletion) {
-				if (ctx.context.orgOptions.organizationDeletion?.disabled) {
-					ctx.context.logger.info(
-						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
-					);
-				}
 				throw APIError.from("NOT_FOUND", {
 					message: "Organization deletion is disabled",
 					code: "ORGANIZATION_DELETION_DISABLED",
@@ -594,12 +556,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 
 			const organizationId = ctx.body.organizationId;
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -745,11 +705,10 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION
-							.message,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }

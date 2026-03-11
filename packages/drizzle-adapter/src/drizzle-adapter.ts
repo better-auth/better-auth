@@ -74,7 +74,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, options }) => {
+		({ getFieldName, getDefaultFieldName, options }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -343,12 +343,55 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					);
 				}
 				for (const key in values) {
-					if (!schema[key]) {
+					let fieldName: string;
+					try {
+						fieldName = getFieldName({ model, field: key });
+					} catch {
+						fieldName = key;
+					}
+					if (!schema[fieldName]) {
 						throw new BetterAuthError(
-							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli@latest generate".`,
+							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx auth@latest generate".`,
 						);
 					}
 				}
+			}
+
+			/**
+			 * Resolve the db.query key for a model.
+			 *
+			 * When `usePlural` is false (default), Better Auth uses singular model
+			 * names like "user", but Drizzle's db.query is keyed by the schema
+			 * export names (often plural like "users"). This function:
+			 *
+			 * 1. Tries the model name directly (works when schema keys match)
+			 * 2. If usePlural is set, tries appending "s"
+			 * 3. Falls back to scanning config.schema to find which db.query key
+			 *    corresponds to the same table object
+			 */
+			function getQueryModel(model: string): string | null {
+				if (db.query[model]) return model;
+
+				if (config.usePlural) {
+					const plural = `${model}s`;
+					if (db.query[plural]) return plural;
+				}
+
+				if (config.schema) {
+					const targetTable = config.schema[model];
+					if (targetTable) {
+						const fullSchema = db._.fullSchema;
+						if (fullSchema) {
+							for (const key of Object.keys(db.query)) {
+								if (fullSchema[key] === targetTable) {
+									return key;
+								}
+							}
+						}
+					}
+				}
+
+				return null;
 			}
 
 			return {
@@ -359,14 +402,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where, join }) {
+				async findOne({ model, where, select, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
 					if (options.experimental?.joins) {
-						if (!db.query || !db.query[model]) {
+						const queryModel = getQueryModel(model);
+						if (!db.query || !queryModel) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
@@ -393,8 +437,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									}
 								}
 							}
-							const query = db.query[model].findFirst({
+							const query = db.query[queryModel].findFirst({
 								where: clause[0],
+								columns:
+									select?.length && select.length > 0
+										? select.reduce(
+												(acc, field) => {
+													acc[getFieldName({ model, field })] = true;
+													return acc;
+												},
+												{} as Record<string, boolean>,
+											)
+										: undefined,
 								with: includes,
 							});
 							const res = await query;
@@ -415,7 +469,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					const query = db
-						.select()
+						.select(
+							select?.length && select.length > 0
+								? select.reduce((acc, field) => {
+										const fieldName = getFieldName({ model, field });
+										return {
+											...acc,
+											[fieldName]: schemaModel[fieldName],
+										};
+									}, {})
+								: undefined,
+						)
 						.from(schemaModel)
 						.where(...clause);
 
@@ -424,15 +488,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset, join }) {
+				async findMany({ model, where, sortBy, limit, select, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
 					if (options.experimental?.joins) {
-						if (!db.query[model]) {
+						const queryModel = getQueryModel(model);
+						if (!queryModel) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
@@ -466,9 +531,19 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									),
 								];
 							}
-							const query = db.query[model].findMany({
+							const query = db.query[queryModel].findMany({
 								where: clause[0],
 								with: includes,
+								columns:
+									select?.length && select.length > 0
+										? select.reduce(
+												(acc, field) => {
+													acc[getFieldName({ model, field })] = true;
+													return acc;
+												},
+												{} as Record<string, boolean>,
+											)
+										: undefined,
 								limit: limit ?? 100,
 								offset: offset ?? 0,
 								orderBy,
@@ -490,7 +565,19 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 
-					let builder = db.select().from(schemaModel);
+					let builder = db
+						.select(
+							select?.length && select.length > 0
+								? select.reduce((acc, field) => {
+										const fieldName = getFieldName({ model, field });
+										return {
+											...acc,
+											[fieldName]: schemaModel[fieldName],
+										};
+									}, {})
+								: undefined,
+						)
+						.from(schemaModel);
 
 					const effectiveLimit = limit;
 					const effectiveOffset = offset;
@@ -584,6 +671,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					? true
 					: false,
 			supportsArrays: config.provider === "pg" ? true : false,
+			customTransformOutput: ({ data, fieldAttributes }) => {
+				// not all providers support dates
+				// one such example case is https://github.com/better-auth/better-auth/issues/7819
+				if (fieldAttributes.type === "date") {
+					if (data === null || data === undefined) {
+						return data;
+					}
+					return new Date(data);
+				}
+				return data;
+			},
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

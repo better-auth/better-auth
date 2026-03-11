@@ -100,13 +100,20 @@ describe("oauth metadata", async () => {
 				"client_secret_post",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
 			acr_values_supported: ["urn:mace:incommon:iap:bronze"],
-			prompt_values_supported: ["login", "consent", "create", "select_account"],
+			prompt_values_supported: [
+				"login",
+				"consent",
+				"create",
+				"select_account",
+				"none",
+			],
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
@@ -150,6 +157,7 @@ describe("oauth metadata", async () => {
 				"client_secret_post",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
 		});
 	});
 

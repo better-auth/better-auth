@@ -60,14 +60,14 @@ export async function generateGenericState(
 		// Store state data in an encrypted cookie
 
 		const encryptedData = await symmetricEncrypt({
-			key: c.context.secret,
+			key: c.context.secretConfig,
 			data: JSON.stringify(stateData),
 		});
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "oauth_state",
 			{
-				maxAge: 10 * 60 * 1000, // 10 minutes
+				maxAge: 10 * 60, // 10 minutes
 			},
 		);
 
@@ -84,7 +84,7 @@ export async function generateGenericState(
 	const stateCookie = c.context.createAuthCookie(
 		settings?.cookieName ?? "state",
 		{
-			maxAge: 5 * 60 * 1000, // 5 minutes
+			maxAge: 5 * 60, // 5 minutes
 		},
 	);
 
@@ -143,7 +143,7 @@ export async function parseGenericState(
 
 		try {
 			const decryptedData = await symmetricDecrypt({
-				key: c.context.secret,
+				key: c.context.secretConfig,
 				data: encryptedData,
 			});
 
@@ -201,7 +201,7 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		await c.context.internalAdapter.deleteVerificationByIdentifier(state);
 	}
 
 	// Check expiration
