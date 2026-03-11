@@ -26,6 +26,9 @@ export function insensitiveInArray(
 	column: DrizzleColumn,
 	values: string[],
 ): SQL {
+	if (values.length === 0) {
+		return sql`false`;
+	}
 	return sql`LOWER(${column}) IN (${sql.join(
 		values.map((v) => sql`LOWER(${v})`),
 		sql`, `,
@@ -39,6 +42,9 @@ export function insensitiveNotInArray(
 	column: DrizzleColumn,
 	values: string[],
 ): SQL {
+	if (values.length === 0) {
+		return sql`true`;
+	}
 	return sql`LOWER(${column}) NOT IN (${sql.join(
 		values.map((v) => sql`LOWER(${v})`),
 		sql`, `,
