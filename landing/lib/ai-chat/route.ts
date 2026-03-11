@@ -125,6 +125,92 @@ function searchIndex(entries: SearchEntry[], query: string) {
 	return scored.slice(0, MAX_SEARCH_RESULTS);
 }
 
+const GITHUB_REPO = "better-auth/better-auth";
+const GITHUB_API = "https://api.github.com";
+const MAX_CODE_SEARCH_RESULTS = 8;
+const MAX_FILE_CONTENT_LENGTH = 12_000;
+
+type GitHubTextMatch = {
+	fragment: string;
+	matches: { text: string; indices: number[] }[];
+};
+
+type GitHubSearchItem = {
+	name: string;
+	path: string;
+	html_url: string;
+	repository: { full_name: string };
+	text_matches?: GitHubTextMatch[];
+};
+
+function githubHeaders(): Record<string, string> {
+	const headers: Record<string, string> = {
+		Accept: "application/vnd.github.text-match+json",
+		"X-GitHub-Api-Version": "2022-11-28",
+	};
+	if (process.env.GITHUB_TOKEN) {
+		headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+	}
+	return headers;
+}
+
+async function githubSearchCode(query: string, path?: string) {
+	let q = `${query} repo:${GITHUB_REPO}`;
+	if (path) {
+		q += ` path:${path}`;
+	}
+
+	const url = new URL(`${GITHUB_API}/search/code`);
+	url.searchParams.set("q", q);
+	url.searchParams.set("per_page", String(MAX_CODE_SEARCH_RESULTS));
+
+	const res = await fetch(url.toString(), { headers: githubHeaders() });
+	if (!res.ok) {
+		const text = await res.text();
+		return { error: `GitHub API error (${res.status}): ${text}` };
+	}
+
+	const data = (await res.json()) as {
+		total_count: number;
+		items: GitHubSearchItem[];
+	};
+
+	return {
+		total_count: data.total_count,
+		results: data.items.map((item) => ({
+			path: item.path,
+			url: item.html_url,
+			fragments: (item.text_matches ?? []).map((m) => m.fragment),
+		})),
+	};
+}
+
+async function githubGetFileContent(path: string, ref = "canary") {
+	const url = `${GITHUB_API}/repos/${GITHUB_REPO}/contents/${encodeURIComponent(path)}?ref=${ref}`;
+
+	const res = await fetch(url, {
+		headers: {
+			Accept: "application/vnd.github.raw+json",
+			"X-GitHub-Api-Version": "2022-11-28",
+			...(process.env.GITHUB_TOKEN
+				? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+				: {}),
+		},
+	});
+
+	if (!res.ok) {
+		return {
+			error: `GitHub API error (${res.status}): file not found or inaccessible`,
+		};
+	}
+
+	let content = await res.text();
+	if (content.length > MAX_FILE_CONTENT_LENGTH) {
+		content = `${content.slice(0, MAX_FILE_CONTENT_LENGTH)}\n\n... (truncated — file exceeds ${MAX_FILE_CONTENT_LENGTH} chars)`;
+	}
+	return { path, content };
+}
+
 const SYSTEM_PROMPT = `You are a helpful documentation assistant for Better Auth, a comprehensive framework-agnostic authentication and authorization framework for TypeScript.
 
 Your role is to answer questions about Better Auth by referencing the official documentation. You should be accurate, concise, and helpful.
@@ -138,6 +224,7 @@ Your role is to answer questions about Better Auth by referencing the official d
 - Format your answers with markdown. Use code blocks for code examples.
 - Keep answers focused and concise - ideally under 400 words. Don't dump entire pages of documentation; extract only the relevant parts.
 - Provide short code snippets, not full files. Only show the minimum code needed to illustrate the answer.
+- When users ask about implementation details, internal behavior, or source code, use searchCode and getFileContent to look up the actual source code from the GitHub repository.
 
 ## Available Documentation Pages
 The following pages are available. Use the slug (in brackets) with the getDocumentation tool to retrieve the full content of a page.
@@ -232,8 +319,42 @@ export async function POST(req: Request) {
 					}
 				},
 			}),
+			searchCode: tool({
+				description:
+					"Search the Better Auth source code on GitHub using semantic code search. Returns matching file paths and code fragments. Use this when users ask about implementation details, internal behavior, or want to see actual source code.",
+				inputSchema: z.object({
+					query: z
+						.string()
+						.describe(
+							"Code search query — function names, class names, keywords, or concepts to find in the source, e.g. 'createSession' or 'hashPassword' or 'organization plugin'",
+						),
+					path: z
+						.string()
+						.optional()
+						.describe(
+							"Optional path filter to narrow search to a directory or file pattern, e.g. 'packages/better-auth/src' or 'packages/cli'",
+						),
+				}),
+				execute: async ({ query, path }) => {
+					return githubSearchCode(query, path);
+				},
+			}),
+			getFileContent: tool({
+				description:
+					"Fetch the content of a specific file from the Better Auth GitHub repository. Use this after searchCode to read the full source of a matching file.",
+				inputSchema: z.object({
+					path: z
+						.string()
+						.describe(
+							"The file path in the repository, e.g. 'packages/better-auth/src/api/routes/session.ts'",
+						),
+				}),
+				execute: async ({ path }) => {
+					return githubGetFileContent(path);
+				},
+			}),
 		},
-		stopWhen: stepCountIs(5),
+		stopWhen: stepCountIs(8),
 	});
 
 	return result.toUIMessageStreamResponse();
