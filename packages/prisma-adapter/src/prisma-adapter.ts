@@ -200,6 +200,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return false;
 					}
 
+					// WhereUniqueInput doesn't support mode, so any insensitive
+					// condition must go through updateMany/WhereInput instead
+					if (condition.mode === "insensitive") {
+						return false;
+					}
+
 					if (condition.field === "id") {
 						return true;
 					}
