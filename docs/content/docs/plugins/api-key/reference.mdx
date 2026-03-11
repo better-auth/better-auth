@@ -171,7 +171,7 @@ Default is `false`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   secondaryStorage: {
@@ -202,7 +202,7 @@ Useful when you want to use a different storage backend specifically for API key
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -307,7 +307,7 @@ You can configure default permissions that will be applied to all newly created 
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -327,7 +327,7 @@ You can also provide a function that returns permissions dynamically:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
