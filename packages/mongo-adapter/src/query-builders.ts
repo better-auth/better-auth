@@ -23,6 +23,9 @@ export function insensitiveEq(field: string, value: string) {
  * Case-insensitive IN using $or with regex for each value.
  */
 export function insensitiveIn(field: string, values: string[]) {
+	if (values.length === 0) {
+		return { $expr: { $eq: [1, 0] } };
+	}
 	return {
 		$or: values.map((v) => ({
 			[field]: {
@@ -37,6 +40,9 @@ export function insensitiveIn(field: string, values: string[]) {
  * Case-insensitive NOT IN using $nor.
  */
 export function insensitiveNotIn(field: string, values: string[]) {
+	if (values.length === 0) {
+		return {};
+	}
 	return {
 		$nor: values.map((v) => ({
 			[field]: {
