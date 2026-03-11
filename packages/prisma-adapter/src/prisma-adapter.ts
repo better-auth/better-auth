@@ -239,9 +239,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							(Array.isArray(w.value) &&
 								w.value.every((v) => typeof v === "string")));
 					const providerSupportsMode =
-						config.provider === "postgresql" ||
-						config.provider === "mongodb" ||
-						config.provider === "cockroachdb";
+						config.provider === "postgresql" || config.provider === "mongodb";
 					const prismaMode =
 						isInsensitive && providerSupportsMode ? "insensitive" : undefined;
 					const modeFilter = prismaMode ? { mode: prismaMode } : {};
