@@ -1403,38 +1403,38 @@ describe("account", async () => {
 		expect(refreshedAccountCookie).toBe(true);
 	});
 
-  it("should allow additional account fields to be set based on provider configuration", async () => {
-    const { signInWithTestUser, client } = await getTestInstance({
-      disableTestUser: true,
-      socialProviders: {
-        google: {
-          clientId: "test",
-          clientSecret: "test",
-          enabled: true,
-          getAccountFields: async (_token, userInfo) => {
-            return {
-              foo: "bar",
-              providerEmail: userInfo.email,
-            }
-          },
-        },
-      },
-      account: {
-        accountLinking: {
-          allowDifferentEmails: true,
-        },
-        additionalFields: {
-          foo: {
-            type: "string",
-            required: false,
-          },
-          providerEmail: {
-            type: "string",
-            required: false,
-          },
-        },
-      },
-    });
+	it("should allow additional account fields to be set based on provider configuration", async () => {
+		const { signInWithTestUser, client } = await getTestInstance({
+			disableTestUser: true,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					getAccountFields: async (_token, userInfo) => {
+						return {
+							foo: "bar",
+							providerEmail: userInfo.email,
+						};
+					},
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+				additionalFields: {
+					foo: {
+						type: "string",
+						required: false,
+					},
+					providerEmail: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+		});
 
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 
@@ -1485,9 +1485,9 @@ describe("account", async () => {
 		await runWithClient3(async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(2);
-      const newAccount = accounts.data?.[1] as Record<string,any>
-      expect(newAccount.foo).toEqual("bar");
-      expect(newAccount.providerEmail).toEqual("test2@test.com");
+			const newAccount = accounts.data?.[1] as Record<string, any>;
+			expect(newAccount.foo).toEqual("bar");
+			expect(newAccount.providerEmail).toEqual("test2@test.com");
 		});
-  })
+	});
 });
