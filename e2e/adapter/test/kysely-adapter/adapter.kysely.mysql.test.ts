@@ -6,6 +6,7 @@ import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -51,6 +52,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		caseInsensitiveTestSuite(),
 	],
 	async onFinish() {
 		await mysqlDB.end();
