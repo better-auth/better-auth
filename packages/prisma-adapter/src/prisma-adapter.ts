@@ -200,10 +200,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return false;
 					}
 
-					// WhereUniqueInput doesn't support mode, so any insensitive
-					// condition must go through updateMany/WhereInput instead
 					if (condition.mode === "insensitive") {
-						return false;
+						const providerSupportsMode =
+							config.provider === "postgresql" || config.provider === "mongodb";
+						const isStringValue =
+							typeof condition.value === "string" ||
+							(Array.isArray(condition.value) &&
+								condition.value.every((v) => typeof v === "string"));
+						if (providerSupportsMode && isStringValue) {
+							return false;
+						}
 					}
 
 					if (condition.field === "id") {

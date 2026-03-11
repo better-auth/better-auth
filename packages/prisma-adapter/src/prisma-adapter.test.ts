@@ -111,7 +111,7 @@ describe("prisma-adapter", () => {
 		});
 	});
 
-	it("should fall back to updateMany when where has insensitive mode", async () => {
+	it("should fall back to updateMany when where has insensitive mode on a supporting provider", async () => {
 		const update = vi.fn();
 		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
 		const findFirst = vi.fn().mockResolvedValue({
@@ -119,6 +119,62 @@ describe("prisma-adapter", () => {
 			email: "Test@Example.COM",
 			name: "Updated",
 		});
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				user: {
+					findFirst,
+					update,
+					updateMany,
+				},
+			},
+			{ provider: "postgresql" },
+		)({});
+
+		const result = await adapter.update({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: "test@example.com",
+					mode: "insensitive",
+				},
+			],
+			update: { name: "Updated" },
+		});
+
+		expect(update).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: {
+					email: { equals: "test@example.com", mode: "insensitive" },
+				},
+				data: expect.objectContaining({
+					name: "Updated",
+					updatedAt: expect.any(Date),
+				}),
+			}),
+		);
+		expect(findFirst).toHaveBeenCalledWith({
+			where: {
+				email: { equals: "test@example.com", mode: "insensitive" },
+			},
+		});
+		expect(result).toEqual({
+			id: "user-id",
+			email: "Test@Example.COM",
+			name: "Updated",
+		});
+	});
+
+	it("should use update (not updateMany) for insensitive mode on unsupported providers", async () => {
+		const update = vi.fn().mockResolvedValue({
+			id: "user-id",
+			email: "Test@Example.COM",
+			name: "Updated",
+		});
+		const updateMany = vi.fn();
+		const findFirst = vi.fn();
 		const adapter = createTestAdapter({
 			$transaction: vi.fn(),
 			user: {
@@ -140,23 +196,17 @@ describe("prisma-adapter", () => {
 			update: { name: "Updated" },
 		});
 
-		expect(update).not.toHaveBeenCalled();
-		expect(updateMany).toHaveBeenCalledWith(
+		expect(update).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: {
-					email: { equals: "test@example.com" },
-				},
+				where: { email: "test@example.com" },
 				data: expect.objectContaining({
 					name: "Updated",
 					updatedAt: expect.any(Date),
 				}),
 			}),
 		);
-		expect(findFirst).toHaveBeenCalledWith({
-			where: {
-				email: { equals: "test@example.com" },
-			},
-		});
+		expect(updateMany).not.toHaveBeenCalled();
+		expect(findFirst).not.toHaveBeenCalled();
 		expect(result).toEqual({
 			id: "user-id",
 			email: "Test@Example.COM",
