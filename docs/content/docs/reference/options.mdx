@@ -20,10 +20,29 @@ export const auth = betterAuth({
 
 Base URL for Better Auth. This is typically the root URL where your application server is hosted. Note: If you include a path in the baseURL, it will take precedence over the default path.
 
+Can be configured as a static string, an object with allowed hosts for multi-domain deployments, or a function for fully dynamic per-request resolution.
+
 ```ts
 import { betterAuth } from "better-auth";
+
+// Static string
 export const auth = betterAuth({
 	baseURL: "https://example.com",
+})
+
+// Allowed hosts (multi-domain)
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: ["myapp.com", "*.vercel.app"],
+	},
+})
+
+// Function (multi-tenant, white-label)
+export const auth = betterAuth({
+	baseURL: async (request) => {
+		const host = request.headers.get("host");
+		return `https://${host}`;
+	},
 })
 ```
 
@@ -32,6 +51,8 @@ If not explicitly set, the system will check for the environment variable `BETTE
 <Callout type="warn">
 Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
 </Callout>
+
+Learn more about dynamic base URL configuration in the [Dynamic Base URL](/docs/concepts/dynamic-base-url) documentation.
 
 ## `basePath`
 
