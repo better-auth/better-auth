@@ -238,7 +238,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						(typeof w.value === "string" ||
 							(Array.isArray(w.value) &&
 								w.value.every((v) => typeof v === "string")));
-					const prismaMode = isInsensitive ? "insensitive" : undefined;
+					const providerSupportsMode =
+						config.provider === "postgresql" ||
+						config.provider === "mongodb" ||
+						config.provider === "cockroachdb";
+					const prismaMode =
+						isInsensitive && providerSupportsMode ? "insensitive" : undefined;
 					const modeFilter = prismaMode ? { mode: prismaMode } : {};
 
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
