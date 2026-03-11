@@ -22,6 +22,10 @@ import type {
 	JoinOption,
 	Where,
 } from "./index";
+import {
+	anyModelUsesNumberId,
+	createIsNumberIdModel,
+} from "./is-number-id-model";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
@@ -37,6 +41,10 @@ export {
 	initGetFieldAttributes,
 	initGetIdField,
 };
+export {
+	anyModelUsesNumberId,
+	createIsNumberIdModel,
+} from "./is-number-id-model";
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -76,8 +84,7 @@ export const createAdapterFactory =
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
 
-		const useNumberId = options.advanced?.database?.generateId === "serial";
-		if (useNumberId && config.supportsNumericIds === false) {
+		if (anyModelUsesNumberId(options) && config.supportsNumericIds === false) {
 			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
 			);
@@ -192,7 +199,7 @@ export const createAdapterFactory =
 			const fields = schema[defaultModelName]!.fields;
 
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			const useNumberId = options.advanced?.database?.generateId === "serial";
+			const isNumberIdModel = createIsNumberIdModel(options);
 			fields.id = idField({
 				customModelName: defaultModelName,
 				forceAllowId: forceAllowId && "id" in data,
@@ -241,11 +248,20 @@ export const createAdapterFactory =
 					newValue = await fieldAttributes!.transform.input(newValue);
 				}
 
-				if (fieldAttributes!.references?.field === "id" && useNumberId) {
-					if (Array.isArray(newValue)) {
-						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
-					} else {
-						newValue = newValue !== null ? Number(newValue) : null;
+				if (fieldAttributes!.references?.field === "id") {
+					const refModel = fieldAttributes!.references!.model;
+					let refDefaultModel: string;
+					try {
+						refDefaultModel = getDefaultModelName(refModel);
+					} catch {
+						refDefaultModel = refModel;
+					}
+					if (isNumberIdModel(refDefaultModel)) {
+						if (Array.isArray(newValue)) {
+							newValue = newValue.map((x) => (x !== null ? Number(x) : null));
+						} else {
+							newValue = newValue !== null ? Number(newValue) : null;
+						}
 					}
 				} else if (
 					config.supportsJSON === false &&
@@ -306,13 +322,14 @@ export const createAdapterFactory =
 				if (!data) return null;
 				const newMappedKeys = config.mapKeysTransformOutput ?? {};
 				const transformedData: Record<string, any> = {};
-				const tableSchema = schema[getDefaultModelName(unsafe_model)]!.fields;
+				const defaultModelName = getDefaultModelName(unsafe_model);
+				const tableSchema = schema[defaultModelName]!.fields;
 				const idKey = Object.entries(newMappedKeys).find(
 					([_, v]) => v === "id",
 				)?.[0];
-				const useNumberId = options.advanced?.database?.generateId === "serial";
+				const isNumberIdModel = createIsNumberIdModel(options);
 				tableSchema[idKey ?? "id"] = {
-					type: useNumberId ? "number" : "string",
+					type: isNumberIdModel(defaultModelName) ? "number" : "string",
 				};
 				for (const key in tableSchema) {
 					if (select.length && !select.includes(key)) {
@@ -522,13 +539,24 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				const useNumberId = options.advanced?.database?.generateId === "serial";
+				const isNumberIdModel = createIsNumberIdModel(options);
 
 				if (
 					defaultFieldName === "id" ||
 					fieldAttr!.references?.field === "id"
 				) {
-					if (useNumberId) {
+					// Determine which model's ID we're referencing
+					let targetModel: string;
+					if (fieldAttr!.references?.model) {
+						try {
+							targetModel = getDefaultModelName(fieldAttr!.references.model);
+						} catch {
+							targetModel = fieldAttr!.references.model;
+						}
+					} else {
+						targetModel = defaultModelName;
+					}
+					if (isNumberIdModel(targetModel)) {
 						if (Array.isArray(value)) {
 							newValue = value.map(Number);
 						} else {

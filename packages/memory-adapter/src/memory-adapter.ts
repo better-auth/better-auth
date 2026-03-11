@@ -1,10 +1,15 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
 import type {
 	CleanedWhere,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	createIsNumberIdModel,
+	initGetDefaultModelName,
+} from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 
 export interface MemoryDB {
@@ -28,9 +33,23 @@ export const memoryAdapter = (
 			debugLogs: config?.debugLogs || false,
 			supportsArrays: true,
 			customTransformInput(props) {
-				const useNumberId =
-					props.options.advanced?.database?.generateId === "serial";
-				if (useNumberId && props.field === "id" && props.action === "create") {
+				const isNumberIdModel = createIsNumberIdModel(props.options);
+				const schema = getAuthTables(props.options);
+				const getDefaultModelName = initGetDefaultModelName({
+					schema,
+					usePlural: false,
+				});
+				let resolvedModel: string;
+				try {
+					resolvedModel = getDefaultModelName(props.model);
+				} catch {
+					resolvedModel = props.model;
+				}
+				if (
+					isNumberIdModel(resolvedModel) &&
+					props.field === "id" &&
+					props.action === "create"
+				) {
 					return db[props.model]!.length + 1;
 				}
 				return props.data;
@@ -249,9 +268,19 @@ export const memoryAdapter = (
 			}
 			return {
 				create: async ({ model, data }) => {
-					const useNumberId =
-						options.advanced?.database?.generateId === "serial";
-					if (useNumberId) {
+					const isNumberIdModel = createIsNumberIdModel(options);
+					const schema = getAuthTables(options);
+					const _getDefaultModelName = initGetDefaultModelName({
+						schema,
+						usePlural: false,
+					});
+					let resolvedModel: string;
+					try {
+						resolvedModel = _getDefaultModelName(model);
+					} catch {
+						resolvedModel = model;
+					}
+					if (isNumberIdModel(resolvedModel)) {
 						// @ts-expect-error
 						data.id = db[getModelName(model)]!.length + 1;
 					}

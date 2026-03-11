@@ -330,6 +330,29 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Control which models use numeric (integer) IDs
+				 * instead of string IDs.
+				 *
+				 * - `true` — all models use number IDs
+				 * - `false` — no models use number IDs
+				 * - `string[]` — only the listed model schema keys use number IDs (e.g. `["user"]`)
+				 * - `(model: string) => boolean` — function that receives the schema key and returns whether to use number IDs
+				 *
+				 * When not set, falls back to legacy behavior:
+				 * all models use number IDs if `generateId` is `"serial"`.
+				 *
+				 * @example
+				 * ```ts
+				 * advanced: {
+				 *   database: {
+				 *     generateId: ({ model }) => model === "user" ? false : crypto.randomUUID(),
+				 *     useNumberId: ["user"],
+				 *   },
+				 * }
+				 * ```
+				 */
+				useNumberId?: boolean | string[] | ((model: string) => boolean);
 		  }
 		| undefined;
 	/**

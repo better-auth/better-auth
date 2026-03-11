@@ -3,7 +3,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import { produceSchema } from "@mrleebo/prisma-ast";
-import { initGetFieldName, initGetModelName } from "better-auth/adapters";
+import {
+	createIsNumberIdModel,
+	initGetDefaultModelName,
+	initGetFieldName,
+	initGetModelName,
+} from "better-auth/adapters";
 import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import { getPrismaVersion } from "../utils/get-package-info";
@@ -28,6 +33,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
+	const getDefaultModelName = initGetDefaultModelName({
+		schema: getAuthTables(options),
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+	const isNumberIdModel = createIsNumberIdModel(options);
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -182,10 +192,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute("id")
 						.attribute(`map("_id")`);
 				} else {
-					const useNumberId =
-						options.advanced?.database?.generateId === "serial";
+					const useNumberIdForTable = isNumberIdModel(table);
 					const useUUIDs = options.advanced?.database?.generateId === "uuid";
-					if (useNumberId) {
+					if (useNumberIdForTable) {
 						builder
 							.model(modelName)
 							.field("id", "Int")
@@ -218,10 +227,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
-				const useNumberId = options.advanced?.database?.generateId === "serial";
+				const useNumberIdForTable = isNumberIdModel(table);
+				let refUsesNumberId = false;
+				if (attr.references?.field === "id") {
+					let refModel: string;
+					try {
+						refModel = getDefaultModelName(attr.references.model);
+					} catch {
+						refModel = attr.references.model;
+					}
+					refUsesNumberId = isNumberIdModel(refModel);
+				}
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
-					field === "id" && useNumberId
+					field === "id" && useNumberIdForTable
 						? getType({
 								isBigint: false,
 								isOptional: false,
@@ -232,7 +251,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								isOptional: !attr?.required,
 								type:
 									attr.references?.field === "id"
-										? useNumberId
+										? refUsesNumberId
 											? "number"
 											: "string"
 										: attr.type,
@@ -435,10 +454,21 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 					let indexField = fieldName;
 					if (provider === "mysql" && field && field.type === "string") {
-						const useNumberId =
-							options.advanced?.database?.generateId === "serial";
 						const useUUIDs = options.advanced?.database?.generateId === "uuid";
-						if (field.references?.field === "id" && (useNumberId || useUUIDs)) {
+						let refUsesNumberIdIdx = false;
+						if (field.references?.field === "id") {
+							let refModel: string;
+							try {
+								refModel = getDefaultModelName(field.references.model);
+							} catch {
+								refModel = field.references.model;
+							}
+							refUsesNumberIdIdx = isNumberIdModel(refModel);
+						}
+						if (
+							field.references?.field === "id" &&
+							(refUsesNumberIdIdx || useUUIDs)
+						) {
 							indexField = `${fieldName}`;
 						} else {
 							indexField = `${fieldName}(length: 191)`; // length of 191 because String in Prisma is varchar(191)
