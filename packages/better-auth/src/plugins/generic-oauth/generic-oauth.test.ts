@@ -154,6 +154,31 @@ describe("oauth2", async () => {
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
 	});
 
+	it("should work with signIn.social() using generic oauth provider", async () => {
+		const headers = new Headers();
+		const signInRes = await authClient.signIn.social({
+			provider: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining(`http://localhost:${port}/authorize`),
+			redirect: true,
+		});
+		// Verify the redirect_uri uses /callback/ (core callback) not /oauth2/callback/
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("redirect_uri")).toBe(
+			"http://localhost:3000/api/auth/callback/test",
+		);
+		const { callbackURL } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+	});
+
 	it("should redirect to the provider and handle the response for a new user", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {

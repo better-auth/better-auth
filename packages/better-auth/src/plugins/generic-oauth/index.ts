@@ -118,7 +118,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							state: data.state,
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							scopes: c.scopes || [],
-							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+							redirectURI:
+								data.redirectURI ||
+								`${ctx.baseURL}/oauth2/callback/${c.providerId}`,
 						});
 					},
 					async validateAuthorizationCode(data: {
