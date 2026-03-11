@@ -5,9 +5,12 @@ import {
 	getHostFromRequest,
 	getProtocolFromRequest,
 	isDynamicBaseURLConfig,
+	isFunctionBaseURLConfig,
+	isPerRequestBaseURL,
 	matchesHostPattern,
 	resolveBaseURL,
 	resolveDynamicBaseURL,
+	resolveFunctionBaseURL,
 } from "./url";
 
 describe("getBaseURL", () => {
@@ -586,5 +589,161 @@ describe("resolveBaseURL", () => {
 		const result = resolveBaseURL(undefined, "/api/auth", request);
 
 		expect(result).toBe("http://example.com:3000/api/auth");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ */
+describe("isFunctionBaseURLConfig", () => {
+	it("should return true for a function", () => {
+		expect(isFunctionBaseURLConfig(() => "https://myapp.com")).toBe(true);
+	});
+
+	it("should return true for an async function", () => {
+		expect(isFunctionBaseURLConfig(async () => "https://myapp.com")).toBe(true);
+	});
+
+	it("should return false for a string", () => {
+		expect(isFunctionBaseURLConfig("https://myapp.com")).toBe(false);
+	});
+
+	it("should return false for a DynamicBaseURLConfig object", () => {
+		expect(isFunctionBaseURLConfig({ allowedHosts: ["myapp.com"] })).toBe(
+			false,
+		);
+	});
+
+	it("should return false for undefined", () => {
+		expect(isFunctionBaseURLConfig(undefined)).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ */
+describe("isPerRequestBaseURL", () => {
+	it("should return true for a function", () => {
+		expect(isPerRequestBaseURL(() => "https://myapp.com")).toBe(true);
+	});
+
+	it("should return true for a DynamicBaseURLConfig", () => {
+		expect(isPerRequestBaseURL({ allowedHosts: ["myapp.com"] })).toBe(true);
+	});
+
+	it("should return false for a string", () => {
+		expect(isPerRequestBaseURL("https://myapp.com")).toBe(false);
+	});
+
+	it("should return false for undefined", () => {
+		expect(isPerRequestBaseURL(undefined)).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ */
+describe("resolveFunctionBaseURL", () => {
+	it("should resolve a sync function", async () => {
+		const fn = () => "https://myapp.com";
+		const request = new Request("http://localhost:3000/test");
+
+		const result = await resolveFunctionBaseURL(fn, request, "/api/auth");
+
+		expect(result).toBe("https://myapp.com/api/auth");
+	});
+
+	it("should resolve an async function", async () => {
+		const fn = async () => "https://tenant.example.com";
+		const request = new Request("http://localhost:3000/test");
+
+		const result = await resolveFunctionBaseURL(fn, request, "/api/auth");
+
+		expect(result).toBe("https://tenant.example.com/api/auth");
+	});
+
+	it("should pass the request to the function", async () => {
+		const fn = (req: Request) => {
+			const host = req.headers.get("x-forwarded-host") || "fallback.com";
+			return `https://${host}`;
+		};
+		const request = new Request("http://localhost:3000/test", {
+			headers: { "x-forwarded-host": "custom.example.com" },
+		});
+
+		const result = await resolveFunctionBaseURL(fn, request, "/api/auth");
+
+		expect(result).toBe("https://custom.example.com/api/auth");
+	});
+
+	it("should throw on empty return value", async () => {
+		const fn = () => "";
+		const request = new Request("http://localhost:3000/test");
+
+		await expect(
+			resolveFunctionBaseURL(fn, request, "/api/auth"),
+		).rejects.toThrow("baseURL function returned an empty value");
+	});
+
+	it("should not append basePath if URL already contains it", async () => {
+		const fn = () => "https://myapp.com/api/auth";
+		const request = new Request("http://localhost:3000/test");
+
+		const result = await resolveFunctionBaseURL(fn, request, "/api/auth");
+
+		expect(result).toBe("https://myapp.com/api/auth");
+	});
+
+	it("should wrap function errors with actionable BetterAuthError", async () => {
+		const fn = () => {
+			throw new Error("DB connection failed");
+		};
+		const request = new Request("http://localhost:3000/test");
+
+		await expect(
+			resolveFunctionBaseURL(fn, request, "/api/auth"),
+		).rejects.toThrow("baseURL function threw an error");
+	});
+
+	it("should preserve original error as cause when function throws", async () => {
+		const originalError = new Error("DB connection failed");
+		const fn = () => {
+			throw originalError;
+		};
+		const request = new Request("http://localhost:3000/test");
+
+		try {
+			await resolveFunctionBaseURL(fn, request, "/api/auth");
+			expect.unreachable("should have thrown");
+		} catch (error: any) {
+			expect(error.cause).toBe(originalError);
+		}
+	});
+
+	it("should throw on URL without protocol", async () => {
+		const fn = () => "myapp.com";
+		const request = new Request("http://localhost:3000/test");
+
+		await expect(
+			resolveFunctionBaseURL(fn, request, "/api/auth"),
+		).rejects.toThrow("Invalid base URL");
+	});
+
+	it("should throw on null return value", async () => {
+		const fn = (() => null) as any;
+		const request = new Request("http://localhost:3000/test");
+
+		await expect(
+			resolveFunctionBaseURL(fn, request, "/api/auth"),
+		).rejects.toThrow("baseURL function returned an empty value");
+	});
+
+	it("should throw on undefined return value", async () => {
+		const fn = (() => undefined) as any;
+		const request = new Request("http://localhost:3000/test");
+
+		await expect(
+			resolveFunctionBaseURL(fn, request, "/api/auth"),
+		).rejects.toThrow("baseURL function returned an empty value");
 	});
 });
