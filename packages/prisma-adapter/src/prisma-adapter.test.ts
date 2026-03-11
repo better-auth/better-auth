@@ -110,4 +110,37 @@ describe("prisma-adapter", () => {
 			userId: "user-id",
 		});
 	});
+
+	it("should fall back to updateMany when where has insensitive mode", async () => {
+		const update = vi.fn();
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi.fn().mockResolvedValue({
+			id: "user-id",
+			email: "Test@Example.COM",
+			name: "Updated",
+		});
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				findFirst,
+				update,
+				updateMany,
+			},
+		});
+
+		await adapter.update({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: "test@example.com",
+					mode: "insensitive",
+				},
+			],
+			update: { name: "Updated" },
+		});
+
+		expect(update).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalled();
+	});
 });
