@@ -874,6 +874,7 @@ stripe({
 | `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
 | `group`                   | `string`   | A group name for categorizing plans.                         |
 | `seatPriceId`             | `string`   | Per-seat billing price ID. Requires the `organization` plugin. |
+| `prorationBehavior`       | `string`   | Proration behavior on subscription updates: `"create_prorations"` (default), `"always_invoice"`, or `"none"`. |
 | `lineItems`               | `LineItem[]` | Additional line items to include in the checkout session.   |
 | `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |
 
