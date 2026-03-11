@@ -128,7 +128,7 @@ describe("prisma-adapter", () => {
 			},
 		});
 
-		await adapter.update({
+		const result = await adapter.update({
 			model: "user",
 			where: [
 				{
@@ -141,6 +141,26 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(update).not.toHaveBeenCalled();
-		expect(updateMany).toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: {
+					email: { equals: "test@example.com" },
+				},
+				data: expect.objectContaining({
+					name: "Updated",
+					updatedAt: expect.any(Date),
+				}),
+			}),
+		);
+		expect(findFirst).toHaveBeenCalledWith({
+			where: {
+				email: { equals: "test@example.com" },
+			},
+		});
+		expect(result).toEqual({
+			id: "user-id",
+			email: "Test@Example.COM",
+			name: "Updated",
+		});
 	});
 });
