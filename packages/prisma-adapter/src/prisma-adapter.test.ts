@@ -48,7 +48,7 @@ describe("prisma-adapter", () => {
 		expect(updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
-					identifier: "magic-link-token",
+					identifier: { equals: "magic-link-token" },
 				},
 				data: expect.objectContaining({
 					value: "updated-value",
@@ -58,7 +58,7 @@ describe("prisma-adapter", () => {
 		);
 		expect(findFirst).toHaveBeenCalledWith({
 			where: {
-				identifier: "magic-link-token",
+				identifier: { equals: "magic-link-token" },
 			},
 		});
 		expect(result).toEqual({
