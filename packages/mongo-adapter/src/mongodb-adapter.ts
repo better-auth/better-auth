@@ -161,7 +161,11 @@ export const mongodbAdapter = (
 					let condition: any;
 					let field = getFieldName({ model, field: field_ });
 					if (field === "id") field = "_id";
+					const fieldAttributes = getFieldAttributes({ model, field: field_ });
+					const isIdOrIdReference =
+						field === "_id" || fieldAttributes?.references?.field === "id";
 					const isInsensitive =
+						!isIdOrIdReference &&
 						mode === "insensitive" &&
 						(typeof value === "string" ||
 							(Array.isArray(value) &&
