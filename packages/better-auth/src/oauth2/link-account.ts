@@ -158,12 +158,12 @@ export async function handleOAuthUserInfo(
 		}
 		try {
 			const { id: _, ...restUserInfo } = userInfo;
-      const { accessToken, refreshToken, ...restAccount } = account
+			const { accessToken, refreshToken, ...restAccount } = account;
 			const accountData = {
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
 				idToken: account.idToken,
-        ...restAccount,
+				...restAccount,
 				accountId: userInfo.id.toString(),
 			};
 			const { user: createdUser, account: createdAccount } =

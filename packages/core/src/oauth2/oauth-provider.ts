@@ -191,8 +191,11 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * Custom function to get account fields from userInfo
 	 */
 	getAccountFields?:
-		| ((token: OAuth2Tokens, userInfo: OAuth2UserInfo) => Promise<{
-        [key: string]: any;
+		| ((
+				token: OAuth2Tokens,
+				userInfo: OAuth2UserInfo,
+		  ) => Promise<{
+				[key: string]: any;
 		  } | null>)
 		| undefined;
 	/**

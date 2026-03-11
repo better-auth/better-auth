@@ -272,13 +272,13 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					});
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
 				}
-        const tokens = {
+				const tokens = {
 					idToken: token,
 					accessToken: c.body.idToken.accessToken,
 					refreshToken: c.body.idToken.refreshToken,
-        };
+				};
 				const userInfo = await provider.getUserInfo({
-          ...tokens,
+					...tokens,
 					user: c.body.idToken.user,
 				});
 				if (!userInfo || !userInfo?.user) {
@@ -299,7 +299,8 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
-        const additionalAccountFields = await provider.options?.getAccountFields?.(tokens, userInfo.user)
+				const additionalAccountFields =
+					await provider.options?.getAccountFields?.(tokens, userInfo.user);
 				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,
@@ -313,7 +314,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						providerId: provider.id,
 						accountId: String(userInfo.user.id),
 						accessToken: c.body.idToken.accessToken,
-            ...additionalAccountFields,
+						...additionalAccountFields,
 					},
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
