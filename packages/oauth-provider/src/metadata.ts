@@ -100,7 +100,13 @@ export function oidcServerMetadata(
 				: ["EdDSA"],
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
 		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
-		prompt_values_supported: ["login", "consent", "create", "select_account"],
+		prompt_values_supported: [
+			"login",
+			"consent",
+			"create",
+			"select_account",
+			"none",
+		],
 	};
 	return metadata;
 }
