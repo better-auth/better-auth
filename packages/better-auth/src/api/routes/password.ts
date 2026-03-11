@@ -84,6 +84,7 @@ export const requestPasswordReset = createAuthEndpoint(
 				},
 			},
 		},
+		use: [originCheck((ctx) => ctx.body.redirectTo)],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
