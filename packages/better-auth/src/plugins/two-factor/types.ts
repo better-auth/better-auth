@@ -11,6 +11,13 @@ export interface TwoFactorOptions {
 	 */
 	issuer?: string | undefined;
 	/**
+	 * The name of the table that stores the two factor
+	 * authentication data.
+	 *
+	 * @default "twoFactor"
+	 */
+	twoFactorTable?: string | undefined;
+	/**
 	 * TOTP OPtions
 	 */
 	totpOptions?: Omit<TOTPOptions, "issuer"> | undefined;

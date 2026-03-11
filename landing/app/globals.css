@@ -536,7 +536,6 @@
 		@apply border-border outline-ring/50;
 	}
 
-	html,
 	body {
 		@apply overflow-x-hidden;
 		max-width: 100vw;
@@ -629,45 +628,21 @@ html:not([data-anchor-scrolling]) {
 	--fd-toc-width: 0px;
 	--fd-layout-width: 100vw;
 	--fd-layout-offset: 0px;
-	--fd-page-width: 100%;
+	--fd-page-width: 900px;
 	--fd-banner-height: 44px;
 	--landing-left-pane-width: min(22vw, 300px);
 	--staggered-nav-cta-width: 128px;
 	padding-top: 44px;
 }
 
-.docs-layout #nd-page {
-	max-width: 100%;
-	width: 100%;
-	margin-inline: auto;
-	padding-inline-end: 0;
-	padding-block-start: 2rem;
-	transition:
-		width 280ms ease-out,
-		max-width 280ms ease-out,
-		margin-inline-start 280ms ease-out;
-}
-
-.docs-layout #nd-page > article {
-	max-width: 100%;
-	width: 100%;
-	margin-inline: 0;
-}
-
 @media (min-width: 64rem) {
 	.docs-layout {
-		--fd-page-width: calc(
-			100vw -
-			var(--landing-left-pane-width) -
-			var(--staggered-nav-cta-width)
+		--fd-layout-width: min(
+			calc(100vw - var(--landing-left-pane-width)),
+			1200px
 		);
-	}
-
-	.docs-layout #nd-page {
-		width: var(--fd-page-width);
-		max-width: var(--fd-page-width);
-		margin-inline-start: var(--landing-left-pane-width);
-		margin-inline-end: 0;
+		--fd-header-height: -1px;
+		padding-inline-start: var(--landing-left-pane-width);
 	}
 
 	.docs-layout::before {
@@ -675,7 +650,7 @@ html:not([data-anchor-scrolling]) {
 		position: fixed;
 		inset-block-start: 0;
 		height: 44px;
-		inset-inline-start: var(--landing-left-pane-width);
+		inset-inline-start: calc(var(--landing-left-pane-width) - 1px);
 		width: 1px;
 		background: var(--color-border);
 		opacity: 0.55;
@@ -690,24 +665,34 @@ html:not([data-anchor-scrolling]) {
 @media (min-width: 80rem) {
 	.docs-layout {
 		--fd-toc-width: 280px;
-		--fd-layout-width: calc(100vw - var(--landing-left-pane-width));
-		padding-inline-start: var(--landing-left-pane-width);
-	}
-
-	.docs-layout #nd-page {
-		width: auto;
-		max-width: none;
-		margin-inline-start: 0;
-		margin-inline-end: 0;
-	}
-
-	.docs-layout #nd-page > article {
-		width: auto;
-		max-width: 900px;
 	}
 
 	.docs-layout #nd-toc {
 		padding-inline-start: 2rem;
+		padding-top: 4rem;
+		padding-bottom: 4rem;
+	}
+}
+
+/* Hide scrollbar in AI Chat panel */
+.ai-chat-messages {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+/* Prevent scroll-chaining and hide scrollbars in TOC areas */
+.docs-layout #nd-toc > div {
+	overscroll-behavior-y: contain;
+	scrollbar-width: none;
+}
+
+.docs-layout [data-toc-popover],
+.docs-layout [data-toc-popover] * {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
 	}
 }
 
@@ -726,7 +711,7 @@ html:not([data-anchor-scrolling]) {
 		position: fixed;
 		inset-block-start: 0;
 		height: 44px;
-		inset-inline-start: var(--landing-left-pane-width);
+		inset-inline-start: calc(var(--landing-left-pane-width) - 1px);
 		width: 1px;
 		background: var(--color-border);
 		opacity: 0.55;
