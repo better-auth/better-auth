@@ -189,7 +189,8 @@ export const getPasskeyActions = (
 				data: null,
 				error: {
 					code: "UNKNOWN_ERROR",
-					message: PASSKEY_ERROR_CODES.UNKNOWN_ERROR,
+					message:
+						e instanceof Error ? e.message : PASSKEY_ERROR_CODES.UNKNOWN_ERROR,
 					status: 500,
 					statusText: "INTERNAL_SERVER_ERROR",
 				},

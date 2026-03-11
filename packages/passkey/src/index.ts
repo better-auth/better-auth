@@ -21,7 +21,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export * from "./error-codes";
+export { PASSKEY_ERROR_CODES } from "./error-codes";
 
 const MAX_AGE_IN_SECONDS = 60 * 5; // 5 minutes
 
