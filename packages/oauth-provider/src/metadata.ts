@@ -68,6 +68,7 @@ export function authServerMetadata(
 export function oidcServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]> & { claims?: string[] },
+	overrides?: { public_client_supported?: boolean },
 ) {
 	const baseURL = ctx.context.baseURL;
 	const jwtPluginOptions = opts.disableJwtPlugin
@@ -75,7 +76,7 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-		public_client_supported: opts.allowUnauthenticatedClientRegistration,
+		public_client_supported: overrides?.public_client_supported ?? opts.allowUnauthenticatedClientRegistration,
 		grant_types_supported: opts.grantTypes,
 		jwt_disabled: opts.disableJwtPlugin,
 	});

@@ -252,6 +252,32 @@ describe("oauth metadata", async () => {
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
+
+	it("should advertise 'none' in token_endpoint_auth_methods_supported when a public client exists", async () => {
+		const { auth } = await createTestInstance();
+
+		await auth.api.adminCreateOAuthClient({
+			body: {
+				token_endpoint_auth_method: "none",
+				redirect_uris: ["http://localhost:3000/callback"],
+				type: "native",
+			},
+		});
+
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(
+			oauthMetadata.token_endpoint_auth_methods_supported,
+		).toContain("none");
+	});
+
+	it("should not advertise 'none' in token_endpoint_auth_methods_supported when no public clients exist", async () => {
+		const { auth } = await createTestInstance();
+
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(
+			oauthMetadata.token_endpoint_auth_methods_supported,
+		).not.toContain("none");
+	});
 });
 
 describe("oauth resource metadata", async () => {

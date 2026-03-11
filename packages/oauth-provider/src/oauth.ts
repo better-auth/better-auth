@@ -292,26 +292,34 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "GET",
 					metadata: {
-						SERVER_ONLY: true,
+					SERVER_ONLY: true,
 					},
 				},
 				async (ctx) => {
+					const publicClients = await ctx.context.adapter.findMany("oauthClient", {
+					where: [{ field: "tokenEndpointAuthMethod", value: "none" }],
+					limit: 1,
+					});
+					const hasPublicClients =
+					opts.allowUnauthenticatedClientRegistration || publicClients.length > 0;
+
 					if (opts.scopes && opts.scopes.includes("openid")) {
-						const metadata = oidcServerMetadata(ctx, opts);
-						return metadata;
+					const metadata = oidcServerMetadata(ctx, opts, {
+						public_client_supported: hasPublicClients,
+					});
+					return metadata;
 					} else {
-						const jwtPluginOptions = opts.disableJwtPlugin
-							? undefined
-							: getJwtPlugin(ctx.context)?.options;
-						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
-							scopes_supported:
-								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-							public_client_supported:
-								opts.allowUnauthenticatedClientRegistration,
-							grant_types_supported: opts.grantTypes,
-							jwt_disabled: opts.disableJwtPlugin,
-						});
-						return authMetadata;
+					const jwtPluginOptions = opts.disableJwtPlugin
+						? undefined
+						: getJwtPlugin(ctx.context)?.options;
+					const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
+						scopes_supported:
+						opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+						public_client_supported: hasPublicClients,
+						grant_types_supported: opts.grantTypes,
+						jwt_disabled: opts.disableJwtPlugin,
+					});
+					return authMetadata;
 					}
 				},
 			),
