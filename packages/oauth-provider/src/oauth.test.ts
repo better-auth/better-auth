@@ -1437,6 +1437,116 @@ describe("oauth - prompt", async () => {
 
 		enablePostLogin = false;
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7700
+	 */
+	it("none - should return login_required error when user not authenticated", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		// Build authorize URL with prompt=none directly (no session)
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid profile email");
+		authUrl.searchParams.set("state", "test-state");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("code_challenge", "test-challenge");
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		// Use a fresh client without session cookies
+		const unauthHeaders = new Headers();
+		let loginRequiredRedirectUri = "";
+		await serverClient.$fetch(authUrl.toString(), {
+			method: "GET",
+			headers: unauthHeaders,
+			onError(context) {
+				loginRequiredRedirectUri =
+					context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(loginRequiredRedirectUri).toContain("error=login_required");
+		expect(loginRequiredRedirectUri).toContain("error_description=");
+		expect(loginRequiredRedirectUri).toContain("state=test-state");
+		expect(loginRequiredRedirectUri).toContain(redirectUri.split("?")[0]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7700
+	 */
+	it("none - should return consent_required error when consent is needed", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		// Register a new client so there's no prior consent
+		const newRedirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/consent-test`;
+		const newClient = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [newRedirectUri],
+			},
+		});
+		expect(newClient?.client_id).toBeDefined();
+
+		// Build authorize URL with prompt=none (with active session but no consent)
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", newClient!.client_id);
+		authUrl.searchParams.set("redirect_uri", newRedirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid profile email");
+		authUrl.searchParams.set("state", "test-state");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("code_challenge", "test-challenge");
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRequiredRedirectUri = "";
+		await serverClient.$fetch(authUrl.toString(), {
+			method: "GET",
+			headers,
+			onError(context) {
+				consentRequiredRedirectUri =
+					context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(consentRequiredRedirectUri).toContain("error=consent_required");
+		expect(consentRequiredRedirectUri).toContain("error_description=");
+		expect(consentRequiredRedirectUri).toContain("state=test-state");
+		expect(consentRequiredRedirectUri).toContain(newRedirectUri.split("?")[0]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7700
+	 */
+	it("none - should not redirect to invalid redirect_uri", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const attackerRedirect = "https://malicious.com/callback";
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", attackerRedirect);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "x");
+		authUrl.searchParams.set("prompt", "none");
+
+		let location = "";
+		await serverClient.$fetch(authUrl.toString(), {
+			method: "GET",
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(location).not.toContain("malicious.com");
+	});
 });
 
 describe("oauth - config", () => {

@@ -278,6 +278,19 @@ export async function authorizeEndpoint(
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
 	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+		// Handle prompt=none per OIDC spec - must return error instead of redirecting to login
+		if (promptSet?.has("none")) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					redirectUri,
+					"login_required",
+					"Authentication required but prompt is none",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 		return redirectWithPromptCode(
 			ctx,
 			opts,
@@ -384,6 +397,19 @@ export async function authorizeEndpoint(
 		!consent ||
 		!requestedScopes.every((val) => consent.scopes.includes(val))
 	) {
+		// Handle prompt=none per OIDC spec - must return error instead of redirecting to consent
+		if (promptSet?.has("none")) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					redirectUri,
+					"consent_required",
+					"Consent required but prompt is none",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
