@@ -186,16 +186,18 @@ export const kyselyAdapter = (
 					const expr = (eb: any) => {
 						const f = `${model}.${field}`;
 						if (operator.toLowerCase() === "in") {
-							if (isInsensitive && Array.isArray(value)) {
-								const { lhs, values } = insensitiveIn(f, value);
+							if (isInsensitive) {
+								const arr = Array.isArray(value) ? value : [value];
+								const { lhs, values } = insensitiveIn(f, arr);
 								return eb(lhs, "in", values);
 							}
 							return eb(f, "in", Array.isArray(value) ? value : [value]);
 						}
 
 						if (operator.toLowerCase() === "not_in") {
-							if (isInsensitive && Array.isArray(value)) {
-								const { lhs, values } = insensitiveNotIn(f, value);
+							if (isInsensitive) {
+								const arr = Array.isArray(value) ? value : [value];
+								const { lhs, values } = insensitiveNotIn(f, arr);
 								return eb(lhs, "not in", values);
 							}
 							return eb(f, "not in", Array.isArray(value) ? value : [value]);
