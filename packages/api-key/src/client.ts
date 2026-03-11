@@ -10,6 +10,7 @@ export const apiKeyClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof apiKey>,
 		pathMethods: {
 			"/api-key/create": "POST",
+			"/api-key/verify": "POST",
 			"/api-key/delete": "POST",
 			"/api-key/delete-all-expired-api-keys": "POST",
 		},

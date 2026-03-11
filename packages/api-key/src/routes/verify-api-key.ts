@@ -250,6 +250,7 @@ export function verifyApiKey({
 	): Promise<void>;
 }) {
 	return createAuthEndpoint(
+		"/api-key/verify",
 		{
 			method: "POST",
 			body: verifyApiKeyBodySchema,
