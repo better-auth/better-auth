@@ -241,20 +241,9 @@ With a static `baseURL` string, `crossSubDomainCookies` derives the domain from 
 
 ## Function-Based Resolution
 
-For multi-tenant and white-label applications where valid domains aren't known at deploy time, you can pass a function that resolves the base URL from each request:
+For multi-tenant and white-label applications where valid domains aren't known at deploy time, you can pass a function that resolves the base URL from each request. The function receives the incoming `Request` and must return a URL string.
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-
-export const auth = betterAuth({
-    baseURL: (request) => {
-        const host = request.headers.get("host");
-        return `https://${host}`;
-    },
-})
-```
-
-The function receives the incoming `Request` and must return a URL string. It can also be async, making it possible to look up domains from a database:
+It can be async, making it possible to look up and validate domains from a database:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"

@@ -88,9 +88,9 @@ When using a [dynamic base URL](/docs/concepts/dynamic-base-url) (allowed hosts 
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-    baseURL: (request) => {
-        const host = request.headers.get("host");
-        return `https://${host}`;
+    baseURL: {
+        allowedHosts: ["auth.example1.com", "auth.example2.com"],
+        protocol: "https",
     },
     advanced: {
         crossSubDomainCookies: {
@@ -100,6 +100,8 @@ export const auth = betterAuth({
     },
 })
 ```
+
+This also works with [function-based baseURL](/docs/concepts/dynamic-base-url#function-based-resolution) for multi-tenant setups. See the Dynamic Base URL documentation for examples and security guidance.
 
 ### Secure Cookies
 
