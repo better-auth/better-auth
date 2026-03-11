@@ -109,6 +109,8 @@ export const auth = betterAuth({
 })
 ```
 
+This also works with [function-based baseURL](/docs/guides/dynamic-base-url#function-resolver) for multi-tenant setups. See the Dynamic Base URL guide for examples and security guidance.
+
 ### Secure Cookies
 
 By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.
