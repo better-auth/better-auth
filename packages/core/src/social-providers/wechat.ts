@@ -1,9 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type {
-	OAuth2Tokens,
-	OAuthProvider,
-	ProviderOptions,
-} from "@better-auth/core/oauth2";
+import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
 
 /**
  * WeChat user profile information
@@ -30,24 +26,11 @@ export interface WeChatProfile extends Record<string, any> {
 	 * User's UnionID (unique across the developer's various applications)
 	 */
 	unionid?: string;
-	/** @note Email is currently unsupported by WeChat  */
+	/** @note Email is currently unsupported by WeChat */
 	email?: string;
-	/**
-	 * Error information if the request failed
-	 */
-	error?: {
-		/**
-		 * Error code
-		 */
-		errcode?: number;
-		/**
-		 * Error message
-		 */
-		errmsg?: string;
-	};
 }
 
-export interface WeChatOptions extends ProviderOptions {
+export interface WeChatOptions extends ProviderOptions<WeChatProfile> {
 	/**
 	 * WeChat App ID
 	 */
@@ -80,18 +63,24 @@ export const wechat = (options: WeChatOptions) => {
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
 
-			const baseUrl = "https://open.weixin.qq.com/connect/qrconnect";
+			// WeChat uses non-standard OAuth2 parameters (appid instead of client_id)
+			// and requires a fragment (#wechat_redirect), so we construct the URL manually.
+			const url = new URL("https://open.weixin.qq.com/connect/qrconnect");
+			url.searchParams.set("scope", _scopes.join(","));
+			url.searchParams.set("response_type", "code");
+			url.searchParams.set("appid", options.clientId);
+			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
+			url.searchParams.set("state", state);
+			url.searchParams.set("lang", options.lang || "cn");
+			url.hash = "wechat_redirect";
 
-			return new URL(
-				`${baseUrl}?scope=${_scopes.join(
-					",",
-				)}&response_type=code&appid=${options.clientId}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}&lang=${options.lang || "cn"}#wechat_redirect`,
-			);
+			return url;
 		},
 
-		validateAuthorizationCode: async ({ code, redirectURI }) => {
+		// WeChat uses non-standard token exchange (appid/secret instead of
+		// client_id/client_secret, GET instead of POST), so shared helpers
+		// like validateAuthorizationCode/getOAuth2Tokens cannot be used directly.
+		validateAuthorizationCode: async ({ code }) => {
 			const params = new URLSearchParams({
 				appid: options.clientId,
 				secret: options.clientSecret,
@@ -101,7 +90,6 @@ export const wechat = (options: WeChatOptions) => {
 
 			const { data: tokenData, error } = await betterFetch<{
 				access_token: string;
-				// How long the access token is valid, in seconds
 				expires_in: number;
 				refresh_token: string;
 				openid: string;
@@ -131,6 +119,8 @@ export const wechat = (options: WeChatOptions) => {
 					Date.now() + tokenData.expires_in * 1000,
 				),
 				scopes: tokenData.scope.split(","),
+				// WeChat requires openid for the userinfo endpoint, which is
+				// returned alongside the access token.
 				openid: tokenData.openid,
 				unionid: tokenData.unionid,
 			};
@@ -167,7 +157,7 @@ export const wechat = (options: WeChatOptions) => {
 						);
 					}
 
-					const tokens = {
+					return {
 						tokenType: "Bearer" as const,
 						accessToken: tokenData.access_token,
 						refreshToken: tokenData.refresh_token,
@@ -176,14 +166,6 @@ export const wechat = (options: WeChatOptions) => {
 						),
 						scopes: tokenData.scope.split(","),
 					};
-
-					// Attach openid to the token if available from refresh response
-					if (tokenData.openid) {
-						(tokens as OAuth2Tokens & { openid: string }).openid =
-							tokenData.openid;
-					}
-
-					return tokens;
 				},
 
 		async getUserInfo(token) {
@@ -191,8 +173,7 @@ export const wechat = (options: WeChatOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			// Get the openid from the token data
-			const openid = (token as OAuth2Tokens & { openid: string }).openid;
+			const openid = (token as OAuth2Tokens & { openid?: string }).openid;
 
 			if (!openid) {
 				return null;
@@ -204,25 +185,25 @@ export const wechat = (options: WeChatOptions) => {
 				lang: "zh_CN",
 			});
 
-			const { data: profile, error } = await betterFetch<WeChatProfile>(
-				"https://api.weixin.qq.com/sns/userinfo?" + params.toString(),
-				{
-					method: "GET",
-				},
-			);
+			const { data: profile, error } = await betterFetch<
+				WeChatProfile & { errcode?: number; errmsg?: string }
+			>("https://api.weixin.qq.com/sns/userinfo?" + params.toString(), {
+				method: "GET",
+			});
 
-			if (error || !profile || profile.error?.errcode) {
+			if (error || !profile || profile.errcode) {
 				return null;
 			}
 
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
 					id: profile.unionid || profile.openid || openid,
 					name: profile.nickname,
-					email: profile.email || profile.nickname,
+					email: profile.email || null,
 					image: profile.headimgurl,
-					/** @note WeChat does not provide emailVerified or even email*/
-					emailVerified: profile.email ? true : false,
+					emailVerified: false,
+					...userMap,
 				},
 				data: profile,
 			};
