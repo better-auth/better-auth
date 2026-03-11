@@ -23,7 +23,7 @@ import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
-import { isDynamicBaseURLConfig } from "../utils/url";
+import { isPerRequestBaseURL } from "../utils/url";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import {
 	createAccountStore,
@@ -73,7 +73,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	if (
 		crossSubdomainEnabled &&
 		!domain &&
-		!isDynamicBaseURLConfig(options.baseURL)
+		!isPerRequestBaseURL(options.baseURL)
 	) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled.",

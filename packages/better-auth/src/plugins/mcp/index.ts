@@ -19,9 +19,9 @@ import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
 import {
-	getBaseURL,
-	isDynamicBaseURLConfig,
+	isFunctionBaseURLConfig,
 	resolveBaseURL,
+	resolveFunctionBaseURL,
 } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import type {
@@ -988,14 +988,9 @@ export const withMcpAuth = <
 ) => {
 	return async (req: Request) => {
 		const basePath = auth.options.basePath || "/api/auth";
-		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
-			? resolveBaseURL(auth.options.baseURL, basePath, req)
-			: getBaseURL(
-					typeof auth.options.baseURL === "string"
-						? auth.options.baseURL
-						: undefined,
-					basePath,
-				);
+		const baseURL = isFunctionBaseURLConfig(auth.options.baseURL)
+			? await resolveFunctionBaseURL(auth.options.baseURL, req, basePath)
+			: resolveBaseURL(auth.options.baseURL, basePath, req);
 		if (!baseURL && !isProduction) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
