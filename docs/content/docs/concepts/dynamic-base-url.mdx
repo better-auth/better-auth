@@ -1,6 +1,6 @@
 ---
 title: Dynamic Base URL
-description: Configure Better Auth to work with multiple domains and preview deployments.
+description: Configure Better Auth to work with multiple domains, preview deployments, and multi-tenant apps.
 ---
 
 When deploying to platforms like Vercel, your application can run on multiple URLs simultaneously:
@@ -8,11 +8,14 @@ When deploying to platforms like Vercel, your application can run on multiple UR
 - Preview deployments (e.g., `my-app-abc123.vercel.app`)
 - Branch previews (e.g., `feature-branch.myapp.com`)
 
-Better Auth supports dynamic base URL resolution using an **allowlist-based approach** that determines the correct URL from each incoming request.
+Better Auth supports two approaches for dynamic base URL resolution:
 
-## Basic Usage
+1. **Allowed hosts** — an allowlist of host patterns, ideal when your domains are known at deploy time
+2. **Function** — a per-request function, ideal for multi-tenant and white-label apps where domains are stored in a database
 
-Configure `baseURL` as an object with an `allowedHosts` array:
+## Allowed Hosts
+
+Configure `baseURL` as an object with an `allowedHosts` array. This is best when your domains are known ahead of time:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -236,23 +239,185 @@ export const auth = betterAuth({
 With a static `baseURL` string, `crossSubDomainCookies` derives the domain from that string at init time. With dynamic base URL, the domain is computed per-request from the resolved host. Learn more about cross-subdomain cookies in the [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) documentation.
 </Callout>
 
+## Function-Based Resolution
+
+For multi-tenant and white-label applications where valid domains aren't known at deploy time, you can pass a function that resolves the base URL from each request:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    baseURL: (request) => {
+        const host = request.headers.get("host");
+        return `https://${host}`;
+    },
+})
+```
+
+The function receives the incoming `Request` and must return a URL string. It can also be async, making it possible to look up domains from a database:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { db } from "./db"
+
+export const auth = betterAuth({
+    baseURL: async (request) => {
+        const host = request.headers.get("host");
+        const tenant = await db.tenant.findByDomain(host);
+        if (!tenant) {
+            throw new Error(`Unknown tenant: ${host}`);
+        }
+        return `https://${host}`;
+    },
+})
+```
+
+<Callout type="info">
+This works the same way as the `trustedOrigins` function — it receives the request and returns a value per-request. Better Auth automatically creates an isolated context for each request, so concurrent requests to different tenants won't interfere with each other.
+</Callout>
+
+### Trusted Origins with Function baseURL
+
+When using a function for `baseURL`, the resolved origin is automatically added to `trustedOrigins` for that request. If you need additional trusted origins, configure them separately:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: (request) => {
+        const host = request.headers.get("host");
+        return `https://${host}`;
+    },
+    trustedOrigins: ["https://admin-panel.myapp.com"],
+})
+```
+
+### Cross-Subdomain Cookies with Function baseURL
+
+When combined with `crossSubDomainCookies`, the cookie domain is automatically derived from the resolved base URL on each request:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: (request) => {
+        const host = request.headers.get("host");
+        return `https://${host}`;
+    },
+    advanced: {
+        crossSubDomainCookies: {
+            enabled: true,
+        },
+    },
+})
+```
+
+With this configuration:
+- A request to `auth.example1.com` sets cookies with `Domain=auth.example1.com`
+- A request to `auth.example2.com` sets cookies with `Domain=auth.example2.com`
+
+### Error Handling
+
+If your function throws an error or returns an empty value, Better Auth throws a descriptive `BetterAuthError`:
+
+- **Function throws** → `"baseURL function threw an error. Ensure your function returns a valid URL."` (with the original error preserved as `cause`)
+- **Empty return value** → `"baseURL function returned an empty value. Return a valid URL (e.g., 'https://myapp.com')."`
+- **Invalid URL (no protocol)** → `"Invalid base URL: <url>. Please provide a valid base URL."`
+
+### Common Patterns
+
+#### White-Label SaaS
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: async (request) => {
+        const host = request.headers.get("host");
+        // Look up custom domain in your database
+        const tenant = await db.customDomain.findFirst({
+            where: { domain: host }
+        });
+        if (!tenant) {
+            throw new Error(`Unknown domain: ${host}`);
+        }
+        return `https://${host}`;
+    },
+})
+```
+
+#### Multi-Tenant with Subdomains
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: (request) => {
+        const host = request.headers.get("x-forwarded-host")
+            || request.headers.get("host");
+        return `https://${host}`;
+    },
+    advanced: {
+        crossSubDomainCookies: {
+            enabled: true,
+        },
+    },
+})
+```
+
+#### Development + Production (Multiple Hosts)
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: (request) => {
+        const host = request.headers.get("host");
+        const proto = request.headers.get("x-forwarded-proto") || "http";
+        return `${proto}://${host}`;
+    },
+})
+```
+
+## Choosing Between Allowed Hosts and Function
+
+| | Allowed Hosts | Function |
+|---|---|---|
+| **Best for** | Known domains, preview deployments | Multi-tenant, white-label, DB-driven domains |
+| **Security** | Allowlist enforced by framework | You control validation |
+| **Performance** | No async overhead | Can be async (DB lookups, etc.) |
+| **Trusted origins** | All hosts added automatically | Only the resolved origin is added |
+| **Configuration** | Declarative | Programmatic |
+
+Use **allowed hosts** when your domains are known at deploy time. Use a **function** when domains are dynamic and stored externally.
+
 ## Security Considerations
 
 <Callout type="info">
-Dynamic base URL uses an **allowlist-based approach** for security. Only hosts explicitly listed in `allowedHosts` are accepted.
+The allowed hosts approach uses an **allowlist** for security. Only hosts explicitly listed in `allowedHosts` are accepted.
 </Callout>
 
+For the **allowed hosts** approach:
 1. **Allowlist is mandatory** - You cannot accept arbitrary hosts
 2. **Headers are validated** - The `x-forwarded-host` and `host` headers are sanitized before use
 3. **Explicit patterns only** - No automatic platform detection; you must add each pattern
 4. **Clear errors** - Unknown hosts throw descriptive errors (unless fallback is set)
 
-This differs from some other auth libraries that auto-trust platforms or accept any header value. Better Auth prioritizes security over convenience.
+For the **function** approach:
+1. **You own the validation** - Your function decides which hosts are valid
+2. **Throw on unknown hosts** - Always throw an error for unrecognized domains rather than returning a default
+3. **Use HTTPS** - Always return `https://` URLs in production
+4. **Don't trust raw headers blindly** - Validate the host against your own data source (database, config, etc.)
+
+<Callout type="warn">
+With the function approach, **you** are responsible for host validation. Never blindly trust request headers without checking them against an authoritative source. An attacker could send requests with arbitrary `Host` headers to trick your application into generating URLs for domains you don't control.
+</Callout>
 
 ## Configuration Reference
+
+### Allowed Hosts Config
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `allowedHosts` | `string[]` | Required | List of allowed host patterns |
 | `fallback` | `string` | - | URL to use when host doesn't match |
 | `protocol` | `"http" \| "https" \| "auto"` | `"auto"` | Protocol for URL construction. `"auto"` derives from request headers, defaults to HTTPS |
+
+### Function Config
+
+| Signature | Description |
+|-----------|-------------|
+| `(request: Request) => string` | Synchronous resolution |
+| `(request: Request) => Promise<string>` | Async resolution (e.g., database lookups) |
+
+The function must return a valid URL with protocol (e.g., `https://myapp.com`). If a path is not included, the configured `basePath` (default: `/api/auth`) is appended automatically.
