@@ -279,7 +279,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					if (w.operator === "ne") {
 						return {
-							[fieldName]: { not: { equals: w.value, ...modeFilter } },
+							[fieldName]: { not: { equals: w.value }, ...modeFilter },
 						};
 					}
 
