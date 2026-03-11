@@ -20,17 +20,40 @@ export const auth = betterAuth({
 
 ## `baseURL`
 
-Base URL for Better Auth. This is typically the root URL where your application server is hosted. You can configure it as either:
+Base URL for Better Auth. This is typically the root URL where your application server is hosted. You can configure it as:
 
 * a static string for single-domain deployments
 * an object for dynamic per-request resolution across multiple allowed hosts
+* a function for fully dynamic per-request resolution
 
 If you include a path in the baseURL string, it will take precedence over the default path.
 
 ```ts
 import { betterAuth } from "better-auth";
+import { getTenantByHost } from "./tenants";
+
+// Static string
 export const auth = betterAuth({
 	baseURL: "https://example.com",
+})
+
+// Allowed hosts (multi-domain)
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: ["myapp.com", "*.vercel.app"],
+	},
+})
+
+// Function (multi-tenant, white-label)
+export const auth = betterAuth({
+	baseURL: async (request) => {
+		const host = request.headers.get("host");
+		const tenant = host ? await getTenantByHost(host) : null;
+		if (!tenant) {
+			throw new Error("Unknown host");
+		}
+		return tenant.authOrigin;
+	},
 })
 ```
 
@@ -61,12 +84,14 @@ export const auth = betterAuth({
 ```
 
 * `allowedHosts`: List of accepted host patterns. Supports exact matches (`myapp.com`), wildcards (`*.vercel.app`, `preview-*.myapp.com`), and port wildcards (`localhost:*`). Automatically added to [`trustedOrigins`](#trustedorigins) (localhost entries get both `http` and `https`)
-* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` derives from `x-forwarded-proto`, then request URL, then defaults to HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
+* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` derives from trusted forwarded headers when `advanced.trustedProxyHeaders` is enabled, then request URL, then defaults to HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
 * `fallback`: URL to use when the incoming host does not match. Without it, unknown hosts throw. Its origin is also added to `trustedOrigins`
 
 <Callout type="warn">
   Use `fallback` carefully. It can hide deployment or proxy misconfiguration that would otherwise fail loudly.
 </Callout>
+
+Use the function form when the valid host must be resolved from application data. The function receives the current `Request` and may return a string or `URL`, synchronously or asynchronously. Validate the host before returning an origin.
 
 When `crossSubDomainCookies` is enabled, the cookie domain is derived from the resolved request host unless you set `domain` explicitly.
 
