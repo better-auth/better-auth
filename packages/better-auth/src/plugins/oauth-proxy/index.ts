@@ -378,11 +378,14 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							ctx.params?.providerId != null
 								? `/oauth2/callback/${provider.id}`
 								: `/callback/${provider.id}`;
+						const baseOrigin =
+							ctx.context.baseURL != null
+								? new URL(ctx.context.baseURL).origin
+								: ctx.request?.url != null
+									? new URL(ctx.request.url).origin
+									: "";
 						const callbackRedirectURI =
-							ctx.request?.url != null
-								? new URL(ctx.request.url).origin +
-									new URL(ctx.request.url).pathname
-								: `${ctx.context.baseURL}${fallbackCallbackPath}`;
+							`${stripTrailingSlash(baseOrigin)}${fallbackCallbackPath}`;
 						try {
 							tokens = await provider.validateAuthorizationCode({
 								code,
