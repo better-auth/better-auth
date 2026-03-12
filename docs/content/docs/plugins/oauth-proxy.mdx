@@ -35,7 +35,7 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
   <Step>
     ### Register the callback URL with your OAuth provider
 
-    In your OAuth provider's developer console (e.g., GitHub, Google), register the callback URL using your **production** domain:
+    In your OAuth provider's developer console (e.g. GitHub, Google), register the callback URL using your **production** domain. For example:
 
     ```
     https://my-production-app.com/api/auth/callback/github
@@ -46,21 +46,21 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
   <Step>
     ### Add trusted origins
 
-    Since preview and development servers redirect through production, you need to add them as trusted origins:
+    Since preview and development servers redirect through production, you need to add them as `trustedOrigins` in your auth config:
 
     ```ts title="auth.ts"
     export const auth = betterAuth({
-      // ...plugins, socialProviders, etc.
+      // ...other config
       trustedOrigins: [ // [!code highlight]
         "http://localhost:3000", // [!code highlight]
-        "https://my-app-*.preview.example.com", // wildcards supported // [!code highlight]
+        "https://my-app-*-preview.example.com", // [!code highlight]
       ], // [!code highlight]
     })
     ```
   </Step>
 </Steps>
 
-<Callout type="warn">
+<Callout type="info">
 All environments (production, preview, development) must share the same `BETTER_AUTH_SECRET`. The plugin uses it to encrypt and decrypt data passed between servers during the OAuth flow.
 </Callout>
 
