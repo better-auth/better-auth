@@ -22,6 +22,7 @@ import {
 	getStoredToken,
 	isPKCERequired,
 	parseClientMetadata,
+	resolveSubjectIdentifier,
 	storeToken,
 	validateClientCredentials,
 } from "./utils";
@@ -132,6 +133,7 @@ async function createIdToken(
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
+	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
 	// TODO: this should be validated against the login process
@@ -152,12 +154,12 @@ async function createIdToken(
 		: getJwtPlugin(ctx.context).options;
 
 	const payload: JWTPayload = {
-		...customClaims,
 		...userClaims,
+		...customClaims,
 		auth_time: authTimeSec,
 		acr,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		sub: user.id,
+		sub: resolvedSub,
 		aud: client.clientId,
 		nonce,
 		iat,

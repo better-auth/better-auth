@@ -1,15 +1,22 @@
 "use client";
 
-import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { ChevronDownIcon } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDownIcon, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import DarkPng from "../../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../../public/branding/better-auth-logo-light.png";
 import { Logo } from "../icons/logo";
 import { contents } from "../sidebar-content";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "../ui/accordion";
 import { Badge } from "../ui/badge";
 import LogoContextMenu from "./logo-context-menu";
 
@@ -23,8 +30,11 @@ interface NavFileItem {
 const navFiles: NavFileItem[] = [
 	{ name: "readme", href: "/" },
 	{ name: "docs", href: "/docs" },
-	{ name: "pricing", href: "/pricing" },
-	{ name: "enterprise", href: "/enterprise" },
+];
+
+const productFiles: NavFileItem[] = [
+	{ name: "framework", href: "/products/framework" },
+	{ name: "infrastructure", href: "/products/infrastructure" },
 ];
 
 const resourceFiles: NavFileItem[] = [
@@ -34,10 +44,22 @@ const resourceFiles: NavFileItem[] = [
 	{ name: "careers", href: "/careers" },
 ];
 
+interface MobileMenuSection {
+	name: string;
+	href?: string;
+	children?: NavFileItem[];
+}
+
+const mobileMenuSections: MobileMenuSection[] = [
+	{ name: "products", children: productFiles },
+	{ name: "resources", children: resourceFiles },
+	{ name: "enterprise", href: "/enterprise" },
+];
+
 function DropdownItem({ item }: { item: NavFileItem }) {
 	return (
-		<div className="group/item flex items-center gap-1.5 px-3 py-1.5 hover:bg-foreground/[0.06] transition-colors duration-150 cursor-pointer">
-			<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/75 dark:text-foreground/60 group-hover/item:text-foreground transition-colors duration-150 whitespace-nowrap">
+		<div className="group/item flex w-full min-w-0 items-center gap-1.5 px-3 py-1.5 hover:bg-foreground/[0.06] transition-colors duration-150 cursor-pointer">
+			<span className="block min-w-0 truncate font-mono text-[10px] uppercase tracking-wider text-foreground/75 dark:text-foreground/60 group-hover/item:text-foreground transition-colors duration-150">
 				{item.name}
 			</span>
 		</div>
@@ -93,12 +115,39 @@ const logoAssets = {
 
 export function StaggeredNavFiles() {
 	const pathname = usePathname() || "/";
+	const [productsOpen, setProductsOpen] = useState(false);
 	const [resourcesOpen, setResourcesOpen] = useState(false);
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [mobileView, setMobileView] = useState<"docs" | "nav">("docs");
 	const [mobileDocSection, setMobileDocSection] = useState(-1);
+	const productsTimeout = useRef<NodeJS.Timeout>(undefined);
 	const resourcesTimeout = useRef<NodeJS.Timeout>(undefined);
 
+	useEffect(() => {
+		document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+		return () => {
+			document.body.style.overflow = "";
+		};
+	}, [mobileMenuOpen]);
+
+	useEffect(() => {
+		const mql = window.matchMedia("(min-width: 1024px)");
+		const handler = () => {
+			if (mql.matches) {
+				setMobileMenuOpen(false);
+			}
+		};
+		mql.addEventListener("change", handler);
+		return () => mql.removeEventListener("change", handler);
+	}, []);
+
+	const openProducts = () => {
+		clearTimeout(productsTimeout.current);
+		setProductsOpen(true);
+	};
+	const closeProducts = () => {
+		productsTimeout.current = setTimeout(() => setProductsOpen(false), 150);
+	};
 	const openResources = () => {
 		clearTimeout(resourcesTimeout.current);
 		setResourcesOpen(true);
@@ -107,15 +156,27 @@ export function StaggeredNavFiles() {
 		resourcesTimeout.current = setTimeout(() => setResourcesOpen(false), 150);
 	};
 	const isActive = useCallback((href: string) => pathname === href, [pathname]);
+	const isActivePrefix = useCallback(
+		(href: string) => pathname === href || pathname.startsWith(`${href}/`),
+		[pathname],
+	);
 	const isDocs = pathname.startsWith("/docs");
+	const isProductPage =
+		pathname === "/products" || pathname.startsWith("/products/");
 	const isResourcePage = resourceFiles.some((r) => {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
 	});
+	const isKnownPage =
+		isActive("/") ||
+		isDocs ||
+		isProductPage ||
+		isResourcePage ||
+		isActive("/enterprise");
 	const isNarrowLeft = isDocs;
 	const leftPaneWidthClass = isNarrowLeft
-		? "w-[22vw]"
-		: pathname === "/pricing" || isResourcePage
+		? "w-[22vw] max-w-[300px]"
+		: isProductPage || isResourcePage
 			? "w-[30%]"
 			: "w-[40%]";
 	const navBottomBorderClass = isNarrowLeft ? "border-foreground/5" : "";
@@ -131,24 +192,24 @@ export function StaggeredNavFiles() {
 	const _router = useRouter();
 	return (
 		<>
-			<div className="absolute top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
+			<div className="fixed top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
 				{/* Left — Logo */}
 				<motion.div
 					initial={{ x: -20, opacity: 0 }}
 					animate={{ x: 0, opacity: 1 }}
 					transition={{ duration: 0.28, ease: "easeOut" }}
-					className={`${leftPaneWidthClass} hidden lg:flex items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
+					className={`${leftPaneWidthClass} hidden ${isKnownPage ? "lg:flex" : "lg:hidden"} h-(--landing-topbar-height) items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
 				>
 					<Link
 						href="/"
-						className="flex items-center gap-1 px-4 lg:px-7 py-3 transition-colors duration-150"
+						className="flex h-full items-center gap-1 px-4 py-3 transition-colors duration-150"
 					>
 						<div className="flex flex-col gap-2 w-full">
 							<LogoContextMenu
 								logo={
 									<div className="flex items-center gap-1">
-										<Logo />
-										<p className="select-none font-mono md:text-lg text-sm uppercase">
+										<Logo className="h-4 w-auto shrink-0" />
+										<p className="select-none font-mono text-lg uppercase leading-none">
 											BETTER-AUTH.
 										</p>
 									</div>
@@ -164,18 +225,39 @@ export function StaggeredNavFiles() {
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
 					transition={{ duration: 0.28, ease: "easeOut" }}
-					className="lg:hidden flex items-center justify-between w-full pointer-events-auto bg-background border-b border-foreground/[0.06]"
+					className="lg:hidden flex items-center justify-between w-full h-(--landing-topbar-height) pointer-events-auto bg-background border-b border-foreground/[0.06]"
 				>
 					<Link
 						href="/"
-						className="flex items-center gap-1 px-4 py-3 transition-colors duration-150"
+						className="flex h-full items-center gap-1 px-4 transition-colors duration-150"
 					>
-						<Logo />
-						<p className="select-none font-mono text-sm uppercase tracking-wider">
+						<Logo className="h-3.5 w-auto shrink-0" />
+						<p className="select-none font-mono text-base uppercase leading-none">
 							BETTER-AUTH.
 						</p>
 					</Link>
-					<div className="flex items-center">
+					<div className="flex items-center gap-1 pr-2">
+						{isDocs && (
+							<button
+								type="button"
+								onClick={() => {
+									window.dispatchEvent(
+										new KeyboardEvent("keydown", {
+											key: "k",
+											metaKey: true,
+											bubbles: true,
+										}),
+									);
+								}}
+								className="flex items-center justify-center size-8 text-foreground/50 hover:text-foreground/80 transition-colors"
+								aria-label="Search"
+							>
+								<Search className="size-4" />
+							</button>
+						)}
+						<div className="flex items-center justify-center size-8 text-foreground/50 [&_button]:text-foreground/50 [&_button:hover]:text-foreground/80">
+							<ThemeToggle />
+						</div>
 						<button
 							type="button"
 							onClick={() => {
@@ -188,14 +270,15 @@ export function StaggeredNavFiles() {
 											s.list.some(
 												(l) =>
 													l.href === pathname ||
-													(l.hasSubpages && pathname.startsWith(`${l.href}/`)),
+													(l.subpages?.length &&
+														pathname.startsWith(`${l.href}/`)),
 											),
 										);
 										setMobileDocSection(idx === -1 ? 0 : idx);
 									}
 								}
 							}}
-							className="flex items-center justify-center px-4 py-3 text-foreground/75 dark:text-foreground/60 hover:text-foreground/85 transition-colors"
+							className="flex items-center justify-center size-8 text-foreground/75 dark:text-foreground/60 hover:text-foreground/85 transition-colors"
 						>
 							{mobileMenuOpen ? (
 								<svg
@@ -231,8 +314,27 @@ export function StaggeredNavFiles() {
 					initial={{ y: -10, opacity: 0 }}
 					animate={{ y: 0, opacity: 1 }}
 					transition={{ duration: 0.28, delay: 0.04, ease: "easeOut" }}
-					className={`flex-1 hidden lg:flex items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
+					className={`flex-1 hidden lg:flex h-(--landing-topbar-height) items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
 				>
+					{/* Inline logo when left pane is hidden */}
+					{!isKnownPage && (
+						<Link
+							href="/"
+							className={`flex h-full items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
+						>
+							<LogoContextMenu
+								logo={
+									<div className="flex items-center gap-1">
+										<Logo className="h-4 w-auto shrink-0" />
+										<p className="select-none font-mono text-lg uppercase leading-none">
+											BETTER-AUTH.
+										</p>
+									</div>
+								}
+								logoAssets={logoAssets}
+							/>
+						</Link>
+					)}
 					{/* File tabs */}
 					{navFiles.map((item, index) => {
 						const active =
@@ -273,6 +375,111 @@ export function StaggeredNavFiles() {
 							</motion.div>
 						);
 					})}
+
+					{/* Products folder tab */}
+					<motion.div
+						initial={{ opacity: 0, y: -4 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.2, delay: 0.14, ease: "easeOut" }}
+						className="relative flex-1"
+						onMouseEnter={openProducts}
+						onMouseLeave={closeProducts}
+					>
+						<div
+							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} cursor-pointer transition-colors duration-150 ${
+								isProductPage
+									? `bg-background border-b-2 ${activeTabBorderClass}`
+									: productsOpen
+										? "bg-foreground/[0.04]"
+										: "hover:bg-foreground/[0.03]"
+							}`}
+						>
+							<span
+								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
+									isProductPage
+										? "text-foreground"
+										: productsOpen
+											? "text-foreground/80"
+											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+								}`}
+							>
+								products
+							</span>
+							<svg
+								className={`h-2 w-2 text-foreground/55 dark:text-foreground/40 transition-transform duration-200 ${
+									productsOpen ? "rotate-180" : ""
+								}`}
+								viewBox="0 0 10 6"
+								fill="none"
+							>
+								<path
+									d="M1 1L5 5L9 1"
+									stroke="currentColor"
+									strokeWidth="1.2"
+								/>
+							</svg>
+						</div>
+
+						<AnimatePresence>
+							{productsOpen && (
+								<motion.div
+									initial={{ opacity: 0, y: -4 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -4 }}
+									transition={{ duration: 0.12, ease: "easeOut" }}
+									className={`absolute top-full left-0 z-50 w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
+								>
+									{productFiles.map((item, i) => (
+										<motion.div
+											key={item.name}
+											initial={{ opacity: 0 }}
+											animate={{ opacity: 1 }}
+											transition={{ duration: 0.1, delay: i * 0.02 }}
+										>
+											<Link
+												href={item.href}
+												onClick={() => setProductsOpen(false)}
+												className="block"
+											>
+												<DropdownItem item={item} />
+											</Link>
+										</motion.div>
+									))}
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</motion.div>
+
+					{/* Enterprise tab */}
+					<motion.div
+						initial={{ opacity: 0, y: -4 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{
+							duration: 0.2,
+							delay: 0.155,
+							ease: "easeOut",
+						}}
+						className="flex-1"
+					>
+						<Link
+							href="/enterprise"
+							className={`group/tab relative flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} transition-colors duration-150 ${
+								isActive("/enterprise")
+									? `bg-background border-b-2 ${activeTabBorderClass}`
+									: "bg-transparent hover:bg-foreground/[0.03]"
+							}`}
+						>
+							<span
+								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
+									isActive("/enterprise")
+										? "text-foreground"
+										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+								}`}
+							>
+								enterprise
+							</span>
+						</Link>
+					</motion.div>
 
 					{/* Resources folder tab */}
 					<motion.div
@@ -325,7 +532,7 @@ export function StaggeredNavFiles() {
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
 									transition={{ duration: 0.12, ease: "easeOut" }}
-									className={`absolute top-full left-0 z-50 min-w-[160px] border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
+									className={`absolute top-full left-0 z-50 w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
 								>
 									{resourceFiles.map((item, i) => (
 										<motion.div
@@ -345,12 +552,12 @@ export function StaggeredNavFiles() {
 											</Link>
 										</motion.div>
 									))}
-									<div className="border-t border-foreground/[0.06] mt-1 pt-1 flex items-center gap-0.5 px-2.5">
+									<div className="mt-1 grid w-full grid-cols-[repeat(auto-fit,minmax(1.75rem,1fr))] items-center justify-items-center gap-y-0.5 border-t border-foreground/[0.06] px-2 pt-1">
 										<a
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="GitHub"
 										>
 											<svg
@@ -369,7 +576,7 @@ export function StaggeredNavFiles() {
 											href="https://discord.gg/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Discord"
 										>
 											<svg
@@ -388,7 +595,7 @@ export function StaggeredNavFiles() {
 											href="https://reddit.com/r/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Reddit"
 										>
 											<svg
@@ -409,7 +616,7 @@ export function StaggeredNavFiles() {
 											href="https://x.com/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="X"
 										>
 											<svg
@@ -428,7 +635,7 @@ export function StaggeredNavFiles() {
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="npm"
 										>
 											<svg
@@ -458,11 +665,11 @@ export function StaggeredNavFiles() {
 						className="flex items-stretch shrink-0"
 					>
 						<a
-							href="/sign-in"
+							href="https://dash.better-auth.com/sign-in"
 							className="flex items-center cursor-pointer gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
 						>
 							<span className="font-mono text-xs uppercase tracking-wider">
-								get-started
+								sign-in
 							</span>
 							<svg
 								className="h-2.5 w-2.5 opacity-50"
@@ -488,37 +695,36 @@ export function StaggeredNavFiles() {
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
 						transition={{ duration: 0.15 }}
-						className="lg:hidden fixed inset-0 z-[98] bg-background/95 backdrop-blur-sm pointer-events-auto"
+						className="lg:hidden fixed inset-0 z-[98] w-full bg-background/95 backdrop-blur-sm pointer-events-auto"
 					>
-						<div className="pt-[52px] flex flex-col h-full overflow-y-auto">
-							{isDocs && mobileView === "docs" ? (
-								<>
-									{/* Subtle back to nav button */}
-									<button
-										type="button"
-										onClick={() => setMobileView("nav")}
-										className="flex items-center gap-2 px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/[0.06]"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="12"
-											height="12"
-											viewBox="0 0 24 24"
+						<div className="flex h-full flex-col pt-(--landing-topbar-height)">
+							<div className="flex-1 min-h-0 overflow-y-auto">
+								{isDocs && mobileView === "docs" ? (
+									<>
+										{/* Subtle back to nav button */}
+										<button
+											type="button"
+											onClick={() => setMobileView("nav")}
+											className="flex items-center gap-2 w-full px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/6"
 										>
-											<path
-												fill="currentColor"
-												d="M3 18h18v-2H3zm0-5h18v-2H3zm0-7v2h18V6z"
-											/>
-										</svg>
-										<span className="font-mono text-[10px] uppercase tracking-wider">
-											Menu
-										</span>
-									</button>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="12"
+												height="12"
+												viewBox="0 0 24 24"
+											>
+												<path
+													fill="currentColor"
+													d="M3 18h18v-2H3zm0-5h18v-2H3zm0-7v2h18V6z"
+												/>
+											</svg>
+											<span className="font-mono text-[10px] uppercase tracking-wider">
+												Menu
+											</span>
+										</button>
 
-									{/* Doc sidebar sections */}
-									<MotionConfig
-										transition={{ duration: 0.35, type: "spring", bounce: 0 }}
-									>
+										{/* Doc sidebar sections */}
+
 										<div className="flex flex-col">
 											{contents.map((section, index) => (
 												<div key={section.title}>
@@ -546,203 +752,231 @@ export function StaggeredNavFiles() {
 															)}
 														/>
 													</button>
-													<AnimatePresence initial={false}>
-														{mobileDocSection === index && (
-															<motion.div
-																initial={{ opacity: 0, height: 0 }}
-																animate={{ opacity: 1, height: "auto" }}
-																exit={{ opacity: 0, height: 0 }}
-																className="relative overflow-hidden"
-															>
-																<div className="text-sm pt-0 pb-1">
-																	{section.href && (
+													{mobileDocSection === index && (
+														<div className="relative overflow-hidden">
+															<div className="text-sm pt-0 pb-1">
+																{section.href && (
+																	<Link
+																		href={section.href}
+																		onClick={() => setMobileMenuOpen(false)}
+																		data-active={
+																			pathname === section.href || undefined
+																		}
+																		className={cn(
+																			"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
+																			pathname === section.href
+																				? "text-foreground bg-foreground/6"
+																				: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
+																		)}
+																	>
+																		<span className="truncate">Overview</span>
+																	</Link>
+																)}
+																{section.list.map((item, i) => {
+																	if (item.separator || item.group) {
+																		return (
+																			<div
+																				key={`sep-${item.title}-${i}`}
+																				className="flex flex-row items-center gap-2 mx-5 my-2"
+																			>
+																				<p className="text-[10px] text-foreground/65 dark:text-foreground/45 uppercase tracking-wider">
+																					{item.title}
+																				</p>
+																				<div className="grow h-px bg-border" />
+																			</div>
+																		);
+																	}
+																	if (!item.href) return null;
+																	const active =
+																		pathname === item.href ||
+																		(!!item.subpages?.length &&
+																			pathname.startsWith(`${item.href}/`));
+																	return (
 																		<Link
-																			href={section.href}
+																			key={item.href}
+																			href={item.href}
 																			onClick={() => setMobileMenuOpen(false)}
-																			data-active={
-																				pathname === section.href || undefined
-																			}
+																			data-active={active || undefined}
 																			className={cn(
 																				"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
-																				pathname === section.href
+																				active
 																					? "text-foreground bg-foreground/6"
 																					: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
 																			)}
 																		>
-																			<span className="truncate">Overview</span>
-																		</Link>
-																	)}
-																	{section.list.map((item, i) => {
-																		if (item.separator || item.group) {
-																			return (
-																				<div
-																					key={`sep-${item.title}-${i}`}
-																					className="flex flex-row items-center gap-2 mx-5 my-2"
-																				>
-																					<p className="text-[10px] text-foreground/65 dark:text-foreground/45 uppercase tracking-wider">
-																						{item.title}
-																					</p>
-																					<div className="grow h-px bg-border" />
-																				</div>
-																			);
-																		}
-																		if (!item.href) return null;
-																		const active =
-																			pathname === item.href ||
-																			(!!item.hasSubpages &&
-																				pathname.startsWith(`${item.href}/`));
-																		return (
-																			<Link
-																				key={item.href}
-																				href={item.href}
-																				onClick={() => setMobileMenuOpen(false)}
-																				data-active={active || undefined}
+																			<span
 																				className={cn(
-																					"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
+																					"min-w-5 [&>svg]:size-[14px] transition-colors duration-150",
 																					active
-																						? "text-foreground bg-foreground/6"
-																						: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
+																						? "text-foreground"
+																						: "text-foreground/75 dark:text-foreground/60",
 																				)}
 																			>
-																				<span
+																				<item.icon className="text-foreground/75" />
+																			</span>
+																			<span className="truncate grow">
+																				{item.title}
+																			</span>
+																			{item.isNew && (
+																				<Badge
 																					className={cn(
-																						"min-w-5 [&>svg]:size-[14px] transition-colors duration-150",
+																						"pointer-events-none border-dashed rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider",
 																						active
-																							? "text-foreground"
-																							: "text-foreground/75 dark:text-foreground/60",
+																							? "border-solid bg-foreground/10 text-foreground"
+																							: "text-foreground/70 dark:text-foreground/55 border-foreground/25",
 																					)}
+																					variant="outline"
 																				>
-																					<item.icon className="text-foreground/75" />
-																				</span>
-																				<span className="truncate grow">
-																					{item.title}
-																				</span>
-																				{item.isNew && (
-																					<Badge
-																						className={cn(
-																							"pointer-events-none border-dashed rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider",
-																							active
-																								? "border-solid bg-foreground/10 text-foreground"
-																								: "text-foreground/70 dark:text-foreground/55 border-foreground/25",
-																						)}
-																						variant="outline"
-																					>
-																						New
-																					</Badge>
-																				)}
-																			</Link>
-																		);
-																	})}
-																</div>
-															</motion.div>
-														)}
-													</AnimatePresence>
+																					New
+																				</Badge>
+																			)}
+																		</Link>
+																	);
+																})}
+															</div>
+														</div>
+													)}
 												</div>
 											))}
 										</div>
-									</MotionConfig>
-								</>
-							) : (
-								<>
-									{/* Back to docs button (when on docs page and switched to nav view) */}
-									{isDocs && mobileView === "nav" && (
-										<button
-											type="button"
-											onClick={() => setMobileView("docs")}
-											className="flex items-center gap-2 px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/[0.06]"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="12"
-												height="12"
-												viewBox="0 0 24 24"
+									</>
+								) : (
+									<>
+										{/* Back to docs button (when on docs page and switched to nav view) */}
+										{isDocs && mobileView === "nav" && (
+											<button
+												type="button"
+												onClick={() => setMobileView("docs")}
+												className="flex items-center gap-2 w-full px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/6"
 											>
-												<path
-													fill="currentColor"
-													d="M20 11H7.83l5.59-5.59L12 4l-8 8l8 8l1.41-1.41L7.83 13H20z"
-												/>
-											</svg>
-											<span className="font-mono text-[10px] uppercase tracking-wider">
-												Docs
-											</span>
-										</button>
-									)}
-
-									{/* Default nav items */}
-									{[...navFiles, ...resourceFiles].map((item, i) => (
-										<motion.div
-											key={item.name}
-											initial={{ opacity: 0, x: -8 }}
-											animate={{ opacity: 1, x: 0 }}
-											transition={{ duration: 0.15, delay: i * 0.03 }}
-										>
-											<Link
-												href={item.href}
-												target={item.external ? "_blank" : undefined}
-												rel={item.external ? "noreferrer" : undefined}
-												onClick={() => setMobileMenuOpen(false)}
-												className={`flex items-center gap-2.5 px-5 py-3.5 border-b border-foreground/[0.06] transition-colors ${
-													isActive(item.path || item.href) ||
-													(item.href === "/docs" && isDocs)
-														? "bg-foreground/[0.04]"
-														: "hover:bg-foreground/[0.03]"
-												}`}
-											>
-												<span
-													className={`font-mono text-sm uppercase tracking-wider ${
-														isActive(item.path || item.href) ||
-														(item.href === "/docs" && isDocs)
-															? "text-foreground"
-															: "text-foreground/75 dark:text-foreground/60"
-													}`}
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="12"
+													height="12"
+													viewBox="0 0 24 24"
 												>
-													{item.name}
+													<path
+														fill="currentColor"
+														d="M20 11H7.83l5.59-5.59L12 4l-8 8l8 8l1.41-1.41L7.83 13H20z"
+													/>
+												</svg>
+												<span className="font-mono text-[10px] uppercase tracking-wider">
+													Docs
 												</span>
-												{item.external && (
-													<svg
-														className="h-2.5 w-2.5 text-foreground/45 dark:text-foreground/30 ml-auto"
-														viewBox="0 0 10 10"
-														fill="none"
-													>
-														<path
-															d="M1 9L9 1M9 1H3M9 1V7"
-															stroke="currentColor"
-															strokeWidth="1.2"
-														/>
-													</svg>
+											</button>
+										)}
+
+										{/* Nav items */}
+										{navFiles.map((item) => (
+											<Link
+												key={item.name}
+												href={item.href}
+												onClick={() => setMobileMenuOpen(false)}
+												className={cn(
+													"flex items-center gap-2.5 px-5 py-3.5 border-b border-foreground/6 transition-colors font-mono text-base uppercase tracking-wider",
+													isActive(item.path || item.href) ||
+														(item.href === "/docs" && isDocs)
+														? "text-foreground bg-foreground/4"
+														: "text-foreground/75 dark:text-foreground/60 hover:bg-foreground/3",
 												)}
-											</Link>
-										</motion.div>
-									))}
-									<motion.div
-										initial={{ opacity: 0, x: -8 }}
-										animate={{ opacity: 1, x: 0 }}
-										transition={{
-											duration: 0.15,
-											delay: [...navFiles, ...resourceFiles].length * 0.03,
-										}}
-										className="px-5 pt-4"
-									>
-										<a
-											href="/sign-in"
-											onClick={() => setMobileMenuOpen(false)}
-											className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
-										>
-											get-started
-											<svg
-												className="h-2.5 w-2.5 opacity-50"
-												viewBox="0 0 10 10"
-												fill="none"
 											>
-												<path
-													d="M1 9L9 1M9 1H3M9 1V7"
-													stroke="currentColor"
-													strokeWidth="1.2"
-												/>
-											</svg>
-										</a>
-									</motion.div>
-								</>
+												{item.name}
+											</Link>
+										))}
+
+										{/* Accordion groups */}
+										<Accordion
+											type="multiple"
+											defaultValue={[
+												"products",
+												...mobileMenuSections
+													.filter((s) =>
+														s.children?.some((item) =>
+															isActivePrefix(item.path || item.href),
+														),
+													)
+													.map((s) => s.name),
+											]}
+											className="w-full"
+										>
+											{mobileMenuSections.map((section) => (
+												<AccordionItem
+													key={section.name}
+													value={section.name}
+													className="border-foreground/6"
+												>
+													{section.children ? (
+														<>
+															<AccordionTrigger className="px-5 py-3.5 font-mono text-base uppercase tracking-wider text-foreground/75 dark:text-foreground/60 hover:text-foreground hover:no-underline">
+																{section.name}
+															</AccordionTrigger>
+															<AccordionContent className="pb-0">
+																{section.children.map((item) => (
+																	<Link
+																		key={item.name}
+																		href={item.href}
+																		target={
+																			item.external ? "_blank" : undefined
+																		}
+																		rel={
+																			item.external ? "noreferrer" : undefined
+																		}
+																		onClick={() => setMobileMenuOpen(false)}
+																		className={cn(
+																			"flex items-center gap-2.5 pl-9 pr-5 py-2.5 transition-colors font-mono text-sm uppercase tracking-wider",
+																			isActivePrefix(item.path || item.href)
+																				? "text-foreground bg-foreground/4"
+																				: "text-foreground/60 dark:text-foreground/45 hover:text-foreground hover:bg-foreground/3",
+																		)}
+																	>
+																		{item.name}
+																	</Link>
+																))}
+															</AccordionContent>
+														</>
+													) : (
+														<Link
+															href={section.href!}
+															onClick={() => setMobileMenuOpen(false)}
+															className={cn(
+																"flex items-center gap-2.5 px-5 py-3.5 transition-colors font-mono text-base uppercase tracking-wider",
+																isActive(section.href!)
+																	? "text-foreground bg-foreground/4"
+																	: "text-foreground/75 dark:text-foreground/60 hover:text-foreground",
+															)}
+														>
+															{section.name}
+														</Link>
+													)}
+												</AccordionItem>
+											))}
+										</Accordion>
+									</>
+								)}
+							</div>
+
+							{/* Sticky footer with sign-in CTA */}
+							{!(isDocs && mobileView === "docs") && (
+								<div className="shrink-0 border-t border-foreground/[0.06] bg-background px-5 py-4">
+									<a
+										href="https://dash.better-auth.com/sign-in"
+										onClick={() => setMobileMenuOpen(false)}
+										className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
+									>
+										sign-in
+										<svg
+											className="h-2.5 w-2.5 opacity-50"
+											viewBox="0 0 10 10"
+											fill="none"
+										>
+											<path
+												d="M1 9L9 1M9 1H3M9 1V7"
+												stroke="currentColor"
+												strokeWidth="1.2"
+											/>
+										</svg>
+									</a>
+								</div>
 							)}
 						</div>
 					</motion.div>

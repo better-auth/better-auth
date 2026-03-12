@@ -1,6 +1,7 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
+	Activity,
 	AppWindow,
 	Binoculars,
 	Book,
@@ -10,6 +11,7 @@ import {
 	Gauge,
 	Key,
 	KeyRound,
+	Logs,
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
@@ -21,13 +23,16 @@ import {
 	UserCircle,
 	UserSquare2,
 	Users2,
+	Zap,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
 export interface SubpageItem {
 	title: string;
-	href: string;
+	href?: string;
+	icon?: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	group?: boolean;
 }
 
 export interface ListItem {
@@ -37,7 +42,6 @@ export interface ListItem {
 	group?: boolean;
 	separator?: boolean;
 	isNew?: boolean;
-	hasSubpages?: boolean;
 	subpages?: SubpageItem[];
 }
 
@@ -1133,6 +1137,24 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "WeChat",
+				href: "/docs/authentication/wechat",
+				isNew: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.504c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Zoom",
 				href: "/docs/authentication/zoom",
 				icon: (props?: SVGProps<any>) => (
@@ -1564,6 +1586,27 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: () => <Gauge className="size-4" />,
 			},
 			{
+				title: "Plugins",
+				group: true,
+				icon: () => <Server className="size-4" />,
+				href: "",
+			},
+			{
+				title: "Dashboard",
+				href: "/docs/infrastructure/plugins/dashboard",
+				icon: () => <AppWindow className="size-4" />,
+			},
+			{
+				title: "Audit Logs",
+				href: "/docs/infrastructure/plugins/audit-logs",
+				icon: () => <Logs className="size-4" />,
+			},
+			{
+				title: "Sentinel",
+				href: "/docs/infrastructure/plugins/sentinel",
+				icon: () => <ShieldCheck className="size-4" />,
+			},
+			{
 				title: "Services",
 				group: true,
 				icon: () => <Server className="size-4" />,
@@ -1578,22 +1621,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "SMS",
 				href: "/docs/infrastructure/services/sms",
 				icon: () => <Phone className="size-4" />,
-			},
-			{
-				title: "Plugins",
-				group: true,
-				icon: () => <Server className="size-4" />,
-				href: "",
-			},
-			{
-				title: "Dash",
-				href: "/docs/infrastructure/plugins/dash",
-				icon: () => <AppWindow className="size-4" />,
-			},
-			{
-				title: "Sentinel",
-				href: "/docs/infrastructure/plugins/sentinel",
-				icon: () => <ShieldCheck className="size-4" />,
 			},
 		],
 	},
@@ -1766,30 +1793,29 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						href: "/docs/plugins/api-key/advanced",
 						title: "Advanced Features",
-
-						// icon: () => <Zap className="size-4" />,
+						icon: () => <Zap className="size-4" />,
 					},
 					{
 						href: "/docs/plugins/api-key/reference",
 						title: "Reference",
-						// icon: () => (
-						// 	<svg
-						// 		xmlns="http://www.w3.org/2000/svg"
-						// 		viewBox="0 0 24 24"
-						// 		fill="none"
-						// 		stroke="currentColor"
-						// 		strokeWidth="2"
-						// 		strokeLinecap="round"
-						// 		strokeLinejoin="round"
-						// 		className="size-4"
-						// 	>
-						// 		<path d="M20 11v6" />
-						// 		<path d="M20 13h2" />
-						// 		<path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" />
-						// 		<circle cx="10" cy="7" r="4" />
-						// 		<circle cx="20" cy="19" r="2" />
-						// 	</svg>
-						// ),
+						icon: () => (
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								className="size-4"
+							>
+								<path d="M20 11v6" />
+								<path d="M20 13h2" />
+								<path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" />
+								<circle cx="10" cy="7" r="4" />
+								<circle cx="20" cy="19" r="2" />
+							</svg>
+						),
 					},
 				],
 			},
@@ -2302,6 +2328,26 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Openfort",
+				href: "/docs/plugins/openfort",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						fill="none"
+						aria-hidden="true"
+						viewBox="597.32 331.34 171.36 105.32"
+					>
+						<g fill="currentColor">
+							<rect x="673.9" y="404.26" width="18.2" height="32.4" />
+							<polygon points="768.68,331.36 768.68,331.36 768.68,331.34 610.78,331.34 610.78,331.36 597.32,331.36 597.32,436.64    615.52,436.64 615.52,349.54 750.48,349.54 750.48,436.64 768.68,436.64  " />
+							<polygon points="732.16,367.79 633.83,367.79 633.83,370.19 633.79,370.19 633.79,436.64 651.99,436.64 651.99,385.99    713.9,385.99 713.9,436.64 732.09,436.64 732.09,385.99 732.16,385.99  " />
+						</g>
+					</svg>
+				),
+			},
+			{
 				title: "Community Plugins",
 				href: "/docs/plugins/community-plugins",
 				icon: () => (
@@ -2672,7 +2718,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Errors",
 				href: "/docs/reference/errors",
 				icon: () => <TriangleAlertIcon className="w-4 h-4 text-current" />,
-				hasSubpages: true,
 				subpages: [
 					{
 						title: "invalid_callback_request",
@@ -2753,6 +2798,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Telemetry",
 				href: "/docs/reference/telemetry",
 				icon: () => <Binoculars className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Instrumentation",
+				href: "/docs/reference/instrumentation",
+				icon: () => <Activity className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "FAQ",

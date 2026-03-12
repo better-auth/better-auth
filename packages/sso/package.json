@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/sso",
-  "version": "1.5.1-beta.1",
+  "version": "1.5.1-beta.3",
   "description": "SSO plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -69,6 +69,7 @@
     "fast-xml-parser": "^5.4.1",
     "jose": "^6.1.3",
     "samlify": "^2.10.2",
+    "tldts": "^6.1.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

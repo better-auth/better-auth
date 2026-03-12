@@ -685,6 +685,41 @@ describe("organization", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8385
+	 */
+	it("should allow multi-role owner to invite with owner role", async () => {
+		const { headers } = await signInWithTestUser();
+		// Create a fresh org for this test
+		const org = await client.organization.create({
+			name: "multi-role-test-org",
+			slug: "multi-role-test-org",
+			fetchOptions: { headers },
+		});
+		const orgId = org.data!.id;
+		const memberId = org.data!.members[0]!.id;
+
+		// Set the member to have multiple roles including owner
+		const updatedMember = await auth.api.updateMemberRole({
+			headers,
+			body: {
+				organizationId: orgId,
+				role: ["owner", "admin"],
+				memberId,
+			},
+		});
+		expect(updatedMember?.role).toBe("owner,admin");
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "multi-role-invite-test@test.com",
+			role: "owner",
+			fetchOptions: { headers },
+		});
+		expect(invite.error).toBeNull();
+		expect(invite.data?.role).toBe("owner");
+	});
+
 	it("should allow leaving organization", async () => {
 		const newUser = {
 			email: "leave@org.com",
@@ -3419,11 +3454,9 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(org.data).toBeDefined();
-		// Note: publicField and secretField use `as any` because endpoint response types
-		// are inferred from adapter return values which include all fields.
-		// The runtime correctly filters returned: false fields.
-		expect((org.data as any).publicField).toBe("public-value");
-		expect((org.data as any).secretField).toBeUndefined();
+		expect(org.data?.publicField).toBe("public-value");
+		// @ts-expect-error secretField has returned: false
+		expect(org.data?.secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg).toBeDefined();
@@ -3456,8 +3489,9 @@ describe("organization additionalFields with returned: false", async () => {
 		expect(orgs.data!.length).toBeGreaterThan(0);
 
 		for (const org of orgs.data!) {
-			expect((org as any).secretField).toBeUndefined();
-			expect((org as any).publicField).toBeDefined();
+			// @ts-expect-error secretField has returned: false
+			expect(org.secretField).toBeUndefined();
+			expect(org.publicField).toBeDefined();
 		}
 	});
 
@@ -3561,8 +3595,9 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(updated.data).toBeDefined();
-		expect((updated.data as any).publicField).toBe("updated-public");
-		expect((updated.data as any).secretField).toBeUndefined();
+		expect(updated.data?.publicField).toBe("updated-public");
+		// @ts-expect-error secretField has returned: false
+		expect(updated.data?.secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg?.secretField).toBe("updated-secret");

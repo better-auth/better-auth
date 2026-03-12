@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { createMetadata } from "@/lib/metadata";
 import { ChangelogContent } from "./changelog-content";
 
 export const dynamic = "force-static";
@@ -17,6 +18,9 @@ interface GitHubRelease {
 function getContent(content: string) {
 	const lines = content.split("\n");
 	const newContext = lines.map((line) => {
+		if (line.trim().startsWith("## ") || line.trim().startsWith("### ")) {
+			return line.split("date=")[0].trim();
+		}
 		if (line.trim().startsWith("- ")) {
 			const mainContent = line.split(";")[0];
 			const context = line.split(";")[2];
@@ -145,7 +149,7 @@ export default async function ChangelogPage() {
 	);
 }
 
-export const metadata = {
-	title: "Changelog - Better Auth",
+export const metadata = createMetadata({
+	title: "Changelog",
 	description: "Latest changes, fixes, and updates to Better Auth",
-};
+});

@@ -22,7 +22,7 @@ Starting with this release, the self-service SSO dashboard — which lets your e
 
 And soon, you’ll be able to host your Better Auth instance on our infrastructure as well, so you can own your auth at scale without worrying about infrastructure needs.
 
-Sign up now: [https://better-auth.com/sign-in](https://better-auth.com/sign-in) 🚀
+Sign up now: [https://dash.better-auth.com/sign-in](https://dash.better-auth.com/sign-in) 🚀
 
 To upgrade, run:
 
@@ -232,7 +232,7 @@ As part of our new Infrastructure product, the SSO plugin is now accompanied by 
 The dashboard is available at:
 
 ```
-https://better-auth.com/dashboard/[project]/organization/[orgId]/enterprise
+https://dash.better-auth.com/[project]/organization/[orgId]/enterprise
 ```
 
 From there, you can generate onboarding links, monitor SSO connection status, and manage provider configurations for each organization.
@@ -712,7 +712,7 @@ The `/forget-password/email-otp` endpoint has been removed. Use the standard pas
 
 ### Adapter Imports
 
-The `better-auth/adapters/test` export has been removed. Use the `testUtils` plugin instead.
+The `better-auth/adapters/test` export has been removed. Use `testAdapter` and `createTestSuite` from `@better-auth/test-utils/adapter` instead. See the [Create a Database Adapter](/docs/guides/create-a-db-adapter#test-your-adapter) guide for details.
 
 ### API Key Plugin Moved to `@better-auth/api-key`
 
@@ -779,7 +779,6 @@ All previously deprecated APIs have been removed. This includes deprecated adapt
 
 | Removed | Replacement |
 | --- | --- |
-| `createAdapter` | `createAdapterFactory` |
 | `Adapter` | `DBAdapter` |
 | `TransactionAdapter` | `DBTransactionAdapter` |
 | `Store` (client) | `ClientStore` |

@@ -6,9 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
-import { groupTocItems } from "@/components/docs/group-toc-items";
-import { StepperTOC } from "@/components/docs/stepper-toc";
 import { Callout } from "@/components/ui/callout";
+import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
 import { cn } from "@/lib/utils";
 
@@ -124,7 +123,6 @@ export default async function Page({
 	const MDX = page.data?.body;
 	const { title, description, date } = page.data;
 	const toc = page.data.toc ?? [];
-	const groupedToc = groupTocItems(toc);
 
 	return (
 		<div className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0">
@@ -141,9 +139,6 @@ export default async function Page({
 			{/* Right panel — blog content */}
 			<div className="w-full lg:w-[70%] flex flex-col">
 				<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:pt-16">
-					{/* Horizontal TOC */}
-					{groupedToc.length > 0 && <StepperTOC items={groupedToc} />}
-
 					{/* Header */}
 					<h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-neutral-800 dark:text-neutral-200">
 						{title}
@@ -276,27 +271,48 @@ export async function generateMetadata({
 }) {
 	const { slug } = await params;
 	if (!slug) {
-		return {
+		return createMetadata({
 			title: "Blog - Better Auth",
 			description: "Latest updates, articles, and insights about Better Auth",
-		};
+		});
 	}
 	const page = blogs.getPage(slug);
 	if (!page || page.data.draft) return notFound();
-	const { title, description, image } = page.data;
-	return {
+	const { title, description, image, date } = page.data;
+
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", title);
+	if (description) ogSearchParams.set("description", description);
+	if (date) {
+		ogSearchParams.set(
+			"date",
+			new Date(date).toLocaleDateString("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+			}),
+		);
+	}
+	const ogUrl = `/api/og-release?${ogSearchParams.toString()}`;
+
+	const ogImage = image || ogUrl;
+
+	return createMetadata({
 		title,
 		description,
-		...(image && {
-			openGraph: {
-				images: [image],
-			},
-			twitter: {
-				card: "summary_large_image" as const,
-				images: [image],
-			},
-		}),
-	};
+		openGraph: {
+			title,
+			description,
+			type: "article",
+			images: [ogImage],
+		},
+		twitter: {
+			card: "summary_large_image" as const,
+			title,
+			description,
+			images: [ogImage],
+		},
+	});
 }
 
 export function generateStaticParams() {

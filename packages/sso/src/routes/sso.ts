@@ -1,5 +1,5 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { User, Verification } from "better-auth";
+import type { User } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -23,7 +23,7 @@ import saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
-import z from "zod/v4";
+import * as z from "zod";
 import { getVerificationIdentifier } from "./domain-verification";
 
 interface AuthnRequestRecord {
@@ -910,15 +910,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				domainVerified = false;
 				domainVerificationToken = generateRandomString(24);
 
-				await ctx.context.adapter.create<Verification>({
-					model: "verification",
-					data: {
-						identifier: getVerificationIdentifier(options, provider.providerId),
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						value: domainVerificationToken as string,
-						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-					},
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: getVerificationIdentifier(options, provider.providerId),
+					value: domainVerificationToken as string,
+					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 				});
 			}
 
