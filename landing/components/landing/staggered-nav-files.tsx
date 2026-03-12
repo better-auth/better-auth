@@ -198,18 +198,18 @@ export function StaggeredNavFiles() {
 					initial={{ x: -20, opacity: 0 }}
 					animate={{ x: 0, opacity: 1 }}
 					transition={{ duration: 0.28, ease: "easeOut" }}
-					className={`${leftPaneWidthClass} hidden ${isKnownPage ? "lg:flex" : "lg:hidden"} items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
+					className={`${leftPaneWidthClass} hidden ${isKnownPage ? "lg:flex" : "lg:hidden"} h-(--landing-topbar-height) items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
 				>
 					<Link
 						href="/"
-						className="flex items-center gap-1 px-4 py-3 transition-colors duration-150"
+						className="flex h-full items-center gap-1 px-4 py-3 transition-colors duration-150"
 					>
 						<div className="flex flex-col gap-2 w-full">
 							<LogoContextMenu
 								logo={
 									<div className="flex items-center gap-1">
-										<Logo />
-										<p className="select-none font-mono md:text-lg text-sm uppercase">
+										<Logo className="h-4 w-auto shrink-0" />
+										<p className="select-none font-mono text-lg uppercase leading-none">
 											BETTER-AUTH.
 										</p>
 									</div>
@@ -225,14 +225,14 @@ export function StaggeredNavFiles() {
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
 					transition={{ duration: 0.28, ease: "easeOut" }}
-					className="lg:hidden flex items-center justify-between w-full h-[52px] pointer-events-auto bg-background border-b border-foreground/[0.06]"
+					className="lg:hidden flex items-center justify-between w-full h-(--landing-topbar-height) pointer-events-auto bg-background border-b border-foreground/[0.06]"
 				>
 					<Link
 						href="/"
-						className="flex items-center gap-1 px-4 py-3 transition-colors duration-150"
+						className="flex h-full items-center gap-1 px-4 transition-colors duration-150"
 					>
-						<Logo />
-						<p className="select-none font-mono text-base uppercase">
+						<Logo className="h-3.5 w-auto shrink-0" />
+						<p className="select-none font-mono text-base uppercase leading-none">
 							BETTER-AUTH.
 						</p>
 					</Link>
@@ -314,19 +314,19 @@ export function StaggeredNavFiles() {
 					initial={{ y: -10, opacity: 0 }}
 					animate={{ y: 0, opacity: 1 }}
 					transition={{ duration: 0.28, delay: 0.04, ease: "easeOut" }}
-					className={`flex-1 hidden lg:flex items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
+					className={`flex-1 hidden lg:flex h-(--landing-topbar-height) items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
 				>
 					{/* Inline logo when left pane is hidden */}
 					{!isKnownPage && (
 						<Link
 							href="/"
-							className={`flex items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
+							className={`flex h-full items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
 						>
 							<LogoContextMenu
 								logo={
 									<div className="flex items-center gap-1">
-										<Logo />
-										<p className="select-none font-mono md:text-lg text-sm uppercase">
+										<Logo className="h-4 w-auto shrink-0" />
+										<p className="select-none font-mono text-lg uppercase leading-none">
 											BETTER-AUTH.
 										</p>
 									</div>
@@ -697,7 +697,7 @@ export function StaggeredNavFiles() {
 						transition={{ duration: 0.15 }}
 						className="lg:hidden fixed inset-0 z-[98] w-full bg-background/95 backdrop-blur-sm pointer-events-auto"
 					>
-						<div className="pt-[52px] flex flex-col h-full">
+						<div className="flex h-full flex-col pt-(--landing-topbar-height)">
 							<div className="flex-1 min-h-0 overflow-y-auto">
 								{isDocs && mobileView === "docs" ? (
 									<>
