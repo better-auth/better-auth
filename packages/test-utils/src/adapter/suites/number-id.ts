@@ -1,6 +1,6 @@
-import { createTestSuite } from "@better-auth/test-utils/adapter";
 import type { User } from "better-auth/types";
 import { expect } from "vitest";
+import { createTestSuite } from "../create-test-suite";
 import { getNormalTestSuiteTests } from "./basic";
 
 export const numberIdTestSuite = createTestSuite(
@@ -23,10 +23,7 @@ export const numberIdTestSuite = createTestSuite(
 		return {
 			"init - tests": async () => {
 				const opts = helpers.getBetterAuthOptions();
-				expect(
-					opts.advanced?.database?.useNumberId ||
-						opts.advanced?.database?.generateId === "serial",
-				).toBe(true);
+				expect(opts.advanced?.database?.generateId === "serial").toBe(true);
 			},
 			"create - should return a number id": async () => {
 				const user = await helpers.generate("user");
