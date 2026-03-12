@@ -16,10 +16,11 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
 
 - Embedded wallet creation and management.
 - Seamless integration with Better Auth authentication.
-- Multi-chain support (Ethereum, Polygon, and more).
+- EVM support (Ethereum, Polygon, Base, etc.) and/or Solana — use one or both.
 - Gas sponsorship for user transactions.
 - Multiple recovery methods (passkey, password, automatic).
 - Sign messages and execute smart contract interactions.
+- Optional Wagmi integration for EVM chains.
 
 ## Installation
 
@@ -36,12 +37,24 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     #### Client
 
     ```package-install
-    @openfort/react wagmi viem @tanstack/react-query
+    @openfort/react @tanstack/react-query
+    ```
+
+    Then install the peer dependencies for the chains you need:
+
+    **For EVM (Ethereum, Polygon, Base, etc.):**
+    ```package-install
+    viem wagmi
+    ```
+
+    **For Solana:**
+    ```package-install
+    @solana/kit
     ```
 
     <Callout>
-      The `@openfort/react` package only supports **EVM chains** (Ethereum, Polygon, etc.). The React SDK integrates with Wagmi for blockchain interactions.
-      If you need support for non-EVM chains, use the Openfort JS SDK directly.
+      The `@openfort/react` package supports **EVM chains** (Ethereum, Polygon, Base, etc.) and **Solana**. You can build an EVM-only, Solana-only, or multi-chain app. The React SDK integrates with Wagmi for EVM blockchain interactions and `@solana/kit` for Solana.
+      If you need support for other chains, use the Openfort JS SDK directly.
     </Callout>
   </Step>
 
@@ -85,7 +98,7 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     # Openfort
     VITE_OPENFORT_PUBLISHABLE_KEY=pk_test_...
     VITE_SHIELD_PUBLISHABLE_KEY=...
-    VITE_POLICY_ID=pol_...  # Transaction policy ID from Openfort dashboard
+    VITE_FEE_SPONSORSHIP_ID=pol_...  # Fee sponsorship ID from Openfort dashboard
 
     # Better Auth
     VITE_BETTERAUTH_URL=http://localhost:3000
@@ -165,10 +178,72 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
   <Step>
     ### Add OpenfortProvider to your app
 
-    Wrap your application with the OpenfortProvider, WagmiProvider, and QueryClientProvider:
+    The `OpenfortProvider` works standalone — Wagmi and React Query are only needed if you use Wagmi hooks.
 
     ```tsx title="app/providers.tsx"
-    import { OpenfortProvider, ThirdPartyOAuthProvider, getDefaultConfig } from "@openfort/react";
+    import { OpenfortProvider, ThirdPartyOAuthProvider } from "@openfort/react";
+    import { authClient } from "./auth-client";
+
+    export function OpenfortProviders({ children }: { children: React.ReactNode }) {
+      return (
+        <OpenfortProvider
+          publishableKey={import.meta.env.VITE_OPENFORT_PUBLISHABLE_KEY}
+          walletConfig={{
+            shieldPublishableKey: import.meta.env.VITE_SHIELD_PUBLISHABLE_KEY,
+            ethereum: {
+              ethereumFeeSponsorshipId: import.meta.env.VITE_FEE_SPONSORSHIP_ID,
+            },
+            solana: {
+              cluster: "devnet", // "mainnet-beta" | "devnet" | "testnet"
+            },
+            getEncryptionSession: async ({ accessToken }) => {
+              const response = await fetch(
+                import.meta.env.VITE_BETTERAUTH_URL +
+                import.meta.env.VITE_BETTERAUTH_BASE_PATH +
+                "/encryption-session",
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+
+              if (!response.ok) return null;
+
+              const data = await response.json();
+              return data.sessionId;
+            },
+            connectOnLogin: false,
+          }}
+          thirdPartyAuth={{
+            getAccessToken: async () => {
+              const session = await authClient.getSession();
+              return session?.data?.session?.token ?? null;
+            },
+            provider: ThirdPartyOAuthProvider.BETTER_AUTH,
+          }}
+        >
+          {children}
+        </OpenfortProvider>
+      );
+    }
+    ```
+
+    <Callout>
+      The `getEncryptionSession` callback receives `{ accessToken, otpCode, userId }` — the SDK provides these automatically. Set `connectOnLogin` to `false` if you want to handle wallet creation manually. Include only the chain configs (`ethereum`, `solana`) you need.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Add Wagmi for EVM interactions
+
+    Wrap your provider tree with `OpenfortWagmiBridge` to enable Wagmi hooks (`useSignMessage`, `useWriteContract`, etc.):
+
+    ```tsx title="app/providers.tsx"
+    import { OpenfortProvider, ThirdPartyOAuthProvider } from "@openfort/react";
+    import { OpenfortWagmiBridge, getDefaultConfig } from "@openfort/react/wagmi";
     import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
     import { polygonAmoy, sepolia } from "viem/chains";
     import { WagmiProvider, createConfig } from "wagmi";
@@ -187,47 +262,46 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
       return (
         <WagmiProvider config={wagmiConfig}>
           <QueryClientProvider client={queryClient}>
-            <OpenfortProvider
-              publishableKey={import.meta.env.VITE_OPENFORT_PUBLISHABLE_KEY}
-              walletConfig={{
-                shieldPublishableKey: import.meta.env.VITE_SHIELD_PUBLISHABLE_KEY,
-                ethereumProviderPolicyId: import.meta.env.VITE_POLICY_ID,
-                getEncryptionSession: async () => {
-                  const session = await authClient.getSession();
-                  const token = session?.data?.session?.token;
+            <OpenfortWagmiBridge>
+              <OpenfortProvider
+                publishableKey={import.meta.env.VITE_OPENFORT_PUBLISHABLE_KEY}
+                walletConfig={{
+                  shieldPublishableKey: import.meta.env.VITE_SHIELD_PUBLISHABLE_KEY,
+                  ethereum: {
+                    ethereumFeeSponsorshipId: import.meta.env.VITE_FEE_SPONSORSHIP_ID,
+                  },
+                  getEncryptionSession: async ({ accessToken }) => {
+                    const response = await fetch(
+                      import.meta.env.VITE_BETTERAUTH_URL +
+                      import.meta.env.VITE_BETTERAUTH_BASE_PATH +
+                      "/encryption-session",
+                      {
+                        method: "POST",
+                        headers: {
+                          Authorization: `Bearer ${accessToken}`,
+                          "Content-Type": "application/json",
+                        },
+                      }
+                    );
 
-                  if (!token) return null;
+                    if (!response.ok) return null;
 
-                  const response = await fetch(
-                    import.meta.env.VITE_BETTERAUTH_URL +
-                    import.meta.env.VITE_BETTERAUTH_BASE_PATH +
-                    "/encryption-session",
-                    {
-                      method: "POST",
-                      headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
-                      },
-                    }
-                  );
-
-                  if (!response.ok) return null;
-
-                  const data = await response.json();
-                  return data.sessionId;
-                },
-                recoverWalletAutomaticallyAfterAuth: false,
-              }}
-              thirdPartyAuth={{
-                getAccessToken: async () => {
-                  const session = await authClient.getSession();
-                  return session?.data?.session?.token ?? null;
-                },
-                provider: ThirdPartyOAuthProvider.BETTER_AUTH,
-              }}
-            >
-              {children}
-            </OpenfortProvider>
+                    const data = await response.json();
+                    return data.sessionId;
+                  },
+                  connectOnLogin: false,
+                }}
+                thirdPartyAuth={{
+                  getAccessToken: async () => {
+                    const session = await authClient.getSession();
+                    return session?.data?.session?.token ?? null;
+                  },
+                  provider: ThirdPartyOAuthProvider.BETTER_AUTH,
+                }}
+              >
+                {children}
+              </OpenfortProvider>
+            </OpenfortWagmiBridge>
           </QueryClientProvider>
         </WagmiProvider>
       );
@@ -235,7 +309,7 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     ```
 
     <Callout>
-      The OpenfortProvider requires Wagmi and React Query providers. Set `recoverWalletAutomaticallyAfterAuth` to `false` if you want to handle wallet creation manually.
+      `OpenfortWagmiBridge` and `getDefaultConfig` are imported from `@openfort/react/wagmi`.
     </Callout>
   </Step>
 
@@ -258,68 +332,83 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
 
 ## Usage
 
-### Wallet Creation
+### Wallet Creation (EVM)
 
-Create an embedded wallet for authenticated users using the `useWallets` hook:
+Create an embedded EVM wallet using the `useEthereumEmbeddedWallet` hook:
 
 ```tsx
-import { RecoveryMethod, useWallets } from "@openfort/react";
+import { useEthereumEmbeddedWallet } from "@openfort/react/ethereum";
+import { RecoveryMethod } from "@openfort/react";
 
 export default function CreateWallet() {
-  const { isCreating, createWallet, error } = useWallets({
-    onSuccess: () => {
-      console.log("Wallet created successfully!");
-    },
-  });
+  const { status, create, activeWallet } = useEthereumEmbeddedWallet();
 
-  if (isCreating) {
+  if (status === "creating") {
     return <div>Creating wallet...</div>;
+  }
+
+  if (status === "connected" && activeWallet) {
+    return <div>Wallet: {activeWallet.address}</div>;
   }
 
   return (
     <div>
       <button
-        onClick={() =>
-          createWallet({
-            recovery: {
-              recoveryMethod: RecoveryMethod.PASSKEY,
-            },
-          })
-        }
+        onClick={() => create({ recoveryMethod: RecoveryMethod.PASSKEY })}
       >
         Create with Passkey
       </button>
 
       <button
-        onClick={() =>
-          createWallet({
-            recovery: {
-              recoveryMethod: RecoveryMethod.AUTOMATIC,
-            },
-          })
-        }
+        onClick={() => create({ recoveryMethod: RecoveryMethod.AUTOMATIC })}
       >
         Create with Automatic Recovery
       </button>
 
       <button
         onClick={() =>
-          createWallet({
-            recovery: {
-              recoveryMethod: RecoveryMethod.PASSWORD,
-              password: "your-secure-password",
-            },
+          create({
+            recoveryMethod: RecoveryMethod.PASSWORD,
+            password: "your-secure-password",
           })
         }
       >
         Create with Password
       </button>
-
-      {error && <p className="text-red-500">Error: {error.message}</p>}
     </div>
   );
 }
 ```
+
+### Wallet Creation (Solana)
+
+Create an embedded Solana wallet using `useSolanaEmbeddedWallet`:
+
+```tsx
+import { useSolanaEmbeddedWallet } from "@openfort/react/solana";
+import { RecoveryMethod } from "@openfort/react";
+
+export default function CreateSolanaWallet() {
+  const { status, create, activeWallet } = useSolanaEmbeddedWallet();
+
+  if (status === "connected" && activeWallet) {
+    return <div>Solana Wallet: {activeWallet.address}</div>;
+  }
+
+  return (
+    <button
+      onClick={() => create({ recoveryMethod: RecoveryMethod.AUTOMATIC })}
+      disabled={status === "creating"}
+    >
+      {status === "creating" ? "Creating..." : "Create Solana Wallet"}
+    </button>
+  );
+}
+```
+
+<Callout>
+  Solana requires the `@solana/kit` peer dependency and `solana` config in `walletConfig`.
+</Callout>
 
 ### Sign Messages
 
@@ -394,24 +483,22 @@ export default function MintTokens() {
 
 ### Access User Information
 
-Get user and wallet information:
+Get user and wallet information using `useUser`:
 
 ```tsx
 import { useUser } from "@openfort/react";
-import { useAccount } from "wagmi";
 
 export default function UserProfile() {
-  const { user } = useUser();
-  const { address, isConnected } = useAccount();
+  const { user, isAuthenticated, isConnected, linkedAccounts } = useUser();
 
-  if (!isConnected) {
-    return <p>No wallet connected</p>;
+  if (!isAuthenticated) {
+    return <p>Not authenticated</p>;
   }
 
   return (
     <div>
-      <h2>Welcome, {user?.player?.name || user?.linkedAccounts[0]?.email}</h2>
-      <p>Wallet Address: {address}</p>
+      <h2>Welcome, {user?.player?.name || linkedAccounts?.[0]?.email}</h2>
+      <p>Connected: {isConnected ? "Yes" : "No"}</p>
     </div>
   );
 }
@@ -445,13 +532,22 @@ interface EncryptionSessionConfig {
 ```ts
 interface OpenfortProviderProps {
   publishableKey: string; // Openfort publishable key
-  walletConfig: {
+  walletConfig?: {
     shieldPublishableKey: string; // Shield publishable key
-    ethereumProviderPolicyId?: string; // Policy ID for gas sponsorship
-    getEncryptionSession: () => Promise<string | null>; // Retrieve encryption session ID
-    recoverWalletAutomaticallyAfterAuth?: boolean; // Auto-recover wallet after auth (default: false)
+    connectOnLogin?: boolean; // Auto-recover/create wallet after auth (default: true)
+    passkeyDisplayName?: string; // Display name for passkey prompts
+    // Encryption session (pick one):
+    getEncryptionSession?: (params: {
+      accessToken: string;
+      otpCode?: string;
+      userId: string;
+    }) => Promise<string>;
+    createEncryptedSessionEndpoint?: string; // Or provide an API endpoint
+    // Chain-specific config:
+    ethereum?: EthereumConfig; // EVM chain settings (chainId, rpcUrls, policyId)
+    solana?: SolanaConfig; // Solana cluster and RPC settings
   };
-  thirdPartyAuth: {
+  thirdPartyAuth?: {
     getAccessToken: () => Promise<string | null>; // Retrieve Better Auth token
     provider: ThirdPartyOAuthProvider; // Authentication provider type
   };
@@ -471,30 +567,21 @@ Openfort supports three wallet recovery methods:
 - **Password**: User-defined password for recovery
 
 ```tsx
-import { RecoveryMethod, useWallets } from "@openfort/react";
+import { useEthereumEmbeddedWallet } from "@openfort/react/ethereum";
+import { RecoveryMethod } from "@openfort/react";
 
-const { createWallet } = useWallets();
+const { create } = useEthereumEmbeddedWallet();
 
 // Passkey recovery
-createWallet({
-  recovery: {
-    recoveryMethod: RecoveryMethod.PASSKEY,
-  },
-});
+create({ recoveryMethod: RecoveryMethod.PASSKEY });
 
 // Automatic recovery
-createWallet({
-  recovery: {
-    recoveryMethod: RecoveryMethod.AUTOMATIC,
-  },
-});
+create({ recoveryMethod: RecoveryMethod.AUTOMATIC });
 
 // Password recovery
-createWallet({
-  recovery: {
-    recoveryMethod: RecoveryMethod.PASSWORD,
-    password: "your-secure-password",
-  },
+create({
+  recoveryMethod: RecoveryMethod.PASSWORD,
+  password: "your-secure-password",
 });
 ```
 
