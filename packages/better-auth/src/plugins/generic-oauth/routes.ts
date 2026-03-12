@@ -369,11 +369,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			}
 
 			try {
-				const callbackRedirectURI =
-					ctx.request?.url != null
-						? new URL(ctx.request.url).origin +
-							new URL(ctx.request.url).pathname
-						: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`;
+				const callbackRedirectURI = `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`;
 				// Use custom getToken if provided
 				if (providerConfig.getToken) {
 					tokens = await providerConfig.getToken({
