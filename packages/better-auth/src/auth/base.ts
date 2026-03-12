@@ -13,7 +13,9 @@ import {
 } from "../utils/url";
 
 type PluginWithServerApi = {
-	getServerApi?: (ctx: Promise<AuthContext> | AuthContext) => Record<string, unknown>;
+	getServerApi?: (
+		ctx: Promise<AuthContext> | AuthContext,
+	) => Record<string, unknown>;
 };
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(

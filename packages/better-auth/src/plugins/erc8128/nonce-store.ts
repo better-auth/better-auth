@@ -11,10 +11,7 @@ interface NonceAdapter {
 		model: string;
 		data: Record<string, unknown>;
 	}): Promise<Record<string, unknown>>;
-	deleteMany(args: {
-		model: string;
-		where: Where[];
-	}): Promise<number>;
+	deleteMany(args: { model: string; where: Where[] }): Promise<number>;
 }
 
 const NONCE_KEY_PREFIX = "erc8128:nonce:";

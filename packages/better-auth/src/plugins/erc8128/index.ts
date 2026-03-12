@@ -791,7 +791,11 @@ export const erc8128 = (options: ERC8128PluginOptions) => {
 			? storageRuntime.getInvalidationOps(ctx, storageMode)
 			: null;
 		const replayableSignatureCandidate = replayableRequestEnabled
-			? getSingleReplayableSignatureCandidate(request, signature, signatureInput)
+			? getSingleReplayableSignatureCandidate(
+					request,
+					signature,
+					signatureInput,
+				)
 			: null;
 		let replayableStatePromise: Promise<{
 			keyNotBefore: number | null;

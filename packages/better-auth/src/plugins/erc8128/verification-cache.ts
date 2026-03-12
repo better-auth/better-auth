@@ -89,10 +89,7 @@ export interface VerificationCacheAdapter {
 		where: Where[];
 		update: Record<string, unknown>;
 	}): Promise<unknown>;
-	deleteMany(args: {
-		model: string;
-		where: Where[];
-	}): Promise<number>;
+	deleteMany(args: { model: string; where: Where[] }): Promise<number>;
 }
 
 /**
@@ -176,7 +173,9 @@ export function createVerificationCacheOps(
 				if (existing) {
 					await adapter.update({
 						model: "erc8128VerificationCache",
-						where: [{ field: "id", operator: "eq", value: String(existing.id) }],
+						where: [
+							{ field: "id", operator: "eq", value: String(existing.id) },
+						],
 						update: {
 							address,
 							chainId,

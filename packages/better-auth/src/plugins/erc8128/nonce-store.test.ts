@@ -9,24 +9,26 @@ import {
 
 type NonceAdapterMock = Parameters<typeof createAdapterNonceStore>[0];
 
-function createDuplicateKeyError(message = "duplicate key value violates unique constraint") {
+function createDuplicateKeyError(
+	message = "duplicate key value violates unique constraint",
+) {
 	const error = new Error(message) as Error & { code?: string };
 	error.code = "23505";
 	return error;
 }
 
 function createMockAdapterStore() {
-	const table = new Map<string, { id: string; nonceKey: string; expiresAt: Date }>();
+	const table = new Map<
+		string,
+		{ id: string; nonceKey: string; expiresAt: Date }
+	>();
 	let nextId = 1;
 
 	const adapter: NonceAdapterMock = {
 		async findOne(args: { model: string; where: Where[] }) {
 			return table.get(String(args.where[0]?.value)) ?? null;
 		},
-		async create(args: {
-			model: string;
-			data: Record<string, unknown>;
-		}) {
+		async create(args: { model: string; data: Record<string, unknown> }) {
 			const nonceKey = String(args.data.nonceKey);
 			if (table.has(nonceKey)) {
 				throw createDuplicateKeyError();
@@ -39,10 +41,7 @@ function createMockAdapterStore() {
 			table.set(row.nonceKey, row);
 			return row;
 		},
-		async deleteMany(args: {
-			model: string;
-			where: Where[];
-		}) {
+		async deleteMany(args: { model: string; where: Where[] }) {
 			const value = String(args.where[0]?.value);
 			const row =
 				Array.from(table.values()).find((entry) => entry.id === value) ??
@@ -119,10 +118,7 @@ describe("erc8128 nonce store", () => {
 			async findOne(args: { model: string; where: Where[] }) {
 				return table.get(String(args.where[0]?.value)) ?? null;
 			},
-			async create(args: {
-				model: string;
-				data: Record<string, unknown>;
-			}) {
+			async create(args: { model: string; data: Record<string, unknown> }) {
 				await Promise.resolve();
 				const nonceKey = String(args.data.nonceKey);
 				if (table.has(nonceKey)) {
@@ -136,10 +132,7 @@ describe("erc8128 nonce store", () => {
 				table.set(nonceKey, row);
 				return row;
 			},
-			async deleteMany(args: {
-				model: string;
-				where: Where[];
-			}) {
+			async deleteMany(args: { model: string; where: Where[] }) {
 				return table.delete(String(args.where[0]?.value)) ? 1 : 0;
 			},
 		};

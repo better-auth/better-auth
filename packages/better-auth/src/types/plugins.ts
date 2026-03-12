@@ -30,7 +30,7 @@ export type InferPluginErrorCodes<O extends BetterAuthOptions> =
 						: {}
 					: {}
 			>
-	: {};
+		: {};
 
 export type InferPluginServerAPI<O extends BetterAuthOptions> =
 	O["plugins"] extends Array<infer P>

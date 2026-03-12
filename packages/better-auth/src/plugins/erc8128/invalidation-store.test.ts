@@ -9,8 +9,7 @@ import { getErc8128SignatureHash } from "./utils";
 import { getVerificationCacheStorageKey } from "./verification-cache";
 
 const KEY_ID_ABC = "erc8128:1:0x0000000000000000000000000000000000000abc";
-const KEY_ID_DB_ONLY =
-	"erc8128:1:0x0000000000000000000000000000000000000db0";
+const KEY_ID_DB_ONLY = "erc8128:1:0x0000000000000000000000000000000000000db0";
 
 function createMockAdapter() {
 	const rows: Array<Record<string, unknown>> = [];

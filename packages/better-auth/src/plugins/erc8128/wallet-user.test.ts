@@ -16,34 +16,43 @@ function createMockContext() {
 
 	const adapter = {
 		id: "test",
-		findOne: vi.fn(async (args: { model: string; where: Array<{ field: string; value: unknown }> }) => {
-			const collection =
-				args.model === "user"
-					? users
-					: args.model === "walletAddress"
-						? wallets
-						: accounts;
-			return (
-				collection.find((row) =>
-					args.where.every(
-						(where) => String(row[where.field] ?? "") === String(where.value ?? ""),
-					),
-				) ?? null
-			);
-		}),
-		create: vi.fn(async (args: { model: string; data: Record<string, unknown> }) => {
-			if (args.model !== "walletAddress") {
-				throw new Error(`unsupported model ${args.model}`);
-			}
-			const row = {
-				id: String(wallets.length + 1),
-				...args.data,
-			};
-			wallets.push(row);
-			return row;
-		}),
-		transaction: vi.fn(async (callback: (trx: typeof adapter) => Promise<unknown>) =>
-			callback(adapter),
+		findOne: vi.fn(
+			async (args: {
+				model: string;
+				where: Array<{ field: string; value: unknown }>;
+			}) => {
+				const collection =
+					args.model === "user"
+						? users
+						: args.model === "walletAddress"
+							? wallets
+							: accounts;
+				return (
+					collection.find((row) =>
+						args.where.every(
+							(where) =>
+								String(row[where.field] ?? "") === String(where.value ?? ""),
+						),
+					) ?? null
+				);
+			},
+		),
+		create: vi.fn(
+			async (args: { model: string; data: Record<string, unknown> }) => {
+				if (args.model !== "walletAddress") {
+					throw new Error(`unsupported model ${args.model}`);
+				}
+				const row = {
+					id: String(wallets.length + 1),
+					...args.data,
+				};
+				wallets.push(row);
+				return row;
+			},
+		),
+		transaction: vi.fn(
+			async (callback: (trx: typeof adapter) => Promise<unknown>) =>
+				callback(adapter),
 		),
 	};
 
@@ -64,16 +73,22 @@ function createMockContext() {
 			const user = users.find((entry) => entry.email === email);
 			return user ? { user, accounts: [] } : null;
 		}),
-		findAccountByProviderId: vi.fn(async (accountId: string, providerId: string) => {
-			return (
-				accounts.find(
-					(entry) =>
-						entry.accountId === accountId && entry.providerId === providerId,
-				) ?? null
-			);
-		}),
+		findAccountByProviderId: vi.fn(
+			async (accountId: string, providerId: string) => {
+				return (
+					accounts.find(
+						(entry) =>
+							entry.accountId === accountId && entry.providerId === providerId,
+					) ?? null
+				);
+			},
+		),
 		createAccount: vi.fn(
-			async (data: { userId: string; providerId: string; accountId: string }) => {
+			async (data: {
+				userId: string;
+				providerId: string;
+				accountId: string;
+			}) => {
 				const account = {
 					id: String(accounts.length + 1),
 					...data,
@@ -120,7 +135,8 @@ describe("findOrCreateWalletUser", () => {
 	});
 
 	it("reuses the existing user when createUser hits a duplicate email race", async () => {
-		const { ctx, users, wallets, accounts, internalAdapter } = createMockContext();
+		const { ctx, users, wallets, accounts, internalAdapter } =
+			createMockContext();
 		const existingUser = {
 			id: "existing-user",
 			email: "0x000000000000000000000000000000000000dEaD@http://localhost:3000",

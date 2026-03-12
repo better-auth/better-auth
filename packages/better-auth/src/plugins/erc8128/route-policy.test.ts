@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	resolveRequestRoutePolicy,
-	resolveRoutePolicy,
-} from "./route-policy";
+import { resolveRequestRoutePolicy, resolveRoutePolicy } from "./route-policy";
 
 function fakeRequest(method: string, path: string): Request {
 	return new Request(`https://example.com${path}`, { method });

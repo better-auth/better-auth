@@ -55,7 +55,9 @@ function createMockAdapter() {
 	const adapter: VerificationCacheAdapter = {
 		async findOne(args) {
 			if (args.where.some((where) => where.field === "id")) {
-				const id = String(args.where.find((where) => where.field === "id")?.value);
+				const id = String(
+					args.where.find((where) => where.field === "id")?.value,
+				);
 				return Array.from(rows.values()).find((row) => row.id === id) ?? null;
 			}
 			const cacheKey = String(
@@ -76,7 +78,9 @@ function createMockAdapter() {
 			return row;
 		},
 		async update(args) {
-			const id = String(args.where.find((where) => where.field === "id")?.value);
+			const id = String(
+				args.where.find((where) => where.field === "id")?.value,
+			);
 			const row = Array.from(rows.values()).find((entry) => entry.id === id);
 			if (row) {
 				Object.assign(row, args.update);

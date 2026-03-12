@@ -77,24 +77,21 @@ export interface InvalidationAdapter {
 		where: Where[];
 		update: Record<string, unknown>;
 	}): Promise<unknown>;
-	deleteMany(args: {
-		model: string;
-		where: Where[];
-	}): Promise<number>;
+	deleteMany(args: { model: string; where: Where[] }): Promise<number>;
 }
 
 type InvalidationRow = Record<string, unknown>;
 type BatchReadableSecondaryStorage = SecondaryStorage & {
-	getMany?: (keys: string[]) => Promise<unknown[] | null | undefined> | unknown[];
+	getMany?: (
+		keys: string[],
+	) => Promise<unknown[] | null | undefined> | unknown[];
 	mget?: (keys: string[]) => Promise<unknown[] | null | undefined> | unknown[];
 	getMultiple?: (
 		keys: string[],
 	) => Promise<unknown[] | null | undefined> | unknown[];
 };
 
-function toInvalidationRecord(
-	row: InvalidationRow,
-): InvalidationRecord | null {
+function toInvalidationRecord(row: InvalidationRow): InvalidationRecord | null {
 	if (typeof row.address !== "string" || typeof row.chainId !== "number") {
 		return null;
 	}
@@ -346,8 +343,7 @@ export function createDBInvalidationOps(
 				adapter,
 				getKeyInvalidationWhere(matchKey),
 			);
-			const record =
-				row && !isExpired(row) ? toInvalidationRecord(row) : null;
+			const record = row && !isExpired(row) ? toInvalidationRecord(row) : null;
 			return record ? [record] : [];
 		},
 
@@ -497,8 +493,7 @@ export function createSecondaryStorageInvalidationOps(
 		): Promise<InvalidationRecord | null> {
 			const signatureHash = getErc8128SignatureHash(signature);
 			const signatureMatchKey =
-				keyId &&
-				getErc8128SignatureInvalidationMatchKey(keyId, signatureHash);
+				keyId && getErc8128SignatureInvalidationMatchKey(keyId, signatureHash);
 			if (!signatureMatchKey) {
 				return null;
 			}
@@ -542,7 +537,7 @@ export function createSecondaryStorageInvalidationOps(
 					cacheHit: parseVerificationCacheValue(cacheRaw) !== null,
 					keyNotBefore:
 						keyRaw && typeof keyRaw === "string"
-							? (JSON.parse(keyRaw) as InvalidationRecord).notBefore ?? null
+							? ((JSON.parse(keyRaw) as InvalidationRecord).notBefore ?? null)
 							: null,
 					signatureInvalidated:
 						signatureRaw != null && String(signatureRaw).length > 0,
@@ -573,7 +568,9 @@ export function createSecondaryStorageInvalidationOps(
 				);
 				await storage.set(
 					`${INV_KEY_PREFIX}${matchKey}`,
-					JSON.stringify(createStoredKeyInvalidationRecord(matchKey, notBefore)),
+					JSON.stringify(
+						createStoredKeyInvalidationRecord(matchKey, notBefore),
+					),
 					ttlUntilExpiry,
 				);
 			} catch {}
@@ -644,8 +641,7 @@ export function createMemoryInvalidationOps(
 			sweep();
 			const signatureHash = getErc8128SignatureHash(signature);
 			const matchKey =
-				keyId &&
-				getErc8128SignatureInvalidationMatchKey(keyId, signatureHash);
+				keyId && getErc8128SignatureInvalidationMatchKey(keyId, signatureHash);
 			if (!matchKey) {
 				return null;
 			}
@@ -734,7 +730,11 @@ export function createDualInvalidationOps(
 			signature: string,
 			cacheKey?: string,
 		): Promise<ReplayableInvalidationState> {
-			const ssState = await ss.findVerificationState(keyId, signature, cacheKey);
+			const ssState = await ss.findVerificationState(
+				keyId,
+				signature,
+				cacheKey,
+			);
 			if (ssState.keyNotBefore !== null && ssState.signatureInvalidated) {
 				return ssState;
 			}

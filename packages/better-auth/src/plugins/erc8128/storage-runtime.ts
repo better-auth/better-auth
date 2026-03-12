@@ -43,9 +43,10 @@ export function createErc8128StorageRuntime(
 	const cleanupThrottleSec =
 		options.cleanupThrottleSec ?? DEFAULT_ERC8128_CLEANUP_THROTTLE_SEC;
 	let persistentCache: VerificationCacheOps | null = null;
-	let persistentCacheStrategy:
-		| Extract<Erc8128StorageMode, "secondary-storage" | "database">
-		| null = null;
+	let persistentCacheStrategy: Extract<
+		Erc8128StorageMode,
+		"secondary-storage" | "database"
+	> | null = null;
 
 	const ensureStorageMode = (
 		ctx: GenericEndpointContext,

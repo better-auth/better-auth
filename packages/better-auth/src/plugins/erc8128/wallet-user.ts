@@ -1,5 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAdapter, runWithTransaction } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { VerifyResult } from "@slicekit/erc8128";
@@ -13,9 +16,7 @@ interface FindOrCreateWalletUserOptions {
 	email?: string | undefined;
 	anonymous?: boolean | undefined;
 	emailDomainName?: string | undefined;
-	ensLookup?:
-	| ((args: ENSLookupArgs) => Promise<ENSLookupResult>)
-	| undefined;
+	ensLookup?: ((args: ENSLookupArgs) => Promise<ENSLookupResult>) | undefined;
 }
 
 type WalletLookupAdapter = Pick<DBAdapter, "findOne" | "create">;
@@ -139,9 +140,9 @@ export async function findOrCreateWalletUser(
 	}
 
 	const domain = options.emailDomainName ?? getOrigin(ctx.context.baseURL);
-	const userEmail = !isAnonymous && email ? email : `${walletAddress}@${domain}`;
-	const { name, avatar } =
-		(await options.ensLookup?.({ walletAddress })) ?? {};
+	const userEmail =
+		!isAnonymous && email ? email : `${walletAddress}@${domain}`;
+	const { name, avatar } = (await options.ensLookup?.({ walletAddress })) ?? {};
 
 	return runWithTransaction(ctx.context.adapter, async () => {
 		const adapter = await getCurrentAdapter(ctx.context.adapter);
