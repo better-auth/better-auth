@@ -386,7 +386,7 @@
 	--scrollbar-thumb-hover: var(--ring);
 	--scrollbar-track: transparent;
 	--radius: 0.2rem;
-	--landing-topbar-height: 52px;
+	--landing-topbar-height: 48px;
 	--fd-nav-height: 56px;
 	--fd-banner-height: 0px;
 	--fd-tocnav-height: 0px;
@@ -408,6 +408,12 @@
 	--shadow-2xl: 0px 1px 2px 0px hsl(0 0% 0% / 0.45);
 	--tracking-normal: 0em;
 	--spacing: 0.25rem;
+}
+
+@media (min-width: 64rem) {
+	:root {
+		--landing-topbar-height: 44px;
+	}
 }
 
 .dark {

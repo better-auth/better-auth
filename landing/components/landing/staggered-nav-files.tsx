@@ -225,11 +225,11 @@ export function StaggeredNavFiles() {
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
 					transition={{ duration: 0.28, ease: "easeOut" }}
-					className="lg:hidden flex items-center justify-between w-full h-[52px] pointer-events-auto bg-background border-b border-foreground/[0.06]"
+					className="lg:hidden flex items-center justify-between w-full h-(--landing-topbar-height) pointer-events-auto bg-background border-b border-foreground/[0.06]"
 				>
 					<Link
 						href="/"
-						className="flex items-center gap-1 px-4 py-3 transition-colors duration-150"
+						className="flex h-full items-center gap-1 px-4 transition-colors duration-150"
 					>
 						<Logo />
 						<p className="select-none font-mono text-base uppercase">
@@ -697,7 +697,7 @@ export function StaggeredNavFiles() {
 						transition={{ duration: 0.15 }}
 						className="lg:hidden fixed inset-0 z-[98] w-full bg-background/95 backdrop-blur-sm pointer-events-auto"
 					>
-						<div className="pt-[52px] flex flex-col h-full">
+						<div className="flex h-full flex-col pt-(--landing-topbar-height)">
 							<div className="flex-1 min-h-0 overflow-y-auto">
 								{isDocs && mobileView === "docs" ? (
 									<>
