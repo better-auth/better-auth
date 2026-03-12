@@ -20,7 +20,7 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
 - Gas sponsorship for user transactions.
 - Multiple recovery methods (passkey, password, automatic).
 - Sign messages and execute smart contract interactions.
-- Optional wagmi integration for EVM chains.
+- Optional Wagmi integration for EVM chains.
 
 ## Installation
 
@@ -53,7 +53,7 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     ```
 
     <Callout>
-      The `@openfort/react` package supports **EVM chains** (Ethereum, Polygon, Base, etc.) and **Solana**. You can build an EVM-only, Solana-only, or multi-chain app. The React SDK integrates with wagmi for EVM blockchain interactions and `@solana/kit` for Solana.
+      The `@openfort/react` package supports **EVM chains** (Ethereum, Polygon, Base, etc.) and **Solana**. You can build an EVM-only, Solana-only, or multi-chain app. The React SDK integrates with Wagmi for EVM blockchain interactions and `@solana/kit` for Solana.
       If you need support for other chains, use the Openfort JS SDK directly.
     </Callout>
   </Step>
@@ -178,7 +178,7 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
   <Step>
     ### Add OpenfortProvider to your app
 
-    The `OpenfortProvider` works standalone — wagmi and React Query are only needed if you use wagmi hooks.
+    The `OpenfortProvider` works standalone — Wagmi and React Query are only needed if you use Wagmi hooks.
 
     ```tsx title="app/providers.tsx"
     import { OpenfortProvider, ThirdPartyOAuthProvider } from "@openfort/react";
@@ -237,9 +237,9 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
   </Step>
 
   <Step>
-    ### Add wagmi for EVM interactions
+    ### Add Wagmi for EVM interactions
 
-    Wrap your provider tree with `OpenfortWagmiBridge` to enable wagmi hooks (`useSignMessage`, `useWriteContract`, etc.):
+    Wrap your provider tree with `OpenfortWagmiBridge` to enable Wagmi hooks (`useSignMessage`, `useWriteContract`, etc.):
 
     ```tsx title="app/providers.tsx"
     import { OpenfortProvider, ThirdPartyOAuthProvider } from "@openfort/react";
@@ -412,7 +412,7 @@ export default function CreateSolanaWallet() {
 
 ### Sign Messages
 
-Sign messages using wagmi hooks:
+Sign messages using Wagmi hooks:
 
 ```tsx
 import { useSignMessage } from "wagmi";
@@ -442,7 +442,7 @@ export default function SignMessage() {
 
 ### Execute Transactions
 
-Execute smart contract transactions using wagmi:
+Execute smart contract transactions using Wagmi:
 
 ```tsx
 import { parseAbi } from "viem";
