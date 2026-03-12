@@ -89,25 +89,13 @@ type signInMagicLink = {
 ```
 </APIMethod>
 
-On success, `signIn.magicLink` returns the generated magic-link payload:
-
-```ts
-const response = await authClient.signIn.magicLink({
-  email: "user@email.com",
-});
-
-response.data;
-// {
-//   status: true,
-//   url: "https://example.com/api/auth/magic-link/verify?token=...",
-//   token: "..."
-// }
-```
-
-The returned `url` and `token` are the same values passed to `sendMagicLink`.
-
 <Callout>
 If the user has not signed up, unless `disableSignUp` is set to `true`, the user will be signed up automatically.
+</Callout>
+
+<Callout type="warn">
+  `signIn.magicLink` and `POST /sign-in/magic-link` do not return the raw magic-link token.
+  The token stays in the out-of-band delivery channel handled by `sendMagicLink`.
 </Callout>
 
 ### Verify Magic Link
@@ -173,3 +161,26 @@ The `storeToken` function can be one of the following:
 - `"plain"`: The token is stored in plain text.
 - `"hashed"`: The token is hashed using the default hasher.
 - `{ type: "custom-hasher", hash: (token: string) => Promise<string> }`: The token is hashed using a custom hasher.
+
+**returnToken**: If set to `true`, trusted server-side code can call `auth.api.signInMagicLinkServer()` to receive the generated `url` and raw `token`.
+
+```ts
+const response = await auth.api.signInMagicLinkServer({
+  body: {
+    email: "user@email.com",
+  },
+  headers: new Headers(),
+});
+
+if ("token" in response) {
+  response.token;
+  response.url;
+}
+```
+
+This does not change the HTTP response for `signIn.magicLink`.
+
+<Callout type="warn">
+  Only enable `returnToken` for trusted server-side workflows such as tests or custom delivery logic.
+  Never expose the returned token to browser clients, logs, or analytics.
+</Callout>

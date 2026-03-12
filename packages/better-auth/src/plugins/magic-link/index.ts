@@ -43,6 +43,15 @@ export interface MagicLinkOptions {
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
 	/**
+	 * Allow trusted server-side code to receive the generated magic link URL and token
+	 * via `auth.api.signInMagicLinkServer`.
+	 *
+	 * This does not change the HTTP/client response for `signIn.magicLink`.
+	 *
+	 * @default false
+	 */
+	returnToken?: boolean | undefined;
+	/**
 	 * Disable sign up if user is not found.
 	 *
 	 * @default false
@@ -138,8 +147,29 @@ const magicLinkVerifyQuerySchema = z.object({
 		})
 		.optional(),
 });
-export const magicLink = (options: MagicLinkOptions) => {
+type SignInMagicLinkBody = z.infer<typeof signInMagicLinkBodySchema>;
+
+type MagicLinkResponse = {
+	status: true;
+};
+
+type MagicLinkServerResponse = MagicLinkResponse & {
+	url: string;
+	token: string;
+};
+
+type MagicLinkDeliveryData = {
+	email: string;
+	url: string;
+	token: string;
+};
+
+type MagicLinkServerResult<ReturnToken extends boolean | undefined> =
+	ReturnToken extends true ? MagicLinkServerResponse : MagicLinkResponse;
+
+export const magicLink = <const O extends MagicLinkOptions>(options: O) => {
 	const opts = {
+		returnToken: false,
 		storeToken: "plain",
 		allowedAttempts: 1,
 		...options,
@@ -157,6 +187,47 @@ export const magicLink = (options: MagicLinkOptions) => {
 			return await opts.storeToken.hash(token);
 		}
 		return token;
+	}
+
+	async function createMagicLink(
+		ctx: GenericEndpointContext & {
+			body: SignInMagicLinkBody;
+		},
+	): Promise<MagicLinkDeliveryData> {
+		const { email } = ctx.body;
+
+		const verificationToken = opts?.generateToken
+			? await opts.generateToken(email)
+			: generateRandomString(32, "a-z", "A-Z");
+		const storedToken = await storeToken(ctx, verificationToken);
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: storedToken,
+			value: JSON.stringify({ email, name: ctx.body.name, attempt: 0 }),
+			expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
+		});
+		const realBaseURL = new URL(ctx.context.baseURL);
+		const pathname = realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
+		const basePath = pathname ? "" : ctx.context.options.basePath || "";
+		const url = new URL(
+			`${pathname}${basePath}/magic-link/verify`,
+			realBaseURL.origin,
+		);
+		url.searchParams.set("token", verificationToken);
+		url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");
+		if (ctx.body.newUserCallbackURL) {
+			url.searchParams.set("newUserCallbackURL", ctx.body.newUserCallbackURL);
+		}
+		if (ctx.body.errorCallbackURL) {
+			url.searchParams.set("errorCallbackURL", ctx.body.errorCallbackURL);
+		}
+		const magicLinkURL = url.toString();
+		const magicLinkData = {
+			email,
+			url: magicLinkURL,
+			token: verificationToken,
+		};
+		await options.sendMagicLink(magicLinkData, ctx);
+		return magicLinkData;
 	}
 
 	return {
@@ -198,14 +269,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 													status: {
 														type: "boolean",
 													},
-													url: {
-														type: "string",
-													},
-													token: {
-														type: "string",
-													},
 												},
-												required: ["status", "url", "token"],
+												required: ["status"],
 											},
 										},
 									},
@@ -214,57 +279,45 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 					},
 				},
-				async (
-					ctx,
-				): Promise<{
-					status: true;
-					url: string;
-					token: string;
-				}> => {
-					const { email } = ctx.body;
-
-					const verificationToken = opts?.generateToken
-						? await opts.generateToken(email)
-						: generateRandomString(32, "a-z", "A-Z");
-					const storedToken = await storeToken(ctx, verificationToken);
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: storedToken,
-						value: JSON.stringify({ email, name: ctx.body.name, attempt: 0 }),
-						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
-					});
-					const realBaseURL = new URL(ctx.context.baseURL);
-					const pathname =
-						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
-					const basePath = pathname ? "" : ctx.context.options.basePath || "";
-					const url = new URL(
-						`${pathname}${basePath}/magic-link/verify`,
-						realBaseURL.origin,
-					);
-					url.searchParams.set("token", verificationToken);
-					url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");
-					if (ctx.body.newUserCallbackURL) {
-						url.searchParams.set(
-							"newUserCallbackURL",
-							ctx.body.newUserCallbackURL,
-						);
-					}
-					if (ctx.body.errorCallbackURL) {
-						url.searchParams.set("errorCallbackURL", ctx.body.errorCallbackURL);
-					}
-					const magicLinkURL = url.toString();
-					await options.sendMagicLink(
-						{
-							email,
-							url: magicLinkURL,
-							token: verificationToken,
-						},
-						ctx,
-					);
+				async (ctx): Promise<MagicLinkResponse> => {
+					await createMagicLink(ctx);
 					return ctx.json({
 						status: true,
-						url: magicLinkURL,
-						token: verificationToken,
 					});
+				},
+			),
+			/**
+			 * ### Endpoint
+			 *
+			 * Server-only helper for creating a magic link.
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInMagicLinkServer`
+			 */
+			signInMagicLinkServer: createAuthEndpoint(
+				{
+					method: "POST",
+					requireHeaders: true,
+					body: signInMagicLinkBodySchema,
+					metadata: {
+						scope: "server",
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx): Promise<MagicLinkServerResult<O["returnToken"]>> => {
+					const magicLinkData = await createMagicLink(ctx);
+					if (!opts.returnToken) {
+						return ctx.json({
+							status: true,
+						}) as MagicLinkServerResult<O["returnToken"]>;
+					}
+					return ctx.json({
+						status: true,
+						url: magicLinkData.url,
+						token: magicLinkData.token,
+					}) as MagicLinkServerResult<O["returnToken"]>;
 				},
 			),
 			/**
