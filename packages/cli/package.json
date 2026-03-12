@@ -1,6 +1,6 @@
 {
   "name": "auth",
-  "version": "1.5.1-beta.1",
+  "version": "1.5.1-beta.3",
   "description": "The CLI for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -69,6 +69,7 @@
     "commander": "^12.1.0",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.41.0",
+    "get-tsconfig": "^4.13.6",
     "open": "^10.2.0",
     "pg": "^8.19.0",
     "prettier": "^3.8.1",

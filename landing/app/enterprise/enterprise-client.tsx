@@ -7,38 +7,14 @@ import { toast } from "sonner";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 
 const included = [
-	{
-		title: "Self-service SSO",
-		desc: "SAML, OIDC, and social SSO with self-service configuration.",
-	},
-	{
-		title: "Dashboard RBAC",
-		desc: "Fine-grained role-based access control for your team.",
-	},
-	{
-		title: "Unlimited seats",
-		desc: "No per-seat charges. Add your entire team.",
-	},
-	{
-		title: "Custom audit logs",
-		desc: "Extended retention and custom configuration for compliance.",
-	},
-	{
-		title: "Implementation assistance",
-		desc: "Hands-on guidance to help integrate the framework into your stack.",
-	},
-	{
-		title: "Advanced support",
-		desc: "Dedicated support channel with priority response.",
-	},
-	{
-		title: "Custom events & security",
-		desc: "Custom volume for events and security detection.",
-	},
-	{
-		title: "Log drain",
-		desc: "Stream auth events to your own logging infrastructure.",
-	},
+	"Self-service SSO",
+	"Dashboard RBAC",
+	"Unlimited seats",
+	"Custom audit logs",
+	"Implementation assistance",
+	"Advanced support",
+	"Custom events & security",
+	"Log drain",
 ];
 
 function EnterpriseHero() {
@@ -58,20 +34,16 @@ function EnterpriseHero() {
 							auth at scale.
 						</span>
 					</h1>
-					<p className="text-[11px] text-foreground/55 dark:text-foreground/50 leading-relaxed max-w-[260px]">
-						Custom pricing, unlimited seats, SSO, RBAC, and advanced support for
+					<p className="text-[11px] text-foreground/65 dark:text-foreground/55 leading-relaxed max-w-[260px]">
+						Custom plans, unlimited seats, SSO, RBAC, and advanced support for
 						teams that need more.
 					</p>
 				</div>
 
-				{/* What's included */}
 				<div className="border-t border-foreground/10 pt-4 space-y-0">
-					<p className="text-[10px] uppercase tracking-widest text-foreground/45 dark:text-foreground/40 font-mono mb-3">
-						What&apos;s included
-					</p>
 					{included.map((item, i) => (
 						<motion.div
-							key={item.title}
+							key={item}
 							initial={{ opacity: 0, x: -8 }}
 							animate={{ opacity: 1, x: 0 }}
 							transition={{
@@ -79,14 +51,14 @@ function EnterpriseHero() {
 								delay: 0.3 + i * 0.05,
 								ease: "easeOut",
 							}}
-							className="py-2.5 border-b border-dashed border-foreground/[0.06] last:border-0"
+							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-							<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/70 dark:text-foreground/60 mb-0.5">
-								{item.title}
-							</h3>
-							<p className="text-[11px] text-foreground/50 dark:text-foreground/45 leading-relaxed">
-								{item.desc}
-							</p>
+							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-[10px] leading-none select-none shrink-0">
+								+
+							</span>
+							<span className="text-[11px] text-foreground/65 dark:text-foreground/55 font-mono tracking-wide">
+								{item}
+							</span>
 						</motion.div>
 					))}
 				</div>
@@ -94,10 +66,10 @@ function EnterpriseHero() {
 				{/* CTA */}
 				<div className="flex items-center gap-3 pt-1">
 					<Link
-						href="/pricing"
+						href="/products/infrastructure"
 						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/60 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 					>
-						View Pricing
+						View Products
 						<svg
 							className="h-2.5 w-2.5 opacity-50"
 							viewBox="0 0 10 10"
@@ -128,7 +100,7 @@ export function EnterprisePageClient() {
 				const url =
 					process.env.NODE_ENV === "development"
 						? "http://localhost:3001/api/enterprise/contact"
-						: "/api/enterprise/contact";
+						: "https://dash.better-auth.com/api/enterprise/contact";
 				const response = await fetch(url, {
 					method: "POST",
 					body: JSON.stringify({
@@ -158,11 +130,11 @@ export function EnterprisePageClient() {
 		});
 
 	return (
-		<div className="relative h-full overflow-x-hidden pt-14 lg:pt-0">
-			<div className="relative text-foreground h-full">
-				<div className="flex flex-col lg:flex-row h-full">
+		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
+			<div className="relative text-foreground lg:h-full">
+				<div className="flex flex-col lg:h-full lg:flex-row">
 					{/* Left side — Enterprise hero */}
-					<div className="hidden lg:block relative w-full lg:w-[40%] border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-y-auto overflow-x-hidden no-scrollbar px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[40%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -170,7 +142,7 @@ export function EnterprisePageClient() {
 					</div>
 
 					{/* Right side — Contact form */}
-					<div className="relative w-full lg:w-[60%] overflow-y-auto overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[60%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
 						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-8 ">
 							{/* Mobile header */}
 							<div className="flex lg:hidden items-center gap-1.5">
@@ -196,17 +168,17 @@ export function EnterprisePageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-5">
+								<p className="text-[10px] uppercase tracking-widest text-foreground dark:text-foreground font-mono mb-5">
 									# Get a demo
 								</p>
 
-								<div className="relative border border-foreground/[0.08] overflow-hidden">
+								<div className="relative border border-foreground/[0.12] overflow-hidden">
 									<div className="px-4 py-4 sm:px-5 sm:py-5">
 										<div className="space-y-1.5 mb-5">
-											<h2 className="text-base font-medium text-foreground/90">
+											<h2 className="text-base font-medium text-foreground/90 dark:text-foreground/85">
 												Get in touch
 											</h2>
-											<p className="text-[11px] text-foreground/40">
+											<p className="text-[11px] text-foreground/50 dark:text-foreground/45">
 												Fill out the form and we&apos;ll be in touch soon.
 											</p>
 										</div>
@@ -215,7 +187,7 @@ export function EnterprisePageClient() {
 											<div>
 												<label
 													htmlFor="enterprise-name"
-													className="block text-[10px] uppercase tracking-widest text-foreground/40 font-mono mb-1.5"
+													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
 												>
 													Full name
 												</label>
@@ -224,14 +196,14 @@ export function EnterprisePageClient() {
 													name="fullName"
 													type="text"
 													placeholder="Your name"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.12] text-foreground/80 text-sm placeholder:text-foreground/20 focus:outline-none focus:border-foreground/30 transition-colors font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
 												/>
 											</div>
 
 											<div>
 												<label
 													htmlFor="enterprise-company"
-													className="block text-[10px] uppercase tracking-widest text-foreground/40 font-mono mb-1.5"
+													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
 												>
 													Company
 												</label>
@@ -240,14 +212,14 @@ export function EnterprisePageClient() {
 													name="company"
 													type="text"
 													placeholder="Company name"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.12] text-foreground/80 text-sm placeholder:text-foreground/20 focus:outline-none focus:border-foreground/30 transition-colors font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
 												/>
 											</div>
 
 											<div>
 												<label
 													htmlFor="enterprise-email"
-													className="block text-[10px] uppercase tracking-widest text-foreground/40 font-mono mb-1.5"
+													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
 												>
 													Company email
 												</label>
@@ -256,21 +228,21 @@ export function EnterprisePageClient() {
 													type="email"
 													name="email"
 													placeholder="name@company.com"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.12] text-foreground/80 text-sm placeholder:text-foreground/20 focus:outline-none focus:border-foreground/30 transition-colors font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
 												/>
 											</div>
 
 											<div>
 												<label
 													htmlFor="enterprise-size"
-													className="block text-[10px] uppercase tracking-widest text-foreground/40 font-mono mb-1.5"
+													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
 												>
 													Company size
 												</label>
 												<select
 													id="enterprise-size"
 													name="companySize"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.12] text-foreground/80 text-sm focus:outline-none focus:border-foreground/30 transition-colors appearance-none cursor-pointer font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm focus:outline-none focus:border-foreground/40 transition-colors appearance-none cursor-pointer font-mono"
 												>
 													<option value="">Select</option>
 													<option value="1-10">1-10</option>
@@ -284,7 +256,7 @@ export function EnterprisePageClient() {
 											<div>
 												<label
 													htmlFor="enterprise-help"
-													className="block text-[10px] uppercase tracking-widest text-foreground/40 font-mono mb-1.5"
+													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
 												>
 													What do you need help with?
 												</label>
@@ -293,7 +265,7 @@ export function EnterprisePageClient() {
 													name="description"
 													rows={4}
 													placeholder="Tell us about your project and requirements..."
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.12] text-foreground/80 text-sm placeholder:text-foreground/20 focus:outline-none focus:border-foreground/30 transition-colors resize-none font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors resize-none font-mono"
 												/>
 											</div>
 
@@ -306,18 +278,18 @@ export function EnterprisePageClient() {
 											</button>
 										</form>
 
-										<p className="mt-4 text-foreground/20 text-[10px] leading-relaxed">
+										<p className="mt-4 text-foreground/40 dark:text-foreground/30 text-[10px] leading-relaxed">
 											By submitting, you agree to our{" "}
 											<Link
-												href="/terms"
-												className="underline hover:text-foreground/40"
+												href="/legal/terms"
+												className="underline hover:text-foreground/55"
 											>
 												Terms of Service
 											</Link>{" "}
 											and{" "}
 											<Link
-												href="/privacy"
-												className="underline hover:text-foreground/40"
+												href="/legal/privacy"
+												className="underline hover:text-foreground/55"
 											>
 												Privacy Policy
 											</Link>

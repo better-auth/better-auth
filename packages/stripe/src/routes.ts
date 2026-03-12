@@ -7,7 +7,7 @@ import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
@@ -908,7 +908,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					await client.subscriptions
 						.update(activeSubscription.id, {
 							items: itemUpdates,
-							proration_behavior: "create_prorations",
+							proration_behavior: plan.prorationBehavior ?? "create_prorations",
 						})
 						.catch(async (e) => {
 							throw ctx.error("BAD_REQUEST", {

@@ -41,4 +41,5 @@ export type * from "../plugins/access";
 export type * from "../plugins/organization";
 export type * from "../types/helper";
 export type { UnionToIntersection } from "../types/helper";
+export type * from "./path-to-object";
 //#endregion

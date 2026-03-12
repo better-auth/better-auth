@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/mongo-adapter",
-  "version": "1.5.1-beta.1",
+  "version": "1.5.1-beta.3",
   "description": "Mongo adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -45,6 +45,11 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
     "mongodb": "^6.0.0 || ^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "mongodb": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",

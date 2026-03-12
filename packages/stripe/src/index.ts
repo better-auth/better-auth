@@ -239,7 +239,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 						await client.subscriptions.update(stripeSub.id, {
 							items,
-							proration_behavior: "create_prorations",
+							proration_behavior: plan.prorationBehavior ?? "create_prorations",
 						});
 						await ctx.adapter.update({
 							model: "subscription",
