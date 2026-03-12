@@ -479,6 +479,8 @@ describe("before hook early return should not leak request headers", async () =>
 		expect(response.headers.has("host")).toBe(false);
 		expect(response.headers.has("accept")).toBe(false);
 		expect(response.headers.has("user-agent")).toBe(false);
+		// toResponse should still set appropriate response headers
+		expect(response.headers.get("content-type")).toBe("application/json");
 	});
 
 	it("should not leak request headers when returnHeaders is true", async () => {
