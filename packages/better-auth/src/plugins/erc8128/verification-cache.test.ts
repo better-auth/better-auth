@@ -237,6 +237,22 @@ describe("database cache ops", () => {
 		expect(await ops.get("sig1")).toBeNull();
 	});
 
+	it("returns null for DB rows with invalid expiresAt values", async () => {
+		const { adapter, rows } = createMockAdapter();
+		const ops = createVerificationCacheOps("database", undefined, adapter);
+
+		rows.set("sig1", {
+			id: "1",
+			cacheKey: "sig1",
+			address: "0xabc",
+			chainId: 1,
+			signatureHash: "0xhash",
+			expiresAt: new Date("invalid"),
+		});
+
+		expect(await ops.get("sig1")).toBeNull();
+	});
+
 	it("deletes a DB value", async () => {
 		const { adapter, rows } = createMockAdapter();
 		const ops = createVerificationCacheOps("database", undefined, adapter);

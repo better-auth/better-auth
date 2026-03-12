@@ -76,6 +76,26 @@ const DEFAULT_CLOCK_SKEW_SEC = 30;
 /** Only verify one signature per request (the first valid one). */
 const MAX_SIGNATURE_VERIFICATIONS = 1;
 
+function requestHasCookie(request: Request, cookieName: string): boolean {
+	const cookieHeader = request.headers.get("cookie");
+	if (!cookieHeader) {
+		return false;
+	}
+
+	for (const cookie of cookieHeader.split(";")) {
+		const trimmedCookie = cookie.trim();
+		const separatorIndex = trimmedCookie.indexOf("=");
+		if (separatorIndex === -1) {
+			continue;
+		}
+		if (trimmedCookie.slice(0, separatorIndex) === cookieName) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		erc8128: {
@@ -932,9 +952,10 @@ export const erc8128 = (options: ERC8128PluginOptions) => {
 		}
 
 		const precedence = options.authPrecedence ?? "session-first";
-		const hasSessionCookie = request.headers
-			.get("cookie")
-			?.includes(ctx.context.authCookies.sessionToken.name);
+		const hasSessionCookie = requestHasCookie(
+			request,
+			ctx.context.authCookies.sessionToken.name,
+		);
 		const currentSessionPromise =
 			protectOptions?.resolveSession &&
 			hasSessionCookie &&
@@ -1220,20 +1241,17 @@ export const erc8128 = (options: ERC8128PluginOptions) => {
 							return;
 						}
 
-						const cookieHeader = ctx.request.headers.get("cookie") || "";
-						const hasSessionCookie = cookieHeader.includes(
+						const hasSessionCookie = requestHasCookie(
+							ctx.request,
 							ctx.context.authCookies.sessionToken.name,
 						);
 						const precedence = options.authPrecedence ?? "session-first";
 
-						// session-first: skip signature verification when a session cookie exists
-						if (hasSessionCookie && precedence === "session-first") {
-							return;
-						}
-
 						const result = await protectRequestInternal(ctx, ctx.request, {
 							resolveSession:
-								hasSessionCookie && precedence === "reject-on-mismatch"
+								hasSessionCookie &&
+								(precedence === "reject-on-mismatch" ||
+									precedence === "session-first")
 									? async () => {
 											const session = await getSessionFromCtx(ctx);
 											return session

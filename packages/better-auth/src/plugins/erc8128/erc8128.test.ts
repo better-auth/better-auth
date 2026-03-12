@@ -284,6 +284,34 @@ describe("erc8128 plugin", () => {
 			expect(data.invalidation_endpoint).toBeUndefined();
 		});
 
+		it("omits persistent endpoints in stateless mode and warns once", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			try {
+				const { auth } = await getTestInstance({
+					database: undefined as any,
+					plugins: [
+						erc8128({
+							verifyMessage: async () => true,
+							routePolicy: {
+								default: { replayable: true },
+							},
+						}),
+					],
+				});
+
+				const { response, data } = await get(auth, "/.well-known/erc8128");
+				expect(response.status).toBe(200);
+				expect(data.verification_endpoint).toBeUndefined();
+				expect(data.invalidation_endpoint).toBeUndefined();
+				expect(warnSpy).toHaveBeenCalledWith(
+					expect.stringContaining("No persistent storage available"),
+				);
+			} finally {
+				warnSpy.mockRestore();
+			}
+		});
+
 		it("includes invalidation endpoint when replayable signatures are enabled", async () => {
 			const { auth } = await getTestInstance({
 				plugins: [
@@ -332,6 +360,25 @@ describe("erc8128 plugin", () => {
 	});
 
 	describe("POST /erc8128/verify", () => {
+		it("returns 404 in stateless mode without persistent storage", async () => {
+			const { auth } = await getTestInstance({
+				database: undefined as any,
+				plugins: [erc8128({ verifyMessage: async () => true })],
+			});
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/erc8128/verify", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+					},
+					body: "{}",
+				}),
+			);
+
+			expect(response.status).toBe(404);
+		});
+
 		it("creates user + walletAddress + account + session and sets cookie for valid signature", async () => {
 			mockVerifier(async () => okResult());
 			const { auth } = await getTestInstance({
@@ -1183,6 +1230,37 @@ describe("erc8128 plugin", () => {
 			expect(verifySpy).not.toHaveBeenCalled();
 		});
 
+		it("session-first does not skip routePolicy enforcement for substring cookie name matches", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					erc8128({
+						verifyMessage: async () => true,
+						routePolicy: {
+							"/get-session": {
+								methods: ["GET"],
+								replayable: false,
+							},
+						},
+					}),
+				],
+			});
+
+			const ctx = await auth.$context;
+			const sessionCookieName = ctx.authCookies.sessionToken.name;
+
+			const { response, data } = await get(auth, "/get-session", {
+				headers: {
+					cookie: `${sessionCookieName}_shadow=1`,
+				},
+			});
+
+			expect(response.status).toBe(401);
+			expect(data).toMatchObject({
+				error: "erc8128_verification_failed",
+				reason: "missing_signature",
+			});
+		});
+
 		it("signature-first: verifies signature even when session cookie is present", async () => {
 			mockVerifier(async () => okResult());
 			const { auth } = await getTestInstance({
@@ -1400,6 +1478,30 @@ describe("erc8128 plugin", () => {
 	});
 
 	describe("POST /erc8128/invalidate", () => {
+		it("returns 404 in stateless mode without persistent storage", async () => {
+			const { auth } = await getTestInstance({
+				database: undefined as any,
+				plugins: [
+					erc8128({
+						verifyMessage: async () => true,
+						routePolicy: { default: { replayable: true } },
+					}),
+				],
+			});
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/erc8128/invalidate", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+					},
+					body: "{}",
+				}),
+			);
+
+			expect(response.status).toBe(404);
+		});
+
 		it("valid non-replayable request sets notBefore for keyId", async () => {
 			const keyId = formatKeyId(defaultChainId, defaultAddress);
 			mockVerifier(async ({ request }) => {

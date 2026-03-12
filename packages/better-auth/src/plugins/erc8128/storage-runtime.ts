@@ -53,9 +53,15 @@ export function createErc8128StorageRuntime(
 		if (ctx.context.secondaryStorage) {
 			return "secondary-storage";
 		}
-		// Better Auth always provides an adapter in DB-backed runtimes, so trust
-		// the configured adapter here and let real DB operations fail at the call
-		// site instead of probing the nonce table on every request.
+
+		// Stateless Better Auth setups still have the in-memory adapter in
+		// context, but that storage is not durable enough for nonces,
+		// invalidations, or replayable verification cache entries.
+		if (!ctx.context.options.database || ctx.context.adapter.id === "memory") {
+			options.warnNoStorage();
+			return "none";
+		}
+
 		return "database";
 	};
 

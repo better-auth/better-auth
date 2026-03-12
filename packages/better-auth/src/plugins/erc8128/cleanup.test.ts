@@ -49,30 +49,50 @@ function createMockCleanupAdapter() {
 	};
 }
 
-function createMockSecondaryStorage() {
+function createMockSecondaryStorage(options?: { atomic?: boolean }) {
 	const store = new Map<string, { value: string; expiresAt: number }>();
-	return {
-		store,
-		storage: {
-			async get(key: string) {
+	const get = vi.fn(async (key: string) => {
+		const entry = store.get(key);
+		if (!entry) return null;
+		if (entry.expiresAt <= Date.now()) {
+			store.delete(key);
+			return null;
+		}
+		return entry.value;
+	});
+	const set = vi.fn(async (key: string, value: string, ttl?: number) => {
+		store.set(key, {
+			value,
+			expiresAt: Date.now() + (ttl ?? 3600) * 1000,
+		});
+	});
+	const setIfNotExists = options?.atomic
+		? vi.fn(async (key: string, value: string, ttl?: number) => {
 				const entry = store.get(key);
-				if (!entry) return null;
-				if (entry.expiresAt <= Date.now()) {
-					store.delete(key);
-					return null;
+				if (entry && entry.expiresAt > Date.now()) {
+					return false;
 				}
-				return entry.value;
-			},
-			async set(key: string, value: string, ttl?: number) {
 				store.set(key, {
 					value,
 					expiresAt: Date.now() + (ttl ?? 3600) * 1000,
 				});
-			},
+				return true;
+			})
+		: undefined;
+
+	return {
+		store,
+		storage: {
+			get,
+			set,
+			setIfNotExists,
 			async delete(key: string) {
 				store.delete(key);
 			},
 		},
+		get,
+		set,
+		setIfNotExists,
 	};
 }
 
@@ -163,5 +183,31 @@ describe("createErc8128CleanupScheduler", () => {
 		await scheduler.schedule();
 
 		expect(deleteMany).not.toHaveBeenCalled();
+	});
+
+	it("uses atomic setIfNotExists when secondaryStorage provides it", async () => {
+		vi.useFakeTimers();
+		try {
+			const { deleteMany, adapter } = createMockCleanupAdapter();
+			const { storage, get, set, setIfNotExists } = createMockSecondaryStorage({
+				atomic: true,
+			});
+			const scheduler = createErc8128CleanupScheduler({
+				adapter,
+				secondaryStorage: storage,
+				strategy: "auto",
+				throttleSec: 5 * 60,
+			});
+
+			await scheduler.schedule();
+			await scheduler.schedule();
+
+			expect(deleteMany).toHaveBeenCalledTimes(3);
+			expect(setIfNotExists).toHaveBeenCalledTimes(2);
+			expect(get).not.toHaveBeenCalled();
+			expect(set).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

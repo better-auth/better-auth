@@ -755,7 +755,7 @@ export function createDualInvalidationOps(
 			ttlSec?: number,
 		) {
 			await Promise.all([
-				db.upsertKeyIdNotBefore(keyId, notBefore),
+				db.upsertKeyIdNotBefore(keyId, notBefore, ttlSec),
 				ss.upsertKeyIdNotBefore(keyId, notBefore, ttlSec),
 			]);
 		},

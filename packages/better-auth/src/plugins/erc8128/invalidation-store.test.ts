@@ -394,6 +394,29 @@ describe("dual invalidation ops", () => {
 		expect(records[0]!.notBefore).toBe(200);
 	});
 
+	it("expires DB fallback on the same ttl as secondaryStorage", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(1000 * 1000));
+			const { adapter } = createMockAdapter();
+			const { storage } = createMockStorage();
+
+			const dbOps = createDBInvalidationOps(adapter);
+			const ssOps = createSecondaryStorageInvalidationOps(storage, 3600);
+			const dualOps = createDualInvalidationOps(dbOps, ssOps);
+
+			await dualOps.upsertKeyIdNotBefore(KEY_ID_ABC, 1000, 1);
+			expect(await dualOps.findByKeyId(KEY_ID_ABC)).toHaveLength(1);
+
+			vi.setSystemTime(new Date((1000 + 2) * 1000));
+			expect(await ssOps.findByKeyId(KEY_ID_ABC)).toEqual([]);
+			expect(await dbOps.findByKeyId(KEY_ID_ABC)).toEqual([]);
+			expect(await dualOps.findByKeyId(KEY_ID_ABC)).toEqual([]);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("uses one fused DB fallback lookup for replayable verification state", async () => {
 		const { adapter } = createMockAdapter();
 		const { storage } = createMockStorage();

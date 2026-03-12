@@ -376,12 +376,14 @@ By default, the client signs every request with a nonce — making each signatur
 
 When any route policy allows replayable signatures, the plugin automatically enables:
 
-- The `/erc8128/invalidate` endpoint for revoking signatures.
+- The `/erc8128/invalidate` endpoint for revoking signatures, when persistent storage is available (`database` or `secondaryStorage`).
 - Server-side cryptographic verification caching so repeated replayable requests can skip repeated `ecrecover` / ERC-1271 checks while still running full request verification.
+
+Without persistent storage, replayable routes are not supported: `/erc8128/invalidate` is not exposed, replayable invalidation is disabled, and replayable route policies fail instead of falling back to process-local state.
 
 ### Invalidation
 
-Replayable signatures can be revoked via a signed `POST` to `/erc8128/invalidate`. Two modes are supported (one per request):
+When persistent storage is available, replayable signatures can be revoked via a signed `POST` to `/erc8128/invalidate`. Two modes are supported (one per request):
 
 - **Per-signature** — revoke a single signature by its hex value.
 - **`notBefore` timestamp** — reject all signatures created before a given time for the caller's key.

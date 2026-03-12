@@ -35,6 +35,16 @@ export function parseVerificationCacheValue(raw: unknown): CacheValue | null {
 	}
 }
 
+function getExpiryTimestamp(value: unknown): number | null {
+	if (!value) {
+		return null;
+	}
+
+	const expiresAt = new Date(value as string | number | Date);
+	const timestamp = expiresAt.getTime();
+	return Number.isNaN(timestamp) ? null : timestamp;
+}
+
 /**
  * Unified interface for the replayable signature verification cache.
  *
@@ -143,13 +153,13 @@ export function createVerificationCacheOps(
 					where: [{ field: "cacheKey", operator: "eq", value: key }],
 				});
 				if (!record) return null;
-				const expiresAt = new Date(record.expiresAt as string | number | Date);
-				if (expiresAt.getTime() <= Date.now()) {
+				const expiresAtMs = getExpiryTimestamp(record.expiresAt);
+				if (expiresAtMs == null || expiresAtMs <= Date.now()) {
 					return null;
 				}
 				const parsed = {
 					verified: true,
-					expires: Math.floor(expiresAt.getTime() / 1000),
+					expires: Math.floor(expiresAtMs / 1000),
 				} satisfies CacheValue;
 				return parsed;
 			} catch {

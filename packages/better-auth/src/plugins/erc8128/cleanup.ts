@@ -78,23 +78,32 @@ export function createErc8128CleanupScheduler(options: {
 				options.throttleSec ?? DEFAULT_ERC8128_CLEANUP_THROTTLE_SEC;
 
 			try {
-				const existing = await options.secondaryStorage!.get(
-					ERC8128_CLEANUP_LOCK_KEY,
-				);
-				if (existing) {
-					return;
+				let acquired = false;
+				if (typeof options.secondaryStorage.setIfNotExists === "function") {
+					acquired = await options.secondaryStorage.setIfNotExists(
+						ERC8128_CLEANUP_LOCK_KEY,
+						token,
+						throttleSec,
+					);
+				} else {
+					const existing = await options.secondaryStorage.get(
+						ERC8128_CLEANUP_LOCK_KEY,
+					);
+					if (!existing) {
+						await options.secondaryStorage.set(
+							ERC8128_CLEANUP_LOCK_KEY,
+							token,
+							throttleSec,
+						);
+
+						const stored = await options.secondaryStorage.get(
+							ERC8128_CLEANUP_LOCK_KEY,
+						);
+						acquired = stored === token;
+					}
 				}
 
-				await options.secondaryStorage!.set(
-					ERC8128_CLEANUP_LOCK_KEY,
-					token,
-					throttleSec,
-				);
-
-				const stored = await options.secondaryStorage!.get(
-					ERC8128_CLEANUP_LOCK_KEY,
-				);
-				if (stored !== token) {
+				if (!acquired) {
 					return;
 				}
 
