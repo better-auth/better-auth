@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import * as z from "zod";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { MagicLinkOptions } from ".";
 import { magicLink } from ".";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
@@ -719,5 +721,125 @@ describe("magic link allowedAttempts", async () => {
 			const betterAuthCookie = headers.get("set-cookie");
 			expect(betterAuthCookie).toBeDefined();
 		}
+	});
+});
+
+describe("magic link additionalData", async () => {
+	it("should pass additionalData to sendMagicLink", async () => {
+		let receivedData: Record<string, unknown> | undefined;
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						receivedData = data.additionalData;
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+				additionalData: { message: "hello" },
+			},
+			headers,
+		});
+		expect(receivedData).toEqual({ message: "hello" });
+	});
+
+	it("should work without additionalData", async () => {
+		let receivedData: unknown = "not-called";
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						receivedData = data.additionalData;
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers,
+		});
+		expect(receivedData).toBeUndefined();
+	});
+
+	it("should validate additionalData with custom schema", async () => {
+		let receivedData: { message: string } | undefined;
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					additionalDataSchema: z.object({ message: z.string() }),
+					async sendMagicLink(data) {
+						receivedData = data.additionalData;
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+				additionalData: { message: "typed hello" },
+			},
+			headers,
+		});
+		expect(receivedData).toEqual({ message: "typed hello" });
+	});
+
+	it("should infer additionalData type from custom schema", () => {
+		const schema = z.object({ message: z.string(), count: z.number() });
+
+		type Opts = MagicLinkOptions<typeof schema>;
+		type SendData = Parameters<Opts["sendMagicLink"]>[0];
+
+		expectTypeOf<SendData["additionalData"]>().toEqualTypeOf<
+			{ message: string; count: number } | undefined
+		>();
+	});
+
+	it("should default additionalData type to Record<string, JsonValue>", () => {
+		type DefaultOpts = MagicLinkOptions;
+		type SendData = Parameters<DefaultOpts["sendMagicLink"]>[0];
+
+		expectTypeOf<SendData["additionalData"]>().not.toEqualTypeOf<undefined>();
+		expectTypeOf<SendData>().toHaveProperty("additionalData");
+	});
+
+	it("should pass additionalData from client", async () => {
+		let receivedData: Record<string, unknown> | undefined;
+		const { customFetchImpl, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						receivedData = data.additionalData;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+			additionalData: { source: "client", nested: { key: "value" } },
+		});
+		expect(receivedData).toEqual({
+			source: "client",
+			nested: { key: "value" },
+		});
 	});
 });
