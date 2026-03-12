@@ -12,12 +12,30 @@ import {
 	resolveBaseURL,
 } from "../utils/url";
 
+type PluginWithServerApi = {
+	getServerApi?: (ctx: Promise<AuthContext> | AuthContext) => Record<string, unknown>;
+};
+
 export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
 	const authContext = initFn(options);
 	const { api } = getEndpoints(authContext, options);
+	const serverApi = options.plugins?.reduce<Record<string, unknown>>(
+		(acc, plugin) => {
+			const pluginWithServerApi = plugin as typeof plugin & PluginWithServerApi;
+			if (!pluginWithServerApi.getServerApi) {
+				return acc;
+			}
+			return {
+				...acc,
+				...pluginWithServerApi.getServerApi(authContext),
+			};
+		},
+		{},
+	);
+	Object.assign(api, serverApi);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
 			return {

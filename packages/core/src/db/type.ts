@@ -326,6 +326,17 @@ export interface SecondaryStorage {
 		ttl?: number | undefined,
 	) => Awaitable<void | null | unknown>;
 	/**
+	 * Atomically set a key only when it does not already exist.
+	 *
+	 * Returns `true` when the key was created and `false` when it already
+	 * existed. Implementations should respect `ttl` when provided.
+	 */
+	setIfNotExists?: (
+		key: string,
+		value: string,
+		ttl?: number | undefined,
+	) => Awaitable<boolean>;
+	/**
 	 *
 	 * @param key - Key to delete
 	 */

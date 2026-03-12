@@ -55,6 +55,19 @@ export function redisStorage(config: RedisStorageConfig) {
 			}
 		},
 
+		async setIfNotExists(
+			key: string,
+			value: string,
+			ttl?: number | undefined,
+		): Promise<boolean> {
+			const prefixedKey = prefixKey(key);
+			const result =
+				ttl !== undefined && ttl > 0
+					? await client.set(prefixedKey, value, "EX", ttl, "NX")
+					: await client.set(prefixedKey, value, "NX");
+			return result === "OK";
+		},
+
 		async delete(key: string) {
 			await client.del(prefixKey(key));
 		},

@@ -319,6 +319,11 @@
       "dev-source": "./src/plugins/mcp/client/adapters.ts",
       "types": "./dist/plugins/mcp/client/adapters.d.mts",
       "default": "./dist/plugins/mcp/client/adapters.mjs"
+    },
+    "./plugins/erc8128": {
+      "dev-source": "./src/plugins/erc8128/index.ts",
+      "types": "./dist/plugins/erc8128/index.d.mts",
+      "default": "./dist/plugins/erc8128/index.mjs"
     }
   },
   "typesVersions": {
@@ -484,6 +489,9 @@
       ],
       "plugins/mcp/client/adapters": [
         "./dist/plugins/mcp/client/adapters.d.mts"
+      ],
+      "plugins/erc8128": [
+        "./dist/plugins/erc8128/index.d.mts"
       ]
     }
   },
@@ -499,6 +507,7 @@
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.1.1",
     "@noble/hashes": "^2.0.1",
+    "@slicekit/erc8128": "0.3.3-beta.5",
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^6.1.3",
