@@ -89,6 +89,23 @@ type signInMagicLink = {
 ```
 </APIMethod>
 
+On success, `signIn.magicLink` returns the generated magic-link payload:
+
+```ts
+const response = await authClient.signIn.magicLink({
+  email: "user@email.com",
+});
+
+response.data;
+// {
+//   status: true,
+//   url: "https://example.com/api/auth/magic-link/verify?token=...",
+//   token: "..."
+// }
+```
+
+The returned `url` and `token` are the same values passed to `sendMagicLink`.
+
 <Callout>
 If the user has not signed up, unless `disableSignUp` is set to `true`, the user will be signed up automatically.
 </Callout>

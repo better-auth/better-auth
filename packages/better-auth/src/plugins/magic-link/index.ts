@@ -198,7 +198,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 													status: {
 														type: "boolean",
 													},
+													url: {
+														type: "string",
+													},
+													token: {
+														type: "string",
+													},
 												},
+												required: ["status", "url", "token"],
 											},
 										},
 									},
@@ -207,7 +214,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (
+					ctx,
+				): Promise<{
+					status: true;
+					url: string;
+					token: string;
+				}> => {
 					const { email } = ctx.body;
 
 					const verificationToken = opts?.generateToken
@@ -238,16 +251,19 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (ctx.body.errorCallbackURL) {
 						url.searchParams.set("errorCallbackURL", ctx.body.errorCallbackURL);
 					}
+					const magicLinkURL = url.toString();
 					await options.sendMagicLink(
 						{
 							email,
-							url: url.toString(),
+							url: magicLinkURL,
 							token: verificationToken,
 						},
 						ctx,
 					);
 					return ctx.json({
 						status: true,
+						url: magicLinkURL,
+						token: verificationToken,
 					});
 				},
 			),
