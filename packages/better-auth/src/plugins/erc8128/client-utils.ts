@@ -80,9 +80,7 @@ function bytesToHex(bytes: Uint8Array): string {
  * Request-bound replayable signatures are only reusable for byte-for-byte
  * equivalent requests, so the cache key needs the effective request shape.
  */
-export async function createRequestFingerprint(
-	request: Request,
-): Promise<string> {
+async function createRequestFingerprint(request: Request): Promise<string> {
 	const headerEntries = Array.from(request.headers.entries())
 		.filter(
 			([name]) =>

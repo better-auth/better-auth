@@ -6,7 +6,6 @@ export type CacheValue = {
 	expires: number;
 };
 
-export const DEFAULT_CACHE_SIZE = 10_000;
 const CACHE_KEY_PREFIX = "erc8128:cache:";
 
 export function getVerificationCacheStorageKey(key: string): string {

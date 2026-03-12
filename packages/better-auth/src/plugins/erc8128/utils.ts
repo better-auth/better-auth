@@ -18,7 +18,7 @@ export function parseErc8128KeyId(keyId: string): {
 	};
 }
 
-export function normalizeErc8128KeyId(keyId: string): string | null {
+function normalizeErc8128KeyId(keyId: string): string | null {
 	const parsed = parseKeyId(keyId);
 	if (!parsed) {
 		return null;

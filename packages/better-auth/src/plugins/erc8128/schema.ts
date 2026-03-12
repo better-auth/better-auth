@@ -1,6 +1,6 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
-export const walletAddressSchema = {
+export const schema = {
 	walletAddress: {
 		fields: {
 			userId: {
@@ -30,9 +30,6 @@ export const walletAddressSchema = {
 			},
 		},
 	},
-} satisfies BetterAuthPluginDBSchema;
-
-export const nonceSchema = {
 	erc8128Nonce: {
 		fields: {
 			nonceKey: {
@@ -47,9 +44,6 @@ export const nonceSchema = {
 			},
 		},
 	},
-} satisfies BetterAuthPluginDBSchema;
-
-export const verificationCacheSchema = {
 	erc8128VerificationCache: {
 		fields: {
 			cacheKey: {
@@ -79,9 +73,6 @@ export const verificationCacheSchema = {
 			},
 		},
 	},
-} satisfies BetterAuthPluginDBSchema;
-
-export const invalidationSchema = {
 	erc8128Invalidation: {
 		fields: {
 			kind: {
@@ -120,13 +111,6 @@ export const invalidationSchema = {
 			},
 		},
 	},
-} satisfies BetterAuthPluginDBSchema;
-
-export const schema = {
-	...walletAddressSchema,
-	...nonceSchema,
-	...verificationCacheSchema,
-	...invalidationSchema,
 } satisfies BetterAuthPluginDBSchema;
 
 export type ERC8128Schema = typeof schema;
