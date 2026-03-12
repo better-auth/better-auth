@@ -305,7 +305,7 @@ describe("erc8128Client", () => {
 			expect(result.url).toBe("/session");
 		});
 
-		it("gracefully handles unparseable URL", async () => {
+		it("gracefully handles not parsable URL", async () => {
 			const { plugin, signFn } = await setupPluginWithConfig({});
 			const init = getInitHook(plugin);
 

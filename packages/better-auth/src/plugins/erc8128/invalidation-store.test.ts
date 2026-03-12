@@ -113,7 +113,7 @@ function createMockStorage() {
 }
 
 describe("DB invalidation ops", () => {
-	it("upserts and finds per-keyId notBefore", async () => {
+	it("upsert and find per-keyId notBefore", async () => {
 		const { adapter } = createMockAdapter();
 		const ops = createDBInvalidationOps(adapter);
 		const nowSec = Math.floor(Date.now() / 1000);
@@ -154,7 +154,7 @@ describe("DB invalidation ops", () => {
 		}
 	});
 
-	it("upserts and finds per-signature invalidation", async () => {
+	it("upsert and find per-signature invalidation", async () => {
 		const { adapter } = createMockAdapter();
 		const ops = createDBInvalidationOps(adapter);
 
@@ -168,7 +168,7 @@ describe("DB invalidation ops", () => {
 	it("returns null for non-existent signature", async () => {
 		const { adapter } = createMockAdapter();
 		const ops = createDBInvalidationOps(adapter);
-		expect(await ops.findBySignature("0xmissing", KEY_ID_ABC)).toBeNull();
+		expect(await ops.findBySignature("xsig", KEY_ID_ABC)).toBeNull();
 	});
 
 	it("loads replayable verification state in one DB query", async () => {
@@ -248,7 +248,7 @@ describe("secondaryStorage invalidation ops", () => {
 	it("returns null for missing signature", async () => {
 		const { storage } = createMockStorage();
 		const ops = createSecondaryStorageInvalidationOps(storage, 3600);
-		expect(await ops.findBySignature("0xmissing", KEY_ID_ABC)).toBeNull();
+		expect(await ops.findBySignature("xsig", KEY_ID_ABC)).toBeNull();
 	});
 
 	it("uses batched secondaryStorage reads for replayable verification state when available", async () => {

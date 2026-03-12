@@ -114,7 +114,7 @@ describe("secondaryStorage cache ops", () => {
 			ttlSec: 300,
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date(v.expires * 1000),
 		});
 		expect(await ops.get("sig1")).toEqual(v);
@@ -145,7 +145,7 @@ describe("secondaryStorage cache ops", () => {
 			ttlSec: 300,
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date(Date.now() + 300_000),
 		});
 		await ops.delete("sig1");
@@ -187,7 +187,7 @@ describe("secondaryStorage cache ops", () => {
 			ttlSec: 300,
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date(Date.now() + 300_000),
 		});
 		expect(await ops.get("sig1")).toBeNull();
@@ -207,7 +207,7 @@ describe("database cache ops", () => {
 			ttlSec: 300,
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date(v.expires * 1000),
 		});
 
@@ -234,7 +234,7 @@ describe("database cache ops", () => {
 			cacheKey: "sig1",
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date(Date.now() - 1_000),
 		});
 
@@ -250,7 +250,7 @@ describe("database cache ops", () => {
 			cacheKey: "sig1",
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date("invalid"),
 		});
 
@@ -267,7 +267,7 @@ describe("database cache ops", () => {
 			ttlSec: 300,
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date(Date.now() + 300_000),
 		});
 		await ops.delete("sig1");
@@ -313,7 +313,7 @@ describe("database cache ops", () => {
 			ttlSec: 300,
 			address: "0xabc",
 			chainId: 1,
-			signatureHash: "0xhash",
+			signatureHash: "0xsig",
 			expiresAt: new Date(v.expires * 1000),
 		});
 		expect(await ops.get("sig1")).toBeNull();

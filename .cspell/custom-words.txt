@@ -15,3 +15,5 @@ myapp
 Neue
 CCPA
 CPRA
+0xuserbsignature
+xsig

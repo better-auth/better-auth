@@ -2179,7 +2179,7 @@ describe("erc8128 plugin", () => {
 				await ctx.adapter.create({
 					model: "erc8128Nonce",
 					data: {
-						nonceKey: "erc8128:1:0xexpired:nonce-1",
+						nonceKey: "erc8128:1:0xsig:nonce-1",
 						expiresAt: new Date("2025-12-31T23:59:00.000Z"),
 					},
 				});
@@ -2251,7 +2251,7 @@ describe("erc8128 plugin", () => {
 				await ctx.adapter.create({
 					model: "erc8128Nonce",
 					data: {
-						nonceKey: "erc8128:1:0xexpired:nonce-2",
+						nonceKey: "erc8128:1:0xsig:nonce-2",
 						expiresAt: new Date("2025-12-31T23:59:00.000Z"),
 					},
 				});
@@ -2315,7 +2315,7 @@ describe("erc8128 plugin", () => {
 				await ctx.adapter.create({
 					model: "erc8128Nonce",
 					data: {
-						nonceKey: "erc8128:1:0xexpired:nonce-db-only",
+						nonceKey: "erc8128:1:0xsig:nonce-db-only",
 						expiresAt: new Date("2025-12-31T23:59:00.000Z"),
 					},
 				});
