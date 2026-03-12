@@ -436,6 +436,71 @@ describe("after hook", async () => {
 	});
 });
 
+describe("before hook early return should not leak request headers", async () => {
+	const endpoints = {
+		earlyReturn: createAuthEndpoint(
+			"/early-return",
+			{
+				method: "GET",
+			},
+			async () => {
+				return { shouldNotReach: true };
+			},
+		),
+	};
+
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async () => {
+				return { earlyReturnData: true };
+			}),
+		},
+	});
+
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("should not leak request headers when asResponse is true", async () => {
+		const requestHeaders = new Headers({
+			"content-length": "42",
+			"host": "example.com",
+			"accept": "text/html",
+			"user-agent": "TestAgent/1.0",
+			"x-custom-request": "should-not-leak",
+		});
+
+		const response = await authEndpoints.earlyReturn({
+			asResponse: true,
+			headers: requestHeaders,
+		});
+
+		expect(response).toBeInstanceOf(Response);
+		// Request-only headers must not appear on the response
+		expect(response.headers.has("content-length")).toBe(false);
+		expect(response.headers.has("host")).toBe(false);
+		expect(response.headers.has("accept")).toBe(false);
+		expect(response.headers.has("user-agent")).toBe(false);
+	});
+
+	it("should not leak request headers when returnHeaders is true", async () => {
+		const requestHeaders = new Headers({
+			"content-length": "100",
+			"host": "example.com",
+			"cookie": "session=abc",
+		});
+
+		const result = await authEndpoints.earlyReturn({
+			returnHeaders: true,
+			headers: requestHeaders,
+		});
+
+		// The headers returned should be empty response headers, not the request headers
+		expect(result.headers).toBeDefined();
+		expect(result.headers.has("content-length")).toBe(false);
+		expect(result.headers.has("host")).toBe(false);
+		expect(result.headers.has("cookie")).toBe(false);
+	});
+});
+
 describe("disabled paths", async () => {
 	it("should return 404 for disabled paths", async () => {
 		const { client } = await getTestInstance({

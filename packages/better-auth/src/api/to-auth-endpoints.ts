@@ -161,12 +161,10 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 							} else if (before) {
 								/* Return before hook response if it's anything other than a context return */
 								return context?.asResponse
-									? toResponse(before, {
-											headers: context?.headers,
-										})
+									? toResponse(before)
 									: context?.returnHeaders
 										? {
-												headers: context?.headers,
+												headers: new Headers(),
 												response: before,
 											}
 										: before;
