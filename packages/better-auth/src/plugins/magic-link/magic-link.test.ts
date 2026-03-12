@@ -9,6 +9,7 @@ type VerificationEmail = {
 	email: string;
 	token: string;
 	url: string;
+	metadata?: Record<string, any>;
 };
 
 describe("magic link", async () => {
@@ -49,6 +50,23 @@ describe("magic link", async () => {
 			url: expect.stringContaining(
 				"http://localhost:3000/api/auth/magic-link/verify",
 			),
+		});
+		expect(verificationEmail.metadata).toBeUndefined();
+	});
+
+	it("should forward metadata to sendMagicLink", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+			metadata: {
+				inviteId: "123",
+			},
+		});
+
+		expect(verificationEmail).toMatchObject({
+			email: testUser.email,
+			metadata: {
+				inviteId: "123",
+			},
 		});
 	});
 	it("should verify magic link", async () => {
