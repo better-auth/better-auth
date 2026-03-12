@@ -7481,6 +7481,134 @@ describe("stripe", () => {
 			expect(response.headers.get("location")).toContain(callbackURL);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8255
+		 */
+		it("should replace {CHECKOUT_SESSION_ID} placeholder in callbackURL with actual session ID", async () => {
+			const testSubscriptionId = "sub_placeholder_test";
+			const testCheckoutSessionId = "cs_placeholder_456";
+			const testCustomerId = "cus_placeholder_test";
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				checkout: {
+					sessions: {
+						...stripeOptions.stripeClient.checkout.sessions,
+						retrieve: vi.fn(),
+					},
+				},
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: testSubscriptionId,
+								status: "active",
+								cancel_at_period_end: false,
+								cancel_at: null,
+								canceled_at: null,
+								trial_start: null,
+								trial_end: null,
+								items: {
+									data: [
+										{
+											price: {
+												id: process.env.STRIPE_PRICE_ID_1,
+												recurring: { interval: "month" },
+											},
+											quantity: 1,
+											current_period_start: Math.floor(Date.now() / 1000),
+											current_period_end:
+												Math.floor(Date.now() / 1000) + 30 * 86400,
+										},
+									],
+								},
+							},
+						],
+					}),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+			};
+
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const testCtx = await testAuth.$context;
+
+			const headers = new Headers();
+			const userRes = await client.signUp.email(
+				{
+					email: "placeholder-test@test.com",
+					password: "password",
+					name: "Placeholder Test",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "placeholder-test@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const sub = await testCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: testCustomerId,
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
+				id: testCheckoutSessionId,
+				metadata: {
+					userId: userRes.user.id,
+					subscriptionId: sub.id,
+					referenceId: userRes.user.id,
+				},
+			});
+
+			// User passes {CHECKOUT_SESSION_ID} in their successUrl, which gets
+			// URL-encoded inside callbackURL. Stripe can only replace the literal
+			// (unencoded) placeholder, so the encoded version stays as-is.
+			// Better Auth should replace it with the actual session ID before redirecting.
+			const callbackURL =
+				"http://localhost:5173/billing/success?session_id={CHECKOUT_SESSION_ID}";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=${testCheckoutSessionId}`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			expect(response.status).toBe(302);
+			const location = response.headers.get("location")!;
+			// The placeholder must be replaced with the actual checkout session ID
+			expect(location).toContain(`session_id=${testCheckoutSessionId}`);
+			// The literal placeholder must NOT remain in the redirect URL
+			expect(location).not.toContain("{CHECKOUT_SESSION_ID}");
+			expect(location).not.toContain("%7BCHECKOUT_SESSION_ID%7D");
+		});
+
 		it("should redirect when checkout session retrieval fails", async () => {
 			const stripeForTest = {
 				...stripeOptions.stripeClient,
