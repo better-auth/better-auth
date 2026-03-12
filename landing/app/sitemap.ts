@@ -35,6 +35,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			changeFrequency: "weekly",
 			priority: 0.8,
 		},
+		{
+			url: `${BASE_URL}/products/framework`,
+			lastModified: new Date(),
+			changeFrequency: "weekly",
+			priority: 0.8,
+		},
+		{
+			url: `${BASE_URL}/products/infrastructure`,
+			lastModified: new Date(),
+			changeFrequency: "weekly",
+			priority: 0.8,
+		},
 	];
 
 	const docPages: MetadataRoute.Sitemap = await Promise.all(
@@ -56,21 +68,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		priority: 0.6,
 	}));
 
-	// These pages are not being used
-	//
-	// const changelogPages: MetadataRoute.Sitemap = changelogs
-	// 	.getPages()
-	// 	.map((page) => ({
-	// 		url: `${BASE_URL}${page.url}`,
-	// 		lastModified: page.data.date ? new Date(page.data.date) : new Date(),
-	// 		changeFrequency: "monthly",
-	// 		priority: 0.6,
-	// 	}));
-
-	return [
-		...basePages,
-		...docPages,
-		...blogPages,
-		//  ...changelogPages
-	];
+	return [...basePages, ...docPages, ...blogPages];
 }
