@@ -71,7 +71,11 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     OPENFORT_SECRET_KEY=sk_test_...
 
     # Shield Encryption (for embedded wallets)
+<<<<<<< HEAD
     SHIELD_PUBLISHABLE_KEY=your-shield-api-key
+=======
+    SHIELD_API_KEY=your-shield-api-key
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
     SHIELD_ENCRYPTION_SHARE=your-shield-encryption-share
     SHIELD_SECRET_KEY=your-shield-secret-key
 
@@ -84,7 +88,11 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     ```bash title=".env.local"
     # Openfort
     VITE_OPENFORT_PUBLISHABLE_KEY=pk_test_...
+<<<<<<< HEAD
     VITE_SHIELD_PUBLISHABLE_KEY=...
+=======
+    VITE_SHIELD_PUBLISHABLE_KEY=sk_test_...
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
     VITE_POLICY_ID=pol_...  # Transaction policy ID from Openfort dashboard
 
     # Better Auth
@@ -132,7 +140,11 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
           use: [
             encryptionSession({
               config: {
+<<<<<<< HEAD
                 apiKey: process.env.SHIELD_PUBLISHABLE_KEY,
+=======
+                apiKey: process.env.SHIELD_API_KEY,
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
                 secretKey: process.env.SHIELD_SECRET_KEY,
                 encryptionPart: process.env.SHIELD_ENCRYPTION_SHARE,
               },
@@ -152,7 +164,11 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     ### Create Better Auth client
 
     ```ts title="auth-client.ts"
+<<<<<<< HEAD
     import { createAuthClient } from 'better-auth/react';
+=======
+    import { createAuthClient } from "better-auth/client";
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
     import { bearer } from "better-auth/plugins/bearer/client";
 
     export const authClient = createAuthClient({
@@ -170,14 +186,23 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     ```tsx title="app/providers.tsx"
     import { OpenfortProvider, ThirdPartyOAuthProvider, getDefaultConfig } from "@openfort/react";
     import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+<<<<<<< HEAD
     import { polygonAmoy, sepolia } from "viem/chains";
+=======
+    import { beamTestnet, polygonAmoy, sepolia } from "viem/chains";
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
     import { WagmiProvider, createConfig } from "wagmi";
     import { authClient } from "./auth-client";
 
     const wagmiConfig = createConfig(
       getDefaultConfig({
         appName: "Your App Name",
+<<<<<<< HEAD
         chains: [polygonAmoy, sepolia]
+=======
+        chains: [beamTestnet, polygonAmoy, sepolia],
+        walletConnectProjectId: import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID,
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
       })
     );
 
@@ -247,8 +272,13 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
     1. Navigate to **Authentication Providers**
     2. Add **Better Auth** as a provider
     3. Set the **Base URL** to your backend endpoint (use ngrok or similar for local development)
+<<<<<<< HEAD
     4. (optional) Create a **Policy** for transaction sponsorship
     5. (optional) Copy the **Policy ID** to your environment variables
+=======
+    4. Create a **Policy** for transaction sponsorship
+    5. Copy the **Policy ID** to your environment variables
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
 
     <Callout type="warn">
       For local development, use a tunneling service like ngrok to expose your backend to Openfort.
@@ -535,7 +565,11 @@ export default function TokenBalance() {
 If you encounter errors retrieving the encryption session:
 
 1. Ensure the Bearer plugin is enabled in your Better Auth config
+<<<<<<< HEAD
 2. Verify that `SHIELD_PUBLISHABLE_KEY`, `SHIELD_SECRET_KEY`, and `SHIELD_ENCRYPTION_SHARE` are set correctly
+=======
+2. Verify that `SHIELD_API_KEY`, `SHIELD_SECRET_KEY`, and `SHIELD_ENCRYPTION_SHARE` are set correctly
+>>>>>>> 265144ad3 (feat(sidebar): add Openfort link and icon to sidebar content)
 3. Confirm that the Better Auth session is active before calling `getEncryptionSession()`
 
 ### CORS Issues
