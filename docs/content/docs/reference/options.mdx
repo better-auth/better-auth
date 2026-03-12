@@ -192,7 +192,7 @@ Read more about databases [here](/docs/concepts/database).
 
 ## `secondaryStorage`
 
-Secondary storage configuration used to store session and rate limit data.
+Secondary storage configuration used to store session data, verification records, and rate limit data.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -495,10 +495,6 @@ export const auth = betterAuth({
 		// your Redis or KV implementation
 	},
 	verification: {
-		modelName: "verifications",
-		fields: {
-			identifier: "verification_identifier"
-		},
 		disableCleanup: false,
 		storeIdentifier: "hashed",
 		storeInDatabase: false
