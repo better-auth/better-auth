@@ -913,6 +913,7 @@ stripe({
 | `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
 | `group`                   | `string`   | Defines the subscription lane for the plan. Plugin-managed flows allow one active or trialing subscription per `referenceId + group`. Omitted plans use `"default"`. |
 | `seatPriceId`             | `string`   | Per-seat billing price ID. Requires the `organization` plugin. |
+| `prorationBehavior`       | `string`   | Proration behavior on subscription updates: `"create_prorations"` (default), `"always_invoice"`, or `"none"`. |
 | `lineItems`               | `LineItem[]` | Additional line items to include in the checkout session.   |
 | `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |
 

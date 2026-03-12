@@ -22,6 +22,16 @@ import {
 } from "./utils";
 
 /**
+ * OIDC Error Codes
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthError
+ */
+type OIDCAuthError =
+	| "login_required"
+	| "consent_required"
+	| "interaction_required"
+	| "account_selection_required";
+
+/**
  * Formats an error url
  */
 export function formatErrorURL(
@@ -52,6 +62,25 @@ export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 		throw ctx.redirect(uri);
 	}
 };
+
+function redirectWithPromptNoneError(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	query: OAuthAuthorizationQuery,
+	error: OIDCAuthError,
+	description: string,
+) {
+	return handleRedirect(
+		ctx,
+		formatErrorURL(
+			query.redirect_uri,
+			error,
+			description,
+			query.state,
+			getIssuer(ctx, opts),
+		),
+	);
+}
 
 /**
  * Validates that the issuer URL
@@ -160,6 +189,7 @@ export async function authorizeEndpoint(
 	const promptSet = ctx.query?.prompt
 		? parsePrompt(ctx.query?.prompt)
 		: undefined;
+	const promptNone = promptSet?.has("none") ?? false;
 	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
 		throw ctx.redirect(
 			getErrorURL(
@@ -278,6 +308,15 @@ export async function authorizeEndpoint(
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
 	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+		if (promptNone) {
+			return redirectWithPromptNoneError(
+				ctx,
+				opts,
+				query,
+				"login_required",
+				"authentication required",
+			);
+		}
 		return redirectWithPromptCode(
 			ctx,
 			opts,
@@ -302,6 +341,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (selectedAccountRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"account_selection_required",
+					"End-User account selection is required",
+				);
+			}
 			return redirectWithPromptCode(ctx, opts, "select_account");
 		}
 	}
@@ -315,6 +363,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (signupRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"interaction_required",
+					"End-User interaction is required",
+				);
+			}
 			return redirectWithPromptCode(
 				ctx,
 				opts,
@@ -332,6 +389,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (postLoginRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"interaction_required",
+					"End-User interaction is required",
+				);
+			}
 			return redirectWithPromptCode(ctx, opts, "post_login");
 		}
 	}
@@ -384,6 +450,15 @@ export async function authorizeEndpoint(
 		!consent ||
 		!requestedScopes.every((val) => consent.scopes.includes(val))
 	) {
+		if (promptNone) {
+			return redirectWithPromptNoneError(
+				ctx,
+				opts,
+				query,
+				"consent_required",
+				"End-User consent is required",
+			);
+		}
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 

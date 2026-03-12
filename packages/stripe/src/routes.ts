@@ -1064,7 +1064,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					try {
 						await client.subscriptions.update(activeSubscription.id, {
 							items: itemUpdates,
-							proration_behavior: "create_prorations",
+							proration_behavior: plan.prorationBehavior ?? "create_prorations",
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
 						});
 					} catch (e) {
 						const err = e as { message?: string; code?: string };
