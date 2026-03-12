@@ -25,15 +25,16 @@ import {
 	selectAcceptSignatureRetryOptions,
 } from "@slicekit/erc8128";
 import type { erc8128 } from ".";
+import type { Erc8128SignatureStore } from "./client-utils";
 import {
 	arraysEqual,
 	buildFullUrl,
-	type Erc8128SignatureStore,
 	resolveRequestBody,
 	resolveSignatureStore,
 	signRequestWithCache,
 } from "./client-utils";
 import { getRoutePolicyPathname } from "./route-policy";
+
 export type { CachedSignature, Erc8128SignatureStore } from "./client-utils";
 
 type PluginManagedOptions = "serverConfigs" | "fetch";

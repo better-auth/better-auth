@@ -4,12 +4,6 @@ import {
 	createErc8128CleanupScheduler,
 } from "./cleanup";
 
-async function flushMicrotasks(ticks = 2) {
-	for (let index = 0; index < ticks; index += 1) {
-		await Promise.resolve();
-	}
-}
-
 function createMockCleanupAdapter() {
 	const rows = new Map<string, Array<Record<string, unknown>>>([
 		["erc8128Nonce", []],
@@ -86,10 +80,12 @@ describe("cleanupExpiredErc8128Storage", () => {
 	it("deletes expired rows across all ERC-8128 tables", async () => {
 		const { rows, adapter } = createMockCleanupAdapter();
 		const now = new Date("2026-01-01T00:00:00.000Z");
-		rows.get("erc8128Nonce")?.push(
-			{ id: "n1", expiresAt: new Date("2025-12-31T23:59:00.000Z") },
-			{ id: "n2", expiresAt: new Date("2026-01-01T00:01:00.000Z") },
-		);
+		rows
+			.get("erc8128Nonce")
+			?.push(
+				{ id: "n1", expiresAt: new Date("2025-12-31T23:59:00.000Z") },
+				{ id: "n2", expiresAt: new Date("2026-01-01T00:01:00.000Z") },
+			);
 		rows.get("erc8128VerificationCache")?.push({
 			id: "c1",
 			expiresAt: new Date("2025-12-31T23:59:00.000Z"),

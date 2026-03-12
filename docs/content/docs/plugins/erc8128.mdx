@@ -172,7 +172,12 @@ A signed `POST` to `/erc8128/verify` verifies the signature, creates a user (if 
 
 **Per-request** authentication verifies a signature on every call with no sessions involved — suited for backend services, AI agents, and stateless APIs.
 
-When any request to `auth.handler` carries ERC-8128 signature headers (`Signature` + `Signature-Input`) and no valid session cookie is present, the middleware verifies it automatically before the endpoint runs. If the wallet is new, the middleware creates the user and wallet record — no prior call to `/erc8128/verify` is needed. The middleware does not mint or persist a cookie session, but it does populate a request-scoped authenticated identity so Better Auth routes can treat the signer as the current user for that request.
+This can happen in two ways:
+
+- automatically for requests routed through `auth.handler`
+- explicitly for arbitrary app routes via `auth.api.erc8128.protect(request)` or `auth.api.erc8128.verifyRequest(request)`
+
+When a request to `auth.handler` carries ERC-8128 signature headers (`Signature` + `Signature-Input`) and no valid session cookie is present, the middleware verifies it automatically before the endpoint runs. If the wallet is new, the middleware creates the user and wallet record — no prior call to `/erc8128/verify` is needed. The middleware does not mint or persist a cookie session, but it does populate a request-scoped authenticated identity so Better Auth routes can treat the signer as the current user for that request.
 
 <Callout>
   The built-in middleware only runs for requests routed through `auth.handler`. For custom app routes outside Better Auth, use the plugin's server API so verification still goes through Better Auth storage, invalidation, and user-linking logic.

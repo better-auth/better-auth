@@ -462,6 +462,18 @@ function withoutSignatureHeaders(request: Request) {
 	return headers;
 }
 
+function createGenericRequestContext<Options extends BetterAuthOptions>(
+	authContext: AuthContext<Options>,
+	request: Request,
+	headers: Headers = request.headers,
+): GenericEndpointContext {
+	return {
+		request,
+		headers,
+		context: cloneAuthContextForRequest(authContext, request),
+	} as unknown as GenericEndpointContext;
+}
+
 async function requireErc8128Context<Options extends BetterAuthOptions>(
 	auth: Auth<Options>,
 ) {
@@ -491,12 +503,14 @@ export function getErc8128Api<Options extends BetterAuthOptions>(
 				resolveSession:
 					options?.resolveSession ??
 					(async () => {
-						const session = await auth.api
-							.getSession({
-								headers: withoutSignatureHeaders(request),
-								request,
-							} as any)
-							.catch(() => null);
+						const sessionContext = createGenericRequestContext(
+							await auth.$context,
+							request,
+							withoutSignatureHeaders(request),
+						);
+						const session = await getSessionFromCtx(sessionContext).catch(
+							() => null,
+						);
 
 						return session
 							? {
