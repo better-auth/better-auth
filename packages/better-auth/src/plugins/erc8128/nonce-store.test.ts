@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type { Where } from "@better-auth/core/db/adapter";
+import { describe, expect, it, vi } from "vitest";
 import {
 	createAdapterNonceStore,
 	createDualNonceStore,

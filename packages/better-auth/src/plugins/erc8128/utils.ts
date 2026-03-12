@@ -1,6 +1,6 @@
+import { base64 } from "@better-auth/utils/base64";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { utf8ToBytes } from "@noble/hashes/utils.js";
-import { base64 } from "@better-auth/utils/base64";
 import { parseKeyId } from "@slicekit/erc8128";
 import { toChecksumAddress } from "../../utils/hashing";
 
