@@ -20,7 +20,7 @@ Magic link or email link is a way to authenticate users without a password. When
     export const auth = betterAuth({
         plugins: [
             magicLink({ // [!code highlight]
-                sendMagicLink: async ({ email, token, url }, ctx) => { // [!code highlight]
+                sendMagicLink: async ({ email, token, url, metadata }, ctx) => { // [!code highlight]
                     // send email to user // [!code highlight]
                 } // [!code highlight]
             }) // [!code highlight]
@@ -85,6 +85,10 @@ type signInMagicLink = {
      * redirected to the callbackURL with an `error` query parameter.
      */
     errorCallbackURL?: string = "/error"
+    /**
+     * Additional metadata forwarded to the sendMagicLink callback.
+     */
+    metadata?: Record<string, any> = { inviteId: "123" }
 }
 ```
 </APIMethod>
@@ -130,6 +134,7 @@ type magicLinkVerify = {
 - `email`: The email address of the user.
 - `url`: The URL to be sent to the user. This URL contains the token.
 - `token`: The token if you want to send the token with custom URL.
+- `metadata`: Additional request metadata passed from `signIn.magicLink`.
 
 and a `ctx` context object as the second parameter.
 

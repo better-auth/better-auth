@@ -39,6 +39,7 @@ export interface MagicLinkOptions {
 			email: string;
 			url: string;
 			token: string;
+			metadata?: Record<string, any>;
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
@@ -110,6 +111,12 @@ const signInMagicLinkBodySchema = z.object({
 		.string()
 		.meta({
 			description: "URL to redirect after error.",
+		})
+		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "Additional metadata to pass to sendMagicLink.",
 		})
 		.optional(),
 });
@@ -208,7 +215,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, metadata } = ctx.body;
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
@@ -243,6 +250,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							email,
 							url: url.toString(),
 							token: verificationToken,
+							metadata,
 						},
 						ctx,
 					);
