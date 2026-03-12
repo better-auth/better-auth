@@ -149,10 +149,12 @@ and a `ctx` context object as the second parameter.
   default, we return a long and cryptographically secure string.
 </Callout>
 
-**storeToken**: The `storeToken` function is called to store the magic link token in the database. The default value is `"plain"`.
+**storeToken**: The `storeToken` function controls how the magic link token is transformed before it is stored by Better Auth's verification layer. The default value is `"plain"`.
 
 The `storeToken` function can be one of the following:
 
 - `"plain"`: The token is stored in plain text.
 - `"hashed"`: The token is hashed using the default hasher.
 - `{ type: "custom-hasher", hash: (token: string) => Promise<string> }`: The token is hashed using a custom hasher.
+
+The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config. If you configure `secondaryStorage`, magic link verification records can be stored there instead of the database.
