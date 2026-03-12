@@ -198,11 +198,11 @@ export function StaggeredNavFiles() {
 					initial={{ x: -20, opacity: 0 }}
 					animate={{ x: 0, opacity: 1 }}
 					transition={{ duration: 0.28, ease: "easeOut" }}
-					className={`${leftPaneWidthClass} hidden ${isKnownPage ? "lg:flex" : "lg:hidden"} items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
+					className={`${leftPaneWidthClass} hidden ${isKnownPage ? "lg:flex" : "lg:hidden"} h-(--landing-topbar-height) items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
 				>
 					<Link
 						href="/"
-						className="flex items-center gap-1 px-4 py-3 transition-colors duration-150"
+						className="flex h-full items-center gap-1 px-4 py-3 transition-colors duration-150"
 					>
 						<div className="flex flex-col gap-2 w-full">
 							<LogoContextMenu
@@ -314,13 +314,13 @@ export function StaggeredNavFiles() {
 					initial={{ y: -10, opacity: 0 }}
 					animate={{ y: 0, opacity: 1 }}
 					transition={{ duration: 0.28, delay: 0.04, ease: "easeOut" }}
-					className={`flex-1 hidden lg:flex items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
+					className={`flex-1 hidden lg:flex h-(--landing-topbar-height) items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
 				>
 					{/* Inline logo when left pane is hidden */}
 					{!isKnownPage && (
 						<Link
 							href="/"
-							className={`flex items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
+							className={`flex h-full items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
 						>
 							<LogoContextMenu
 								logo={

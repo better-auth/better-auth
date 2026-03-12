@@ -386,6 +386,7 @@
 	--scrollbar-thumb-hover: var(--ring);
 	--scrollbar-track: transparent;
 	--radius: 0.2rem;
+	--landing-topbar-height: 52px;
 	--fd-nav-height: 56px;
 	--fd-banner-height: 0px;
 	--fd-tocnav-height: 0px;
@@ -629,10 +630,10 @@ html:not([data-anchor-scrolling]) {
 	--fd-layout-width: 100vw;
 	--fd-layout-offset: 0px;
 	--fd-page-width: 900px;
-	--fd-banner-height: 44px;
+	--fd-banner-height: var(--landing-topbar-height);
 	--landing-left-pane-width: min(22vw, 300px);
 	--staggered-nav-cta-width: 128px;
-	padding-top: 44px;
+	padding-top: var(--landing-topbar-height);
 }
 
 @media (min-width: 64rem) {
@@ -641,7 +642,6 @@ html:not([data-anchor-scrolling]) {
 			calc(100vw - var(--landing-left-pane-width)),
 			1200px
 		);
-		--fd-header-height: -1px;
 		padding-inline-start: var(--landing-left-pane-width);
 	}
 
@@ -649,7 +649,7 @@ html:not([data-anchor-scrolling]) {
 		content: "";
 		position: fixed;
 		inset-block-start: 0;
-		height: 44px;
+		height: var(--landing-topbar-height);
 		inset-inline-start: calc(var(--landing-left-pane-width) - 1px);
 		width: 1px;
 		background: var(--color-border);
@@ -698,7 +698,7 @@ html:not([data-anchor-scrolling]) {
 
 /* Blog layout: matches docs pattern with narrow left pane + TOC sidebar */
 .blog-layout {
-	padding-top: 44px;
+	padding-top: var(--landing-topbar-height);
 }
 
 @media (min-width: 64rem) {
@@ -710,7 +710,7 @@ html:not([data-anchor-scrolling]) {
 		content: "";
 		position: fixed;
 		inset-block-start: 0;
-		height: 44px;
+		height: var(--landing-topbar-height);
 		inset-inline-start: calc(var(--landing-left-pane-width) - 1px);
 		width: 1px;
 		background: var(--color-border);
