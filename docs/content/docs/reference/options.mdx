@@ -491,12 +491,17 @@ Verification configuration options.
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
+	secondaryStorage: {
+		// your Redis or KV implementation
+	},
 	verification: {
 		modelName: "verifications",
 		fields: {
-			userId: "user_id"
+			identifier: "verification_identifier"
 		},
-		disableCleanup: false
+		disableCleanup: false,
+		storeIdentifier: "hashed",
+		storeInDatabase: false
 	},
 })
 ```
@@ -504,6 +509,10 @@ export const auth = betterAuth({
 - `modelName`: The model name for the verification table
 - `fields`: Map fields to different column names
 - `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
+- `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
+- `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
+
+If `secondaryStorage` is configured, verification records are stored there by default. That behavior applies to flows that use Better Auth's shared verification layer, including OTP and magic-link style flows.
 
 ## `rateLimit`
 
