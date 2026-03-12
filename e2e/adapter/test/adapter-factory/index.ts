@@ -1,6 +1,9 @@
-export * from "./auth-flow";
-export * from "./basic";
-export * from "./joins";
-export * from "./number-id";
-export * from "./transactions";
-export * from "./uuid";
+export {
+	authFlowTestSuite,
+	getNormalTestSuiteTests,
+	joinsTestSuite,
+	normalTestSuite,
+	numberIdTestSuite,
+	transactionsTestSuite,
+	uuidTestSuite,
+} from "@better-auth/test-utils/adapter";
