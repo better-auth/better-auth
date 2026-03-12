@@ -11,6 +11,23 @@ import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
+async function createOrReplaceVerification(
+	internalAdapter: {
+		createVerificationValue: (data: {
+			value: string;
+			identifier: string;
+			expiresAt: Date;
+		}) => Promise<unknown>;
+		deleteVerificationByIdentifier: (identifier: string) => Promise<unknown>;
+	},
+	data: { value: string; identifier: string; expiresAt: Date },
+) {
+	await internalAdapter
+		.deleteVerificationByIdentifier(data.identifier)
+		.catch(() => {});
+	await internalAdapter.createVerificationValue(data);
+}
+
 export type RequiredPhoneNumberOptions = PhoneNumberOptions & {
 	expiresIn: number;
 	otpLength: number;
@@ -119,7 +136,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (opts.requireVerification) {
 				if (!user.phoneNumberVerified) {
 					const otp = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
+					await createOrReplaceVerification(ctx.context.internalAdapter, {
 						value: otp,
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
@@ -275,7 +292,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			}
 
 			const code = generateOTP(opts.otpLength);
-			await ctx.context.internalAdapter.createVerificationValue({
+			await createOrReplaceVerification(ctx.context.internalAdapter, {
 				value: `${code}:0`,
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
@@ -705,7 +722,7 @@ export const requestPasswordResetPhoneNumber = (
 				],
 			});
 			const code = generateOTP(opts.otpLength);
-			await ctx.context.internalAdapter.createVerificationValue({
+			await createOrReplaceVerification(ctx.context.internalAdapter, {
 				value: `${code}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
