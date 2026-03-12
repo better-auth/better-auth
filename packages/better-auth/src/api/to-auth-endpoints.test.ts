@@ -462,8 +462,8 @@ describe("before hook early return should not leak request headers", async () =>
 	it("should not leak request headers when asResponse is true", async () => {
 		const requestHeaders = new Headers({
 			"content-length": "42",
-			"host": "example.com",
-			"accept": "text/html",
+			host: "example.com",
+			accept: "text/html",
 			"user-agent": "TestAgent/1.0",
 			"x-custom-request": "should-not-leak",
 		});
@@ -486,8 +486,8 @@ describe("before hook early return should not leak request headers", async () =>
 	it("should not leak request headers when returnHeaders is true", async () => {
 		const requestHeaders = new Headers({
 			"content-length": "100",
-			"host": "example.com",
-			"cookie": "session=abc",
+			host: "example.com",
+			cookie: "session=abc",
 		});
 
 		const result = await authEndpoints.earlyReturn({
