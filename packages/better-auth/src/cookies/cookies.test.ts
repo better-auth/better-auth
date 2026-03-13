@@ -1338,6 +1338,78 @@ describe("Cookie Chunking", () => {
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
 	});
+
+	/**
+	 * https://github.com/better-auth/better-auth/issues/8585
+	 */
+	it("should chunk by dynamic max value size", async () => {
+		const largeString = "x".repeat(4069);
+
+		const { client } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					entraProfile: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		let hasChunkedCookies = false;
+		let singleSessionDataValueLength: number | null = null;
+
+		await client.signUp.email(
+			{
+				name: "Entra User",
+				email: "entra-chunk-test@example.com",
+				password: "password123",
+				entraProfile: largeString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookie!);
+					parsed.forEach((value, name) => {
+						if (
+							name.includes("session_data.0") ||
+							name.includes("session_data.1")
+						) {
+							hasChunkedCookies = true;
+						}
+						if (name.endsWith("session_data") && !name.includes(".")) {
+							singleSessionDataValueLength = value.value.length;
+						}
+						headers.append("cookie", `${name}=${value.value}`);
+					});
+				},
+			},
+		);
+
+		const msg =
+			singleSessionDataValueLength != null
+				? `Cookie was not chunked; session_data value length was ${singleSessionDataValueLength}`
+				: "Expected chunked session_data cookies (session_data.0, session_data.1)";
+		expect(hasChunkedCookies, msg).toBe(true);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("entra-chunk-test@example.com");
+	});
 });
 
 describe("parse cookies", () => {
