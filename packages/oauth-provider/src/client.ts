@@ -43,7 +43,8 @@ export const oauthProviderClient = () => {
 							pathname.endsWith("/sign-in/social") ||
 							pathname.endsWith("/sign-in/oauth2") ||
 							pathname.endsWith("/oauth2/consent") ||
-							pathname.endsWith("/oauth2/continue")
+							pathname.endsWith("/oauth2/continue") ||
+							pathname.endsWith("/oauth2/public-client-prelogin")
 						) {
 							ctx.body = JSON.stringify({
 								...body,
