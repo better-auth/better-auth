@@ -113,7 +113,7 @@ function chunkCookie(
 	}
 
 	logger.debug(`CHUNKING_${storeName.toUpperCase()}_COOKIE`, {
-		message: `${storeName} cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes, chunking.`,
+		message: `${storeName} cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
 		emptyCookieSize: estimateEmptyCookieSize(`${cookie.name}.0`, options),
 		valueSize: cookie.value.length,
 		chunkCount,
