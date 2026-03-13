@@ -1,5 +1,6 @@
 /// <reference types="electron" />
 
+import { afterEach } from "node:test";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
@@ -121,8 +122,10 @@ export function testUtils(overrideOpts?: BetterAuthOptions) {
 		await runMigrations();
 		vi.useFakeTimers();
 	});
-	afterAll(() => {
+	afterEach(() => {
 		testInstance.storage.clear();
+	});
+	afterAll(() => {
 		vi.useRealTimers();
 	});
 

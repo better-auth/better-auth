@@ -78,8 +78,7 @@ const mockElectron = vi.hoisted(() => {
 vi.mock("electron", () => mockElectron);
 
 describe("Electron", () => {
-	const { auth, client, proxyClient, options, customFetchImpl } =
-		testUtils();
+	const { auth, client, proxyClient, options, customFetchImpl } = testUtils();
 
 	it("should throw error when making requests outside the main process", async ({
 		setProcessType,
@@ -1351,7 +1350,7 @@ describe("Electron", () => {
 			},
 		});
 
-		mockElectron.safeStorage.encryptString.mockImplementation(() => {
+		mockElectron.safeStorage.encryptString.mockImplementationOnce(() => {
 			throw new Error("encryption failed");
 		});
 
@@ -1377,7 +1376,7 @@ describe("Electron", () => {
 		setProcessType,
 	}) => {
 		setProcessType("browser");
-		mockElectron.safeStorage.isEncryptionAvailable.mockReturnValue(false);
+		mockElectron.safeStorage.isEncryptionAvailable.mockReturnValueOnce(false);
 
 		const { user } = await auth.api.signUpEmail({
 			body: {
@@ -1426,7 +1425,7 @@ describe("Electron", () => {
 	it("should return null on decrypt failure", async ({ setProcessType }) => {
 		setProcessType("browser");
 
-		const storage = new Map<string, any>([
+		const cookieStorage = new Map<string, any>([
 			[
 				"better-auth.cookie",
 				Buffer.from('{"session":"old"}').toString("base64"),
@@ -1439,9 +1438,9 @@ describe("Electron", () => {
 				electronClient({
 					...options,
 					storage: {
-						getItem: (name) => storage.get(name) ?? null,
+						getItem: (name) => cookieStorage.get(name) ?? null,
 						setItem: (name, value) => {
-							storage.set(name, value);
+							cookieStorage.set(name, value);
 							return true;
 						},
 					},
