@@ -1,3 +1,4 @@
+import { username } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { i18n } from ".";
@@ -372,6 +373,59 @@ describe("i18n plugin", async () => {
 					translations: {} as any,
 				});
 			}).toThrow("i18n plugin: translations object is empty");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8492
+	 */
+	describe("before hook error translation", () => {
+		it("should translate errors thrown from plugin before hooks", async () => {
+			const { auth: authWithUsername } = await getTestInstance({
+				plugins: [
+					username(),
+					i18n({
+						defaultLocale: "fr",
+						detection: ["header"],
+						translations: {
+							fr: {
+								USERNAME_IS_ALREADY_TAKEN: "Nom d'utilisateur déjà pris",
+							},
+						},
+					}),
+				],
+			});
+
+			// Create first user with username
+			await authWithUsername.api.signUpEmail({
+				body: {
+					email: "user1@example.com",
+					password: "password123",
+					name: "User 1",
+					username: "testuser",
+				},
+			});
+
+			// Try to create second user with the same username
+			const response = await authWithUsername.api.signUpEmail({
+				body: {
+					email: "user2@example.com",
+					password: "password123",
+					name: "User 2",
+					username: "testuser",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("USERNAME_IS_ALREADY_TAKEN");
+			expect(body.message).toBe("Nom d'utilisateur déjà pris");
+			expect(body.originalMessage).toBe(
+				"Username is already taken. Please try another.",
+			);
 		});
 	});
 });
