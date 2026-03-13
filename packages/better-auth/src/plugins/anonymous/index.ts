@@ -8,6 +8,7 @@ import * as z from "zod";
 import {
 	APIError,
 	getSessionFromCtx,
+	isAPIError,
 	sensitiveSessionMiddleware,
 } from "../../api";
 import {
@@ -242,12 +243,36 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							ctx.path?.startsWith("/magic-link/verify") ||
 							ctx.path?.startsWith("/email-otp/verify-email") ||
 							ctx.path?.startsWith("/one-tap/callback") ||
+							ctx.path?.startsWith("/passkey/verify-registration") ||
 							ctx.path?.startsWith("/passkey/verify-authentication") ||
 							ctx.path?.startsWith("/phone-number/verify") ||
 							false
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						/**
+						 * Make sure the user had an anonymous session.
+						 */
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, {
+							disableRefresh: true,
+						});
+						if (!session || !session.user.isAnonymous) {
+							return;
+						}
+						// Passkey registration links a credential without creating an account.
+						// Handle it explicitly because account-based fallback cannot detect it.
+						if (ctx.path === "/passkey/verify-registration") {
+							if (isAPIError(ctx.context.returned)) {
+								return;
+							}
+							await ctx.context.internalAdapter.updateUser(session.user.id, {
+								isAnonymous: false,
+							});
+							return;
+						}
+
 						const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 
 						/**
@@ -263,18 +288,13 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							?.value.split(".")[0]!;
 
 						if (!sessionCookie) {
-							return;
-						}
-						/**
-						 * Make sure the user had an anonymous session.
-						 */
-						const session = await getSessionFromCtx<{
-							isAnonymous: boolean | null;
-						}>(ctx, {
-							disableRefresh: true,
-						});
-
-						if (!session || !session.user.isAnonymous) {
+							const linkedAccounts =
+								await ctx.context.internalAdapter.findAccounts(session.user.id);
+							if (linkedAccounts.length > 0) {
+								await ctx.context.internalAdapter.updateUser(session.user.id, {
+									isAnonymous: false,
+								});
+							}
 							return;
 						}
 
