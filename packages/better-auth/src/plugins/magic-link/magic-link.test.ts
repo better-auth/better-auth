@@ -395,6 +395,57 @@ describe("magic link generate", async () => {
 		expect(sendMagicLink).not.toHaveBeenCalled();
 	});
 
+	it("should generate the same link shape as auth.api.signInMagicLink", async () => {
+		let generatedEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const generateToken = vi.fn(() => "shared-token");
+		const generateInstance = await getTestInstance({
+			plugins: [
+				magicLink({
+					generateToken,
+					sendMagicLink,
+				}),
+			],
+		});
+		const signInInstance = await getTestInstance({
+			plugins: [
+				magicLink({
+					generateToken,
+					sendMagicLink(data) {
+						generatedEmail = data;
+					},
+				}),
+			],
+		});
+
+		const generated = await generateInstance.auth.api.generateMagicLink({
+			body: {
+				email: generateInstance.testUser.email,
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				errorCallbackURL: "/error",
+			},
+			headers: new Headers(),
+		});
+
+		await signInInstance.auth.api.signInMagicLink({
+			body: {
+				email: signInInstance.testUser.email,
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				errorCallbackURL: "/error",
+			},
+			headers: new Headers(),
+		});
+
+		expect(generated.url).toBe(generatedEmail.url);
+		expect(generated.token).toBe(generatedEmail.token);
+		expect(generateToken).toHaveBeenCalledTimes(2);
+	});
+
 	it("should allow generateMagicLink with lastLoginMethod installed", async () => {
 		const { auth, testUser } = await getTestInstance({
 			plugins: [
