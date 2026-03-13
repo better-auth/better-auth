@@ -254,7 +254,22 @@ export async function POST(req: Request) {
 		);
 	}
 
-	const { messages } = await req.json();
+	const body = await req.json();
+	const messages = body?.messages;
+	if (!Array.isArray(messages) || messages.length === 0) {
+		return new Response(
+			JSON.stringify({
+				error: "Invalid request: messages must be a non-empty array.",
+			}),
+			{ status: 400, headers: { "Content-Type": "application/json" } },
+		);
+	}
+	if (messages.length > 100) {
+		return new Response(JSON.stringify({ error: "Too many messages." }), {
+			status: 400,
+			headers: { "Content-Type": "application/json" },
+		});
+	}
 	const docsIndex = getDocsIndex();
 
 	const system = SYSTEM_PROMPT + docsIndex;
