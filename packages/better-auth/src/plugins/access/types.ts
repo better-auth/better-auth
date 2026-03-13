@@ -3,6 +3,14 @@ import type { AuthorizeResponse, createAccessControl } from "./access";
 
 export type ArrayElement<T> = T extends readonly (infer E)[] ? E : never;
 
+export type IsExactlyEmptyObject<T> = keyof T extends never // no keys
+	? T extends {} // is assignable to {}
+		? {} extends T
+			? true
+			: false // and {} is assignable to it
+		: false
+	: false;
+
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =
 	| T[number][]
 	| ReadonlyArray<T[number]>;
