@@ -299,6 +299,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 			generateMagicLink: createAuthEndpoint(
 				{
 					method: "POST",
+					requireHeaders: true,
 					body: generateMagicLinkBodySchema,
 					metadata: {
 						scope: "server",
