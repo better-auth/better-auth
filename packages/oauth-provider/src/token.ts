@@ -73,6 +73,7 @@ async function createJwtAccessToken(
 	client: SchemaClient<Scope[]>,
 	audience: string | string[],
 	scopes: string[],
+	resources?: string[],
 	referenceId?: string,
 	overrides?: {
 		iat?: number;
@@ -86,6 +87,7 @@ async function createJwtAccessToken(
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes,
+				resources,
 				resource: ctx.body.resource,
 				referenceId,
 				metadata: parseClientMetadata(client.metadata),
@@ -239,6 +241,7 @@ async function createOpaqueAccessToken(
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	payload: JWTPayload,
+	resources?: string[],
 	referenceId?: string,
 	refreshId?: string,
 ) {
@@ -255,6 +258,7 @@ async function createOpaqueAccessToken(
 			sessionId: payload?.sid,
 			userId: user?.id,
 			referenceId,
+			resources,
 			refreshId,
 			scopes,
 			createdAt: new Date(iat * 1000),
@@ -274,6 +278,7 @@ async function createRefreshToken(
 	payload: JWTPayload,
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
 	authTime?: Date,
+	resources?: string[],
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -307,13 +312,14 @@ async function createRefreshToken(
 			userId: user.id,
 			referenceId,
 			authTime,
+			resources,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
 		},
 	});
 	return {
-		id: refreshToken.id,
+		id: refreshToken.id as string,
 		token: await encodeRefreshToken(opts, token, sessionId),
 	};
 }
@@ -322,12 +328,12 @@ async function createRefreshToken(
  * Checks the resource parameter, if provided,
  * and returns a valid audience based on the request
  */
-async function checkResource(
+export async function checkResource(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	resource: string | string[] | undefined,
 	scopes: string[],
 ) {
-	const resource: string | string[] | undefined = ctx.body.resource;
 	const audience =
 		typeof resource === "string"
 			? [resource]
@@ -354,7 +360,7 @@ async function checkResource(
 			if (!validAudiences.has(aud)) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "requested resource invalid",
-					error: "invalid_request",
+					error: "invalid_target",
 				});
 			}
 		}
@@ -373,6 +379,7 @@ async function createUserTokens(
 	nonce?: string,
 	additional?: {
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+		resources?: string[];
 	},
 	authTime?: Date,
 ) {
@@ -391,7 +398,12 @@ async function createUserTokens(
 		: defaultExp;
 
 	// Check requested audience if sent as the resource parameter
-	const audience = await checkResource(ctx, opts, scopes);
+	const audience = await checkResource(
+		ctx,
+		opts,
+		additional?.resources,
+		scopes,
+	);
 	const isRefreshToken =
 		additional?.refreshToken?.scopes?.includes("offline_access") ||
 		scopes.includes("offline_access");
@@ -415,6 +427,7 @@ async function createUserTokens(
 					},
 					additional?.refreshToken,
 					authTime,
+					additional?.resources,
 				)
 			: undefined;
 
@@ -428,6 +441,7 @@ async function createUserTokens(
 					client,
 					audience,
 					scopes,
+					additional?.resources,
 					referenceId,
 					{
 						iat,
@@ -446,6 +460,7 @@ async function createUserTokens(
 						exp,
 						sid: sessionId,
 					},
+					additional?.resources,
 					referenceId,
 					earlyRefreshToken?.id,
 				),
@@ -466,6 +481,7 @@ async function createUserTokens(
 						},
 						additional?.refreshToken,
 						authTime,
+						additional?.resources,
 					)
 				: undefined,
 		isIdToken
@@ -508,6 +524,7 @@ async function checkVerificationValue(
 	code: string,
 	client_id: string,
 	redirect_uri?: string,
+	resource?: string[],
 ) {
 	const verification = await ctx.context.internalAdapter.findVerificationValue(
 		await storeToken(opts.storeTokens, code, "authorization_code"),
@@ -570,6 +587,36 @@ async function checkVerificationValue(
 			error: "invalid_request",
 		});
 	}
+	const verificationResources =
+		typeof verificationValue.query.resource === "string"
+			? [verificationValue.query.resource]
+			: verificationValue.query.resource;
+	if (verificationResources) {
+		if (!resource) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"resource not found in original authorization request",
+				error: "invalid_target",
+			});
+		}
+		const requestedSet = new Set(resource);
+		const authorizedSet = new Set(verificationResources);
+		for (const r of requestedSet) {
+			if (!authorizedSet.has(r)) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "requested resource not authorized",
+					error: "invalid_target",
+				});
+			}
+		}
+		if (requestedSet.size !== authorizedSet.size) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"resource set mismatch between authorization and token request",
+				error: "invalid_target",
+			});
+		}
+	}
 
 	return verificationValue;
 }
@@ -587,14 +634,18 @@ async function handleAuthorizationCodeGrant(
 		code,
 		code_verifier,
 		redirect_uri,
+		resource,
 	}: {
 		client_id?: string;
 		client_secret?: string;
 		code?: string;
 		code_verifier?: string;
 		redirect_uri?: string;
+		resource?: string | string[];
 	} = ctx.body;
+
 	const authorization = ctx.request?.headers.get("authorization") || null;
+	const resources = typeof resource === "string" ? [resource] : resource;
 
 	// Convert basic authorization
 	if (authorization?.startsWith("Basic ")) {
@@ -639,6 +690,7 @@ async function handleAuthorizationCodeGrant(
 		code,
 		client_id,
 		redirect_uri,
+		resources,
 	);
 	const scopes = verificationValue.query.scope?.split(" ");
 	if (!scopes) {
@@ -771,7 +823,9 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.referenceId,
 		session.id,
 		verificationValue.query?.nonce,
-		undefined,
+		{
+			resources,
+		},
 		authTime,
 	);
 }
@@ -790,12 +844,16 @@ async function handleClientCredentialsGrant(
 		client_id,
 		client_secret,
 		scope,
+		resource,
 	}: {
 		client_id?: string;
 		client_secret?: string;
 		scope?: string;
+		resource?: string | string[];
 	} = ctx.body;
+
 	const authorization = ctx.request?.headers.get("authorization") || null;
+	const resources = typeof resource === "string" ? [resource] : resource;
 
 	// Convert basic authorization
 	if (authorization?.startsWith("Basic ")) {
@@ -858,7 +916,7 @@ async function handleClientCredentialsGrant(
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context).options;
-	const audience = await checkResource(ctx, opts, requestedScopes);
+	const audience = await checkResource(ctx, opts, resources, requestedScopes);
 
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.m2mAccessTokenExpiresIn ?? 3600);
@@ -878,6 +936,7 @@ async function handleClientCredentialsGrant(
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				scopes: requestedScopes,
+				resources,
 				resource: ctx.body.resource,
 				metadata: parseClientMetadata(client.metadata),
 			})
@@ -907,6 +966,7 @@ async function handleClientCredentialsGrant(
 						iat,
 						exp,
 					},
+					resources,
 				);
 
 	return ctx.json(
@@ -941,14 +1001,17 @@ async function handleRefreshTokenGrant(
 		client_secret,
 		refresh_token,
 		scope,
+		resource,
 	}: {
 		client_id?: string;
 		client_secret?: string;
 		refresh_token?: string;
 		scope?: string;
+		resource?: string | string[];
 	} = ctx.body;
 
 	const authorization = ctx.request?.headers.get("authorization") || null;
+	const resources = typeof resource === "string" ? [resource] : resource;
 
 	// Convert basic authorization
 	if (authorization?.startsWith("Basic ")) {
@@ -1029,6 +1092,18 @@ async function handleRefreshTokenGrant(
 		});
 	}
 
+	// Check body resources against refresh token resources
+	if (
+		resources &&
+		refreshToken.resources &&
+		!resources.every((v) => refreshToken.resources?.includes(v))
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "requested resource invalid",
+			error: "invalid_target",
+		});
+	}
+
 	// Check session scopes
 	const scopes = refreshToken?.scopes;
 	const requestedScopes = scope?.split(" ");
@@ -1077,6 +1152,7 @@ async function handleRefreshTokenGrant(
 		undefined,
 		{
 			refreshToken,
+			resources: resources ?? refreshToken.resources,
 		},
 		authTime,
 	);

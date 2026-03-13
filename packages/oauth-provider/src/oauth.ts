@@ -351,6 +351,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						code_challenge: z.string().optional(),
 						code_challenge_method: z.enum(["S256"]).optional(),
 						nonce: z.string().optional(),
+						resource: z
+							.union([z.string(), z.array(z.string()).min(1)])
+							.optional(),
 						prompt: z
 							.enum([
 								"none",
@@ -422,6 +425,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string" },
 									description: "OpenID Connect nonce",
+								},
+								{
+									name: "resource",
+									in: "query",
+									required: false,
+									schema: { type: "array", items: { type: "string" } },
+									description:
+										"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
 								},
 								{
 									name: "prompt",
@@ -582,7 +593,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						code_verifier: z.string().optional(),
 						redirect_uri: SafeUrlSchema.optional(),
 						refresh_token: z.string().optional(),
-						resource: z.string().optional(),
+						resource: z
+							.union([z.string(), z.array(z.string()).min(1)])
+							.optional(),
 						scope: z.string().optional(),
 					}),
 					metadata: {
@@ -637,7 +650,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												resource: {
 													type: "string",
 													description:
-														"Requested token resource (ie audience) to obtain a JWT formatted access token",
+														"Requested token resource(s) (ie audience) to obtain a JWT formatted access token",
 												},
 												scope: {
 													type: "string",
@@ -756,11 +769,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													enum: ["access_token", "refresh_token"],
 													description:
 														"Hint about the type of the token submitted for introspection",
-												},
-												resource: {
-													type: "string",
-													description:
-														"Introspects a token for a specific resource.",
 												},
 											},
 											required: ["token"],
