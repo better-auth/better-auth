@@ -122,8 +122,11 @@ response.token;
 ```
 
 `generateMagicLink` is server-only, returns the generated `url` and raw `token`,
-and leaves delivery to your own code. Pass the incoming request headers so Better
-Auth can resolve the correct base URL for the generated link.
+and leaves delivery to your own code. It uses the same server-side link
+generation behavior as `auth.api.signInMagicLink()`.
+
+Unlike `signInMagicLink`, `generateMagicLink()` does not accept `metadata`
+because it never calls `sendMagicLink`.
 
 <Callout type="warn">
   Only use `generateMagicLink` in trusted server-side code. Do not expose the
