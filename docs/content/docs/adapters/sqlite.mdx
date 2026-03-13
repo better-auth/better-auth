@@ -52,6 +52,10 @@ node your-app.js
 
 ### Bun Built-in SQLite
 
+<Callout type="warning">
+  Use `bunx` with the `--bun` flag to run cli commands to prevent seeing type errors related to recognizing the `bun:sqlite` module, eg: `bunx --bun auth@latest generate`
+</Callout>
+
 You can also use the built-in [SQLite](https://bun.com/docs/api/sqlite) module in Bun, which is similar to the Node.js version:
 
 ```ts title="auth.ts"

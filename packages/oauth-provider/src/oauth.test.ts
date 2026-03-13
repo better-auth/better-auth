@@ -285,6 +285,78 @@ describe("oauth", async () => {
 		expect(callbackUrl).toContain("/success");
 	});
 
+	it("should return a JSON redirect after email sign-in in a fetch-based oauth flow", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance();
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const headers = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		let loginRedirectUri = "";
+		await authClient.$fetch(data.url, {
+			method: "GET",
+			onError(ctx) {
+				loginRedirectUri = ctx.response.headers.get("Location") || "";
+			},
+		});
+		expect(loginRedirectUri).toContain("/login");
+
+		vi.stubGlobal("window", {
+			location: {
+				href: "",
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		let signInLocationHeader = "";
+		const signInResponse = await authClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: {
+					"Sec-Fetch-Mode": "cors",
+				},
+				throw: true,
+				onResponse(ctx) {
+					signInLocationHeader = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+
+		expect(signInLocationHeader).toBe("");
+		expect(signInResponse.redirect).toBe(true);
+		expect(signInResponse.url).toContain(
+			`${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`,
+		);
+		expect(signInResponse.url).not.toContain(`${authServerBaseUrl}/login`);
+	});
+
 	it("should sign in using generic oauth discovery", async ({
 		onTestFinished,
 	}) => {
@@ -1092,6 +1164,109 @@ describe("oauth - prompt", async () => {
 		enableSelectAccount = false;
 	});
 
+	it("none - should return account_selection_required when account selection is required", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		enableSelectAccount = true;
+		try {
+			const { customFetchImpl: customFetchImplRP } = await createTestInstance({
+				prompt: "none",
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: rpBaseUrl,
+				fetchOptions: {
+					customFetchImpl: customFetchImplRP,
+				},
+			});
+
+			const data = await client.signIn.oauth2(
+				{
+					providerId,
+					callbackURL: "/success",
+				},
+				{
+					headers,
+					throw: true,
+				},
+			);
+			expect(data.url).toContain(`prompt=none`);
+
+			let callbackRedirectUri = "";
+			await serverClient.$fetch(data.url, {
+				method: "GET",
+				headers,
+				onError(context) {
+					callbackRedirectUri = context.response.headers.get("Location") || "";
+				},
+			});
+
+			expect(callbackRedirectUri).toContain(redirectUri);
+			expect(callbackRedirectUri).toContain("error=account_selection_required");
+			expect(callbackRedirectUri).toContain("state=");
+			expect(callbackRedirectUri).toContain(
+				`iss=${encodeURIComponent(authServerBaseUrl)}`,
+			);
+			expect(callbackRedirectUri).not.toContain("/select-account");
+		} finally {
+			enableSelectAccount = false;
+		}
+	});
+
+	it("none - should return interaction_required when post login is required", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		enableSelectAccount = false;
+		enablePostLogin = true;
+		try {
+			const { customFetchImpl: customFetchImplRP } = await createTestInstance({
+				prompt: "none",
+			});
+			const client = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: rpBaseUrl,
+				fetchOptions: {
+					customFetchImpl: customFetchImplRP,
+				},
+			});
+
+			const data = await client.signIn.oauth2(
+				{
+					providerId,
+					callbackURL: "/success",
+				},
+				{
+					headers,
+					throw: true,
+				},
+			);
+			expect(data.url).toContain(`prompt=none`);
+
+			let callbackRedirectUri = "";
+			await serverClient.$fetch(data.url, {
+				method: "GET",
+				headers,
+				onError(context) {
+					callbackRedirectUri = context.response.headers.get("Location") || "";
+				},
+			});
+
+			expect(callbackRedirectUri).toContain(redirectUri);
+			expect(callbackRedirectUri).toContain("error=interaction_required");
+			expect(callbackRedirectUri).toContain("state=");
+			expect(callbackRedirectUri).toContain(
+				`iss=${encodeURIComponent(authServerBaseUrl)}`,
+			);
+			expect(callbackRedirectUri).not.toContain("/select-organization");
+		} finally {
+			enablePostLogin = false;
+		}
+	});
+
 	it("login+consent - should always redirect to login and force consent (notice consent previously given)", async ({
 		onTestFinished,
 	}) => {
@@ -1368,15 +1543,28 @@ describe("oauth - prompt", async () => {
 });
 
 describe("oauth - config", () => {
-	const port = 3002;
-	const authServerBaseUrl = `http://localhost:${port}`;
-	const authServerUrl = `${authServerBaseUrl}/api/auth`;
+	let port = 3002;
+	let authServerBaseUrl = `http://localhost:${port}`;
+	let authServerUrl = `${authServerBaseUrl}/api/auth`;
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
 	let server: Listener;
 	let oauthClient: OAuthClient | null;
+
+	beforeAll(async () => {
+		const tempServer = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{
+				port: 0,
+			},
+		);
+		port = tempServer.address?.port ?? 3002;
+		authServerBaseUrl = `http://localhost:${port}`;
+		authServerUrl = `${authServerBaseUrl}/api/auth`;
+		await tempServer.close();
+	});
 
 	afterEach(async () => {
 		if (server) {
@@ -1427,6 +1615,79 @@ describe("oauth - config", () => {
 			],
 		});
 	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8017
+	 */
+	it("should preserve form-urlencoded token body when req.body was pre-parsed", async () => {
+		const { auth: authorizationServer, signInWithTestUser } =
+			await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			});
+
+		const { headers } = await signInWithTestUser();
+		const nodeHandler = toNodeHandler(authorizationServer.handler);
+		server = await listen(
+			async (req, res) => {
+				if (req.url?.startsWith("/api/auth/oauth2/token")) {
+					const requestWithParsedBody = req as typeof req & {
+						body?: unknown;
+					};
+					requestWithParsedBody.body = {};
+				}
+				await nodeHandler(req, res);
+			},
+			{
+				port,
+			},
+		);
+
+		const createdClient = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(createdClient?.client_id).toBeDefined();
+		expect(createdClient?.client_secret).toBeDefined();
+
+		const tokenResponse = await fetch(
+			new URL("/api/auth/oauth2/token", server.url),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: createdClient!.client_id,
+					client_secret: createdClient!.client_secret!,
+				}).toString(),
+			},
+		);
+
+		const tokenPayload = (await tokenResponse.json()) as {
+			access_token?: string;
+			token_type?: string;
+			error?: string;
+		};
+		expect(tokenResponse.status).toBe(200);
+		expect(tokenPayload.error).toBeUndefined();
+		expect(tokenPayload.access_token).toBeDefined();
+		expect(tokenPayload.token_type).toBe("Bearer");
+	});
 
 	it.for([
 		{

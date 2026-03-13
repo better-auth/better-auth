@@ -39,3 +39,5 @@ authjs
 vite
 electronjs
 wagmi
+tldts
+headimgurl

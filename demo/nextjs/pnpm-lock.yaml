@@ -263,15 +263,19 @@ packages:
     resolution: {integrity: sha512-cTlrKttbrRHEw3W+0/I609A2Matj5JQaRvfLtEIGZvlN0RaPi+3ANsMeqAyCAVlH/lUIW2tmtBlSMni74lcXeg==}
     engines: {node: '>=12'}
 
-  '@better-auth/core@1.5.0-beta.20':
-    resolution: {integrity: sha512-6RmDZ6kU85u1BR/H6OPjV3Z9LrfnCXKVEXFCjOUy0lgNOLRD2QOL59fgu2rpGc85aDxjDi2ddRPrSfvySGnybg==}
+  '@better-auth/core@1.5.1-beta.3':
+    resolution: {integrity: sha512-up7xBj99ki9UlTLEsZRfkheYHBLaYIt9JGI9lyAdQcbowTvXnWrk/fkgVcc2YNqRoPvBWCSooEdKL+b5OETQdQ==}
     peerDependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
+      '@cloudflare/workers-types': '>=4'
       better-call: 1.3.2
       jose: ^6.1.0
       kysely: ^0.28.5
       nanostores: ^1.0.1
+    peerDependenciesMeta:
+      '@cloudflare/workers-types':
+        optional: true
 
   '@better-auth/dash@0.1.6':
     resolution: {integrity: sha512-5FTWeto6oZVhZRHvHiAEM0D6ifQKbjdVTBUidd9gUn5f+SSa1Zxn4qPtW+iWyJPDLWanXZNXoXGvggtj1TQn9w==}
@@ -284,12 +288,12 @@ packages:
       better-auth: '>=1.4.15'
       zod: '>=4.1.12'
 
-  '@better-auth/sso@1.5.0-beta.20':
-    resolution: {integrity: sha512-seYOvqpqxYHLVa2gfEg2WtyHNjbNr6epk7dx/Qf/oTHYj4N0psKv5vGJ4KNiuCjh68qJDSe9tXo0nUHXIgToNw==}
+  '@better-auth/sso@1.5.1-beta.3':
+    resolution: {integrity: sha512-J59NWigp0uOVmG+gMEJyLSs1lgRYU4hqblrmenk5YlO4jFBn+/iOZfQfBeLOYZLGHrAhy3RiF5TTvLE2oD7lfA==}
     peerDependencies:
-      '@better-auth/core': 1.5.0-beta.20
+      '@better-auth/core': 1.5.1-beta.3
       '@better-auth/utils': 0.3.1
-      better-auth: 1.5.0-beta.20
+      better-auth: 1.5.1-beta.3
       better-call: 1.3.2
 
   '@better-auth/utils@0.3.1':
@@ -1709,11 +1713,16 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-call@1.1.0-beta.2:
-    resolution: {integrity: sha512-H0kqGDNT1ixkzboxg3fAYkpJ4HyIhNUID/OyC3fBEfwmHFBLwHpNRwRZYGGOcgcRQNIZtXlJGXaGvnFUhCS44Q==}
-
   better-call@1.3.3:
     resolution: {integrity: sha512-7IhuPAdH2m1z7ILNiH5DrIkLkA0vvMM8Q3cfqveiglA1p/Ad8yNDOSYMQ4h/rNounLcsJf2GoZemRKLHxE7E5A==}
+    peerDependencies:
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
+
+  better-call@2.0.0-beta.4:
+    resolution: {integrity: sha512-C/b/XgTkTbblOtb6E3kuJPU341zRoKcjs+SFR/AVyrnH6VwKWUp2OpomkzKN+v6R4be+/W/NjX1vQbRVjwZHRw==}
     peerDependencies:
       zod: ^4.0.0
     peerDependenciesMeta:
@@ -1736,9 +1745,9 @@ packages:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
 
-  camelcase@6.3.0:
-    resolution: {integrity: sha512-Gmy6FhYlCY7uOElZUSbxo2UCDH8owEk996gkbrpsgGtrJLM3J7jGxl9Ic7Qwwj4ivOE5AWZWRMecDdF7hqGjFA==}
-    engines: {node: '>=10'}
+  camelcase@9.0.0:
+    resolution: {integrity: sha512-TO9xmyXTZ9HUHI8M1OnvExxYB0eYVS/1e5s7IDMTAoIcwUd+aNcFODs6Xk83mobk0velyHFQgA1yIrvYc6wclw==}
+    engines: {node: '>=20'}
 
   caniuse-lite@1.0.30001775:
     resolution: {integrity: sha512-s3Qv7Lht9zbVKE9XoTyRG6wVDCKdtOFIjBGg3+Yhn6JaytuNKPIjBMTMIY1AnOH3seL5mvF+x33oGAyK3hVt3A==}
@@ -1993,11 +2002,11 @@ packages:
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
-  fast-xml-builder@1.0.0:
-    resolution: {integrity: sha512-fpZuDogrAgnyt9oDDz+5DBz0zgPdPZz6D4IR7iESxRXElrlGTRkHJ9eEt+SACRJwT0FNFrt71DFQIUFBJfX/uQ==}
+  fast-xml-builder@1.1.0:
+    resolution: {integrity: sha512-7mtITW/we2/wTUZqMyBOR2F8xP4CRxMiSEcQxPIqdRWdO2L/HZSOlzoNyghmyDwNB8BDxePooV1ZTJpkOUhdRg==}
 
-  fast-xml-parser@5.4.1:
-    resolution: {integrity: sha512-BQ30U1mKkvXQXXkAGcuyUA/GA26oEB7NzOtsxCDtyu62sjGw5QraKFhx2Em3WQNjPw9PG6MQ9yuIIgkSDfGu5A==}
+  fast-xml-parser@5.5.1:
+    resolution: {integrity: sha512-JTpMz8P5mDoNYzXTmTT/xzWjFiCWi0U+UQTJtrFH9muXsr2RqtXZPbnCW5h2mKsOd4u3XcPWCvDSrnaBPlUcMQ==}
     hasBin: true
 
   fetch-blob@3.2.0:
@@ -2368,10 +2377,6 @@ packages:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
-  node-forge@1.3.3:
-    resolution: {integrity: sha512-rLvcdSyRCyouf6jcOIPe/BgwG/d7hKjzMKOas33/pHEr6gbq18IK9zV7DiPvzsz0oBJPme6qr6H6kGZuI9/DZg==}
-    engines: {node: '>= 6.13.0'}
-
   node-rsa@1.1.1:
     resolution: {integrity: sha512-Jd4cvbJMryN21r5HgxQOpMEqv+ooke/korixNNK3mGqfGJmy0M77WDDzo/05969+OkMy3XW1UuZsSmW9KQm7Fw==}
 
@@ -2393,15 +2398,16 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  pako@1.0.11:
-    resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
-
   parseley@0.12.1:
     resolution: {integrity: sha512-e6qHKe3a9HWr0oMRVDTRhKce+bRO8VGQR3NyVwcjwrbhMmFCX9KszEV35+rn4AdilFAq9VPxP/Fe1wC9Qjd2lw==}
 
   parseurl@1.3.3:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
     engines: {node: '>= 0.8'}
+
+  path-expression-matcher@1.1.2:
+    resolution: {integrity: sha512-LXWqJmcpp2BKOEmgt4CyuESFmBfPuhJlAHKJsFzuJU6CxErWk75BrO+Ni77M9OxHN6dCYKM4vj+21Z6cOL96YQ==}
+    engines: {node: '>=14.0.0'}
 
   path-key@3.1.1:
     resolution: {integrity: sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==}
@@ -2577,9 +2583,6 @@ packages:
       '@react-email/render':
         optional: true
 
-  rou3@0.5.1:
-    resolution: {integrity: sha512-OXMmJ3zRk2xeXFGfA3K+EOPHC5u7RDFG7lIOx0X1pdnhUkI8MdVrbV+sNsD80ElpUZ+MRHdyxPnFthq9VHs8uQ==}
-
   rou3@0.7.12:
     resolution: {integrity: sha512-iFE4hLDuloSWcD7mjdCDhx2bKcIsYbtOTpfH5MHHLSKMOUyjqQXTeZVa289uuwEGEKFoE/BAPbhaU4B774nceg==}
 
@@ -2590,8 +2593,8 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  samlify@2.10.2:
-    resolution: {integrity: sha512-y5s1cHwclqwP8h7K2Wj9SfP1q+1S9+jrs5OAegYTLAiuFi7nDvuKqbiXLmUTvYPMpzHcX94wTY2+D604jgTKvA==}
+  samlify@2.11.0:
+    resolution: {integrity: sha512-1C9ukjlf0rRsuyqdzztqikdItqa33j9NCCDZgeBiWk0etU6vxNB+SWJKW4Flk07ZlhXeev/twALEKrPhIAyfDg==}
 
   scheduler@0.27.0:
     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
@@ -2611,9 +2614,6 @@ packages:
   serve-static@2.2.1:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
     engines: {node: '>= 18'}
-
-  set-cookie-parser@2.7.2:
-    resolution: {integrity: sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw==}
 
   set-cookie-parser@3.0.1:
     resolution: {integrity: sha512-n7Z7dXZhJbwuAHhNzkTti6Aw9QDDjZtm3JTpTGATIdNzdQz5GuFs22w90BcvF4INfnrL5xrX3oGsuqO5Dx3A1Q==}
@@ -2768,10 +2768,6 @@ packages:
     resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
     hasBin: true
 
-  uuid@8.3.2:
-    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
-    hasBin: true
-
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
@@ -2827,6 +2823,10 @@ packages:
     resolution: {integrity: sha512-NNXnzrkDrAzalLhIUc01jO2mOzXGXh1JwPgkihcLLzw98c0WgYDmmjSh1Kl3wzaxSVWMuA+fe0WTWOBDWCBmNA==}
     engines: {node: '>=0.6.0'}
 
+  xpath@0.0.34:
+    resolution: {integrity: sha512-FxF6+rkr1rNSQrhUNYrAFJpRXNzlDoMxeXN5qI84939ylEv3qqPFKa85Oxr6tDaJKqwW6KKyo2v26TSv3k6LeA==}
+    engines: {node: '>=0.6.0'}
+
   yallist@4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
 
@@ -2848,12 +2848,12 @@ snapshots:
       escape-html: 1.0.3
       xpath: 0.0.32
 
-  '@better-auth/core@1.5.0-beta.20(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)':
+  '@better-auth/core@1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)':
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.19-beta.1
       '@standard-schema/spec': 1.1.0
-      better-call: 1.1.0-beta.2
+      better-call: 2.0.0-beta.4(zod@4.3.6)
       jose: 6.1.3
       kysely: 0.28.11
       nanostores: 1.1.1
@@ -2873,29 +2873,30 @@ snapshots:
 
   '@better-auth/infra@0.1.8(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(kysely@0.28.11)(nanostores@1.1.1)(zod@4.3.6)':
     dependencies:
-      '@better-auth/core': 1.5.0-beta.20(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
-      '@better-auth/sso': 1.5.0-beta.20(@better-auth/core@1.5.0-beta.20(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@1.1.0-beta.2)
+      '@better-auth/core': 1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
+      '@better-auth/sso': 1.5.1-beta.3(@better-auth/core@1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@2.0.0-beta.4(zod@4.3.6))
       '@better-fetch/fetch': 1.1.19-beta.1
       better-auth: link:../../packages/better-auth
-      better-call: 1.1.0-beta.2
+      better-call: 2.0.0-beta.4(zod@4.3.6)
       jose: 6.1.3
       libphonenumber-js: 1.12.38
       zod: 4.3.6
     transitivePeerDependencies:
       - '@better-auth/utils'
+      - '@cloudflare/workers-types'
       - kysely
       - nanostores
 
-  '@better-auth/sso@1.5.0-beta.20(@better-auth/core@1.5.0-beta.20(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@1.1.0-beta.2)':
+  '@better-auth/sso@1.5.1-beta.3(@better-auth/core@1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@2.0.0-beta.4(zod@4.3.6))':
     dependencies:
-      '@better-auth/core': 1.5.0-beta.20(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
+      '@better-auth/core': 1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
       better-auth: link:../../packages/better-auth
-      better-call: 1.1.0-beta.2
-      fast-xml-parser: 5.4.1
+      better-call: 2.0.0-beta.4(zod@4.3.6)
+      fast-xml-parser: 5.5.1
       jose: 6.1.3
-      samlify: 2.10.2
+      samlify: 2.11.0
       zod: 4.3.6
 
   '@better-auth/utils@0.3.1': {}
@@ -4214,14 +4215,16 @@ snapshots:
 
   baseline-browser-mapping@2.10.0: {}
 
-  better-call@1.1.0-beta.2:
+  better-call@1.3.3(zod@4.3.6):
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
-      rou3: 0.5.1
-      set-cookie-parser: 2.7.2
+      rou3: 0.7.12
+      set-cookie-parser: 3.0.1
+    optionalDependencies:
+      zod: 4.3.6
 
-  better-call@1.3.3(zod@4.3.6):
+  better-call@2.0.0-beta.4(zod@4.3.6):
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
@@ -4256,7 +4259,7 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
 
-  camelcase@6.3.0: {}
+  camelcase@9.0.0: {}
 
   caniuse-lite@1.0.30001775: {}
 
@@ -4488,11 +4491,14 @@ snapshots:
 
   fast-uri@3.1.0: {}
 
-  fast-xml-builder@1.0.0: {}
-
-  fast-xml-parser@5.4.1:
+  fast-xml-builder@1.1.0:
     dependencies:
-      fast-xml-builder: 1.0.0
+      path-expression-matcher: 1.1.2
+
+  fast-xml-parser@5.5.1:
+    dependencies:
+      fast-xml-builder: 1.1.0
+      path-expression-matcher: 1.1.2
       strnum: 2.2.0
 
   fetch-blob@3.2.0:
@@ -4812,8 +4818,6 @@ snapshots:
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
 
-  node-forge@1.3.3: {}
-
   node-rsa@1.1.1:
     dependencies:
       asn1: 0.2.6
@@ -4834,14 +4838,14 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  pako@1.0.11: {}
-
   parseley@0.12.1:
     dependencies:
       leac: 0.6.0
       peberminta: 0.9.0
 
   parseurl@1.3.3: {}
+
+  path-expression-matcher@1.1.2: {}
 
   path-key@3.1.1: {}
 
@@ -5013,8 +5017,6 @@ snapshots:
     optionalDependencies:
       '@react-email/render': 2.0.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
 
-  rou3@0.5.1: {}
-
   rou3@0.7.12: {}
 
   router@2.2.0:
@@ -5029,19 +5031,16 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  samlify@2.10.2:
+  samlify@2.11.0:
     dependencies:
       '@authenio/xml-encryption': 2.0.2
       '@xmldom/xmldom': 0.8.11
-      camelcase: 6.3.0
-      node-forge: 1.3.3
+      camelcase: 9.0.0
       node-rsa: 1.1.1
-      pako: 1.0.11
-      uuid: 8.3.2
       xml: 1.0.1
       xml-crypto: 6.1.2
       xml-escape: 1.1.0
-      xpath: 0.0.32
+      xpath: 0.0.34
 
   scheduler@0.27.0: {}
 
@@ -5076,8 +5075,6 @@ snapshots:
       send: 1.2.1
     transitivePeerDependencies:
       - supports-color
-
-  set-cookie-parser@2.7.2: {}
 
   set-cookie-parser@3.0.1: {}
 
@@ -5234,8 +5231,6 @@ snapshots:
 
   uuid@10.0.0: {}
 
-  uuid@8.3.2: {}
-
   vary@1.1.2: {}
 
   vaul@1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
@@ -5287,6 +5282,8 @@ snapshots:
   xpath@0.0.32: {}
 
   xpath@0.0.33: {}
+
+  xpath@0.0.34: {}
 
   yallist@4.0.0: {}
 
