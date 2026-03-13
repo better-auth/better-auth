@@ -113,6 +113,7 @@ const response = await auth.api.generateMagicLink({
     email: "user@email.com",
     callbackURL: "/dashboard",
   },
+  headers: request.headers,
 });
 
 response.status;
@@ -121,7 +122,8 @@ response.token;
 ```
 
 `generateMagicLink` is server-only, returns the generated `url` and raw `token`,
-and leaves delivery to your own code.
+and leaves delivery to your own code. Pass the incoming request headers so Better
+Auth can resolve the correct base URL for the generated link.
 
 <Callout type="warn">
   Only use `generateMagicLink` in trusted server-side code. Do not expose the

@@ -357,6 +357,7 @@ describe("magic link generate", async () => {
 			body: {
 				email: testUser.email,
 			},
+			headers: new Headers(),
 		});
 
 		expectTypeOf<typeof response>().toMatchObjectType<{
@@ -384,6 +385,7 @@ describe("magic link generate", async () => {
 				newUserCallbackURL: "/welcome",
 				errorCallbackURL: "/error",
 			},
+			headers: new Headers(),
 		});
 
 		const url = new URL(response.url);
@@ -408,6 +410,7 @@ describe("magic link generate", async () => {
 				body: {
 					email: testUser.email,
 				},
+				headers: new Headers(),
 			}),
 		).resolves.toMatchObject({
 			status: true,
@@ -597,6 +600,7 @@ describe("magic link storeToken", async () => {
 			body: {
 				email: testUser.email,
 			},
+			headers: new Headers(),
 		});
 		const hashedToken = await defaultKeyHasher(response.token);
 		const storedToken =
@@ -670,6 +674,7 @@ describe("magic link storeToken", async () => {
 			body: {
 				email: testUser.email,
 			},
+			headers: new Headers(),
 		});
 		const hashedToken = `${response.token}hashed`;
 		const storedToken =
