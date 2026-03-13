@@ -1024,8 +1024,40 @@ describe("Electron", () => {
 	});
 
 	describe("cookies", () => {
+		async function setupSessionWithTokenExchange() {
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
+			const { user } = await auth.api.signInEmail({
+				body: { email: "test@test.com", password: "password" },
+			});
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "test-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+			await client.$fetch("/electron/token", {
+				method: "POST",
+				body: {
+					token: identifier,
+					code_verifier: "test-challenge",
+					state: "abc",
+				},
+			});
+		}
+
 		it("should send cookie and get session", async ({ setProcessType }) => {
 			setProcessType("browser");
+			await setupSessionWithTokenExchange();
 
 			const { data } = await client.getSession();
 			expect(data).toMatchObject({
@@ -1036,7 +1068,10 @@ describe("Electron", () => {
 			expect(mockElectron.safeStorage.decryptString).toHaveBeenCalled();
 		});
 
-		it("should get cookies", async () => {
+		it("should get cookies", async ({ setProcessType }) => {
+			setProcessType("browser");
+			await setupSessionWithTokenExchange();
+
 			const c = client.getCookie();
 			expect(c).includes("better-auth.session_token");
 		});
@@ -1376,50 +1411,73 @@ describe("Electron", () => {
 		setProcessType,
 	}) => {
 		setProcessType("browser");
-		mockElectron.safeStorage.isEncryptionAvailable.mockReturnValueOnce(false);
+		mockElectron.safeStorage.isEncryptionAvailable.mockReturnValue(false);
+		try {
+			const memoryFallbackStorage = new Map<string, unknown>();
+			const clientWithStorage = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+				plugins: [
+					electronClient({
+						...options,
+						storage: {
+							getItem: (name) => memoryFallbackStorage.get(name) ?? null,
+							setItem: (name, value) => {
+								memoryFallbackStorage.set(name, value);
+							},
+						},
+					}),
+				],
+			});
 
-		const { user } = await auth.api.signUpEmail({
-			body: {
-				name: "Memory Storage Test",
-				email: "memory-storage@test.com",
-				password: "password",
-			},
-		});
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					name: "Memory Storage Test",
+					email: "memory-storage@test.com",
+					password: "password",
+				},
+			});
 
-		const codeVerifier = base64Url.encode(randomBytes(32));
-		const codeChallenge = base64Url.encode(
-			await createHash("SHA-256").digest(codeVerifier),
-		);
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = base64Url.encode(
+				await createHash("SHA-256").digest(codeVerifier),
+			);
 
-		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
-		await (await auth.$context).adapter.create({
-			model: "verification",
-			data: {
-				identifier: `electron:${identifier}`,
-				value: JSON.stringify({
-					userId: user.id,
-					codeChallenge,
-					codeChallengeMethod: "s256",
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge,
+						codeChallengeMethod: "s256",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			const result = await clientWithStorage.$fetch("/electron/token", {
+				method: "POST",
+				body: {
+					token: identifier,
+					code_verifier: codeVerifier,
 					state: "abc",
-				}),
-				expiresAt: new Date(Date.now() + 300 * 1000),
-			},
-		});
+				},
+			});
 
-		const result = await client.$fetch("/electron/token", {
-			method: "POST",
-			body: {
-				token: identifier,
-				code_verifier: codeVerifier,
-				state: "abc",
-			},
-		});
-
-		expect((result.data as any)?.user).toMatchObject({
-			email: "memory-storage@test.com",
-			name: "Memory Storage Test",
-		});
-		expect(client.getCookie()).toContain("better-auth.session_token=");
+			expect((result.data as any)?.user).toMatchObject({
+				email: "memory-storage@test.com",
+				name: "Memory Storage Test",
+			});
+			expect(clientWithStorage.getCookie()).toContain(
+				"better-auth.session_token=",
+			);
+			expect(memoryFallbackStorage.has("better-auth.cookie")).toBe(false);
+		} finally {
+			mockElectron.safeStorage.isEncryptionAvailable.mockReturnValue(true);
+		}
 	});
 
 	it("should return null on decrypt failure", async ({ setProcessType }) => {

@@ -1,6 +1,5 @@
 /// <reference types="electron" />
 
-import { afterEach } from "node:test";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
@@ -9,7 +8,7 @@ import { createAuthClient } from "better-auth/client";
 import { getMigrations } from "better-auth/db/migration";
 import { oAuthProxy } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { afterAll, beforeAll, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, test, vi } from "vitest";
 import { electronClient } from "../src/client";
 import { electron } from "../src/index";
 import { electronProxyClient } from "../src/proxy";
