@@ -51,6 +51,9 @@ onlyBuiltDependencies:
   - sharp
   - workerd
 
+ignoredBuiltDependencies:
+  - electron
+
 trustPolicy: no-downgrade
 
 trustPolicyIgnoreAfter: 43200
