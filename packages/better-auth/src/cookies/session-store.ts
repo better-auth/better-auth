@@ -98,7 +98,7 @@ function chunkCookie(
 	const chunkSize = getMaxCookieValueSize(`${cookie.name}.999`, options);
 	const chunkCount = Math.ceil(cookie.value.length / chunkSize);
 
-	if (chunkCount === 1) {
+	if (chunkCount <= 1) {
 		chunks[cookie.name] = cookie.value;
 		return [cookie];
 	}

@@ -1,3 +1,4 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import type { CookieOptions } from "better-call";
 
 export const ALLOWED_COOKIE_SIZE = 4096;
@@ -177,7 +178,7 @@ export function setCookieToHeader(headers: Headers) {
 export function estimateEmptyCookieSize(
 	name: string,
 	attributes: CookieOptions,
-): number {
+) {
 	const path = attributes.path ?? "/";
 	let s = `${name}=`;
 	s += `; Path=${path}`;
@@ -204,9 +205,10 @@ export function estimateEmptyCookieSize(
 	return s.length;
 }
 
-export function getMaxCookieValueSize(
-	name: string,
-	attributes: CookieOptions,
-): number {
-	return ALLOWED_COOKIE_SIZE - estimateEmptyCookieSize(name, attributes);
+export function getMaxCookieValueSize(name: string, attributes: CookieOptions) {
+	const size = ALLOWED_COOKIE_SIZE - estimateEmptyCookieSize(name, attributes);
+	if (size <= 0) {
+		throw new BetterAuthError(`Cookie ${name} is too large to be chunked.`);
+	}
+	return size;
 }
