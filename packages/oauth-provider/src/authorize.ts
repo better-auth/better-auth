@@ -501,10 +501,13 @@ async function redirectWithAuthorizationCode(
 			authTime: verificationValue.authTime,
 		} satisfies VerificationValue),
 	};
-	await ctx.context.internalAdapter.createVerificationValue({
-		...data,
-		createdAt: new Date(iat * 1000),
-	});
+	await ctx.context.internalAdapter.createVerificationValue(
+		{
+			...data,
+			createdAt: new Date(iat * 1000),
+		},
+		"oauth-authorization-code",
+	);
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);

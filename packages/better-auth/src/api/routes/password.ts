@@ -109,6 +109,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			generateId(24);
 			await ctx.context.internalAdapter.findVerificationValue(
 				"dummy-verification-token",
+				"reset-password",
 			);
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
@@ -124,11 +125,14 @@ export const requestPasswordReset = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				value: user.user.id,
+				identifier: verificationToken,
+				expiresAt,
+			},
+			"reset-password",
+		);
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.runInBackgroundOrAwait(
@@ -214,7 +218,8 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 		}
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(
-				`reset-password:${token}`,
+				token,
+				"reset-password",
 			);
 		if (!verification || verification.expiresAt < new Date()) {
 			throw ctx.redirect(
@@ -288,10 +293,11 @@ export const resetPassword = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
-		const id = `reset-password:${token}`;
-
 		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(id);
+			await ctx.context.internalAdapter.findVerificationValue(
+				token,
+				"reset-password",
+			);
 		if (!verification || verification.expiresAt < new Date()) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
@@ -309,7 +315,10 @@ export const resetPassword = createAuthEndpoint(
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(id);
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			token,
+			"reset-password",
+		);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			const user = await ctx.context.internalAdapter.findUserById(userId);

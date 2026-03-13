@@ -98,11 +98,14 @@ export async function generateGenericState(
 	const expiresAt = new Date();
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
-	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify(stateData),
-		identifier: state,
-		expiresAt,
-	});
+	const verification = await c.context.internalAdapter.createVerificationValue(
+		{
+			value: JSON.stringify(stateData),
+			identifier: state,
+			expiresAt,
+		},
+		"state",
+	);
 
 	if (!verification) {
 		throw new StateError(
@@ -114,7 +117,7 @@ export async function generateGenericState(
 	}
 
 	return {
-		state: verification.identifier,
+		state,
 		codeVerifier: stateData.codeVerifier,
 	};
 }
@@ -163,7 +166,10 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 	} else {
 		// Default: database strategy
-		const data = await c.context.internalAdapter.findVerificationValue(state);
+		const data = await c.context.internalAdapter.findVerificationValue(
+			state,
+			"state",
+		);
 		if (!data) {
 			throw new StateError("State mismatch: verification not found", {
 				code: "state_mismatch",
@@ -201,7 +207,10 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationByIdentifier(state);
+		await c.context.internalAdapter.deleteVerificationByIdentifier(
+			state,
+			"state",
+		);
 	}
 
 	// Check expiration

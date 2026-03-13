@@ -59,7 +59,8 @@ export const electronToken = (_opts: ElectronOptions) =>
 		},
 		async (ctx) => {
 			const token = await ctx.context.internalAdapter.findVerificationValue(
-				`electron:${ctx.body.token}`,
+				ctx.body.token,
+				"electron",
 			);
 			if (!token || token.expiresAt < new Date()) {
 				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
@@ -109,7 +110,8 @@ export const electronToken = (_opts: ElectronOptions) =>
 				}
 			}
 			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				`electron:${ctx.body.token}`,
+				ctx.body.token,
+				"electron",
 			);
 
 			const user = await ctx.context.internalAdapter.findUserById(

@@ -36,6 +36,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		const verificationToken =
 			await ctx.context.internalAdapter.findVerificationValue(
 				signedTwoFactorCookie,
+				"2fa",
 			);
 		if (!verificationToken) {
 			throw APIError.from(
@@ -71,6 +72,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				// Delete the verification token from the database after successful verification
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					signedTwoFactorCookie,
+					"2fa",
 				);
 				await setSessionCookie(ctx, {
 					session,
@@ -93,16 +95,19 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					 * Store it in the verification table with an expiration
 					 * so the server can validate and revoke it.
 					 */
-					const trustIdentifier = `trust-device-${generateRandomString(32)}`;
+					const trustIdentifier = generateRandomString(32);
 					const token = await createHMAC("SHA-256", "base64urlnopad").sign(
 						ctx.context.secret,
 						`${user.id}!${trustIdentifier}`,
 					);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: user.id,
-						identifier: trustIdentifier,
-						expiresAt: new Date(Date.now() + maxAge * 1000),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							value: user.id,
+							identifier: trustIdentifier,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
+						},
+						"trust-device",
+					);
 					await ctx.setSignedCookie(
 						trustDeviceCookie.name,
 						`${token}!${trustIdentifier}`,
