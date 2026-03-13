@@ -21,7 +21,6 @@
     "@better-fetch/fetch": "^1.1.21",
     "@biomejs/biome": "2.4.4",
     "@hookform/resolvers": "^5.2.1",
-    "@inkeep/ai-sdk-provider": "^0.54.0",
     "@openrouter/ai-sdk-provider": "^2.2.5",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",
