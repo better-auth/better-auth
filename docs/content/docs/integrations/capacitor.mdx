@@ -1,0 +1,232 @@
+---
+title: Capacitor Integration
+description: Integrate Better Auth with Capacitor.
+---
+
+[Capacitor](https://capacitorjs.com/) is a cross-platform runtime for building web-native apps that run on iOS, Android, and the web. Since Capacitor apps are web apps running in a native WebView, the Better Auth client SDK works out of the box — no special plugin or configuration needed.
+
+You only need Capacitor plugins when implementing social login flows that require native functionality, like platform-specific sign-in APIs or opening a browser window.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Configure a Better Auth Backend
+
+    Before using Better Auth with Capacitor, make sure you have a Better Auth backend set up and running.
+
+    To get started, check out our [installation](/docs/installation) guide for setting up Better Auth on your server.
+  </Step>
+
+  <Step>
+    ### Install the Better Auth Client SDK
+
+    Install the Better Auth package in your Capacitor app:
+
+    ```package-install
+    better-auth
+    ```
+  </Step>
+
+  <Step>
+    ### Initialize the Auth Client
+
+    Create an auth client instance pointing to your Better Auth backend:
+
+    ```ts title="lib/auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+
+    export const authClient = createAuthClient({
+      baseURL: "https://api.example.com",
+    });
+    ```
+
+    <Callout>
+      Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure Trusted Origins
+
+    If your Capacitor app is served from a different origin than your Better Auth backend, you need to add the app's origin to the `trustedOrigins` list in your Better Auth server config.
+
+    On Android, Capacitor serves your app from `https://localhost` by default. On iOS, it uses `capacitor://localhost`.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+
+    export const auth = betterAuth({
+      trustedOrigins: [
+        "https://localhost",      // Android
+        "capacitor://localhost",  // iOS
+      ],
+    });
+    ```
+
+    <Callout type="info">
+      If you've configured a custom hostname or scheme in your Capacitor config, adjust the trusted origins accordingly.
+    </Callout>
+  </Step>
+</Steps>
+
+## Usage
+
+### Email and Password Authentication
+
+Email and password authentication works without any additional Capacitor plugins. The Better Auth client handles everything over HTTP, which the WebView supports natively.
+
+<Tabs items={["sign-in", "sign-up"]}>
+  <Tab value="sign-in">
+    ```ts title="sign-in.ts"
+    import { authClient } from "./lib/auth-client";
+
+    const { data, error } = await authClient.signIn.email({
+      email: "john.doe@example.com",
+      password: "password1234",
+    });
+    ```
+  </Tab>
+  <Tab value="sign-up">
+    ```ts title="sign-up.ts"
+    import { authClient } from "./lib/auth-client";
+
+    const { data, error } = await authClient.signUp.email({
+      name: "John Doe",
+      email: "john.doe@example.com",
+      password: "password1234",
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Social Sign-In with Native Plugins
+
+Social login providers like Apple, Google, or Microsoft typically require platform-specific APIs for mobile authentication. The approach is:
+
+1. Use a Capacitor plugin to handle the native social login flow and obtain an **ID token**.
+2. Pass that token to Better Auth's `signIn.social()` method with the `idToken` option.
+
+This gives you a native sign-in experience while Better Auth manages users and sessions on the server.
+
+<Callout type="info">
+  ID token sign-in is supported for providers like Google, Apple, and Facebook. See the [social sign-in documentation](/docs/authentication/social#id-token-sign-in) for more details.
+</Callout>
+
+#### Apple Sign-In
+
+You can use the [`@capawesome/capacitor-apple-sign-in`](https://capawesome.io/plugins/apple-sign-in/) plugin for native Sign in with Apple on Android, iOS, and web:
+
+```ts title="sign-in-with-apple.ts"
+import { AppleSignIn, SignInScope } from "@capawesome/capacitor-apple-sign-in";
+import { authClient } from "./lib/auth-client";
+
+const signInWithApple = async () => {
+  // 1. Use the Capacitor plugin to get an ID token
+  const { idToken } = await AppleSignIn.signIn({
+    scopes: [SignInScope.Email, SignInScope.Name],
+  });
+  // 2. Pass the ID token to Better Auth
+  await authClient.signIn.social({
+    provider: "apple",
+    idToken: {
+      token: idToken,
+    },
+  });
+};
+```
+
+#### Google Sign-In
+
+You can use the [`@capawesome/capacitor-google-sign-in`](https://capawesome.io/plugins/google-sign-in/) plugin for native Google Sign-In on Android, iOS, and web:
+
+```ts title="sign-in-with-google.ts"
+import { GoogleSignIn } from "@capawesome/capacitor-google-sign-in";
+import { authClient } from "./lib/auth-client";
+
+const signInWithGoogle = async () => {
+  // 1. Use the Capacitor plugin to get an ID token
+  const { idToken } = await GoogleSignIn.signIn({
+    scopes: ["profile", "email"],
+  });
+  // 2. Pass the ID token to Better Auth
+  await authClient.signIn.social({
+    provider: "google",
+    idToken: {
+      token: idToken,
+    },
+  });
+};
+```
+
+#### Other Providers (OAuth)
+
+For providers without a dedicated Capacitor plugin — like Microsoft, LinkedIn, or Facebook — you can use the [`@capawesome-team/capacitor-oauth`](https://capawesome.io/plugins/oauth/) plugin. It supports any OAuth 2.0 / OpenID Connect provider using the Authorization Code flow with PKCE.
+
+Here's an example for Microsoft:
+
+```ts title="sign-in-with-microsoft.ts"
+import { Oauth } from "@capawesome-team/capacitor-oauth";
+import { authClient } from "./lib/auth-client";
+
+const signInWithMicrosoft = async () => {
+  // 1. Use the OAuth plugin to get an ID token
+  const result = await Oauth.login({
+    issuerUrl: "https://login.microsoftonline.com/{tenant-id}/v2.0",
+    clientId: "{client-id}",
+    redirectUrl: "com.example.app://oauth/callback",
+    scopes: ["openid", "profile", "email"],
+  });
+  // 2. Pass the ID token to Better Auth
+  await authClient.signIn.social({
+    provider: "microsoft",
+    idToken: {
+      token: result.idToken,
+    },
+  });
+};
+```
+
+This approach works for any social provider that Better Auth supports. See the [social sign-in documentation](/docs/authentication/social) for the full list of supported providers.
+
+### Session
+
+You can use the `useSession` hook to access the current user's session. The import path depends on the framework you are using:
+
+<Tabs items={["react", "vue", "svelte"]}>
+  <Tab value="react">
+    ```tsx title="Profile.tsx"
+    import { authClient } from "./lib/auth-client";
+
+    export function Profile() {
+      const { data: session } = authClient.useSession();
+
+      return <p>Welcome, {session?.user.name}</p>;
+    }
+    ```
+  </Tab>
+  <Tab value="vue">
+    ```vue title="Profile.vue"
+    <script setup lang="ts">
+    import { authClient } from "./lib/auth-client";
+
+    const { data: session } = authClient.useSession();
+    </script>
+
+    <template>
+      <p>Welcome, {{ session?.user.name }}</p>
+    </template>
+    ```
+  </Tab>
+  <Tab value="svelte">
+    ```svelte title="Profile.svelte"
+    <script lang="ts">
+    import { authClient } from "./lib/auth-client";
+
+    const session = authClient.useSession();
+    </script>
+
+    <p>Welcome, {$session?.data?.user.name}</p>
+    ```
+  </Tab>
+</Tabs>
