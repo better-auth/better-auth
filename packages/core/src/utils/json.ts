@@ -50,7 +50,14 @@ export function safeJSONParse<T>(data: unknown): T | null {
 		}
 		return JSON.parse(data, (_, value) => reviveDate(value));
 	} catch (e) {
-		logger.error("Error parsing JSON", { error: e });
+		logger.error(
+			"Failed to parse JSON from secondary storage. " +
+				"This can happen if your secondaryStorage.get() returns " +
+				"an already-parsed object instead of a JSON string, or " +
+				"if the stored value is corrupted. Received type: " +
+				typeof data,
+			{ error: e },
+		);
 		return null;
 	}
 }
