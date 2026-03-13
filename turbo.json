@@ -20,11 +20,7 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "passThroughEnv": [
-        "TYPESENSE_ADMIN_API_KEY",
-        "INKEEP_API_KEY",
-        "GITHUB_TOKEN"
-      ]
+      "passThroughEnv": ["TYPESENSE_ADMIN_API_KEY", "GITHUB_TOKEN"]
     },
     "clean": {},
     "format": {
