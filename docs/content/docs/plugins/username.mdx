@@ -114,6 +114,14 @@ type signInUsername = {
      * The password of the user.
     */
     password: string = "password1234"
+    /**
+     * The URL to redirect to after sign in.
+    */
+    callbackURL?: string = "/dashboard"
+    /**
+     * Whether to remember the user session.
+    */
+    rememberMe?: boolean = false
 }
 ```
 </APIMethod>
