@@ -45,13 +45,20 @@ export const oauthProviderClient = () => {
 							pathname.endsWith("/oauth2/consent") ||
 							pathname.endsWith("/oauth2/continue")
 						) {
+							const oauthQuery =
+								typeof window !== "undefined"
+									? parseSignedQuery(window?.location?.search)
+									: undefined;
 							ctx.body = JSON.stringify({
 								...body,
-								oauth_query:
-									typeof window !== "undefined"
-										? parseSignedQuery(window?.location?.search)
-										: undefined,
+								oauth_query: oauthQuery,
 							});
+							// Set accept header to application/json when in OAuth flow
+							// This ensures the server returns JSON redirect instead of throwing a redirect
+							// which would cause CORS errors when fetch tries to follow cross-origin redirects
+							if (oauthQuery) {
+								ctx.headers.set("accept", "application/json");
+							}
 						}
 					},
 				},
