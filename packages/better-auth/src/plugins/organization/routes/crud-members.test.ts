@@ -948,9 +948,16 @@ describe("transferOwnership", async () => {
 			headers: ownerHeaders,
 		});
 
-		// A third user signs in and tries to accept the token via POST
+		// A third user (unrelated to the org) signs in and tries to accept the token via POST
+		await auth.api.signUpEmail({
+			body: {
+				email: "unrelated-post@test.com",
+				password: "password",
+				name: "Unrelated User",
+			},
+		});
 		const thirdSignIn = await auth.api.signInEmail({
-			body: { email: "test@test.com", password: "test123456" },
+			body: { email: "unrelated-post@test.com", password: "password" },
 			asResponse: true,
 		});
 		const thirdHeaders = new Headers();
@@ -1237,13 +1244,13 @@ describe("transferOwnership", async () => {
 							organization,
 							newOwnerMember,
 						}) => {
-							beforeHook(organization.name, newOwnerMember.id);
+							beforeHook(organization.name, newOwnerMember.id, newOwnerMember.role);
 						},
 						afterTransferOwnership: async ({
 							organization,
 							newOwnerMember,
 						}) => {
-							afterHook(organization.name, newOwnerMember.id);
+							afterHook(organization.name, newOwnerMember.id, newOwnerMember.role);
 						},
 					},
 				}),
@@ -1287,13 +1294,17 @@ describe("transferOwnership", async () => {
 			headers: ownerHeaders,
 		});
 
+		// before hook receives the pre-promotion (stale) role
 		expect(beforeHook).toHaveBeenCalledWith(
 			"hooks-transfer",
 			newOwnerMember?.id,
+			"admin",
 		);
+		// after hook receives the post-promotion (updated) role
 		expect(afterHook).toHaveBeenCalledWith(
 			"hooks-transfer",
 			newOwnerMember?.id,
+			"owner,admin",
 		);
 	});
 });
