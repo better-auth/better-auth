@@ -490,7 +490,10 @@ describe("delete organization", async () => {
 			body: { organizationId: org?.id },
 			headers,
 		});
-		expect(res).toMatchObject({ success: true, message: "Organization deleted" });
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
 
 		const orgs = await auth.api.listOrganizations({ headers });
 		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
@@ -566,7 +569,10 @@ describe("delete organization", async () => {
 			body: { organizationId: org?.id, token: capturedToken },
 			headers,
 		});
-		expect(res).toMatchObject({ success: true, message: "Organization deleted" });
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
 
 		const orgs = await auth.api.listOrganizations({ headers });
 		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
@@ -601,7 +607,10 @@ describe("delete organization", async () => {
 			query: { token: capturedToken },
 			headers,
 		});
-		expect(res).toMatchObject({ success: true, message: "Organization deleted" });
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
 
 		const orgs = await auth.api.listOrganizations({ headers });
 		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
@@ -639,7 +648,7 @@ describe("delete organization", async () => {
 
 	it("should reject token belonging to a different user", async () => {
 		let capturedToken = "";
-		const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				organization({
 					sendDeleteOrganizationEmail: async (data) => {

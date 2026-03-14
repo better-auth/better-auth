@@ -769,10 +769,7 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 				await ctx.context.internalAdapter.findVerificationValue(
 					`delete-organization-${ctx.query.token}`,
 				);
-			if (
-				!verificationRecord ||
-				verificationRecord.expiresAt < new Date()
-			) {
+			if (!verificationRecord || verificationRecord.expiresAt < new Date()) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
