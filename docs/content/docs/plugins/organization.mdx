@@ -826,6 +826,12 @@ type deleteOrganization = {
     * Only used when confirming via the callback endpoint.
     */
     callbackURL?: string
+    /*
+    * The requester's password for identity verification.
+    * Optional — if provided, it is verified against the user's credential account
+    * before proceeding with deletion (or sending the confirmation email).
+    */
+    password?: string
 }
 ```
 </APIMethod>
@@ -890,9 +896,12 @@ export const auth = betterAuth({
 
 **Step 1 — Initiate deletion (client)**
 
+You can optionally pass a `password` to verify the requester's identity before the email is sent:
+
 ```ts
 const { data, error } = await authClient.organization.delete({
   organizationId: "org-id",
+  password: "user-password", // optional identity check
   callbackURL: "/org-deleted", // optional redirect after confirmation
 });
 // data.message === "Verification email sent"

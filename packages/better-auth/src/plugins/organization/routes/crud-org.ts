@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { originCheck } from "../../../api/middlewares";
@@ -531,6 +531,13 @@ const deleteOrganizationBodySchema = z.object({
 			description: "URL to redirect to after the organization is deleted",
 		})
 		.optional(),
+	password: z
+		.string()
+		.meta({
+			description:
+				"The current user's password for identity verification. Optional — used to confirm the requester's identity before initiating deletion.",
+		})
+		.optional(),
 });
 
 export const deleteOrganization = <O extends OrganizationOptions>(
@@ -546,6 +553,36 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			metadata: {
 				openapi: {
 					description: "Delete an organization",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										organizationId: {
+											type: "string",
+											description: "The organization id to delete",
+										},
+										token: {
+											type: "string",
+											description:
+												"Verification token received via email to confirm deletion",
+										},
+										callbackURL: {
+											type: "string",
+											description:
+												"URL to redirect to after the organization is deleted",
+										},
+										password: {
+											type: "string",
+											description:
+												"The requester's password for identity verification",
+										},
+									},
+								},
+							},
+						},
+					},
 					responses: {
 						"200": {
 							description: "Success",
@@ -593,13 +630,62 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			 * deletion.  Delegate to the callback handler directly.
 			 */
 			if (ctx.body.token) {
-				await deleteOrganizationCallback(options)({
-					...ctx,
-					query: {
-						token: ctx.body.token,
-						callbackURL: ctx.body.callbackURL,
-					},
-				});
+				const verificationRecord =
+					await ctx.context.internalAdapter.findVerificationValue(
+						`delete-organization-${ctx.body.token}`,
+					);
+				if (!verificationRecord || verificationRecord.expiresAt < new Date()) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
+					);
+				}
+				const parts = verificationRecord.value.split(":");
+				const tokenUserId = parts[0];
+				const tokenOrgId = parts[1];
+				if (!tokenUserId || !tokenOrgId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
+					);
+				}
+				if (tokenUserId !== session.user.id) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
+					);
+				}
+				const cbAdapter = getOrgAdapter<O>(ctx.context, options);
+				const cbOrg = await cbAdapter.findOrganizationById(tokenOrgId);
+				if (!cbOrg) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
+				}
+				if (tokenOrgId === session.session.activeOrganizationId) {
+					await cbAdapter.setActiveOrganization(
+						session.session.token,
+						null,
+						ctx,
+					);
+				}
+				if (options?.organizationHooks?.beforeDeleteOrganization) {
+					await options.organizationHooks.beforeDeleteOrganization({
+						organization: cbOrg,
+						user: session.user,
+					});
+				}
+				await cbAdapter.deleteOrganization(tokenOrgId);
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`delete-organization-${ctx.body.token}`,
+				);
+				if (options?.organizationHooks?.afterDeleteOrganization) {
+					await options.organizationHooks.afterDeleteOrganization({
+						organization: cbOrg,
+						user: session.user,
+					});
+				}
 				return ctx.json({
 					success: true,
 					message: "Organization deleted",
@@ -645,6 +731,28 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
 				throw APIError.fromStatus("BAD_REQUEST");
+			}
+
+			if (ctx.body.password) {
+				const accounts = await ctx.context.internalAdapter.findAccounts(
+					session.user.id,
+				);
+				const credentialAccount = accounts.find(
+					(account) => account.providerId === "credential" && account.password,
+				);
+				if (!credentialAccount || !credentialAccount.password) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+					);
+				}
+				const passwordValid = await ctx.context.password.verify({
+					hash: credentialAccount.password,
+					password: ctx.body.password,
+				});
+				if (!passwordValid) {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+				}
 			}
 
 			/**
@@ -753,7 +861,7 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			if (!ctx.context.orgOptions.sendDeleteOrganizationEmail) {
+			if (!options.sendDeleteOrganizationEmail) {
 				throw APIError.from("NOT_FOUND", {
 					message: "Organization deletion email confirmation is not enabled",
 					code: "NOT_FOUND",
@@ -776,7 +884,15 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 				);
 			}
 
-			const [userId, organizationId] = verificationRecord.value.split(":");
+			const parts = verificationRecord.value.split(":");
+			const userId = parts[0];
+			const organizationId = parts[1];
+			if (!userId || !organizationId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
+				);
+			}
 			if (userId !== session.user.id) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -801,7 +917,7 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 					role: member.role,
 					permissions: { organization: ["delete"] },
 					organizationId,
-					options: ctx.context.orgOptions,
+					options,
 				},
 				ctx,
 			);
