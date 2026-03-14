@@ -664,11 +664,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					);
 				}
 				if (tokenOrgId === session.session.activeOrganizationId) {
-					await adapter.setActiveOrganization(
-						session.session.token,
-						null,
-						ctx,
-					);
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
 				}
 				if (options?.organizationHooks?.beforeDeleteOrganization) {
 					await options.organizationHooks.beforeDeleteOrganization({
@@ -867,7 +863,7 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 					code: "ORGANIZATION_DELETION_DISABLED",
 				});
 			}
-			
+
 			if (!options.sendDeleteOrganizationEmail) {
 				throw APIError.from("NOT_FOUND", {
 					message: "Organization deletion email confirmation is not enabled",
