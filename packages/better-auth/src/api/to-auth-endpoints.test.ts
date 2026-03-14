@@ -199,6 +199,15 @@ describe("before hook", async () => {
 					return { response: true };
 				},
 			),
+			responseHeaders: createAuthEndpoint(
+				"/response-headers",
+				{
+					method: "POST",
+				},
+				async (c) => {
+					return { response: true };
+				},
+			),
 		};
 
 		const authContext = init({
@@ -206,6 +215,15 @@ describe("before hook", async () => {
 				before: createAuthMiddleware(async (c) => {
 					if (c.path === "/json") {
 						return { before: true };
+					}
+					if (c.path === "/response-headers") {
+						return new Response(JSON.stringify({ before: true }), {
+							status: 201,
+							headers: {
+								"content-type": "application/json",
+								"x-hook": "before",
+							},
+						});
 					}
 					return new Response(JSON.stringify({ before: true }));
 				}),
@@ -221,6 +239,39 @@ describe("before hook", async () => {
 		it("should return the hook response", async () => {
 			const response = await authEndpoints.json();
 			expect(response).toMatchObject({ before: true });
+		});
+
+		it("should not leak request headers into early before responses", async () => {
+			const response = await authEndpoints.responseHeaders({
+				asResponse: true,
+				headers: new Headers({
+					"content-length": "999",
+					"x-request": "leak-me-not",
+				}),
+			});
+
+			expect(response.status).toBe(201);
+			expect(response.headers.get("x-hook")).toBe("before");
+			expect(response.headers.get("x-request")).toBeNull();
+			expect(response.headers.get("content-length")).toBeNull();
+			await expect(response.json()).resolves.toMatchObject({ before: true });
+		});
+
+		it("should return response headers and status for early before responses", async () => {
+			const result = await authEndpoints.responseHeaders({
+				returnHeaders: true,
+				returnStatus: true,
+				headers: new Headers({
+					"content-length": "999",
+					"x-request": "leak-me-not",
+				}),
+			});
+
+			expect(result.status).toBe(201);
+			expect(result.headers.get("x-hook")).toBe("before");
+			expect(result.headers.get("x-request")).toBeNull();
+			expect(result.headers.get("content-length")).toBeNull();
+			expect(result.response).toBeInstanceOf(Response);
 		});
 	});
 });

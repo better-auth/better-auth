@@ -160,16 +160,28 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								internalContext = defuReplaceArrays(rest, internalContext);
 							} else if (before) {
 								/* Return before hook response if it's anything other than a context return */
-								return context?.asResponse
-									? toResponse(before, {
-											headers: context?.headers,
-										})
-									: context?.returnHeaders
+								const response = toResponse(before);
+								if (context?.asResponse) {
+									return response;
+								}
+								if (context?.returnHeaders) {
+									return context?.returnStatus
 										? {
-												headers: context?.headers,
+												headers: response.headers,
 												response: before,
+												status: response.status,
 											}
-										: before;
+										: {
+												headers: response.headers,
+												response: before,
+											};
+								}
+								return context?.returnStatus
+									? {
+											response: before,
+											status: response.status,
+										}
+									: before;
 							}
 
 							internalContext.asResponse = false;
