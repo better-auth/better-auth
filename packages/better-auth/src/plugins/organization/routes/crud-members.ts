@@ -1201,6 +1201,14 @@ export const transferOwnership = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 					);
 				}
+				if (
+					!tokenCurrentOwnerMember.role.split(",").includes(creatorRole)
+				) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_TRANSFER_TOKEN,
+					);
+				}
 				const fromUser = await ctx.context.internalAdapter.findUserById(
 					tokenPayload.fromUserId,
 				);
@@ -1210,9 +1218,6 @@ export const transferOwnership = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 					);
 				}
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`transfer-ownership-${ctx.body.token}`,
-				);
 				await performOwnershipTransfer(
 					adapter,
 					options,
@@ -1221,6 +1226,9 @@ export const transferOwnership = <O extends OrganizationOptions>(options: O) =>
 					confirmedToMember,
 					fromUser,
 					creatorRole,
+				);
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`transfer-ownership-${ctx.body.token}`,
 				);
 				return ctx.json({ success: true, message: "Ownership transferred" });
 			}
@@ -1449,6 +1457,15 @@ export const transferOwnershipCallback = <O extends OrganizationOptions>(
 				);
 			}
 
+			const creatorRole = options?.creatorRole || "owner";
+
+			if (!currentOwnerMember.role.split(",").includes(creatorRole)) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_TRANSFER_TOKEN,
+				);
+			}
+
 			const fromUser = await ctx.context.internalAdapter.findUserById(
 				payload.fromUserId,
 			);
@@ -1459,12 +1476,6 @@ export const transferOwnershipCallback = <O extends OrganizationOptions>(
 				);
 			}
 
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				`transfer-ownership-${ctx.query.token}`,
-			);
-
-			const creatorRole = options?.creatorRole || "owner";
-
 			await performOwnershipTransfer(
 				adapter,
 				options,
@@ -1473,6 +1484,10 @@ export const transferOwnershipCallback = <O extends OrganizationOptions>(
 				toMember,
 				fromUser,
 				creatorRole,
+			);
+
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				`transfer-ownership-${ctx.query.token}`,
 			);
 
 			if (ctx.query.callbackURL) {
@@ -1527,10 +1542,9 @@ async function performOwnershipTransfer(
 	const existingNewOwnerRoles = toMember.role
 		.split(",")
 		.filter((r: string) => r !== creatorRole);
-	await adapter.updateMember(
-		toMember.id,
-		[creatorRole, ...existingNewOwnerRoles].join(","),
-	);
+	const updatedNewOwnerRole = [creatorRole, ...existingNewOwnerRoles].join(",");
+	await adapter.updateMember(toMember.id, updatedNewOwnerRole);
+	const updatedToMember = { ...toMember, role: updatedNewOwnerRole };
 
 	// Demote the current owner to admin
 	const newCurrentOwnerRoles = currentOwnerMember.role
@@ -1551,7 +1565,7 @@ async function performOwnershipTransfer(
 					>["afterTransferOwnership"]
 				>
 			>[0]["previousOwner"],
-			newOwnerMember: toMember as Parameters<
+			newOwnerMember: updatedToMember as Parameters<
 				NonNullable<
 					NonNullable<
 						typeof options.organizationHooks
