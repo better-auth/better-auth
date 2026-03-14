@@ -655,16 +655,16 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
 					);
 				}
-				const cbAdapter = getOrgAdapter<O>(ctx.context, options);
-				const cbOrg = await cbAdapter.findOrganizationById(tokenOrgId);
-				if (!cbOrg) {
+				const adapter = getOrgAdapter<O>(ctx.context, options);
+				const org = await adapter.findOrganizationById(tokenOrgId);
+				if (!org) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 					);
 				}
 				if (tokenOrgId === session.session.activeOrganizationId) {
-					await cbAdapter.setActiveOrganization(
+					await adapter.setActiveOrganization(
 						session.session.token,
 						null,
 						ctx,
@@ -672,17 +672,17 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				}
 				if (options?.organizationHooks?.beforeDeleteOrganization) {
 					await options.organizationHooks.beforeDeleteOrganization({
-						organization: cbOrg,
+						organization: org,
 						user: session.user,
 					});
 				}
-				await cbAdapter.deleteOrganization(tokenOrgId);
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					`delete-organization-${ctx.body.token}`,
 				);
+				await adapter.deleteOrganization(tokenOrgId);
 				if (options?.organizationHooks?.afterDeleteOrganization) {
 					await options.organizationHooks.afterDeleteOrganization({
-						organization: cbOrg,
+						organization: org,
 						user: session.user,
 					});
 				}
@@ -861,10 +861,17 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			if (options.disableOrganizationDeletion) {
+				throw APIError.from("NOT_FOUND", {
+					message: "Organization deletion is disabled",
+					code: "ORGANIZATION_DELETION_DISABLED",
+				});
+			}
+			
 			if (!options.sendDeleteOrganizationEmail) {
 				throw APIError.from("NOT_FOUND", {
 					message: "Organization deletion email confirmation is not enabled",
-					code: "NOT_FOUND",
+					code: "ORGANIZATION_DELETION_EMAIL_CONFIRMATION_NOT_ENABLED",
 				});
 			}
 
@@ -946,10 +953,10 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 					user: session.user,
 				});
 			}
-			await adapter.deleteOrganization(organizationId);
 			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 				`delete-organization-${ctx.query.token}`,
 			);
+			await adapter.deleteOrganization(organizationId);
 			if (options?.organizationHooks?.afterDeleteOrganization) {
 				await options.organizationHooks.afterDeleteOrganization({
 					organization: org,

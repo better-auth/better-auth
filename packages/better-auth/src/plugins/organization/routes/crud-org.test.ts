@@ -648,7 +648,7 @@ describe("delete organization", async () => {
 
 	it("should reject token belonging to a different user", async () => {
 		let capturedToken = "";
-		const { auth, signInWithTestUser } = await getTestInstance({
+		const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
 			plugins: [
 				organization({
 					sendDeleteOrganizationEmail: async (data) => {
@@ -671,18 +671,13 @@ describe("delete organization", async () => {
 		});
 
 		// A different user tries to use the token
-		const otherHeaders = new Headers();
 		await auth.api.signUpEmail({
 			body: { email: "other@test.com", password: "password", name: "Other" },
-			asResponse: true,
 		});
-		const signInRes = await auth.api.signInEmail({
-			body: { email: "other@test.com", password: "password" },
-			asResponse: true,
-		});
-		signInRes.headers.getSetCookie().forEach((cookie) => {
-			otherHeaders.append("cookie", cookie);
-		});
+		const { headers: otherHeaders } = await signInWithUser(
+			"other@test.com",
+			"password",
+		);
 
 		const res = await auth.api.deleteOrganizationCallback({
 			query: { token: capturedToken },
@@ -690,6 +685,8 @@ describe("delete organization", async () => {
 			asResponse: true,
 		});
 		expect(res.status).toBe(400);
+		const body = await res.json();
+		expect(body.code).toBe("INVALID_ORGANIZATION_DELETION_TOKEN");
 	});
 
 	it("should call beforeDeleteOrganization and afterDeleteOrganization hooks", async () => {
