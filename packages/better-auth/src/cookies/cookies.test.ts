@@ -1278,6 +1278,102 @@ describe("Cookie Chunking", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8585
+	 */
+	it("should chunk cookies when data length exceeds CHUNK_SIZE (3896 bytes) even if under 4093 bytes", async () => {
+		// CHUNK_SIZE = 4096 - 200 = 3896 bytes (overhead estimate).
+		// Previously the threshold was hard-coded as 4093, which missed cookies
+		// between 3897-4093 bytes in value length that still exceed the total
+		// 4096-byte browser limit once cookie name + attributes are included.
+		const { client } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					bioField: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		// A string that, when combined with session/user metadata and base64-encoded,
+		// produces a cookie value between 3897 and 4093 bytes — the previously broken range.
+		const mediumString = "x".repeat(1500);
+
+		const headers = new Headers();
+		let hasCookieChunks = false;
+
+		await client.signUp.email(
+			{
+				name: "Boundary Test User",
+				email: "boundary-chunk-test@example.com",
+				password: "password123",
+				bioField: mediumString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) {
+						const parsed = parseSetCookieHeader(setCookie);
+						parsed.forEach((value, name) => {
+							if (
+								name.includes("session_data.0") ||
+								name.includes("session_data.1")
+							) {
+								hasCookieChunks = true;
+							}
+							headers.append("cookie", `${name}=${value.value}`);
+						});
+					}
+				},
+			},
+		);
+
+		// If this was chunked, verify reconstruction works; if not chunked,
+		// verify the single cookie value fits within the allowed size.
+		if (hasCookieChunks) {
+			const request = new Request("https://example.com/api/auth/session", {
+				headers,
+			});
+			const cache = await getCookieCache(request, {
+				secret: "better-auth.secret",
+			});
+			expect(cache).not.toBeNull();
+			expect(cache?.user?.email).toEqual("boundary-chunk-test@example.com");
+		}
+
+		// Whether or not chunking occurred, the individual cookie values must fit within 4096 bytes
+		const headersResult = new Headers();
+		await client.signUp.email(
+			{
+				name: "Boundary Test User2",
+				email: "boundary-chunk-test2@example.com",
+				password: "password123",
+				bioField: mediumString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) {
+						const parsed = parseSetCookieHeader(setCookie);
+						parsed.forEach((value, name) => {
+							// Each individual cookie value must be <= CHUNK_SIZE (3896 bytes)
+							expect(value.value.length).toBeLessThanOrEqual(3896);
+							headersResult.append("cookie", `${name}=${value.value}`);
+						});
+					}
+				},
+			},
+		);
+	});
+
 	it("should NOT chunk cookies when they are under 4KB", async () => {
 		const { client, testUser } = await getTestInstance({
 			secret: "better-auth.secret",

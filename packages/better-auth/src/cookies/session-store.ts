@@ -11,7 +11,7 @@ const ALLOWED_COOKIE_SIZE = 4096;
 // Estimated size of an empty cookie with all attributes
 // (name, path, domain, secure, httpOnly, sameSite, expires/maxAge)
 const ESTIMATED_EMPTY_COOKIE_SIZE = 200;
-const CHUNK_SIZE = ALLOWED_COOKIE_SIZE - ESTIMATED_EMPTY_COOKIE_SIZE;
+export const CHUNK_SIZE = ALLOWED_COOKIE_SIZE - ESTIMATED_EMPTY_COOKIE_SIZE;
 
 interface Cookie {
 	name: string;
