@@ -1680,11 +1680,9 @@ describe("stripe - organization customer", () => {
 				}),
 				list: vi.fn().mockResolvedValue({ data: [] }),
 				// First call (user upgrade): no existing customer
-				// Second call (org upgrade): empty -> user customer excluded by customerType filter
-				search: vi
-					.fn()
-					.mockResolvedValueOnce({ data: [] })
-					.mockResolvedValueOnce({ data: [] }),
+				// Second call (org upgrade): returns user customer only if query
+				// lacks customerType filter — verifies the fix actually matters
+				search: vi.fn().mockResolvedValueOnce({ data: [] }),
 				retrieve: vi.fn(),
 				update: vi.fn(),
 			},
@@ -1774,8 +1772,30 @@ describe("stripe - organization customer", () => {
 			fetchOptions: { headers: userAHeaders },
 		});
 
-		// Organization upgrades -> search filters by customerType:"organization",
-		// so User A's customer (customerType:"user") is not matched
+		// Organization upgrades
+		mockStripeCustomerType.customers.search.mockImplementationOnce(
+			(params: { query?: string }) => {
+				const query = params?.query ?? "";
+				if (query.includes(orgId) && !query.includes("customerType")) {
+					// Without the fix: user customer would be returned
+					return Promise.resolve({
+						data: [
+							{
+								id: userCustomerId,
+								metadata: {
+									userId: "user-a",
+									customerType: "user",
+									organizationId: orgId,
+								},
+							},
+						],
+					});
+				}
+				// With the fix: customerType filter excludes user customer
+				return Promise.resolve({ data: [] });
+			},
+		);
+
 		mockStripeCustomerType.customers.create.mockResolvedValueOnce({
 			id: orgCustomerId,
 			metadata: { organizationId: orgId, customerType: "organization" },
@@ -1798,9 +1818,17 @@ describe("stripe - organization customer", () => {
 		});
 		expect(updatedOrg?.stripeCustomerId).toBe(orgCustomerId);
 
-		// Search query must include customerType filter
-		const orgSearchCall = mockStripeCustomerType.customers.search.mock.calls[1];
-		expect(orgSearchCall?.[0]?.query).toContain("customerType");
+		// Find the org lookup search call and verify the full query
+		const orgSearchCall =
+			mockStripeCustomerType.customers.search.mock.calls.find(
+				([arg]) =>
+					typeof arg?.query === "string" &&
+					arg.query.includes(orgId) &&
+					arg.query.includes("organizationId"),
+			);
+		expect(orgSearchCall?.[0]?.query).toContain(
+			`metadata["organizationId"]:"${orgId}" AND metadata["customerType"]:"organization"`,
+		);
 	});
 });
 
