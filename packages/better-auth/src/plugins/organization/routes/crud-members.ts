@@ -4,6 +4,7 @@ import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
+import { generateRandomString } from "../../../crypto";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
 import { getOrgAdapter } from "../adapter";
@@ -1060,3 +1061,450 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 			});
 		},
 	);
+
+const transferOwnershipBodySchema = z.object({
+	organizationId: z
+		.string()
+		.meta({ description: "The organization ID" })
+		.optional(),
+	memberId: z.string().meta({
+		description: "The ID of the member who will become the new owner",
+	}),
+	password: z
+		.string()
+		.meta({
+			description:
+				"Current owner's password for identity verification (optional)",
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description:
+				"URL to redirect to after the new owner accepts the transfer",
+		})
+		.optional(),
+	token: z
+		.string()
+		.meta({ description: "Transfer confirmation token received via email" })
+		.optional(),
+});
+
+export const transferOwnership = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/transfer-ownership",
+		{
+			method: "POST",
+			body: transferOwnershipBodySchema,
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "transferOrganizationOwnership",
+					description:
+						"Transfer ownership of an organization to another member",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: { type: "boolean" },
+											message: { type: "string" },
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+			if (!organizationId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
+			}
+
+			const currentOwnerMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId,
+			});
+			if (!currentOwnerMember) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+
+			const creatorRole = options?.creatorRole || "owner";
+			const currentOwnerRoles = currentOwnerMember.role.split(",");
+			if (!currentOwnerRoles.includes(creatorRole)) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_TRANSFER_OWNERSHIP,
+				);
+			}
+
+			const toMember = await adapter.findMemberById(ctx.body.memberId);
+			if (!toMember || toMember.organizationId !== organizationId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.CANNOT_TRANSFER_OWNERSHIP_TO_NON_MEMBER,
+				);
+			}
+
+			const org = await adapter.findOrganizationById(organizationId);
+			if (!org) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const toUser = await ctx.context.internalAdapter.findUserById(
+				toMember.userId,
+			);
+			if (!toUser) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
+			}
+
+			if (options?.sendTransferOwnershipEmail) {
+				if (!ctx.body.token) {
+					if (ctx.body.password) {
+						const accounts = await ctx.context.internalAdapter.findAccounts(
+							session.user.id,
+						);
+						const credentialAccount = accounts.find(
+							(a: { providerId: string; password?: string | null }) =>
+								a.providerId === "credential" && a.password,
+						);
+						if (!credentialAccount?.password) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+							);
+						}
+						const valid = await ctx.context.password.verify({
+							hash: credentialAccount.password,
+							password: ctx.body.password,
+						});
+						if (!valid) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.INVALID_PASSWORD,
+							);
+						}
+					}
+
+					const token = generateRandomString(32, "0-9", "a-z");
+					const expiresIn =
+						(options?.transferOwnershipTokenExpiresIn ?? 60 * 60 * 24) * 1000;
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: `transfer-ownership-${token}`,
+						value: JSON.stringify({
+							organizationId,
+							fromUserId: session.user.id,
+							toMemberId: toMember.id,
+						}),
+						expiresAt: new Date(Date.now() + expiresIn),
+					});
+
+					const cbParam = ctx.body.callbackURL
+						? `&callbackURL=${encodeURIComponent(ctx.body.callbackURL)}`
+						: "";
+					const url = `${ctx.context.baseURL}/organization/transfer-ownership/callback?token=${token}${cbParam}`;
+
+					await ctx.context.runInBackgroundOrAwait(
+						options.sendTransferOwnershipEmail(
+							{
+								organization: org,
+								currentOwner: session.user,
+								newOwner: toUser,
+								url,
+								token,
+							},
+							ctx.request,
+						),
+					);
+
+					return ctx.json({
+						success: true,
+						message: "Transfer confirmation email sent",
+					});
+				}
+
+				// Token confirmation path
+				const verification =
+					await ctx.context.internalAdapter.findVerificationValue(
+						`transfer-ownership-${ctx.body.token}`,
+					);
+				if (!verification || verification.expiresAt < new Date()) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_TRANSFER_TOKEN,
+					);
+				}
+				const payload = JSON.parse(verification.value) as {
+					organizationId: string;
+					fromUserId: string;
+					toMemberId: string;
+				};
+				if (
+					payload.fromUserId !== session.user.id ||
+					payload.organizationId !== organizationId
+				) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.INVALID_TRANSFER_TOKEN,
+					);
+				}
+				const confirmedToMember = await adapter.findMemberById(
+					payload.toMemberId,
+				);
+				if (!confirmedToMember) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+					);
+				}
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`transfer-ownership-${ctx.body.token}`,
+				);
+				await performOwnershipTransfer(
+					adapter,
+					options,
+					org,
+					currentOwnerMember,
+					confirmedToMember,
+					session.user,
+					creatorRole,
+				);
+				return ctx.json({ success: true, message: "Ownership transferred" });
+			}
+
+			// Immediate transfer (no email configured)
+			await performOwnershipTransfer(
+				adapter,
+				options,
+				org,
+				currentOwnerMember,
+				toMember,
+				session.user,
+				creatorRole,
+			);
+			return ctx.json({ success: true, message: "Ownership transferred" });
+		},
+	);
+
+export const transferOwnershipCallback = <O extends OrganizationOptions>(
+	options: O,
+) => {
+	return createAuthEndpoint(
+		"/organization/transfer-ownership/callback",
+		{
+			method: "GET",
+			query: z.object({
+				token: z.string().meta({ description: "Transfer confirmation token" }),
+				callbackURL: z
+					.string()
+					.meta({ description: "URL to redirect to after acceptance" })
+					.optional(),
+			}),
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "transferOrganizationOwnershipCallback",
+					description:
+						"Accept an ownership transfer by verifying the email token",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: { type: "boolean" },
+											message: { type: "string" },
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			const verification =
+				await ctx.context.internalAdapter.findVerificationValue(
+					`transfer-ownership-${ctx.query.token}`,
+				);
+			if (!verification || verification.expiresAt < new Date()) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_TRANSFER_TOKEN,
+				);
+			}
+
+			const payload = JSON.parse(verification.value) as {
+				organizationId: string;
+				fromUserId: string;
+				toMemberId: string;
+			};
+
+			// The new owner must be the authenticated user
+			const toMember = await adapter.findMemberById(payload.toMemberId);
+			if (!toMember || toMember.userId !== session.user.id) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_TRANSFER_TOKEN,
+				);
+			}
+
+			const org = await adapter.findOrganizationById(payload.organizationId);
+			if (!org) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const currentOwnerMember = await adapter.findMemberByOrgId({
+				userId: payload.fromUserId,
+				organizationId: payload.organizationId,
+			});
+			if (!currentOwnerMember) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
+			}
+
+			const fromUser = await ctx.context.internalAdapter.findUserById(
+				payload.fromUserId,
+			);
+			if (!fromUser) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
+			}
+
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				`transfer-ownership-${ctx.query.token}`,
+			);
+
+			const creatorRole = options?.creatorRole || "owner";
+
+			await performOwnershipTransfer(
+				adapter,
+				options,
+				org,
+				currentOwnerMember,
+				toMember,
+				fromUser,
+				creatorRole,
+			);
+
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
+			}
+
+			return ctx.json({ success: true, message: "Ownership transferred" });
+		},
+	);
+};
+
+async function performOwnershipTransfer(
+	adapter: ReturnType<typeof getOrgAdapter>,
+	options: OrganizationOptions,
+	org: NonNullable<
+		Awaited<
+			ReturnType<ReturnType<typeof getOrgAdapter>["findOrganizationById"]>
+		>
+	>,
+	currentOwnerMember: NonNullable<
+		Awaited<ReturnType<ReturnType<typeof getOrgAdapter>["findMemberById"]>>
+	>,
+	toMember: NonNullable<
+		Awaited<ReturnType<ReturnType<typeof getOrgAdapter>["findMemberById"]>>
+	>,
+	fromUser: { id: string; [key: string]: unknown },
+	creatorRole: string,
+) {
+	if (options?.organizationHooks?.beforeTransferOwnership) {
+		await options.organizationHooks.beforeTransferOwnership({
+			organization: org,
+			currentOwner: fromUser as Parameters<
+				NonNullable<
+					NonNullable<
+						typeof options.organizationHooks
+					>["beforeTransferOwnership"]
+				>
+			>[0]["currentOwner"],
+			newOwnerMember: toMember as Parameters<
+				NonNullable<
+					NonNullable<
+						typeof options.organizationHooks
+					>["beforeTransferOwnership"]
+				>
+			>[0]["newOwnerMember"],
+		});
+	}
+
+	// Demote the current owner to admin
+	const newCurrentOwnerRoles = currentOwnerMember.role
+		.split(",")
+		.filter((r: string) => r !== creatorRole);
+	await adapter.updateMember(
+		currentOwnerMember.id,
+		newCurrentOwnerRoles.length ? newCurrentOwnerRoles.join(",") : "admin",
+	);
+
+	// Promote the new member to owner
+	const existingNewOwnerRoles = toMember.role
+		.split(",")
+		.filter((r: string) => r !== creatorRole);
+	await adapter.updateMember(
+		toMember.id,
+		[creatorRole, ...existingNewOwnerRoles].join(","),
+	);
+
+	if (options?.organizationHooks?.afterTransferOwnership) {
+		await options.organizationHooks.afterTransferOwnership({
+			organization: org,
+			previousOwner: fromUser as Parameters<
+				NonNullable<
+					NonNullable<
+						typeof options.organizationHooks
+					>["afterTransferOwnership"]
+				>
+			>[0]["previousOwner"],
+			newOwnerMember: toMember as Parameters<
+				NonNullable<
+					NonNullable<
+						typeof options.organizationHooks
+					>["afterTransferOwnership"]
+				>
+			>[0]["newOwnerMember"],
+		});
+	}
+}
