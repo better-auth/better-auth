@@ -2,7 +2,9 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
+import { originCheck } from "../../../api/middlewares";
 import { setSessionCookie } from "../../../cookies";
+import { generateRandomString } from "../../../crypto";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
@@ -510,9 +512,25 @@ export const updateOrganization = <O extends OrganizationOptions>(
 };
 
 const deleteOrganizationBodySchema = z.object({
-	organizationId: z.string().meta({
-		description: "The organization id to delete",
-	}),
+	organizationId: z
+		.string()
+		.meta({
+			description: "The organization id to delete",
+		})
+		.optional(),
+	token: z
+		.string()
+		.meta({
+			description:
+				"The verification token received via email. When provided the deletion is confirmed.",
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect to after the organization is deleted",
+		})
+		.optional(),
 });
 
 export const deleteOrganization = <O extends OrganizationOptions>(
@@ -534,8 +552,20 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 							content: {
 								"application/json": {
 									schema: {
-										type: "string",
-										description: "The organization id that was deleted",
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+											},
+											message: {
+												type: "string",
+												enum: [
+													"Organization deleted",
+													"Verification email sent",
+												],
+											},
+										},
+										required: ["success", "message"],
 									},
 								},
 							},
@@ -556,6 +586,24 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
 				throw APIError.fromStatus("UNAUTHORIZED");
+			}
+
+			/**
+			 * If a token is supplied, the user is confirming a previously initiated
+			 * deletion.  Delegate to the callback handler directly.
+			 */
+			if (ctx.body.token) {
+				await deleteOrganizationCallback(options)({
+					...ctx,
+					query: {
+						token: ctx.body.token,
+						callbackURL: ctx.body.callbackURL,
+					},
+				});
+				return ctx.json({
+					success: true,
+					message: "Organization deleted",
+				});
 			}
 
 			const organizationId = ctx.body.organizationId;
@@ -593,17 +641,48 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				);
 			}
-			if (organizationId === session.session.activeOrganizationId) {
-				/**
-				 * If the organization is deleted, we set the active organization to null
-				 */
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
 
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
+
+			/**
+			 * If `sendDeleteOrganizationEmail` is configured, send a verification
+			 * email instead of deleting immediately.
+			 */
+			if (ctx.context.orgOptions.sendDeleteOrganizationEmail) {
+				const token = generateRandomString(32, "0-9", "a-z");
+				const expiresIn =
+					ctx.context.orgOptions.deleteOrganizationTokenExpiresIn ??
+					60 * 60 * 24;
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: `${session.user.id}:${organizationId}`,
+					identifier: `delete-organization-${token}`,
+					expiresAt: new Date(Date.now() + expiresIn * 1000),
+				});
+				const url = `${ctx.context.baseURL}/organization/delete/callback?token=${token}&callbackURL=${encodeURIComponent(ctx.body.callbackURL || "/")}`;
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.orgOptions.sendDeleteOrganizationEmail(
+						{
+							organization: org,
+							user: session.user,
+							url,
+							token,
+						},
+						ctx.request,
+					),
+				);
+				return ctx.json({
+					success: true,
+					message: "Verification email sent",
+				});
+			}
+
+			if (organizationId === session.session.activeOrganizationId) {
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			}
+
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
 				await options.organizationHooks.beforeDeleteOrganization({
 					organization: org,
@@ -617,7 +696,161 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					user: session.user,
 				});
 			}
-			return ctx.json(org);
+			return ctx.json({
+				success: true,
+				message: "Organization deleted",
+			});
+		},
+	);
+};
+
+export const deleteOrganizationCallback = <O extends OrganizationOptions>(
+	options: O,
+) => {
+	return createAuthEndpoint(
+		"/organization/delete/callback",
+		{
+			method: "GET",
+			query: z.object({
+				token: z.string().meta({
+					description: "The verification token from the confirmation email",
+				}),
+				callbackURL: z
+					.string()
+					.meta({
+						description: "URL to redirect to after the organization is deleted",
+					})
+					.optional(),
+			}),
+			use: [originCheck((ctx) => ctx.query.callbackURL)],
+			metadata: {
+				openapi: {
+					description:
+						"Callback to complete organization deletion with a verification token",
+					responses: {
+						"200": {
+							description: "Organization successfully deleted",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+											},
+											message: {
+												type: "string",
+												enum: ["Organization deleted"],
+											},
+										},
+										required: ["success", "message"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			if (!ctx.context.orgOptions.sendDeleteOrganizationEmail) {
+				throw APIError.from("NOT_FOUND", {
+					message: "Organization deletion email confirmation is not enabled",
+					code: "NOT_FOUND",
+				});
+			}
+
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				throw APIError.fromStatus("UNAUTHORIZED");
+			}
+
+			const verificationRecord =
+				await ctx.context.internalAdapter.findVerificationValue(
+					`delete-organization-${ctx.query.token}`,
+				);
+			if (
+				!verificationRecord ||
+				verificationRecord.expiresAt < new Date()
+			) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
+				);
+			}
+
+			const [userId, organizationId] = verificationRecord.value.split(":");
+			if (userId !== session.user.id) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVALID_ORGANIZATION_DELETION_TOKEN,
+				);
+			}
+
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId,
+			});
+			if (!member) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+			const canDeleteOrg = await hasPermission(
+				{
+					role: member.role,
+					permissions: { organization: ["delete"] },
+					organizationId,
+					options: ctx.context.orgOptions,
+				},
+				ctx,
+			);
+			if (!canDeleteOrg) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+				);
+			}
+
+			const org = await adapter.findOrganizationById(organizationId);
+			if (!org) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			if (organizationId === session.session.activeOrganizationId) {
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			}
+
+			if (options?.organizationHooks?.beforeDeleteOrganization) {
+				await options.organizationHooks.beforeDeleteOrganization({
+					organization: org,
+					user: session.user,
+				});
+			}
+			await adapter.deleteOrganization(organizationId);
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				`delete-organization-${ctx.query.token}`,
+			);
+			if (options?.organizationHooks?.afterDeleteOrganization) {
+				await options.organizationHooks.afterDeleteOrganization({
+					organization: org,
+					user: session.user,
+				});
+			}
+
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
+			}
+			return ctx.json({
+				success: true,
+				message: "Organization deleted",
+			});
 		},
 	);
 };
