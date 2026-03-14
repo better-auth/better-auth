@@ -733,4 +733,88 @@ describe("delete organization", async () => {
 		expect(beforeHook).toHaveBeenCalledWith("hooks-test");
 		expect(afterHook).toHaveBeenCalledWith("hooks-test");
 	});
+	it("should verify password before sending email when password is provided", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async (data) => {
+						capturedToken = data.token;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "pw-test", slug: "pw-test" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: {
+				organizationId: org?.id,
+				password: "test123456",
+			},
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Verification email sent",
+		});
+		expect(capturedToken).toBeTruthy();
+	});
+
+	it("should reject deletion when wrong password is provided", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async () => {},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "pw-wrong", slug: "pw-wrong" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: {
+				organizationId: org?.id,
+				password: "wrong-password",
+			},
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("should delete immediately with correct password and no email configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "pw-immediate", slug: "pw-immediate" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: {
+				organizationId: org?.id,
+				password: "test123456",
+			},
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
+
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
+	});
 });
