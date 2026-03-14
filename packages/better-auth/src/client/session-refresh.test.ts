@@ -728,13 +728,18 @@ describe("session-refresh", () => {
 	it("should preserve session when $fetch returns unwrapped data (throw: true)", async () => {
 		vi.useFakeTimers();
 
-		const sessionData = {
-			user: { id: "1", email: "test@test.com" },
+		const initialData = {
+			user: { id: "1", email: "old@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const refreshedData = {
+			user: { id: "1", email: "new@test.com" },
 			session: { id: "session-1" },
 		};
 
 		const sessionAtom: SessionAtom = atom({
-			data: sessionData,
+			data: initialData,
 			error: null,
 			isPending: false,
 			isRefetching: false,
@@ -742,7 +747,7 @@ describe("session-refresh", () => {
 		const sessionSignal = atom(false);
 
 		// When throw: true, $fetch returns data directly instead of { data, error }
-		const mockFetch = vi.fn(async () => sessionData);
+		const mockFetch = vi.fn(async () => refreshedData);
 
 		const manager = createSessionRefreshManager({
 			sessionAtom,
@@ -759,10 +764,10 @@ describe("session-refresh", () => {
 
 		await vi.advanceTimersByTimeAsync(5000);
 
+		expect(mockFetch).toHaveBeenCalledTimes(1);
 		const updatedSession = sessionAtom.get();
-		// Session should still have valid data, not null
-		expect(updatedSession.data).toEqual(sessionData);
-		expect(updatedSession.data?.user?.email).toBe("test@test.com");
+		expect(updatedSession.data).toEqual(refreshedData);
+		expect(updatedSession.data?.user?.email).toBe("new@test.com");
 
 		manager.cleanup();
 		vi.useRealTimers();
@@ -771,13 +776,18 @@ describe("session-refresh", () => {
 	it("should preserve session on visibilitychange when $fetch returns unwrapped data (throw: true)", async () => {
 		vi.useFakeTimers();
 
-		const sessionData = {
-			user: { id: "1", email: "test@test.com" },
+		const initialData = {
+			user: { id: "1", email: "old@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const refreshedData = {
+			user: { id: "1", email: "new@test.com" },
 			session: { id: "session-1" },
 		};
 
 		const sessionAtom: SessionAtom = atom({
-			data: sessionData,
+			data: initialData,
 			error: null,
 			isPending: false,
 			isRefetching: false,
@@ -785,7 +795,7 @@ describe("session-refresh", () => {
 		const sessionSignal = atom(false);
 
 		// When throw: true, $fetch returns data directly
-		const mockFetch = vi.fn(async () => sessionData);
+		const mockFetch = vi.fn(async () => refreshedData);
 
 		const manager = createSessionRefreshManager({
 			sessionAtom,
@@ -803,9 +813,10 @@ describe("session-refresh", () => {
 		manager.triggerRefetch({ event: "visibilitychange" });
 		await vi.runAllTimersAsync();
 
+		expect(mockFetch).toHaveBeenCalledTimes(1);
 		const updatedSession = sessionAtom.get();
-		expect(updatedSession.data).toEqual(sessionData);
-		expect(updatedSession.data?.user?.email).toBe("test@test.com");
+		expect(updatedSession.data).toEqual(refreshedData);
+		expect(updatedSession.data?.user?.email).toBe("new@test.com");
 
 		manager.cleanup();
 		vi.useRealTimers();
