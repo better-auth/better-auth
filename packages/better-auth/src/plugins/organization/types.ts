@@ -341,6 +341,70 @@ export interface OrganizationOptions {
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
 	/**
+	 * Send a confirmation email to the prospective new owner before
+	 * transferring organization ownership.
+	 *
+	 * When this option is provided, calling `organization.transferOwnership`
+	 * will NOT immediately transfer ownership. Instead it will generate a
+	 * short-lived token, store it in the verification table and invoke this
+	 * callback so you can email a confirmation link to the new owner.
+	 *
+	 * The new owner must then confirm by visiting
+	 * `GET /organization/transfer-ownership/callback?token=<token>` while
+	 * authenticated, or by calling
+	 * `authClient.organization.acceptOwnershipTransfer({ token })`.
+	 *
+	 * @example
+	 * ```ts
+	 * sendTransferOwnershipEmail: async (data) => {
+	 * 	await sendEmail(
+	 * 		data.newOwner.email,
+	 * 		`You've been offered ownership of "${data.organization.name}"`,
+	 * 		`Click to accept: ${data.url}`,
+	 * 	);
+	 * }
+	 * ```
+	 */
+	sendTransferOwnershipEmail?:
+		| ((
+				data: {
+					/**
+					 * The organization whose ownership is being transferred
+					 */
+					organization: Organization;
+					/**
+					 * The current owner initiating the transfer
+					 */
+					currentOwner: User;
+					/**
+					 * The member being offered ownership
+					 */
+					newOwner: User;
+					/**
+					 * Pre-built callback URL including the token.
+					 * Redirect the new owner here to confirm.
+					 */
+					url: string;
+					/**
+					 * The raw verification token (32-char alphanumeric).
+					 * Use this if you want to build the URL yourself.
+					 */
+					token: string;
+				},
+				/**
+				 * The original request object
+				 */
+				request?: Request,
+		  ) => Promise<void>)
+		| undefined;
+	/**
+	 * Expiration time (in seconds) for the ownership transfer
+	 * verification token sent via `sendTransferOwnershipEmail`.
+	 *
+	 * @default 86400 (24 hours)
+	 */
+	transferOwnershipTokenExpiresIn?: number | undefined;
+	/**
 	 * Hooks for organization
 	 */
 	organizationHooks?:
@@ -741,6 +805,24 @@ export interface OrganizationOptions {
 					team: Team & Record<string, any>;
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
+				}) => Promise<void>;
+
+				/**
+				 * A callback that runs before ownership of an organization is transferred.
+				 */
+				beforeTransferOwnership?: (data: {
+					organization: Organization & Record<string, any>;
+					currentOwner: User & Record<string, any>;
+					newOwnerMember: Member & Record<string, any>;
+				}) => Promise<void>;
+
+				/**
+				 * A callback that runs after ownership of an organization is transferred.
+				 */
+				afterTransferOwnership?: (data: {
+					organization: Organization & Record<string, any>;
+					previousOwner: User & Record<string, any>;
+					newOwnerMember: Member & Record<string, any>;
 				}) => Promise<void>;
 
 				/**
