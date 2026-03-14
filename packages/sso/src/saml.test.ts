@@ -2174,7 +2174,7 @@ describe("SAML SSO", async () => {
 		const deflatedBuffer = Buffer.from(samlRequestParam, "base64");
 		const xml = inflateRawSync(deflatedBuffer).toString("utf-8");
 		const idMatch = xml.match(/ID="([^"]+)"/);
-		const authnRequestId = idMatch![1];
+		const authnRequestId = idMatch![1] as string;
 
 		let samlResponse: any;
 		await betterFetch(
