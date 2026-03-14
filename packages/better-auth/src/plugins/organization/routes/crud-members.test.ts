@@ -803,6 +803,174 @@ describe("transferOwnership", async () => {
 		expect(updatedOldOwner?.role).not.toContain("owner");
 	});
 
+	it("should complete transfer via POST body token (new owner accepting)", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendTransferOwnershipEmail: async (data) => {
+						capturedToken = data.token;
+					},
+				}),
+			],
+		});
+		const { headers: ownerHeaders, user: owner } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "transfer-post-token", slug: "transfer-post-token" },
+			headers: ownerHeaders,
+		});
+		await auth.api.setActiveOrganization({
+			body: { organizationId: org?.id as string },
+			headers: ownerHeaders,
+		});
+
+		const newOwnerUser = await auth.api.signUpEmail({
+			body: {
+				email: "newowner-post@test.com",
+				password: "password",
+				name: "New Owner Post",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org?.id as string,
+				userId: newOwnerUser?.user?.id as string,
+				role: "admin",
+			},
+			headers: ownerHeaders,
+		});
+		const members = await auth.api.listMembers({
+			query: { organizationId: org?.id as string },
+			headers: ownerHeaders,
+		});
+		const newOwnerMember = members?.members.find(
+			(m: any) => m.userId === newOwnerUser?.user?.id,
+		);
+
+		// Initiate transfer as the current owner
+		await auth.api.transferOwnership({
+			body: {
+				organizationId: org?.id as string,
+				memberId: newOwnerMember?.id as string,
+			},
+			headers: ownerHeaders,
+		});
+		expect(capturedToken).toHaveLength(32);
+
+		// New owner signs in and confirms via POST body token (not GET callback)
+		const newOwnerSignIn = await auth.api.signInEmail({
+			body: { email: "newowner-post@test.com", password: "password" },
+			asResponse: true,
+		});
+		const newOwnerHeaders = new Headers();
+		newOwnerSignIn.headers.getSetCookie().forEach((cookie: string) => {
+			newOwnerHeaders.append("cookie", cookie);
+		});
+
+		const res = await auth.api.transferOwnership({
+			body: {
+				organizationId: org?.id as string,
+				token: capturedToken,
+			},
+			headers: newOwnerHeaders,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Ownership transferred",
+		});
+
+		// Verify roles were swapped
+		const updatedMembers = await auth.api.listMembers({
+			query: { organizationId: org?.id as string },
+			headers: ownerHeaders,
+		});
+		const updatedNewOwner = updatedMembers?.members.find(
+			(m: any) => m.userId === newOwnerUser?.user?.id,
+		);
+		const updatedOldOwner = updatedMembers?.members.find(
+			(m: any) => m.userId === owner.id,
+		);
+		expect(updatedNewOwner?.role).toContain("owner");
+		expect(updatedOldOwner?.role).not.toContain("owner");
+	});
+
+	it("should reject POST body token if wrong user tries to accept", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendTransferOwnershipEmail: async (data) => {
+						capturedToken = data.token;
+					},
+				}),
+			],
+		});
+		const { headers: ownerHeaders } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "transfer-post-wrong", slug: "transfer-post-wrong" },
+			headers: ownerHeaders,
+		});
+		await auth.api.setActiveOrganization({
+			body: { organizationId: org?.id as string },
+			headers: ownerHeaders,
+		});
+
+		const newOwnerUser = await auth.api.signUpEmail({
+			body: {
+				email: "newowner-pw@test.com",
+				password: "password",
+				name: "New Owner PW",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org?.id as string,
+				userId: newOwnerUser?.user?.id as string,
+				role: "admin",
+			},
+			headers: ownerHeaders,
+		});
+		const members = await auth.api.listMembers({
+			query: { organizationId: org?.id as string },
+			headers: ownerHeaders,
+		});
+		const newOwnerMember = members?.members.find(
+			(m: any) => m.userId === newOwnerUser?.user?.id,
+		);
+
+		await auth.api.transferOwnership({
+			body: {
+				organizationId: org?.id as string,
+				memberId: newOwnerMember?.id as string,
+			},
+			headers: ownerHeaders,
+		});
+
+		// A third user signs in and tries to accept the token via POST
+		const thirdSignIn = await auth.api.signInEmail({
+			body: { email: "test@test.com", password: "test123456" },
+			asResponse: true,
+		});
+		const thirdHeaders = new Headers();
+		thirdSignIn.headers.getSetCookie().forEach((cookie: string) => {
+			thirdHeaders.append("cookie", cookie);
+		});
+
+		const res = await auth.api.transferOwnership({
+			body: {
+				organizationId: org?.id as string,
+				token: capturedToken,
+			},
+			headers: thirdHeaders,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+		const body = await res.json();
+		expect(body.code).toBe("INVALID_TRANSFER_TOKEN");
+	});
+
 	it("should reject callback if wrong user tries to accept", async () => {
 		let capturedToken = "";
 		const { auth, signInWithTestUser } = await getTestInstance({
@@ -856,7 +1024,7 @@ describe("transferOwnership", async () => {
 			headers: ownerHeaders,
 		});
 
-		// A third user tries to accept with the token
+		// A third user tries to accept with the token via GET callback
 		const _thirdUser = await auth.api.signUpEmail({
 			body: {
 				email: "thirduser@test.com",
@@ -882,7 +1050,7 @@ describe("transferOwnership", async () => {
 		expect(res.status).toBe(400);
 	});
 
-	it("should reject invalid or expired token", async () => {
+	it("should reject an invalid (non-existent) token", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				organization({
@@ -897,6 +1065,85 @@ describe("transferOwnership", async () => {
 			headers,
 			asResponse: true,
 		});
+		expect(res.status).toBe(400);
+	});
+
+	it("should reject an expired token", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendTransferOwnershipEmail: async (data) => {
+						capturedToken = data.token;
+					},
+					transferOwnershipTokenExpiresIn: 1, // 1 second
+				}),
+			],
+		});
+		const { headers: ownerHeaders } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "transfer-expired", slug: "transfer-expired" },
+			headers: ownerHeaders,
+		});
+		await auth.api.setActiveOrganization({
+			body: { organizationId: org?.id as string },
+			headers: ownerHeaders,
+		});
+
+		const newOwnerUser = await auth.api.signUpEmail({
+			body: {
+				email: "newowner-exp@test.com",
+				password: "password",
+				name: "New Owner Exp",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org?.id as string,
+				userId: newOwnerUser?.user?.id as string,
+				role: "admin",
+			},
+			headers: ownerHeaders,
+		});
+		const members = await auth.api.listMembers({
+			query: { organizationId: org?.id as string },
+			headers: ownerHeaders,
+		});
+		const newOwnerMember = members?.members.find(
+			(m: any) => m.userId === newOwnerUser?.user?.id,
+		);
+
+		// Initiate the transfer to capture the token
+		await auth.api.transferOwnership({
+			body: {
+				organizationId: org?.id as string,
+				memberId: newOwnerMember?.id as string,
+			},
+			headers: ownerHeaders,
+		});
+		expect(capturedToken).toHaveLength(32);
+
+		// Advance time past the 1-second expiry
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(2000);
+
+		const newOwnerSignIn = await auth.api.signInEmail({
+			body: { email: "newowner-exp@test.com", password: "password" },
+			asResponse: true,
+		});
+		const newOwnerHeaders = new Headers();
+		newOwnerSignIn.headers.getSetCookie().forEach((cookie: string) => {
+			newOwnerHeaders.append("cookie", cookie);
+		});
+
+		const res = await auth.api.transferOwnershipCallback({
+			query: { token: capturedToken },
+			headers: newOwnerHeaders,
+			asResponse: true,
+		});
+
+		vi.useRealTimers();
 		expect(res.status).toBe(400);
 	});
 
