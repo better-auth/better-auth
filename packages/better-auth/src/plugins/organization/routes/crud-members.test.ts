@@ -1244,13 +1244,21 @@ describe("transferOwnership", async () => {
 							organization,
 							newOwnerMember,
 						}) => {
-							beforeHook(organization.name, newOwnerMember.id, newOwnerMember.role);
+							beforeHook(
+								organization.name,
+								newOwnerMember.id,
+								newOwnerMember.role,
+							);
 						},
 						afterTransferOwnership: async ({
 							organization,
 							newOwnerMember,
 						}) => {
-							afterHook(organization.name, newOwnerMember.id, newOwnerMember.role);
+							afterHook(
+								organization.name,
+								newOwnerMember.id,
+								newOwnerMember.role,
+							);
 						},
 					},
 				}),

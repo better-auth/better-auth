@@ -1201,9 +1201,7 @@ export const transferOwnership = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 					);
 				}
-				if (
-					!tokenCurrentOwnerMember.role.split(",").includes(creatorRole)
-				) {
+				if (!tokenCurrentOwnerMember.role.split(",").includes(creatorRole)) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						ORGANIZATION_ERROR_CODES.INVALID_TRANSFER_TOKEN,
