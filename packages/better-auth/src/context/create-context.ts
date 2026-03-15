@@ -126,12 +126,16 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 		}
 	}
 
-	const baseURL = isDynamicConfig
-		? undefined
-		: getBaseURL(
-				typeof options.baseURL === "string" ? options.baseURL : undefined,
-				options.basePath,
-			);
+	const basePath = options.basePath || "/api/auth";
+	const baseURL =
+		isDynamicConfig && isDynamicBaseURLConfig(options.baseURL)
+			? options.baseURL.fallback
+				? getBaseURL(options.baseURL.fallback, basePath)
+				: getBaseURL(undefined, basePath, undefined, true)
+			: getBaseURL(
+					typeof options.baseURL === "string" ? options.baseURL : undefined,
+					basePath,
+				);
 
 	if (!baseURL && !isDynamicConfig) {
 		logger.warn(
@@ -178,7 +182,7 @@ Most of the features of Better Auth will not work correctly.`,
 			: baseURL
 				? new URL(baseURL).origin
 				: "",
-		basePath: options.basePath || "/api/auth",
+		basePath,
 		plugins: plugins.concat(internalPlugins),
 	};
 
