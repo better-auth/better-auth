@@ -146,6 +146,60 @@ describe("assignOrganizationByDomain", () => {
 		expect(members[0]?.role).toBe("member");
 	});
 
+	it("should assign owner role when provisioning defaultRole is owner", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({ domainVerified: true, organizationId: org.id }),
+		);
+
+		const user = createUser();
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+			provisioningOptions: {
+				defaultRole: "owner",
+			},
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.organizationId).toBe(org.id);
+		expect(members[0]?.role).toBe("owner");
+	});
+
+	it("should assign owner role when provisioning getRole returns owner", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({ domainVerified: true, organizationId: org.id }),
+		);
+
+		const user = createUser();
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+			provisioningOptions: {
+				getRole: async () => "owner",
+			},
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.organizationId).toBe(org.id);
+		expect(members[0]?.role).toBe("owner");
+	});
+
 	it("should NOT assign user when email domain does not match any provider", async () => {
 		const { data, createContext } = createTestContext();
 
