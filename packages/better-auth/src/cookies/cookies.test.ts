@@ -9,6 +9,9 @@ import {
 } from "../cookies";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
+	ALLOWED_COOKIE_SIZE,
+	estimateEmptyCookieSize,
+	getMaxCookieValueSize,
 	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -1337,6 +1340,114 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+
+	/**
+	 * https://github.com/better-auth/better-auth/issues/8585
+	 */
+	it("should chunk by dynamic max value size", async () => {
+		const longPrefix = "better-auth-" + "x".repeat(80);
+		const largeString = "x".repeat(4069);
+
+		const { client } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: {
+				cookiePrefix: longPrefix,
+			},
+			user: {
+				additionalFields: {
+					entraProfile: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		let hasChunkedCookies = false;
+		let singleSessionDataValueLength: number | null = null;
+		const chunkValues: { name: string; index: number; value: string }[] = [];
+		const cookieAttrs = {
+			path: "/",
+			httpOnly: true,
+			sameSite: "lax" as const,
+			maxAge: 300,
+		};
+
+		await client.signUp.email(
+			{
+				name: "Entra User",
+				email: "entra-chunk-test@example.com",
+				password: "password123",
+				entraProfile: largeString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookie!);
+					parsed.forEach((value, name) => {
+						const chunkMatch = name.match(/\.session_data\.(\d+)$/);
+						if (chunkMatch) {
+							hasChunkedCookies = true;
+							chunkValues.push({
+								name,
+								index: Number(chunkMatch[1]),
+								value: value.value,
+							});
+						} else if (name.includes("session_data") && !/\.\d+$/.test(name)) {
+							singleSessionDataValueLength = value.value.length;
+						}
+						headers.append("cookie", `${name}=${value.value}`);
+					});
+				},
+			},
+		);
+
+		const sessionDataValueLength =
+			chunkValues.length > 0
+				? chunkValues
+						.sort((a, b) => a.index - b.index)
+						.reduce((sum, c) => sum + c.value.length, 0)
+				: singleSessionDataValueLength;
+
+		const msg =
+			sessionDataValueLength != null
+				? `Cookie was not chunked; session_data value length was ${sessionDataValueLength}`
+				: "Expected chunked session_data cookies (session_data.0, session_data.1)";
+		expect(hasChunkedCookies, msg).toBe(true);
+
+		expect(sessionDataValueLength).not.toBeNull();
+		expect(sessionDataValueLength!).toBeGreaterThan(
+			getMaxCookieValueSize(`${longPrefix}.session_data.99`, cookieAttrs),
+		);
+
+		// Each chunk (name=value + attrs) must not exceed 4KB.
+		for (const { name, value } of chunkValues) {
+			const fullSize =
+				estimateEmptyCookieSize(name, cookieAttrs) + value.length;
+			expect(
+				fullSize,
+				`Chunk cookie "${name}" size ${fullSize} exceeds ${ALLOWED_COOKIE_SIZE}`,
+			).toBeLessThanOrEqual(ALLOWED_COOKIE_SIZE);
+		}
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			cookiePrefix: longPrefix,
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("entra-chunk-test@example.com");
 	});
 });
 

@@ -24,7 +24,7 @@ import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
-import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
+import { getMaxCookieValueSize, SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import {
 	createAccountStore,
 	createSessionStore,
@@ -230,8 +230,11 @@ export async function setCookieCache(
 		);
 	}
 
-	// Check if we need to chunk the cookie (only if it exceeds 4093 bytes)
-	if (data.length > 4093) {
+	// Chunk when value exceeds max single-cookie size (name + value + attrs must stay ≤ 4096 bytes)
+	if (
+		data.length >
+		getMaxCookieValueSize(ctx.context.authCookies.sessionData.name, options)
+	) {
 		const sessionStore = createSessionStore(
 			ctx.context.authCookies.sessionData.name,
 			options,
