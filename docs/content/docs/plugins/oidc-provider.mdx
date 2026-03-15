@@ -474,14 +474,12 @@ Table Name: `oauthApplication`
     {
       name: "name",
       type: "string",
-      description: "Name of the OAuth client",
-      isRequired: true
+      description: "Name of the OAuth client"
     },
     { 
       name: "redirectUrls",
       type: "string", 
-      description: "Comma-separated list of redirect URLs",
-      isRequired: true
+      description: "Comma-separated list of redirect URLs"
     },
     { 
       name: "metadata", 
@@ -492,8 +490,7 @@ Table Name: `oauthApplication`
     { 
       name: "type", 
       type: "string",
-      description: "Type of OAuth client (e.g., web, mobile)",
-      isRequired: true
+      description: "Type of OAuth client (e.g., web, mobile)"
     },
     {
       name: "disabled",
@@ -512,12 +509,14 @@ Table Name: `oauthApplication`
     { 
       name: "createdAt", 
       type: "Date", 
-      description: "Timestamp of when the OAuth client was created" 
+      description: "Timestamp of when the OAuth client was created",
+      isOptional: true
     },
    {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the OAuth client was last updated"
+      description: "Timestamp of when the OAuth client was last updated",
+      isOptional: true
    }
   ]}
 />
@@ -544,20 +543,17 @@ Table Name: `oauthAccessToken`
       name: "refreshToken",
       type: "string",
       description: "Refresh token issued to the client",
-      isRequired: true,
       isUnique: true
     },
     { 
       name: "accessTokenExpiresAt", 
       type: "Date", 
-      description: "Expiration date of the access token",
-      isRequired: true
+      description: "Expiration date of the access token"
     },
     { 
       name: "refreshTokenExpiresAt", 
       type: "Date", 
-      description: "Expiration date of the refresh token",
-      isRequired: true
+      description: "Expiration date of the refresh token"
     },
     { 
       name: "clientId", 
@@ -577,18 +573,19 @@ Table Name: `oauthAccessToken`
     { 
       name: "scopes", 
       type: "string", 
-      description: "Comma-separated list of scopes granted",
-      isRequired: true
+      description: "Comma-separated list of scopes granted"
     },
     { 
       name: "createdAt", 
       type: "Date", 
-      description: "Timestamp of when the access token was created" 
+      description: "Timestamp of when the access token was created",
+      isOptional: true
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the access token was last updated"
+      description: "Timestamp of when the access token was last updated",
+      isOptional: true
     }
   ]}
 />
@@ -622,24 +619,24 @@ Table Name: `oauthConsent`
     { 
       name: "scopes", 
       type: "string", 
-      description: "Comma-separated list of scopes consented to",
-      isRequired: true
+      description: "Comma-separated list of scopes consented to"
     },
     { 
       name: "consentGiven", 
       type: "boolean", 
-      description: "Indicates if consent was given",
-      isRequired: true
+      description: "Indicates if consent was given"
     },
     { 
       name: "createdAt", 
       type: "Date", 
-      description: "Timestamp of when the consent was given" 
+      description: "Timestamp of when the consent was given",
+      isOptional: true
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the consent was last updated"
+      description: "Timestamp of when the consent was last updated",
+      isOptional: true
     }
   ]}
 />
