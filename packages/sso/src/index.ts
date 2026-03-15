@@ -77,6 +77,7 @@ export {
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
 } from "./oidc";
+export { getSSOState } from "./sso-state";
 
 const fastValidator = {
 	async validate(xml: string) {

@@ -145,6 +145,10 @@ export interface SSOOptions {
 				 * The SSO provider
 				 */
 				provider: SSOProvider<SSOOptions>;
+				/**
+				 * Additional data passed to the sign-in request via `additionalData`.
+				 */
+				additionalData?: Record<string, unknown>;
 		  }) => Awaitable<void>)
 		| undefined;
 	/**
