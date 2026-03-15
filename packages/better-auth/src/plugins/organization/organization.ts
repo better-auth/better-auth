@@ -41,6 +41,7 @@ import {
 	checkOrganizationSlug,
 	createOrganization,
 	deleteOrganization,
+	deleteOrganizationCallback,
 	getFullOrganization,
 	listOrganizations,
 	setActiveOrganization,
@@ -138,6 +139,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	createOrganization: ReturnType<typeof createOrganization<O>>;
 	updateOrganization: ReturnType<typeof updateOrganization<O>>;
 	deleteOrganization: ReturnType<typeof deleteOrganization<O>>;
+	deleteOrganizationCallback: ReturnType<typeof deleteOrganizationCallback<O>>;
 	setActiveOrganization: ReturnType<typeof setActiveOrganization<O>>;
 	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
 	listOrganizations: ReturnType<typeof listOrganizations<O>>;
@@ -487,6 +489,26 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
 		 */
 		deleteOrganization: deleteOrganization(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/delete/callback`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.deleteOrganizationCallback`
+		 *
+		 * **client:**
+		 * `authClient.organization.deleteCallback`
+		 *
+		 * Confirms an organization deletion that was previously initiated with
+		 * an email verification link. Only available when
+		 * `sendDeleteOrganizationEmail` is configured.
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#delete-organization)
+		 */
+		deleteOrganizationCallback: deleteOrganizationCallback(opts),
 		/**
 		 * ### Endpoint
 		 *

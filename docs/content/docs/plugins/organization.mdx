@@ -816,13 +816,29 @@ type deleteOrganization = {
     * The organization ID to delete.
     */
     organizationId: string = "org-id"
+    /*
+    * Verification token received via email (when email confirmation is enabled).
+    * When provided, the deletion is confirmed immediately.
+    */
+    token?: string
+    /*
+    * URL to redirect to after the organization is deleted.
+    * Only used when confirming via the callback endpoint.
+    */
+    callbackURL?: string
+    /*
+    * The requester's password for identity verification.
+    * Optional — if provided, it is verified against the user's credential account
+    * before proceeding with deletion (or sending the confirmation email).
+    */
+    password?: string
 }
 ```
 </APIMethod>
 
 If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
 
-You can configure how organization deletion is handled through `organizationDeletion` option:
+You can configure how organization deletion is handled through the organization options:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -842,6 +858,74 @@ const auth = betterAuth({
       },
     }),
   ],
+});
+```
+
+### Email Confirmation Before Deletion
+
+You can require the organization owner to confirm deletion via email before the organization is removed. This works similarly to the [delete user](/docs/concepts/users-accounts#delete-user) confirmation flow.
+
+When `sendDeleteOrganizationEmail` is configured, calling `organization.delete` will **not** delete the organization immediately. Instead, it will:
+1. Generate a short-lived verification token
+2. Call your `sendDeleteOrganizationEmail` callback so you can email the confirmation link
+3. Return `{ success: true, message: "Verification email sent" }`
+
+The owner must then confirm the deletion by visiting the callback URL or by supplying the `token` in a second call to `organization.delete`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      sendDeleteOrganizationEmail: async ({ organization, user, url, token }) => {
+        // url is the pre-built confirmation link:
+        // {baseURL}/organization/delete/callback?token={token}
+        await sendEmail({
+          to: user.email,
+          subject: `Confirm deletion of "${organization.name}"`,
+          html: `<p>Click the link below to confirm:</p><a href="${url}">Delete organization</a>`,
+        });
+      },
+      deleteOrganizationTokenExpiresIn: 3600, // optional, default: 86400 (24h)
+    }),
+  ],
+});
+```
+
+**Step 1 — Initiate deletion (client)**
+
+You can optionally pass a `password` to verify the requester's identity before the email is sent:
+
+```ts
+const { data, error } = await authClient.organization.delete({
+  organizationId: "org-id",
+  password: "user-password", // optional identity check
+  callbackURL: "/org-deleted", // optional redirect after confirmation
+});
+// data.message === "Verification email sent"
+```
+
+**Step 2a — Confirm via email link**
+
+The confirmation link in the email points to `GET /organization/delete/callback?token=<token>`. When the owner visits this URL, the organization is deleted and they are optionally redirected to `callbackURL`.
+
+**Step 2b — Confirm programmatically (e.g. in a custom UI)**
+
+```ts
+const { data, error } = await authClient.organization.delete({
+  organizationId: "org-id",
+  token: tokenFromEmailLink,
+});
+// data.message === "Organization deleted"
+```
+
+You can also call the callback endpoint directly on the server:
+
+```ts
+await auth.api.deleteOrganizationCallback({
+  query: { token: tokenFromEmailLink },
 });
 ```
 
