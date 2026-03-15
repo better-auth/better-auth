@@ -95,6 +95,7 @@ interface Field {
 	isPrimaryKey?: boolean;
 	isForeignKey?: boolean;
 	isOptional?: boolean;
+	isUnique?: boolean;
 }
 
 const typeAliases: Record<string, string> = {
@@ -217,8 +218,17 @@ type DrizzleProvider = "pg" | "mysql" | "sqlite";
 
 function fieldToDBField(field: Field): DBFieldAttribute {
 	const t = field.type.toLowerCase();
-	const type = (typeAliases[t] ?? t) as DBFieldAttribute["type"];
-	const bigint = t === "bigint";
+	const isArray = t.endsWith("[]");
+	const raw = isArray ? t.slice(0, -2) : t;
+	const aliased = typeAliases[raw] ?? raw;
+	const type = (
+		isArray && (aliased === "string" || aliased === "number")
+			? `${aliased}[]`
+			: isArray
+				? t
+				: aliased
+	) as DBFieldAttribute["type"];
+	const bigint = raw === "bigint";
 
 	let references: DBFieldAttribute["references"] | undefined;
 	if (field.isForeignKey && field.name.endsWith("Id")) {
@@ -234,7 +244,7 @@ function fieldToDBField(field: Field): DBFieldAttribute {
 		type,
 		required: field.isPrimaryKey ? true : !field.isOptional,
 		references,
-		unique: false,
+		unique: field.isUnique ?? false,
 		bigint,
 	};
 }

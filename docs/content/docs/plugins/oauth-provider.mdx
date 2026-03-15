@@ -1847,13 +1847,11 @@ Table Name: `oauthRefreshToken`
       name: "createdAt",
       type: "Date",
       description: "Timestamp when the token was created",
-      isOptional: true,
     },
     {
       name: "expiresAt",
       type: "Date",
       description: "Timestamp when the token will expire",
-      isOptional: true,
     },
   ]}
 />
@@ -1925,13 +1923,11 @@ Table Name: `oauthAccessToken`
       name: "createdAt",
       type: "Date",
       description: "Timestamp when the token was created",
-      isOptional: true,
     },
     {
       name: "expiresAt",
       type: "Date",
       description: "Timestamp when the token will expire",
-      isOptional: true,
     },
   ]}
 />
@@ -1952,7 +1948,6 @@ Table Name: `oauthConsent`
       name: "userId",
       type: "string",
       description: "ID of the user who gave consent",
-      isOptional: true,
       isForeignKey: true,
       references: { model: "user", field: "id" }
     },
@@ -1980,13 +1975,11 @@ Table Name: `oauthConsent`
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the consent was given",
-      isOptional: true,
     },
     {
       name: "updatedAt",
       type: "Date",
       description: "Timestamp of when the consent was last updated",
-      isOptional: true,
     },
   ]}
 />
