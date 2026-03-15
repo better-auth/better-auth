@@ -100,7 +100,7 @@ export function EnterprisePageClient() {
 				const url =
 					process.env.NODE_ENV === "development"
 						? "http://localhost:3001/api/enterprise/contact"
-						: "/api/enterprise/contact";
+						: "https://dash.better-auth.com/api/enterprise/contact";
 				const response = await fetch(url, {
 					method: "POST",
 					body: JSON.stringify({
@@ -130,11 +130,11 @@ export function EnterprisePageClient() {
 		});
 
 	return (
-		<div className="relative h-full overflow-x-hidden pt-14 lg:pt-0">
-			<div className="relative text-foreground h-full">
-				<div className="flex flex-col lg:flex-row h-full">
+		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
+			<div className="relative text-foreground lg:h-full">
+				<div className="flex flex-col lg:h-full lg:flex-row">
 					{/* Left side — Enterprise hero */}
-					<div className="hidden lg:block relative w-full lg:w-[40%] border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-y-auto overflow-x-hidden no-scrollbar px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[40%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -142,7 +142,7 @@ export function EnterprisePageClient() {
 					</div>
 
 					{/* Right side — Contact form */}
-					<div className="relative w-full lg:w-[60%] overflow-y-auto overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[60%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
 						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-8 ">
 							{/* Mobile header */}
 							<div className="flex lg:hidden items-center gap-1.5">
@@ -281,14 +281,14 @@ export function EnterprisePageClient() {
 										<p className="mt-4 text-foreground/40 dark:text-foreground/30 text-[10px] leading-relaxed">
 											By submitting, you agree to our{" "}
 											<Link
-												href="/terms"
+												href="/legal/terms"
 												className="underline hover:text-foreground/55"
 											>
 												Terms of Service
 											</Link>{" "}
 											and{" "}
 											<Link
-												href="/privacy"
+												href="/legal/privacy"
 												className="underline hover:text-foreground/55"
 											>
 												Privacy Policy
