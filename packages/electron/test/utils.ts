@@ -8,7 +8,7 @@ import { createAuthClient } from "better-auth/client";
 import { getMigrations } from "better-auth/db/migration";
 import { oAuthProxy } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { afterAll, beforeAll, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, test, vi } from "vitest";
 import { electronClient } from "../src/client";
 import { electron } from "../src/index";
 import { electronProxyClient } from "../src/proxy";
@@ -109,6 +109,7 @@ function getTestInstance(overrideOpts?: BetterAuthOptions) {
 		client,
 		options,
 		customFetchImpl,
+		storage,
 	};
 }
 
@@ -119,6 +120,9 @@ export function testUtils(overrideOpts?: BetterAuthOptions) {
 		const { runMigrations } = await getMigrations(testInstance.auth.options);
 		await runMigrations();
 		vi.useFakeTimers();
+	});
+	afterEach(() => {
+		testInstance.storage.clear();
 	});
 	afterAll(() => {
 		vi.useRealTimers();

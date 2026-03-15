@@ -3,6 +3,7 @@ import { APIError } from "@better-auth/core/error";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
+import { InvalidClient, InvalidRequest } from "./error";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { parsePrompt } from "./utils/prompt";
@@ -58,15 +59,38 @@ export async function authorize(
 			error: "invalid_request",
 		});
 	}
+	const query = ctx.query as AuthorizationQuery;
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
 		// Handle prompt=none per OIDC spec - must return error instead of redirecting
-		const query = ctx.query as AuthorizationQuery;
 		const promptSet = parsePrompt(query.prompt ?? "");
-		if (promptSet.has("none") && query.redirect_uri) {
+		if (promptSet.has("none")) {
+			if (!query.redirect_uri) {
+				throw new InvalidRequest(
+					"redirect_uri is required when prompt=none and must be usable to return errors without displaying UI",
+				);
+			}
+			if (!query.client_id) {
+				throw new InvalidClient("client_id is required");
+			}
+			const client = await getClient(
+				query.client_id,
+				options.trustedClients || [],
+			);
+			if (!client) {
+				throw new InvalidClient("client_id is required");
+			}
+			const validRedirectURI = client.redirectUrls.find(
+				(url) => url === query.redirect_uri,
+			);
+			if (!validRedirectURI) {
+				throw new InvalidRequest(
+					"redirect_uri is invalid or not registered for this client",
+				);
+			}
 			return handleRedirect(
 				formatErrorURL(
-					query.redirect_uri,
+					validRedirectURI,
 					"login_required",
 					"Authentication required but prompt is none",
 				),
@@ -91,7 +115,6 @@ export async function authorize(
 		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
 	}
 
-	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
 		const errorURL = getErrorURL(
 			ctx,
