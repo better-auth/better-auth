@@ -120,6 +120,8 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
+				const hasRequest = context?.request instanceof Request;
+				const shouldReturnResponse = context?.asResponse ?? hasRequest;
 				return withSpan(
 					`${methodName} ${pathName}`,
 					{
@@ -160,7 +162,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								internalContext = defuReplaceArrays(rest, internalContext);
 							} else if (before) {
 								/* Return before hook response if it's anything other than a context return */
-								return context?.asResponse
+								return shouldReturnResponse
 									? toResponse(before, {
 											headers: context?.headers,
 										})
@@ -232,11 +234,11 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								result.response.stack = result.response.errorStack;
 							}
 
-							if (isAPIError(result.response) && !context?.asResponse) {
+							if (isAPIError(result.response) && !shouldReturnResponse) {
 								throw result.response;
 							}
 
-							const response = context?.asResponse
+							const response = shouldReturnResponse
 								? toResponse(result.response, {
 										headers: result.headers,
 										status: result.status,
