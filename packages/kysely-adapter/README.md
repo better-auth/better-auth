@@ -10,7 +10,7 @@ npm install @better-auth/kysely-adapter
 
 ## Documentation
 
-For full documentation, visit [better-auth.com/docs/adapters/kysely](https://www.better-auth.com/docs/adapters/kysely).
+For full documentation, visit [https://better-auth.com/docs/adapters/other-relational-databases](https://better-auth.com/docs/adapters/other-relational-databases).
 
 ## License
 
