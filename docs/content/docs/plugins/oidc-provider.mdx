@@ -506,17 +506,15 @@ Table Name: `oauthApplication`
       isForeignKey: true,
       references: { model: "user", field: "id" }
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the OAuth client was created",
-      isOptional: true
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was created"
     },
    {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the OAuth client was last updated",
-      isOptional: true
+      description: "Timestamp of when the OAuth client was last updated"
    }
   ]}
 />
@@ -575,17 +573,15 @@ Table Name: `oauthAccessToken`
       type: "string", 
       description: "Comma-separated list of scopes granted"
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the access token was created",
-      isOptional: true
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the access token was created"
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the access token was last updated",
-      isOptional: true
+      description: "Timestamp of when the access token was last updated"
     }
   ]}
 />
@@ -626,17 +622,15 @@ Table Name: `oauthConsent`
       type: "boolean", 
       description: "Indicates if consent was given"
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the consent was given",
-      isOptional: true
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the consent was given"
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the consent was last updated",
-      isOptional: true
+      description: "Timestamp of when the consent was last updated"
     }
   ]}
 />
