@@ -291,18 +291,19 @@ Table Name: `rateLimit`
         isPrimaryKey: true
         },
         { 
-        name: "key", 
-        type: "string", 
+        name: "key",
+        type: "string",
         description: "Unique identifier for each rate limit key",
+        isUnique: true,
         },
         { 
-        name: "count", 
-        type: "integer", 
-        description: "Time window in seconds" 
+        name: "count",
+        type: "integer",
+        description: "Number of requests made in the current window"
         },
-        { 
-        name: "lastRequest", 
-        type: "bigint", 
-        description: "Max requests in the window" 
+        {
+        name: "lastRequest",
+        type: "bigint",
+        description: "Timestamp of the last request (epoch ms)" 
         }]}
     />
