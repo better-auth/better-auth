@@ -1602,7 +1602,6 @@ Table Name: `oauthClient`
       type: "string",
       description: "Unique identifier for each OAuth client",
       isUnique: true,
-      isRequired: true,
     },
     {
       name: "clientSecret",
@@ -1724,7 +1723,6 @@ Table Name: `oauthClient`
       name: "redirectUris",
       type: "string[]",
       description: "Array of of redirect uris",
-      isRequired: true,
     },
     {
       name: "postLogoutRedirectUris",
@@ -1793,14 +1791,12 @@ Table Name: `oauthRefreshToken`
       name: "token",
       type: "string",
       description: "Hashed/encrypted refresh token",
-      isRequired: true,
     },
     {
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "oauthClient", field: "clientId" },
     },
     {
@@ -1808,7 +1804,7 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the session used at issuance of the token (and still active)",
       isForeignKey: true,
-      isRequired: false,
+      isOptional: true,
       references: { model: "session", field: "id" },
     },
     {
@@ -1816,7 +1812,6 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the user associated with the token",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "user", field: "id" },
     },
     {
@@ -1829,7 +1824,6 @@ Table Name: `oauthRefreshToken`
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
-      isRequired: true,
     },
     {
       name: "revoked",
@@ -1872,7 +1866,6 @@ Table Name: `oauthAccessToken`
       name: "token",
       type: "string",
       description: "Hashed/encrypted access token",
-      isRequired: true,
       isUnique: true,
     },
     {
@@ -1880,7 +1873,6 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "oauthClient", field: "clientId" }
     },
     {
@@ -1917,7 +1909,6 @@ Table Name: `oauthAccessToken`
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
-      isRequired: true,
     },
     {
       name: "createdAt",
@@ -1956,7 +1947,6 @@ Table Name: `oauthConsent`
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "oauthClient", field: "clientId" }
     },
     {
@@ -1969,7 +1959,6 @@ Table Name: `oauthConsent`
       name: "scopes",
       type: "string[]",
       description: "Array of scopes consented to",
-      isRequired: true
     },
     {
       name: "createdAt",
