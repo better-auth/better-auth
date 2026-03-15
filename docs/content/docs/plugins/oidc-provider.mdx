@@ -453,11 +453,11 @@ Table Name: `oauthApplication`
       description: "Database ID of the OAuth client",
       isPrimaryKey: true
    },
-    { 
-      name: "clientId", 
-      type: "string", 
+    {
+      name: "clientId",
+      type: "string",
       description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true
+      isUnique: true
     },
     { 
       name: "clientSecret", 
@@ -465,9 +465,15 @@ Table Name: `oauthApplication`
       description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
       isOptional: true
     },
-    { 
-      name: "name", 
-      type: "string", 
+    {
+      name: "icon",
+      type: "string",
+      description: "Icon of the OAuth client",
+      isOptional: true
+    },
+    {
+      name: "name",
+      type: "string",
       description: "Name of the OAuth client",
       isRequired: true
     },
@@ -489,11 +495,11 @@ Table Name: `oauthApplication`
       description: "Type of OAuth client (e.g., web, mobile)",
       isRequired: true
     },
-    { 
-      name: "disabled", 
-      type: "boolean", 
+    {
+      name: "disabled",
+      type: "boolean",
       description: "Indicates if the client is disabled",
-      isRequired: true
+      isOptional: true
     },
     { 
       name: "userId", 

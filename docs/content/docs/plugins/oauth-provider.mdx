@@ -1601,7 +1601,7 @@ Table Name: `oauthClient`
       name: "clientId",
       type: "string",
       description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true,
+      isUnique: true,
     },
     {
       name: "clientSecret",
@@ -1652,7 +1652,6 @@ Table Name: `oauthClient`
       type: "string",
       description: "ID of the reference of the client owner if not a user. (optional)",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "createdAt",
@@ -1725,6 +1724,12 @@ Table Name: `oauthClient`
       isRequired: true,
     },
     {
+      name: "postLogoutRedirectUris",
+      type: "string[]",
+      description: "Array of post-logout redirect URIs",
+      isOptional: true,
+    },
+    {
       name: "tokenEndpointAuthMethod",
       type: "string",
       description: "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post']",
@@ -1752,6 +1757,12 @@ Table Name: `oauthClient`
       name: "type",
       type: "string",
       description: "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
+      isOptional: true,
+    },
+    {
+      name: "requirePKCE",
+      type: "boolean",
+      description: "Whether PKCE is required for this client",
       isOptional: true,
     },
     {
@@ -1954,14 +1965,14 @@ Table Name: `oauthConsent`
     },
     {
       name: "scopes",
-      type: "string",
-      description: "Comma-separated list of scopes consented to",
+      type: "string[]",
+      description: "Array of scopes consented to",
       isRequired: true
     },
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the consent was given" 
+      description: "Timestamp of when the consent was given"
     },
     {
       name: "updatedAt",

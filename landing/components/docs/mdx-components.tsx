@@ -97,8 +97,23 @@ interface Field {
 	isOptional?: boolean;
 }
 
+const typeAliases: Record<string, string> = {
+	text: "string",
+	integer: "number",
+	int: "number",
+	bigint: "number",
+	float: "number",
+	double: "number",
+	decimal: "number",
+	bool: "boolean",
+	object: "json",
+	timestamp: "date",
+	datetime: "date",
+};
+
 function TypeIcon({ type }: { type: string }) {
-	const t = type.toLowerCase().replace("[]", "");
+	const raw = type.toLowerCase().replace("[]", "");
+	const t = typeAliases[raw] ?? raw;
 	const className = "size-3 shrink-0";
 
 	if (t === "string" || t === "text") {
@@ -202,7 +217,8 @@ type DrizzleProvider = "pg" | "mysql" | "sqlite";
 
 function fieldToDBField(field: Field): DBFieldAttribute {
 	const t = field.type.toLowerCase();
-	const type = (t === "text" ? "string" : t) as DBFieldAttribute["type"];
+	const type = (typeAliases[t] ?? t) as DBFieldAttribute["type"];
+	const bigint = t === "bigint";
 
 	let references: DBFieldAttribute["references"] | undefined;
 	if (field.isForeignKey && field.name.endsWith("Id")) {
@@ -219,6 +235,7 @@ function fieldToDBField(field: Field): DBFieldAttribute {
 		required: field.isPrimaryKey ? true : !field.isOptional,
 		references,
 		unique: false,
+		bigint,
 	};
 }
 
