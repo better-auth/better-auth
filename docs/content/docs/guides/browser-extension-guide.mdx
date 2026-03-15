@@ -1,222 +1,661 @@
 ---
 title: Browser Extension Guide
-description: A step-by-step guide to creating a browser extension with Better Auth.
+description: Authenticate users in Chrome and Firefox extensions using Better Auth, including social OAuth sign-in.
 ---
 
-In this guide, we'll walk you through the steps of creating a browser extension using <Link href="https://docs.plasmo.com/">Plasmo</Link> with Better Auth for authentication.
+Browser extensions (Manifest V3) present unique authentication challenges. Extension popups lose context on navigation, service workers have no DOM, and `chrome-extension://` is not a valid OAuth redirect URI. This guide walks you through setting up Better Auth in a browser extension — from basic session auth to social OAuth with providers like Google and Apple.
 
-If you would like to view a completed example, you can check out the <Link href="https://github.com/better-auth/examples/tree/main/browser-extension-example">browser extension example</Link>.
+<Callout type="info">
+This guide is framework-agnostic. Examples use vanilla MV3 code, but the same patterns apply to <Link href="https://wxt.dev">WXT</Link>, <Link href="https://docs.plasmo.com">Plasmo</Link>, <Link href="https://crxjs.dev/vite-plugin">CRXJS</Link>, or any other extension framework.
+</Callout>
 
 <Callout type="warn">
-  The Plasmo framework does not provide a backend for the browser extension.
-  This guide assumes you have{" "}
-  <Link href="/docs/integrations/hono">a backend setup</Link> of Better Auth and
-  are ready to create a browser extension to connect to it.
+Browser extensions do not provide a backend. This guide assumes you have <Link href="/docs/installation">a Better Auth server set up</Link> and are ready to connect your extension to it.
 </Callout>
+
+## Basic Setup
 
 <Steps>
 
-    <Step>
-        ## Setup & Installations
+<Step>
+### Install Better Auth
 
-        Initialize a new Plasmo project with TailwindCSS and a src directory.
+In your extension project, install the Better Auth client package.
 
-        ```bash
-        pnpm create plasmo --with-tailwindcss --with-src
-        ```
+```package-install
+better-auth
+```
+</Step>
 
-        Then, install the Better Auth package.
+<Step>
+### Create the auth client
 
-        ```bash
-        pnpm add better-auth
-        ```
+Create a client instance pointing to your Better Auth server.
 
-        To start the Plasmo development server, run the following command.
+```ts title="src/lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react"
 
-        ```bash
-        pnpm dev
-        ```
-    </Step>
+export const authClient = createAuthClient({
+	baseURL: "http://localhost:3000",
+})
+```
+</Step>
 
+<Step>
+### Configure the manifest
 
-    <Step>
-        ## Configure tsconfig
+Add `host_permissions` so the extension's service worker can make cross-origin requests to your backend **without CORS preflight**.
 
-        Configure the `tsconfig.json` file to include `strict` mode.
+```json title="manifest.json"
+{
+	"host_permissions": [
+		"http://localhost:3000/*"
+	]
+}
+```
 
-        For this demo, we have also changed the import alias from `~` to `@` and set it to the `src` directory.
+For production, replace with your actual backend URL (e.g. `https://api.example.com/*`).
 
-        ```json title="tsconfig.json"
-        {
-            "compilerOptions": {
-                "paths": {
-                    "@/_": [
-                        "./src/_"
-                    ]
-                },
-                "strict": true,
-                "baseUrl": "."
-            }
-        }
-        ```
-    </Step>
+<Callout type="info">
+In Plasmo, add this to the `manifest` field in `package.json`. In WXT, set it in `wxt.config.ts` under `manifest.host_permissions`.
+</Callout>
+</Step>
 
+<Step>
+### Configure the server
 
-    <Step>
-        ## Create the client auth instance
+Add your extension's origin to the `trustedOrigins` list so Better Auth accepts requests from it.
 
-        Create a new file at `src/auth/auth-client.ts` and add the following code.
+You can find your extension ID at `chrome://extensions` after loading it.
 
-       <Files>
-            <Folder name="src" defaultOpen>
-                <Folder name="auth" defaultOpen>
-                    <File name="auth-client.ts" />
-                </Folder>
-            </Folder>
-       </Files>
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
 
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/react"
+export const auth = betterAuth({
+	trustedOrigins: ["chrome-extension://YOUR_EXTENSION_ID"],
+})
+```
 
-        export const authClient = createAuthClient({
-            baseURL: "http://localhost:3000" /* Base URL of your Better Auth backend. */,
-            plugins: [],
-        });
-        ```
-    </Step>
+<Callout type="warn">
+Using wildcards (`chrome-extension://*`) trusts **all** extensions. It's safer to explicitly list each extension ID. Only use wildcards during development.
+</Callout>
+</Step>
 
-    <Step>
-        ## Configure the manifest
+<Step>
+### Use the auth client
 
-        We must ensure the extension knows the URL to the Better Auth backend.
+You can now use `authClient` in your popup, side panel, or options page just like a regular web app.
 
-        Head to your package.json file, and add the following code.
+```tsx title="src/popup.tsx"
+import { authClient } from "./lib/auth-client"
 
-        ```json title="package.json"
-        {
-            //...
-            "manifest": {
-                "host_permissions": [
-                    "https://URL_TO_YOUR_BACKEND" // localhost works too (e.g. http://localhost:3000)
-                ]
-            }
-        }
-        ```
-    </Step>
+function Popup() {
+	const { data: session, isPending } = authClient.useSession()
 
+	if (isPending) return <p>Loading...</p>
 
-    <Step>
-        ## You're now ready!
+	if (!session) {
+		return (
+			<button
+				onClick={() =>
+					authClient.signIn.email({
+						email: "user@example.com",
+						password: "password",
+					})
+				}
+			>
+				Sign In
+			</button>
+		)
+	}
 
-        You have now set up Better Auth for your browser extension.
-
-        Add your desired UI and create your dream extension!
-
-        To learn more about the client Better Auth API, check out the <Link href="/docs/concepts/client">client documentation</Link>.
-
-
-        Here's a quick example 😎
-
-        ```tsx title="src/popup.tsx"
-        import { authClient } from "./auth/auth-client"
-
-
-        function IndexPopup() {
-            const {data, isPending, error} = authClient.useSession();
-            if(isPending){
-                return <>Loading...</>
-            }
-            if(error){
-                return <>Error: {error.message}</>
-            }
-            if(data){
-                return <>Signed in as {data.user.name}</>
-            }
-        }
-
-        export default IndexPopup;
-        ```
-
-    </Step>
-
-
-    <Step>
-        ## Bundle your extension
-
-        To get a production build, run the following command.
-
-        ```bash
-        pnpm build
-        ```
-
-        Head over to <Link href="chrome://extensions" target="_blank">chrome://extensions</Link> and enable developer mode.
-
-        <img src="https://docs.plasmo.com/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fdeveloper_mode.76f090f7.png&w=1920&q=75" />
-
-        Click on "Load Unpacked" and navigate to your extension's `build/chrome-mv3-dev` (or `build/chrome-mv3-prod`) directory.
-
-        To see your popup, click on the puzzle piece icon on the Chrome toolbar, and click on your extension.
-
-        Learn more about <Link href="https://docs.plasmo.com/framework#loading-the-extension-in-chrome">bundling your extension here.</Link>
-    </Step>
-
-    <Step>
-        ## Configure the server auth instance
-
-        First, we will need your extension URL.
-        
-        An extension URL formed like this: `chrome-extension://YOUR_EXTENSION_ID`.
-
-        You can find your extension ID at <Link href="chrome://extensions" target="_blank">chrome://extensions</Link>.
-
-        <img src="/extension-id.png" width={500} />
-
-        Head to your server's auth file, and make sure that your extension's URL is added to the `trustedOrigins` list.
-
-
-        ```ts title="server.ts"
-        import { betterAuth } from "better-auth"
-        import { auth } from "@/auth/auth"
-
-        export const auth = betterAuth({
-            trustedOrigins: ["chrome-extension://YOUR_EXTENSION_ID"],
-        })
-        ```
-
-        If you're developing multiple extensions or need to support different browser extensions with different IDs, you can use wildcard patterns:
-
-        ```ts title="server.ts"
-        export const auth = betterAuth({
-            trustedOrigins: [
-                // Support a specific extension ID
-                "chrome-extension://YOUR_EXTENSION_ID",
-                
-                // Or support multiple extensions with wildcard (less secure)
-                "chrome-extension://*"
-            ],
-        })
-        ```
-
-        <Callout type="warn">
-          Using wildcards for extension origins (`chrome-extension://*`) reduces security by trusting all extensions. 
-          It's safer to explicitly list each extension ID you trust. Only use wildcards for development and testing.
-        </Callout>
-    </Step>
-
-    <Step>
-        ## That's it!
-
-        Everything is set up! You can now start developing your extension. 🎉
-    </Step>
+	return <p>Signed in as {session.user.name}</p>
+}
+```
+</Step>
 
 </Steps>
 
+## Social OAuth in Extensions
 
-## Wrapping Up
+Social sign-in (`authClient.signIn.social()`) works by redirecting the page to the OAuth provider. In an extension popup, this **destroys the popup context** — the popup closes and there's nowhere for the provider to redirect back to.
 
-Congratulations! You've successfully created a browser extension using Better Auth and Plasmo.
-We highly recommend you visit the <Link href="https://docs.plasmo.com/">Plasmo documentation</Link> to learn more about the framework.
+There are two strategies for handling this, depending on the provider.
 
-If you would like to view a completed example, you can check out the <Link href="https://github.com/better-auth/examples/tree/main/browser-extension-example">browser extension example</Link>.
+### Strategy 1: `chrome.identity.launchWebAuthFlow`
 
-If you have any questions, feel free to open an issue on our <Link href="https://github.com/better-auth/better-auth/issues">GitHub repo</Link>, or join our <Link href="https://discord.gg/better-auth">Discord server</Link> for support.
+`chrome.identity.launchWebAuthFlow()` opens a browser-managed popup for OAuth. After the user consents, the browser intercepts the redirect to `https://<extension-id>.chromiumapp.org/` and returns the final URL to your extension code. You then extract the ID token from the URL fragment and exchange it with Better Auth.
+
+This works for providers that can return an OIDC `id_token` in the URL fragment — for example, Google and Microsoft. Providers that don't support this (such as GitHub or Apple) should use the Website Bridge strategy instead.
+
+<Steps>
+
+<Step>
+#### Pin your extension ID
+
+Unpacked extensions get a random ID on every reload, but OAuth redirect URIs must be registered in the provider's console. You need a stable ID during development.
+
+1. Upload your extension to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole) (you don't need to publish it)
+2. Copy the public key from the package info
+3. Add it to your manifest:
+
+```json title="manifest.json"
+{
+	"key": "YOUR_PUBLIC_KEY_FROM_CHROME_DEVELOPER_DASHBOARD"
+}
+```
+
+<Callout type="warn">
+Only include the `key` in development builds. Published extensions get their key from the Chrome Web Store automatically.
+</Callout>
+</Step>
+
+<Step>
+#### Add the `identity` permission
+
+This permission is required for `chrome.identity.launchWebAuthFlow`.
+
+```json title="manifest.json"
+{
+	"permissions": ["identity"]
+}
+```
+
+<Callout type="info">
+If your manifest defines a custom `content_security_policy`, make sure `connect-src` includes your Better Auth server URL and OAuth provider API endpoints (e.g. `https://accounts.google.com`). Without this, the service worker's `fetch` calls will be blocked.
+</Callout>
+</Step>
+
+<Step>
+#### Register the redirect URI with your OAuth provider
+
+In your OAuth provider's console (e.g. Google Cloud Console), create a **Web application** OAuth client and add this redirect URI:
+
+```
+https://YOUR_EXTENSION_ID.chromiumapp.org/
+```
+
+You can get this URL at runtime with `chrome.identity.getRedirectURL()`.
+
+<Callout type="warn">
+`chrome.identity.getRedirectURL()` returns a URL with a **trailing slash**. Make sure the URI registered in the provider console matches exactly, including the trailing slash.
+</Callout>
+
+<Callout type="info">
+Use a **Web application** OAuth client type, not "Chrome App". The `launchWebAuthFlow` API uses the implicit flow with a web redirect URI, not Chrome's built-in `getAuthToken`.
+</Callout>
+</Step>
+
+<Step>
+#### Implement the OAuth flow in the service worker
+
+The service worker builds the OAuth URL, launches the auth flow, and extracts the ID token from the response.
+
+```ts title="src/background.ts"
+async function getGoogleIdToken() {
+	const redirectUrl = chrome.identity.getRedirectURL()
+	const nonce = crypto.randomUUID()
+	const state = crypto.randomUUID()
+
+	const url = new URL("https://accounts.google.com/o/oauth2/v2/auth")
+	url.searchParams.set("client_id", "YOUR_GOOGLE_CLIENT_ID")
+	url.searchParams.set("redirect_uri", redirectUrl)
+	url.searchParams.set("response_type", "id_token token")
+	url.searchParams.set("scope", "openid email profile")
+	url.searchParams.set("nonce", nonce)
+	url.searchParams.set("state", state)
+	url.searchParams.set("prompt", "select_account")
+	url.searchParams.set("include_granted_scopes", "true")
+
+	return new Promise((resolve, reject) => {
+		chrome.identity.launchWebAuthFlow(
+			{ url: url.toString(), interactive: true },
+			(responseUrl) => {
+				if (chrome.runtime.lastError || !responseUrl) {
+					reject(
+						new Error(
+							chrome.runtime.lastError?.message ?? "Auth cancelled",
+						),
+					)
+					return
+				}
+
+				const params = new URLSearchParams(
+					responseUrl.split("#")[1] ?? "",
+				)
+
+				if (params.get("state") !== state) {
+					reject(new Error("Invalid OAuth state"))
+					return
+				}
+
+				const idToken = params.get("id_token")
+				if (!idToken) {
+					reject(new Error("No id_token in response"))
+					return
+				}
+
+				resolve({
+					idToken,
+					accessToken: params.get("access_token") ?? undefined,
+					nonce,
+				})
+			},
+		)
+	})
+}
+```
+</Step>
+
+<Step>
+#### Exchange the ID token with Better Auth
+
+Send the ID token to Better Auth's `signIn.social` method with the `idToken` parameter. Better Auth verifies the token cryptographically using the provider's public JWKS keys — no client secret is needed on the extension side.
+
+```ts title="src/background.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+	baseURL: "http://localhost:3000",
+})
+
+async function signInWithGoogle() {
+	const { idToken, accessToken, nonce } = await getGoogleIdToken()
+
+	const { data } = await authClient.signIn.social({
+		provider: "google",
+		disableRedirect: true, // [!code highlight]
+		requestSignUp: true, // [!code highlight]
+		idToken: {
+			token: idToken,
+			accessToken,
+			nonce,
+		},
+	})
+
+	// data: { token: string, user: { id, email, name, ... }, redirect: false }
+	return data
+}
+```
+
+- `disableRedirect: true` — prevents Better Auth from returning a redirect response, which cannot be followed in an extension service worker.
+- `requestSignUp: true` — ensures new users are automatically registered on their first sign-in. Without this, only existing users can authenticate.
+
+<Callout>
+When an `idToken` is provided, no redirect happens. Better Auth verifies the token server-side and creates a session directly. The response contains a `token` (session token) and a `user` object. See the <Link href="/docs/authentication/google#sign-in-with-google-with-id-token">Google ID Token docs</Link> for more details.
+</Callout>
+</Step>
+
+<Step>
+#### Store the session
+
+The `signIn.social` call with `idToken` returns a `token` (session token) and a `user` object. Store these in `chrome.storage.local` for use in subsequent API calls.
+
+```ts title="src/background.ts"
+async function signInWithGoogle() {
+	const { idToken, accessToken, nonce } = await getGoogleIdToken()
+
+	const { data } = await authClient.signIn.social({
+		provider: "google",
+		disableRedirect: true,
+		requestSignUp: true,
+		idToken: {
+			token: idToken,
+			accessToken,
+			nonce,
+		},
+	})
+
+	if (data?.token) {
+		await chrome.storage.local.set({
+			session: {
+				token: data.token,
+				user: data.user,
+			},
+		})
+	}
+}
+```
+
+<Callout type="info">
+Persist the session in the service worker (inside the `signInWithGoogle` function), not in the popup. The popup can close while the OAuth window is open — if the user clicks outside it to interact with the consent screen, Chrome closes the popup. The service worker continues running and can still store the result.
+</Callout>
+
+For subsequent API calls, attach the token as a Bearer header:
+
+```ts title="src/background.ts"
+const { session } = await chrome.storage.local.get("session")
+
+const response = await fetch("https://your-backend.com/api/protected", {
+	headers: {
+		Authorization: `Bearer ${session.token}`,
+	},
+})
+```
+
+<Callout type="info">
+Use the <Link href="/docs/plugins/bearer">Bearer plugin</Link> on the server so Better Auth accepts the session token in the `Authorization` header. This is the recommended approach for extensions — it avoids cookie issues entirely.
+</Callout>
+</Step>
+
+</Steps>
+
+### Strategy 2: Website Bridge
+
+Some providers cannot use `launchWebAuthFlow`. For example, **Apple** requires `response_mode=form_post`, delivering the authorization result as a POST body — but `launchWebAuthFlow` can only read URL parameters. Apple also requires redirect URIs on a domain you own, so `chromiumapp.org` won't work.
+
+The solution is to open a tab on your website, run the Better Auth OAuth flow there, and message the result back to the extension.
+
+<Steps>
+
+<Step>
+#### Declare `externally_connectable`
+
+This allows your website to send messages to the extension via `chrome.runtime.sendMessage`.
+
+```json title="manifest.json"
+{
+	"externally_connectable": {
+		"matches": ["https://your-website.com/*"]
+	}
+}
+```
+</Step>
+
+<Step>
+#### Create a bridge page on your website
+
+This page receives the provider name and extension ID from query params, then initiates the Better Auth OAuth flow.
+
+```tsx title="your-website/pages/browser-ext-auth.tsx"
+import { useEffect } from "react"
+import { authClient } from "../lib/auth-client"
+
+const ALLOWED_EXTENSION_ID = "YOUR_EXTENSION_ID" // [!code highlight]
+
+export default function BrowserExtAuth() {
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search)
+		const provider = params.get("provider")
+		const extensionId = params.get("extensionId")
+
+		if (!provider || !extensionId) return
+		if (extensionId !== ALLOWED_EXTENSION_ID) return // [!code highlight]
+
+		authClient.signIn.social({
+			provider,
+			callbackURL: `/browser-ext-auth-callback?extensionId=${extensionId}`,
+		})
+	}, [])
+
+	return <p>Redirecting to sign in...</p>
+}
+```
+</Step>
+
+<Step>
+#### Create the callback page
+
+After OAuth completes, Better Auth redirects here. This page retrieves the session and sends it to the extension.
+
+```tsx title="your-website/pages/browser-ext-auth-callback.tsx"
+import { useEffect } from "react"
+import { authClient } from "../lib/auth-client"
+
+export default function BrowserExtAuthCallback() {
+	useEffect(() => {
+		const extensionId = new URLSearchParams(
+			window.location.search,
+		).get("extensionId")
+
+		if (!extensionId) return
+
+		authClient.getSession().then(({ data }) => {
+			if (!data) {
+				chrome.runtime.sendMessage(extensionId, {
+					kind: "error",
+					message: "No session found after OAuth",
+				})
+				return
+			}
+
+			chrome.runtime.sendMessage(extensionId, {
+				kind: "success",
+				token: data.session.token,
+				user: {
+					id: data.user.id,
+					email: data.user.email,
+				},
+			})
+		})
+	}, [])
+
+	return <p>Completing sign in...</p>
+}
+```
+
+<Callout type="warn">
+Add a `robots` meta tag with `noindex,nofollow` to both bridge pages so they are not indexed by search engines.
+</Callout>
+</Step>
+
+<Step>
+#### Listen for external messages in the service worker
+
+The listener validates the sender origin, persists the session, closes the bridge tab, and resolves the pending promise from `signInWithWebsiteBridge`.
+
+```ts title="src/background.ts"
+chrome.runtime.onMessageExternal.addListener(
+	(message, sender, sendResponse) => {
+		const senderOrigin = sender.url
+			? new URL(sender.url).origin
+			: null
+
+		if (senderOrigin !== "https://your-website.com") {
+			sendResponse()
+			return
+		}
+
+		// Validate message shape
+		if (!message || typeof message !== "object" || !message.kind) {
+			sendResponse()
+			return
+		}
+
+		void (async () => {
+			if (message.kind === "success") {
+				await chrome.storage.local.set({
+					session: { token: message.token, user: message.user },
+				})
+			}
+
+			// Close the bridge tab
+			if (sender.tab?.id) {
+				chrome.tabs.remove(sender.tab.id).catch(() => {})
+			}
+
+			// Resolve the pending promise from signInWithWebsiteBridge
+			if (pendingAuth) {
+				const pending = pendingAuth
+				pendingAuth = null
+				clearTimeout(pending.timeoutId)
+				if (message.kind === "success") {
+					pending.resolve(message)
+				} else {
+					pending.reject(new Error(message.message ?? "Auth failed"))
+				}
+			}
+
+			sendResponse()
+		})()
+
+		return true // keep sendResponse channel open for async
+	},
+)
+```
+</Step>
+
+<Step>
+#### Trigger the flow from the popup
+
+The popup opens the bridge tab and waits for the service worker to receive the result. Use a timeout to avoid hanging forever if the user abandons the flow.
+
+```ts title="src/background.ts"
+let pendingAuth: {
+	resolve: (value: unknown) => void
+	reject: (error: Error) => void
+	tabId?: number
+	timeoutId?: ReturnType<typeof setTimeout>
+} | null = null
+
+function signInWithWebsiteBridge(provider: string) {
+	// Cancel any existing pending auth
+	if (pendingAuth) {
+		clearTimeout(pendingAuth.timeoutId)
+		pendingAuth.reject(new Error("Another sign-in request started"))
+		if (pendingAuth.tabId) chrome.tabs.remove(pendingAuth.tabId)
+		pendingAuth = null
+	}
+
+	const url = new URL("https://your-website.com/browser-ext-auth")
+	url.searchParams.set("provider", provider)
+	url.searchParams.set("extensionId", chrome.runtime.id)
+
+	return new Promise((resolve, reject) => {
+		const timeoutId = setTimeout(() => {
+			if (pendingAuth?.resolve !== resolve) return
+			pendingAuth = null
+			reject(new Error("Timed out waiting for OAuth callback"))
+		}, 3 * 60 * 1000) // 3 minutes
+
+		pendingAuth = { resolve, reject, timeoutId }
+
+		chrome.tabs.create({ url: url.toString() }).then((tab) => {
+			if (pendingAuth?.resolve === resolve) {
+				pendingAuth.tabId = tab.id
+			}
+		})
+	})
+}
+```
+</Step>
+
+</Steps>
+
+## Service Worker Keep-Alive
+
+MV3 service workers terminate after ~30 seconds of inactivity. If a user takes longer to complete OAuth consent, the service worker dies mid-flow.
+
+To prevent this, open a long-lived port from the popup before starting the OAuth flow.
+
+```ts title="src/popup.ts"
+// Before starting OAuth
+const keepAlivePort = chrome.runtime.connect({ name: "oauth-keepalive" })
+
+// Start OAuth...
+await signInWithGoogle()
+
+// After OAuth completes
+keepAlivePort.disconnect()
+```
+
+In the service worker, accept the connection:
+
+```ts title="src/background.ts"
+chrome.runtime.onConnect.addListener((port) => {
+	if (port.name !== "oauth-keepalive") return
+	port.onDisconnect.addListener(() => {
+		// intentionally empty — the listener keeps the SW alive
+	})
+})
+```
+
+<Callout type="info">
+The extension popup closes if the user clicks outside it (e.g. to interact with the OAuth consent screen). For this reason, persist the auth result in the service worker — not the popup — so auth completes even if the popup closes.
+</Callout>
+
+## Cookie Configuration
+
+If you use cookie-based sessions instead of Bearer tokens, the default `SameSite: Lax` setting **blocks cookies from `chrome-extension://` origins** in production. You'll see auth working on localhost but failing when deployed.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	trustedOrigins: ["chrome-extension://YOUR_EXTENSION_ID"],
+	advanced: {
+		cookies: {
+			session_token: {
+				attributes: {
+					sameSite: "none",
+					secure: true,
+				},
+			},
+		},
+	},
+})
+```
+
+<Callout type="warn">
+`SameSite: None` requires `Secure: true`, which means HTTPS only. This won't work on `http://localhost`. The recommended approach for extensions is to use the <Link href="/docs/plugins/bearer">Bearer plugin</Link> instead, which avoids cookie issues entirely.
+</Callout>
+
+## Content Script Authentication
+
+Content scripts run in the context of web pages, not the extension. They cannot reliably make authenticated requests directly due to CSP and CORS restrictions.
+
+**Recommended:** Proxy all authenticated requests through the service worker.
+
+```ts title="src/content-script.ts"
+const response = await chrome.runtime.sendMessage({
+	type: "api-request",
+	url: "/api/protected-endpoint",
+})
+```
+
+In the service worker, handle the request:
+
+```ts title="src/background.ts"
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	if (message.type !== "api-request") return false
+
+	chrome.storage.local.get("session").then(({ session }) => {
+		if (!session?.token) {
+			sendResponse({ error: "Not authenticated" })
+			return
+		}
+		fetch(`https://your-backend.com${message.url}`, {
+			headers: { Authorization: `Bearer ${session.token}` },
+		})
+			.then((res) => res.json())
+			.then(sendResponse)
+			.catch(() => sendResponse({ error: "Request failed" }))
+	})
+
+	return true // keep sendResponse channel open
+})
+```
+
+## Troubleshooting
+
+### `redirect_uri_mismatch` from Google
+
+- Ensure the redirect URI in Google Console **exactly** matches `chrome.identity.getRedirectURL()`, including the trailing slash
+- Use a **Web application** client type, not "Chrome App"
+- Make sure you're using the pinned extension ID (via the `key` field), not a randomly assigned one
+
+### Auth works on localhost but breaks in production
+
+- Check cookie `SameSite` settings — the default `Lax` blocks cross-origin requests from extensions
+- Switch to Bearer tokens (recommended) or set `SameSite: None; Secure: true`
+
+### Service worker dies during OAuth
+
+- Implement the keep-alive port pattern (see [Service Worker Keep-Alive](#service-worker-keep-alive) above)
+- Persist auth results in the service worker, not the popup
+
+### Apple OAuth fails with `launchWebAuthFlow`
+
+Apple requires `response_mode=form_post`, which `launchWebAuthFlow` can't handle — it only reads URL parameters. Use the [Website Bridge](#strategy-2-website-bridge) pattern instead.
+
+### Firefox compatibility
+
+Firefox supports `browser.identity.launchWebAuthFlow` with the same API. The redirect URL format is different (`https://<UUID>.extensions.allizom.org/`) but works the same way. Use `browser.identity.getRedirectURL()` to get the correct URL for each browser.
