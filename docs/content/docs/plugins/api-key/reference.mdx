@@ -497,11 +497,13 @@ Table: `apikey`
       name: "enabled",
       type: "boolean",
       description: "Whether the API key is enabled.",
+      isOptional: true,
     },
     {
       name: "rateLimitEnabled",
       type: "boolean",
       description: "Whether the API key has rate limiting enabled.",
+      isOptional: true,
     },
     {
       name: "rateLimitTimeWindow",
@@ -521,6 +523,7 @@ Table: `apikey`
       type: "number",
       description:
         "The number of requests made within the rate limit time window.",
+      isOptional: true,
     },
     {
       name: "remaining",

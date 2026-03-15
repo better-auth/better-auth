@@ -1602,6 +1602,7 @@ Table Name: `oauthClient`
       type: "string",
       description: "Unique identifier for each OAuth client",
       isUnique: true,
+      isRequired: true,
     },
     {
       name: "clientSecret",
@@ -1657,11 +1658,13 @@ Table Name: `oauthClient`
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the OAuth client was created",
+      isOptional: true,
     },
     {
       name: "updatedAt",
       type: "Date",
       description: "Timestamp of when the OAuth client was last updated",
+      isOptional: true,
     },
     {
       name: "name",
@@ -1821,7 +1824,6 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
@@ -1845,11 +1847,13 @@ Table Name: `oauthRefreshToken`
       name: "createdAt",
       type: "Date",
       description: "Timestamp when the token was created",
+      isOptional: true,
     },
     {
       name: "expiresAt",
       type: "Date",
       description: "Timestamp when the token will expire",
+      isOptional: true,
     },
   ]}
 />
@@ -1871,6 +1875,7 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "Hashed/encrypted access token",
       isRequired: true,
+      isUnique: true,
     },
     {
       name: "clientId",
@@ -1909,7 +1914,6 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
@@ -1920,12 +1924,14 @@ Table Name: `oauthAccessToken`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp when the token was created" 
+      description: "Timestamp when the token was created",
+      isOptional: true,
     },
     {
       name: "expiresAt",
       type: "Date",
       description: "Timestamp when the token will expire",
+      isOptional: true,
     },
   ]}
 />
@@ -1946,6 +1952,7 @@ Table Name: `oauthConsent`
       name: "userId",
       type: "string",
       description: "ID of the user who gave consent",
+      isOptional: true,
       isForeignKey: true,
       references: { model: "user", field: "id" }
     },
@@ -1954,6 +1961,7 @@ Table Name: `oauthConsent`
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
+      isRequired: true,
       references: { model: "oauthClient", field: "clientId" }
     },
     {
@@ -1961,7 +1969,6 @@ Table Name: `oauthConsent`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
@@ -1972,12 +1979,14 @@ Table Name: `oauthConsent`
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the consent was given"
+      description: "Timestamp of when the consent was given",
+      isOptional: true,
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the consent was last updated"
+      description: "Timestamp of when the consent was last updated",
+      isOptional: true,
     },
   ]}
 />

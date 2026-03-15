@@ -502,10 +502,11 @@ Table Name: `oauthApplication`
       isOptional: true
     },
     { 
-      name: "userId", 
-      type: "string", 
+      name: "userId",
+      type: "string",
       description: "ID of the user who owns the client. (optional)",
       isOptional: true,
+      isForeignKey: true,
       references: { model: "user", field: "id" }
     },
     { 
@@ -534,15 +535,17 @@ Table Name: `oauthAccessToken`
       isPrimaryKey: true
    },
     { 
-      name: "accessToken", 
-      type: "string", 
+      name: "accessToken",
+      type: "string",
       description: "Access token issued to the client",
+      isUnique: true
     },
     { 
-      name: "refreshToken", 
-      type: "string", 
+      name: "refreshToken",
+      type: "string",
       description: "Refresh token issued to the client",
-      isRequired: true
+      isRequired: true,
+      isUnique: true
     },
     { 
       name: "accessTokenExpiresAt", 
@@ -564,9 +567,10 @@ Table Name: `oauthAccessToken`
       references: { model: "oauthApplication", field: "clientId" }
     },
     { 
-      name: "userId", 
-      type: "string", 
+      name: "userId",
+      type: "string",
       description: "ID of the user associated with the token",
+      isOptional: true,
       isForeignKey: true,
       references: { model: "user", field: "id" }
     },
