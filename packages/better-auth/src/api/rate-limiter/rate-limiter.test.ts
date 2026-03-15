@@ -320,6 +320,70 @@ describe("should work in development/test environment", () => {
 	});
 });
 
+describe("missing client IP warning", () => {
+	const warningMessage =
+		"Rate limiting skipped: could not determine client IP address. " +
+		"Ensure your runtime forwards a trusted client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
+
+	let originalNodeEnv: string | undefined;
+	let originalTestEnv: string | undefined;
+
+	beforeEach(() => {
+		originalNodeEnv = process.env.NODE_ENV;
+		originalTestEnv = process.env.TEST;
+	});
+
+	afterEach(() => {
+		if (originalNodeEnv === undefined) {
+			process.env.NODE_ENV = undefined;
+		} else {
+			process.env.NODE_ENV = originalNodeEnv;
+		}
+
+		if (originalTestEnv === undefined) {
+			process.env.TEST = undefined;
+		} else {
+			process.env.TEST = originalTestEnv;
+		}
+
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
+
+	it("should point users to ipAddressHeaders when no client IP is available outside dev/test", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const log = vi.fn();
+		const { client } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+			},
+			logger: {
+				level: "warn",
+				log,
+			},
+		});
+
+		const response = await client.getSession();
+
+		expect(response.error?.status).not.toBe(429);
+		expect(log).toHaveBeenCalledOnce();
+		expect(log).toHaveBeenCalledWith("warn", warningMessage);
+		expect(
+			log.mock.calls.some(([, message]) =>
+				`${message}`.includes("trustedProxies"),
+			),
+		).toBe(false);
+	});
+});
+
 describe("IPv6 address normalization and rate limiting", () => {
 	it("should normalize IPv6 addresses to canonical form", () => {
 		// All these representations of the same IPv6 address should normalize to the same value
