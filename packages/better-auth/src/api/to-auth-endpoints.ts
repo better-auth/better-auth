@@ -388,6 +388,9 @@ async function runAfterHooks(
 				response: any;
 				headers: Headers;
 			};
+			if (!result) {
+				continue;
+			}
 			if (result.headers) {
 				result.headers.forEach((value, key) => {
 					if (!context.context.responseHeaders) {
