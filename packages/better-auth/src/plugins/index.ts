@@ -8,6 +8,7 @@ export * from "./captcha";
 export * from "./custom-session";
 export * from "./device-authorization";
 export * from "./email-otp";
+export * from "./erc8128";
 export * from "./generic-oauth";
 export * from "./haveibeenpwned";
 export * from "./jwt";
