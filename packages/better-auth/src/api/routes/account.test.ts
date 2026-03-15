@@ -1402,4 +1402,92 @@ describe("account", async () => {
 		expect(refreshedSessionCookie).toBe(true);
 		expect(refreshedAccountCookie).toBe(true);
 	});
+
+	it("should allow additional account fields to be set based on provider configuration", async () => {
+		const { signInWithTestUser, client } = await getTestInstance({
+			disableTestUser: true,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					getAccountFields: async (_token, userInfo) => {
+						return {
+							foo: "bar",
+							providerEmail: userInfo.email,
+						};
+					},
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+				additionalFields: {
+					foo: {
+						type: "string",
+						required: false,
+					},
+					providerEmail: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+		});
+
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+
+		await runWithClient2(async (headers) => {
+			const linkAccountRes = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
+				},
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						headers.set(
+							"cookie",
+							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+						);
+					},
+				},
+			);
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const state =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+					: "";
+			email = "test2@test.com";
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/callback");
+				},
+			});
+		});
+
+		const { runWithUser: runWithClient3 } = await signInWithTestUser();
+
+		await runWithClient3(async () => {
+			const accounts = await client.listAccounts();
+			expect(accounts.data?.length).toBe(2);
+			const newAccount = accounts.data?.[1] as Record<string, any>;
+			expect(newAccount.foo).toEqual("bar");
+			expect(newAccount.providerEmail).toEqual("test2@test.com");
+		});
+	});
 });

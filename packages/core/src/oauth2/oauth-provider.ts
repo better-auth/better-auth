@@ -188,6 +188,17 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 				  }>)
 		| undefined;
 	/**
+	 * Custom function to get account fields from userInfo
+	 */
+	getAccountFields?:
+		| ((
+				token: OAuth2Tokens,
+				userInfo: OAuth2UserInfo,
+		  ) => Promise<{
+				[key: string]: any;
+		  } | null>)
+		| undefined;
+	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */

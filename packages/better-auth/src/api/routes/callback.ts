@@ -174,6 +174,11 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError("no_callback_url");
 		}
 
+		const additionalAccountFields = await provider.options?.getAccountFields?.(
+			tokens,
+			userInfo,
+		);
+
 		if (link) {
 			const isTrustedProvider = c.context.trustedProviders.includes(
 				provider.id,
@@ -209,6 +214,7 @@ export const callbackOAuth = createAuthEndpoint(
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 						scope: tokens.scopes?.join(","),
+						...additionalAccountFields,
 					}).filter(([_, value]) => value !== undefined),
 				);
 				await c.context.internalAdapter.updateAccount(
@@ -224,6 +230,7 @@ export const callbackOAuth = createAuthEndpoint(
 					accessToken: await setTokenUtil(tokens.accessToken, c.context),
 					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
 					scope: tokens.scopes?.join(","),
+					...additionalAccountFields,
 				});
 				if (!newAccount) {
 					return redirectOnError("unable_to_link_account");
@@ -250,6 +257,7 @@ export const callbackOAuth = createAuthEndpoint(
 			accountId: String(userInfo.id),
 			...tokens,
 			scope: tokens.scopes?.join(","),
+			...additionalAccountFields,
 		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
