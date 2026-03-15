@@ -1,3 +1,4 @@
+import { safePlural } from "../../utils/pluralize";
 import type { BetterAuthDBSchema } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
@@ -26,11 +27,11 @@ export const initGetModelName = ({
 
 		if (useCustomModelName) {
 			return usePlural
-				? `${schema[defaultModelKey]!.modelName}s`
+				? safePlural(schema[defaultModelKey]!.modelName)
 				: schema[defaultModelKey]!.modelName;
 		}
 
-		return usePlural ? `${model}s` : model;
+		return usePlural ? safePlural(model) : model;
 	};
 	return getModelName;
 };
