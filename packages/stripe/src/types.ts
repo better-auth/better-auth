@@ -232,7 +232,7 @@ export interface Subscription {
 	 * A field to group subscriptions so you can have multiple subscriptions
 	 * for one reference id
 	 */
-	groupId?: string | undefined;
+	group?: string | undefined;
 	/**
 	 * Number of seats for the subscription (useful for team plans)
 	 */
