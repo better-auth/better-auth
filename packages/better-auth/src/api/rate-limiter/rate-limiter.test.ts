@@ -325,27 +325,7 @@ describe("missing client IP warning", () => {
 		"Rate limiting skipped: could not determine client IP address. " +
 		"Ensure your runtime forwards a trusted client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
 
-	let originalNodeEnv: string | undefined;
-	let originalTestEnv: string | undefined;
-
-	beforeEach(() => {
-		originalNodeEnv = process.env.NODE_ENV;
-		originalTestEnv = process.env.TEST;
-	});
-
 	afterEach(() => {
-		if (originalNodeEnv === undefined) {
-			process.env.NODE_ENV = undefined;
-		} else {
-			process.env.NODE_ENV = originalNodeEnv;
-		}
-
-		if (originalTestEnv === undefined) {
-			process.env.TEST = undefined;
-		} else {
-			process.env.TEST = originalTestEnv;
-		}
-
 		vi.unstubAllEnvs();
 		vi.resetModules();
 	});
