@@ -267,6 +267,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				matcher(path) {
 					return (
 						path.includes("/organization/update-member-role") ||
+						path.includes("/organization/transfer-ownership") ||
 						path.startsWith("/organization/set-active")
 					);
 				},
@@ -276,6 +277,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				matcher(path) {
 					return (
 						path.includes("/organization/update-member-role") ||
+						path.includes("/organization/transfer-ownership") ||
 						path.startsWith("/organization/set-active")
 					);
 				},

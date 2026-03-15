@@ -845,6 +845,142 @@ const auth = betterAuth({
 });
 ```
 
+## Transfer Ownership
+
+To transfer the ownership of an organization to another member, use `organization.transferOwnership`. By default this is immediate — the current owner's role is demoted to `admin` and the target member's role is promoted to `owner`.
+
+<APIMethod
+  path="/organization/transfer-ownership"
+  method="POST"
+  requireSession
+>
+```ts
+type transferOwnership = {
+    /*
+     * The organization ID. Defaults to the active organization.
+     */
+    organizationId?: string
+    /*
+     * The ID of the member who will become the new owner.
+     */
+    memberId: string
+    /*
+     * Current owner's password for identity verification (optional).
+     * Only checked when `sendTransferOwnershipEmail` is configured.
+     */
+    password?: string
+    /*
+     * URL to redirect to after the new owner accepts the transfer.
+     */
+    callbackURL?: string
+    /*
+     * Confirmation token received via email.
+     * When provided (and `sendTransferOwnershipEmail` is configured),
+     * the transfer is completed immediately.
+     */
+    token?: string
+}
+```
+</APIMethod>
+
+```ts
+const { data, error } = await authClient.organization.transferOwnership({
+  organizationId: "org-id",
+  memberId: "member-id", // the member who will become owner
+});
+// data.message === "Ownership transferred"
+```
+
+You can configure ownership transfer behaviour through the organization options:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+const auth = betterAuth({
+  plugins: [
+    organization({
+      organizationHooks: {
+        beforeTransferOwnership: async ({ organization, currentOwner, newOwnerMember }) => {
+          // runs before roles are swapped
+        },
+        afterTransferOwnership: async ({ organization, previousOwner, newOwnerMember }) => {
+          // runs after roles are swapped
+        },
+      },
+    }),
+  ],
+});
+```
+
+### Email Confirmation for Ownership Transfer
+
+When `sendTransferOwnershipEmail` is configured, calling `organization.transferOwnership` will **not** transfer ownership immediately. Instead, it will:
+1. Optionally verify the current owner's password (if `password` is supplied in the request)
+2. Generate a short-lived token
+3. Call your `sendTransferOwnershipEmail` callback so you can email the confirmation link **to the new owner**
+4. Return `{ success: true, message: "Transfer confirmation email sent" }`
+
+The new owner must then confirm acceptance by visiting the callback URL or by supplying the `token` in a second call.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      sendTransferOwnershipEmail: async ({ organization, currentOwner, newOwner, url, token }) => {
+        // url is the pre-built confirmation link:
+        // {baseURL}/organization/transfer-ownership/callback?token={token}
+        await sendEmail({
+          to: newOwner.email,
+          subject: `You have been offered ownership of "${organization.name}"`,
+          html: `<p>${currentOwner.name} wants to transfer ownership to you.</p>
+                 <a href="${url}">Accept ownership</a>`,
+        });
+      },
+      transferOwnershipTokenExpiresIn: 3600, // optional, default: 86400 (24h)
+    }),
+  ],
+});
+```
+
+**Step 1 — Initiate transfer (current owner)**
+
+```ts
+const { data, error } = await authClient.organization.transferOwnership({
+  organizationId: "org-id",
+  memberId: "member-id",
+  password: "current-owner-password", // optional identity check
+  callbackURL: "/dashboard",           // optional redirect after acceptance
+});
+// data.message === "Transfer confirmation email sent"
+```
+
+**Step 2a — New owner accepts via email link**
+
+The confirmation link points to `GET /organization/transfer-ownership/callback?token=<token>`. When the new owner visits this URL while authenticated, ownership is transferred and they are optionally redirected to `callbackURL`.
+
+**Step 2b — Accept programmatically (e.g. in a custom UI)**
+
+```ts
+// Called as the new owner
+const { data, error } = await authClient.organization.transferOwnershipCallback({
+  token: tokenFromEmailLink,
+});
+// data.message === "Ownership transferred"
+```
+
+You can also call the callback endpoint on the server:
+
+```ts
+await auth.api.transferOwnershipCallback({
+  query: { token: tokenFromEmailLink },
+  headers,
+});
+```
+
 ## Invitations
 
 To add a member to an organization, we first need to send an invitation to the user. The user will receive an email/sms with the invitation link. Once the user accepts the invitation, they will be added to the organization.
