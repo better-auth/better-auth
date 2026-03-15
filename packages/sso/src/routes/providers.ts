@@ -382,6 +382,7 @@ function mergeOIDCConfig(
 		tokenEndpointAuthentication:
 			updates.tokenEndpointAuthentication ??
 			current.tokenEndpointAuthentication,
+		prompt: updates.prompt ?? current.prompt,
 	};
 }
 
