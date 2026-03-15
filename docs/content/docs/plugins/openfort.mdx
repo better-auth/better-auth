@@ -1,12 +1,11 @@
 ---
 title: Openfort
-description: Better Auth Plugin for Openfort Web3 Wallet Infrastructure
+description: Openfort plugin for Better Auth to manage crypto wallets and stablecoin interactions.
 ---
 
-[Openfort](https://www.openfort.io/) is an infrastructure provider for integrating blockchain wallets into applications. 
-It enables seamless wallet creation, management, and blockchain interactions with embedded wallets.
+The Openfort plugin integrates [Openfort's](https://www.openfort.io/) wallet infrastructure with Better Auth. Since wallet creation and authentication are tightly coupled in applications, this plugin simplifies embedding blockchain wallets into your app — handling wallet provisioning, key management, transaction execution, and orchestration.
 
-This plugin is maintained by the Openfort team. For bugs, issues or feature requests, please visit the [Openfort Adapters GitHub repo](https://github.com/openfort-xyz/openfort-adapters).
+This plugin is maintained by the Openfort team. For bugs, issues, or feature requests, visit the [Openfort Adapters GitHub repo](https://github.com/openfort-xyz/openfort-adapters).
 
 <Card href="https://t.me/openfort" title="Get help on Openfort's Telegram">
   Join the Openfort community for support and questions.
@@ -14,13 +13,13 @@ This plugin is maintained by the Openfort team. For bugs, issues or feature requ
 
 ## Features
 
-- Embedded wallet creation and management.
-- Seamless integration with Better Auth authentication.
-- EVM support (Ethereum, Polygon, Base, etc.) and/or Solana — use one or both.
-- Gas sponsorship for user transactions.
-- Multiple recovery methods (passkey, password, automatic).
-- Sign messages and execute smart contract interactions.
-- Optional Wagmi integration for EVM chains.
+- Create embedded wallets automatically when users and AI agents sign up, with no private key exposure.
+- Seamless Better Auth integration — wallets are tied directly to authenticated user and agent sessions.
+- Multi-chain support across Ethereum (EVM-compatible networks) and Solana.
+- Make gasless transactions via Openfort's policy engine.
+- Multiple recovery methods — passkey, password, or automatic cloud backup.
+- Sign messages and execute smart contracts directly from your application.
+- Flexible wallet and permission assignment — associate wallets with users, organizations, or autonomous agents.
 
 ## Installation
 
