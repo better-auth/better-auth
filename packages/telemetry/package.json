@@ -20,8 +20,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json"
@@ -29,21 +29,21 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "node": "./dist/node.mjs",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "node": "./dist/node.js",
+      "default": "./dist/index.js"
     }
   },
   "typesVersions": {
     "*": {
       "index": [
-        "dist/index.d.mts"
+        "dist/index.d.ts"
       ]
     }
   },
@@ -53,7 +53,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "tsdown": "catalog:",
+    "tsup": "catalog:",
     "type-fest": "^5.4.4"
   },
   "peerDependencies": {

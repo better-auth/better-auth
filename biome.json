@@ -136,6 +136,7 @@
       "!**/.next",
       "!**/.svelte-kit",
       "!**/.contentlayer",
+      "!**/.tsup",
       "!**/.turbo",
       "!**/.nuxt",
       "!**/.source",

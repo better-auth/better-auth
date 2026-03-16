@@ -16,8 +16,9 @@ import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 export const kElectron = Symbol.for("better-auth:electron");
 
 const requestAuthOptionsSchema = (() => {
-	const { provider, idToken, loginHint, ...signInSocialBody } =
-		signInSocial().options.body.shape;
+	const { provider, idToken, loginHint, ...signInSocialBody } = (
+		signInSocial().options.body as z.ZodObject<z.ZodRawShape>
+	).shape;
 
 	return z.object({
 		...signInSocialBody,

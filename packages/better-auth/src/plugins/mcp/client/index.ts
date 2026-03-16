@@ -158,7 +158,7 @@ export function createMcpAuthClient(
 				return null;
 			}
 
-			const data = await response.json();
+			const data = (await response.json()) as McpSession | null;
 			if (!data || !data.userId) {
 				return null;
 			}

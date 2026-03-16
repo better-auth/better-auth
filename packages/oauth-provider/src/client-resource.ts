@@ -98,8 +98,8 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 							jwksUrl,
 							verifyOptions: {
 								...opts?.verifyOptions,
-								audience,
-								issuer,
+								audience: audience as string | string[],
+								issuer: issuer as string | string[],
 							},
 							remoteVerify:
 								opts?.remoteVerify && introspectUrl
@@ -110,7 +110,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 									: undefined,
 						});
 					} catch (error) {
-						throw handleMcpErrors(error, audience, {
+						throw handleMcpErrors(error, audience as string | string[], {
 							resourceMetadataMappings: opts?.resourceMetadataMappings,
 						});
 					}
@@ -181,9 +181,9 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 					const authorizationServer = await getAuthorizationServer();
 
 					return {
-						resource,
+						resource: resource as string,
 						authorization_servers: authorizationServer
-							? [authorizationServer]
+							? [authorizationServer as string]
 							: undefined,
 						...overrides,
 					};

@@ -1,13 +1,14 @@
-import { defineConfig } from "tsdown";
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-	dts: { build: true, incremental: true },
+	dts: true,
 	format: ["esm"],
 	entry: {
 		adapter: "./src/adapter/index.ts",
 	},
+	tsconfig: "../../tsconfig.build.json",
 	sourcemap: true,
-	unbundle: true,
+	splitting: true,
 	outDir: "./dist",
 	clean: true,
 });

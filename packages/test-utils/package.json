@@ -20,8 +20,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch"
+    "build": "tsup",
+    "dev": "tsup --watch"
   },
   "files": [
     "dist"
@@ -29,14 +29,14 @@
   "exports": {
     "./adapter": {
       "dev-source": "./src/adapter/index.ts",
-      "default": "./dist/adapter.mjs",
-      "types": "./dist/adapter.d.mts"
+      "default": "./dist/adapter.js",
+      "types": "./dist/adapter.d.ts"
     }
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "tsdown": "catalog:",
+    "tsup": "catalog:",
     "vitest": "catalog:vitest"
   },
   "peerDependencies": {

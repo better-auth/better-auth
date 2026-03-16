@@ -20,8 +20,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
@@ -31,28 +31,28 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./client": {
       "dev-source": "./src/client.ts",
-      "types": "./dist/client.d.mts",
-      "default": "./dist/client.mjs"
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.mts"
+        "./dist/index.d.ts"
       ],
       "client": [
-        "./dist/client.d.mts"
+        "./dist/client.d.ts"
       ]
     }
   },
@@ -64,7 +64,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "tsdown": "catalog:"
+    "tsup": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",

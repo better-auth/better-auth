@@ -19,13 +19,13 @@
   "publishConfig": {
     "access": "public",
     "executableFiles": [
-      "./dist/index.mjs"
+      "./dist/index.js"
     ]
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsup",
     "dev": "tsx ./src/index.ts",
-    "start": "node ./dist/index.mjs",
+    "start": "node ./dist/index.js",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
@@ -37,20 +37,20 @@
   ],
   "exports": {
     "./api": {
-      "types": "./dist/api.d.mts",
-      "default": "./dist/api.mjs"
+      "types": "./dist/api.d.ts",
+      "default": "./dist/api.js"
     }
   },
   "typesVersions": {
     "*": {
       "api": [
-        "./dist/api.d.mts"
+        "./dist/api.d.ts"
       ]
     }
   },
   "bin": {
-    "better-auth": "./dist/index.mjs",
-    "auth": "./dist/index.mjs"
+    "better-auth": "./dist/index.js",
+    "auth": "./dist/index.js"
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
@@ -86,7 +86,7 @@
     "better-sqlite3": "^12.6.2",
     "jiti": "^2.6.1",
     "memfs": "^4.56.10",
-    "tsdown": "catalog:",
+    "tsup": "catalog:",
     "tsx": "^4.21.0",
     "type-fest": "^5.4.4",
     "typescript": "catalog:"

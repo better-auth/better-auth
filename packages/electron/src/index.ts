@@ -119,7 +119,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 				return;
 			}
 
-			const req = request.clone();
+			const req = request.clone() as Request;
 			req.headers.set("origin", electronOrigin);
 			return {
 				request: req,
