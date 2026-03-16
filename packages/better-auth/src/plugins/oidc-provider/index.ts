@@ -985,6 +985,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
+						scope: requestedScopes.join(" "),
 						...userClaims,
 						...additionalUserClaims,
 					};
@@ -1037,7 +1038,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 											? ctx.context.options.baseURL
 											: undefined),
 									expirationTime,
-									definePayload: () => payload,
+									definePayload: async (session) => {
+										const basePayload = jwtPlugin.options?.jwt?.definePayload
+											? await jwtPlugin.options.jwt.definePayload(session)
+											: {};
+										return {
+											...basePayload,
+											...payload,
+										};
+									},
 								},
 							},
 						);
@@ -1410,9 +1419,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: clientId,
 							clientSecret: storedClientSecret,
 							redirectUrls: body.redirect_uris.join(","),
-							type: "web",
+							type:
+								body.token_endpoint_auth_method === "none" ? "public" : "web",
 							authenticationScheme:
-								body.token_endpoint_auth_method || "client_secret_basic",
+								body.token_endpoint_auth_method ?? "client_secret_basic",
 							disabled: false,
 							userId: session?.session.userId,
 							createdAt: new Date(),
@@ -1434,7 +1444,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							client_secret_expires_at: 0, // 0 means it doesn't expire
 							redirect_uris: body.redirect_uris,
 							token_endpoint_auth_method:
-								body.token_endpoint_auth_method || "client_secret_basic",
+								body.token_endpoint_auth_method ?? "client_secret_basic",
 							grant_types: body.grant_types || ["authorization_code"],
 							response_types: body.response_types || ["code"],
 							client_name: body.client_name,
