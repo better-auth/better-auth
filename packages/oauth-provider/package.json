@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/oauth-provider",
-  "version": "1.4.21",
+  "version": "1.4.22",
   "type": "module",
   "description": "An oauth provider plugin for Better Auth",
   "main": "dist/index.mjs",
