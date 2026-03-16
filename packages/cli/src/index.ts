@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
 import { Command } from "commander";
-import path from "node:path";
 import semver from "semver";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
@@ -32,8 +32,9 @@ async function main() {
 	}
 
 	try {
-		const betterAuthPkg = getPackageInfo(
-			path.join(process.cwd(), "node_modules", "better-auth"),
+		const betterAuthPkgUrl = import.meta.resolve("better-auth/package.json");
+		const betterAuthPkg = JSON.parse(
+			readFileSync(new URL(betterAuthPkgUrl), "utf-8"),
 		);
 		if (semver.gte(betterAuthPkg.version, "1.5.0")) {
 			console.warn(
