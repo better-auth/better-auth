@@ -35,11 +35,11 @@ export const captcha = (options: CaptchaOptions) =>
 				const pathname = new URL(request.url).pathname;
 
 				const isIncluded = includeEndpoints.some((endpoint) =>
-					pathname.url.includes(endpoint),
+					pathname.includes(endpoint),
 				);
 
 				const isExcluded = excludeEndpoints.some((endpoint) =>
-					pathname.url.includes(endpoint),
+					pathname.includes(endpoint),
 				);
 
 				if (isExcluded || !isIncluded) {
