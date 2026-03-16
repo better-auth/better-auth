@@ -45,7 +45,7 @@ async function main() {
 			);
 		}
 	} catch {
-		// Silently ignore — better-auth may not be installed yet
+		// better-auth may not be installed yet
 	}
 
 	program
