@@ -32,12 +32,14 @@ export const captcha = (options: CaptchaOptions) =>
 					.filter((e) => e.startsWith("!"))
 					.map((e) => e.slice(1));
 
+				const pathname = new URL(request.url).pathname;
+
 				const isIncluded = includeEndpoints.some((endpoint) =>
-					request.url.includes(endpoint),
+					pathname.url.includes(endpoint),
 				);
 
 				const isExcluded = excludeEndpoints.some((endpoint) =>
-					request.url.includes(endpoint),
+					pathname.url.includes(endpoint),
 				);
 
 				if (isExcluded || !isIncluded) {
