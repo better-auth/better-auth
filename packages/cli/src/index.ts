@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
 import { Command } from "commander";
 import semver from "semver";
 import { generate } from "./commands/generate";
@@ -33,11 +35,26 @@ async function main() {
 	}
 
 	try {
-		const betterAuthPkgUrl = import.meta.resolve("better-auth/package.json");
-		const betterAuthPkg = JSON.parse(
-			readFileSync(new URL(betterAuthPkgUrl), "utf-8"),
-		);
-		if (semver.gte(betterAuthPkg.version, "1.5.0")) {
+		const _require = createRequire(import.meta.url);
+		const betterAuthEntry = _require.resolve("better-auth");
+
+		let dir = path.dirname(betterAuthEntry);
+		let betterAuthPkg: { name?: string; version?: string } | null = null;
+
+		while (dir !== path.dirname(dir)) {
+			try {
+				const candidate = JSON.parse(
+					readFileSync(path.join(dir, "package.json"), "utf-8"),
+				);
+				if (candidate.name === "better-auth") {
+					betterAuthPkg = candidate;
+					break;
+				}
+			} catch {}
+			dir = path.dirname(dir);
+		}
+
+		if (betterAuthPkg?.version && semver.gte(betterAuthPkg.version, "1.5.0")) {
 			console.warn(
 				`\x1b[33m\nWarning: You are using @better-auth/cli (v${cliVersion}) with better-auth v${betterAuthPkg.version}.\n` +
 					`The old CLI may produce unexpected results with better-auth v1.5.x or later.\n` +
