@@ -1709,9 +1709,10 @@ describe("oidc public client registration", async () => {
 			client_name: "mcp-public-client",
 			token_endpoint_auth_method: "none",
 		});
-		// Public clients should not receive client_secret
-		// (they only get one if type !== "public", see registration response)
+		// Public clients should not receive client_secret or client_secret_expires_at
 		expect(res.data?.client_id).toBeDefined();
+		expect(res.data).not.toHaveProperty("client_secret");
+		expect(res.data).not.toHaveProperty("client_secret_expires_at");
 	});
 
 	it("should preserve token_endpoint_auth_method none (not falsy-replace)", async ({

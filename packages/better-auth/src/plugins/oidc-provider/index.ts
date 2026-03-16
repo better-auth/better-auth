@@ -1439,7 +1439,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 									}
 								: {}),
 							client_id_issued_at: Math.floor(Date.now() / 1000),
-							client_secret_expires_at: 0, // 0 means it doesn't expire
 							redirect_uris: body.redirect_uris,
 							token_endpoint_auth_method:
 								body.token_endpoint_auth_method ?? "client_secret_basic",
