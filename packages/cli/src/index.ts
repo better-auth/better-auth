@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import path from "node:path";
+import semver from "semver";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
@@ -13,7 +15,6 @@ import { getPackageInfo } from "./utils/get-package-info";
 
 import "dotenv/config";
 
-// handle exit
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
 
@@ -29,6 +30,22 @@ async function main() {
 	} catch {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
+
+	try {
+		const betterAuthPkg = getPackageInfo(
+			path.join(process.cwd(), "node_modules", "better-auth"),
+		);
+		if (semver.gte(betterAuthPkg.version, "1.5.0")) {
+			console.warn(
+				`\x1b[33m\nWarning: You are using @better-auth/cli (v${cliVersion}) with better-auth v${betterAuthPkg.version}.\n` +
+				`The old CLI may produce unexpected results with better-auth v1.5.x or later.\n` +
+				`Please use the new CLI instead: \x1b[36mnpx auth@latest\x1b[0m\n`,
+			);
+		}
+	} catch {
+		// Silently ignore — better-auth may not be installed yet
+	}
+
 	program
 		.addCommand(init)
 		.addCommand(migrate)
