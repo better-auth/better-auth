@@ -15,6 +15,7 @@ import {
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
+	Navigation,
 	Phone,
 	ScanFace,
 	Server,
@@ -436,6 +437,11 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "Dynamic Base URL",
+				href: "/docs/concepts/dynamic-base-url",
+				icon: () => <Navigation className="w-4 h-4 text-current" />,
 			},
 		],
 		Icon: () => (

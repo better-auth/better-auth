@@ -22,8 +22,10 @@
       "outputs": [".next/**", "!.next/cache/**"],
       "passThroughEnv": [
         "TYPESENSE_ADMIN_API_KEY",
-        "INKEEP_API_KEY",
-        "GITHUB_TOKEN"
+        "GITHUB_TOKEN",
+        "OPENROUTER_API_KEY",
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN"
       ]
     },
     "clean": {},
