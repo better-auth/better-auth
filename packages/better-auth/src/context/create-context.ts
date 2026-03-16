@@ -102,6 +102,8 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 					enabled: true,
 					strategy: "jwe" as const,
 					refreshCache: true,
+					// match session expiresIn, default 7 days
+					maxAge: options.session?.expiresIn || 60 * 60 * 24 * 7,
 				},
 			},
 			account: {
