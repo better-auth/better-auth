@@ -16,7 +16,7 @@ export const user = sqliteTable("user", {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  priority: text({ enum: ["high", "medium", "low"] }),
+  priority: text({ enum: ["high", "medium", "low"] }).notNull(),
 });
 
 export const session = sqliteTable(
