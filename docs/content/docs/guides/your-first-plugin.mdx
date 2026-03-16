@@ -118,8 +118,7 @@ In our case we want to match any requests going to the signup path:
 
 And for our logic, we’ll write the following code to check the if user’s birthday makes them above 5 years old.
 ```ts title="Imports"
-import { APIError } from "better-auth/api";
-import { createAuthMiddleware } from "better-auth/plugins";
+import { createAuthMiddleware, APIError } from "better-auth/api";
 ```
 ```ts title="Before hook"
 {
