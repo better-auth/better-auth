@@ -224,16 +224,19 @@ export const generatePasskeyRegistrationOptions = (
 				},
 			);
 			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: verificationToken,
-				value: JSON.stringify({
-					expectedChallenge: options.challenge,
-					userData: {
-						id: session.user.id,
-					},
-				}),
-				expiresAt: expirationTime,
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					identifier: verificationToken,
+					value: JSON.stringify({
+						expectedChallenge: options.challenge,
+						userData: {
+							id: session.user.id,
+						},
+					}),
+					expiresAt: expirationTime,
+				},
+				"passkey",
+			);
 			return ctx.json(options, {
 				status: 200,
 			});
@@ -392,11 +395,14 @@ export const generatePasskeyAuthenticationOptions = (
 				},
 			);
 			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: verificationToken,
-				value: JSON.stringify(data),
-				expiresAt: expirationTime,
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					identifier: verificationToken,
+					value: JSON.stringify(data),
+					expiresAt: expirationTime,
+				},
+				"passkey",
+			);
 			return ctx.json(options, {
 				status: 200,
 			});
@@ -465,10 +471,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				);
 			}
 
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
-					verificationToken,
-				);
+			const data = await ctx.context.internalAdapter.findVerificationValue(
+				verificationToken,
+				"passkey",
+			);
 			if (!data) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -529,6 +535,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				});
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					verificationToken,
+					"passkey",
 				);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
@@ -607,10 +614,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
-					verificationToken,
-				);
+			const data = await ctx.context.internalAdapter.findVerificationValue(
+				verificationToken,
+				"passkey",
+			);
 			if (!data) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -697,6 +704,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				});
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					verificationToken,
+					"passkey",
 				);
 
 				return ctx.json(

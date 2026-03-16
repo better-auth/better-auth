@@ -103,11 +103,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 								defaultOTPGenerator(opts);
 							const storedOTP = await storeOTP(ctx, opts, otp);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: `${storedOTP}:0`,
-								identifier: `email-verification-otp-${email}`,
-								expiresAt: getDate(opts.expiresIn, "sec"),
-							});
+							await ctx.context.internalAdapter.createVerificationValue(
+								{
+									value: `${storedOTP}:0`,
+									identifier: email,
+									expiresAt: getDate(opts.expiresIn, "sec"),
+								},
+								"email-verification-otp",
+							);
 							await ctx.context.runInBackgroundOrAwait(
 								options.sendVerificationOTP(
 									{

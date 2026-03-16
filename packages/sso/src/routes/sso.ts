@@ -1428,11 +1428,14 @@ export const signInSSO = (options?: SSOOptions) => {
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
 					};
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `${constants.AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
-						value: JSON.stringify(record),
-						expiresAt: new Date(record.expiresAt),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: record.id,
+							value: JSON.stringify(record),
+							expiresAt: new Date(record.expiresAt),
+						},
+						"saml-authn-request",
+					);
 				}
 
 				return ctx.json({
@@ -2187,7 +2190,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							inResponseTo,
+							"saml-authn-request",
 						);
 					if (verification) {
 						try {
@@ -2227,7 +2231,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						);
 
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							inResponseTo,
+							"saml-authn-request",
 						);
 						const redirectUrl =
 							relayState?.callbackURL ||
@@ -2239,7 +2244,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					}
 
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+						inResponseTo,
+						"saml-authn-request",
 					);
 				} else if (!allowIdpInitiated) {
 					ctx.context.logger.error(
@@ -2275,7 +2281,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 				const existingAssertion =
 					await ctx.context.internalAdapter.findVerificationValue(
-						`${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+						assertionId,
+						"saml-used-assertion",
 					);
 
 				let isReplay = false;
@@ -2311,17 +2318,20 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					);
 				}
 
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-					value: JSON.stringify({
-						assertionId,
-						issuer,
-						providerId: provider.providerId,
-						usedAt: Date.now(),
-						expiresAt,
-					}),
-					expiresAt: new Date(expiresAt),
-				});
+				await ctx.context.internalAdapter.createVerificationValue(
+					{
+						identifier: assertionId,
+						value: JSON.stringify({
+							assertionId,
+							issuer,
+							providerId: provider.providerId,
+							usedAt: Date.now(),
+							expiresAt,
+						}),
+						expiresAt: new Date(expiresAt),
+					},
+					"saml-used-assertion",
+				);
 			} else {
 				ctx.context.logger.warn(
 					"Could not extract assertion ID for replay protection",
@@ -2434,7 +2444,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			await setSessionCookie(ctx, { session, user });
 
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
-				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${provider.providerId}:${extract.nameID}`;
+				const samlSessionKey = `${provider.providerId}:${extract.nameID}`;
 				const samlSessionData: SAMLSessionRecord = {
 					sessionId: session.id,
 					providerId: provider.providerId,
@@ -2442,22 +2452,28 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
 				};
 				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: samlSessionKey,
-						value: JSON.stringify(samlSessionData),
-						expiresAt: session.expiresAt,
-					})
+					.createVerificationValue(
+						{
+							identifier: samlSessionKey,
+							value: JSON.stringify(samlSessionData),
+							expiresAt: session.expiresAt,
+						},
+						"saml-session",
+					)
 					.catch((e) =>
 						ctx.context.logger.warn("Failed to create SAML session record", {
 							error: e,
 						}),
 					);
 				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
-						value: samlSessionKey,
-						expiresAt: session.expiresAt,
-					})
+					.createVerificationValue(
+						{
+							identifier: session.id,
+							value: samlSessionKey,
+							expiresAt: session.expiresAt,
+						},
+						"saml-session-by-id",
+					)
 					.catch((e) =>
 						ctx.context.logger.warn(
 							"Failed to create SAML session lookup record",
@@ -2703,7 +2719,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							inResponseToAcs,
+							"saml-authn-request",
 						);
 					if (verification) {
 						try {
@@ -2742,7 +2759,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							},
 						);
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							inResponseToAcs,
+							"saml-authn-request",
 						);
 						const redirectUrl =
 							relayState?.callbackURL ||
@@ -2754,7 +2772,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					}
 
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+						inResponseToAcs,
+						"saml-authn-request",
 					);
 				} else if (!allowIdpInitiated) {
 					ctx.context.logger.error(
@@ -2790,7 +2809,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 				const existingAssertion =
 					await ctx.context.internalAdapter.findVerificationValue(
-						`${constants.USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
+						assertionIdAcs,
+						"saml-used-assertion",
 					);
 
 				let isReplay = false;
@@ -2826,17 +2846,20 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					);
 				}
 
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
-					value: JSON.stringify({
-						assertionId: assertionIdAcs,
-						issuer,
-						providerId,
-						usedAt: Date.now(),
-						expiresAt,
-					}),
-					expiresAt: new Date(expiresAt),
-				});
+				await ctx.context.internalAdapter.createVerificationValue(
+					{
+						identifier: assertionIdAcs,
+						value: JSON.stringify({
+							assertionId: assertionIdAcs,
+							issuer,
+							providerId,
+							usedAt: Date.now(),
+							expiresAt,
+						}),
+						expiresAt: new Date(expiresAt),
+					},
+					"saml-used-assertion",
+				);
 			} else {
 				ctx.context.logger.warn(
 					"Could not extract assertion ID for replay protection",
@@ -2949,7 +2972,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			await setSessionCookie(ctx, { session, user });
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
-				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
+				const samlSessionKey = `${providerId}:${extract.nameID}`;
 				const samlSessionData: SAMLSessionRecord = {
 					sessionId: session.id,
 					providerId,
@@ -2957,22 +2980,28 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
 				};
 				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: samlSessionKey,
-						value: JSON.stringify(samlSessionData),
-						expiresAt: session.expiresAt,
-					})
+					.createVerificationValue(
+						{
+							identifier: samlSessionKey,
+							value: JSON.stringify(samlSessionData),
+							expiresAt: session.expiresAt,
+						},
+						"saml-session",
+					)
 					.catch((e) =>
 						ctx.context.logger.warn("Failed to create SAML session record", {
 							error: e,
 						}),
 					);
 				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
-						value: samlSessionKey,
-						expiresAt: session.expiresAt,
-					})
+					.createVerificationValue(
+						{
+							identifier: session.id,
+							value: samlSessionKey,
+							expiresAt: session.expiresAt,
+						},
+						"saml-session-by-id",
+					)
 					.catch((e) =>
 						ctx.context.logger.warn(
 							"Failed to create SAML session lookup record",
@@ -3111,9 +3140,11 @@ async function handleLogoutResponse(
 
 	const inResponseTo = extract?.response?.inResponseTo;
 	if (inResponseTo) {
-		const key = `${constants.LOGOUT_REQUEST_KEY_PREFIX}${inResponseTo}`;
 		const pendingRequest =
-			await ctx.context.internalAdapter.findVerificationValue(key);
+			await ctx.context.internalAdapter.findVerificationValue(
+				inResponseTo,
+				"saml-logout-request",
+			);
 
 		if (!pendingRequest) {
 			ctx.context.logger.warn(
@@ -3123,7 +3154,7 @@ async function handleLogoutResponse(
 		}
 
 		await ctx.context.internalAdapter
-			.deleteVerificationByIdentifier(key)
+			.deleteVerificationByIdentifier(inResponseTo, "saml-logout-request")
 			.catch((e: unknown) =>
 				ctx.context.logger.warn(
 					"Failed to delete logout request verification value",
@@ -3171,8 +3202,11 @@ async function handleLogoutRequest(
 	const { nameID } = parsed.extract;
 	const sessionIndex = (parsed.extract as SAMLAssertionExtract).sessionIndex;
 
-	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
-	const stored = await ctx.context.internalAdapter.findVerificationValue(key);
+	const samlSessionId = `${providerId}:${nameID}`;
+	const stored = await ctx.context.internalAdapter.findVerificationValue(
+		samlSessionId,
+		"saml-session",
+	);
 
 	if (stored) {
 		const data = safeJsonParse<SAMLSessionRecord>(stored.value);
@@ -3190,9 +3224,7 @@ async function handleLogoutRequest(
 						}),
 					);
 				await ctx.context.internalAdapter
-					.deleteVerificationByIdentifier(
-						`${constants.SAML_SESSION_BY_ID_PREFIX}${data.sessionId}`,
-					)
+					.deleteVerificationByIdentifier(data.sessionId, "saml-session-by-id")
 					.catch((e: unknown) =>
 						ctx.context.logger.warn(
 							"Failed to delete SAML session lookup during SLO",
@@ -3211,7 +3243,7 @@ async function handleLogoutRequest(
 			}
 		}
 		await ctx.context.internalAdapter
-			.deleteVerificationByIdentifier(key)
+			.deleteVerificationByIdentifier(samlSessionId, "saml-session")
 			.catch((e: unknown) =>
 				ctx.context.logger.warn(
 					"Failed to delete SAML session key during SLO",
@@ -3304,10 +3336,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 			const idp = createIdP(config);
 
 			const session = ctx.context.session;
-			const sessionLookupKey = `${constants.SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
 			const sessionLookup =
 				await ctx.context.internalAdapter.findVerificationValue(
-					sessionLookupKey,
+					session.session.id,
+					"saml-session-by-id",
 				);
 
 			let nameID = session.user.email;
@@ -3316,10 +3348,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 
 			if (sessionLookup) {
 				samlSessionKey = sessionLookup.value;
-				const stored =
-					await ctx.context.internalAdapter.findVerificationValue(
-						samlSessionKey,
-					);
+				const stored = await ctx.context.internalAdapter.findVerificationValue(
+					samlSessionKey,
+					"saml-session",
+				);
 				if (stored) {
 					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 					if (data) {
@@ -3338,15 +3370,18 @@ export const initiateSLO = (options?: SSOOptions) => {
 			const ttl =
 				options?.saml?.logoutRequestTTL ??
 				constants.DEFAULT_LOGOUT_REQUEST_TTL_MS;
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: `${constants.LOGOUT_REQUEST_KEY_PREFIX}${logoutRequest.id}`,
-				value: providerId,
-				expiresAt: new Date(Date.now() + ttl),
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					identifier: logoutRequest.id,
+					value: providerId,
+					expiresAt: new Date(Date.now() + ttl),
+				},
+				"saml-logout-request",
+			);
 
 			if (samlSessionKey) {
 				await ctx.context.internalAdapter
-					.deleteVerificationByIdentifier(samlSessionKey)
+					.deleteVerificationByIdentifier(samlSessionKey, "saml-session")
 					.catch((e) =>
 						ctx.context.logger.warn(
 							"Failed to delete SAML session key during logout",
@@ -3355,7 +3390,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 					);
 			}
 			await ctx.context.internalAdapter
-				.deleteVerificationByIdentifier(sessionLookupKey)
+				.deleteVerificationByIdentifier(
+					session.session.id,
+					"saml-session-by-id",
+				)
 				.catch((e) =>
 					ctx.context.logger.warn(
 						"Failed to delete session lookup key during logout",

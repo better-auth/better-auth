@@ -114,13 +114,14 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 										// The format is typically "otp:retryCount" or just "otp"
 										const otpPart = verification.value.split(":")[0];
 										if (otpPart) {
-											// Extract base identifier (remove prefix like "email-verification-otp-")
+											// Extract base identifier (remove namespace prefix like "email-verification-otp:")
 											let identifier = verification.identifier;
 											const prefixes = [
-												"email-verification-otp-",
-												"sign-in-otp-",
-												"forget-password-otp-",
-												"phone-verification-otp-",
+												"email-verification-otp:",
+												"sign-in-otp:",
+												"forget-password-otp:",
+												"phone-verification-otp:",
+												"phone-number:",
 											];
 											for (const prefix of prefixes) {
 												if (identifier.startsWith(prefix)) {

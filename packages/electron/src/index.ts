@@ -83,16 +83,19 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
 		const codeExpiresInMs = opts.codeExpiresIn * 1000;
 		const expiresAt = new Date(Date.now() + codeExpiresInMs);
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: `electron:${identifier}`,
-			value: JSON.stringify({
-				userId,
-				codeChallenge: code_challenge,
-				codeChallengeMethod: code_challenge_method.toLowerCase(),
-				state,
-			}),
-			expiresAt,
-		});
+		await ctx.context.internalAdapter.createVerificationValue(
+			{
+				identifier,
+				value: JSON.stringify({
+					userId,
+					codeChallenge: code_challenge,
+					codeChallengeMethod: code_challenge_method.toLowerCase(),
+					state,
+				}),
+				expiresAt,
+			},
+			"electron",
+		);
 
 		const redirectToken = base64Url.encode(
 			new TextEncoder().encode(JSON.stringify({ identifier, state })),

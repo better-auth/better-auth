@@ -207,11 +207,14 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${hashedCode}:0`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: new Date(Date.now() + opts.period),
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					value: `${hashedCode}:0`,
+					identifier: key,
+					expiresAt: new Date(Date.now() + opts.period),
+				},
+				"2fa-otp",
+			);
 			const sendOTPResult = options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx,
@@ -306,14 +309,13 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
 			const toCheckOtp =
-				await ctx.context.internalAdapter.findVerificationValue(
-					`2fa-otp-${key}`,
-				);
+				await ctx.context.internalAdapter.findVerificationValue(key, "2fa-otp");
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`2fa-otp-${key}`,
+						key,
+						"2fa-otp",
 					);
 				}
 				throw APIError.from(
@@ -324,7 +326,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter!) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`2fa-otp-${key}`,
+					key,
+					"2fa-otp",
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -374,10 +377,11 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				return valid(ctx);
 			} else {
 				await ctx.context.internalAdapter.updateVerificationByIdentifier(
-					`2fa-otp-${key}`,
+					key,
 					{
 						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
+					"2fa-otp",
 				);
 				return invalid("INVALID_CODE");
 			}

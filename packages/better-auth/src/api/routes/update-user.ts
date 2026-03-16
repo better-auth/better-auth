@@ -505,16 +505,19 @@ export const deleteUser = createAuthEndpoint(
 
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const token = generateRandomString(32, "0-9", "a-z");
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: session.user.id,
-				identifier: `delete-account-${token}`,
-				expiresAt: new Date(
-					Date.now() +
-						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
-							60 * 60 * 24) *
-							1000,
-				),
-			});
+			await ctx.context.internalAdapter.createVerificationValue(
+				{
+					value: session.user.id,
+					identifier: token,
+					expiresAt: new Date(
+						Date.now() +
+							(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+								60 * 60 * 24) *
+								1000,
+					),
+				},
+				"delete-account",
+			);
 			const url = `${
 				ctx.context.baseURL
 			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
@@ -628,7 +631,8 @@ export const deleteUserCallback = createAuthEndpoint(
 			);
 		}
 		const token = await ctx.context.internalAdapter.findVerificationValue(
-			`delete-account-${ctx.query.token}`,
+			ctx.query.token,
+			"delete-account",
 		);
 		if (!token || token.expiresAt < new Date()) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
@@ -644,7 +648,8 @@ export const deleteUserCallback = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			`delete-account-${ctx.query.token}`,
+			ctx.query.token,
+			"delete-account",
 		);
 
 		deleteSessionCookie(ctx);
