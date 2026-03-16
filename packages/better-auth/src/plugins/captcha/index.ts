@@ -27,8 +27,22 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
-				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
+				const includeEndpoints = endpoints.filter((e) => !e.startsWith("!"));
+				const excludeEndpoints = endpoints
+					.filter((e) => e.startsWith("!"))
+					.map((e) => e.slice(1));
+
+				const isIncluded = includeEndpoints.some((endpoint) =>
+					request.url.includes(endpoint)
+				);
+
+				const isExcluded = excludeEndpoints.some((endpoint) =>
+					request.url.includes(endpoint)
+				);
+
+				if (isExcluded || !isIncluded) {
 					return undefined;
+				}
 
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
