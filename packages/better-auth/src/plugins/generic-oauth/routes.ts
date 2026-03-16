@@ -195,7 +195,8 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 				scopes: ctx.body.scopes
 					? [...ctx.body.scopes, ...(scopes || [])]
 					: scopes || [],
-				redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+				redirectURI:
+					redirectURI || `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
 				prompt,
 				accessType,
 				responseType,
@@ -373,7 +374,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				if (providerConfig.getToken) {
 					tokens = await providerConfig.getToken({
 						code,
-						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+						redirectURI:
+							providerConfig.redirectURI ||
+							`${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
 						codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
 					});
 				} else {
@@ -392,7 +395,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						headers: providerConfig.authorizationHeaders,
 						code,
 						codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
-						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+						redirectURI:
+							providerConfig.redirectURI ||
+							`${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
 						options: {
 							clientId: providerConfig.clientId,
 							clientSecret: providerConfig.clientSecret,
