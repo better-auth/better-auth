@@ -36,7 +36,9 @@ async function main() {
 
 	try {
 		const _require = createRequire(import.meta.url);
-		const betterAuthEntry = _require.resolve("better-auth");
+		const betterAuthEntry = _require.resolve("better-auth", {
+			paths: [process.cwd()],
+		});
 
 		let dir = path.dirname(betterAuthEntry);
 		let betterAuthPkg: { name?: string; version?: string } | null = null;
