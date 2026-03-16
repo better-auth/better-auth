@@ -453,11 +453,13 @@ Now at your `redirect_uri` (ie callback), check to see if the returned state mat
 
 ### Token Endpoint
 
-By default, the token endpoint supports providing tokens for the following grants:
+By default, the token endpoint supports the following built-in grants:
 
 - "authorization_code"
 - "client_credentials"
 - "refresh_token"
+
+Plugins can register additional grant types (e.g., CIBA, token exchange) via the `customGrantTypeHandlers` context. Unknown fields in the token request body are passed through to plugin handlers.
 
 #### Authorization code grant
 
@@ -1733,7 +1735,7 @@ Table Name: `oauthClient`
     {
       name: "grantTypes",
       type: "string[]",
-      description: "Array of supported grant types. Supports: ['authorization_code', 'client_credentials', 'refresh_token']",
+      description: "Array of supported grant types. Built-in: 'authorization_code', 'client_credentials', 'refresh_token'. Plugins may register additional grant types.",
       isOptional: true,
     },
     {

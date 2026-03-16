@@ -13,7 +13,6 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import type { GrantType } from "./types/oauth";
 import { userNormalClaims } from "./userinfo";
 import {
 	basicToClientCredentials,
@@ -35,7 +34,7 @@ export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const grantType: GrantType | undefined = ctx.body?.grant_type;
+	const grantType: string | undefined = ctx.body?.grant_type;
 
 	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
 		throw new APIError("BAD_REQUEST", {
@@ -56,11 +55,26 @@ export async function tokenEndpoint(
 				error_description: "missing required grant_type",
 				error: "unsupported_grant_type",
 			});
-		default:
+		default: {
+			const handlers = (ctx.context as Record<string, unknown>)
+				.customGrantTypeHandlers as
+				| Record<
+						string,
+						(
+							ctx: GenericEndpointContext,
+							opts: OAuthOptions<Scope[]>,
+						) => Promise<Response>
+				  >
+				| undefined;
+			const handler = handlers?.[grantType];
+			if (handler) {
+				return handler(ctx, opts);
+			}
 			throw new APIError("BAD_REQUEST", {
 				error_description: `unsupported grant_type ${grantType}`,
 				error: "unsupported_grant_type",
 			});
+		}
 	}
 }
 

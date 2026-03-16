@@ -570,21 +570,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.object({
-						grant_type: z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-						client_id: z.string().optional(),
-						client_secret: z.string().optional(),
-						code: z.string().optional(),
-						code_verifier: z.string().optional(),
-						redirect_uri: SafeUrlSchema.optional(),
-						refresh_token: z.string().optional(),
-						resource: z.string().optional(),
-						scope: z.string().optional(),
-					}),
+					body: z
+						.object({
+							grant_type: z.string().trim().min(1),
+							client_id: z.string().optional(),
+							client_secret: z.string().optional(),
+							code: z.string().optional(),
+							code_verifier: z.string().optional(),
+							redirect_uri: SafeUrlSchema.optional(),
+							refresh_token: z.string().optional(),
+							resource: z.string().optional(),
+							scope: z.string().optional(),
+						})
+						.passthrough(),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
@@ -598,12 +596,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											properties: {
 												grant_type: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
-													description: "OAuth2 grant type",
+													description:
+														"OAuth2 grant type. Built-in: authorization_code, client_credentials, refresh_token. Extensible via plugins.",
 												},
 												client_id: {
 													type: "string",
@@ -1124,13 +1118,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							)
+							.array(z.string())
 							.default(["authorization_code"])
 							.optional(),
 						response_types: z
@@ -1252,14 +1240,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "array",
 														items: {
 															type: "string",
-															enum: [
-																"authorization_code",
-																"client_credentials",
-																"refresh_token",
-															],
 														},
 														description:
-															"Requested authentication method for the token endpoint",
+															"Grant types the client intends to use at the token endpoint",
 													},
 													response_types: {
 														type: "array",
