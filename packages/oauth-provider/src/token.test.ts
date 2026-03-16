@@ -1807,3 +1807,128 @@ describe("oauth token - client secret validation", async () => {
 		expect(responseStatus).toBe(500);
 	});
 });
+
+describe("oauth token - custom grant types", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const MOCK_GRANT = "urn:test:mock-grant";
+
+	const mockPlugin = {
+		id: "mock-grant" as const,
+		init() {
+			return {
+				context: {
+					customGrantTypeHandlers: {
+						[MOCK_GRANT]: async () => ({
+							access_token: "mock-token",
+							token_type: "Bearer",
+							expires_in: 3600,
+							expires_at: Math.floor(Date.now() / 1000) + 3600,
+							scope: "openid",
+						}),
+					},
+				},
+			};
+		},
+	};
+
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				grantTypes: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+					MOCK_GRANT,
+				],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			mockPlugin,
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	it("should dispatch to a custom grant handler", async ({ expect }) => {
+		const res = await client.$fetch<{
+			access_token?: string;
+			token_type?: string;
+			expires_in?: number;
+			scope?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({ grant_type: MOCK_GRANT }),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(res.data?.access_token).toBe("mock-token");
+		expect(res.data?.token_type).toBe("Bearer");
+		expect(res.data?.expires_in).toBe(3600);
+		expect(res.data?.scope).toBe("openid");
+	});
+
+	it("should reject unknown grant type", async ({ expect }) => {
+		const res = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "urn:test:nonexistent",
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(res.error).toMatchObject({
+			error: "unsupported_grant_type",
+		});
+	});
+
+	it("should reject grant_type=toString (prototype safety)", async ({
+		expect,
+	}) => {
+		const res = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({ grant_type: "toString" }),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(res.error).toMatchObject({
+			error: "unsupported_grant_type",
+		});
+	});
+
+	it("should reject grant_type=constructor (prototype safety)", async ({
+		expect,
+	}) => {
+		const res = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({ grant_type: "constructor" }),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(res.error).toMatchObject({
+			error: "unsupported_grant_type",
+		});
+	});
+
+	it("should still handle built-in client_credentials grant", async ({
+		expect,
+	}) => {
+		const res = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: "test-client",
+				client_secret: "test-secret",
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		// Reaches client_credentials handler (may fail on invalid client, not unsupported_grant_type)
+		expect(res.error?.error).not.toBe("unsupported_grant_type");
+	});
+});

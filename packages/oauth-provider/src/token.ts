@@ -26,6 +26,25 @@ import {
 	validateClientCredentials,
 } from "./utils";
 
+export type TokenResponse = {
+	access_token: string;
+	expires_in: number;
+	expires_at: number;
+	token_type: string;
+	scope: string;
+	refresh_token?: string;
+	id_token?: string;
+	[key: string]: unknown;
+};
+
+/**
+ * Handler for a custom grant type registered by a plugin via `customGrantTypeHandlers`.
+ */
+export type GrantTypeHandler = (
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) => Promise<TokenResponse>;
+
 /**
  * Handles the /oauth2/token endpoint by delegating
  * the grant types
@@ -33,7 +52,7 @@ import {
 export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-) {
+): Promise<TokenResponse> {
 	const grantType: string | undefined = ctx.body?.grant_type;
 
 	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
@@ -56,19 +75,19 @@ export async function tokenEndpoint(
 				error: "unsupported_grant_type",
 			});
 		default: {
+			// Dispatch to custom grant type handlers registered by plugins.
+			// Guards: prototype chain, non-object handlers, non-function values.
 			const handlers = (ctx.context as Record<string, unknown>)
-				.customGrantTypeHandlers as
-				| Record<
-						string,
-						(
-							ctx: GenericEndpointContext,
-							opts: OAuthOptions<Scope[]>,
-						) => Promise<Response>
-				  >
-				| undefined;
-			const handler = handlers?.[grantType];
-			if (handler) {
-				return handler(ctx, opts);
+				.customGrantTypeHandlers;
+			if (
+				handlers != null &&
+				typeof handlers === "object" &&
+				Object.hasOwn(handlers as object, grantType)
+			) {
+				const handler = (handlers as Record<string, unknown>)[grantType];
+				if (typeof handler === "function") {
+					return (handler as GrantTypeHandler)(ctx, opts);
+				}
 			}
 			throw new APIError("BAD_REQUEST", {
 				error_description: `unsupported grant_type ${grantType}`,
@@ -389,7 +408,7 @@ async function createUserTokens(
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
 	authTime?: Date,
-) {
+): Promise<TokenResponse> {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
 	const exp = opts.scopeExpirations
@@ -496,23 +515,17 @@ async function createUserTokens(
 			: undefined,
 	]);
 
-	return ctx.json(
-		{
-			access_token: accessToken,
-			expires_in: exp - iat,
-			expires_at: exp,
-			token_type: "Bearer",
-			refresh_token: refreshToken?.token,
-			scope: scopes.join(" "),
-			id_token: idToken,
-		},
-		{
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
+	ctx.setHeader("Cache-Control", "no-store");
+	ctx.setHeader("Pragma", "no-cache");
+	return {
+		access_token: accessToken,
+		expires_in: exp - iat,
+		expires_at: exp,
+		token_type: "Bearer",
+		refresh_token: refreshToken?.token,
+		scope: scopes.join(" "),
+		id_token: idToken,
+	};
 }
 
 /** Checks verification value */
@@ -799,7 +812,7 @@ async function handleAuthorizationCodeGrant(
 async function handleClientCredentialsGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-) {
+): Promise<TokenResponse> {
 	let {
 		client_id,
 		client_secret,
@@ -923,21 +936,15 @@ async function handleClientCredentialsGrant(
 					},
 				);
 
-	return ctx.json(
-		{
-			access_token: accessToken,
-			expires_in: exp - iat,
-			expires_at: exp,
-			token_type: "Bearer",
-			scope: requestedScopes.join(" "),
-		},
-		{
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
+	ctx.setHeader("Cache-Control", "no-store");
+	ctx.setHeader("Pragma", "no-cache");
+	return {
+		access_token: accessToken,
+		expires_in: exp - iat,
+		expires_at: exp,
+		token_type: "Bearer",
+		scope: requestedScopes.join(" "),
+	} satisfies TokenResponse;
 }
 
 /**

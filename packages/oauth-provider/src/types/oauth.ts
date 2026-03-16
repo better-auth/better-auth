@@ -8,7 +8,11 @@ import type { Prompt } from ".";
  * Built-in grants: "authorization_code", "client_credentials", "refresh_token".
  * Plugins register additional grant types via customGrantTypeHandlers.
  */
-export type GrantType = string;
+export type GrantType =
+	| "authorization_code"
+	| "client_credentials"
+	| "refresh_token"
+	| (string & {});
 
 export type AuthMethod =
 	| "client_secret_basic" // Basic header

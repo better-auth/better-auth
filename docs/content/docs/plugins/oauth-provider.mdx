@@ -461,6 +461,10 @@ By default, the token endpoint supports the following built-in grants:
 
 Plugins can register additional grant types (e.g., CIBA, token exchange) via the `customGrantTypeHandlers` context. Unknown fields in the token request body are passed through to plugin handlers.
 
+<Callout>
+Plugins that register custom grant types must also add their grant type string to the `grantTypes` allowlist during `init()`. The CIBA plugin does this automatically. If `grantTypes` is not configured (or set to `undefined`), all grant types are allowed through to dispatch.
+</Callout>
+
 #### Authorization code grant
 
 The authorization code grant enables clients to obtain access user access tokens and optionally refresh tokens (with the "offline_access" scope).
