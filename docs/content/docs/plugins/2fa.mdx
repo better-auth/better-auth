@@ -532,7 +532,7 @@ these are options for OTP.
         default: 3,
     },
     storeOTP: {
-        description: "How to store the otp in the database. Whether to store it as plain text, encrypted or hashed. You can also provide a custom encryptor or hasher.",
+        description: "How to transform the stored OTP value, whether plain text, encrypted, or hashed. You can also provide a custom encryptor or hasher. The storage backend is controlled by the global verification config, so secondary storage can be used instead of the database.",
         type: "string",
         default: "plain",
     },

@@ -1640,7 +1640,7 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			use: [originCheck((ctx) => ctx.query.callbackURL)],
 		},
 		async (ctx) => {
-			const callbackURL = ctx.query?.callbackURL || "/";
+			let callbackURL = ctx.query?.callbackURL || "/";
 
 			const session = await getSessionFromCtx<User & WithStripeCustomerId>(ctx);
 			if (!session) {
@@ -1652,6 +1652,15 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			if (!ctx.query?.checkoutSessionId) {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
+
+			/**
+			 * Replace the Stripe {CHECKOUT_SESSION_ID} template variable in callbackURL.
+			 * @see https://docs.stripe.com/payments/checkout/custom-success-page?payment-ui=stripe-hosted#modify-the-success-url
+			 */
+			callbackURL = callbackURL.replaceAll(
+				"{CHECKOUT_SESSION_ID}",
+				ctx.query.checkoutSessionId,
+			);
 
 			// Resolve subscriptionId from Stripe checkout session metadata.
 			// The metadata is set server-side when creating the checkout session,
