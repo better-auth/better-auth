@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
+import chalk from "chalk";
 import { Command } from "commander";
+import semver from "semver";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
@@ -25,6 +28,28 @@ async function main() {
 	} catch {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
+
+	const cliVersion = packageInfo.version || "1.1.2";
+
+	try {
+		const _require = createRequire(process.cwd() + "/");
+		const betterAuthPkg = _require("better-auth/package.json");
+
+		if (betterAuthPkg.version && semver.gte(betterAuthPkg.version, "1.5.0")) {
+			console.warn(
+				chalk.yellow(
+					`\nWarning: You are using @better-auth/cli (v${cliVersion}) with better-auth v${betterAuthPkg.version}.\n` +
+						`The old CLI may produce unexpected results with better-auth v1.5.x or later.\n` +
+						`Please use the new CLI instead: `,
+				) +
+					chalk.cyan("npx auth@latest") +
+					"\n",
+			);
+		}
+	} catch {
+		// better-auth may not be installed yet — skip the check
+	}
+
 	program
 		.addCommand(init)
 		.addCommand(migrate)
