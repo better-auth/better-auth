@@ -2173,7 +2173,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				logger: ctx.context.logger,
 			});
 
-			const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
+			const inResponseTo = (extract as any)?.response?.inResponseTo as
 				| string
 				| undefined;
 			const shouldValidateInResponseTo =
@@ -2689,7 +2689,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				logger: ctx.context.logger,
 			});
 
-			const inResponseToAcs = (extract as SAMLAssertionExtract).inResponseTo as
+			const inResponseToAcs = (extract as any)?.response?.inResponseTo as
 				| string
 				| undefined;
 			const shouldValidateInResponseToAcs =
