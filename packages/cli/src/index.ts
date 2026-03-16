@@ -15,6 +15,7 @@ import { getPackageInfo } from "./utils/get-package-info";
 
 import "dotenv/config";
 
+// handle exit
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
 
@@ -39,8 +40,8 @@ async function main() {
 		if (semver.gte(betterAuthPkg.version, "1.5.0")) {
 			console.warn(
 				`\x1b[33m\nWarning: You are using @better-auth/cli (v${cliVersion}) with better-auth v${betterAuthPkg.version}.\n` +
-				`The old CLI may produce unexpected results with better-auth v1.5.x or later.\n` +
-				`Please use the new CLI instead: \x1b[36mnpx auth@latest\x1b[0m\n`,
+					`The old CLI may produce unexpected results with better-auth v1.5.x or later.\n` +
+					`Please use the new CLI instead: \x1b[36mnpx auth@latest\x1b[0m\n`,
 			);
 		}
 	} catch {
