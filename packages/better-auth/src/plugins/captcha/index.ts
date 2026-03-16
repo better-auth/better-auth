@@ -33,11 +33,11 @@ export const captcha = (options: CaptchaOptions) =>
 					.map((e) => e.slice(1));
 
 				const isIncluded = includeEndpoints.some((endpoint) =>
-					request.url.includes(endpoint)
+					request.url.includes(endpoint),
 				);
 
 				const isExcluded = excludeEndpoints.some((endpoint) =>
-					request.url.includes(endpoint)
+					request.url.includes(endpoint),
 				);
 
 				if (isExcluded || !isIncluded) {
