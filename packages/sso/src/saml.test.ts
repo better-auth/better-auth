@@ -343,7 +343,7 @@ const createTemplateCallback =
 			SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater.toISOString(),
 			NameIDFormat: selectedNameIDFormat,
 			NameID: email,
-			InResponseTo: "null",
+			InResponseTo: "",
 			AuthnStatement: "",
 			attrFirstName: "Test",
 			attrLastName: "User",
@@ -2108,6 +2108,148 @@ describe("SAML SSO", async () => {
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).toContain("error=unsolicited_response");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8607
+	 */
+	it("should allow SP-initiated SAML response with valid InResponseTo", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					saml: {
+						enableInResponseToValidation: true,
+						allowIdpInitiated: false,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "sp-initiated-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// Store a known AuthnRequest ID in the verification table to simulate SP-initiated flow
+		const knownRequestId = "_sp-initiated-test-request-id";
+		const internalAdapter = (await auth.$context).internalAdapter;
+		await internalAdapter.createVerificationValue({
+			identifier: `saml-authn-request:${knownRequestId}`,
+			value: JSON.stringify({
+				id: knownRequestId,
+				providerId: "sp-initiated-provider",
+				createdAt: Date.now(),
+				expiresAt: Date.now() + 5 * 60 * 1000,
+			}),
+			expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+		});
+
+		// Generate a SAML response with InResponseTo matching the stored request ID
+		const idp = saml.IdentityProvider({
+			metadata: idpMetadata,
+			privateKey: idPk,
+			isAssertionEncrypted: false,
+			privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			loginResponseTemplate: {
+				context:
+					'<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}" InResponseTo="{InResponseTo}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value="{StatusCode}"/></samlp:Status><saml:Assertion ID="{AssertionID}" Version="2.0" IssueInstant="{IssueInstant}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>{Issuer}</saml:Issuer><saml:Subject><saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID><saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="{SubjectConfirmationDataNotOnOrAfter}" Recipient="{SubjectRecipient}" InResponseTo="{InResponseTo}"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore="{ConditionsNotBefore}" NotOnOrAfter="{ConditionsNotOnOrAfter}"><saml:AudienceRestriction><saml:Audience>{Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>{AttributeStatement}</saml:Assertion></samlp:Response>',
+				attributes: [
+					{
+						name: "email",
+						valueTag: "email",
+						nameFormat: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+						valueXsiType: "xs:string",
+					},
+				],
+			},
+		});
+		const sp = saml.ServiceProvider({ metadata: spMetadata });
+		const email = "sp-initiated@test.com";
+		const { context: samlContext } = await idp.createLoginResponse(
+			sp,
+			{} as any,
+			saml.Constants.wording.binding.post,
+			{ email },
+			(template: any) => {
+				const now = new Date();
+				const fiveMinutesLater = new Date(now.getTime() + 5 * 60 * 1000);
+				const assertionConsumerServiceUrl =
+					sp.entityMeta.getAssertionConsumerService(
+						saml.Constants.wording.binding.post,
+					);
+				const nameIDFormat = idp.entitySetting.nameIDFormat;
+				const selectedNameIDFormat = Array.isArray(nameIDFormat)
+					? nameIDFormat[0]
+					: nameIDFormat;
+				const tagValues = {
+					ID: generateRequestID(),
+					AssertionID: generateRequestID(),
+					Destination: assertionConsumerServiceUrl,
+					Audience: sp.entityMeta.getEntityID(),
+					EntityID: sp.entityMeta.getEntityID(),
+					SubjectRecipient: assertionConsumerServiceUrl,
+					Issuer: idp.entityMeta.getEntityID(),
+					IssueInstant: now.toISOString(),
+					AssertionConsumerServiceURL: assertionConsumerServiceUrl,
+					StatusCode: "urn:oasis:names:tc:SAML:2.0:status:Success",
+					ConditionsNotBefore: now.toISOString(),
+					ConditionsNotOnOrAfter: fiveMinutesLater.toISOString(),
+					SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater.toISOString(),
+					NameIDFormat: selectedNameIDFormat,
+					NameID: email,
+					InResponseTo: knownRequestId,
+					AuthnStatement: "",
+					attrEmail: email,
+				};
+				return {
+					id: tagValues.ID,
+					context: saml.SamlLib.replaceTagsByValue(template, tagValues),
+				};
+			},
+		);
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/sp-initiated-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlContext,
+					}),
+				},
+			),
+		);
+
+		// SP-initiated response with valid InResponseTo should succeed
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).not.toContain("error=");
+		expect(redirectLocation).toContain("dashboard");
 	});
 
 	/**
