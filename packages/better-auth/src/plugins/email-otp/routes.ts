@@ -12,9 +12,10 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import { storeOTP, verifyStoredOTP } from "./otp-token";
-import type { EmailOTPOptions } from "./types";
-import { splitAtLastColon } from "./utils";
+import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
+import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
+import { splitAtLastColon, toOTPIdentifier } from "./utils";
 
 const types = [
 	"email-verification",
@@ -23,14 +24,48 @@ const types = [
 	"change-email",
 ] as const;
 
-type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
+/**
+ * Resolves the OTP to send: reuses an existing one if possible,
+ * otherwise generates and stores a new one.
+ *
+ * @internal
+ */
+async function resolveOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	email: string,
+	type: (typeof types)[number],
+): Promise<string> {
+	const identifier = toOTPIdentifier(type, email);
 
-type RequiredEmailOTPOptions = WithRequired<
-	EmailOTPOptions,
-	"expiresIn" | "generateOTP" | "storeOTP"
->;
+	if (opts.resendStrategy === "reuse") {
+		const reused = await tryReuseOTP(ctx, opts, identifier);
+		if (reused) return reused;
+	}
 
-import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
+	const otp =
+		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
+	const storedOTP = await storeOTP(ctx, opts, otp);
+
+	await ctx.context.internalAdapter
+		.createVerificationValue({
+			value: `${storedOTP}:0`,
+			identifier,
+			expiresAt: getDate(opts.expiresIn, "sec"),
+		})
+		.catch(async () => {
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				identifier,
+			);
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: `${storedOTP}:0`,
+				identifier,
+				expiresAt: getDate(opts.expiresIn, "sec"),
+			});
+		});
+
+	return otp;
+}
 
 const sendVerificationOTPBodySchema = z.object({
 	email: z.string({}).meta({
@@ -108,57 +143,22 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 					message: "Invalid OTP type",
 				});
 			}
-			const otp =
-				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
-				defaultOTPGenerator(opts);
+			const identifier = toOTPIdentifier(ctx.body.type, email);
+			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
 
-			const storedOTP = await storeOTP(ctx, opts, otp);
-
-			await ctx.context.internalAdapter
-				.createVerificationValue({
-					value: `${storedOTP}:0`,
-					identifier: `${ctx.body.type}-otp-${email}`,
-					expiresAt: getDate(opts.expiresIn, "sec"),
-				})
-				.catch(async (error) => {
-					// might be duplicate key error
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${ctx.body.type}-otp-${email}`,
-					);
-					//try again
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: `${storedOTP}:0`,
-						identifier: `${ctx.body.type}-otp-${email}`,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
-				});
+			const shouldSendOTP = ctx.body.type === "sign-in" && !opts.disableSignUp;
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
-				if (ctx.body.type === "sign-in" && !opts.disableSignUp) {
-					// allow
-				} else {
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${ctx.body.type}-otp-${email}`,
-					);
-					return ctx.json({
-						success: true,
-					});
-				}
+			if (!user && !shouldSendOTP) {
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					identifier,
+				);
+				return ctx.json({ success: true });
 			}
 
 			await ctx.context.runInBackgroundOrAwait(
-				opts.sendVerificationOTP(
-					{
-						email,
-						otp,
-						type: ctx.body.type,
-					},
-					ctx,
-				),
+				opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
 			);
-			return ctx.json({
-				success: true,
-			});
+			return ctx.json({ success: true });
 		},
 	);
 
@@ -204,7 +204,7 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
-				identifier: `${ctx.body.type}-otp-${email}`,
+				identifier: toOTPIdentifier(ctx.body.type, email),
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 			return otp;
@@ -270,7 +270,7 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const email = ctx.query.email.toLowerCase();
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
-					`${ctx.query.type}-otp-${email}`,
+					toOTPIdentifier(ctx.query.type, email),
 				);
 			if (!verificationValue || verificationValue.expiresAt < new Date()) {
 				return ctx.json({
@@ -371,17 +371,15 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
+			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const verificationValue =
-				await ctx.context.internalAdapter.findVerificationValue(
-					`${ctx.body.type}-otp-${email}`,
-				);
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
 			if (!verificationValue) {
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 			}
-			const otpIdentifier = `${ctx.body.type}-otp-${email}`;
 			if (verificationValue.expiresAt < new Date()) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					otpIdentifier,
+					identifier,
 				);
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
 			}
@@ -390,14 +388,14 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const allowedAttempts = opts?.allowedAttempts || 3;
 			if (attempts && parseInt(attempts) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					otpIdentifier,
+					identifier,
 				);
 				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
 			}
 			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
 			if (!verified) {
 				await ctx.context.internalAdapter.updateVerificationByIdentifier(
-					otpIdentifier,
+					identifier,
 					{
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					},
@@ -488,7 +486,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			await atomicVerifyOTP(
 				ctx,
 				opts,
-				`email-verification-otp-${email}`,
+				toOTPIdentifier("email-verification", email),
 				ctx.body.otp,
 			);
 
@@ -641,7 +639,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const email = rawEmail.toLowerCase();
 
 			// Use atomic verification to prevent race conditions
-			await atomicVerifyOTP(ctx, opts, `sign-in-otp-${email}`, otp);
+			await atomicVerifyOTP(ctx, opts, toOTPIdentifier("sign-in", email), otp);
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
@@ -748,19 +746,12 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email;
-			const otp =
-				opts.generateOTP({ email, type: "forget-password" }, ctx) ||
-				defaultOTPGenerator(opts);
-			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier: `forget-password-otp-${email}`,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
+			const identifier = toOTPIdentifier("forget-password", email);
+			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`forget-password-otp-${email}`,
+					identifier,
 				);
 				return ctx.json({
 					success: true,
@@ -847,19 +838,12 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 		async (ctx) => {
 			warnDeprecation();
 			const email = ctx.body.email;
-			const otp =
-				opts.generateOTP({ email, type: "forget-password" }, ctx) ||
-				defaultOTPGenerator(opts);
-			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier: `forget-password-otp-${email}`,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
+			const identifier = toOTPIdentifier("forget-password", email);
+			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`forget-password-otp-${email}`,
+					identifier,
 				);
 				return ctx.json({
 					success: true,
@@ -946,7 +930,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			await atomicVerifyOTP(
 				ctx,
 				opts,
-				`forget-password-otp-${email}`,
+				toOTPIdentifier("forget-password", email),
 				ctx.body.otp,
 			);
 
@@ -1093,12 +1077,15 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 				const currentEmailVerificationValue =
 					await ctx.context.internalAdapter.findVerificationValue(
-						`email-verification-otp-${email}`,
+						toOTPIdentifier("email-verification", email),
 					);
 				if (!currentEmailVerificationValue) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 				}
-				const currentEmailIdentifier = `email-verification-otp-${email}`;
+				const currentEmailIdentifier = toOTPIdentifier(
+					"email-verification",
+					email,
+				);
 				if (currentEmailVerificationValue.expiresAt < new Date()) {
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 						currentEmailIdentifier,
@@ -1151,14 +1138,14 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
-				identifier: `change-email-otp-${email}-${newEmail}`,
+				identifier: toOTPIdentifier("change-email", `${email}-${newEmail}`),
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`change-email-otp-${email}-${newEmail}`,
+					toOTPIdentifier("change-email", `${email}-${newEmail}`),
 				);
 				return ctx.json({
 					success: true,
@@ -1262,12 +1249,15 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
-					`change-email-otp-${email}-${newEmail}`,
+					toOTPIdentifier("change-email", `${email}-${newEmail}`),
 				);
 			if (!verificationValue) {
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 			}
-			const changeEmailIdentifier = `change-email-otp-${email}-${newEmail}`;
+			const changeEmailIdentifier = toOTPIdentifier(
+				"change-email",
+				`${email}-${newEmail}`,
+			);
 			if (verificationValue.expiresAt < new Date()) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					changeEmailIdentifier,
