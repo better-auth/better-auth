@@ -78,6 +78,19 @@ describe("email-otp", async () => {
 		expect(verifiedUser.data?.token).toBeDefined();
 	});
 
+	it("should sign-in with email containing spaces", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: `  ${testUser.email}  `, // spaces
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: `  ${testUser.email.toUpperCase()}  `, // spaces + different case
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
 	it("should sign-up with otp", async () => {
 		const testUser2 = {
 			email: "test-email@domain.com",
@@ -196,6 +209,44 @@ describe("email-otp", async () => {
 		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password-2",
+		});
+		expect(data?.user).toBeDefined();
+	});
+
+	it("should reset password with mixed case email", async () => {
+    // request with uppercase
+		await client.emailOtp.requestPasswordReset({
+			email: testUser.email.toUpperCase(),
+		});
+		// reset with lowercase
+		await client.emailOtp.resetPassword({
+			email: testUser.email.toLowerCase(),
+			otp,
+			password: "changed-password-case",
+		});
+
+		const { data } = await client.signIn.email({
+			email: testUser.email,
+			password: "changed-password-case",
+		});
+		expect(data?.user).toBeDefined();
+	});
+
+	it("should reset password with email containing spaces", async () => {
+		// request with spaces and uppercase
+		await client.emailOtp.requestPasswordReset({
+			email: `  ${testUser.email.toUpperCase()}  `,
+		});
+		// reset with spaces and lowercase
+		await client.emailOtp.resetPassword({
+			email: `  ${testUser.email.toLowerCase()}  `,
+			otp,
+			password: "changed-password-spaces",
+		});
+
+		const { data } = await client.signIn.email({
+			email: testUser.email,
+			password: "changed-password-spaces",
 		});
 		expect(data?.user).toBeDefined();
 	});

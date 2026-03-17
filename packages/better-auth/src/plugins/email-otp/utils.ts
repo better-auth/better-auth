@@ -5,7 +5,7 @@ export function toOTPIdentifier(
 	type: "email-verification" | "sign-in" | "forget-password" | "change-email",
 	email: string,
 ) {
-	return `${type}-otp-${email}`;
+	return `${type}-otp-${email.trim().toLowerCase()}`;
 }
 
 export const defaultKeyHasher = async (otp: string) => {
