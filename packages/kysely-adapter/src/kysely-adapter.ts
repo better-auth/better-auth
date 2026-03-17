@@ -122,12 +122,17 @@ export const kyselyAdapter = (
 						return res;
 					}
 
-					const value = values[field] || where[0]?.value;
+					const value =
+						values[field] !== undefined ? values[field] : where[0]?.value;
 					res = await db
 						.selectFrom(model)
 						.selectAll()
 						.orderBy(getFieldName({ model, field }), "desc")
-						.where(getFieldName({ model, field }), "=", value)
+						.where(
+							getFieldName({ model, field }),
+							value === null ? "is" : "=",
+							value,
+						)
 						.limit(1)
 						.executeTakeFirst();
 					return res;
@@ -187,11 +192,13 @@ export const kyselyAdapter = (
 						}
 
 						if (operator === "eq") {
-							return eb(f, "=", value);
+							return value === null ? eb(f, "is", null) : eb(f, "=", value);
 						}
 
 						if (operator === "ne") {
-							return eb(f, "<>", value);
+							return value === null
+								? eb(f, "is not", null)
+								: eb(f, "<>", value);
 						}
 
 						if (operator === "gt") {

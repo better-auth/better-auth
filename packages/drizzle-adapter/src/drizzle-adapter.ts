@@ -19,6 +19,8 @@ import {
 	gt,
 	gte,
 	inArray,
+	isNotNull,
+	isNull,
 	like,
 	lt,
 	lte,
@@ -215,7 +217,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					if (w.operator === "ne") {
-						return [ne(schemaModel[field], w.value)];
+						return [
+							w.value === null
+								? isNotNull(schemaModel[field])
+								: ne(schemaModel[field], w.value),
+						];
 					}
 
 					if (w.operator === "gt") {
@@ -226,7 +232,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return [gte(schemaModel[field], w.value)];
 					}
 
-					return [eq(schemaModel[field], w.value)];
+					return [
+						w.value === null
+							? isNull(schemaModel[field])
+							: eq(schemaModel[field], w.value),
+					];
 				}
 				const andGroup = where.filter(
 					(w) => w.connector === "AND" || !w.connector,
@@ -274,9 +284,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return gte(schemaModel[field], w.value);
 						}
 						if (w.operator === "ne") {
-							return ne(schemaModel[field], w.value);
+							return w.value === null
+								? isNotNull(schemaModel[field])
+								: ne(schemaModel[field], w.value);
 						}
-						return eq(schemaModel[field], w.value);
+						return w.value === null
+							? isNull(schemaModel[field])
+							: eq(schemaModel[field], w.value);
 					}),
 				);
 				const orClause = or(
@@ -320,9 +334,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return gte(schemaModel[field], w.value);
 						}
 						if (w.operator === "ne") {
-							return ne(schemaModel[field], w.value);
+							return w.value === null
+								? isNotNull(schemaModel[field])
+								: ne(schemaModel[field], w.value);
 						}
-						return eq(schemaModel[field], w.value);
+						return w.value === null
+							? isNull(schemaModel[field])
+							: eq(schemaModel[field], w.value);
 					}),
 				);
 
