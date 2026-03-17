@@ -66,6 +66,11 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 												type: "string",
 												description: "Name of the team",
 											},
+											slug: {
+												type: "string",
+												description:
+													"URL-friendly identifier, unique within the organization",
+											},
 											organizationId: {
 												type: "string",
 												description:
@@ -85,6 +90,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 										required: [
 											"id",
 											"name",
+											"slug",
 											"organizationId",
 											"createdAt",
 											"updatedAt",
@@ -426,6 +432,11 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 												type: "string",
 												description: "Updated name of the team",
 											},
+											slug: {
+												type: "string",
+												description:
+													"URL-friendly identifier, unique within the organization",
+											},
 											organizationId: {
 												type: "string",
 												description:
@@ -445,6 +456,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 										required: [
 											"id",
 											"name",
+											"slug",
 											"organizationId",
 											"createdAt",
 											"updatedAt",
