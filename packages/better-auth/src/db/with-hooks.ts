@@ -4,7 +4,7 @@ import {
 	getCurrentAuthContext,
 	queueAfterTransactionHook,
 } from "@better-auth/core/context";
-import type { BaseModelNames } from "@better-auth/core/db";
+import type { BaseModelNames, ModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import {
 	ATTR_CONTEXT,
@@ -18,6 +18,13 @@ export type DatabaseHooksEntry = {
 	hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>;
 };
 
+type DeleteHookEntry = {
+	delete?: {
+		before?: (data: Record<string, any>, context: unknown) => Promise<any>;
+		after?: (data: Record<string, any>, context: unknown) => Promise<any>;
+	};
+};
+
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -26,6 +33,12 @@ export function getWithHooks(
 	},
 ) {
 	const hooksEntries = ctx.hooks;
+	const getDeleteHooks = (
+		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>,
+		model: Exclude<ModelNames, "rate-limit">,
+	) => {
+		return (hooks as Record<string, DeleteHookEntry | undefined>)[model];
+	};
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
 		model: BaseModelNames,
@@ -252,7 +265,7 @@ export function getWithHooks(
 
 	async function deleteWithHooks<T extends Record<string, any>>(
 		where: Where[],
-		model: BaseModelNames,
+		model: Exclude<ModelNames, "rate-limit">,
 		customDeleteFn?:
 			| {
 					fn: (where: Where[]) => void | Promise<any>;
@@ -276,7 +289,7 @@ export function getWithHooks(
 
 		if (entityToDelete) {
 			for (const { source, hooks } of hooksEntries) {
-				const toRun = hooks[model]?.delete?.before;
+				const toRun = getDeleteHooks(hooks, model)?.delete?.before;
 				if (toRun) {
 					const result = await withSpan(
 						`db delete.before ${model}`,
@@ -285,9 +298,7 @@ export function getWithHooks(
 							[ATTR_DB_COLLECTION_NAME]: model,
 							[ATTR_CONTEXT]: source,
 						},
-						() =>
-							// @ts-expect-error context type mismatch
-							toRun(entityToDelete as any, context),
+						() => toRun(entityToDelete as any, context),
 					);
 					if (result === false) {
 						return null;
@@ -312,7 +323,7 @@ export function getWithHooks(
 
 		if (entityToDelete) {
 			for (const { source, hooks } of hooksEntries) {
-				const toRun = hooks[model]?.delete?.after;
+				const toRun = getDeleteHooks(hooks, model)?.delete?.after;
 				if (toRun) {
 					await queueAfterTransactionHook(async () => {
 						await withSpan(
@@ -322,9 +333,7 @@ export function getWithHooks(
 								[ATTR_DB_COLLECTION_NAME]: model,
 								[ATTR_CONTEXT]: source,
 							},
-							() =>
-								// @ts-expect-error context type mismatch
-								toRun(entityToDelete as any, context),
+							() => toRun(entityToDelete as any, context),
 						);
 					});
 				}
