@@ -99,10 +99,12 @@ export interface SAMLSessionRecord {
 export interface SAMLAssertionExtract {
 	nameID?: string;
 	sessionIndex?: string;
-	inResponseTo?: string;
 	conditions?: {
 		notBefore?: string;
 		notOnOrAfter?: string;
+	};
+	response?: {
+		inResponseTo?: string;
 	};
 }
 
