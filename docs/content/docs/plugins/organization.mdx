@@ -647,9 +647,9 @@ type setActiveOrganization = {
 To automatically set an active organization when a session is created, you can use [database hooks](/docs/concepts/database#database-hooks). You'll need to implement logic to determine which organization to set as the initial active organization.
 
 ```ts title="auth.ts"
-export const auth = betterAuth({
-  import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 
+export const auth = betterAuth({
   databaseHooks: {
     session: {
       create: {
@@ -2274,6 +2274,7 @@ Table Name: `teamMember`
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the team member was created",
+      isOptional: true,
     },
   ]}
 />
@@ -2303,6 +2304,7 @@ Table Name: `organization`
       name: "slug",
       type: "string",
       description: "The slug of the organization",
+      isUnique: true,
     },
     {
       name: "logo",
@@ -2394,6 +2396,7 @@ Table Name: `invitation`
       name: "role",
       type: "string",
       description: "The role of the user in the organization",
+      isOptional: true,
     },
     {
       name: "status",
@@ -2485,6 +2488,7 @@ Table Name: `organizationRole`
       name: "updatedAt",
       type: "Date",
       description: "Timestamp of when the organization role was updated",
+      isOptional: true,
     },
   ]}
 />
@@ -2552,6 +2556,7 @@ Table Name: `teamMember`
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the team member was created",
+      isOptional: true,
     },
   ]}
 />
