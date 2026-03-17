@@ -275,6 +275,7 @@ export function getWithHooks(
 	) {
 		const context = await getCurrentAuthContext().catch(() => null);
 		let entityToDelete: T | null = null;
+		let entityLookupFailed = false;
 
 		try {
 			const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
@@ -284,6 +285,7 @@ export function getWithHooks(
 			});
 			entityToDelete = entities[0] || null;
 		} catch {
+			entityLookupFailed = true;
 			// If we can't find the entity, we'll still proceed with deletion
 		}
 
@@ -314,7 +316,9 @@ export function getWithHooks(
 
 		const shouldRunAdapterDelete =
 			!customDeleteFn || customDeleteFn.executeMainFn;
-		if (shouldRunAdapterDelete) {
+		const shouldAttemptAdapterDelete =
+			shouldRunAdapterDelete && (entityToDelete !== null || entityLookupFailed);
+		if (shouldAttemptAdapterDelete) {
 			await (await getCurrentAdapter(adapter)).delete({
 				model,
 				where,
