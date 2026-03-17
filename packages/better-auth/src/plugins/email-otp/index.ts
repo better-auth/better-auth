@@ -100,7 +100,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						const response = await getEndpointResponse<{
 							user: { email: string };
 						}>(ctx);
-						const email = response?.user.email;
+						const email = response?.user.email.trim().toLowerCase();
 						if (email) {
 							const otp =
 								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
