@@ -3,6 +3,27 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader } from "../cookies";
 
+/**
+ * Re-create a standard Request with `duplex: 'half'` so that streaming
+ * bodies work in Next.js App Router route handlers.
+ *
+ * Next.js may hand the handler a Request whose body is a ReadableStream,
+ * but the runtime sometimes loses the internal "disturbed" flag when the
+ * request is forwarded between layers. Constructing a fresh Request with
+ * `duplex: 'half'` ensures the body stream is treated correctly.
+ */
+function toPlainRequest(req: Request): Request {
+	const hasBody = req.method !== "GET" && req.method !== "HEAD";
+	return new Request(req.url, {
+		method: req.method,
+		headers: new Headers(req.headers),
+		...(hasBody && {
+			body: req.body,
+			duplex: "half",
+		}),
+	} as RequestInit);
+}
+
 export function toNextJsHandler(
 	auth:
 		| {
@@ -11,7 +32,12 @@ export function toNextJsHandler(
 		| ((request: Request) => Promise<Response>),
 ) {
 	const handler = async (request: Request) => {
-		return "handler" in auth ? auth.handler(request) : auth(request);
+		const hasBody =
+			request.method !== "GET" &&
+			request.method !== "HEAD" &&
+			request.body != null;
+		const effectiveRequest = hasBody ? toPlainRequest(request) : request;
+		return "handler" in auth ? auth.handler(effectiveRequest) : auth(effectiveRequest);
 	};
 	return {
 		GET: handler,
