@@ -80,12 +80,12 @@ describe("email-otp", async () => {
 
 	it("should sign-in with email containing spaces", async () => {
 		await client.emailOtp.sendVerificationOtp({
-			email: `  ${testUser.email}  `, // spaces
+			email: `  ${testUser.email}  `,
 			type: "sign-in",
 		});
 
 		const verifiedUser = await client.signIn.emailOtp({
-			email: `  ${testUser.email.toUpperCase()}  `, // spaces + different case
+			email: `  ${testUser.email.toUpperCase()}  `,
 			otp,
 		});
 		expect(verifiedUser.data?.token).toBeDefined();
@@ -214,11 +214,9 @@ describe("email-otp", async () => {
 	});
 
 	it("should reset password with mixed case email", async () => {
-    // request with uppercase
 		await client.emailOtp.requestPasswordReset({
 			email: testUser.email.toUpperCase(),
 		});
-		// reset with lowercase
 		await client.emailOtp.resetPassword({
 			email: testUser.email.toLowerCase(),
 			otp,
@@ -233,11 +231,9 @@ describe("email-otp", async () => {
 	});
 
 	it("should reset password with email containing spaces", async () => {
-		// request with spaces and uppercase
 		await client.emailOtp.requestPasswordReset({
 			email: `  ${testUser.email.toUpperCase()}  `,
 		});
-		// reset with spaces and lowercase
 		await client.emailOtp.resetPassword({
 			email: `  ${testUser.email.toLowerCase()}  `,
 			otp,
