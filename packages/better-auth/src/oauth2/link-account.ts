@@ -120,25 +120,25 @@ export async function handleOAuthUserInfo(
 			}
 
 			const {
-        accountId: _,
-        providerId: __,
-        accessToken: ___,
-        refreshToken: ____,
-        idToken: _____,
-        accessTokenExpiresAt: ______,
-        refreshTokenExpiresAt: _______,
-        scope: ________,
+				accountId: _,
+				providerId: __,
+				accessToken: ___,
+				refreshToken: ____,
+				idToken: _____,
+				accessTokenExpiresAt: ______,
+				refreshTokenExpiresAt: _______,
+				scope: ________,
 				...additionalAccountFields
 			} = account;
 
-			if (Object.keys(freshTokens).length > 0 || Object.keys(additionalAccountFields).length > 0) {
-				await c.context.internalAdapter.updateAccount(
-					linkedAccount.id,
-          {
-            ...freshTokens,
-            ...additionalAccountFields,
-          },
-				);
+			if (
+				Object.keys(freshTokens).length > 0 ||
+				Object.keys(additionalAccountFields).length > 0
+			) {
+				await c.context.internalAdapter.updateAccount(linkedAccount.id, {
+					...freshTokens,
+					...additionalAccountFields,
+				});
 			}
 
 			if (
