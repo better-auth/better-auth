@@ -13,7 +13,7 @@ describe("organization creation in database hooks", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						after: async (user: any) => {
+						after: async (user) => {
 							// Only run for our specific test user
 							if (user.email !== "test-hook@example.com") {
 								return;
@@ -36,7 +36,7 @@ describe("organization creation in database hooks", async () => {
 						},
 					},
 				},
-			} as any,
+			},
 		});
 
 		// Create a user which should trigger the hook
@@ -103,7 +103,7 @@ describe("organization creation in database hooks", async () => {
 			databaseHooks: {
 				user: {
 					create: {
-						after: async (user: any) => {
+						after: async (user) => {
 							// Skip test instance default user
 							if (!user.email?.includes("-hook@")) {
 								return;
@@ -122,7 +122,7 @@ describe("organization creation in database hooks", async () => {
 						},
 					},
 				},
-			} as any,
+			},
 		});
 
 		if (!db.options?.adapterConfig.transaction) {
@@ -272,7 +272,7 @@ describe("organization creation in database hooks", async () => {
 								},
 							};
 						},
-						after: async (user: any) => {
+						after: async (user) => {
 							// Skip test instance default user
 							if (user.email !== "before-hook@example.com") {
 								return;
@@ -384,6 +384,7 @@ describe("organization member deletion in database hooks", async () => {
 
 	it("should block member removal when delete before returns false", async () => {
 		let afterRemoveMemberCalled = false;
+		let deleteAfterHookCalled = false;
 
 		const { auth, db, signInWithTestUser } = await getTestInstance({
 			plugins: [
@@ -399,6 +400,9 @@ describe("organization member deletion in database hooks", async () => {
 				member: {
 					delete: {
 						before: async () => false,
+						after: async () => {
+							deleteAfterHookCalled = true;
+						},
 					},
 				},
 			} as any,
@@ -439,9 +443,10 @@ describe("organization member deletion in database hooks", async () => {
 
 		expect(response.status).toBe(400);
 		expect(await response.json()).toMatchObject({
-			message: "Member deletion was blocked by a database hook",
+			message: "Member could not be deleted",
 		});
 		expect(afterRemoveMemberCalled).toBe(false);
+		expect(deleteAfterHookCalled).toBe(false);
 		const members = await db.findMany({
 			model: "member",
 			where: [{ field: "id", value: member.id }],

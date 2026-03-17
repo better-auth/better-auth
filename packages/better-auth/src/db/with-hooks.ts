@@ -268,7 +268,7 @@ export function getWithHooks(
 		model: Exclude<ModelNames, "rate-limit">,
 		customDeleteFn?:
 			| {
-					fn: (where: Where[]) => void | Promise<any>;
+					fn: (where: Where[]) => void | Promise<T | null | void>;
 					executeMainFn?: boolean;
 			  }
 			| undefined,
@@ -307,21 +307,30 @@ export function getWithHooks(
 			}
 		}
 
-		const customDeleted = customDeleteFn
-			? await customDeleteFn.fn(where)
-			: null;
+		let customDeleted: T | null | void = undefined;
+		if (customDeleteFn) {
+			customDeleted = await customDeleteFn.fn(where);
+		}
 
 		const shouldRunAdapterDelete =
 			!customDeleteFn || customDeleteFn.executeMainFn;
-		const deleted =
-			shouldRunAdapterDelete && entityToDelete
-				? await (await getCurrentAdapter(adapter)).delete({
-						model,
-						where,
-					})
-				: customDeleted;
+		if (shouldRunAdapterDelete) {
+			await (await getCurrentAdapter(adapter)).delete({
+				model,
+				where,
+			});
+		}
 
-		if (entityToDelete) {
+		const deleted = shouldRunAdapterDelete
+			? customDeleted === undefined
+				? entityToDelete
+				: customDeleted
+			: (customDeleted ?? null);
+		const entityForHooks =
+			entityToDelete ??
+			(deleted && typeof deleted === "object" ? (deleted as T) : null);
+
+		if (entityForHooks) {
 			for (const { source, hooks } of hooksEntries) {
 				const toRun = getDeleteHooks(hooks, model)?.delete?.after;
 				if (toRun) {
@@ -333,14 +342,14 @@ export function getWithHooks(
 								[ATTR_DB_COLLECTION_NAME]: model,
 								[ATTR_CONTEXT]: source,
 							},
-							() => toRun(entityToDelete as any, context),
+							() => toRun(entityForHooks as any, context),
 						);
 					});
 				}
 			}
 		}
 
-		return deleted;
+		return deleted ?? null;
 	}
 
 	async function deleteManyWithHooks<T extends Record<string, any>>(
