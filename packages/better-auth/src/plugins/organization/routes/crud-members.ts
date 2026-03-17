@@ -407,7 +407,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 			});
 			if (!deletedMember) {
 				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "Member deletion was blocked by a database hook",
+					message: "Member could not be deleted",
 				});
 			}
 			if (
@@ -839,7 +839,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			});
 			if (!deletedMember) {
 				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "Member deletion was blocked by a database hook",
+					message: "Member could not be deleted",
 				});
 			}
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {

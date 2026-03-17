@@ -156,7 +156,7 @@ export interface InternalAdapter<
 		model: Exclude<ModelNames, "rate-limit">,
 		customDeleteFn?:
 			| {
-					fn: (where: Where[]) => void | Promise<T | null>;
+					fn: (where: Where[]) => void | Promise<T | null | void>;
 					executeMainFn?: boolean;
 			  }
 			| undefined,
