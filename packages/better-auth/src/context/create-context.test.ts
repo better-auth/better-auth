@@ -381,7 +381,10 @@ describe("base context creation", () => {
 			);
 		});
 
-		it("should use default maxAge (300) for 20% calculation", async () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8638
+		 */
+		it("should use default maxAge (7 days) for 20% calculation in stateless mode", async () => {
 			const res = await initBase({
 				session: {
 					cookieCache: {
@@ -389,10 +392,25 @@ describe("base context creation", () => {
 					},
 				},
 			});
+			// In stateless mode (no database), maxAge defaults to 7 days
+			const sevenDays = 60 * 60 * 24 * 7;
 			expect(res.sessionConfig.cookieRefreshCache).toEqual({
 				enabled: true,
-				updateAge: 60,
+				updateAge: Math.floor(sevenDays * 0.2),
 			});
+		});
+
+		it("should use default maxAge (300) for 20% calculation when database is configured", async () => {
+			const res = await initBase({
+				database: new DatabaseSync(":memory:"),
+				session: {
+					cookieCache: {
+						enabled: true,
+						refreshCache: false,
+					},
+				},
+			});
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
 		});
 
 		it("should use custom updateAge in cookieRefreshCache", async () => {

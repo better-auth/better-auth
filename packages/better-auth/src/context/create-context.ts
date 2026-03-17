@@ -101,6 +101,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 				cookieCache: {
 					enabled: true,
 					strategy: "jwe" as const,
+					maxAge: 60 * 60 * 24 * 7, // 7 days
 					refreshCache: true,
 				},
 			},
