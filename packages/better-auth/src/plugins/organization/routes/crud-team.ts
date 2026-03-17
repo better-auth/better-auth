@@ -592,7 +592,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 };
 
 const checkTeamSlugBodySchema = z.object({
-	slug: z.string().meta({
+	slug: z.string().min(1).meta({
 		description: 'The team slug to check. Eg: "my-team"',
 	}),
 	organizationId: z
