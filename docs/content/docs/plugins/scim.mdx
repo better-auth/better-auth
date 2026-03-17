@@ -455,11 +455,11 @@ The plugin requires additional fields in the `scimProvider` table to store the p
 <DatabaseTable
     fields={[
         {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
+            name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
         },
-        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "scimToken", type: "string", description: "The SCIM bearer token. Used by your identity provider to authenticate against your server", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
+        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isUnique: true },
+        { name: "scimToken", type: "string", description: "The SCIM bearer token. Used by your identity provider to authenticate against your server", isUnique: true },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isOptional: true },
     ]}
 />
 
@@ -469,7 +469,7 @@ The `scimProvider` schema is extended as follows:
 
 <DatabaseTable
     fields={[
-        { name: "userId", type: "string", description: "The user id of the connection owner. Set automatically when generating a token via the API.", isRequired: false },
+        { name: "userId", type: "string", description: "The user id of the connection owner. Set automatically when generating a token via the API.", isOptional: true },
     ]}
 />
 
