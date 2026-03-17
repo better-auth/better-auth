@@ -972,6 +972,12 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							fieldName: opts.schema?.team?.fields?.organizationId,
 							index: true,
 						},
+						slug: {
+							type: "string",
+							required: true,
+							fieldName: opts.schema?.team?.fields?.slug,
+							index: true,
+						},
 						createdAt: {
 							type: "date",
 							required: true,

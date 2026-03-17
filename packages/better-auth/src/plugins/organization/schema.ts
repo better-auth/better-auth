@@ -59,7 +59,6 @@ interface TeamDefaultFields {
 	slug: {
 		type: "string";
 		required: true;
-		unique: true;
 	};
 	organizationId: {
 		type: "string";
