@@ -17,6 +17,9 @@ const teamBaseSchema = z.object({
 	name: z.string().meta({
 		description: 'The name of the team. Eg: "my-team"',
 	}),
+	slug: z.string().min(1).meta({
+		description: 'The slug of the team. Eg: "my-team"',
+	}),
 	organizationId: z
 		.string()
 		.meta({
@@ -159,7 +162,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS,
 				);
 			}
-			const { name, organizationId: _, ...additionalFields } = ctx.body;
+			const { name, organizationId: _, slug, ...additionalFields } = ctx.body;
 
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
@@ -169,8 +172,20 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 
+			const existingTeamWithSlug = await adapter.findTeamBySlug(
+				slug,
+				organizationId,
+			);
+			if (existingTeamWithSlug) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.TEAM_SLUG_ALREADY_TAKEN,
+				);
+			}
+
 			let teamData = {
 				name,
+				slug,
 				organizationId,
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -182,6 +197,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				const response = await options?.organizationHooks.beforeCreateTeam({
 					team: {
 						name,
+						slug,
 						organizationId,
 						...additionalFields,
 					},
@@ -495,7 +511,12 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 
-			const { name, organizationId: __, ...additionalFields } = ctx.body.data;
+			const {
+				name,
+				organizationId: __,
+				slug,
+				...additionalFields
+			} = ctx.body.data;
 
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
@@ -505,8 +526,23 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 
+			// Check if slug is being updated and validate uniqueness within the org
+			if (typeof slug === "string") {
+				const existingTeamWithSlug = await adapter.findTeamBySlug(
+					slug,
+					organizationId,
+				);
+				if (existingTeamWithSlug && existingTeamWithSlug.id !== team.id) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.TEAM_SLUG_ALREADY_TAKEN,
+					);
+				}
+			}
+
 			const updates = {
 				name,
+				slug,
 				...additionalFields,
 			};
 
@@ -554,6 +590,49 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 		},
 	);
 };
+
+const checkTeamSlugBodySchema = z.object({
+	slug: z.string().meta({
+		description: 'The team slug to check. Eg: "my-team"',
+	}),
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				'The organization ID to check the slug against. Defaults to the active organization. Eg: "organization-id"',
+		})
+		.optional(),
+});
+
+export const checkTeamSlug = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/check-team-slug",
+		{
+			method: "POST",
+			body: checkTeamSlugBodySchema,
+			use: [orgMiddleware, orgSessionMiddleware],
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+			if (!organizationId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const team = await adapter.findTeamBySlug(ctx.body.slug, organizationId);
+			if (!team) {
+				return ctx.json({ status: true });
+			}
+			throw APIError.from(
+				"BAD_REQUEST",
+				ORGANIZATION_ERROR_CODES.TEAM_SLUG_ALREADY_TAKEN,
+			);
+		},
+	);
 
 const listOrganizationTeamsQuerySchema = z.optional(
 	z.object({

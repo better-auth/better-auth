@@ -22,6 +22,7 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM:
 		"You are not allowed to create a new team",
 	TEAM_ALREADY_EXISTS: "Team already exists",
+	TEAM_SLUG_ALREADY_TAKEN: "Team slug already taken",
 	TEAM_NOT_FOUND: "Team not found",
 	YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER:
 		"You cannot leave the organization as the only owner",

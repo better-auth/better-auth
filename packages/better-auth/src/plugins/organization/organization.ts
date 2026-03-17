@@ -48,6 +48,7 @@ import {
 } from "./routes/crud-org";
 import {
 	addTeamMember,
+	checkTeamSlug,
 	createTeam,
 	listOrganizationTeams,
 	listTeamMembers,
@@ -132,6 +133,7 @@ export type TeamEndpoints<O extends OrganizationOptions> = {
 	listTeamMembers: ReturnType<typeof listTeamMembers<O>>;
 	addTeamMember: ReturnType<typeof addTeamMember<O>>;
 	removeTeamMember: ReturnType<typeof removeTeamMember<O>>;
+	checkTeamSlug: ReturnType<typeof checkTeamSlug<O>>;
 };
 
 export type OrganizationEndpoints<O extends OrganizationOptions> = {
@@ -903,6 +905,20 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
 		 */
 		removeTeamMember: removeTeamMember(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/check-team-slug`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.checkTeamSlug`
+		 *
+		 * **client:**
+		 * `authClient.organization.checkTeamSlug`
+		 */
+		checkTeamSlug: checkTeamSlug(opts),
 	};
 	if (teamSupport) {
 		endpoints = {

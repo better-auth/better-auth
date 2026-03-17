@@ -1838,7 +1838,7 @@ export const authClient = createAuthClient({
 
 #### Create Team
 
-Create a new team within an organization:
+Create a new team within an organization. The `slug` must be unique within the organization.
 
 <APIMethod path="/organization/create-team" method="POST">
 ```ts
@@ -1847,6 +1847,10 @@ type createTeam = {
      * The name of the team. 
      */
     name: string = "my-team"
+    /**
+     * The slug of the team. Must be unique within the organization.
+     */
+    slug: string = "my-team"
     /**
      * The organization ID which the team will be created in. Defaults to the active organization. 
      */
@@ -1898,6 +1902,10 @@ type updateTeam = {
          */
         name?: string = "My new team name"
         /**
+         * The slug of the team. Must be unique within the organization.
+         */
+        slug?: string = "my-new-slug"
+        /**
          * The organization ID which the team falls under.
          */
         organizationId?: string = "My new organization ID for this team"
@@ -1910,6 +1918,25 @@ type updateTeam = {
          */
         updatedAt?: Date = new Date()
     }
+}
+```
+</APIMethod>
+
+#### Check Team Slug
+
+Check if a team slug is available within an organization.
+
+<APIMethod path="/organization/check-team-slug" method="POST" requireSession>
+```ts
+type checkTeamSlug = {
+    /**
+     * The team slug to check.
+     */
+    slug: string = "my-team"
+    /**
+     * The organization ID to check the slug against. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
 }
 ```
 </APIMethod>
@@ -2369,6 +2396,12 @@ Table Name: `team`
       name: "name",
       type: "string",
       description: "The name of the team",
+    },
+    {
+      name: "slug",
+      type: "string",
+      isOptional: true,
+      description: "URL-friendly identifier for the team, unique within the organization",
     },
     {
       name: "organizationId",
