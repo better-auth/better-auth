@@ -78,6 +78,7 @@ describe("team", async () => {
 		const createTeamResponse = await client.organization.createTeam(
 			{
 				name: "Development Team",
+				slug: "development-team",
 				organizationId,
 			},
 			{
@@ -88,10 +89,12 @@ describe("team", async () => {
 		teamId = createTeamResponse.data?.id as string;
 		expect(createTeamResponse.data?.name).toBe("Development Team");
 		expect(createTeamResponse.data?.organizationId).toBe(organizationId);
+		expect(createTeamResponse.data?.slug).toBe("development-team");
 
 		const createSecondTeamResponse = await client.organization.createTeam(
 			{
 				name: "Marketing Team",
+				slug: "marketing-team",
 				organizationId,
 			},
 			{
@@ -102,6 +105,80 @@ describe("team", async () => {
 		secondTeamId = createSecondTeamResponse.data?.id as string;
 		expect(createSecondTeamResponse.data?.name).toBe("Marketing Team");
 		expect(createSecondTeamResponse.data?.organizationId).toBe(organizationId);
+		expect(createSecondTeamResponse.data?.slug).toBe("marketing-team");
+	});
+
+	it("should create a team with an explicit slug", async () => {
+		expect(organizationId).toBeDefined();
+
+		const res = await client.organization.createTeam(
+			{
+				name: "Design Team",
+				slug: "design",
+				organizationId,
+			},
+			{ headers },
+		);
+
+		expect(res.data?.slug).toBe("design");
+		expect(res.data?.name).toBe("Design Team");
+
+		// Clean up - remove so it doesn't affect other tests
+		await client.organization.removeTeam({
+			teamId: res.data?.id as string,
+			organizationId,
+			fetchOptions: { headers },
+		});
+	});
+
+	it("should reject a duplicate slug within the same organization", async () => {
+		expect(organizationId).toBeDefined();
+
+		const res = await client.organization.createTeam(
+			{
+				name: "Another Dev Team",
+				slug: "development-team",
+				organizationId,
+			},
+			{ headers },
+		);
+
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should reject creating a team without a slug", async () => {
+		expect(organizationId).toBeDefined();
+
+		const res = await client.organization.createTeam(
+			// @ts-expect-error — slug is required
+			{
+				name: "No Slug Team",
+				organizationId,
+			},
+			{ headers },
+		);
+
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should allow the same slug in different organizations", async () => {
+		const otherOrg = await client.organization.create({
+			name: "Other Org",
+			slug: "other-org-for-slug-test",
+			fetchOptions: { headers },
+		});
+		expect(otherOrg.data?.id).toBeDefined();
+
+		const res = await client.organization.createTeam(
+			{
+				name: "Development Team",
+				slug: "development-team",
+				organizationId: otherOrg.data?.id as string,
+			},
+			{ headers },
+		);
+
+		expect(res.data?.slug).toBe("development-team");
 	});
 
 	it("should invite member to team", async () => {
@@ -214,6 +291,51 @@ describe("team", async () => {
 		expect(updateTeamResponse.data?.id).toBe(teamId);
 	});
 
+	it("should update a team slug", async () => {
+		const updateTeamResponse = await client.organization.updateTeam({
+			teamId,
+			data: {
+				slug: "updated-dev-team",
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(updateTeamResponse.data?.slug).toBe("updated-dev-team");
+		expect(updateTeamResponse.data?.id).toBe(teamId);
+	});
+
+	it("should reject updating a team slug to one already taken in the same org", async () => {
+		const res = await client.organization.updateTeam({
+			teamId,
+			data: {
+				slug: "marketing-team",
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should check team slug availability", async () => {
+		const available = await client.organization.checkTeamSlug(
+			{
+				slug: "brand-new-slug",
+				organizationId,
+			},
+			{ headers },
+		);
+		expect(available.data?.status).toBe(true);
+
+		const taken = await client.organization.checkTeamSlug(
+			{
+				slug: "marketing-team",
+				organizationId,
+			},
+			{ headers },
+		);
+		expect(taken.error?.status).toBe(400);
+	});
+
 	it("should remove a team", async () => {
 		const teamsBeforeRemoval = await client.organization.listTeams({
 			fetchOptions: { headers },
@@ -273,6 +395,7 @@ describe("team", async () => {
 		const newTeam = await client.organization.createTeam(
 			{
 				name: "Team in New Org",
+				slug: "team-in-new-org",
 				organizationId: newOrgId,
 			},
 			{
@@ -306,6 +429,7 @@ describe("team", async () => {
 		const newTeamRes = await client.organization.createTeam(
 			{
 				name: "Team for Member Test",
+				slug: "team-for-member-test",
 				organizationId: testOrgId,
 			},
 			{
@@ -449,6 +573,7 @@ describe("team", async () => {
 		const createTeamResponse = await client.organization.createTeam(
 			{
 				name: "Development Team",
+				slug: "development-team-permissions",
 				organizationId: createOrganizationResponse.data?.id,
 			},
 			{
@@ -568,6 +693,7 @@ describe("multi team support", async () => {
 			headers: admin.headers,
 			body: {
 				name: "Team One",
+				slug: "team-one",
 				organizationId,
 			},
 		});
@@ -581,6 +707,7 @@ describe("multi team support", async () => {
 			headers: admin.headers,
 			body: {
 				name: "Team Two",
+				slug: "team-two",
 				organizationId,
 			},
 		});
@@ -594,6 +721,7 @@ describe("multi team support", async () => {
 			headers: admin.headers,
 			body: {
 				name: "Team Three",
+				slug: "team-three",
 				organizationId,
 			},
 		});
@@ -730,6 +858,7 @@ describe("multi team support", async () => {
 			headers: admin.headers,
 			body: {
 				name: "Team Four",
+				slug: "team-four",
 				organizationId,
 			},
 		});

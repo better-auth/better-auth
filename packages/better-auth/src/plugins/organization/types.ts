@@ -655,6 +655,7 @@ export interface OrganizationOptions {
 				beforeCreateTeam?: (data: {
 					team: {
 						name: string;
+						slug: string;
 						organizationId: string;
 						[key: string]: any;
 					};
@@ -682,6 +683,7 @@ export interface OrganizationOptions {
 					team: Team & Record<string, any>;
 					updates: {
 						name?: string;
+						slug?: string;
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;

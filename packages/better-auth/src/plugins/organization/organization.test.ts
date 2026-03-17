@@ -2544,6 +2544,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Team>().toEqualTypeOf<{
 			id: string;
 			name: string;
+			slug: string;
 			organizationId: string;
 			createdAt: Date;
 			updatedAt?: Date | undefined;
@@ -2803,6 +2804,7 @@ describe("Additional Fields", async () => {
 		type ExpectedTeams = {
 			id: string;
 			name: string;
+			slug: string;
 			organizationId: string;
 			createdAt: Date;
 			updatedAt?: Date | undefined;
@@ -3190,6 +3192,7 @@ describe("Additional Fields", async () => {
 		team = await auth.api.createTeam({
 			body: {
 				name: "test",
+				slug: "test-team",
 				teamRequiredField: "hey",
 				teamOptionalField: "hey2",
 				organizationId: org.id,

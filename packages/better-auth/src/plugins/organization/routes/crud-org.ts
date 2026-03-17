@@ -221,9 +221,15 @@ export const createOrganization = <O extends OrganizationOptions>(
 				options?.teams?.enabled &&
 				options.teams.defaultTeam?.enabled !== false
 			) {
+				const defaultTeamSlug = organization.name
+					.toLowerCase()
+					.replace(/\s+/g, "-")
+					.replace(/[^a-z0-9-]/g, "")
+					.replace(/^-+|-+$/g, "");
 				let teamData = {
 					organizationId: organization.id,
 					name: `${organization.name}`,
+					slug: defaultTeamSlug,
 					createdAt: new Date(),
 				};
 				if (options?.organizationHooks?.beforeCreateTeam) {
@@ -231,6 +237,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						team: {
 							organizationId: organization.id,
 							name: `${organization.name}`,
+							slug: defaultTeamSlug,
 						},
 						user,
 						organization,
