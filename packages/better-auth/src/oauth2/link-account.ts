@@ -119,10 +119,25 @@ export async function handleOAuthUserInfo(
 				});
 			}
 
-			if (Object.keys(freshTokens).length > 0) {
+			const {
+        accountId: _,
+        providerId: __,
+        accessToken: ___,
+        refreshToken: ____,
+        idToken: _____,
+        accessTokenExpiresAt: ______,
+        refreshTokenExpiresAt: _______,
+        scope: ________,
+				...additionalAccountFields
+			} = account;
+
+			if (Object.keys(freshTokens).length > 0 || Object.keys(additionalAccountFields).length > 0) {
 				await c.context.internalAdapter.updateAccount(
 					linkedAccount.id,
-					freshTokens,
+          {
+            ...freshTokens,
+            ...additionalAccountFields,
+          },
 				);
 			}
 

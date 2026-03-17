@@ -299,8 +299,6 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
-				const additionalAccountFields =
-					await provider.options?.getAccountFields?.(tokens, userInfo.user);
 				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,
@@ -314,7 +312,6 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						providerId: provider.id,
 						accountId: String(userInfo.user.id),
 						accessToken: c.body.idToken.accessToken,
-						...additionalAccountFields,
 					},
 					callbackURL: c.body.callbackURL,
 					disableSignUp:

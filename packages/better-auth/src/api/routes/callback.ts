@@ -253,11 +253,11 @@ export const callbackOAuth = createAuthEndpoint(
 			return redirectOnError("email_not_found");
 		}
 		const accountData = {
+			...additionalAccountFields,
 			providerId: provider.id,
 			accountId: String(userInfo.id),
 			...tokens,
 			scope: tokens.scopes?.join(","),
-			...additionalAccountFields,
 		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
