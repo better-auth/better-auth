@@ -361,7 +361,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				ctx,
 			);
 
-			if (!canDeleteMember) {
+			if (!canDeleteMember.success) {
 				throw APIError.from(
 					"UNAUTHORIZED",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER,
@@ -622,7 +622,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				ctx,
 			);
 
-			if (!canUpdateMember) {
+			if (!canUpdateMember.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
