@@ -5,6 +5,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { parseJSON } from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
+import { getWithHooks } from "../../db";
 import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import type {
@@ -27,6 +28,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 	options?: O | undefined,
 ) => {
 	const baseAdapter = context.adapter;
+	const hooks = context.options.databaseHooks
+		? [{ source: "user", hooks: context.options.databaseHooks }]
+		: [];
+	const { deleteWithHooks } = getWithHooks(baseAdapter, {
+		options: context.options,
+		hooks,
+	});
 	const orgAdditionalFields = options?.schema?.organization?.additionalFields;
 	const memberAdditionalFields = options?.schema?.member?.additionalFields;
 	const invitationAdditionalFields =
@@ -342,15 +350,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			} else {
 				userId = _userId;
 			}
-			const member = await adapter.delete<InferMember<O, false>>({
-				model: "member",
-				where: [
-					{
-						field: "id",
-						value: memberId,
-					},
-				],
-			});
+			const member = await deleteWithHooks<InferMember<O, false>>(
+				[{ field: "id", value: memberId }],
+				"member",
+			);
 			// remove member from all teams they're part of
 			if (options?.teams?.enabled) {
 				const teams = await adapter.findMany<Team>({

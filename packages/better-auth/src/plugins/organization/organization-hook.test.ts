@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from ".";
 
@@ -314,5 +314,100 @@ describe("organization creation in database hooks", async () => {
 		});
 		expect(org).toBeDefined();
 		expect((org as any)?.name).toBe("Before-After Org");
+	});
+});
+
+describe("member deletion database hooks", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8653
+	 */
+	it("should call databaseHooks.member.delete.after when removing a member via removeMember", async () => {
+		const afterDeleteHook = vi.fn();
+
+		const { auth, db, signInWithUser } = await getTestInstance({
+			plugins: [organization()],
+			databaseHooks: {
+				member: {
+					delete: {
+						after: afterDeleteHook,
+					},
+				},
+			},
+		});
+
+		// Sign up and sign in as owner
+		await auth.api.signUpEmail({
+			body: {
+				email: "owner-8653@example.com",
+				password: "password123",
+				name: "Owner",
+			},
+		});
+		const { headers: ownerHeaders, res: ownerRes } = await signInWithUser(
+			"owner-8653@example.com",
+			"password123",
+		);
+
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Test Org 8653",
+				slug: "test-org-8653",
+				userId: ownerRes.user.id,
+			},
+			headers: ownerHeaders,
+		});
+
+		// Sign up and sign in as a second member
+		await auth.api.signUpEmail({
+			body: {
+				email: "member-8653@example.com",
+				password: "password123",
+				name: "Member",
+			},
+		});
+		const { headers: memberHeaders } = await signInWithUser(
+			"member-8653@example.com",
+			"password123",
+		);
+
+		const inviteResult = await auth.api.createInvitation({
+			body: {
+				email: "member-8653@example.com",
+				organizationId: org!.id,
+				role: "member",
+			},
+			headers: ownerHeaders,
+		});
+
+		await auth.api.acceptInvitation({
+			body: { invitationId: inviteResult!.id },
+			headers: memberHeaders,
+		});
+
+		// Retrieve the member record for the invited user
+		const members = await db.findMany({
+			model: "member",
+			where: [{ field: "organizationId", value: org!.id }],
+		});
+		const memberRecord = members.find(
+			(m: any) => m.userId !== ownerRes.user.id,
+		);
+		expect(memberRecord).toBeDefined();
+
+		const hookCallCountBefore = afterDeleteHook.mock.calls.length;
+
+		// Remove the member — this should trigger the databaseHook
+		await auth.api.removeMember({
+			body: {
+				memberIdOrEmail: memberRecord!.id as string,
+				organizationId: org!.id,
+			},
+			headers: ownerHeaders,
+		});
+
+		expect(afterDeleteHook.mock.calls.length).toBeGreaterThan(hookCallCountBefore);
+		const deletedMemberArg = afterDeleteHook.mock.calls.at(-1)?.[0];
+		expect(deletedMemberArg).toBeDefined();
+		expect(deletedMemberArg?.id).toBe(memberRecord!.id);
 	});
 });
