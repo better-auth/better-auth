@@ -1601,7 +1601,7 @@ Table Name: `oauthClient`
       name: "clientId",
       type: "string",
       description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true,
+      isUnique: true,
     },
     {
       name: "clientSecret",
@@ -1652,17 +1652,18 @@ Table Name: `oauthClient`
       type: "string",
       description: "ID of the reference of the client owner if not a user. (optional)",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the OAuth client was created",
+      isOptional: true,
     },
     {
       name: "updatedAt",
       type: "Date",
       description: "Timestamp of when the OAuth client was last updated",
+      isOptional: true,
     },
     {
       name: "name",
@@ -1722,7 +1723,12 @@ Table Name: `oauthClient`
       name: "redirectUris",
       type: "string[]",
       description: "Array of of redirect uris",
-      isRequired: true,
+    },
+    {
+      name: "postLogoutRedirectUris",
+      type: "string[]",
+      description: "Array of post-logout redirect URIs",
+      isOptional: true,
     },
     {
       name: "tokenEndpointAuthMethod",
@@ -1755,6 +1761,12 @@ Table Name: `oauthClient`
       isOptional: true,
     },
     {
+      name: "requirePKCE",
+      type: "boolean",
+      description: "Whether PKCE is required for this client",
+      isOptional: true,
+    },
+    {
       name: "metadata",
       type: "json",
       description: "Additional metadata for the OAuth client",
@@ -1779,14 +1791,12 @@ Table Name: `oauthRefreshToken`
       name: "token",
       type: "string",
       description: "Hashed/encrypted refresh token",
-      isRequired: true,
     },
     {
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "oauthClient", field: "clientId" },
     },
     {
@@ -1794,7 +1804,7 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the session used at issuance of the token (and still active)",
       isForeignKey: true,
-      isRequired: false,
+      isOptional: true,
       references: { model: "session", field: "id" },
     },
     {
@@ -1802,7 +1812,6 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the user associated with the token",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "user", field: "id" },
     },
     {
@@ -1810,13 +1819,11 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
-      isRequired: true,
     },
     {
       name: "revoked",
@@ -1859,14 +1866,13 @@ Table Name: `oauthAccessToken`
       name: "token",
       type: "string",
       description: "Hashed/encrypted access token",
-      isRequired: true,
+      isUnique: true,
     },
     {
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "oauthClient", field: "clientId" }
     },
     {
@@ -1898,18 +1904,16 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
-      isRequired: true,
     },
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp when the token was created" 
+      description: "Timestamp when the token was created",
     },
     {
       name: "expiresAt",
@@ -1950,23 +1954,21 @@ Table Name: `oauthConsent`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
-      type: "string",
-      description: "Comma-separated list of scopes consented to",
-      isRequired: true
+      type: "string[]",
+      description: "Array of scopes consented to",
     },
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the consent was given" 
+      description: "Timestamp of when the consent was given",
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the consent was last updated"
+      description: "Timestamp of when the consent was last updated",
     },
   ]}
 />

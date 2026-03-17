@@ -611,12 +611,11 @@ Table Name: `deviceCode`
             type: "string",
             description: "The user-friendly code for verification",
         },
-        { 
-            name: "userId", 
-            type: "string", 
+        {
+            name: "userId",
+            type: "string",
             description: "The ID of the user who approved/denied",
-            isOptional: true,
-            isForeignKey: true
+            isOptional: true
         },
         {
             name: "clientId",
@@ -652,15 +651,5 @@ Table Name: `deviceCode`
             description: "Minimum seconds between polls",
             isOptional: true
         },
-        {
-            name: "createdAt",
-            type: "Date",
-            description: "When the request was created",
-        },
-        {
-            name: "updatedAt",
-            type: "Date",
-            description: "When the request was last updated",
-        }
     ]}
 />
