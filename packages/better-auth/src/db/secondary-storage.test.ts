@@ -120,3 +120,53 @@ describe("secondary storage - get returns already-parsed object", async () => {
 		expect(activeAfter ?? null).toBeNull();
 	});
 });
+
+describe("secondary storage - get double-parses JSON (common user mistake)", async () => {
+	const store = new Map<string, string>();
+
+	const { client, signInWithTestUser } = await getTestInstance({
+		secondaryStorage: {
+			set(key, value, ttl) {
+				store.set(key, value);
+			},
+			get(key) {
+				const raw = store.get(key);
+				if (!raw) return null;
+				// Simulates a common mistake: user parses JSON in their get()
+				// then better-auth tries to parse it again
+				return JSON.parse(raw);
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+		rateLimit: {
+			enabled: false,
+		},
+	});
+
+	beforeEach(() => {
+		store.clear();
+	});
+
+	it("should handle double-parsed values without crashing", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const s1 = await client.getSession({ fetchOptions: { headers } });
+		expect(s1.data).not.toBeNull();
+		expect(s1.data!.session.userId).toEqual(expect.any(String));
+
+		const list = await client.listSessions({ fetchOptions: { headers } });
+		expect(list.data?.length).toBe(1);
+
+		const token = s1.data!.session.token;
+		const revoke = await client.revokeSession({
+			fetchOptions: { headers },
+			token,
+		});
+		expect(revoke.data?.status).toBe(true);
+
+		const after = await client.getSession({ fetchOptions: { headers } });
+		expect(after.data).toBeNull();
+	});
+});
