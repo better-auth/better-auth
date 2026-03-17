@@ -13,3 +13,5 @@ prefs
 uncompromised
 myapp
 Neue
+CCPA
+CPRA

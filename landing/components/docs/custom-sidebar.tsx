@@ -5,11 +5,11 @@ import type {
 	Item as PageTreeItem,
 	Separator as PageTreeSeparator,
 } from "fumadocs-core/page-tree";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { FC, ReactNode } from "react";
 import { useState } from "react";
-import { useCommandMenu } from "@/components/command-menu";
 
 // ─── Item ───────────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ export const CustomSeparator: FC<{ item: PageTreeSeparator }> = ({ item }) => {
 // ─── Search Button (sidebar banner) ─────────────────────────────────────────
 
 export const SearchButton: FC = () => {
-	const { setOpen } = useCommandMenu();
+	const { setOpenSearch: setOpen } = useSearchContext();
 
 	return (
 		<button
