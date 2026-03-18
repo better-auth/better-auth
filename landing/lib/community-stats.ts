@@ -61,7 +61,7 @@ async function fetchGitHubStats(): Promise<{
 				headers: githubHeaders,
 			}),
 			fetch(
-				"https://api.github.com/repos/better-auth/better-auth/contributors?per_page=1",
+				"https://api.github.com/repos/better-auth/better-auth/contributors?per_page=1&anon=true",
 				{
 					next: { revalidate: 3600 },
 					headers: githubHeaders,
