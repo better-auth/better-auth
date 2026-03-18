@@ -671,3 +671,50 @@ If you need to use better fetch plugins, you can pass them to the `fetchPlugins`
 This is only useful if you want to provide `hooks` like `useSession` and you want to listen to atoms and re-evaluate them when they change.
 
 You can see how this is used in the built-in plugins.
+
+## Plugin Extension Protocol
+
+Some plugins act as **platforms** — they provide shared infrastructure that other plugins build on. The `oauth-provider` plugin is the primary example.
+
+The **Plugin Extension Protocol** enables typed, declarative composition between plugins via two fields on `BetterAuthPlugin` (`extensions`, `dependencies`) and one `AuthContext` method (`getExtensions`):
+
+### `extensions`
+
+Contribute capabilities to a host plugin. Each key is a host plugin ID registered in `BetterAuthExtensionRegistry`, and the value must satisfy the host's extension contract:
+
+```ts
+{
+  id: "my-plugin",
+  extensions: {
+    "oauth-provider": {
+      grantTypes: { "urn:custom:grant": myHandler },
+    } satisfies OAuthProviderExtension,
+  },
+}
+```
+
+TypeScript provides autocomplete for registered hosts and type-checking for the contract.
+
+### `dependencies`
+
+Declare which plugins your plugin requires. Validated at startup before any `init` runs:
+
+```ts
+{
+  id: "my-plugin",
+  dependencies: ["oauth-provider"],
+}
+```
+
+### `getExtensions`
+
+Host plugins call `ctx.getExtensions(hostId)` in their `init` to collect all typed contributions from guest plugins:
+
+```ts
+init(ctx) {
+  const extensions = ctx.getExtensions("oauth-provider");
+  // extensions is OAuthProviderExtension[]
+}
+```
+
+See the <Link href="/docs/concepts/plugins">Plugins</Link> documentation for more details on creating plugins.
