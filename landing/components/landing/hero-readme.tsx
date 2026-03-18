@@ -1216,10 +1216,18 @@ function SentinelSection() {
 
 const EMPTY_CONTRIBUTORS: ContributorInfo[] = [];
 
+type CommunityHeroStats = {
+	npmDownloads: number;
+	githubStars: number;
+	contributors: number;
+};
+
 function ContributorsSection({
 	contributors = EMPTY_CONTRIBUTORS,
+	contributorCount,
 }: {
 	contributors: ContributorInfo[];
+	contributorCount: number;
 }) {
 	if (contributors.length === 0) return null;
 
@@ -1245,7 +1253,7 @@ function ContributorsSection({
 			<p className="text-[13px] text-foreground/50 dark:text-foreground/40 mb-5 leading-relaxed">
 				Built by a community of{" "}
 				<span className="text-foreground/70 dark:text-foreground/60 font-medium tabular-nums">
-					746+
+					{contributorCount}+
 				</span>{" "}
 				contributors.
 			</p>
@@ -1335,11 +1343,7 @@ const footerLinks = [
 	{ label: "Changelog", href: "/changelog" },
 ];
 
-function ReadmeFooter({
-	stats,
-}: {
-	stats: { npmDownloads: number; githubStars: number };
-}) {
+function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 	return (
 		<div className="relative mt-10 pt-8 pb-0 overflow-hidden">
 			{/* Watermark logo */}
@@ -1516,7 +1520,7 @@ export function HeroReadMe({
 	stats,
 }: {
 	contributors: ContributorInfo[];
-	stats: { npmDownloads: number; githubStars: number };
+	stats: CommunityHeroStats;
 }) {
 	const [socialHovered, setSocialHovered] = useState(false);
 
@@ -2522,7 +2526,10 @@ export function HeroReadMe({
 							</div>
 						</div>
 
-						<ContributorsSection contributors={contributors} />
+						<ContributorsSection
+							contributors={contributors}
+							contributorCount={stats.contributors}
+						/>
 
 						<ReadmeFooter stats={stats} />
 					</motion.article>
