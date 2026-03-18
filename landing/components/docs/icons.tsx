@@ -176,6 +176,19 @@ export const Icons = {
 			</g>
 		</svg>
 	),
+	encore: () => (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			width="1em"
+			height="1em"
+			viewBox="90.6 91 90.9 102.1"
+		>
+			<path
+				className="fill-foreground"
+				d="M181.4,170.2v22.9H90.6v-69.3c14.4-3.1,28.7-7.1,42.6-12c16.6-5.8,32.7-12.7,48.3-20.8v25.6 c-13.2,6.4-26.9,12-40.8,16.9c-15.7,5.5-31.8,9.9-48.1,13.3v0.2c30.1-2.8,59.7-7.7,88.9-14.5v23.5c-29.2,6.6-58.9,11.3-88.9,14v0.2 H181.4z"
+			/>
+		</svg>
+	),
 	nestJS: (props?: SVGProps<any>) => (
 		<svg
 			className={props?.className}
