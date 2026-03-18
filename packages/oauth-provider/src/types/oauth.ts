@@ -6,13 +6,9 @@ import type { Prompt } from ".";
  */
 export type GrantType =
 	| "authorization_code"
-	// | "implicit" // NEVER SUPPORT - deprecated in oAuth2.1
-	// | "password" // NEVER SUPPORT - deprecated in oAuth2.1
 	| "client_credentials"
-	| "refresh_token";
-// | "urn:ietf:params:oauth:grant-type:device_code"  // specified in oAuth2.1 but not yet implemented
-// | "urn:ietf:params:oauth:grant-type:jwt-bearer"   // unspecified in oAuth2.1
-// | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
+	| "refresh_token"
+	| (string & {});
 
 export type AuthMethod =
 	| "client_secret_basic" // Basic header

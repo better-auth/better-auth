@@ -32,3 +32,4 @@ Timestampz
 Vercel
 rgba
 idtoken
+eidas
