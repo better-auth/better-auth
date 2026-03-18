@@ -18,6 +18,8 @@ export function getContributors(): ContributorInfo[] {
 	return staticContributors as ContributorInfo[];
 }
 
+const staticContributorsCount = staticContributors.length;
+
 // Fetch NPM download stats for the last year
 async function fetchNpmDownloads(): Promise<number> {
 	try {
@@ -75,7 +77,7 @@ async function fetchGitHubStats(): Promise<{
 			console.error("Failed to fetch GitHub repo stats:", repoResponse.status);
 		}
 
-		let contributorsCount = 100;
+		let contributorsCount = staticContributorsCount;
 		if (contributorsResponse.ok) {
 			const linkHeader = contributorsResponse.headers.get("Link");
 			if (linkHeader) {
@@ -94,7 +96,7 @@ async function fetchGitHubStats(): Promise<{
 		return { stars, contributors: contributorsCount };
 	} catch (error) {
 		console.error("Error fetching GitHub stats:", error);
-		return { stars: 26000, contributors: 100 };
+		return { stars: 27000, contributors: staticContributorsCount };
 	}
 }
 
