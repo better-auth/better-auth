@@ -71,6 +71,7 @@ export default async function HomePage() {
 								stats={{
 									npmDownloads: communityStats.npmDownloads,
 									githubStars: communityStats.githubStars,
+									contributors: communityStats.contributors,
 								}}
 							/>
 						</div>
