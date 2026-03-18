@@ -48,7 +48,8 @@ run specific tests.
 * `packages/core` - Core utilities and types
 * `packages/cli` - Command-line interface
 * `packages/*` - Database adapters, plugins, and integrations
-* `docs/` - Documentation site (Next.js + Fumadocs)
+* `docs/` - Documentation content
+* `landing/` - Documentation site (Next.js + Fumadocs)
 * `demo/` - Demo apps
 * `e2e/` - End-to-end tests (smoke, adapter, integration)
 
@@ -81,10 +82,11 @@ run specific tests.
 ## Documentation
 
 * Please update the documentation when you make changes to the public API
-* Documentation is located in the `docs/` directory, built with
+* Documentation site is `landing/`, built with
   [Next.js](https://nextjs.org/docs/llms.txt) + [Fumadocs](https://www.fumadocs.dev/llms.txt)
 * Content lives in `docs/content/docs/` organized by topic (authentication,
-  adapters, concepts, guides, plugins, examples, reference)
+  adapters, concepts, guides, infrastructure, integrations, plugins,
+  examples, reference)
 
 ## Git Workflow
 
@@ -95,7 +97,7 @@ run specific tests.
 
 ## Postmortems
 
-Check `postmortem/` directory for lessons learned from past issues.
+Check `.postmortem/` directory for lessons learned from past issues.
 
 ## After Everything is done
 
