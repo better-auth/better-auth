@@ -1001,6 +1001,10 @@ plugins: [
 ]
 ```
 
+<Callout type="info">
+When `organization.enabled: true`, the plugin automatically omits `chargebeeCustomerId` from the `user` table and disables user-level billing hooks. You do not need to add that column to your database schema when using exclusively org-scoped billing.
+</Callout>
+
 #### Creating Organization Subscriptions
 
 Even with Organization Customer enabled, user subscriptions remain available and are the default. To use the organization as the billing entity, pass `customerType: "organization"`:
