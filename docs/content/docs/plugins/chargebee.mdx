@@ -149,6 +149,32 @@ chargebee({
 })
 ```
 
+#### Passing Additional Customer Params
+
+Better Auth stores names in a single `user.name` field. If you want to pass `first_name`, `last_name`, or any other Chargebee customer field at creation time, use `getCustomerCreateParams`:
+
+```ts title="auth.ts"
+chargebee({
+    // ... other options
+    createCustomerOnSignUp: true,
+    getCustomerCreateParams: (user) => {
+        const [firstName, ...rest] = (user.name ?? "").split(" ");
+        return {
+            first_name: firstName || undefined,
+            last_name: rest.join(" ") || undefined,
+            // phone: user.phoneNumber,
+            // any other Chargebee Customer.CreateInputParam fields
+        };
+    },
+})
+```
+
+The callback receives the `user` object and an optional `ctx` (request context — only available when the customer is created on-demand at subscription time, not during sign-up).
+
+<Callout type="info">
+`getCustomerCreateParams` applies to both `createCustomerOnSignUp` and on-demand customer creation (e.g. when a user subscribes for the first time without prior sign-up creation). For organizations, use `organization.getCustomerCreateParams` instead.
+</Callout>
+
 ### Subscription Management
 
 #### Defining Plans
@@ -879,6 +905,7 @@ chargebee({
 | `webhookUsername`         | `string`   | Username for Basic Auth on the webhook endpoint. Recommended in production.                   |
 | `webhookPassword`         | `string`   | Password for Basic Auth on the webhook endpoint. Recommended in production.                   |
 | `createCustomerOnSignUp`  | `boolean`  | Whether to automatically create a Chargebee customer when a user signs up. Default: `false`.  |
+| `getCustomerCreateParams` | `function` | Return additional params passed to `cb.customer.create` for user customers (e.g. `first_name`, `last_name`). Receives `user` and an optional `ctx`. |
 | `onCustomerCreate`        | `function` | Callback called after a customer is created. Receives `{ chargebeeCustomer, user }`.          |
 | `webhookHandler`          | `function` | Callback receiving the webhook handler instance. Call `handler.on(EventType, fn)` to register typed event listeners. |
 | `subscription`            | `object`   | Subscription configuration. See [below](#subscription-options).                               |
