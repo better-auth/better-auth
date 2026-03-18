@@ -96,7 +96,7 @@ async function fetchGitHubStats(): Promise<{
 		return { stars, contributors: contributorsCount };
 	} catch (error) {
 		console.error("Error fetching GitHub stats:", error);
-		return { stars: 27000, contributors: staticContributorsCount };
+		return { stars: 26000, contributors: staticContributorsCount };
 	}
 }
 
