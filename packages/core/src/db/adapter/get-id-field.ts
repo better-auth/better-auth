@@ -57,18 +57,29 @@ export const initGetIdField = ({
 						defaultValue() {
 							if (disableIdGeneration) return undefined;
 							const generateId = options.advanced?.database?.generateId;
-							if (generateId === false || useNumberId) return undefined;
+
+							// let the database handle id generation
+							if (generateId === false || generateId === "serial")
+								return undefined;
+
+							// user-provided function takes highest priority
 							if (typeof generateId === "function") {
 								return generateId({
 									model,
 								});
 							}
-							if (customIdGenerator) {
-								return customIdGenerator({ model });
-							}
+
+							// user-provided "uuid" option
 							if (generateId === "uuid") {
 								return crypto.randomUUID();
 							}
+
+							// database adapter-level custom id generator
+							if (customIdGenerator) {
+								return customIdGenerator({ model });
+							}
+
+							// fallback to default id generation
 							return defaultGenerateId();
 						},
 					}
