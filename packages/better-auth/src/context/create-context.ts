@@ -247,6 +247,13 @@ Most of the features of Better Auth will not work correctly.`,
 
 	const hasPluginFn = (id: string) => pluginIds.has(id);
 
+	const getExtensionsFn = (hostId: string) =>
+		(options.plugins ?? [])
+			.map(
+				(p) => (p.extensions as Record<string, unknown> | undefined)?.[hostId],
+			)
+			.filter((ext): ext is NonNullable<typeof ext> => ext != null);
+
 	const trustedOrigins = await getTrustedOrigins(options);
 	const trustedProviders = await getTrustedProviders(options);
 
@@ -398,6 +405,7 @@ Most of the features of Better Auth will not work correctly.`,
 		},
 		getPlugin: getPluginFn,
 		hasPlugin: hasPluginFn as never,
+		getExtensions: getExtensionsFn as never,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

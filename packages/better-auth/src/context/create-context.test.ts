@@ -1908,4 +1908,90 @@ describe("base context creation", () => {
 			expect(ctx.hasPlugin("plugin-4")).toBe(false);
 		});
 	});
+
+	describe("getExtensions", () => {
+		it("should return empty array when no plugins have extensions", async () => {
+			const ctx = await initBase({
+				plugins: [{ id: "plain-plugin" }],
+			});
+			const result = ctx.getExtensions("nonexistent" as never);
+			expect(result).toEqual([]);
+		});
+
+		it("should collect extensions from multiple plugins", async () => {
+			const ext1 = { grantTypes: { "custom:a": () => {} } };
+			const ext2 = { grantTypes: { "custom:b": () => {} } };
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "plugin-a",
+						extensions: { "test-host": ext1 } as never,
+					},
+					{
+						id: "plugin-b",
+						extensions: { "test-host": ext2 } as never,
+					},
+				],
+			});
+			const result = ctx.getExtensions("test-host" as never);
+			expect(result).toHaveLength(2);
+			expect(result[0]).toBe(ext1);
+			expect(result[1]).toBe(ext2);
+		});
+
+		it("should skip plugins without extensions", async () => {
+			const ext = { metadata: () => ({}) };
+			const ctx = await initBase({
+				plugins: [
+					{ id: "no-ext" },
+					{
+						id: "with-ext",
+						extensions: { "test-host": ext } as never,
+					},
+					{ id: "also-no-ext" },
+				],
+			});
+			const result = ctx.getExtensions("test-host" as never);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toBe(ext);
+		});
+	});
+
+	describe("plugin dependencies", () => {
+		it("should throw when a dependency is missing", async () => {
+			await expect(
+				initBase({
+					plugins: [
+						{
+							id: "child-plugin",
+							dependencies: ["missing-parent"],
+						},
+					],
+				}),
+			).rejects.toThrow(
+				'Plugin "child-plugin" requires plugin "missing-parent" which is not installed',
+			);
+		});
+
+		it("should pass when all dependencies are present", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{ id: "parent-plugin" },
+					{
+						id: "child-plugin",
+						dependencies: ["parent-plugin"],
+					},
+				],
+			});
+			expect(ctx).toBeDefined();
+			expect(ctx.hasPlugin("child-plugin")).toBe(true);
+		});
+
+		it("should pass when plugin has no dependencies field", async () => {
+			const ctx = await initBase({
+				plugins: [{ id: "standalone-plugin" }],
+			});
+			expect(ctx).toBeDefined();
+		});
+	});
 });
