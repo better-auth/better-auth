@@ -195,6 +195,33 @@ type getOAuthClientPublic = {
 ```
 </APIMethod>
 
+#### Get Public Client Prelogin
+
+To obtain a public client prior to login, you must first enable the endpoint in your configuration:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowPublicClientPrelogin: true,
+})
+```
+
+Then, the following endpoint will obtain public client information.
+
+<APIMethod path="/oauth2/public-client-prelogin" method="POST">
+```ts
+type getOAuthClientPublicPrelogin = {
+  /**
+   * The OAuth client's client_id
+   */
+  client_id: string,
+  /**
+   * Valid oauth query parameters (Sent automatically when using the provided client)
+   */
+  oauth_query: string
+}
+```
+</APIMethod>
+
 #### List Clients
 
 To obtain a list of clients owned by a specific user or organization, use the following endpoint:
