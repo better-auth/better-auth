@@ -1,4 +1,5 @@
 import { createAuthClient } from "better-auth/client";
+import { makeSignature } from "better-auth/crypto";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
@@ -11,7 +12,7 @@ describe("oauthClient", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
 			oauthProvider({
@@ -21,6 +22,7 @@ describe("oauthClient", async () => {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
 				},
+				allowPublicClientPrelogin: true,
 			}),
 			jwt(),
 		],
@@ -96,6 +98,27 @@ describe("oauthClient", async () => {
 			query: {
 				client_id: oauthUiClient.client_id,
 			},
+		});
+		expect(client.data).toMatchObject({
+			client_id: oauthUiClient.client_id,
+			...testUiClientInput,
+		});
+	});
+
+	it("should get public-only information about a client prelogin", async () => {
+		// Creates mock valid search params
+		const signedParams = new URLSearchParams({
+			exp: `${Math.floor(Date.now() / 1000) + 60}`,
+		});
+		const sig = await makeSignature(
+			signedParams.toString(),
+			(auth.options as unknown as { secret: string }).secret,
+		);
+		signedParams.set("sig", sig);
+
+		const client = await authClient.oauth2.publicClientPrelogin({
+			client_id: oauthUiClient.client_id,
+			oauth_query: signedParams.toString(),
 		});
 		expect(client.data).toMatchObject({
 			client_id: oauthUiClient.client_id,
