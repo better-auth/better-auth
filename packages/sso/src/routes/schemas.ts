@@ -38,6 +38,17 @@ const oidcConfigSchema = z.object({
 	pkce: z.boolean().optional(),
 	overrideUserInfo: z.boolean().optional(),
 	mapping: oidcMappingSchema,
+	prompt: z
+		.enum([
+			"none",
+			"login",
+			"create",
+			"consent",
+			"select_account",
+			"select_account consent",
+			"login consent",
+		])
+		.optional(),
 });
 
 const samlConfigSchema = z.object({
