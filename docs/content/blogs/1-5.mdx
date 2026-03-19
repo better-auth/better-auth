@@ -2,6 +2,7 @@
 title: "Better Auth 1.5"
 description: "Auth CLI, MCP Auth, OAuth 2.1 Provider, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, secret key rotation, and more!"
 date: 2026-02-28
+draft: true
 author:
   name: "Alex Yang"
   avatar: "/avatars/alex.png"
@@ -268,6 +269,87 @@ export const auth = betterAuth({
 - **OIDC ID token `aud` claim validation**: Verify audience in OpenID Connect flows.
 - **Provider CRUD endpoints**: List, get, update, and delete SSO providers via API.
 - **Shared OIDC redirect URI**: Single redirect URI for all OIDC providers.
+
+---
+
+### API Key Plugin
+
+The API Key plugin has received some major improvements.
+
+We've extracted the plugin into it's own package, install it via:
+
+```package-install
+npm install @better-auth/api-key
+```
+
+And update your imports!
+
+```diff title="auth.ts"
+- import { apiKey } from "better-auth/plugins";
++ import { apiKey } from "@better-auth/api-key";
+```
+
+```diff title="auth-client.ts"
+- import { apiKeyClient } from "better-auth/client/plugins";
++ import { apiKeyClient } from "@better-auth/api-key/client";
+```
+
+#### Organization owned API Keys
+
+Long awaited support for organization-owned API keys has been added.
+You can now create API keys that are owned by organizations instead of users.
+
+```ts
+import { apiKey } from "@better-auth/api-key";
+
+export const auth = betterAuth({
+    plugins: [apiKey({ references: "organization" })],
+});
+```
+
+And creating a organization-owned API key:
+
+```ts
+import { auth } from "@/lib/auth";
+
+const apiKey = await auth.api.createApiKey({
+    body: { organizationId: "org_123" },
+});
+```
+
+#### Multiple configurations for API Keys
+
+You can now support multiple api-key use-cases within your app!
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        apiKey([
+            {
+                configId: "user-keys",
+                prefix: "usr_"
+            },
+            {
+                configId: "org-keys",
+                prefix: "org_",
+                references: "organization"
+            }
+        ])
+    ]
+});
+```
+
+To create an API Key for a given configuration, call:
+
+```ts
+const key = auth.api.createApiKey({
+    body: {
+        configId: "user-keys",
+        //...
+    }
+});
+```
+
 
 ---
 
@@ -681,6 +763,10 @@ export const auth = betterAuth({
 + const ownerType = apiKey.references; // "user" or "organization"
 + const configId = apiKey.configId;
 ```
+
+**Permission changes:**
+The `updateApiKey` endpoint now requires at least a `userId` parameter or headers to be passed on the server side.
+If you didn't provide this in previous version, you're now required to pass them.
 
 ---
 

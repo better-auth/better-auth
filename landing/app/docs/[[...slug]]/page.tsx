@@ -13,12 +13,12 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
+import { Features } from "@/components/docs/features";
 import {
 	AddToCursor,
 	DatabaseTable,
 	DividerText,
 	Endpoint,
-	Features,
 	ForkButton,
 	GenerateAppleJwt,
 	GenerateSecret,

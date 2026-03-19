@@ -281,14 +281,14 @@ export function EnterprisePageClient() {
 										<p className="mt-4 text-foreground/40 dark:text-foreground/30 text-[10px] leading-relaxed">
 											By submitting, you agree to our{" "}
 											<Link
-												href="/legal/terms"
+												href="/terms"
 												className="underline hover:text-foreground/55"
 											>
 												Terms of Service
 											</Link>{" "}
 											and{" "}
 											<Link
-												href="/legal/privacy"
+												href="/privacy"
 												className="underline hover:text-foreground/55"
 											>
 												Privacy Policy

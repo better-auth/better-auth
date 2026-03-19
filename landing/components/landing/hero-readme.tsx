@@ -1383,7 +1383,7 @@ function ReadmeFooter({
 
 				<div className="flex items-center justify-center gap-4 mt-4">
 					<a
-						href="https://dash.better-auth.com/sign-in"
+						href="/sign-in"
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
 					>
 						Get Started
@@ -1476,7 +1476,7 @@ function ReadmeFooter({
 					</div>
 
 					<div className="flex items-center justify-between w-full sm:w-auto sm:gap-4 shrink-0">
-						<span className="text-[10px] text-foreground/50 font-mono">
+						<span className="text-[10px] text-foreground font-mono">
 							© {new Date().getFullYear()} Better Auth Inc.
 						</span>
 						<div className="flex items-center gap-3 sm:gap-4">
@@ -1551,7 +1551,7 @@ export function HeroReadMe({
 
 						<div className="flex items-center gap-3 my-4">
 							<div className="flex-1 border-t border-foreground/6"></div>
-							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Trusted By
 							</span>
 						</div>
@@ -1559,7 +1559,7 @@ export function HeroReadMe({
 						<TrustedBy />
 
 						<div className="flex items-center gap-3 my-4">
-							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Features
 							</span>
 							<div className="flex-1 border-t border-foreground/10"></div>
@@ -2240,10 +2240,10 @@ export function HeroReadMe({
 						{/* Infrastructure transition */}
 						<div className="mt-16 mb-8">
 							<div className="flex items-center gap-4">
-								<span className="text-lg sm:text-xl font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+								<span className="text-lg sm:text-xl font-bold text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 									Infrastructure
 								</span>
-								<div className="flex-1 border-t border-foreground/10" />
+								<div className="flex-1 border-t border-foreground/15" />
 							</div>
 							<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-xl">
 								Managed infrastructure on top of the open-source framework.

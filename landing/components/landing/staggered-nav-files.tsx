@@ -602,7 +602,7 @@ export function StaggeredNavFiles() {
 						className="flex items-stretch shrink-0"
 					>
 						<a
-							href="https://dash.better-auth.com/sign-in"
+							href="/sign-in"
 							className="flex items-center cursor-pointer gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
 						>
 							<span className="font-mono text-xs uppercase tracking-wider">
@@ -872,7 +872,7 @@ export function StaggeredNavFiles() {
 										className="px-5 pt-4"
 									>
 										<a
-											href="https://dash.better-auth.com/sign-in"
+											href="/sign-in"
 											onClick={() => setMobileMenuOpen(false)}
 											className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
 										>

@@ -1193,8 +1193,8 @@ export function AiNativeSection() {
 	return (
 		<div className="mt-8">
 			<div className="flex items-center gap-3 mb-3">
-				<div className="flex-1 border-t border-foreground/10" />
-				<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+				<div className="flex-1 border-t border-foreground/[0.06]" />
+				<span className="text-[10px] text-foreground/70 dark:text-foreground/55 font-mono tracking-wider uppercase shrink-0">
 					AI Native
 				</span>
 			</div>

@@ -48,11 +48,11 @@ export const metadata: Metadata = {
 		apple: "/favicon/apple-touch-icon.png",
 	},
 	openGraph: {
-		images: ["/og.png"],
+		images: ["https://docs.better-auth.com/og.png"],
 	},
 	twitter: {
 		card: "summary_large_image",
-		images: ["/og.png"],
+		images: ["https://docs.better-auth.com/og.png"],
 	},
 };
 
