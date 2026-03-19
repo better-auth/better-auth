@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "postinstall": "fumadocs-mdx",
-    "dev": "next dev --turbopack --port 3000",
+    "dev": "next dev --port 3000",
     "build": "next build",
     "postbuild": "pnpm sync-typesense",
     "start": "next start",

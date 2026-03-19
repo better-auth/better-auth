@@ -24,7 +24,12 @@ export function HeroTitle() {
 			className="relative z-[2] w-full py-16 flex flex-col justify-center h-full pointer-events-none"
 		>
 			<div className="space-y-2 sm:space-y-1">
-				<div className="flex items-center gap-1.5">
+				<a
+					href="https://agentauthprotocol.com"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="relative inline-flex items-center gap-1.5 px-2.5 py-1 pointer-events-auto group/badge rounded-full bg-neutral-200/80 dark:bg-neutral-800/80 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/50 transition-colors"
+				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="0.9em"
@@ -38,10 +43,28 @@ export function HeroTitle() {
 							d="M13 4V2c4.66.5 8.33 4.19 8.85 8.85c.6 5.49-3.35 10.43-8.85 11.03v-2c3.64-.45 6.5-3.32 6.96-6.96A7.994 7.994 0 0 0 13 4m-7.33.2A9.8 9.8 0 0 1 11 2v2.06c-1.43.2-2.78.78-3.9 1.68zM2.05 11a9.8 9.8 0 0 1 2.21-5.33L5.69 7.1A8 8 0 0 0 4.05 11zm2.22 7.33A10.04 10.04 0 0 1 2.06 13h2c.18 1.42.75 2.77 1.63 3.9zm1.4 1.41l1.39-1.37h.04c1.13.88 2.48 1.45 3.9 1.63v2c-1.96-.21-3.82-1-5.33-2.26M12 17l1.56-3.42L17 12l-3.44-1.56L12 7l-1.57 3.44L7 12l3.43 1.58z"
 						/>
 					</svg>
-					<span className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-100">
-						Own Your Auth
+					<span className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-100 font-light">
+						Introducing{" "}
+						<span className="font-normal">| Agent Auth Protocol</span>
 					</span>
-				</div>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="0.85em"
+						height="0.85em"
+						viewBox="0 0 24 24"
+						className="text-neutral-500 dark:text-neutral-400 transition-transform group-hover/badge:translate-x-0.5"
+						aria-hidden="true"
+					>
+						<path
+							fill="none"
+							stroke="currentColor"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="2"
+							d="M5 12h14m-6-6l6 6l-6 6"
+						/>
+					</svg>
+				</a>
 				<h1 className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 					The most comprehensive authentication framework for{" "}
 					<span className="relative inline-flex overflow-hidden align-bottom">

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { ai } from "./commands/ai";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
@@ -30,6 +31,7 @@ async function main() {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
 	program
+		.addCommand(ai)
 		.addCommand(init)
 		.addCommand(migrate)
 		.addCommand(generate)
