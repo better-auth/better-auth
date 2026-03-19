@@ -43,11 +43,11 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0"
+    "@better-auth/utils": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.1",
+    "@better-auth/utils": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
