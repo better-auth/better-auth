@@ -142,6 +142,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (config.storeInDatabase) return;
 						const lastUsedLoginMethod =
 							config.customResolveMethod?.(ctx) ?? defaultResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
