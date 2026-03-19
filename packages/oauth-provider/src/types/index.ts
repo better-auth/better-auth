@@ -803,6 +803,12 @@ export interface VerificationValue {
 	userId: string;
 	referenceId?: string;
 	authTime?: number;
+	/**
+	 * When set, the token response will include `auth_session` for
+	 * first-party app step-up re-authentication. Only set this field
+	 * from trusted server-side code — never from client input.
+	 */
+	authSession?: string;
 }
 
 /**

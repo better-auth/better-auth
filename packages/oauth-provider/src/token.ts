@@ -375,6 +375,9 @@ async function createUserTokens(
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
 	authTime?: Date,
+	extra?: {
+		tokenResponse?: Record<string, unknown>;
+	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -484,6 +487,7 @@ async function createUserTokens(
 
 	return ctx.json(
 		{
+			...extra?.tokenResponse,
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
@@ -762,6 +766,10 @@ async function handleAuthorizationCodeGrant(
 			? new Date(verificationValue.authTime)
 			: new Date(session.createdAt);
 
+	const extra = verificationValue.authSession
+		? { tokenResponse: { auth_session: verificationValue.authSession } }
+		: undefined;
+
 	return createUserTokens(
 		ctx,
 		opts,
@@ -773,6 +781,7 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.query?.nonce,
 		undefined,
 		authTime,
+		extra,
 	);
 }
 
