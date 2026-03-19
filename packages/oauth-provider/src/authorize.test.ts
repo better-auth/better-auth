@@ -369,3 +369,223 @@ describe("oauth authorize - authenticated", async () => {
 		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
 });
+
+describe("oauth authorize - custom validateRedirectUri", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+
+	// Custom validation function that accepts any localhost subdomain
+	// This simulates wildcard matching like *.localhost
+	const customValidator = (uri: string, registeredUris: string[]): boolean => {
+		// First check exact match
+		if (registeredUris.includes(uri)) {
+			return true;
+		}
+		// Allow any *.localhost subdomain if localhost is registered
+		try {
+			const url = new URL(uri);
+			if (url.hostname.endsWith(".localhost")) {
+				// Check if base localhost pattern is registered
+				return registeredUris.some((registered) => {
+					const registeredUrl = new URL(registered);
+					return (
+						registeredUrl.hostname === "localhost" &&
+						registeredUrl.port === url.port &&
+						registeredUrl.pathname === url.pathname
+					);
+				});
+			}
+		} catch {
+			return false;
+		}
+		return false;
+	};
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				validateRedirectUri: customValidator,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	// Register with base localhost URI
+	const registeredUri = `${rpBaseUrl}/callback`;
+	// Use a subdomain that matches our custom validator logic
+	const subdomainUri = "http://pr-123.localhost:5000/callback";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		oauthClient = response;
+	});
+
+	it("should accept redirect_uri matching custom validation logic", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(64);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+			},
+			redirectURI: subdomainUri,
+			state: "custom-validator-test",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		// Should redirect to the subdomain URI with authorization code
+		expect(callbackRedirectUrl).toContain("pr-123.localhost");
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).toContain("state=custom-validator-test");
+	});
+
+	it("should reject redirect_uri not matching custom validation", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+		// Use a completely different domain
+		const unauthorizedUri = "http://localhost:9999/evil";
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", unauthorizedUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "unauthorized-test");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let errorRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		// Should redirect to error page, not the unauthorized URI
+		expect(errorRedirectUrl).toContain("error=invalid_redirect");
+		expect(errorRedirectUrl).not.toContain("localhost:9999");
+	});
+});
+
+describe("oauth authorize - validateRedirectUri error handling", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+
+	// Validator that throws an error for certain URIs
+	const throwingValidator = (
+		uri: string,
+		_registeredUris: string[],
+	): boolean => {
+		if (uri.includes("throw-error")) {
+			throw new Error("Validator intentionally threw");
+		}
+		return uri === "http://localhost:5000/callback";
+	};
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				validateRedirectUri: throwingValidator,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const redirectUri = `${rpBaseUrl}/callback`;
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		oauthClient = response;
+	});
+
+	it("should fail closed when validator throws an exception", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+		// Use a URI that will cause the validator to throw
+		const throwingUri = "http://throw-error.localhost:5000/callback";
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", throwingUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "validator-throws-test");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let errorRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		// Should fail closed - redirect to error page, not the attacker URI
+		expect(errorRedirectUrl).toContain("error=invalid_redirect");
+		expect(errorRedirectUrl).not.toContain("throw-error");
+	});
+});
