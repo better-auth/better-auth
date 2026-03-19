@@ -510,7 +510,12 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 
-	// Validator that throws an error for certain URIs
+	// URI that is registered AND triggers the validator to throw
+	// This tests fail-closed behavior: if error handling incorrectly fell back
+	// to exact-match, this URI would pass (since it's registered)
+	const registeredThrowingUri = `${rpBaseUrl}/throw-error-callback`;
+
+	// Validator that throws an error for URIs containing "throw-error"
 	const throwingValidator = (
 		uri: string,
 		_registeredUris: string[],
@@ -518,7 +523,7 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 		if (uri.includes("throw-error")) {
 			throw new Error("Validator intentionally threw");
 		}
-		return uri === "http://localhost:5000/callback";
+		return uri === `${rpBaseUrl}/callback`;
 	};
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -547,13 +552,15 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 	});
 
 	let oauthClient: OAuthClient | null;
-	const redirectUri = `${rpBaseUrl}/callback`;
 
 	beforeAll(async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
-				redirect_uris: [redirectUri],
+				// Register BOTH URIs - the normal one and the one that triggers throw
+				// This makes the test discriminating: if fail-closed incorrectly
+				// fell back to exact-match, registeredThrowingUri would pass
+				redirect_uris: [`${rpBaseUrl}/callback`, registeredThrowingUri],
 				skip_consent: true,
 			},
 		});
@@ -565,12 +572,12 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 		if (!oauthClient?.client_id) {
 			throw Error("beforeAll not run properly");
 		}
-		// Use a URI that will cause the validator to throw
-		const throwingUri = "http://throw-error.localhost:5000/callback";
-
+		// Use a registered URI that causes the validator to throw
+		// If fail-closed is broken and falls back to exact-match, this would PASS
+		// (because registeredThrowingUri IS in redirect_uris)
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", oauthClient.client_id);
-		authUrl.searchParams.set("redirect_uri", throwingUri);
+		authUrl.searchParams.set("redirect_uri", registeredThrowingUri);
 		authUrl.searchParams.set("response_type", "code");
 		authUrl.searchParams.set("scope", "openid");
 		authUrl.searchParams.set("state", "validator-throws-test");
@@ -584,7 +591,9 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 			},
 		});
 
-		// Should fail closed - redirect to error page, not the attacker URI
+		// Should fail closed - redirect to error page, not the registered URI
+		// This verifies fail-closed behavior: the URI is registered, but since
+		// the validator threw, we must reject it rather than fall back to exact-match
 		expect(errorRedirectUrl).toContain("error=invalid_redirect");
 		expect(errorRedirectUrl).not.toContain("throw-error");
 	});
