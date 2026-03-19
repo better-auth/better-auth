@@ -201,3 +201,4 @@ test-results/
 state.txt
 
 .cursor/
+.warden/
