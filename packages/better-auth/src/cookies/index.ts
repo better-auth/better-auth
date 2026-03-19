@@ -252,11 +252,27 @@ export async function setCookieCache(
 		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
 	}
 
-	// Refresh account cookie to keep it in sync
+	// Refresh account cookie to keep its expiry in sync with the session cache.
+	// However, if the account cookie was already set in this response (e.g. by
+	// handleOAuthUserInfo during an OAuth callback), skip the refresh. Reading
+	// from the incoming request would return stale data and overwrite the fresh
+	// cookie that was just set.
+	//
+	// Note: we use ctx.responseHeaders (better-call's internal accumulator) rather
+	// than ctx.context.responseHeaders. The latter is populated by to-auth-endpoints.ts
+	// only after the handler returns, so it is undefined during handler execution.
 	if (ctx.context.options.account?.storeAccountCookie) {
-		const accountData = await getAccountCookie(ctx);
-		if (accountData) {
-			await setAccountCookie(ctx, accountData);
+		const setCookieHeader = ctx.responseHeaders?.get("set-cookie") || "";
+		const accountCookieName = ctx.context.authCookies.accountData.name;
+		const alreadySetInResponse = setCookieHeader.includes(
+			`${accountCookieName}=`,
+		);
+
+		if (!alreadySetInResponse) {
+			const accountData = await getAccountCookie(ctx);
+			if (accountData) {
+				await setAccountCookie(ctx, accountData);
+			}
 		}
 	}
 }
