@@ -5,15 +5,16 @@ description: Agent identity, registration, discovery, and capability-based autho
 
 `AI Agents` `MCP` `Capabilities`
 
-The Agent Auth plugin lets your Better Auth server act as an **Agent Auth provider**. It's a server implementation of the [Agent Auth Protocol](https://agentauthprotocol.com). 
+The Agent Auth plugin lets your Better Auth server act as an **Agent Auth provider**. It's a server implementation of the [Agent Auth Protocol](https://agentauthprotocol.com).
 
-It gives AI agents a standard way to discover your service, register themselves, request approval, and execute scoped capabilities using short-lived signed JWTs.
+It gives AI agents a standard way to discover your service, register themselves, request approval, and execute scoped capabilities using short-lived signed JWTs. It comes with adapters for **OpenAPI** and **MCP** — so you can turn an existing REST API or MCP server into an agent-auth-enabled service without writing capabilities by hand.
 
 ## Features
 
-- Discovery document at `/.well-known/agent-configuration` (including `default_location` for execute)
-- Agent and host registration
-- Capability listing, description, and execution
+- **OpenAPI adapter** — derive capabilities, input/output schemas, and a proxy `onExecute` handler directly from an OpenAPI 3.x spec
+- **MCP adapter** — expose agent auth as MCP tools so any MCP-compatible AI agent can discover and call your capabilities
+- Discovery document at `/.well-known/agent-configuration`
+- Capability listing, description, and execution (optional per-capability `location` URLs)
 - Delegated and autonomous agent modes
 - Device authorization and CIBA approval flows
 - Short-lived signed JWTs with replay protection
@@ -176,6 +177,126 @@ export async function GET() {
 <Callout>
   The discovery route should live at `/.well-known/agent-configuration`, even if your Better Auth base path is `/api/auth`.
 </Callout>
+
+## OpenAPI Adapter
+
+If your service already has an OpenAPI spec, you can turn the entire API into an agent-auth provider in a few lines. **`createFromOpenAPI`** reads the spec and produces everything the plugin needs: capabilities (one per `operationId`), input/output JSON Schemas, a proxy **`onExecute`** handler, and optionally **`providerName`** / **`providerDescription`** from `info`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { agentAuth } from "@better-auth/agent-auth";
+import { createFromOpenAPI } from "@better-auth/agent-auth/openapi";
+
+const spec = await fetch("https://api.example.com/openapi.json").then((r) =>
+  r.json(),
+);
+
+export const auth = betterAuth({
+  plugins: [
+    agentAuth({
+      ...createFromOpenAPI(spec, {
+        baseUrl: "https://api.example.com",
+      }),
+    }),
+  ],
+});
+```
+
+That is all it takes. Every operation with an `operationId` in the spec becomes a capability whose name is that id. Path, query, and header parameters plus the JSON request body are merged into a single `input` schema, and the 200/201 response body becomes `output`.
+
+### Upstream authentication
+
+The proxy handler calls your upstream API on behalf of the agent. Use **`resolveHeaders`** to inject the credentials each request needs (for example an internal service token or a user-scoped access token looked up from `agentSession`).
+
+```ts title="auth.ts"
+createFromOpenAPI(spec, {
+  baseUrl: "https://api.example.com",
+  async resolveHeaders({ agentSession }) {
+    const token = await getAccessToken(agentSession.user.id);
+    return { Authorization: `Bearer ${token}` };
+  },
+});
+```
+
+### Default host capabilities
+
+Control which capabilities are auto-granted to new hosts. You can pass `true` (all), a single HTTP method string, an array of methods, or a callback that receives the full runtime context.
+
+```ts title="auth.ts"
+createFromOpenAPI(spec, {
+  baseUrl: "https://api.example.com",
+  defaultHostCapabilities: ["GET", "HEAD"],
+});
+```
+
+### Approval strength per method
+
+Map HTTP methods to **`approvalStrength`** so mutating operations require stronger user verification (for example WebAuthn) while reads use a normal session.
+
+```ts title="auth.ts"
+createFromOpenAPI(spec, {
+  baseUrl: "https://api.example.com",
+  approvalStrength: {
+    GET: "session",
+    POST: "webauthn",
+    PUT: "webauthn",
+    DELETE: "webauthn",
+  },
+});
+```
+
+### Per-capability `location`
+
+When you set **`location`**, every derived capability gets that URL. Agents call it directly (with the agent JWT) instead of going through the default execute endpoint—useful when you want the agent to hit the real API URL and handle the session in your own middleware rather than proxying through `onExecute`.
+
+```ts title="auth.ts"
+createFromOpenAPI(spec, {
+  baseUrl: "https://api.example.com",
+  location: "https://api.example.com/agent/execute",
+});
+```
+
+### Using the pieces individually
+
+If you only need part of the pipeline, the adapter also exports the lower-level helpers:
+
+- **`fromOpenAPI(spec)`** — returns `Capability[]` only (no handler, no host caps).
+- **`createOpenAPIHandler(spec, opts)`** — returns only the `onExecute` proxy handler so you can pair it with hand-written capabilities or filter the spec yourself.
+
+```ts title="auth.ts"
+import {
+  fromOpenAPI,
+  createOpenAPIHandler,
+} from "@better-auth/agent-auth/openapi";
+
+const capabilities = fromOpenAPI(spec);
+const onExecute = createOpenAPIHandler(spec, {
+  baseUrl: "https://api.example.com",
+});
+
+agentAuth({ capabilities, onExecute });
+```
+
+## MCP Adapter
+
+The SDK and CLI ship with MCP support so any MCP-compatible AI agent (Cursor, Claude Desktop, Windsurf, etc.) can discover and use agent-auth providers through MCP tools.
+
+```bash
+agent-auth mcp
+```
+
+This starts an MCP server (over stdio) that exposes tools like **`search`**, **`connect_agent`**, **`execute_capability`**, and **`batch_execute_capabilities`**. The agent discovers providers, connects, gets user approval, and executes capabilities — all through the standard MCP tool interface.
+
+You can also use the SDK's tool adapters directly if you're building your own MCP server or using another tool-calling framework:
+
+```ts
+import { AgentAuthClient, getAgentAuthTools } from "@auth/agent";
+
+const client = new AgentAuthClient({ registryUrl: "https://registry.example.com" });
+const tools = getAgentAuthTools(client);
+```
+
+The returned tools are framework-agnostic (name, JSON Schema parameters, execute function). The SDK includes built-in adapters for **MCP**, **OpenAI function calling**, **Vercel AI SDK**, and **Anthropic Claude** — or you can wire them into any tool-calling runtime yourself.
 
 ## Capabilities
 
@@ -340,30 +461,6 @@ agentAuth({
   The plugin does not render the device approval UI for you. Your app must provide the page referenced by `deviceAuthorizationPage`.
 </Callout>
 
-
-## OpenAPI-Derived Capabilities
-
-If your service already has an OpenAPI document, you can derive Agent Auth capabilities from it instead of writing each one by hand.
-
-```ts title="auth.ts"
-import { createFromOpenAPI } from "@better-auth/agent-auth/openapi";
-
-const openapi = createFromOpenAPI(spec, {
-  baseUrl: "https://api.example.com",
-  defaultHostCapabilities: "GET",
-});
-
-export const auth = betterAuth({
-  plugins: [
-    agentAuth({
-      ...openapi,
-      providerName: "Example API",
-    }),
-  ],
-});
-```
-
-This is especially useful when you want to turn an existing REST API into a capability-driven interface for agents.
 
 ## Events and Auditing
 
