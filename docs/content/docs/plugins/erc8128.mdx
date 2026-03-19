@@ -1,0 +1,642 @@
+---
+title: ERC-8128
+description: Authenticate requests with Ethereum accounts using HTTP Message Signatures
+---
+
+[ERC-8128](https://erc8128.org) is a signature-based authentication standard built on [RFC 9421 (HTTP Message Signatures)](https://www.rfc-editor.org/rfc/rfc9421). The client signs each request with an Ethereum account, binding identity and intent to every request, and the server verifies it cryptographically. Signatures are controlled by the client and can be request-bound or class-bound, with or without replay protection, while the server always accepts the strongest security posture (non-replayable, request-bound). Since no credential exchange or login is needed, authentication is zero-round-trip by design and the same flow works for humans, backend services, and AI agents.
+
+This plugin integrates ERC-8128 into Better Auth with two modes: **session-based authentication** (sign once via `/erc8128/verify`, get a session, use cookies normally) and **per-request authentication** where every call is individually signed.
+
+## Quick Start
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { erc8128 } from "better-auth/plugins";
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
+
+const publicClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
+
+export const auth = betterAuth({
+  plugins: [
+    erc8128({
+      verifyMessage: publicClient.verifyMessage,
+      authPrecedence: "signature-first",
+      routePolicy: {
+        "/feed": { methods: ["GET"], replayable: true },
+        "/verify": { methods: ["DELETE"], replayable: false },
+      },
+    }),
+  ],
+});
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { erc8128Client } from "better-auth/client/plugins";
+import { createWalletClient, custom } from "viem";
+import { mainnet } from "viem/chains";
+
+const wallet = createWalletClient({
+  chain: mainnet,
+  transport: custom(window.ethereum!),
+});
+const [address] = await wallet.getAddresses();
+
+export const authClient = createAuthClient({
+  plugins: [
+    erc8128Client({
+      signer: {
+        address,
+        chainId: mainnet.id,
+        signMessage: (message) =>
+          wallet.signMessage({ account: address, message: { raw: message } }),
+      },
+    }),
+  ],
+});
+```
+
+```ts title="App route"
+const result = await auth.api.erc8128.protect(request);
+
+if (!result.ok) {
+  return result.response;
+}
+
+const user = result.principal?.user ?? null;
+const session = result.principal?.session ?? null;
+```
+
+If the request already goes through `auth.handler`, the plugin runs automatically. `authPrecedence: "signature-first"` makes ERC-8128 win when both a Better Auth session and signature headers are present.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the Server Plugin
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { erc8128 } from "better-auth/plugins"; // [!code highlight]
+        import { createPublicClient, http } from "viem";
+        import { mainnet } from "viem/chains";
+
+        const publicClient = createPublicClient({
+            chain: mainnet,
+            transport: http(),
+        });
+
+        export const auth = betterAuth({
+            plugins: [
+                erc8128({ // [!code highlight]
+                    verifyMessage: publicClient.verifyMessage, // [!code highlight]
+                }), // [!code highlight]
+            ],
+        });
+        ```
+    </Step>
+
+    <Step>
+        ### Migrate the Database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```package-install
+            npx auth migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```package-install
+            npx auth generate
+            ```
+            </Tab>
+        </Tabs>
+
+        See the [Schema](#schema) section to add fields manually.
+    </Step>
+
+    <Step>
+        ### Add the Client Plugin
+
+        Pass a `signer` to sign every request automatically.
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client";
+        import { erc8128Client } from "better-auth/client/plugins"; // [!code highlight]
+        import { createWalletClient, custom } from "viem";
+        import { mainnet } from "viem/chains";
+
+        const wallet = createWalletClient({
+            chain: mainnet,
+            transport: custom(window.ethereum!),
+        });
+        const [address] = await wallet.getAddresses();
+
+        export const authClient = createAuthClient({
+            plugins: [
+                erc8128Client({ // [!code highlight]
+                    signer: { // [!code highlight]
+                        address, // [!code highlight]
+                        chainId: mainnet.id, // [!code highlight]
+                        signMessage: (message) => // [!code highlight]
+                            wallet.signMessage({ account: address, message: { raw: message } }), // [!code highlight]
+                    }, // [!code highlight]
+                }), // [!code highlight]
+            ],
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+Clients authenticate by signing HTTP requests with the [`@slicekit/erc8128`](https://github.com/slice-so/erc8128) library.
+
+### Authentication Modes
+
+The plugin supports two distinct modes, used automatically based on the request headers. Both modes create users and wallet records automatically on first contact.
+
+#### Session-based
+
+**Session-based** authentication trades a single signed request for a session cookie — ideal for browser apps.
+
+A signed `POST` to `/erc8128/verify` verifies the signature, creates a user (if new), starts a session, and sets the session cookie.
+
+#### Per-request
+
+**Per-request** authentication verifies a signature on every call with no sessions involved — suited for backend services, AI agents, and stateless APIs.
+
+This can happen in two ways:
+
+- automatically for requests routed through `auth.handler`
+- explicitly for arbitrary app routes via `auth.api.erc8128.protect(request)` or `auth.api.erc8128.verifyRequest(request)`
+
+When a request to `auth.handler` carries ERC-8128 signature headers (`Signature` + `Signature-Input`) and no valid session cookie is present, the middleware verifies it automatically before the endpoint runs. If the wallet is new, the middleware creates the user and wallet record — no prior call to `/erc8128/verify` is needed. The middleware does not mint or persist a cookie session, but it does populate a request-scoped authenticated identity so Better Auth routes can treat the signer as the current user for that request.
+
+<Callout>
+  The built-in middleware only runs for requests routed through `auth.handler`. For custom app routes outside Better Auth, use the plugin's server API so verification still goes through Better Auth storage, invalidation, and user-linking logic.
+</Callout>
+
+## Protect App Routes
+
+The plugin can protect arbitrary `Request` objects without forcing your app routes through fake Better Auth endpoints.
+
+```ts title="Using it from any framework"
+const result = await auth.api.erc8128.protect(request);
+
+if (!result.ok) {
+  return result.response;
+}
+
+if (result.principal) {
+  // `principal.user` and `principal.session` come from Better Auth infra
+}
+```
+
+`protect(request)` resolves `routePolicy`, verifies the signature, uses Better Auth storage for nonces/invalidation/cache, and returns the request-scoped principal. Public routes return `ok: true` with `authenticated: false`.
+
+If you want strict signature verification without policy-driven pass-through, use `auth.api.erc8128.verifyRequest(request)`.
+
+<Callout>
+  The plugin does not create or choose an RPC transport on its own. Whatever function you pass as `verifyMessage` is the function Better Auth will call for cryptographic verification, including any EOA or ERC-1271 RPC work.
+</Callout>
+
+### Hono
+
+If you already have Better Auth running in Hono, the ERC-8128 integration can stay small:
+
+1. Add the `erc8128` plugin to your Better Auth instance.
+2. Forward `/api/auth/*` to `auth.handler`.
+3. Call `protect()` inside any Hono route that should accept ERC-8128 signatures.
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+import { erc8128, getErc8128Api } from "better-auth/plugins/erc8128";
+import { Hono } from "hono";
+import { createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
+
+const publicClient = createPublicClient({
+  chain: mainnet,
+  transport: http(process.env.RPC_URL),
+});
+
+const auth = betterAuth({
+  baseURL: "https://example.com",
+  secondaryStorage: {}, // (preferred) your secondary storage implementation here
+  database: {}, // (alternative / optional) your Better Auth database adapter
+  plugins: [
+    erc8128({
+      verifyMessage: publicClient.verifyMessage,
+      routePolicy: {
+        "/protected": [
+          {
+            methods: ["GET"],
+            replayable: false,
+          },
+        ],
+      },
+    }),
+  ],
+});
+
+const erc8128Api = getErc8128Api(auth);
+const app = new Hono();
+
+app.get("/.well-known/erc8128", async (c) => {
+  return c.json(await erc8128Api.getConfig(c.req.raw));
+});
+
+app.get("/protected", async (c) => {
+  const result = await erc8128Api.protect(c.req.raw);
+
+  if (!result.ok) {
+    return result.response;
+  }
+
+  return c.json({
+    success: true,
+    authenticated: result.authenticated,
+    address: result.verification?.address ?? null,
+  });
+});
+
+app.on(["GET", "POST"], "/api/auth/*", (c) => {
+  return auth.handler(c.req.raw);
+});
+
+export default app;
+```
+
+`protect()` verifies the ERC-8128 signature for routes covered by your `routePolicy`. `/.well-known/erc8128` exposes the discovery document, and `/api/auth/*` lets Better Auth handle the plugin's built-in endpoints.
+
+<Callout>
+  For custom Better Auth or Better Call endpoints that both parse a request body and rely on ERC-8128 verification, set `cloneRequest: true`. Verification may need the original request bytes; without cloning, body parsing can consume the stream before downstream code or signature validation reads it.
+</Callout>
+
+## Signing Model
+
+The signer always controls the security posture of each signature — whether it includes a nonce (non-replayable) or omits it (replayable), and whether it covers the full request (request-bound) or only selected components like method and path (class-bound).
+
+The server controls what it *accepts*: `routePolicy` declares which routes allow replayable or class-bound signatures. The server always accepts a stronger posture than required — a non-replayable, request-bound signature is valid everywhere.
+
+## Route Policy
+
+Use `routePolicy` to declare which routes require authentication and what signature postures the server accepts.
+
+Paths are defined **relative to Better Auth's `basePath`**. With the default mount this means you write `"/session"` instead of `"/api/auth/session"`. If your app uses a custom `basePath`, the plugin strips it automatically. Legacy basePath-prefixed keys are still accepted for compatibility.
+
+```ts title="auth.ts"
+erc8128({
+  verifyMessage: publicClient.verifyMessage,
+  routePolicy: {
+    "/products/*": {
+      methods: ["GET"],
+      replayable: true,
+      classBoundPolicies: ["@method", "@path"], // require at least these + @authority
+    },
+    "/orders": [
+      { methods: ["POST"], replayable: false },
+      { methods: ["PUT"], replayable: false },
+    ],
+    "/public/*": false, // skip verification entirely
+    default: { replayable: false }, // require auth on all other routes
+  },
+});
+```
+
+Matching order:
+
+1. Exact path match (`"/path"`).
+2. Longest wildcard path match (`"/path/*"`).
+3. `default` policy (if set).
+4. No match + no default → opportunistic (passthrough on failure).
+
+For a matched path:
+
+- a single object applies to all methods unless it sets `methods`
+- an array lets you declare multiple method-specific variants on the same path
+- method-specific entries are preferred over methodless entries on that same path
+- if a path matches but none of its method-specific entries apply and there is no methodless fallback for that path, `default` is not consulted
+
+A value of `false` skips verification. A `RoutePolicy` object requires verification — returning `401` on failure. Setting `replayable: true` means the server accepts both replayable and non-replayable signatures for that route. `classBoundPolicies` sets the minimum components a class-bound signature must cover.
+
+Protected routes always allow **request-bound** signatures. `routePolicy` only controls whether weaker postures are additionally accepted:
+
+- `replayable: false`, no `classBoundPolicies`
+  - only non-replayable, request-bound signatures
+- `replayable: true`, no `classBoundPolicies`
+  - request-bound signatures, replayable or non-replayable
+- `replayable: false`, `classBoundPolicies: [...]`
+  - request-bound signatures, plus non-replayable class-bound signatures
+- `replayable: true`, `classBoundPolicies: [...]`
+  - request-bound signatures, plus replayable or non-replayable class-bound signatures
+
+On a specifically matched route, `classBoundPolicies` and `additionalRequestBoundComponents` do **not** inherit from `default`.
+
+- Omitting `classBoundPolicies` on a matched route means class-bound signatures are not allowed there.
+- Omitting `additionalRequestBoundComponents` on a matched route means no extra request-bound components beyond the standard ERC-8128 request-bound set.
+
+Example:
+
+```ts title="Replayable by default, strict on one route"
+erc8128({
+  verifyMessage: publicClient.verifyMessage,
+  routePolicy: {
+    default: {
+      replayable: true,
+      classBoundPolicies: ["@authority"],
+    },
+    "/erc8128/invalidate": {
+      methods: ["POST"],
+      replayable: false,
+    },
+  },
+});
+```
+
+In that configuration:
+
+- most protected routes accept replayable or non-replayable request-bound signatures, and replayable or non-replayable class-bound signatures with at least `@authority`
+- `POST /erc8128/invalidate` accepts only non-replayable, request-bound signatures
+
+<Callout>
+  Both `/erc8128/verify` and `/erc8128/invalidate` enforce non-replayable, request-bound signatures — this is not configurable.
+</Callout>
+
+## Replayable Signatures
+
+By default, the client signs every request with a nonce — making each signature single-use. For automation or backend-to-backend calls where re-signing is impractical, the signer can omit the nonce to produce a replayable signature. The server must explicitly allow this per-route via `routePolicy` (`replayable: true`); routes that don't opt in will reject replayable signatures.
+
+When any route policy allows replayable signatures, the plugin automatically enables:
+
+- The `/erc8128/invalidate` endpoint for revoking signatures, when persistent storage is available (`database` or `secondaryStorage`).
+- Server-side cryptographic verification caching so repeated replayable requests can skip repeated `ecrecover` / ERC-1271 checks while still running full request verification.
+
+Without persistent storage, replayable routes are not supported: `/erc8128/invalidate` is not exposed, replayable invalidation is disabled, and replayable route policies fail instead of falling back to process-local state.
+
+### Invalidation
+
+When persistent storage is available, replayable signatures can be revoked via a signed `POST` to `/erc8128/invalidate`. Two modes are supported (one per request):
+
+- **Per-signature** — revoke a single signature by its hex value.
+- **`notBefore` timestamp** — reject all signatures created before a given time for the caller's key.
+
+## Auto-Signing
+
+When a `signer` is passed to `erc8128Client()` (as shown in the [installation step](#add-the-client-plugin)), every request through the Better Auth client is signed automatically — no manual header construction needed.
+
+The signer can also be a function for lazy or dynamic wallet connections — return `null` to skip signing:
+
+```ts
+erc8128Client({
+  signer: () => isConnected ? walletSigner : null,
+})
+```
+
+On initialization, the client fetches `GET /.well-known/erc8128` to learn the server's route policies. By default, all requests use **non-replayable, request-bound** signatures — the strongest posture. Use `preferReplayable`, `binding`, and `components` to opt into weaker postures when appropriate — see [Signing Posture](#signing-posture).
+
+### Signing Posture
+
+The client controls its signing posture through three independent parameters. The plugin forwards all other `@slicekit/erc8128` options (`ttlSeconds`, `label`, `contentDigest`, etc.) to `signRequest` automatically. See the [ERC-8128 documentation](https://erc8128.slice.so) for full concept explanations.
+
+**`preferReplayable`** controls whether signatures include a nonce. When `false` (default), every signature is non-replayable — single-use. When `true`, the client omits the nonce to produce replayable signatures on routes where the server's `routePolicy` allows it. Routes that don't allow replayable signatures still get non-replayable ones.
+
+**`binding`** controls what the signature covers. `"request-bound"` (default) covers the full request. `"class-bound"` covers only selected components — useful for reusing the same signature across multiple requests that share those components.
+
+**`components`** specifies which derived components to include. Its meaning depends on `binding`: when request-bound, these are *additional* components beyond the defaults. When class-bound, these are the *minimum* components the signature must cover (plus `@authority`, which is always included).
+
+The client automatically merges the signer's preferences with the server's requirements (from `/.well-known/erc8128`) to produce the most appropriate signature for each route.
+
+```ts title="Backend agent — class-bound replayable with minimum components"
+erc8128Client({
+  signer: agentSigner,
+  preferReplayable: true,
+  binding: "class-bound",
+  components: ["@method"],
+  storage: sigCache,
+})
+```
+
+### Signature Caching
+
+When a signature is replayable, the client caches it and reuses it when safe — avoiding a cryptographic signing operation on every call. Class-bound signatures can satisfy multiple requests when their covered components match the route policy. Request-bound signatures are reused only for the exact same request shape.
+
+Caching is controlled by the `storage` option: `"localStorage"` uses the browser adapter (default when available), an `Erc8128SignatureStore` object provides a custom async-capable store for Node.js backends (Redis, database, in-memory Map), and `false` disables caching entirely.
+
+```ts title="Node.js backend with custom store"
+const sigCache = new Map();
+
+erc8128Client({
+  signer: myAgentSigner,
+  binding: "class-bound",
+  preferReplayable: true,
+  storage: {
+    get: (keyId) => sigCache.get(keyId) ?? null,
+    set: (keyId, entries) => sigCache.set(keyId, entries),
+    delete: (keyId) => sigCache.delete(keyId),
+  },
+})
+```
+
+Each keyId maps to an array of cached signatures — different routes may require different class-bound components, and request-bound signatures may exist for distinct exact-request fingerprints. Expired entries are pruned automatically on each cache access. The `clearSignatureCache()` action removes all entries for the current signer.
+
+## Custom Better Auth Endpoints
+
+For custom Better Auth endpoints, the plugin exposes the successful verification result through `getErc8128Verification(ctx)`.
+
+If the endpoint parses a body, also set `cloneRequest: true` so Better Call preserves the original request for signature verification.
+
+```ts title="Custom endpoint reading the verified ERC-8128 result"
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { erc8128, getErc8128Verification } from "better-auth/plugins";
+import * as z from "zod";
+
+const signedEndpoint = createAuthEndpoint(
+  "/custom/signed",
+  {
+    method: "POST",
+    body: z.object({
+      value: z.string(),
+    }),
+    cloneRequest: true,
+  },
+  async (ctx) => {
+    const verification = getErc8128Verification(ctx);
+
+    return ctx.json({
+      value: ctx.body.value,
+      signer: verification?.address ?? null,
+      keyId: verification?.params.keyid ?? null,
+      replayable: verification?.replayable ?? null,
+      binding: verification?.binding ?? null,
+    });
+  },
+);
+```
+
+## Error Handling
+
+When verification is required and fails, the response includes:
+
+```json
+{
+  "error": "erc8128_verification_failed",
+  "reason": "expired",
+  "detail": "Signature has expired"
+}
+```
+
+Along with `Accept-Signature` and `WWW-Authenticate` headers indicating the expected signature components.
+
+## Storage
+
+The plugin manages three types of ephemeral data — all with bounded lifetimes tied to signature validity:
+
+| Concern | Purpose | Durability |
+| --- | --- | --- |
+| **Nonce tracking** | Prevent replay of non-replayable signatures | Security-critical |
+| **Signature invalidation** | Revoke replayable signatures | Security-critical |
+| **Verification cache** | Cache successful cryptographic signature checks for replayable traffic while still running full request verification | Performance only |
+
+### Secondary Storage
+
+When Better Auth's [`secondaryStorage`](/docs/concepts/session-management#sessions-in-secondary-storage) is configured (e.g. Redis), **all three are stored there by default** — with TTL-based auto-cleanup. This is faster than database queries and eliminates the need for manual cleanup of expired records.
+
+To also persist nonces and invalidation records to the database (dual-write with secondaryStorage as fast read-through), set `storeInDatabase`:
+
+```ts title="auth.ts"
+erc8128({
+  verifyMessage: publicClient.verifyMessage,
+  storeInDatabase: true, // [!code highlight]
+})
+```
+
+This follows the same pattern as Better Auth's [`session.storeSessionInDatabase`](/docs/concepts/session-management#sessions-in-secondary-storage).
+
+| `secondaryStorage` | `storeInDatabase` | Nonce | Invalidation | Cache | Endpoint availability |
+| --- | --- | --- | --- | --- | --- |
+| Not configured, DB available | `false` | Database | Database | Database + in-memory | Full (`/verify`, `/invalidate` when replayable) |
+| Configured | `false` (default) | secondaryStorage | secondaryStorage | secondaryStorage | Full |
+| Configured | `true` | Database + secondaryStorage | Database + secondaryStorage | secondaryStorage | Full |
+| No DB and no secondaryStorage | `false` | In-memory (process-local) | Disabled | In-memory only | `/.well-known` only (+ request-bound middleware for explicit route policies) |
+
+<Callout>
+For production deployments with multiple server instances, configure `secondaryStorage` (e.g. Redis) so nonce tracking, invalidation, and verification caching are shared across all instances.
+</Callout>
+
+<Callout>
+When `secondaryStorage` is configured and `storeInDatabase: true`, ERC-8128 uses a best-effort distributed lease in secondary storage to run shared automatic cleanup for `erc8128Nonce`, `erc8128VerificationCache`, and `erc8128Invalidation` at most once per throttle window. Without `secondaryStorage`, automatic cleanup is off; use `cleanupExpiredErc8128Storage()` from your own cron/worker flow if you want database cleanup in that deployment shape.
+</Callout>
+
+## Options
+
+### Server
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `verifyMessage` | `VerifyMessageFn` | *required* | Signature verification function (use viem's `publicClient.verifyMessage` — handles both EOA and ERC-1271 smart contract signatures). The plugin does not override its transport or RPC source. |
+| `routePolicy` | `Record<string, RoutePolicy \| RoutePolicy[] \| false> & { default?: RoutePolicy }` | — | Per-route middleware policy map keyed by Better Auth paths relative to `basePath` — see [Route Policy](#route-policy). |
+| `sessionExpiresIn` | `number` | — | Session TTL in seconds (for `/erc8128/verify`). |
+| `maxValiditySec` | `number` | `300` | Maximum signature validity window (seconds). |
+| `clockSkewSec` | `number` | `30` | Allowed clock skew (seconds) for future-dated timestamps and underlying verifier tolerance. The plugin still enforces `now < expires` as a hard expiry cutoff. |
+| `authPrecedence` | `"session-first" \| "signature-first" \| "reject-on-mismatch"` | `"session-first"` | How to handle requests that carry both a session cookie and an ERC-8128 signature. `session-first` skips verification; `signature-first` ignores the cookie; `reject-on-mismatch` verifies both and returns 401 if they map to different users. |
+| `storeInDatabase` | `boolean` | `false` | When `secondaryStorage` is configured, also persist nonces and invalidation to the database. See [Storage](#storage). |
+| `cleanupStrategy` | `"auto" \| "off"` | `"auto"` | Automatic cleanup strategy for expired ERC-8128 database rows. `"auto"` uses a best-effort distributed lease in `secondaryStorage` when available; otherwise it does nothing automatically. |
+| `cleanupThrottleSec` | `number` | `300` | Minimum time between automatic ERC-8128 database cleanup runs. |
+| `cacheSize` | `number` | `10000` | Max entries in the in-memory verification cache. Ignored when `secondaryStorage` is active. |
+| `emailDomainName` | `string` | From `baseURL` | Domain for auto-generated user emails. |
+| `anonymous` | `boolean` | `true` | If `false`, email is required on `/erc8128/verify`. Per-request auth can only authenticate already-linked wallets unless anonymous onboarding is enabled. |
+| `ensLookup` | `Function` | — | ENS resolver for new user name/avatar. |
+
+Manual cleanup helper:
+
+`expires` is enforced strictly by the plugin: once `now >= expires`, the signature is rejected. `clockSkewSec` does not extend validity past `expires`; it only affects underlying verifier tolerance around clock drift.
+
+```ts
+import { cleanupExpiredErc8128Storage } from "better-auth/plugins/erc8128";
+
+const ctx = await auth.$context;
+
+await cleanupExpiredErc8128Storage({
+  adapter: ctx.adapter,
+});
+```
+
+### Client
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `signer` | `EthHttpSigner \| () => EthHttpSigner \| null` | — | Wallet signer for auto-signing. Without this, the plugin is type-only. |
+| `preferReplayable` | `boolean` | `false` | Whether to prefer replayable signatures when the server allows it — see [Signing Posture](#signing-posture). |
+| `binding` | `"request-bound" \| "class-bound"` | `"request-bound"` | What the signature covers — see [Signing Posture](#signing-posture). |
+| `components` | `string[]` | — | When request-bound, additional components beyond the defaults. When class-bound, minimum components (plus `@authority`). Merged with the server's route policy. |
+| `storage` | `"localStorage" \| Erc8128SignatureStore \| false` | auto | Where to cache replayable signatures — see [Signature Caching](#signature-caching). |
+| `storagePrefix` | `string` | `"erc8128"` | Key prefix for the built-in `localStorage` adapter. |
+| `expiryMarginSec` | `number` | `10` | Seconds before expiry to consider a cached signature stale. |
+| `ttlSeconds` | `number` | — | Signature TTL in seconds. Forwarded to `signRequest`. |
+| `label` | `string` | — | Signature label. Forwarded to `signRequest`. |
+| `contentDigest` | `"auto" \| "recompute" \| "require" \| "off"` | — | Content-Digest handling mode. Forwarded to `signRequest`. |
+| `expires` | `number` | — | Explicit expiration timestamp (unix seconds). Overrides `ttlSeconds`. Forwarded to `signRequest`. |
+| `nonce` | `string \| () => Promise<string>` | — | Custom nonce value or async generator. Forwarded to `signRequest`. |
+
+## Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/erc8128/verify` | Verify a signed request, create/link user, start session. |
+| `POST` | `/erc8128/invalidate` | Invalidate replayable signatures. Available when any route policy allows replayable and persistent storage is available. |
+| `GET` | `/.well-known/erc8128` | Discovery metadata (algorithms, policies, endpoints, capabilities). |
+
+## Schema
+
+### `walletAddress`
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `userId` | `string` | Reference to `user.id`. |
+| `address` | `string` | Ethereum address. |
+| `chainId` | `number` | EVM chain ID. |
+| `isPrimary` | `boolean` | Primary wallet flag. |
+| `createdAt` | `date` | Creation timestamp. |
+
+### `erc8128Nonce`
+
+Tracks consumed nonces for non-replayable signatures.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `nonceKey` | `string` | Canonical nonce identifier (`erc8128:nonce:<keyId>:<nonce>`). Unique. |
+| `expiresAt` | `date` | When the consumed nonce stops blocking replays and becomes eligible for cleanup. Indexed. |
+
+### `erc8128VerificationCache`
+
+Caches successful replayable signature checks. The cache key is derived from the signer, signature, and canonical request-binding message.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `cacheKey` | `string` | Opaque cache lookup key for exact replayable verification matches. Unique. |
+| `address` | `string` | Signer address for query/filter use. Indexed. |
+| `chainId` | `number` | Chain ID extracted from the ERC-8128 key ID. Indexed. |
+| `signatureHash` | `string` | Hash of the submitted signature for direct signature lookup. Indexed. |
+| `expiresAt` | `date` | Verified signature expiry and cleanup cutoff. Indexed. |
+
+### `erc8128Invalidation`
+
+Stores both per-key invalidation timestamps and per-signature invalidation records.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `kind` | `string` | `"key"` for per-key invalidation, `"signature"` for per-signature invalidation. Indexed. |
+| `matchKey` | `string` | Canonical lookup key for the invalidation record. Unique. |
+| `address` | `string` | Signer address. Indexed. |
+| `chainId` | `number` | Chain ID from the ERC-8128 key ID. Indexed. |
+| `signatureHash` | `string` | Signature hash for per-signature invalidation rows. Nullable, indexed. |
+| `notBefore` | `number` | Unix timestamp for per-key invalidation. Signatures created before this are rejected. Nullable. |
+| `expiresAt` | `date` | Cleanup cutoff for both per-key and per-signature invalidation rows. Nullable, indexed. |

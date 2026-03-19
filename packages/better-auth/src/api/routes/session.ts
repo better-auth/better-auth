@@ -82,6 +82,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 			}
 
+			if (ctx.context.session) {
+				return ctx.context.session as {
+					session: Session<Option["session"], Option["plugins"]>;
+					user: User<Option["user"], Option["plugins"]>;
+				};
+			}
+
 			try {
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,

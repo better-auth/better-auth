@@ -32,6 +32,17 @@ export type InferPluginErrorCodes<O extends BetterAuthOptions> =
 			>
 		: {};
 
+export type InferPluginServerAPI<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? UnionToIntersection<
+				P extends { $ServerAPI?: infer ServerAPI }
+					? ServerAPI extends Record<string, any>
+						? ServerAPI
+						: {}
+					: {}
+			>
+		: {};
+
 export type InferPluginIDs<O extends BetterAuthOptions> =
 	O["plugins"] extends Array<infer P>
 		? UnionToIntersection<P extends BetterAuthPlugin ? P["id"] : never>
