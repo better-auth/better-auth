@@ -1601,6 +1601,7 @@ async function handleOIDCCallback(
 				? "post"
 				: "basic",
 	}).catch((e) => {
+		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {
 			throw ctx.redirect(
 				`${
