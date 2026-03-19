@@ -69,3 +69,97 @@ describe("auth-minimal", () => {
 		sqliteDB.close();
 	});
 });
+
+describe("minimal additionalFields config typing", () => {
+	it("should reject extraneous keys in user.additionalFields", () => {
+		betterAuth({
+			user: {
+				additionalFields: {
+					// @ts-expect-error - unknown key should not be allowed
+					test: {
+						type: "boolean",
+						abc: "def",
+					},
+				},
+			},
+		});
+
+		betterAuth({
+			user: {
+				additionalFields: {
+					// @ts-expect-error - misspelled required should not be allowed
+					test: {
+						type: "boolean",
+						require: true,
+					},
+				},
+			},
+		});
+	});
+
+	it("should reject extraneous keys when passed as a variable (structural strictness)", () => {
+		const badConfig = {
+			user: {
+				additionalFields: {
+					test: {
+						type: "boolean" as const,
+						abc: "def",
+					},
+				},
+			},
+		};
+
+		// @ts-expect-error - extraneous keys should fail even when structurally typed
+		betterAuth(badConfig);
+	});
+
+	it("should reject extraneous keys in session.additionalFields", () => {
+		betterAuth({
+			session: {
+				additionalFields: {
+					// @ts-expect-error - unknown key should not be allowed
+					test: {
+						type: "string",
+						abc: "def",
+					},
+				},
+			},
+		});
+	});
+
+	it("should allow valid additionalFields keys and preserve inference", () => {
+		const auth = betterAuth({
+			user: {
+				additionalFields: {
+					role: {
+						type: "string",
+						required: true,
+						input: true,
+						returned: true,
+					},
+				},
+			},
+		});
+
+		expectTypeOf<
+			typeof auth.$Infer.Session.user.role
+		>().toEqualTypeOf<string>();
+
+		const authWithSessionField = betterAuth({
+			session: {
+				additionalFields: {
+					deviceId: {
+						type: "string",
+						required: true,
+						input: true,
+						returned: true,
+					},
+				},
+			},
+		});
+
+		expectTypeOf<
+			typeof authWithSessionField.$Infer.Session.session.deviceId
+		>().toEqualTypeOf<string>();
+	});
+});
