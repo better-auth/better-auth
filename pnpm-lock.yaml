@@ -13,11 +13,11 @@ catalogs:
       specifier: 1.1.21
       version: 1.1.21
     better-call:
-      specifier: 2.0.2
-      version: 2.0.2
+      specifier: 1.3.2
+      version: 1.3.2
     tsdown:
-      specifier: 0.21.1
-      version: 0.21.1
+      specifier: 0.21.0-beta.2
+      version: 0.21.0-beta.2
     typescript:
       specifier: ^5.9.3
       version: 5.9.3
@@ -1004,7 +1004,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/better-auth:
     dependencies:
@@ -1046,7 +1046,7 @@ importers:
         version: 7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1087,15 +1087,6 @@ importers:
       '@lynx-js/react':
         specifier: ^0.116.3
         version: 0.116.3(@types/react@19.2.14)
-      '@opentelemetry/api':
-        specifier: ^1.9.0
-        version: 1.9.0
-      '@opentelemetry/sdk-trace-base':
-        specifier: ^1.30.0
-        version: 1.30.1(@opentelemetry/api@1.9.0)
-      '@opentelemetry/sdk-trace-node':
-        specifier: ^1.30.0
-        version: 1.30.1(@opentelemetry/api@1.9.0)
       '@sveltejs/kit':
         specifier: ^2.53.3
         version: 2.53.3(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.53.5)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -1158,7 +1149,7 @@ importers:
         version: 18.6.2(@azure/core-client@1.10.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       type-fest:
         specifier: ^5.4.4
         version: 5.4.4
@@ -1270,7 +1261,7 @@ importers:
         version: 4.56.10(tslib@2.8.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -1283,9 +1274,6 @@ importers:
 
   packages/core:
     dependencies:
-      '@opentelemetry/semantic-conventions':
-        specifier: ^1.39.0
-        version: 1.39.0
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -1302,18 +1290,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250121.0
         version: 4.20260226.1
-      '@opentelemetry/api':
-        specifier: ^1.9.0
-        version: 1.9.0
-      '@opentelemetry/sdk-trace-base':
-        specifier: ^1.30.0
-        version: 1.30.1(@opentelemetry/api@1.9.0)
-      '@opentelemetry/sdk-trace-node':
-        specifier: ^1.30.0
-        version: 1.30.1(@opentelemetry/api@1.9.0)
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       jose:
         specifier: ^6.1.3
         version: 6.1.3
@@ -1325,7 +1304,7 @@ importers:
         version: 1.1.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/drizzle-adapter:
     devDependencies:
@@ -1340,7 +1319,7 @@ importers:
         version: 0.45.1(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@upstash/redis@1.36.4)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.11)(mysql2@3.18.2(@types/node@25.5.0))(pg@8.19.0)(postgres@3.4.8)(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1355,7 +1334,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       conf:
         specifier: ^15.0.2
         version: 15.1.0
@@ -1380,7 +1359,7 @@ importers:
         version: 38.8.4
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/expo:
     dependencies:
@@ -1389,7 +1368,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1417,7 +1396,7 @@ importers:
         version: 0.84.1(@babel/core@7.29.0)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.4)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/i18n:
     devDependencies:
@@ -1429,7 +1408,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/kysely-adapter:
     devDependencies:
@@ -1447,7 +1426,7 @@ importers:
         version: 0.28.11
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1462,7 +1441,7 @@ importers:
         version: 0.3.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1480,7 +1459,7 @@ importers:
         version: 7.1.0(socks@2.8.7)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1495,7 +1474,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       jose:
         specifier: ^6.1.3
         version: 6.1.3
@@ -1517,7 +1496,7 @@ importers:
         version: 1.9.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/passkey:
     dependencies:
@@ -1535,7 +1514,7 @@ importers:
         version: 13.2.3
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       nanostores:
         specifier: ^1.0.1
         version: 1.1.1
@@ -1551,7 +1530,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/prisma-adapter:
     dependencies:
@@ -1570,7 +1549,7 @@ importers:
         version: 7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1588,7 +1567,7 @@ importers:
         version: 5.9.3
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1606,7 +1585,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1619,7 +1598,7 @@ importers:
         version: link:../sso
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/sso:
     dependencies:
@@ -1659,7 +1638,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1671,7 +1650,7 @@ importers:
         version: 8.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/stripe:
     dependencies:
@@ -1690,13 +1669,13 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 2.0.2(zod@4.3.6)
+        version: 1.3.2(zod@4.3.6)
       stripe:
         specifier: ^20.4.0
         version: 20.4.0(@types/node@25.5.0)
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/telemetry:
     dependencies:
@@ -1712,7 +1691,7 @@ importers:
         version: link:../core
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       type-fest:
         specifier: ^5.4.4
         version: 5.4.4
@@ -1727,7 +1706,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
       vitest:
         specifier: catalog:vitest
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(@vitest/ui@4.0.18)(happy-dom@20.7.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass@1.97.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
@@ -1750,7 +1729,7 @@ importers:
         specifier: ^6.8.2
         version: 6.8.2
       undici:
-        specifier: ^7.24.0
+        specifier: ^7.22.0
         version: 7.24.1
       vitest:
         specifier: catalog:vitest
@@ -4666,10 +4645,6 @@ packages:
     resolution: {integrity: sha512-lp4qAiMTD4sNWW4DbKLBkfiMZ4jbAboJIGOQr5DvciMRI494OapieI9qiODpOt0XBr1LjIDy1xAGAnVs5supTA==}
     engines: {node: '>=14'}
 
-  '@opentelemetry/semantic-conventions@1.39.0':
-    resolution: {integrity: sha512-R5R9tb2AXs2IRLNKLBJDynhkfmx7mX0vi8NkhZb3gUkPWHn6HXk5J8iQ/dql0U3ApfWym4kXXmBDRGO+oeOfjg==}
-    engines: {node: '>=14'}
-
   '@orama/cuid2@2.2.3':
     resolution: {integrity: sha512-Lcak3chblMejdlSHgYU2lS2cdOhDpU6vkfIJH4m+YKvqQyLqs1bB8+w6NT1MG5bO12NUK2GFc34Mn2xshMIQ1g==}
 
@@ -4679,6 +4654,9 @@ packages:
 
   '@oramacloud/client@2.1.4':
     resolution: {integrity: sha512-uNPFs4wq/iOPbggCwTkVNbIr64Vfd7ZS/h+cricXVnzXWocjDTfJ3wLL4lr0qiSu41g8z+eCAGBqJ30RO2O4AA==}
+
+  '@oxc-project/types@0.114.0':
+    resolution: {integrity: sha512-//nBfbzHQHvJs8oFIjv6coZ6uxQ4alLfiPe6D5vit6c4pmxATHHlVwgB1k+Hv4yoAMyncdxgRBF5K4BYWUCzvA==}
 
   '@oxc-project/types@0.115.0':
     resolution: {integrity: sha512-4n91DKnebUS4yjUHl2g3/b2T+IUdCfmoZGhmwsovZCDaJSs+QkVAM+0AqqTxHSsHfeiMuueT75cZaZcT/m0pSw==}
@@ -6120,16 +6098,34 @@ packages:
     resolution: {integrity: sha512-C7c51Nn4yTxXFKvgh2txJFNweaVcfUPQxwEUFw4aWsCmfiBDJsTSwviIF8EcwjQ6k8bPyMWCl1vw4BdxE569Cg==}
     engines: {node: '>= 10'}
 
+  '@rolldown/binding-android-arm64@1.0.0-rc.5':
+    resolution: {integrity: sha512-zCEmUrt1bggwgBgeKLxNj217J1OrChrp3jJt24VK9jAharSTeVaHODNL+LpcQVhRz+FktYWfT9cjo5oZ99ZLpg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
   '@rolldown/binding-android-arm64@1.0.0-rc.8':
     resolution: {integrity: sha512-5bcmMQDWEfWUq3m79Mcf/kbO6e5Jr6YjKSsA1RnpXR6k73hQ9z1B17+4h93jXpzHvS18p7bQHM1HN/fSd+9zog==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [android]
 
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.5':
+    resolution: {integrity: sha512-ZP9xb9lPAex36pvkNWCjSEJW/Gfdm9I3ssiqOFLmpZ/vosPXgpoGxCmh+dX1Qs+/bWQE6toNFXWWL8vYoKoK9Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
   '@rolldown/binding-darwin-arm64@1.0.0-rc.8':
     resolution: {integrity: sha512-dcHPd5N4g9w2iiPRJmAvO0fsIWzF2JPr9oSuTjxLL56qu+oML5aMbBMNwWbk58Mt3pc7vYs9CCScwLxdXPdRsg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
+    os: [darwin]
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.5':
+    resolution: {integrity: sha512-7IdrPunf6dp9mywMgTOKMMGDnMHQ6+h5gRl6LW8rhD8WK2kXX0IwzcM5Zc0B5J7xQs8QWOlKjv8BJsU/1CD3pg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
     os: [darwin]
 
   '@rolldown/binding-darwin-x64@1.0.0-rc.8':
@@ -6138,11 +6134,23 @@ packages:
     cpu: [x64]
     os: [darwin]
 
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.5':
+    resolution: {integrity: sha512-o/JCk+dL0IN68EBhZ4DqfsfvxPfMeoM6cJtxORC1YYoxGHZyth2Kb2maXDb4oddw2wu8iIbnYXYPEzBtAF5CAg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
   '@rolldown/binding-freebsd-x64@1.0.0-rc.8':
     resolution: {integrity: sha512-xNrRa6mQ9NmMIJBdJtPMPG8Mso0OhM526pDzc/EKnRrIrrkHD1E0Z6tONZRmUeJElfsQ6h44lQQCcDilSNIvSQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [freebsd]
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.5':
+    resolution: {integrity: sha512-IIBwTtA6VwxQLcEgq2mfrUgam7VvPZjhd/jxmeS1npM+edWsrrpRLHUdze+sk4rhb8/xpP3flemgcZXXUW6ukw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
 
   '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.8':
     resolution: {integrity: sha512-WgCKoO6O/rRUwimWfEJDeztwJJmuuX0N2bYLLRxmXDTtCwjToTOqk7Pashl/QpQn3H/jHjx0b5yCMbcTVYVpNg==}
@@ -6150,12 +6158,26 @@ packages:
     cpu: [arm]
     os: [linux]
 
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.5':
+    resolution: {integrity: sha512-KSol1De1spMZL+Xg7K5IBWXIvRWv7+pveaxFWXpezezAG7CS6ojzRjtCGCiLxQricutTAi/LkNWKMsd2wNhMKQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
   '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.8':
     resolution: {integrity: sha512-tOHgTOQa8G4Z3ULj4G3NYOGGJEsqPHR91dT72u63OtVsZ7B6wFJKOx+ZKv+pvwzxWz92/I2ycaqi2/Ll4l+rlg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.5':
+    resolution: {integrity: sha512-WFljyDkxtXRlWxMjxeegf7xMYXxUr8u7JdXlOEWKYgDqEgxUnSEsVDxBiNWQ1D5kQKwf8Wo4sVKEYPRhCdsjwA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
 
   '@rolldown/binding-linux-arm64-musl@1.0.0-rc.8':
     resolution: {integrity: sha512-oRbxcgDujCi2Yp1GTxoUFsIFlZsuPHU4OV4AzNc3/6aUmR4lfm9FK0uwQu82PJsuUwnF2jFdop3Ep5c1uK7Uxg==}
@@ -6178,12 +6200,26 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.5':
+    resolution: {integrity: sha512-CUlplTujmbDWp2gamvrqVKi2Or8lmngXT1WxsizJfts7JrvfGhZObciaY/+CbdbS9qNnskvwMZNEhTPrn7b+WA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@rolldown/binding-linux-x64-gnu@1.0.0-rc.8':
     resolution: {integrity: sha512-a1+F0aV4Wy9tT3o+cHl3XhOy6aFV+B8Ll+/JFj98oGkb6lGk3BNgrxd+80RwYRVd23oLGvj3LwluKYzlv1PEuw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.5':
+    resolution: {integrity: sha512-wdf7g9NbVZCeAo2iGhsjJb7I8ZFfs6X8bumfrWg82VK+8P6AlLXwk48a1ASiJQDTS7Svq2xVzZg3sGO2aXpHRA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
 
   '@rolldown/binding-linux-x64-musl@1.0.0-rc.8':
     resolution: {integrity: sha512-bGyXCFU11seFrf7z8PcHSwGEiFVkZ9vs+auLacVOQrVsI8PFHJzzJROF3P6b0ODDmXr0m6Tj5FlDhcXVk0Jp8w==}
@@ -6192,21 +6228,44 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.5':
+    resolution: {integrity: sha512-0CWY7ubu12nhzz+tkpHjoG3IRSTlWYe0wrfJRf4qqjqQSGtAYgoL9kwzdvlhaFdZ5ffVeyYw9qLsChcjUMEloQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+
   '@rolldown/binding-openharmony-arm64@1.0.0-rc.8':
     resolution: {integrity: sha512-n8d+L2bKgf9G3+AM0bhHFWdlz9vYKNim39ujRTieukdRek0RAo2TfG2uEnV9spa4r4oHUfL9IjcY3M9SlqN1gw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [openharmony]
 
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.5':
+    resolution: {integrity: sha512-LztXnGzv6t2u830mnZrFLRVqT/DPJ9DL4ZTz/y93rqUVkeHjMMYIYaFj+BUthiYxbVH9dH0SZYufETspKY/NhA==}
+    engines: {node: '>=14.0.0'}
+    cpu: [wasm32]
+
   '@rolldown/binding-wasm32-wasi@1.0.0-rc.8':
     resolution: {integrity: sha512-4R4iJDIk7BrJdteAbEAICXPoA7vZoY/M0OBfcRlQxzQvUYMcEp2GbC/C8UOgQJhu2TjGTpX1H8vVO1xHWcRqQA==}
     engines: {node: '>=14.0.0'}
     cpu: [wasm32]
 
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.5':
+    resolution: {integrity: sha512-jUct1XVeGtyjqJXEAfvdFa8xoigYZ2rge7nYEm70ppQxpfH9ze2fbIrpHmP2tNM2vL/F6Dd0CpXhpjPbC6bSxQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
   '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.8':
     resolution: {integrity: sha512-3lwnklba9qQOpFnQ7EW+A1m4bZTWXZE4jtehsZ0YOl2ivW1FQqp5gY7X2DLuKITggesyuLwcmqS11fA7NtrmrA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
+    os: [win32]
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.5':
+    resolution: {integrity: sha512-VQ8F9ld5gw29epjnVGdrx8ugiLTe8BMqmhDYy7nGbdeDo4HAt4bgdZvLbViEhg7DZyHLpiEUlO5/jPSUrIuxRQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
     os: [win32]
 
   '@rolldown/binding-win32-x64-msvc@1.0.0-rc.8':
@@ -6217,6 +6276,9 @@ packages:
 
   '@rolldown/pluginutils@1.0.0-beta.40':
     resolution: {integrity: sha512-s3GeJKSQOwBlzdUrj4ISjJj5SfSh+aqn0wjOar4Bx95iV1ETI7F6S/5hLcfAxZ9kXDcyrAkxPlqmd1ZITttf+w==}
+
+  '@rolldown/pluginutils@1.0.0-rc.5':
+    resolution: {integrity: sha512-RxlLX/DPoarZ9PtxVrQgZhPoor987YtKQqCo5zkjX+0S0yLJ7Vv515Wk6+xtTL67VONKJKxETWZwuZjss2idYw==}
 
   '@rolldown/pluginutils@1.0.0-rc.8':
     resolution: {integrity: sha512-wzJwL82/arVfeSP3BLr1oTy40XddjtEdrdgtJ4lLRBu06mP3q/8HGM6K0JRlQuTA3XB0pNJx2so/nmpY4xyOew==}
@@ -8009,8 +8071,8 @@ packages:
     peerDependencies:
       better-auth: ^1.0.3
 
-  better-call@2.0.2:
-    resolution: {integrity: sha512-QqSKtfJD/ZzQdlm7BTUxT9RCA0AxcrZEMyU/yl7/uoFDoR7YCTdc555xQXjReo75M6/xkskPawPdhbn3fge4Cg==}
+  better-call@1.3.2:
+    resolution: {integrity: sha512-4cZIfrerDsNTn3cm+MhLbUePN0gdwkhSXEuG7r/zuQ8c/H7iU0/jSK5TD3FW7U0MgKHce/8jGpPYNO4Ve+4NBw==}
     peerDependencies:
       zod: ^4.0.0
     peerDependenciesMeta:
@@ -8166,10 +8228,6 @@ packages:
   cac@6.7.14:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
     engines: {node: '>=8'}
-
-  cac@7.0.0:
-    resolution: {integrity: sha512-tixWYgm5ZoOD+3g6UTea91eow5z6AAHaho3g0V9CNSNb45gM8SmflpAc+GRd1InC4AqN/07Unrgp56Y94N9hJQ==}
-    engines: {node: '>=20.19.0'}
 
   cacheable-lookup@5.0.4:
     resolution: {integrity: sha512-2/kNscPhpcxrOigMZzbiWF7dz8ilhb/nIHU3EyZiXWXpeq/au8qJ8VhdftMkty3n7Gj6HIGalQG8oiBNB3AJgA==}
@@ -13767,6 +13825,11 @@ packages:
       vue-tsc:
         optional: true
 
+  rolldown@1.0.0-rc.5:
+    resolution: {integrity: sha512-0AdalTs6hNTioaCYIkAa7+xsmHBfU5hCNclZnM/lp7lGGDuUOb6N4BVNtwiomybbencDjq/waKjTImqiGCs5sw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+
   rolldown@1.0.0-rc.8:
     resolution: {integrity: sha512-RGOL7mz/aoQpy/y+/XS9iePBfeNRDUdozrhCEJxdpJyimW8v6yp4c30q6OviUU5AnUJVLRL9GP//HUs6N3ALrQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -14635,30 +14698,27 @@ packages:
   ts-morph@27.0.2:
     resolution: {integrity: sha512-fhUhgeljcrdZ+9DZND1De1029PrE+cMkIP7ooqkLRTrRLTqcki2AstsyJm0vRNbTbVCNJ0idGlbBrfqc7/nA8w==}
 
-  tsdown@0.21.1:
-    resolution: {integrity: sha512-2Qgm5Pztm1ZOBr6AfJ4pAlspuufa5SlnBgnUx7a0QSm0a73FrBETiRB422gHtMKbgWf1oUtjBL/eK+po7OXwKw==}
+  tsdown@0.21.0-beta.2:
+    resolution: {integrity: sha512-OKj8mKf0ws1ucxuEi3mO/OGyfRQxO9MY2D6SoIE/7RZcbojsZSBhJr4xC4MNivMqrQvi3Ke2e+aRZDemPBWPCw==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.21.1
-      '@tsdown/exe': 0.21.1
       '@vitejs/devtools': '*'
       publint: ^0.3.0
       typescript: ^5.0.0
+      unplugin-lightningcss: ^0.4.0
       unplugin-unused: ^0.5.0
     peerDependenciesMeta:
       '@arethetypeswrong/core':
-        optional: true
-      '@tsdown/css':
-        optional: true
-      '@tsdown/exe':
         optional: true
       '@vitejs/devtools':
         optional: true
       publint:
         optional: true
       typescript:
+        optional: true
+      unplugin-lightningcss:
         optional: true
       unplugin-unused:
         optional: true
@@ -15924,7 +15984,7 @@ snapshots:
   '@antfu/install-pkg@1.1.0':
     dependencies:
       package-manager-detector: 1.6.0
-      tinyexec: 1.0.2
+      tinyexec: 1.0.4
 
   '@arethetypeswrong/cli@0.18.2':
     dependencies:
@@ -16143,7 +16203,7 @@ snapshots:
 
   '@babel/generator@7.29.1':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
@@ -16721,7 +16781,7 @@ snapshots:
   '@babel/template@7.28.6':
     dependencies:
       '@babel/code-frame': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
 
   '@babel/traverse@7.29.0':
@@ -16729,7 +16789,7 @@ snapshots:
       '@babel/code-frame': 7.29.0
       '@babel/generator': 7.29.1
       '@babel/helper-globals': 7.28.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/template': 7.28.6
       '@babel/types': 7.29.0
       debug: 4.4.3
@@ -18762,11 +18822,13 @@ snapshots:
   '@opentelemetry/context-async-hooks@1.30.1(@opentelemetry/api@1.9.0)':
     dependencies:
       '@opentelemetry/api': 1.9.0
+    optional: true
 
   '@opentelemetry/core@1.30.1(@opentelemetry/api@1.9.0)':
     dependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/semantic-conventions': 1.28.0
+    optional: true
 
   '@opentelemetry/instrumentation@0.203.0(@opentelemetry/api@1.9.0)':
     dependencies:
@@ -18782,17 +18844,20 @@ snapshots:
     dependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.0)
+    optional: true
 
   '@opentelemetry/propagator-jaeger@1.30.1(@opentelemetry/api@1.9.0)':
     dependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.0)
+    optional: true
 
   '@opentelemetry/resources@1.30.1(@opentelemetry/api@1.9.0)':
     dependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/semantic-conventions': 1.28.0
+    optional: true
 
   '@opentelemetry/sdk-trace-base@1.30.1(@opentelemetry/api@1.9.0)':
     dependencies:
@@ -18800,6 +18865,7 @@ snapshots:
       '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/resources': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/semantic-conventions': 1.28.0
+    optional: true
 
   '@opentelemetry/sdk-trace-node@1.30.1(@opentelemetry/api@1.9.0)':
     dependencies:
@@ -18810,10 +18876,10 @@ snapshots:
       '@opentelemetry/propagator-jaeger': 1.30.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 1.30.1(@opentelemetry/api@1.9.0)
       semver: 7.7.4
+    optional: true
 
-  '@opentelemetry/semantic-conventions@1.28.0': {}
-
-  '@opentelemetry/semantic-conventions@1.39.0': {}
+  '@opentelemetry/semantic-conventions@1.28.0':
+    optional: true
 
   '@orama/cuid2@2.2.3':
     dependencies:
@@ -18828,6 +18894,8 @@ snapshots:
       '@orama/orama': 3.1.18
       lodash: 4.17.23
     optional: true
+
+  '@oxc-project/types@0.114.0': {}
 
   '@oxc-project/types@0.115.0': {}
 
@@ -20351,7 +20419,7 @@ snapshots:
   '@react-native/codegen@0.84.1(@babel/core@7.29.0)':
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       hermes-parser: 0.32.0
       invariant: 2.2.4
       nullthrows: 1.1.1
@@ -20636,22 +20704,43 @@ snapshots:
 
   '@resvg/resvg-wasm@2.4.0': {}
 
+  '@rolldown/binding-android-arm64@1.0.0-rc.5':
+    optional: true
+
   '@rolldown/binding-android-arm64@1.0.0-rc.8':
+    optional: true
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.5':
     optional: true
 
   '@rolldown/binding-darwin-arm64@1.0.0-rc.8':
     optional: true
 
+  '@rolldown/binding-darwin-x64@1.0.0-rc.5':
+    optional: true
+
   '@rolldown/binding-darwin-x64@1.0.0-rc.8':
+    optional: true
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.5':
     optional: true
 
   '@rolldown/binding-freebsd-x64@1.0.0-rc.8':
     optional: true
 
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.5':
+    optional: true
+
   '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.8':
     optional: true
 
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.5':
+    optional: true
+
   '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.8':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.5':
     optional: true
 
   '@rolldown/binding-linux-arm64-musl@1.0.0-rc.8':
@@ -20663,13 +20752,27 @@ snapshots:
   '@rolldown/binding-linux-s390x-gnu@1.0.0-rc.8':
     optional: true
 
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.5':
+    optional: true
+
   '@rolldown/binding-linux-x64-gnu@1.0.0-rc.8':
+    optional: true
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.5':
     optional: true
 
   '@rolldown/binding-linux-x64-musl@1.0.0-rc.8':
     optional: true
 
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.5':
+    optional: true
+
   '@rolldown/binding-openharmony-arm64@1.0.0-rc.8':
+    optional: true
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.5':
+    dependencies:
+      '@napi-rs/wasm-runtime': 1.1.1
     optional: true
 
   '@rolldown/binding-wasm32-wasi@1.0.0-rc.8':
@@ -20677,13 +20780,21 @@ snapshots:
       '@napi-rs/wasm-runtime': 1.1.1
     optional: true
 
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.5':
+    optional: true
+
   '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.8':
+    optional: true
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.5':
     optional: true
 
   '@rolldown/binding-win32-x64-msvc@1.0.0-rc.8':
     optional: true
 
   '@rolldown/pluginutils@1.0.0-beta.40': {}
+
+  '@rolldown/pluginutils@1.0.0-rc.5': {}
 
   '@rolldown/pluginutils@1.0.0-rc.8': {}
 
@@ -21446,7 +21557,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.29.0
       '@babel/generator': 7.29.1
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       ansis: 4.2.0
       babel-dead-code-elimination: 1.0.12
@@ -21792,7 +21903,7 @@ snapshots:
 
   '@types/babel__core@7.20.5':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       '@types/babel__generator': 7.27.0
       '@types/babel__template': 7.4.4
@@ -21804,7 +21915,7 @@ snapshots:
 
   '@types/babel__template@7.4.4':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
 
   '@types/babel__traverse@7.28.0':
@@ -22435,7 +22546,7 @@ snapshots:
 
   '@vue/compiler-core@3.5.29':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@vue/shared': 3.5.29
       entities: 7.0.1
       estree-walker: 2.0.2
@@ -22448,7 +22559,7 @@ snapshots:
 
   '@vue/compiler-sfc@3.5.29':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@vue/compiler-core': 3.5.29
       '@vue/compiler-dom': 3.5.29
       '@vue/compiler-ssr': 3.5.29
@@ -22785,7 +22896,7 @@ snapshots:
   babel-dead-code-elimination@1.0.12:
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/traverse': 7.29.0
       '@babel/types': 7.29.0
     transitivePeerDependencies:
@@ -22963,7 +23074,7 @@ snapshots:
       mailchecker: 6.0.19
       validator: 13.15.26
 
-  better-call@2.0.2(zod@4.3.6):
+  better-call@1.3.2(zod@4.3.6):
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
@@ -23205,8 +23316,6 @@ snapshots:
       magicast: 0.5.2
 
   cac@6.7.14: {}
-
-  cac@7.0.0: {}
 
   cacheable-lookup@5.0.4: {}
 
@@ -26152,7 +26261,7 @@ snapshots:
   istanbul-lib-instrument@5.2.1:
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.2
       semver: 6.3.1
@@ -26772,7 +26881,7 @@ snapshots:
 
   magicast@0.2.11:
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       recast: 0.23.11
 
@@ -27492,7 +27601,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.29.0
       '@babel/generator': 7.29.1
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       flow-enums-runtime: 0.0.6
       metro: 0.83.4
@@ -27581,7 +27690,7 @@ snapshots:
       '@babel/code-frame': 7.29.0
       '@babel/core': 7.29.0
       '@babel/generator': 7.29.1
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/template': 7.28.6
       '@babel/traverse': 7.29.0
       '@babel/types': 7.29.0
@@ -28493,7 +28602,7 @@ snapshots:
     dependencies:
       citty: 0.2.1
       pathe: 2.0.3
-      tinyexec: 1.0.2
+      tinyexec: 1.0.4
 
   oauth2-mock-server@8.2.2:
     dependencies:
@@ -30659,7 +30768,7 @@ snapshots:
 
   robust-predicates@3.0.2: {}
 
-  rolldown-plugin-dts@0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3):
+  rolldown-plugin-dts@0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.5)(typescript@5.9.3):
     dependencies:
       '@babel/generator': 8.0.0-rc.2
       '@babel/helper-validator-identifier': 8.0.0-rc.2
@@ -30670,11 +30779,30 @@ snapshots:
       dts-resolver: 2.1.3(oxc-resolver@11.19.0)
       get-tsconfig: 4.13.6
       obug: 2.1.1
-      rolldown: 1.0.0-rc.8
+      rolldown: 1.0.0-rc.5
     optionalDependencies:
       typescript: 5.9.3
     transitivePeerDependencies:
       - oxc-resolver
+
+  rolldown@1.0.0-rc.5:
+    dependencies:
+      '@oxc-project/types': 0.114.0
+      '@rolldown/pluginutils': 1.0.0-rc.5
+    optionalDependencies:
+      '@rolldown/binding-android-arm64': 1.0.0-rc.5
+      '@rolldown/binding-darwin-arm64': 1.0.0-rc.5
+      '@rolldown/binding-darwin-x64': 1.0.0-rc.5
+      '@rolldown/binding-freebsd-x64': 1.0.0-rc.5
+      '@rolldown/binding-linux-arm-gnueabihf': 1.0.0-rc.5
+      '@rolldown/binding-linux-arm64-gnu': 1.0.0-rc.5
+      '@rolldown/binding-linux-arm64-musl': 1.0.0-rc.5
+      '@rolldown/binding-linux-x64-gnu': 1.0.0-rc.5
+      '@rolldown/binding-linux-x64-musl': 1.0.0-rc.5
+      '@rolldown/binding-openharmony-arm64': 1.0.0-rc.5
+      '@rolldown/binding-wasm32-wasi': 1.0.0-rc.5
+      '@rolldown/binding-win32-arm64-msvc': 1.0.0-rc.5
+      '@rolldown/binding-win32-x64-msvc': 1.0.0-rc.5
 
   rolldown@1.0.0-rc.8:
     dependencies:
@@ -31695,20 +31823,20 @@ snapshots:
       '@ts-morph/common': 0.28.1
       code-block-writer: 13.0.3
 
-  tsdown@0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3):
+  tsdown@0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
-      cac: 7.0.0
+      cac: 6.7.14
       defu: 6.1.4
       empathic: 2.0.0
       hookable: 6.0.1
       import-without-cache: 0.2.5
       obug: 2.1.1
       picomatch: 4.0.3
-      rolldown: 1.0.0-rc.8
-      rolldown-plugin-dts: 0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3)
+      rolldown: 1.0.0-rc.5
+      rolldown-plugin-dts: 0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.5)(typescript@5.9.3)
       semver: 7.7.4
-      tinyexec: 1.0.2
+      tinyexec: 1.0.4
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
