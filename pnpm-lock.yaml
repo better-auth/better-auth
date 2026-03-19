@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@better-auth/utils':
-      specifier: 0.3.1
-      version: 0.3.1
+      specifier: 0.4.0
+      version: 0.4.0
     '@better-fetch/fetch':
       specifier: 1.1.21
       version: 1.1.21
@@ -124,7 +124,7 @@ importers:
         version: 3.0.107(react@19.2.4)(zod@4.3.6)
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -991,7 +991,7 @@ importers:
     dependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1031,7 +1031,7 @@ importers:
         version: link:../telemetry
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -1191,7 +1191,7 @@ importers:
         version: link:../telemetry
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
@@ -1295,7 +1295,7 @@ importers:
     devDependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -1334,7 +1334,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@upstash/redis@1.36.4)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.11)(mysql2@3.18.2(@types/node@25.5.0))(pg@8.19.0)(postgres@3.4.8)(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
@@ -1349,7 +1349,7 @@ importers:
     dependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -1438,7 +1438,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@cloudflare/workers-types':
         specifier: ^4.20250121.0
         version: 4.20260226.1
@@ -1459,7 +1459,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       tsdown:
         specifier: 'catalog:'
         version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -1474,7 +1474,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       mongodb:
         specifier: ^7.1.0
         version: 7.1.0(socks@2.8.7)
@@ -1489,7 +1489,7 @@ importers:
     dependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -1523,7 +1523,7 @@ importers:
     dependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -1564,7 +1564,7 @@ importers:
         version: link:../core
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       prisma:
         specifier: ^7.4.1
         version: 7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
@@ -1600,7 +1600,7 @@ importers:
     dependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -1625,7 +1625,7 @@ importers:
     dependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -1702,7 +1702,7 @@ importers:
     dependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
-        version: 0.3.1
+        version: 0.4.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -2515,6 +2515,9 @@ packages:
 
   '@better-auth/utils@0.3.1':
     resolution: {integrity: sha512-+CGp4UmZSUrHHnpHhLPYu6cV+wSUSvVbZbNykxhUDocpVNTo9uFFxw/NqJlh1iC4wQ9HKKWGCKuZ5wUgS0v6Kg==}
+
+  '@better-auth/utils@0.4.0':
+    resolution: {integrity: sha512-RpMtLUIQAEWMgdPLNVbIF5ON2mm+CH0U3rCdUCU1VyeAUui4m38DyK7/aXMLZov2YDjG684pS1D0MBllrmgjQA==}
 
   '@better-fetch/fetch@1.1.21':
     resolution: {integrity: sha512-/ImESw0sskqlVR94jB+5+Pxjf+xBwDZF/N5+y2/q4EqD7IARUTSpPfIo8uf39SYpCxyOCtbyYpUrZ3F/k0zT4A==}
@@ -16747,6 +16750,10 @@ snapshots:
       '@babel/helper-validator-identifier': 8.0.0-rc.2
 
   '@better-auth/utils@0.3.1': {}
+
+  '@better-auth/utils@0.4.0':
+    dependencies:
+      '@noble/hashes': 2.0.1
 
   '@better-fetch/fetch@1.1.21': {}
 
