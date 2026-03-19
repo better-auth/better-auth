@@ -80,7 +80,7 @@ It gives AI agents a standard way to discover your service, register themselves,
                       requestedBy: agentSession.user.id, // [!code highlight]   
                     }; // [!code highlight]
                   default: // [!code highlight]
-                    
+                    throw new Error(`Unsupported capability: ${capability}`); // [!code highlight]
                 } // [!code highlight]
               }, // [!code highlight]
             }), // [!code highlight]
