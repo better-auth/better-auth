@@ -277,27 +277,6 @@ const onExecute = createOpenAPIHandler(spec, {
 agentAuth({ capabilities, onExecute });
 ```
 
-## MCP Adapter
-
-The SDK and CLI ship with MCP support so any MCP-compatible AI agent (Cursor, Claude Desktop, Windsurf, etc.) can discover and use agent-auth providers through MCP tools.
-
-```bash
-agent-auth mcp
-```
-
-This starts an MCP server (over stdio) that exposes tools like **`search`**, **`connect_agent`**, **`execute_capability`**, and **`batch_execute_capabilities`**. The agent discovers providers, connects, gets user approval, and executes capabilities — all through the standard MCP tool interface.
-
-You can also use the SDK's tool adapters directly if you're building your own MCP server or using another tool-calling framework:
-
-```ts
-import { AgentAuthClient, getAgentAuthTools } from "@auth/agent";
-
-const client = new AgentAuthClient({ registryUrl: "https://registry.example.com" });
-const tools = getAgentAuthTools(client);
-```
-
-The returned tools are framework-agnostic (name, JSON Schema parameters, execute function). The SDK includes built-in adapters for **MCP**, **OpenAI function calling**, **Vercel AI SDK**, and **Anthropic Claude** — or you can wire them into any tool-calling runtime yourself.
-
 ## Capabilities
 
 Capabilities are the contract between your application and an agent. Each capability has a name, a description, and optionally a JSON Schema `input` definition.
