@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/mongo-adapter",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "description": "Mongo adapter for Better Auth",
   "type": "module",
   "license": "MIT",
