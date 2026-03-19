@@ -1005,7 +1005,7 @@ oauthProvider({
 
 ### Custom Redirect URI Validation
 
-By default, the OAuth provider performs exact string matching against registered redirect URIs. The `validateRedirectUri` option allows you to implement custom validation logic, such as wildcard pattern matching for preview deployments.
+By default, the OAuth provider performs exact string matching against registered redirect URIs. The `validateRedirectUri` option allows you to implement custom validation logic, such as wildcard pattern matching for preview deployments. The validator can be synchronous or asynchronous (e.g., for fetching tenant configuration from a database).
 
 **Common Use Cases:**
 - **Preview deployments**: Platforms like Vercel, Netlify, or Cloudflare Pages generate unique subdomains for each PR/branch (e.g., `pr-123.preview.example.com`). Instead of registering each preview URL individually, you can use wildcard matching.
@@ -1025,8 +1025,10 @@ oauthProvider({
       if (!pattern.includes('*')) {
         return false;
       }
-      // Convert *.example.com to regex
-      const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+      // Convert *.example.com to regex pattern
+      // First escape all regex special chars including *
+      const escaped = pattern.replace(/[.+?^${}()|[\]\\*]/g, '\\$&');
+      // Then replace escaped \* with pattern to match single subdomain label
       const regex = new RegExp('^' + escaped.replace(/\\\*/g, '[^.]+') + '$');
       return regex.test(uri);
     });

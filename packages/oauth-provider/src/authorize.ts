@@ -230,7 +230,7 @@ export async function authorizeEndpoint(
 	if (query.redirect_uri) {
 		try {
 			isValidRedirectUri = opts.validateRedirectUri
-				? opts.validateRedirectUri(query.redirect_uri, registeredUris)
+				? await opts.validateRedirectUri(query.redirect_uri, registeredUris)
 				: registeredUris.includes(query.redirect_uri);
 		} catch {
 			// Custom validator threw an error - fail closed for security

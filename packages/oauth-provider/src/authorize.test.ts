@@ -589,3 +589,113 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 		expect(errorRedirectUrl).not.toContain("throw-error");
 	});
 });
+
+describe("oauth authorize - async validateRedirectUri", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+
+	// Async validation function that simulates fetching tenant config
+	const asyncValidator = async (
+		uri: string,
+		registeredUris: string[],
+	): Promise<boolean> => {
+		// Simulate async operation (e.g., database lookup)
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		// First check exact match
+		if (registeredUris.includes(uri)) {
+			return true;
+		}
+		// Allow any *.localhost subdomain if localhost is registered
+		try {
+			const url = new URL(uri);
+			if (url.hostname.endsWith(".localhost")) {
+				return registeredUris.some((registered) => {
+					const registeredUrl = new URL(registered);
+					return (
+						registeredUrl.hostname === "localhost" &&
+						registeredUrl.port === url.port &&
+						registeredUrl.pathname === url.pathname
+					);
+				});
+			}
+		} catch {
+			return false;
+		}
+		return false;
+	};
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				validateRedirectUri: asyncValidator,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const registeredUri = `${rpBaseUrl}/callback`;
+	const subdomainUri = "http://async-test.localhost:5000/callback";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		oauthClient = response;
+	});
+
+	it("should support async validator returning a Promise", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(64);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+			},
+			redirectURI: subdomainUri,
+			state: "async-validator-test",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		// Should redirect to the subdomain URI with authorization code
+		expect(callbackRedirectUrl).toContain("async-test.localhost");
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).toContain("state=async-validator-test");
+	});
+});

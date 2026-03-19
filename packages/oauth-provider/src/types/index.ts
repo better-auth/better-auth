@@ -72,13 +72,14 @@ export interface OAuthOptions<
 	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
 	 * @param registeredUris - Array of registered redirect URIs for the client
-	 * @returns `true` if the redirect URI is valid, `false` otherwise
+	 * @returns `true` if the redirect URI is valid, `false` otherwise.
+	 *   Supports both sync and async validators (returns `Awaitable<boolean>`).
 	 * @default Exact string match against registered URIs
 	 */
 	validateRedirectUri?: (
 		redirectUri: string,
 		registeredUris: string[],
-	) => boolean;
+	) => Awaitable<boolean>;
 	/**
 	 * List of valid audiences if there are multiple.
 	 *
