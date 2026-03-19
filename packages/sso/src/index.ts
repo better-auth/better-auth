@@ -47,9 +47,15 @@ export {
 	SignatureAlgorithm,
 } from "./saml";
 
-import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
+import type {
+	OIDCConfig,
+	Organization,
+	SAMLConfig,
+	SSOOptions,
+	SSOProvider,
+} from "./types";
 
-export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+export type { SAMLConfig, OIDCConfig, Organization, SSOOptions, SSOProvider };
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
