@@ -1333,7 +1333,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@better-auth/utils':
-        specifier: ^0.3.1
+        specifier: 'catalog:'
         version: 0.3.1
       drizzle-orm:
         specifier: ^0.45.1
@@ -1437,7 +1437,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@better-auth/utils':
-        specifier: ^0.3.1
+        specifier: 'catalog:'
         version: 0.3.1
       '@cloudflare/workers-types':
         specifier: ^4.20250121.0
@@ -1458,7 +1458,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@better-auth/utils':
-        specifier: ^0.3.1
+        specifier: 'catalog:'
         version: 0.3.1
       tsdown:
         specifier: 'catalog:'
@@ -1473,7 +1473,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@better-auth/utils':
-        specifier: ^0.3.1
+        specifier: 'catalog:'
         version: 0.3.1
       mongodb:
         specifier: ^7.1.0
@@ -1563,7 +1563,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@better-auth/utils':
-        specifier: ^0.3.1
+        specifier: 'catalog:'
         version: 0.3.1
       prisma:
         specifier: ^7.4.1
