@@ -5,19 +5,18 @@ description: Agent identity, registration, discovery, and capability-based autho
 
 `AI Agents` `MCP` `Capabilities`
 
-The Agent Auth plugin lets your Better Auth server act as an **Agent Auth provider**. It gives AI agents a standard way to discover your service, register themselves, request approval, and execute scoped capabilities using short-lived signed JWTs.
+The Agent Auth plugin lets your Better Auth server act as an **Agent Auth provider**. It's a server implementation of the [Agent Auth Protocol](https://agentauthprotocol.com). 
 
-This is useful when you want to expose product actions like `deploy_project`, `create_issue`, or `send_email` to external agents without handing them a full user session or a long-lived API key.
+It gives AI agents a standard way to discover your service, register themselves, request approval, and execute scoped capabilities using short-lived signed JWTs.
 
 ## Features
 
-- Discovery document at `/.well-known/agent-configuration`
+- Discovery document at `/.well-known/agent-configuration` (including `default_location` for execute)
 - Agent and host registration
 - Capability listing, description, and execution
 - Delegated and autonomous agent modes
 - Device authorization and CIBA approval flows
 - Short-lived signed JWTs with replay protection
-- Optional Better Auth client plugin, SDK, and CLI
 - Audit/event hooks for approvals, grants, and execution
 
 ## Installation
@@ -30,10 +29,10 @@ This is useful when you want to expose product actions like `deploy_project`, `c
         @better-auth/agent-auth
         ```
 
-        Optional companion packages:
+        Client and CLI packages (optional):
 
         ```bash
-        npm install @better-auth/agent-auth-sdk @better-auth/agent-auth-cli
+        npm install @auth/agent @auth/agent-cli
         ```
     </Step>
 
@@ -49,43 +48,43 @@ This is useful when you want to expose product actions like `deploy_project`, `c
         export const auth = betterAuth({
           plugins: [
             agentAuth({ // [!code highlight]
-              providerName: "Acme",
-              providerDescription: "Acme project and deployment APIs for AI agents.",
-              modes: ["delegated", "autonomous"],
-              capabilities: [
-                {
-                  name: "deploy_project",
-                  description: "Deploy a project to production.",
-                  input: {
-                    type: "object",
-                    properties: {
-                      projectId: { type: "string" },
-                    },
-                    required: ["projectId"],
-                  },
-                },
-                {
-                  name: "list_projects",
-                  description: "List projects the current user can access.",
-                },
-              ],
-              async onExecute({ capability, arguments: args, agentSession }) {
-                switch (capability) {
-                  case "list_projects":
-                    return [{ id: "proj_123", name: "marketing-site" }];
-                  case "deploy_project":
-                    return {
-                      ok: true,
-                      projectId: args?.projectId,
-                      requestedBy: agentSession.user.id,
-                    };
-                  default:
-                    throw new Error(`Unsupported capability: ${capability}`);
-                }
-              },
+              providerName: "Acme", // [!code highlight]
+              providerDescription: "Acme project and deployment APIs for AI agents.", // [!code highlight]
+              modes: ["delegated", "autonomous"], // [!code highlight]
+              capabilities: [ // [!code highlight]
+                { // [!code highlight]
+                  name: "deploy_project", // [!code highlight]
+                  description: "Deploy a project to production.", // [!code highlight]
+                  input: { // [!code highlight]
+                    type: "object", // [!code highlight]
+                    properties: { // [!code highlight]
+                      projectId: { type: "string" }, // [!code highlight]
+                    }, // [!code highlight]
+                    required: ["projectId"], // [!code highlight]
+                  }, // [!code highlight]
+                }, // [!code highlight]
+                { // [!code highlight]
+                  name: "list_projects", // [!code highlight]
+                  description: "List projects the current user can access.", // [!code highlight]
+                }, // [!code highlight]
+              ], // [!code highlight]
+              async onExecute({ capability, arguments: args, agentSession }) { // [!code highlight] 
+                switch (capability) { // [!code highlight]
+                  case "list_projects": // [!code highlight]  
+                    return [{ id: "proj_123", name: "marketing-site" }]; // [!code highlight]
+                  case "deploy_project": // [!code highlight]
+                    return { // [!code highlight]
+                      ok: true, // [!code highlight]
+                      projectId: args?.projectId, // [!code highlight]
+                      requestedBy: agentSession.user.id, // [!code highlight]   
+                    }; // [!code highlight]
+                  default: // [!code highlight]
+                    
+                } // [!code highlight]
+              }, // [!code highlight]
             }), // [!code highlight]
-          ],
-        });
+          ], // [!code highlight]
+        }); // [!code highlight]
         ```
     </Step>
 
@@ -150,11 +149,17 @@ The Agent Auth flow usually looks like this:
 2. The agent lists capabilities and decides what it needs
 3. The agent registers with your server and requests capability grants
 4. Your user approves the request through device authorization or CIBA
-5. The agent signs short-lived JWTs and calls `execute` for granted capabilities
+5. The agent signs short-lived JWTs (with an `aud` that matches the URL it calls) and invokes each granted capability at **`default_location`** or at that capability’s own **`location`**, if you set one
 
 ## Discovery
 
-The discovery document tells agents how to interact with your server. The plugin includes provider metadata, supported modes, approval methods, and the endpoint paths agents should use.
+The discovery document tells agents how to interact with your server. The plugin includes provider metadata, supported modes, approval methods, absolute endpoint URLs, and a **`default_location`** field.
+
+Important fields for execution:
+
+- **`issuer`** — The provider’s base URL (Better Auth `baseURL`).
+- **`endpoints`** — Absolute URLs for each route (for example `execute` points at `POST /capability/execute` on that base).
+- **`default_location`** — The full URL of the default execute endpoint. It always matches `endpoints.execute`. Agents use this as the JWT **`aud`** when a capability does not define a custom URL, and as the request URL for those capabilities.
 
 Expose it from your app root:
 
@@ -175,6 +180,8 @@ export async function GET() {
 ## Capabilities
 
 Capabilities are the contract between your application and an agent. Each capability has a name, a description, and optionally a JSON Schema `input` definition.
+
+By default, agents call **`default_location`** from discovery (the execute URL) and the plugin runs **`onExecute`**. If you set **`location`** on a capability, agents call that absolute URL instead—for example an existing REST route—and **`onExecute` is not used** for those requests; you resolve the agent session with the helpers below and implement the handler yourself.
 
 Use capabilities to expose narrow, reviewable actions instead of broad API access.
 
@@ -199,13 +206,91 @@ agentAuth({
 });
 ```
 
+Optional **`location`** — agents call this URL with the agent JWT instead of the default execute URL:
+
+```ts title="auth.ts"
+{
+  name: "create_issue",
+  description: "Create an issue in the current workspace.",
+  location: "https://api.example.com/v1/issues",
+}
+```
+
+### Default execute vs custom `location`
+
+- **No `location`** — Agents `POST` to **`default_location`** (`endpoints.execute`) with `{ capability, arguments }`. After the plugin validates the JWT and grant, it runs **`onExecute`**.
+- **With `location`** — Agents call that URL (your REST handler, another service, an OpenAPI operation URL, etc.). **`onExecute` does not run** for that call. Resolve **`agentSession`** in your handler using the helpers below, then enforce grants and your business logic.
+
+### Agent session outside `onExecute`
+
+For custom **`location`** routes (or any non-execute handler), the agent still sends an **`Authorization: Bearer`** header with the agent JWT. Whatever framework you use, take the incoming **`Headers`** (e.g. **`request.headers`**, or your runtime’s equivalent) and pass them through—the verification path is the same: signature, **`aud`**, replay (**`jti`**), expiry, and (when present) request-binding claims.
+
+**`auth.api.getAgentSession({ headers })`** runs that flow in-process and returns **`AgentSession`** or **`null`**. **`verifyAgentRequest(request, auth)`** does the same by forwarding the **`Request`**’s headers to **`GET /agent/session`** via **`auth.handler`**—pick whichever fits your code shape; there is no Hono-vs-Next split, only “headers in, session out.”
+
+```ts title="api/issues/route.ts"
+import { auth } from "@/lib/auth";
+
+export async function POST(request: Request) {
+  const agentSession = await auth.api.getAgentSession({
+    headers: request.headers,
+  });
+  if (!agentSession) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  // Check grants, enforce constraints, run your handler…
+}
+```
+
+```ts
+// Equivalent when you already have `Request` + `auth` and prefer a helper:
+import { verifyAgentRequest } from "@better-auth/agent-auth";
+const agentSession = await verifyAgentRequest(request, auth);
+```
+
+**Checking grants and inputs**
+
+After you have **`agentSession`**, inspect **`agentSession.agent.capabilityGrants`**. These are **active** DB grants **intersected** with the JWT’s **`capabilities`** claim (same as execute). For the capability this route implements, ensure there is a matching grant:
+
+```ts
+const CAP = "create_issue";
+const allowed = agentSession.agent.capabilityGrants.some(
+  (g) => g.capability === CAP && g.status === "active",
+);
+if (!allowed) {
+  return new Response("Forbidden", { status: 403 });
+}
+```
+
+If that grant has **`constraints`**, validate the request body or query the same way **`POST /capability/execute`** would—otherwise a client could bypass constraints by calling your custom URL. The plugin does not re-run execute’s constraint helpers on arbitrary routes; that logic stays in your handler (or call into shared code you extract from your **`onExecute`** path).
+
+**What you get on the session**
+
+- **`agentSession.user`** — Resolved user for the agent (delegated host user or **`resolveAutonomousUser`**).
+- **`agentSession.agent`** — Id, name, mode, **`capabilityGrants`**, host id, metadata.
+- **`agentSession.host`** — Host record when the agent is linked to a host.
+
+Types are exported from **`@better-auth/agent-auth`** (for example **`AgentSession`**).
+
+### JWT audience (`aud`)
+
+The JWT **`aud`** must match what the server expects for the URL being called:
+
+- **No per-capability `location`** — Use **`default_location`** / **`endpoints.execute`**, or issuer / base URL values the plugin already allows.
+- **With `location`** — **`aud`** should be that same absolute URL. `GET /capability/list` includes `location` when set. Invalid `location` values in config fail at startup.
+
+**Single capability in the JWT** — If `capabilities` lists exactly one id, **`aud`** may equal that capability’s **`location`** when set.
+
+**Multiple capabilities in the JWT** — Per-capability **`location`** values are not accepted as **`aud`**; use the issuer, base path, or default execute endpoint instead.
+
+Behind a reverse proxy, set **`trustProxy`** if you need **`Host`** / **`X-Forwarded-Proto`** to line up with **`aud`** validation.
+
 ### Filter visible capabilities
 
 Use `resolveCapabilities` to show different capability sets to different callers, such as plan-gated, user-specific, or organization-specific capabilities.
 
-### Execute capabilities
+### `onExecute`
 
-`onExecute` runs after the plugin has verified the agent JWT and checked that the requested capability is granted.
+Runs for capabilities that use the **default execute URL** (no per-capability **`location`**). The plugin verifies the JWT (including **`aud`**), attaches **`agentSession`**, checks the grant, then calls **`onExecute`**. Capabilities with a custom **`location`** never hit this path—you handle them in your own route using the session helpers above.
 
 ```ts title="auth.ts"
 agentAuth({
@@ -255,51 +340,6 @@ agentAuth({
   The plugin does not render the device approval UI for you. Your app must provide the page referenced by `deviceAuthorizationPage`.
 </Callout>
 
-## SDK Usage
-
-The optional SDK gives agents a high-level client for discovery, registration, approval handling, capability execution, and provider search.
-
-```ts title="agent.ts"
-import { AgentAuthClient } from "@better-auth/agent-auth-sdk";
-
-const client = new AgentAuthClient({
-  registryUrl: "https://registry.example.com",
-});
-
-const provider = await client.discoverProvider("https://acme.com");
-const capabilities = await client.listCapabilities({
-  provider: provider.issuer,
-});
-
-const connection = await client.connectAgent({
-  provider: provider.issuer,
-  name: "Acme Assistant",
-  mode: "delegated",
-  capabilities: ["list_projects"],
-});
-
-const result = await client.executeCapability({
-  agentId: connection.agent_id,
-  capability: "list_projects",
-});
-```
-
-## CLI Usage
-
-The CLI wraps the SDK for local testing, integrations, and agent workflows.
-
-```bash
-agent-auth discover https://acme.com
-agent-auth capabilities --provider https://acme.com
-agent-auth connect --provider https://acme.com --capabilities list_projects
-agent-auth execute <agent-id> list_projects
-```
-
-You can also run the CLI as an MCP server so tools like AI assistants can use discovered providers through a tool interface:
-
-```bash
-agent-auth mcp
-```
 
 ## OpenAPI-Derived Capabilities
 
@@ -358,12 +398,14 @@ The Agent Auth plugin supports many options. These are the ones you will usually
       required: false,
     },
     capabilities: {
-      description: "Capability definitions exposed by the provider.",
+      description:
+        "Capability definitions (`name`, `description`, optional `input`, optional absolute `location` — if set, agents call this URL instead of `default_location` and you use session helpers in your handler).",
       type: "Capability[]",
       required: false,
     },
     onExecute: {
-      description: "Handler for executing a granted capability.",
+      description:
+        "Handler for capabilities invoked via the default execute URL (`default_location`). Not called when the agent uses a custom per-capability `location`.",
       type: "function",
       required: false,
     },
@@ -402,17 +444,12 @@ The Agent Auth plugin supports many options. These are the ones you will usually
       type: "function",
       required: false,
     },
+    trustProxy: {
+      description:
+        "Trust `X-Forwarded-Proto` when validating JWT `aud` against request host (use behind a reverse proxy). Defaults to `false`.",
+      type: "boolean",
+      required: false,
+    },
   }}
 />
 
-## When To Use Agent Auth
-
-Agent Auth is a good fit when you want:
-
-- external AI agents to discover your service and self-register
-- explicit user approval before an agent can act
-- narrowly scoped capabilities instead of broad API keys
-- short-lived, signed tokens instead of long-lived secrets
-- a provider model that works well with SDKs, CLIs, and MCP tool adapters
-
-If you just need user sessions, OAuth login, or standard API token auth, one of the core Better Auth flows or plugins may be a simpler fit.
