@@ -409,7 +409,14 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+				// When preserveSessionInDatabase is enabled, revoked sessions
+				// remain in the database for audit purposes. Skip the database
+				// fallback to prevent those revoked sessions from being restored.
+				if (
+					!sessionStringified &&
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase)
+				) {
 					return null;
 				}
 				if (sessionStringified) {
