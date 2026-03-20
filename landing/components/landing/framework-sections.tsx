@@ -1116,13 +1116,13 @@ export function PluginEcosystem() {
 	return (
 		<div>
 			<div className="flex items-center gap-3 mb-3">
-				<span className="text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+				<span className="text-xs text-foreground/70 font-mono tracking-wider uppercase shrink-0">
 					Plugin Ecosystem
 				</span>
 				<div className="flex-1 border-t border-foreground/10" />
 				<Link
 					href="/docs/plugins"
-					className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 hover:text-foreground/55 transition-colors uppercase tracking-wider shrink-0"
+					className="text-[10px] font-mono text-foreground/70 dark:text-foreground/70 hover:text-foreground/55 transition-colors uppercase tracking-wider shrink-0"
 				>
 					browse all &rarr;
 				</Link>

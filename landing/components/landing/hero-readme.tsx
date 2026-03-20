@@ -2237,7 +2237,7 @@ export function HeroReadMe({
 						</div>
 
 						<div className="flex items-center gap-3 pt-8 mb-3">
-							<span className="text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-xs text-foreground/70 font-mono tracking-wider uppercase shrink-0">
 								OAuth Providers
 							</span>
 							<div className="flex-1 border-t border-foreground/10" />
