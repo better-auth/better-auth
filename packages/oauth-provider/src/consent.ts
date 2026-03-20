@@ -120,7 +120,7 @@ export async function consentEndpoint(
 	}
 	ctx?.headers?.set("accept", "application/json");
 	ctx.query = deleteFromPrompt(query, "consent");
-	ctx.context.postLogin = true;
+	(ctx.context as Record<string, unknown>).postLogin = true;
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
