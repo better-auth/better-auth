@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
+import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 
 const included = [
@@ -159,7 +160,7 @@ export function EnterprisePageClient() {
 
 					{/* Right side — Contact form */}
 					<div className="relative w-full lg:w-[60%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 pt-8 lg:p-8 lg:pt-16 pb-32 space-y-8">
+						<div className="p-5 pt-8 lg:p-8 lg:pt-16 space-y-8">
 							{/* Mobile header */}
 							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6">
 								<HalftoneBackground />
@@ -338,6 +339,7 @@ export function EnterprisePageClient() {
 								</div>
 							</motion.div>
 						</div>
+						<Footer />
 					</div>
 				</div>
 			</div>

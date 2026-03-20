@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
+import Footer from "@/components/landing/footer";
 import { Callout } from "@/components/ui/callout";
 import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
@@ -94,7 +95,7 @@ function BlogList() {
 						</Link>
 					))}
 				</div>
-				<div className="h-16" />
+				<Footer />
 			</div>
 		</div>
 	);
@@ -209,6 +210,7 @@ export default async function Page({
 						/>
 					</article>
 				</div>
+				<Footer />
 			</div>
 		</div>
 	);

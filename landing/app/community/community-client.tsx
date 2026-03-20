@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 import type { CommunityStats } from "@/lib/community-stats";
 
@@ -401,7 +402,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 
 					{/* Right side — Stats & platforms */}
 					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 pt-8 lg:p-8 lg:pt-16 pb-32 space-y-8">
+						<div className="p-5 pt-8 lg:p-8 lg:pt-16 space-y-8">
 							{/* Mobile header */}
 							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6">
 								<HalftoneBackground />
@@ -540,6 +541,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 								</Link>
 							</motion.div>
 						</div>
+						<Footer />
 					</div>
 				</div>
 			</div>

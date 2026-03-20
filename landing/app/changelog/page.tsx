@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 import { createMetadata } from "@/lib/metadata";
 import { ChangelogContent } from "./changelog-content";
@@ -171,7 +172,7 @@ export default async function ChangelogPage() {
 
 				<ChangelogContent messages={messages ?? []} />
 
-				<div className="h-16" />
+				<Footer />
 			</div>
 		</div>
 	);

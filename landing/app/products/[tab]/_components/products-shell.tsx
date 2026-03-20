@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 
 function FrameworkHero() {
@@ -277,6 +278,7 @@ export function ProductsShell({
 						</div>
 
 						{children}
+						<Footer />
 					</div>
 				</div>
 			</div>
