@@ -410,31 +410,29 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+				if (!sessionStringified) {
 					return null;
 				}
-				if (sessionStringified) {
-					const s = safeJSONParse<{
-						session: Session;
-						user: User;
-					}>(sessionStringified);
-					if (!s) return null;
-					const parsedSession = parseSessionOutput(ctx.options, {
-						...s.session,
-						expiresAt: new Date(s.session.expiresAt),
-						createdAt: new Date(s.session.createdAt),
-						updatedAt: new Date(s.session.updatedAt),
-					});
-					const parsedUser = parseUserOutput(ctx.options, {
-						...s.user,
-						createdAt: new Date(s.user.createdAt),
-						updatedAt: new Date(s.user.updatedAt),
-					});
-					return {
-						session: parsedSession,
-						user: parsedUser,
-					};
-				}
+				const s = safeJSONParse<{
+					session: Session;
+					user: User;
+				}>(sessionStringified);
+				if (!s) return null;
+				const parsedSession = parseSessionOutput(ctx.options, {
+					...s.session,
+					expiresAt: new Date(s.session.expiresAt),
+					createdAt: new Date(s.session.createdAt),
+					updatedAt: new Date(s.session.updatedAt),
+				});
+				const parsedUser = parseUserOutput(ctx.options, {
+					...s.user,
+					createdAt: new Date(s.user.createdAt),
+					updatedAt: new Date(s.user.updatedAt),
+				});
+				return {
+					session: parsedSession,
+					user: parsedUser,
+				};
 			}
 
 			const currentAdapter = await getCurrentAdapter(adapter);
