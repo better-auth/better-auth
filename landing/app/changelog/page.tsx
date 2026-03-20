@@ -50,10 +50,10 @@ export default async function ChangelogPage() {
 		"https://api.github.com/repos/better-auth/better-auth/releases",
 		{ next: { revalidate: 3600 } },
 	);
-	const releases: GitHubRelease[] = await res.json();
+	const releases: GitHubRelease[] = res.ok ? await res.json() : [];
 
-	const messages = releases
-		?.filter((release) => !release.prerelease)
+	const messages = (Array.isArray(releases) ? releases : [])
+		.filter((release) => !release.prerelease)
 		.map((release) => ({
 			tag: release.tag_name,
 			title: release.name,
