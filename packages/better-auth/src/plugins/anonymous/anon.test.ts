@@ -154,6 +154,55 @@ describe("anonymous", async () => {
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
 
+	it("should link anonymous account on social sign-in without session cookie (Expo flow)", async () => {
+		linkAccountFn.mockClear();
+		const anonHeaders = new Headers();
+		await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(anonHeaders),
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: { headers: anonHeaders },
+		});
+		expect(session.data?.user.isAnonymous).toBe(true);
+
+		// signIn.social: server receives anonymous session cookie via headers
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(anonHeaders),
+				headers: anonHeaders,
+			},
+		});
+		const state = new URL(signInRes.data?.url || "").searchParams.get("state");
+
+		// Simulate Expo: callback uses same headers as signIn.social
+		// (which has state cookie) but without the anonymous session cookie.
+		// In real Expo, the in-app browser gets the state cookie via
+		// /expo-authorization-proxy but never has the session cookie.
+		const callbackHeaders = new Headers(anonHeaders);
+		callbackHeaders.delete("cookie");
+		const cookies = anonHeaders.get("cookie") || "";
+		for (const part of cookies.split(";")) {
+			const trimmed = part.trim();
+			if (trimmed && !trimmed.startsWith("better-auth.session_token")) {
+				const existing = callbackHeaders.get("cookie");
+				callbackHeaders.set(
+					"cookie",
+					existing ? `${existing}; ${trimmed}` : trimmed,
+				);
+			}
+		}
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers: callbackHeaders,
+		});
+
+		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+
 	it("should work with generateName", async () => {
 		const { client, sessionSetter } = await getTestInstance(
 			{
