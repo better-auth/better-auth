@@ -902,6 +902,113 @@ describe("oauth-proxy", async () => {
 			);
 		});
 
+		it("should use dedicated secret instead of global secret", async () => {
+			const dedicatedSecret = "oauth-proxy-dedicated-secret-key";
+
+			const production = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview.example.com",
+							secret: dedicatedSecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							secret: dedicatedSecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Step 1: Start OAuth on production
+			const res = await production.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			// Step 2: Complete OAuth callback on production
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+
+			// Verify: encrypted with dedicated secret, NOT with global secret
+			const decryptedWithDedicated = await symmetricDecrypt({
+				key: dedicatedSecret,
+				data: encryptedProfile!,
+			});
+			expect(decryptedWithDedicated).toContain("user@email.com");
+
+			const { secret: globalSecret } = await production.auth.$context;
+			await expect(
+				symmetricDecrypt({
+					key: globalSecret,
+					data: encryptedProfile!,
+				}),
+			).rejects.toThrow();
+
+			// Step 3: Preview can decrypt and create user
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const users = await previewCtx.internalAdapter.listUsers();
+			expect(users.length).toBe(1);
+			expect(users[0]?.email).toBe("user@email.com");
+		});
+
 		it("should handle existing user on preview", async () => {
 			// Preview instance
 			const preview = await getTestInstance(

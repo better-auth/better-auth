@@ -61,7 +61,7 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
 </Steps>
 
 <Callout type="info">
-All environments (production, preview, development) must share the same `BETTER_AUTH_SECRET`. The plugin uses it to encrypt and decrypt data passed between servers during the OAuth flow.
+All environments participating in the OAuth proxy flow must share the same encryption key. By default, the plugin uses `BETTER_AUTH_SECRET`. To avoid sharing your main secret across environments, you can provide a dedicated `secret` option (see [Options](#options)).
 </Callout>
 
 ## How it works
@@ -96,3 +96,5 @@ This plugin is intended for development and preview environments. If `baseURL` a
 **currentURL**: The application's current URL is automatically determined by the plugin. It first checks the request URL, then vendor-specific environment variables from popular hosting providers, and finally falls back to the `baseURL` in your auth config. You only need to set this if the URL isn't being inferred correctly in your environment.
 
 **maxAge**: Maximum age in seconds for encrypted profile payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
+
+**secret**: A dedicated secret used for encrypting and decrypting data during the OAuth proxy flow. When set, this is used **instead of** the global `BETTER_AUTH_SECRET`, limiting the blast radius if the key is shared across environments — a leaked proxy secret cannot forge sessions or decrypt other data protected by the main secret. All environments participating in the proxy flow must share the same `secret` value.

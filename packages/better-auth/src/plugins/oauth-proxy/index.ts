@@ -1,4 +1,8 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+	SecretConfig,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -56,6 +60,21 @@ export interface OAuthProxyOptions {
 	 * @default 60 (1 minute)
 	 */
 	maxAge?: number | undefined;
+	/**
+	 * A dedicated secret used to encrypt and decrypt data passed between
+	 * servers during the OAuth proxy flow.
+	 *
+	 * When set, this secret is used **instead of** the global
+	 * `BETTER_AUTH_SECRET` for all OAuth proxy encryption operations.
+	 * This limits the blast radius if the secret is shared across
+	 * environments (production, preview, development): a leaked proxy
+	 * secret cannot be used to forge sessions or decrypt other data
+	 * protected by the main secret.
+	 *
+	 * All environments participating in the OAuth proxy flow must share
+	 * the same `secret` value.
+	 */
+	secret?: string | SecretConfig | undefined;
 }
 
 /**
@@ -101,6 +120,9 @@ const oauthCallbackQuerySchema = z.object({
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
+	const getEncryptionKey = (
+		ctx: GenericEndpointContext,
+	): string | SecretConfig => opts?.secret ?? ctx.context.secretConfig;
 
 	return {
 		id: "oauth-proxy",
@@ -168,7 +190,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					let decryptedPayload: string;
 					try {
 						decryptedPayload = await symmetricDecrypt({
-							key: ctx.context.secretConfig,
+							key: getEncryptionKey(ctx),
 							data: encryptedProfile,
 						});
 					} catch (e) {
@@ -298,7 +320,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let statePackage: OAuthProxyStatePackage | undefined;
 						try {
 							const decryptedPackage = await symmetricDecrypt({
-								key: ctx.context.secretConfig,
+								key: getEncryptionKey(ctx),
 								data: state,
 							});
 							statePackage =
@@ -331,7 +353,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let stateData: StateData;
 						try {
 							const decryptedState = await symmetricDecrypt({
-								key: ctx.context.secretConfig,
+								key: getEncryptionKey(ctx),
 								data: statePackage.stateCookie,
 							});
 							stateData = parseJSON<StateData>(decryptedState);
@@ -436,7 +458,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						};
 
 						const encryptedPayload = await symmetricEncrypt({
-							key: ctx.context.secretConfig,
+							key: getEncryptionKey(ctx),
 							data: JSON.stringify(payload),
 						});
 
@@ -505,7 +527,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							if (verification) {
 								// Encrypt the verification value so it matches cookie mode format
 								stateCookieValue = await symmetricEncrypt({
-									key: ctx.context.secretConfig,
+									key: getEncryptionKey(ctx),
 									data: verification.value,
 								});
 							}
@@ -523,7 +545,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								isOAuthProxy: true,
 							};
 							const encryptedPackage = await symmetricEncrypt({
-								key: ctx.context.secretConfig,
+								key: getEncryptionKey(ctx),
 								data: JSON.stringify(statePackage),
 							});
 
