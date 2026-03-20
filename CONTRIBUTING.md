@@ -87,11 +87,11 @@ When contributing to Better Auth:
 6. Create a `.env` file from the example:
    * On Unix-based systems:
      ```bash
-     cp -n ./docs/.env.example ./docs/.env
+     cp -n ./landing/.env.example ./landing/.env
      ```
    * On Windows:
      ```batch
-     copy /Y .\docs\.env.example .\docs\.env
+     copy /Y .\landing\.env.example .\landing\.env
      ```
 
 7. Build the project:
@@ -256,7 +256,7 @@ All contributions must include appropriate tests. Follow these guidelines:
   If it’s super necessary, provide a clear migration path
 * Follow the existing patterns for error handling and logging
 
-### Documentation (`/docs`)
+### Documentation (`/landing`)
 
 * Keep documentation up-to-date with code changes
 * Use clear, concise language
