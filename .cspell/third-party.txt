@@ -36,3 +36,9 @@ nuxtzzle
 Deel
 WorkOS
 authjs
+vite
+electronjs
+wagmi
+tldts
+headimgurl
+encoredev

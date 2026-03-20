@@ -3,6 +3,7 @@ import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
+import { inferAdditionalFields } from "../additional-fields/client";
 import { admin } from "../admin";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
@@ -31,11 +32,10 @@ describe("Custom Session Plugin Tests", async () => {
 						const newData = {
 							message: "Hello, World!",
 						};
-						const nameParts = user.name?.split(" ") ?? [];
 						return {
 							user: {
-								firstName: nameParts[0],
-								lastName: nameParts[1],
+								firstName: user.name.split(" ")[0],
+								lastName: user.name.split(" ")[1],
 							},
 							newData,
 							session,
@@ -65,21 +65,53 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
 	});
 
-	it("should return set cookie headers", async () => {
+	it("should return set cookie headers as separate entries", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.getSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {
-					const header = context.response.headers.get("set-cookie");
-					expect(header).toBeDefined();
-
-					const cookies = parseSetCookieHeader(header!);
-					expect(cookies.has("better-auth.session_token")).toBe(true);
-					expect(cookies.has("better-auth.session_data")).toBe(true);
+					const setCookies = context.response.headers.getSetCookie();
+					// Each Set-Cookie must be a separate header (not comma-joined)
+					// to ensure browsers correctly parse individual cookie attributes
+					expect(setCookies.length).toBeGreaterThanOrEqual(2);
+					const joined = setCookies.join("; ");
+					expect(joined).toContain("better-auth.session_token");
+					expect(joined).toContain("better-auth.session_data");
 				},
 			},
 		});
+	});
+
+	it("should not double-encode session cookie during get-session refresh", async () => {
+		const { headers } = await signInWithTestUser();
+		const signedInCookie = headers.get("cookie");
+		const signedInSessionToken = signedInCookie?.match(
+			/better-auth\.session_token=([^;]+)/,
+		)?.[1];
+		expect(signedInSessionToken).toBeDefined();
+
+		let refreshedSessionToken: string | undefined;
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const setCookies = context.response.headers.getSetCookie();
+					for (const cookieStr of setCookies) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						const token = parsed.get("better-auth.session_token")?.value;
+						if (token) {
+							refreshedSessionToken = token;
+							break;
+						}
+					}
+				},
+			},
+		});
+
+		expect(refreshedSessionToken).toBeDefined();
+		expect(refreshedSessionToken).toBe(signedInSessionToken);
+		expect(refreshedSessionToken).not.toContain("%25");
 	});
 
 	it("should return the custom session for multi-session", async () => {
@@ -106,6 +138,107 @@ describe("Custom Session Plugin Tests", async () => {
 		const session = sessions[0]!;
 		//@ts-expect-error
 		expect(session.newData).toEqual({ message: "Hello, World!" });
+	});
+
+	it("should preserve individual cookie Max-Age when cookieCache is enabled", async () => {
+		const sessionExpiresIn = 86400;
+		const cacheMaxAge = 300;
+		const {
+			auth: authWithCache,
+			signInWithTestUser: signInWithCache,
+			customFetchImpl: cacheFetchImpl,
+		} = await getTestInstance({
+			session: {
+				expiresIn: sessionExpiresIn,
+				updateAge: 0,
+				cookieCache: {
+					enabled: true,
+					maxAge: cacheMaxAge,
+				},
+			},
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return { user, session };
+				}),
+			],
+		});
+
+		const cacheClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [customSessionClient<typeof authWithCache>()],
+			fetchOptions: { customFetchImpl: cacheFetchImpl },
+		});
+
+		const { headers } = await signInWithCache();
+		await cacheClient.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const setCookies = context.response.headers.getSetCookie();
+					expect(setCookies.length).toBeGreaterThanOrEqual(2);
+
+					// Each cookie must be its own Set-Cookie header entry.
+					// If they were comma-joined, the browser would merge attributes
+					// and the session_token could inherit the short Max-Age from
+					// session_data, causing premature session expiry.
+					const tokenCookie = setCookies.find((c) =>
+						c.includes("better-auth.session_token"),
+					);
+					const dataCookie = setCookies.find((c) =>
+						c.includes("better-auth.session_data"),
+					);
+					expect(tokenCookie).toBeDefined();
+					expect(dataCookie).toBeDefined();
+
+					// Verify each cookie has its own Max-Age attribute
+					const tokenMaxAge = tokenCookie!.match(/Max-Age=(\d+)/i);
+					const dataMaxAge = dataCookie!.match(/Max-Age=(\d+)/i);
+					expect(tokenMaxAge).toBeTruthy();
+					expect(dataMaxAge).toBeTruthy();
+
+					const tokenMaxAgeValue = Number(tokenMaxAge![1]);
+					const dataMaxAgeValue = Number(dataMaxAge![1]);
+
+					// session_token must have the session expiresIn (within a small
+					// tolerance for elapsed time), not the shorter cookieCache maxAge
+					// (which would happen if headers were comma-joined)
+					expect(tokenMaxAgeValue).toBeGreaterThan(sessionExpiresIn - 10);
+					expect(tokenMaxAgeValue).toBeLessThanOrEqual(sessionExpiresIn);
+					expect(dataMaxAgeValue).toBe(cacheMaxAge);
+
+					// The critical invariant: token and data cookies must have
+					// different Max-Age values when configured differently
+					expect(tokenMaxAgeValue).not.toBe(dataMaxAgeValue);
+				},
+			},
+		});
+	});
+
+	it("should not comma-join Set-Cookie headers", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const setCookies = context.response.headers.getSetCookie();
+					// No single entry should contain multiple cookie assignments.
+					// A comma-joined header would look like:
+					// "session_token=xxx; ..., session_data=yyy; ..."
+					for (const cookie of setCookies) {
+						const cookieNames = cookie
+							.split(";")
+							.map((p) => p.trim().split("=")[0]!.toLowerCase());
+						// Only the first segment is the cookie name=value; the rest are
+						// attributes (max-age, path, httponly, samesite, etc.)
+						// None of those attributes should be another "better-auth." cookie
+						const betterAuthEntries = cookieNames.filter((n) =>
+							n.startsWith("better-auth."),
+						);
+						expect(betterAuthEntries).toHaveLength(1);
+					}
+				},
+			},
+		});
 	});
 
 	it.skipIf(globalThis.gc == null)(
@@ -166,6 +299,83 @@ describe("Custom Session Plugin Tests", async () => {
 			custom: {
 				field: string;
 			};
+		}>();
+	});
+
+	it("should not add user/session to client getSession type when custom session omits them", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				customSession(async () => {
+					return {
+						custom: {
+							field: "field",
+						},
+					};
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [customSessionClient<typeof auth>()],
+		});
+
+		type SessionData = typeof client.$Infer.Session;
+
+		// When custom session omits user/session, the client type must not claim they exist
+		expectTypeOf<SessionData>().toEqualTypeOf<{
+			custom: {
+				field: string;
+			};
+		}>();
+
+		// Verify user and session are not in the type
+		expectTypeOf<keyof SessionData>().toEqualTypeOf<"custom">();
+	});
+
+	it("should infer both customSessionClient and inferAdditionalFields when combined", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					role: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return {
+						user: {
+							firstName: user.name.split(" ")[0],
+							lastName: user.name.split(" ")[1],
+						},
+						session,
+						customData: { message: "hello" },
+					};
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [
+				customSessionClient<typeof auth>(),
+				inferAdditionalFields<typeof auth>(),
+			],
+		});
+
+		type SessionData = typeof client.$Infer.Session;
+		type User = SessionData["user"];
+
+		expectTypeOf<User>().toMatchObjectType<{
+			id: string;
+			firstName: string | undefined;
+			lastName: string | undefined;
+			role?: string | undefined | null;
+		}>();
+
+		type CustomData = SessionData["customData"];
+		expectTypeOf<CustomData>().toMatchObjectType<{
+			message: string;
 		}>();
 	});
 });

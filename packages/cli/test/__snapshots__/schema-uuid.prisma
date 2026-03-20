@@ -1,18 +1,17 @@
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
   id               String      @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  name             String
   email            String
   emailVerified    Boolean     @default(false)
-  name             String?
   image            String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt

@@ -1,4 +1,5 @@
 import * as z from "zod";
+import type { AwaitableFunction } from "../types";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
 import { cognito } from "./cognito";
@@ -21,6 +22,7 @@ import { notion } from "./notion";
 import { paybin } from "./paybin";
 import { paypal } from "./paypal";
 import { polar } from "./polar";
+import { railway } from "./railway";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
@@ -31,6 +33,7 @@ import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
+import { wechat } from "./wechat";
 import { zoom } from "./zoom";
 
 export const socialProviders = {
@@ -66,7 +69,9 @@ export const socialProviders = {
 	paybin,
 	paypal,
 	polar,
+	railway,
 	vercel,
+	wechat,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -81,11 +86,11 @@ export const SocialProviderListEnum = z
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
-	[K in SocialProviderList[number]]?: Parameters<
-		(typeof socialProviders)[K]
-	>[0] & {
-		enabled?: boolean | undefined;
-	};
+	[K in SocialProviderList[number]]?: AwaitableFunction<
+		Parameters<(typeof socialProviders)[K]>[0] & {
+			enabled?: boolean | undefined;
+		}
+	>;
 };
 
 export * from "./apple";
@@ -112,6 +117,7 @@ export * from "./notion";
 export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
+export * from "./railway";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./salesforce";
@@ -122,6 +128,7 @@ export * from "./twitch";
 export * from "./twitter";
 export * from "./vercel";
 export * from "./vk";
+export * from "./wechat";
 export * from "./zoom";
 
 export type SocialProviderList = typeof socialProviderList;

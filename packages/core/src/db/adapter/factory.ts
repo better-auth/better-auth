@@ -1,5 +1,10 @@
 import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
+import {
+	ATTR_DB_COLLECTION_NAME,
+	ATTR_DB_OPERATION_NAME,
+	withSpan,
+} from "../../instrumentation";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
 import { getAuthTables } from "../get-tables";
@@ -38,20 +43,20 @@ let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
 const createAsIsTransaction =
-	(adapter: DBAdapter<BetterAuthOptions>) =>
-	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
+	<Options extends BetterAuthOptions>(adapter: DBAdapter<Options>) =>
+	<R>(fn: (trx: DBTransactionAdapter<Options>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (
-	options: BetterAuthOptions,
-) => DBAdapter<BetterAuthOptions>;
+export type AdapterFactory<Options extends BetterAuthOptions> = (
+	options: Options,
+) => DBAdapter<Options>;
 
 export const createAdapterFactory =
-	({
+	<Options extends BetterAuthOptions>({
 		adapter: customAdapter,
 		config: cfg,
-	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	}: AdapterFactoryOptions): AdapterFactory<Options> =>
+	(options: Options): DBAdapter<Options> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -540,12 +545,32 @@ export const createAdapterFactory =
 					newValue = value.toISOString();
 				}
 
+				if (fieldAttr.type === "boolean" && typeof newValue === "string") {
+					newValue = newValue === "true";
+				}
+
+				if (fieldAttr.type === "number") {
+					if (typeof newValue === "string" && newValue.trim() !== "") {
+						const parsed = Number(newValue);
+						if (!Number.isNaN(parsed)) {
+							newValue = parsed;
+						}
+					} else if (Array.isArray(newValue)) {
+						const parsed = newValue.map((v) =>
+							typeof v === "string" && v.trim() !== "" ? Number(v) : NaN,
+						);
+						if (parsed.every((n) => !Number.isNaN(n))) {
+							newValue = parsed;
+						}
+					}
+				}
+
 				if (
 					fieldAttr.type === "boolean" &&
-					typeof value === "boolean" &&
+					typeof newValue === "boolean" &&
 					!config.supportsBooleans
 				) {
-					newValue = value ? 1 : 0;
+					newValue = newValue ? 1 : 0;
 				}
 
 				if (
@@ -745,20 +770,36 @@ export const createAdapterFactory =
 			});
 			try {
 				if (joinConfig.relation === "one-to-one") {
-					result = await adapterInstance.findOne<Record<string, any>>({
-						model: modelName,
-						where: where,
-					});
+					result = await withSpan(
+						`db findOne ${modelName}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "findOne",
+							[ATTR_DB_COLLECTION_NAME]: modelName,
+						},
+						() =>
+							adapterInstance.findOne<Record<string, any>>({
+								model: modelName,
+								where: where,
+							}),
+					);
 				} else {
 					const limit =
 						joinConfig.limit ??
 						options.advanced?.database?.defaultFindManyLimit ??
 						100;
-					result = await adapterInstance.findMany<Record<string, any>>({
-						model: modelName,
-						where: where,
-						limit,
-					});
+					result = await withSpan(
+						`db findMany ${modelName}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "findMany",
+							[ATTR_DB_COLLECTION_NAME]: modelName,
+						},
+						() =>
+							adapterInstance.findMany<Record<string, any>>({
+								model: modelName,
+								where: where,
+								limit,
+							}),
+					);
 				}
 			} catch (error) {
 				logger.error(`Failed to query fallback join for model ${modelName}:`, {
@@ -785,10 +826,8 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
-		let lazyLoadTransaction:
-			| DBAdapter<BetterAuthOptions>["transaction"]
-			| null = null;
-		const adapter: DBAdapter<BetterAuthOptions> = {
+		let lazyLoadTransaction: DBAdapter<Options>["transaction"] | null = null;
+		const adapter: DBAdapter<Options> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
@@ -861,7 +900,14 @@ export const createAdapterFactory =
 					`${formatMethod("create")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.create<T>({ data, model });
+				const res = await withSpan(
+					`db create ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "create",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.create<T>({ data, model }),
+				);
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -919,11 +965,19 @@ export const createAdapterFactory =
 					`${formatMethod("update")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.update<T>({
-					model,
-					where,
-					update: data,
-				});
+				const res = await withSpan(
+					`db update ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "update",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.update<T>({
+							model,
+							where,
+							update: data,
+						}),
+				);
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -982,11 +1036,19 @@ export const createAdapterFactory =
 					{ model, data },
 				);
 
-				const updatedCount = await adapterInstance.updateMany({
-					model,
-					where,
-					update: data,
-				});
+				const updatedCount = await withSpan(
+					`db updateMany ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "updateMany",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.updateMany({
+							model,
+							where,
+							update: data,
+						}),
+				);
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -1045,12 +1107,20 @@ export const createAdapterFactory =
 					{ model, where, select, join },
 				);
 
-				const res = await adapterInstance.findOne<T>({
-					model,
-					where,
-					select,
-					join: passJoinToAdapter ? join : undefined,
-				});
+				const res = await withSpan(
+					`db findOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "findOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.findOne<T>({
+							model,
+							where,
+							select,
+							join: passJoinToAdapter ? join : undefined,
+						}),
+				);
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
@@ -1124,15 +1194,23 @@ export const createAdapterFactory =
 					`${formatMethod("findMany")}:`,
 					{ model, where, limit, sortBy, offset, join },
 				);
-				const res = await adapterInstance.findMany<T>({
-					model,
-					where,
-					limit: limit,
-					select,
-					sortBy,
-					offset,
-					join: passJoinToAdapter ? join : undefined,
-				});
+				const res = await withSpan(
+					`db findMany ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "findMany",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.findMany<T>({
+							model,
+							where,
+							limit: limit,
+							select,
+							sortBy,
+							offset,
+							join: passJoinToAdapter ? join : undefined,
+						}),
+				);
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
@@ -1179,10 +1257,14 @@ export const createAdapterFactory =
 					`${formatMethod("delete")}:`,
 					{ model, where },
 				);
-				await adapterInstance.delete({
-					model,
-					where,
-				});
+				await withSpan(
+					`db delete ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "delete",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.delete({ model, where }),
+				);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -1212,10 +1294,14 @@ export const createAdapterFactory =
 					`${formatMethod("deleteMany")} ${formatAction("DeleteMany")}:`,
 					{ model, where },
 				);
-				const res = await adapterInstance.deleteMany({
-					model,
-					where,
-				});
+				const res = await withSpan(
+					`db deleteMany ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "deleteMany",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.deleteMany({ model, where }),
+				);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -1249,10 +1335,14 @@ export const createAdapterFactory =
 						where,
 					},
 				);
-				const res = await adapterInstance.count({
-					model,
-					where,
-				});
+				const res = await withSpan(
+					`db count ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "count",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.count({ model, where }),
+				);
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,

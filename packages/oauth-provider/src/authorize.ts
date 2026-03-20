@@ -1,8 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { oAuthState } from "./oauth";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -10,7 +12,24 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { getClient, getJwtPlugin, parsePrompt, storeToken } from "./utils";
+
+import {
+	getClient,
+	getJwtPlugin,
+	isPKCERequired,
+	parsePrompt,
+	storeToken,
+} from "./utils";
+
+/**
+ * OIDC Error Codes
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthError
+ */
+type OIDCAuthError =
+	| "login_required"
+	| "consent_required"
+	| "interaction_required"
+	| "account_selection_required";
 
 /**
  * Formats an error url
@@ -32,8 +51,9 @@ export function formatErrorURL(
 }
 
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+	const fromFetch = isBrowserFetchRequest(ctx.request?.headers);
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
-	if (acceptJson) {
+	if (fromFetch || acceptJson) {
 		return {
 			redirect: true,
 			url: uri.toString(),
@@ -42,6 +62,25 @@ export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 		throw ctx.redirect(uri);
 	}
 };
+
+function redirectWithPromptNoneError(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	query: OAuthAuthorizationQuery,
+	error: OIDCAuthError,
+	description: string,
+) {
+	return handleRedirect(
+		ctx,
+		formatErrorURL(
+			query.redirect_uri,
+			error,
+			description,
+			query.state,
+			getIssuer(ctx, opts),
+		),
+	);
+}
 
 /**
  * Validates that the issuer URL
@@ -131,6 +170,10 @@ export async function authorizeEndpoint(
 
 	// Check request
 	const query: OAuthAuthorizationQuery = ctx.query;
+	await oAuthState.set({
+		query: query.toString(),
+	});
+
 	if (!query.client_id) {
 		throw ctx.redirect(
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
@@ -146,6 +189,7 @@ export async function authorizeEndpoint(
 	const promptSet = ctx.query?.prompt
 		? parsePrompt(ctx.query?.prompt)
 		: undefined;
+	const promptNone = promptSet?.has("none") ?? false;
 	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
 		throw ctx.redirect(
 			getErrorURL(
@@ -193,12 +237,7 @@ export async function authorizeEndpoint(
 	if (requestedScopes) {
 		const validScopes = new Set(client.scopes ?? opts.scopes);
 		const invalidScopes = requestedScopes.filter((scope) => {
-			return (
-				!validScopes?.has(scope) ||
-				// offline access must be requested through PKCE
-				(scope === "offline_access" &&
-					(query.code_challenge_method !== "S256" || !query.code_challenge))
-			);
+			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
 			throw ctx.redirect(
@@ -218,35 +257,66 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
-	if (!query.code_challenge || !query.code_challenge_method) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"pkce is required",
-				query.state,
-				getIssuer(ctx, opts),
-			),
-		);
+	// Check if PKCE is required for this client and scope
+	const pkceRequired = isPKCERequired(client, requestedScopes);
+
+	// Validate PKCE parameters if required
+	if (pkceRequired) {
+		if (!query.code_challenge || !query.code_challenge_method) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					pkceRequired.valueOf(),
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 	}
 
-	// Check code challenges
-	const codeChallengesSupported = ["S256"];
-	if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"invalid code_challenge method",
-				query.state,
-				getIssuer(ctx, opts),
-			),
-		);
+	// If PKCE parameters are provided, validate them (even if not required)
+	if (query.code_challenge || query.code_challenge_method) {
+		// Both parameters must be provided together
+		if (!query.code_challenge || !query.code_challenge_method) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"code_challenge and code_challenge_method must both be provided",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
+
+		// Check code challenge method is supported (only S256)
+		const codeChallengesSupported = ["S256"];
+		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"invalid code_challenge method, only S256 is supported",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 	}
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
 	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+		if (promptNone) {
+			return redirectWithPromptNoneError(
+				ctx,
+				opts,
+				query,
+				"login_required",
+				"authentication required",
+			);
+		}
 		return redirectWithPromptCode(
 			ctx,
 			opts,
@@ -271,6 +341,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (selectedAccountRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"account_selection_required",
+					"End-User account selection is required",
+				);
+			}
 			return redirectWithPromptCode(ctx, opts, "select_account");
 		}
 	}
@@ -284,6 +363,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (signupRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"interaction_required",
+					"End-User interaction is required",
+				);
+			}
 			return redirectWithPromptCode(
 				ctx,
 				opts,
@@ -301,6 +389,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (postLoginRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"interaction_required",
+					"End-User interaction is required",
+				);
+			}
 			return redirectWithPromptCode(ctx, opts, "post_login");
 		}
 	}
@@ -323,6 +420,7 @@ export async function authorizeEndpoint(
 			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
+			authTime: new Date(session.session.createdAt).getTime(),
 			referenceId,
 		});
 	}
@@ -352,6 +450,15 @@ export async function authorizeEndpoint(
 		!consent ||
 		!requestedScopes.every((val) => consent.scopes.includes(val))
 	) {
+		if (promptNone) {
+			return redirectWithPromptNoneError(
+				ctx,
+				opts,
+				query,
+				"consent_required",
+				"End-User consent is required",
+			);
+		}
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
@@ -360,6 +467,7 @@ export async function authorizeEndpoint(
 		clientId: client.clientId,
 		userId: session.user.id,
 		sessionId: session.session.id,
+		authTime: new Date(session.session.createdAt).getTime(),
 		referenceId,
 	});
 }
@@ -372,6 +480,7 @@ async function redirectWithAuthorizationCode(
 		clientId: string;
 		userId: string;
 		sessionId: string;
+		authTime: number;
 		referenceId?: string;
 	},
 ) {
@@ -389,17 +498,13 @@ async function redirectWithAuthorizationCode(
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
+			authTime: verificationValue.authTime,
 		} satisfies VerificationValue),
 	};
-	ctx.context.verification_id
-		? await ctx.context.internalAdapter.updateVerificationValue(
-				ctx.context.verification_id,
-				data,
-			)
-		: await ctx.context.internalAdapter.createVerificationValue({
-				...data,
-				createdAt: new Date(iat * 1000),
-			});
+	await ctx.context.internalAdapter.createVerificationValue({
+		...data,
+		createdAt: new Date(iat * 1000),
+	});
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);

@@ -263,7 +263,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			if (
-				member.role !== creatorRole &&
+				!member.role
+					.split(",")
+					.map((r) => r.trim())
+					.includes(creatorRole) &&
 				roles.split(",").includes(creatorRole)
 			) {
 				throw APIError.from(
@@ -700,14 +703,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.organizationId,
 				ctx,
 			);
-			if (!acceptedI) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND.message,
-					},
-				});
-			}
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
 					invitation: acceptedI as unknown as Invitation,

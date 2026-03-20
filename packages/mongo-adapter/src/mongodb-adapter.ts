@@ -8,7 +8,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
-import { ObjectId } from "mongodb";
+import { ObjectId, UUID } from "mongodb";
 
 class MongoAdapterError extends Error {
 	constructor(
@@ -77,6 +77,17 @@ export const mongodbAdapter = (
 			options,
 		}) => {
 			const customIdGen = getCustomIdGenerator(options);
+			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+
+			function coerceToIdType(value: string): ObjectId | UUID {
+				if (useUUIDs) return new UUID(value);
+				return new ObjectId(value);
+			}
+
+			function isIdInstance(value: unknown): value is ObjectId | UUID {
+				if (useUUIDs) return value instanceof UUID;
+				return value instanceof ObjectId;
+			}
 
 			function serializeID({
 				field,
@@ -100,7 +111,7 @@ export const mongodbAdapter = (
 						return value;
 					}
 					if (typeof value !== "string") {
-						if (value instanceof ObjectId) {
+						if (isIdInstance(value)) {
 							return value;
 						}
 						if (Array.isArray(value)) {
@@ -110,12 +121,12 @@ export const mongodbAdapter = (
 								}
 								if (typeof v === "string") {
 									try {
-										return new ObjectId(v);
+										return coerceToIdType(v);
 									} catch {
 										return v;
 									}
 								}
-								if (v instanceof ObjectId) {
+								if (isIdInstance(v)) {
 									return v;
 								}
 								throw new MongoAdapterError("INVALID_ID", "Invalid id value");
@@ -124,7 +135,7 @@ export const mongodbAdapter = (
 						throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 					}
 					try {
-						return new ObjectId(value);
+						return coerceToIdType(value);
 					} catch {
 						return value;
 					}
@@ -632,15 +643,19 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action !== "create") {
+					if (action !== "create" && action !== "update") {
+						return data;
+					}
+					const IdClass =
+						options.advanced?.database?.generateId === "uuid" ? UUID : ObjectId;
+					if (data instanceof IdClass) {
 						return data;
 					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
 							if (typeof v === "string") {
 								try {
-									const oid = new ObjectId(v);
-									return oid;
+									return new IdClass(v);
 								} catch {
 									return v;
 								}
@@ -650,8 +665,7 @@ export const mongodbAdapter = (
 					}
 					if (typeof data === "string") {
 						try {
-							const oid = new ObjectId(data);
-							return oid;
+							return new IdClass(data);
 						} catch {
 							return data;
 						}
@@ -663,18 +677,26 @@ export const mongodbAdapter = (
 					) {
 						return null;
 					}
-					const oid = new ObjectId();
-					return oid;
+					if (action === "update") {
+						return data;
+					}
+					return new IdClass();
 				}
 				return data;
 			},
 			customTransformOutput({ data, field, fieldAttributes }) {
 				if (field === "id" || fieldAttributes.references?.field === "id") {
+					if (data instanceof UUID) {
+						return data.toString();
+					}
 					if (data instanceof ObjectId) {
 						return data.toHexString();
 					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
+							if (v instanceof UUID) {
+								return v.toString();
+							}
 							if (v instanceof ObjectId) {
 								return v.toHexString();
 							}

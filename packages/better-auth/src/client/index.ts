@@ -15,6 +15,7 @@ export {
 	type OnlineListener,
 	type OnlineManager,
 } from "./online-manager";
+export * from "./parser";
 export * from "./query";
 export * from "./session-refresh";
 export * from "./types";
@@ -40,4 +41,5 @@ export type * from "../plugins/access";
 export type * from "../plugins/organization";
 export type * from "../types/helper";
 export type { UnionToIntersection } from "../types/helper";
+export type * from "./path-to-object";
 //#endregion

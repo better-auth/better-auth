@@ -26,6 +26,12 @@ export interface MagicLinkOptions {
 	 */
 	expiresIn?: number | undefined;
 	/**
+	 * Allowed attempts for verifying the magic link token.
+	 * Note: Passing Infinity will allow unlimited attempts.
+	 * @default 1
+	 */
+	allowedAttempts?: number;
+	/**
 	 * Send magic link implementation.
 	 */
 	sendMagicLink: (
@@ -33,6 +39,7 @@ export interface MagicLinkOptions {
 			email: string;
 			url: string;
 			token: string;
+			metadata?: Record<string, any>;
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
@@ -106,6 +113,12 @@ const signInMagicLinkBodySchema = z.object({
 			description: "URL to redirect after error.",
 		})
 		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "Additional metadata to pass to sendMagicLink.",
+		})
+		.optional(),
 });
 const magicLinkVerifyQuerySchema = z.object({
 	token: z.string().meta({
@@ -135,6 +148,7 @@ const magicLinkVerifyQuerySchema = z.object({
 export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
+		allowedAttempts: 1,
 		...options,
 	} satisfies MagicLinkOptions;
 
@@ -201,7 +215,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, metadata } = ctx.body;
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
@@ -209,7 +223,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					const storedToken = await storeToken(ctx, verificationToken);
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: storedToken,
-						value: JSON.stringify({ email, name: ctx.body.name }),
+						value: JSON.stringify({ email, name: ctx.body.name, attempt: 0 }),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
 					const realBaseURL = new URL(ctx.context.baseURL);
@@ -236,6 +250,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							email,
 							url: url.toString(),
 							token: verificationToken,
+							metadata,
 						},
 						ctx,
 					);
@@ -347,18 +362,37 @@ export const magicLink = (options: MagicLinkOptions) => {
 						redirectWithError("INVALID_TOKEN");
 					}
 					if (tokenValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							tokenValue.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							storedToken,
 						);
 						redirectWithError("EXPIRED_TOKEN");
 					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						tokenValue.id,
-					);
-					const { email, name } = JSON.parse(tokenValue.value) as {
+					const {
+						email,
+						name,
+						attempt = 0,
+					} = JSON.parse(tokenValue.value) as {
 						email: string;
 						name?: string | undefined;
+						attempt?: number | undefined;
 					};
+					if (attempt >= opts.allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							storedToken,
+						);
+						redirectWithError("ATTEMPTS_EXCEEDED");
+					}
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						storedToken,
+						{
+							value: JSON.stringify({
+								email,
+								name,
+								attempt: attempt + 1,
+							}),
+						},
+					);
+
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter
 						.findUserByEmail(email)
@@ -369,7 +403,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							const newUser = await ctx.context.internalAdapter.createUser({
 								email: email,
 								emailVerified: true,
-								name,
+								name: name || "",
 							});
 							isNewUser = true;
 							user = newUser;

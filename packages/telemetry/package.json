@@ -1,13 +1,34 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.5.0-beta.10",
+  "version": "1.5.1-beta.3",
   "description": "Telemetry package for Better Auth",
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/telemetry"
   },
+  "keywords": [
+    "auth",
+    "telemetry",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -15,6 +36,7 @@
     ".": {
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
+      "node": "./dist/node.mjs",
       "default": "./dist/index.mjs"
     }
   },
@@ -25,21 +47,14 @@
       ]
     }
   },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --project tsconfig.json"
+  "dependencies": {
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "tsdown": "catalog:",
-    "type-fest": "^5.4.2"
-  },
-  "dependencies": {
-    "@better-auth/utils": "catalog:",
-    "@better-fetch/fetch": "catalog:"
+    "type-fest": "^5.4.4"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*"

@@ -33,11 +33,10 @@ npx convex dev
 <Step>
 ## Install packages
 
-Install a pinned version of Better Auth and the Convex component for Better Auth, and make sure you are using the latest version of Convex.
+Install Better Auth and the Convex component for Better Auth, and make sure you are using the latest version of Convex.
 
 ```package-install
-npm install better-auth@1.4.9 --save-exact
-npm install @convex-dev/better-auth
+npm install better-auth @convex-dev/better-auth
 ```
 
 <Callout type="info">
@@ -48,7 +47,7 @@ npm install @convex-dev/better-auth
 <Step>
 ## Set environment variables
 
-Generate a secret for encryption and generating hashes. Use the command below if you have openssl installed, or use `@better-auth/cli secret` to generate one.
+Generate a secret for encryption and generating hashes. Use the command below if you have openssl installed, or use `npx auth secret` to generate one.
 
 ```package-install
 npx convex env set BETTER_AUTH_SECRET=$(openssl rand -base64 32)
@@ -186,7 +185,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   } satisfies BetterAuthOptions;
 };
 
-// For `@better-auth/cli`
+// For `auth` CLI
 export const options = createAuthOptions({} as GenericCtx<DataModel>);
 
 // Better Auth Instance
@@ -197,10 +196,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 
 ### Generate the schema
 
-After configuring your Better Auth instance, create a `convex/betterAuth/schema.ts` file and run the command below to generate the schema.
+After configuring your Better Auth instance, run the command below to generate `convex/betterAuth/schema.ts`.
 
 ```package-install
-npx @better-auth/cli generate --config ./convex/betterAuth/auth.ts --output ./convex/betterAuth/schema.ts
+npx auth generate --config ./convex/betterAuth/auth.ts --output ./convex/betterAuth/schema.ts
 ```
 
 <Callout type="info">

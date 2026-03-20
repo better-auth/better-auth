@@ -183,6 +183,35 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return operator;
 				}
 			}
+			const hasRootUniqueWhereCondition = (
+				model: string,
+				where?: Where[] | undefined,
+			) => {
+				if (!where?.length) {
+					return false;
+				}
+
+				return where.some((condition) => {
+					if (condition.connector === "OR") {
+						return false;
+					}
+
+					if (condition.operator && condition.operator !== "eq") {
+						return false;
+					}
+
+					if (condition.field === "id") {
+						return true;
+					}
+
+					return (
+						getFieldAttributes({
+							model,
+							field: condition.field,
+						})?.unique === true
+					);
+				});
+			};
 			const convertWhereClause = ({
 				action,
 				model,
@@ -463,6 +492,28 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
+					const hasRootUniqueCondition = hasRootUniqueWhereCondition(
+						model,
+						where,
+					);
+					if (!hasRootUniqueCondition) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "updateMany",
+						});
+						const result = await db[model]!.updateMany({
+							where: whereClause,
+							data: update,
+						});
+						if (!result?.count) {
+							return null;
+						}
+
+						return await db[model]!.findFirst({
+							where: whereClause,
+						});
+					}
 					const whereClause = convertWhereClause({
 						model,
 						where,
@@ -496,6 +547,20 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
+					}
+					// Prisma's delete() requires a WhereUniqueInput (unique/primary key field).
+					// When deleting by non-unique fields (e.g. identifier), fall back to deleteMany.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (!hasIdField) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "deleteMany",
+						});
+						await db[model]!.deleteMany({
+							where: whereClause,
+						});
+						return;
 					}
 					const whereClause = convertWhereClause({
 						model,

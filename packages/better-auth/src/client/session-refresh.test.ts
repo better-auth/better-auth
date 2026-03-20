@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { atom } from "nanostores";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalOnlineManager } from "./online-manager";
 import type { SessionAtom } from "./session-atom";
 import { createSessionRefreshManager } from "./session-refresh";
@@ -11,6 +12,12 @@ describe("session-refresh", () => {
 		const onlineManager = getGlobalOnlineManager();
 		onlineManager.setOnline(true);
 		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
 	});
 
 	it("should trigger network fetch and update session when refetchInterval fires", async () => {
@@ -613,5 +620,269 @@ describe("session-refresh", () => {
 
 		manager.cleanup();
 		vi.useRealTimers();
+	});
+
+	/**
+	 * https://github.com/better-auth/better-auth/issues/8325
+	 */
+	it("should preserve custom session fields on poll refresh", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+
+		const customSessionData = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+			activationInfo: { isActivated: true, activatedAt: "2024-01-01" },
+			role: "admin",
+		};
+
+		const mockFetch = vi.fn(async () => ({
+			data: customSessionData,
+			error: null,
+		}));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(customSessionData);
+		expect((updatedSession.data as any)?.activationInfo).toEqual({
+			isActivated: true,
+			activatedAt: "2024-01-01",
+		});
+		expect((updatedSession.data as any)?.role).toBe("admin");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should preserve custom session fields on visibilitychange refresh", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+
+		const customSessionData = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+			customField: "custom value",
+		};
+
+		const mockFetch = vi.fn(async () => ({
+			data: customSessionData,
+			error: null,
+		}));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchOnWindowFocus: true,
+				},
+			},
+		});
+
+		manager.init();
+
+		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
+
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(customSessionData);
+		expect((updatedSession.data as any)?.customField).toBe("custom value");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should preserve session when $fetch returns unwrapped data (throw: true)", async () => {
+		vi.useFakeTimers();
+
+		const initialData = {
+			user: { id: "1", email: "old@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const refreshedData = {
+			user: { id: "1", email: "new@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const sessionAtom: SessionAtom = atom({
+			data: initialData,
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		// When throw: true, $fetch returns data directly instead of { data, error }
+		const mockFetch = vi.fn(async () => refreshedData);
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(refreshedData);
+		expect(updatedSession.data?.user?.email).toBe("new@test.com");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should preserve session on visibilitychange when $fetch returns unwrapped data (throw: true)", async () => {
+		vi.useFakeTimers();
+
+		const initialData = {
+			user: { id: "1", email: "old@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const refreshedData = {
+			user: { id: "1", email: "new@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const sessionAtom: SessionAtom = atom({
+			data: initialData,
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		// When throw: true, $fetch returns data directly
+		const mockFetch = vi.fn(async () => refreshedData);
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchOnWindowFocus: true,
+				},
+			},
+		});
+
+		manager.init();
+
+		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
+
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(refreshedData);
+		expect(updatedSession.data?.user?.email).toBe("new@test.com");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should broadcast session update when broadcastSessionUpdate is called with signout", () => {
+		const channel = getGlobalBroadcastChannel();
+		const postSpy = vi.spyOn(channel, "post");
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+		const mockFetch = vi.fn(async () => ({ data: null, error: null }));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {},
+		});
+
+		manager.init();
+		manager.broadcastSessionUpdate("signout");
+
+		expect(postSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { trigger: "signout" } }),
+		);
+
+		manager.cleanup();
+	});
+
+	it("should broadcast session update when broadcastSessionUpdate is called with updateUser", () => {
+		const channel = getGlobalBroadcastChannel();
+		const postSpy = vi.spyOn(channel, "post");
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+		const mockFetch = vi.fn(async () => ({ data: null, error: null }));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {},
+		});
+
+		manager.init();
+		manager.broadcastSessionUpdate("updateUser");
+
+		expect(postSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { trigger: "updateUser" } }),
+		);
+
+		manager.cleanup();
 	});
 });

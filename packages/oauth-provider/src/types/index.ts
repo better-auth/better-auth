@@ -116,6 +116,11 @@ export interface OAuthOptions<
 		[K in Scopes[number]]?: number | string | Date;
 	};
 	/**
+	 * Allows /oauth2/public-client-prelogin endpoint to be
+	 * requestable prior to login via a valid oauth_query.
+	 */
+	allowPublicClientPrelogin?: boolean;
+	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
 	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
@@ -664,6 +669,14 @@ export interface OAuthOptions<
 		 */
 		userinfo?: { window: number; max: number } | false;
 	};
+	/**
+	 * Secret used to compute pairwise subject identifiers (HMAC-SHA256).
+	 * When set, clients with `subject_type: "pairwise"` receive unique,
+	 * unlinkable `sub` values per sector identifier.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+	 */
+	pairwiseSecret?: string;
 }
 
 export interface OAuthAuthorizationQuery {
@@ -789,6 +802,7 @@ export interface VerificationValue {
 	sessionId: string;
 	userId: string;
 	referenceId?: string;
+	authTime?: number;
 }
 
 /**
@@ -892,11 +906,22 @@ export interface SchemaClient<
 	 * - user-agent-based - A user-agent-based application (public client)
 	 */
 	type?: "web" | "native" | "user-agent-based";
+	/**
+	 * Whether this client requires PKCE for authorization code flow.
+	 *
+	 * @default true
+	 *
+	 * Note: PKCE is always required for public clients and when
+	 * requesting offline_access scope, regardless of this setting.
+	 */
+	requirePKCE?: boolean;
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
 	/** Used to enable client to logout via the `/oauth2/end-session` endpoint */
 	enableEndSession?: boolean;
+	/** Subject identifier type: "public" (default) or "pairwise" */
+	subjectType?: "public" | "pairwise";
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**
@@ -972,6 +997,11 @@ export interface OAuthRefreshToken<
 	 * When token was revoked. If set, token is considered a replay attack.
 	 */
 	revoked?: Date;
+	/**
+	 * The time the user originally authenticated.
+	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
+	 */
+	authTime?: Date;
 	/**
 	 * Scopes granted for this refresh token.
 	 *

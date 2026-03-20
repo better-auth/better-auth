@@ -53,10 +53,11 @@ export async function getClientEndpoint(
  * This is commonly used to display information on login flow pages.
  */
 export async function getClientPublicEndpoint(
-	ctx: GenericEndpointContext & { query: { client_id: string } },
+	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	clientId: string,
 ) {
-	const client = await getClient(ctx, opts, ctx.query.client_id);
+	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
 		throw new APIError("NOT_FOUND", {
 			error_description: "client not found",
@@ -269,7 +270,10 @@ export async function updateClientEndpoint(
 					value: clientId,
 				},
 			],
-			update: oauthToSchema(updates),
+			update: {
+				...oauthToSchema(updates),
+				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
+			},
 		},
 	);
 	if (!updatedClient) {
@@ -351,8 +355,8 @@ export async function rotateClientSecretEndpoint(
 				},
 			],
 			update: {
-				...schemaToOAuth(client),
 				clientSecret: storedClientSecret,
+				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
 			},
 		},
 	);

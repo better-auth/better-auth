@@ -4,7 +4,7 @@ import { isProxy } from "node:util/types";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import {
@@ -12,6 +12,7 @@ import {
 	deviceAuthorizationClient,
 	emailOTPClient,
 	genericOAuthClient,
+	magicLinkClient,
 	multiSessionClient,
 	oidcClient,
 	organizationClient,
@@ -30,6 +31,10 @@ import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
 describe("run time proxy", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("atom in proxy should not be proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
@@ -183,7 +188,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -266,6 +271,36 @@ describe("type", () => {
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
 	});
 
+	it("should infer magic link metadata in sign-in request", () => {
+		const client = createReactClient({
+			plugins: [magicLinkClient()],
+		});
+
+		type SignInMagicLinkInput = NonNullable<
+			Parameters<typeof client.signIn.magicLink>[0]
+		>;
+
+		expectTypeOf<SignInMagicLinkInput>().toMatchTypeOf<{
+			email: string;
+			name?: string | undefined;
+			callbackURL?: string | undefined;
+			newUserCallbackURL?: string | undefined;
+			errorCallbackURL?: string | undefined;
+			metadata?: Record<string, any> | undefined;
+		}>();
+
+		const request: SignInMagicLinkInput = {
+			email: "test@email.com",
+			metadata: {
+				inviteId: "123",
+			},
+		};
+
+		expectTypeOf(request.metadata).toEqualTypeOf<
+			Record<string, any> | undefined
+		>();
+	});
+
 	it("should infer session", () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin(), testClientPlugin2(), twoFactorClient()],
@@ -292,7 +327,7 @@ describe("type", () => {
 				id: string;
 				email: string;
 				emailVerified: boolean;
-				name?: string | undefined | null;
+				name: string;
 				createdAt: Date;
 				updatedAt: Date;
 				image?: string | undefined | null;
@@ -310,7 +345,7 @@ describe("type", () => {
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
-			name?: string | undefined | null;
+			name: string;
 			id: string;
 			email: string;
 			emailVerified: boolean;
@@ -339,7 +374,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -394,7 +429,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -430,7 +465,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -468,7 +503,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -507,7 +542,7 @@ describe("type", () => {
 							id: string;
 							email: string;
 							emailVerified: boolean;
-							name?: string | undefined | null;
+							name: string;
 							createdAt: Date;
 							updatedAt: Date;
 							image?: string | undefined | null;
@@ -547,7 +582,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;

@@ -1,0 +1,114 @@
+{
+  "name": "@better-auth/electron",
+  "version": "1.5.1-beta.3",
+  "description": "Better Auth integration for Electron applications.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/integrations/electron",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/electron"
+  },
+  "keywords": [
+    "electron",
+    "auth",
+    "better-auth",
+    "typescript"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
+    },
+    "./proxy": {
+      "dev-source": "./src/proxy.ts",
+      "types": "./dist/proxy.d.mts",
+      "default": "./dist/proxy.mjs"
+    },
+    "./preload": {
+      "dev-source": "./src/preload.ts",
+      "types": "./dist/preload.d.mts",
+      "default": "./dist/preload.mjs"
+    },
+    "./storage": {
+      "dev-source": "./src/storage.ts",
+      "types": "./dist/storage.d.mts",
+      "default": "./dist/storage.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
+      ],
+      "proxy": [
+        "./dist/proxy.d.mts"
+      ],
+      "preload": [
+        "./dist/preload.d.mts"
+      ],
+      "storage": [
+        "./dist/storage.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-auth": "workspace:*",
+    "better-sqlite3": "^12.6.2",
+    "electron": "^38.8.4",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "conf": "^15.0.2",
+    "electron": ">=36.0.0"
+  },
+  "peerDependenciesMeta": {
+    "electron": {
+      "optional": true
+    },
+    "conf": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { validateEmailDomain } from "./utils";
+import { getHostnameFromDomain, validateEmailDomain } from "./utils";
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7324
+ */
 describe("validateEmailDomain", () => {
 	// Tests for issue #7324: Enterprise multi-domain SSO support
 	// https://github.com/better-auth/better-auth/issues/7324
@@ -99,5 +102,36 @@ describe("validateEmailDomain", () => {
 		it("should return false for domain list with only whitespace/commas", () => {
 			expect(validateEmailDomain("user@company.com", ", ,")).toBe(false);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8361
+ */
+describe("getHostnameFromDomain", () => {
+	it("should extract hostname from a bare domain", () => {
+		expect(getHostnameFromDomain("github.com")).toBe("github.com");
+	});
+
+	it("should extract hostname from a full URL", () => {
+		expect(getHostnameFromDomain("https://github.com")).toBe("github.com");
+	});
+
+	it("should extract hostname from a URL with port", () => {
+		expect(getHostnameFromDomain("https://github.com:8081")).toBe("github.com");
+	});
+
+	it("should extract hostname from a subdomain", () => {
+		expect(getHostnameFromDomain("auth.github.com")).toBe("auth.github.com");
+	});
+
+	it("should extract hostname from a URL with path", () => {
+		expect(getHostnameFromDomain("https://github.com/path/to/resource")).toBe(
+			"github.com",
+		);
+	});
+
+	it("should return null for an empty string", () => {
+		expect(getHostnameFromDomain("")).toBeNull();
 	});
 });

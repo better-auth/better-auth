@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { testAdapter } from "@better-auth/test-utils/adapter";
-import { Pool } from "pg";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
@@ -30,11 +29,6 @@ const { execute } = await testAdapter({
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
 		const db = await getPrismaClient(dialect);
-		const pgDB = new Pool({
-			connectionString: "postgres://user:password@localhost:5434/better_auth",
-		});
-		await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
-		await pgDB.end();
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);
 		await generatePrismaSchema(options, db, migrationCount, dialect);

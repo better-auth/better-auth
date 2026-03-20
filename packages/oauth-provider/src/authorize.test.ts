@@ -148,6 +148,37 @@ describe("oauth authorize - unauthenticated", async () => {
 			`redirect_uri=${encodeURIComponent(redirectUri)}`,
 		);
 	});
+
+	it("should return login_required when prompt=none and user is not logged in", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "prompt-none-login-required");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let callbackRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("error=login_required");
+		expect(callbackRedirectUrl).toContain("state=prompt-none-login-required");
+		expect(callbackRedirectUrl).toContain(
+			`iss=${encodeURIComponent(authServerBaseUrl)}`,
+		);
+		expect(callbackRedirectUrl).not.toContain("/login");
+	});
 });
 
 describe("oauth authorize - authenticated", async () => {
@@ -179,6 +210,7 @@ describe("oauth authorize - authenticated", async () => {
 	});
 
 	let oauthClient: OAuthClient | null;
+	let oauthClientNeedsConsent: OAuthClient | null;
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	// Registers a confidential client application to work with
@@ -195,6 +227,19 @@ describe("oauth authorize - authenticated", async () => {
 		expect(response?.client_secret).toBeDefined();
 		expect(response?.redirect_uris).toEqual([redirectUri]);
 		oauthClient = response;
+
+		const responseNeedsConsent = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: false,
+			},
+		});
+		expect(responseNeedsConsent?.client_id).toBeDefined();
+		expect(responseNeedsConsent?.user_id).toBeDefined();
+		expect(responseNeedsConsent?.client_secret).toBeDefined();
+		expect(responseNeedsConsent?.redirect_uris).toEqual([redirectUri]);
+		oauthClientNeedsConsent = responseNeedsConsent;
 	});
 
 	it("should authorize and include iss parameter", async () => {
@@ -257,11 +302,6 @@ describe("oauth authorize - authenticated", async () => {
 		);
 	});
 
-	it("should advertise authorization_response_iss_parameter_supported in metadata", async () => {
-		const metadata = await auth.api.getOpenIdConfig();
-		expect(metadata.authorization_response_iss_parameter_supported).toBe(true);
-	});
-
 	it("should have metadata issuer match iss parameter (RFC 9207)", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -296,5 +336,36 @@ describe("oauth authorize - authenticated", async () => {
 		const issParam = redirectUrl.searchParams.get("iss");
 
 		expect(issParam).toBe(metadataIssuer);
+	});
+
+	it("should return consent_required when prompt=none and consent is needed", async () => {
+		if (!oauthClientNeedsConsent?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClientNeedsConsent.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "prompt-none-consent-required");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("error=consent_required");
+		expect(callbackRedirectUrl).toContain("state=prompt-none-consent-required");
+		expect(callbackRedirectUrl).toContain(
+			`iss=${encodeURIComponent(authServerBaseUrl)}`,
+		);
+		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
 });

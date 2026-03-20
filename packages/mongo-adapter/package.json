@@ -1,13 +1,36 @@
 {
   "name": "@better-auth/mongo-adapter",
-  "version": "1.5.0-beta.10",
+  "version": "1.5.1-beta.3",
   "description": "Mongo adapter for Better Auth",
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/adapters/mongodb",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/mongo-adapter"
   },
+  "keywords": [
+    "auth",
+    "mongodb",
+    "adapter",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -18,21 +41,20 @@
       "default": "./dist/index.mjs"
     }
   },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
     "mongodb": "^6.0.0 || ^7.0.0"
   },
+  "peerDependenciesMeta": {
+    "mongodb": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.1",
-    "mongodb": "^7.0.0",
+    "mongodb": "^7.1.0",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

@@ -9,7 +9,6 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
-import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
@@ -28,7 +27,11 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
-import { deleteFromPrompt, getJwtPlugin } from "./utils";
+import {
+	deleteFromPrompt,
+	getJwtPlugin,
+	verifyOAuthQueryParams,
+} from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -41,6 +44,7 @@ declare module "@better-auth/core" {
 export const oAuthState = defineRequestState<{ query?: string } | null>(
 	() => null,
 );
+export const getOAuthProviderState = oAuthState.get;
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -116,6 +120,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		claims: Array.from(claims),
 		clientRegistrationAllowedScopes,
 	};
+
+	// Validate pairwiseSecret minimum length
+	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
+		throw new BetterAuthError(
+			"pairwiseSecret must be at least 32 characters long for adequate HMAC-SHA256 security",
+		);
+	}
 
 	// TODO: device_code grant also allows for refresh tokens
 	if (
@@ -201,27 +212,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						// Verify query signature
 						const query = ctx.body.oauth_query;
-						let queryParams = new URLSearchParams(query);
-						const sig = queryParams.get("sig");
-						const exp = Number(queryParams.get("exp"));
-						queryParams.delete("sig");
-						queryParams = new URLSearchParams(queryParams);
-						const verifySig = await makeSignature(
-							queryParams.toString(),
+						const isValid = await verifyOAuthQueryParams(
+							query,
 							ctx.context.secret,
 						);
-						if (
-							!sig ||
-							!constantTimeEqual(sig, verifySig) ||
-							new Date(exp * 1000) < new Date()
-						) {
+						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_signature",
 							});
 						}
+						const queryParams = new URLSearchParams(query);
+						queryParams.delete("sig");
 						queryParams.delete("exp");
 						await oAuthState.set({
-							query: new URLSearchParams(queryParams).toString(),
+							query: queryParams.toString(),
 						});
 
 						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
@@ -298,6 +302,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							public_client_supported:
+								opts.allowUnauthenticatedClientRegistration,
+							grant_types_supported: opts.grantTypes,
+							jwt_disabled: opts.disableJwtPlugin,
 						});
 						return authMetadata;
 					}
@@ -1126,6 +1134,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.default(["code"])
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
+						subject_type: z.enum(["public", "pairwise"]).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -1289,6 +1298,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			createOAuthClient: oauthClientEndpoints.createOAuthClient(opts),
 			getOAuthClient: oauthClientEndpoints.getOAuthClient(opts),
 			getOAuthClientPublic: oauthClientEndpoints.getOAuthClientPublic(opts),
+			getOAuthClientPublicPrelogin:
+				oauthClientEndpoints.getOAuthClientPublicPrelogin(opts),
 			getOAuthClients: oauthClientEndpoints.getOAuthClients(opts),
 			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),

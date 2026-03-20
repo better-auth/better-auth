@@ -14,6 +14,9 @@
 		"packages/prisma-adapter": {
 			"ignoreDependencies": ["@prisma/client", "prisma"]
 		},
+		"packages/drizzle-adapter": {
+			"ignoreDependencies": ["drizzle-orm"]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
@@ -22,6 +25,11 @@
 				"!src/adapters/**/test/auth.ts"
 			],
 			"ignoreDependencies": [
+				// adapter re-export packages (optional peer deps)
+				"@better-auth/drizzle-adapter",
+				"@better-auth/mongo-adapter",
+				"@better-auth/prisma-adapter",
+
 				// implicit adapter dependencies
 				"drizzle-kit",
 				"drizzle-orm",
@@ -66,8 +74,26 @@
 				"@types/pg",
 				"drizzle-orm",
 				"pg",
-				"prisma"
-			]
+				"prisma",
+				// implicit dependencies
+				"semver",
+				"@babel/core",
+				"@babel/preset-react",
+				"@babel/preset-typescript",
+				"@better-auth/telemetry",
+				"@clack/prompts",
+				"@mrleebo/prisma-ast",
+				"better-auth",
+				"c12",
+				"chalk",
+				"get-tsconfig",
+				"open",
+				"prettier",
+				"prompts",
+				"yocto-spinner",
+				"zod"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
 		},
 		"packages/expo": {
 			"ignoreDependencies": [
@@ -79,6 +105,28 @@
 
 				// implicit dependencies
 				"react-native"
+			]
+		},
+		"packages/electron": {
+			"ignoreDependencies": [
+				// loading of optional peers
+				"conf",
+
+				// implicit dependencies
+				"electron"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
+		},
+		"packages/kysely-adapter": {
+			"ignoreDependencies": [
+				// optional peer dependency
+				"kysely"
+			]
+		},
+		"packages/mongo-adapter": {
+			"ignoreDependencies": [
+				// optional peer dependency
+				"mongodb"
 			]
 		},
 		"packages/stripe": {
@@ -113,5 +161,5 @@
 		],
 		"entry": ["**/*.test.ts", "**/*.spec.ts"]
 	},
-	"ignoreWorkspaces": ["demo/**", "docs/**", "e2e/**"]
+	"ignoreWorkspaces": ["demo/**", "landing/**", "docs/**", "e2e/**"]
 }

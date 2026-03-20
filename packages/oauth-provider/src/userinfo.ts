@@ -3,6 +3,7 @@ import { APIError } from "better-auth/api";
 import type { User } from "better-auth/types";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
+import { getClient, resolveSubjectIdentifier } from "./utils";
 
 /**
  * Provides shared /userinfo and id_token claims functionality
@@ -10,23 +11,12 @@ import type { OAuthOptions, Scope } from "./types";
  * @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
  */
 export function userNormalClaims(user: User, scopes: string[]) {
-	let givenName: string | undefined;
-	let familyName: string | undefined;
-	if (user.name) {
-		const nameParts = user.name.split(" ").filter(Boolean);
-		if (nameParts.length > 1) {
-			familyName = nameParts.pop();
-			givenName = nameParts.join(" ");
-		} else {
-			givenName = nameParts[0];
-		}
-	}
-
+	const name = user.name.split(" ").filter((v) => v !== "");
 	const profile = {
 		name: user.name ?? undefined,
 		picture: user.image ?? undefined,
-		given_name: givenName,
-		family_name: familyName,
+		given_name: name.length > 1 ? name.slice(0, -1).join(" ") : undefined,
+		family_name: name.length > 1 ? name.at(-1) : undefined,
 	};
 	const email = {
 		email: user.email ?? undefined,
@@ -91,6 +81,21 @@ export async function userInfoEndpoint(
 	}
 
 	const baseUserClaims = userNormalClaims(user, scopes ?? []);
+
+	// Resolve pairwise sub if server has pairwise enabled and client is configured for it
+	if (opts.pairwiseSecret) {
+		const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
+		if (clientId) {
+			const client = await getClient(ctx, opts, clientId);
+			if (client) {
+				baseUserClaims.sub = await resolveSubjectIdentifier(
+					user.id,
+					client,
+					opts,
+				);
+			}
+		}
+	}
 	const additionalInfoUserClaims =
 		opts.customUserInfoClaims && scopes?.length
 			? await opts.customUserInfoClaims({ user, scopes, jwt })
