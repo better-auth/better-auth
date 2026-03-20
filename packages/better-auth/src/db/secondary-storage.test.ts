@@ -156,7 +156,7 @@ describe("secondary storage - storeSessionInDatabase + preserveSessionInDatabase
 		expect(s1.data).not.toBeNull();
 		const token = s1.data!.session.token;
 
-		// Session should exist in both secondary storage and database
+		// Session should exist in secondary storage
 		expect(store.has(token)).toBe(true);
 
 		// Revoke the session
