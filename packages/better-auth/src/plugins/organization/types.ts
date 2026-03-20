@@ -335,6 +335,13 @@ export interface OrganizationOptions {
 		  }
 		| undefined;
 	/**
+	 * Roles allowed to access full organization data via
+	 * `getFullOrganization`. If not set, all members can access.
+	 *
+	 * @default undefined
+	 */
+	fullOrganizationAccessRoles?: string[] | undefined;
+	/**
 	 * Disable organization deletion
 	 *
 	 * @default false
