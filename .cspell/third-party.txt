@@ -41,3 +41,4 @@ electronjs
 wagmi
 tldts
 headimgurl
+encoredev

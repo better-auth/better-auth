@@ -5,6 +5,7 @@ import {
 	AppWindow,
 	Binoculars,
 	Book,
+	BotIcon,
 	CircleHelp,
 	Database,
 	FlaskConical,
@@ -1523,6 +1524,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/fastify",
 			},
 			{
+				title: "Encore",
+				icon: Icons.encore,
+				href: "/docs/integrations/encore",
+				isNew: true,
+			},
+			{
 				title: "Express",
 				icon: Icons.express,
 				href: "/docs/integrations/express",
@@ -1790,6 +1797,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "Agent Auth",
+				href: "/docs/plugins/agent-auth",
+				icon: () => <BotIcon className="size-4" />,
+				isNew: true,
 			},
 			{
 				title: "API Key",
