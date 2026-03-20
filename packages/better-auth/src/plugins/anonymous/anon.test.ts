@@ -154,6 +154,9 @@ describe("anonymous", async () => {
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8692
+	 */
 	it("should link anonymous account on social sign-in without session cookie (Expo flow)", async () => {
 		linkAccountFn.mockClear();
 		const anonHeaders = new Headers();
