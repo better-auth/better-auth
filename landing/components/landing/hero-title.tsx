@@ -1,21 +1,9 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-
-const rotatingWords = ["the web", "Next.js", "TypeScript"];
 
 export function HeroTitle() {
-	const [wordIndex, setWordIndex] = useState(0);
-
-	useEffect(() => {
-		const interval = setInterval(() => {
-			setWordIndex((i) => (i + 1) % rotatingWords.length);
-		}, 2500);
-		return () => clearInterval(interval);
-	}, []);
-
 	return (
 		<motion.div
 			initial={{ opacity: 0, y: 12 }}
@@ -23,7 +11,7 @@ export function HeroTitle() {
 			transition={{ duration: 0.5, ease: "easeOut" }}
 			className="relative z-[2] w-full py-16 flex flex-col justify-center h-full pointer-events-none"
 		>
-			<div className="space-y-2 sm:space-y-1">
+			<div>
 				<a
 					href="https://agentauthprotocol.com"
 					target="_blank"
@@ -65,26 +53,12 @@ export function HeroTitle() {
 						/>
 					</svg>
 				</a>
-				<h1 className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
-					The most comprehensive authentication framework for{" "}
-					<span className="relative inline-flex overflow-hidden align-bottom">
-						<AnimatePresence mode="wait">
-							<motion.span
-								key={rotatingWords[wordIndex]}
-								initial={{ y: "100%", opacity: 0 }}
-								animate={{ y: 0, opacity: 1 }}
-								exit={{ y: "-100%", opacity: 0 }}
-								transition={{ duration: 0.3, ease: "easeInOut" }}
-								className="inline-block border-b border-dashed border-foreground/20"
-							>
-								{rotatingWords[wordIndex]}
-							</motion.span>
-						</AnimatePresence>
-					</span>
+				<h1 className="pt-3 sm:pt-4 text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight text-balance">
+					The most comprehensive authentication framework
 				</h1>
 
 				{/* CTA Buttons */}
-				<div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 sm:pt-4 lg:mt-5 pointer-events-auto">
+				<div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-4 sm:pt-5 pointer-events-auto">
 					<Link
 						href="/docs/installation"
 						className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 bg-neutral-900 text-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 text-xs sm:text-sm font-medium hover:opacity-90 transition-colors"
