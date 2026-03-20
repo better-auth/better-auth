@@ -49,6 +49,7 @@ import {
 } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState, parseRelayState } from "../saml-state";
+import { setSSOState } from "../sso-state";
 import type {
 	OIDCConfig,
 	SAMLAssertionExtract,
@@ -1016,6 +1017,13 @@ const signInSSOBodySchema = z.object({
 				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 		})
 		.optional(),
+	additionalData: z
+		.record(z.string(), z.unknown())
+		.meta({
+			description:
+				"Additional data to pass through the SSO flow. Available in provisionUser on callback.",
+		})
+		.optional(),
 	providerType: z.enum(["oidc", "saml"]).optional(),
 });
 
@@ -1277,13 +1285,14 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				const state = await generateState(
-					ctx,
-					undefined,
-					options?.redirectURI?.trim()
-						? { ssoProviderId: provider.providerId }
-						: false,
-				);
+				const additionalData: Record<string, any> = {};
+				if (options?.redirectURI?.trim()) {
+					additionalData.ssoProviderId = provider.providerId;
+				}
+				if (ctx.body.additionalData) {
+					additionalData.additionalData = ctx.body.additionalData;
+				}
+				const state = await generateState(ctx, undefined, additionalData);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
@@ -1414,7 +1423,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				const { state: relayState } = await generateRelayState(
 					ctx,
 					undefined,
-					false,
+					ctx.body.additionalData || false,
 				);
 
 				const shouldSaveRequest =
@@ -1478,6 +1487,7 @@ async function handleOIDCCallback(
 			`${ctx.context.baseURL}/error`;
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
+	await setSSOState(stateData);
 	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
 	if (!code || error) {
 		throw ctx.redirect(
@@ -1759,7 +1769,8 @@ async function handleOIDCCallback(
 	if (linked.error) {
 		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
 	}
-	const { session, user } = linked.data!;
+	const { session } = linked.data!;
+	let user = linked.data!.user;
 
 	if (options?.provisionUser && linked.isRegister) {
 		await options.provisionUser({
@@ -1767,7 +1778,14 @@ async function handleOIDCCallback(
 			userInfo,
 			token: tokenResponse,
 			provider,
+			additionalData: stateData?.additionalData as
+				| Record<string, unknown>
+				| undefined,
 		});
+		const provisionedUser = await ctx.context.internalAdapter.findUserById(
+			user.id,
+		);
+		user = provisionedUser ?? user;
 	}
 
 	await assignOrganizationFromProvider(ctx as any, {
@@ -2024,6 +2042,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					relayState = null;
 				}
 			}
+			await setSSOState(relayState);
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
@@ -2408,14 +2427,22 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				);
 			}
 
-			const { session, user } = result.data!;
+			const { session } = result.data!;
+			let user = result.data!.user;
 
 			if (options?.provisionUser) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
 					provider,
+					additionalData: relayState?.additionalData as
+						| Record<string, unknown>
+						| undefined,
 				});
+				const provisionedUser = await ctx.context.internalAdapter.findUserById(
+					user.id,
+				);
+				user = provisionedUser ?? user;
 			}
 
 			await assignOrganizationFromProvider(ctx as any, {
@@ -2531,6 +2558,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					relayState = null;
 				}
 			}
+			await setSSOState(relayState);
 
 			// If defaultSSO is configured, use it as the provider
 			let provider: SSOProvider<SSOOptions> | null = null;
@@ -2924,14 +2952,22 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				);
 			}
 
-			const { session, user } = result.data!;
+			const { session } = result.data!;
+			let user = result.data!.user;
 
 			if (options?.provisionUser) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
 					provider,
+					additionalData: relayState?.additionalData as
+						| Record<string, unknown>
+						| undefined,
 				});
+				const provisionedUser = await ctx.context.internalAdapter.findUserById(
+					user.id,
+				);
+				user = provisionedUser ?? user;
 			}
 
 			await assignOrganizationFromProvider(ctx as any, {

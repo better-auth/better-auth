@@ -6,7 +6,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
 import type {
@@ -29,6 +29,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { getSSOState } from "./sso-state";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -2396,6 +2397,379 @@ describe("SAML SSO with custom fields", () => {
 					"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 			},
 		});
+	});
+});
+
+describe("SAML SSO with additional data encoded in RelayState", async () => {
+	const SAML_PROVIDER_CONFIG = {
+		issuer: "http://localhost:8081",
+		domain: "http://localhost:8081",
+		samlConfig: {
+			entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+			cert: certificate,
+			callbackUrl: "http://localhost:3000/dashboard",
+			wantAssertionsSigned: false,
+			signatureAlgorithm: "sha256",
+			digestAlgorithm: "sha256",
+			idpMetadata: { metadata: idpMetadata },
+			spMetadata: { metadata: spMetadata },
+			identifierFormat:
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		},
+	};
+
+	it("should encode additionalData in the SAML RelayState URL parameter", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: { ...SAML_PROVIDER_CONFIG, providerId: "saml-relay-encode" },
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-relay-encode",
+				callbackURL: "http://localhost:3000/dashboard",
+				additionalData: { tenantId: "acme", role: "admin" },
+			},
+			returnHeaders: true,
+		});
+
+		const relayState = new URL(signInRes.response.url).searchParams.get(
+			"RelayState",
+		);
+		expect(relayState).toBeTruthy();
+		// Should be an opaque signed token, not a raw URL or plaintext data
+		expect(relayState).not.toContain("http");
+		expect(relayState).not.toContain("acme");
+		expect(relayState).not.toContain("tenantId");
+	});
+
+	it("should pass additionalData to provisionUser and expose full relay state via getSSOState via SAML callback endpoint", async () => {
+		const provisionUserFn = vi.fn();
+		let capturedSSOState: Awaited<ReturnType<typeof getSSOState>> = null;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					provisionUser: async (args) => {
+						capturedSSOState = await getSSOState();
+						return provisionUserFn(args);
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: { ...SAML_PROVIDER_CONFIG, providerId: "saml-cb-additional" },
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-cb-additional",
+				callbackURL: "http://localhost:3000/dashboard",
+				additionalData: { tenantId: "acme", role: "admin" },
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: { SAMLResponse: samlResponse.samlResponse, RelayState: relayState },
+			headers: { Cookie: signInRes.headers.get("set-cookie") ?? "" },
+			params: { providerId: "saml-cb-additional" },
+			asResponse: true,
+		});
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(provisionUserFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalData: { tenantId: "acme", role: "admin" },
+			}),
+		);
+
+		// getSSOState exposes the full relay state including internal fields
+		expect(capturedSSOState).toMatchObject({
+			callbackURL: "http://localhost:3000/dashboard",
+			additionalData: { tenantId: "acme", role: "admin" },
+		});
+		expect(capturedSSOState).toHaveProperty("expiresAt");
+		expect(capturedSSOState).toHaveProperty("codeVerifier");
+	});
+
+	it("should pass additionalData to provisionUser and expose full relay state via getSSOState via ACS endpoint", async () => {
+		const provisionUserFn = vi.fn();
+		let capturedSSOState: Awaited<ReturnType<typeof getSSOState>> = null;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					provisionUser: async (args) => {
+						capturedSSOState = await getSSOState();
+						return provisionUserFn(args);
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: { ...SAML_PROVIDER_CONFIG, providerId: "saml-acs-additional" },
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-acs-additional",
+				callbackURL: "http://localhost:3000/dashboard",
+				additionalData: { tenantId: "acs-tenant" },
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-additional",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Cookie: signInRes.headers.get("set-cookie") ?? "",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayState,
+					}),
+				},
+			),
+		);
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(provisionUserFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalData: { tenantId: "acs-tenant" },
+			}),
+		);
+
+		// getSSOState exposes the full relay state including internal fields
+		expect(capturedSSOState).toMatchObject({
+			callbackURL: "http://localhost:3000/dashboard",
+			additionalData: { tenantId: "acs-tenant" },
+		});
+		expect(capturedSSOState).toHaveProperty("expiresAt");
+		expect(capturedSSOState).toHaveProperty("codeVerifier");
+	});
+});
+
+describe("provisionUser should complete before user is passed to org provisioning hooks (SAML)", async () => {
+	const SAML_PROVIDER_CONFIG = {
+		issuer: "http://localhost:8081",
+		domain: "http://localhost:8081",
+		samlConfig: {
+			entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+			cert: certificate,
+			callbackUrl: "http://localhost:3000/dashboard",
+			wantAssertionsSigned: false,
+			signatureAlgorithm: "sha256",
+			digestAlgorithm: "sha256",
+			idpMetadata: { metadata: idpMetadata },
+			spMetadata: { metadata: spMetadata },
+			identifierFormat:
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		},
+	};
+
+	it("should pass provisioned (re-fetched) user to org provisioning via SAML callback, not stale user", async () => {
+		let dbRef: any = null;
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					provisionUser: async ({ user }) => {
+						await (dbRef as any).update({
+							model: "user",
+							where: [{ field: "id", value: user.id }],
+							update: { name: "provisioned-user" },
+						});
+					},
+					organizationProvisioning: {
+						getRole: async ({ user }) => {
+							return (user as any).name === "provisioned-user"
+								? "admin"
+								: "member";
+						},
+					},
+				}),
+				organization(),
+			],
+		});
+		dbRef = db;
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "SAML CB Provision Org", slug: "saml-cb-provision-org" },
+			headers,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				...SAML_PROVIDER_CONFIG,
+				providerId: "saml-cb-provision-hooks",
+				organizationId: org?.id,
+			},
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-cb-provision-hooks",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: { SAMLResponse: samlResponse.samlResponse, RelayState: relayState },
+			headers: { Cookie: signInRes.headers.get("set-cookie") ?? "" },
+			params: { providerId: "saml-cb-provision-hooks" },
+			asResponse: true,
+		});
+
+		const fullOrg = await auth.api.getFullOrganization({
+			query: { organizationId: org?.id || "" },
+			headers,
+		});
+
+		const member = fullOrg?.members.find(
+			(m: any) => m.user.email === "test@email.com",
+		);
+
+		// provisionUser updates user name to "provisioned-user" in DB.
+		// After the fix, user is re-fetched before being passed to getRole.
+		// getRole sees user.name === "provisioned-user" → returns "admin".
+		// Without the fix, stale user is passed with original name → "member".
+		expect(member?.role).toBe("admin");
+	});
+
+	it("should pass provisioned (re-fetched) user to org provisioning via SAML ACS endpoint, not stale user", async () => {
+		let dbRef: any = null;
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					provisionUser: async ({ user }) => {
+						await (dbRef as any).update({
+							model: "user",
+							where: [{ field: "id", value: user.id }],
+							update: { name: "provisioned-user" },
+						});
+					},
+					organizationProvisioning: {
+						getRole: async ({ user }) => {
+							return (user as any).name === "provisioned-user"
+								? "admin"
+								: "member";
+						},
+					},
+				}),
+				organization(),
+			],
+		});
+		dbRef = db;
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "SAML ACS Provision Org", slug: "saml-acs-provision-org" },
+			headers,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				...SAML_PROVIDER_CONFIG,
+				providerId: "saml-acs-provision-hooks",
+				organizationId: org?.id,
+			},
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-acs-provision-hooks",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const relayState =
+			new URL(signInRes.response.url).searchParams.get("RelayState") ?? "";
+
+		let samlResponse: any;
+		await betterFetch(signInRes.response.url, {
+			onSuccess: async (ctx) => {
+				samlResponse = await ctx.data;
+			},
+		});
+
+		await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-provision-hooks",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Cookie: signInRes.headers.get("set-cookie") ?? "",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayState,
+					}),
+				},
+			),
+		);
+
+		const fullOrg = await auth.api.getFullOrganization({
+			query: { organizationId: org?.id || "" },
+			headers,
+		});
+
+		const member = fullOrg?.members.find(
+			(m: any) => m.user.email === "test@email.com",
+		);
+
+		// provisionUser updates user name to "provisioned-user" in DB.
+		// After the fix, user is re-fetched before being passed to getRole.
+		// getRole sees user.name === "provisioned-user" → returns "admin".
+		// Without the fix, stale user is passed with original name → "member".
+		expect(member?.role).toBe("admin");
 	});
 });
 

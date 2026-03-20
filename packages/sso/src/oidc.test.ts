@@ -6,6 +6,7 @@ import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import { getSSOState } from "./sso-state";
 
 const server = new OAuth2Server();
 
@@ -1389,5 +1390,286 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("userinfo-only@test.com");
+	});
+});
+
+describe("SSO OIDC with additionalData encoded in state", async () => {
+	const provisionUserFn = vi.fn();
+	const server = new OAuth2Server();
+
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					provisionUser: provisionUserFn,
+				}),
+				organization(),
+			],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.on("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "additional-data-oidc@localhost.com",
+				name: "Additional Data User",
+				sub: "additional-data-oidc-sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token: any) => {
+			token.payload.email = "additional-data-oidc@localhost.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Additional Data User";
+			token.payload.picture = "https://test.com/picture.png";
+		});
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop();
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should pass additionalData to provisionUser and expose full relay state via getSSOState on new-user OIDC sign-in", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "oidc-additional-data",
+			},
+			headers,
+		});
+
+		provisionUserFn.mockClear();
+		let capturedSSOState: Awaited<ReturnType<typeof getSSOState>> = null;
+		provisionUserFn.mockImplementationOnce(async () => {
+			capturedSSOState = await getSSOState();
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "user@localhost.com",
+			callbackURL: "/dashboard",
+			additionalData: { tenantId: "acme", role: "admin" },
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		await simulateOAuthFlow(res.url, signInHeaders);
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(provisionUserFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				additionalData: { tenantId: "acme", role: "admin" },
+			}),
+		);
+
+		// getSSOState exposes the full relay state including internal fields
+		expect(capturedSSOState).toMatchObject({
+			callbackURL: "/dashboard",
+			additionalData: { tenantId: "acme", role: "admin" },
+		});
+		expect(capturedSSOState).toHaveProperty("expiresAt");
+		expect(capturedSSOState).toHaveProperty("codeVerifier");
+	});
+});
+
+describe("provisionUser should complete before user is passed to org provisioning hooks (OIDC)", async () => {
+	const server = new OAuth2Server();
+	let dbRef: any = null;
+
+	const { auth, db, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					provisionUser: async ({ user }) => {
+						await (dbRef as any).update({
+							model: "user",
+							where: [{ field: "id", value: user.id }],
+							update: { name: "provisioned-user" },
+						});
+					},
+					organizationProvisioning: {
+						getRole: async ({ user }) => {
+							return (user as any).name === "provisioned-user"
+								? "admin"
+								: "member";
+						},
+					},
+				}),
+				organization(),
+			],
+		});
+
+	dbRef = db;
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.on("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "provision-hooks-test@localhost.com",
+				name: "Original Name",
+				sub: "provision-hooks-test-sub",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token: any) => {
+			token.payload.email = "provision-hooks-test@localhost.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Original Name";
+		});
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop();
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+
+		const newHeaders = new Headers();
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return newHeaders;
+	}
+
+	it("should pass provisioned (re-fetched) user to org provisioning, not stale user", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "Provision Hooks Org", slug: "provision-hooks-org" },
+			headers,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				organizationId: org?.id,
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "provision-hooks-provider",
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "user@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		await simulateOAuthFlow(res.url, signInHeaders);
+
+		const fullOrg = await auth.api.getFullOrganization({
+			query: { organizationId: org?.id || "" },
+			headers,
+		});
+
+		const member = fullOrg?.members.find(
+			(m: any) => m.user.email === "provision-hooks-test@localhost.com",
+		);
+
+		// provisionUser updates user name to "provisioned-user" in DB.
+		// After the fix, user is re-fetched before being passed to getRole.
+		// getRole sees user.name === "provisioned-user" → returns "admin".
+		// Without the fix, stale user is passed with name "Original Name" → "member".
+		expect(member?.role).toBe("admin");
 	});
 });
