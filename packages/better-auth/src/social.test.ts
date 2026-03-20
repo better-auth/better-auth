@@ -2174,3 +2174,68 @@ describe("Railway Provider", async () => {
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8676
+ */
+describe("databaseHooks APIError in social sign-in", async () => {
+	it("should return error redirect when databaseHooks.user.create.before throws APIError without message", async () => {
+		const { APIError } = await import("./api");
+		const headers = new Headers();
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async () => {
+								throw new APIError("BAD_REQUEST", {
+									code: "INVALID_ADDITIONAL_DATA",
+								} as any);
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		let responseStatus = 0;
+		try {
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				headers,
+				method: "GET",
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+				onSuccess(context) {
+					responseStatus = context.response.status;
+				},
+			});
+		} catch {
+			// betterFetch may throw on redirect responses; that's expected
+		}
+		// Should redirect with error, not crash with 500
+		expect(responseStatus).not.toBe(500);
+		expect(responseStatus).toBe(302);
+	});
+});
