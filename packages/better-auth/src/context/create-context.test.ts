@@ -1842,9 +1842,7 @@ describe("base context creation", () => {
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(true);
 			expect(ctx.options.session?.cookieCache?.strategy).toBe("jwe");
 			expect(ctx.options.session?.cookieCache?.refreshCache).toBe(true);
-			expect(ctx.options.session?.cookieCache?.maxAge).toBe(
-				60 * 60 * 24 * 7,
-			);
+			expect(ctx.options.session?.cookieCache?.maxAge).toBe(60 * 60 * 24 * 7);
 			expect(ctx.oauthConfig.storeStateStrategy).toBe("cookie");
 			expect(ctx.options.database).toBeUndefined();
 		});
