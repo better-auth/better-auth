@@ -8,6 +8,7 @@ export type GrantType =
 	| "authorization_code"
 	| "client_credentials"
 	| "refresh_token"
+	| "urn:openid:params:grant-type:ciba"
 	| (string & {});
 
 export type AuthMethod =
@@ -174,6 +175,23 @@ export interface AuthServerMetadata {
 	 * @default true
 	 */
 	authorization_response_iss_parameter_supported?: boolean;
+	/**
+	 * URL of the backchannel authentication endpoint (CIBA).
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html
+	 */
+	backchannel_authentication_endpoint?: string;
+	/**
+	 * Supported CIBA token delivery modes.
+	 */
+	backchannel_token_delivery_modes_supported?: ("poll" | "ping" | "push")[];
+	/**
+	 * Signing algorithms supported for backchannel authentication requests.
+	 */
+	backchannel_authentication_request_signing_alg_values_supported?: string[];
+	/**
+	 * Whether the server supports the user_code parameter in CIBA requests.
+	 */
+	backchannel_user_code_parameter_supported?: boolean;
 }
 
 /**

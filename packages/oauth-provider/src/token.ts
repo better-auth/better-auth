@@ -35,9 +35,13 @@ export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const grantType: GrantType | undefined = ctx.body?.grant_type;
+	const grantType: string | undefined = ctx.body?.grant_type;
 
-	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
+	if (
+		opts.grantTypes &&
+		grantType &&
+		!opts.grantTypes.includes(grantType as GrantType)
+	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported grant_type ${grantType}`,
 			error: "unsupported_grant_type",
@@ -555,6 +559,7 @@ export async function createUserTokens(
 			refresh_token: refreshToken?.token,
 			scope: scopes.join(" "),
 			id_token: idToken,
+			...extra?.tokenResponse,
 		},
 		{
 			headers: {
@@ -679,13 +684,6 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_request",
 		});
 	}
-	if (!redirect_uri) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "redirect_uri is required",
-			error: "invalid_request",
-		});
-	}
-
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 

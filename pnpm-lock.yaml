@@ -1172,6 +1172,37 @@ importers:
         specifier: ^3.5.29
         version: 3.5.29(typescript@5.9.3)
 
+  packages/ciba:
+    dependencies:
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.3.1
+      '@better-fetch/fetch':
+        specifier: 'catalog:'
+        version: 1.1.21
+      better-call:
+        specifier: 'catalog:'
+        version: 2.0.2(zod@4.3.6)
+      jose:
+        specifier: ^6.1.3
+        version: 6.1.3
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../oauth-provider
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+
   packages/cli:
     dependencies:
       '@babel/core':
@@ -31708,7 +31739,7 @@ snapshots:
       rolldown: 1.0.0-rc.8
       rolldown-plugin-dts: 0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3)
       semver: 7.7.4
-      tinyexec: 1.0.2
+      tinyexec: 1.0.4
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
