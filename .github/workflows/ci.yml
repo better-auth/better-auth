@@ -120,6 +120,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Typecheck dist declarations
+        run: pnpm typecheck:dist
+
   test:
     runs-on: starsling-ubuntu-24.04
     timeout-minutes: 30
