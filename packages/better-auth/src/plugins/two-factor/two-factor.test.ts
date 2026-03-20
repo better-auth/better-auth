@@ -80,6 +80,7 @@ describe("two factor", async () => {
 		expect(dbUser?.twoFactorEnabled).toBe(false);
 		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
+		expect(twoFactor?.verified).toBe(false);
 	});
 
 	it("should use custom issuer from request parameter", async () => {
@@ -1638,5 +1639,174 @@ describe("OTP storage modes", async () => {
 			});
 			expect(verifyRes.status).toBe(200);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8627
+ */
+describe("OTP-only account adding TOTP (issue #8627)", async () => {
+	it("should create twoFactor row with verified=false on enableTwoFactor", async () => {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+
+		const userId = (await auth.api.getSession({ headers }))?.user.id as string;
+		const twoFactorRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+
+		expect(twoFactorRecord).toBeDefined();
+		expect(twoFactorRecord?.verified).toBe(false);
+	});
+
+	it("should mark TOTP as verified after verifyTOTP during enrollment", async () => {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+		});
+
+		const userId = (await auth.api.getSession({ headers }))?.user.id as string;
+		const twoFactorRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(twoFactorRecord?.verified).toBe(false);
+
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorRecord!.secret,
+		});
+		const code = await createOTP(decrypted).totp();
+		const verifyRes = await auth.api.verifyTOTP({
+			body: { code },
+			headers,
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+
+		const updatedRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(updatedRecord?.verified).toBe(true);
+	});
+
+	it("should ignore unverified TOTP during sign-in and allow OTP fallback", async () => {
+		let OTP = "";
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+					},
+				}),
+			],
+		});
+		let { headers } = await signInWithTestUser();
+
+		// Step 1: Enable and fully verify TOTP (sets twoFactorEnabled=true)
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+		});
+		const userId = (await auth.api.getSession({ headers }))?.user.id as string;
+		const record1 = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: record1!.secret,
+		});
+		const code = await createOTP(decrypted).totp();
+		const verifyEnrollRes = await auth.api.verifyTOTP({
+			body: { code },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(verifyEnrollRes.headers);
+		expect(verifyEnrollRes.status).toBe(200);
+
+		// Step 2: Call enableTwoFactor again, simulating re-enrollment.
+		// This deletes the old verified row and creates a new unverified one,
+		// while twoFactorEnabled remains true.
+		const enableRes2 = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		expect(enableRes2.status).toBe(200);
+
+		// Confirm: twoFactorEnabled=true but TOTP row is unverified
+		const record2 = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(record2?.verified).toBe(false);
+
+		// Step 3: Sign in — should trigger 2FA redirect
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const signInHeaders = convertSetCookieToCookie(signInRes.headers);
+
+		// verifyTOTP should fail because the TOTP row is unverified
+		// (it should be invisible to the sign-in flow)
+		const verifyRes = await auth.api.verifyTOTP({
+			body: { code: "000000" },
+			headers: signInHeaders,
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(400);
+
+		// OTP should still work for sign-in
+		await auth.api.sendTwoFactorOTP({
+			headers: signInHeaders,
+			body: {},
+		});
+		expect(OTP.length).toBe(6);
+
+		const otpVerifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: signInHeaders,
+			body: { code: OTP },
+			asResponse: true,
+		});
+		expect(otpVerifyRes.status).toBe(200);
 	});
 });

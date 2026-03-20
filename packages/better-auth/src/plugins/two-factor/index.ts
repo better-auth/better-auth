@@ -196,6 +196,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							secret: encryptedSecret,
 							backupCodes: backupCodes.encryptedBackupCodes,
 							userId: user.id,
+							verified: !!options?.skipVerificationOnEnable,
 						},
 					});
 					const totpURI = createOTP(secret, {

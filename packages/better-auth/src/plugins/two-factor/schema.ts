@@ -34,6 +34,12 @@ export const schema = {
 				},
 				index: true,
 			},
+			verified: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+				input: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
