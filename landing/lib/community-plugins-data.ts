@@ -226,4 +226,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/qamarq.png",
 		},
 	},
+	{
+		name: "better-auth-devtools",
+		url: "https://github.com/C-W-D-Harshit/better-auth-devtools",
+		description:
+			"A devtools panel for Better Auth that lets you create managed test users from templates, switch between sessions instantly, inspect live session data, and edit fields like roles on the fly. All from a floating React UI that only runs in development.",
+		author: {
+			name: "C-W-D-Harshit",
+			github: "C-W-D-Harshit",
+			avatar: "https://github.com/C-W-D-Harshit.png",
+		},
+	},
 ];
