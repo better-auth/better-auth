@@ -3,6 +3,7 @@ import type { Provider } from "./types";
 export const defaultEndpoints = [
 	"/sign-up/email",
 	"/sign-in/email",
+	"!/sign-in/email-otp",
 	"/request-password-reset",
 ];
 
