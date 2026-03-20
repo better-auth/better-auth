@@ -185,12 +185,7 @@ export const APIMethod = ({
 	const serverTabContent = (
 		<div className="border shadow-sm [&_figure]:my-0 [&_figure]:border-0 [&_figure]:shadow-none [&_figure]:rounded-none [&_.fd-scroll-container]:bg-transparent">
 			{isClientOnly || isServerOnly ? null : (
-				<Endpoint
-					method={method || "GET"}
-					path={path}
-					isServerOnly={isServerOnly ?? false}
-					className=""
-				/>
+				<Endpoint method={method || "GET"} path={path} className="" />
 			)}
 			{serverOnlyNote || note ? (
 				<Note>
@@ -296,11 +291,7 @@ export const APIMethod = ({
 				<ApiMethodTabsContent value="client">
 					<div className="border shadow-sm [&_figure]:my-0 [&_figure]:border-0 [&_figure]:shadow-none [&_figure]:rounded-none [&_.fd-scroll-container]:bg-transparent">
 						{isServerOnly ? null : (
-							<Endpoint
-								method={method || "GET"}
-								path={path}
-								isServerOnly={isServerOnly ?? false}
-							/>
+							<Endpoint method={method || "GET"} path={path} />
 						)}
 						{clientOnlyNote || note ? (
 							<Note>
@@ -463,12 +454,13 @@ function PropertyList({
 	while (i < props.length) {
 		const prop = props[i];
 		if (prop.type === "Object") {
-			const parentPath = [...prop.path, prop.propName].join(".");
+			const parentSegments = [...prop.path, prop.propName];
 			const children: Property[] = [];
 			i++;
 			while (
 				i < props.length &&
-				props[i].path.join(".").startsWith(parentPath)
+				props[i].path.length >= parentSegments.length &&
+				parentSegments.every((seg, idx) => props[i].path[idx] === seg)
 			) {
 				children.push(props[i]);
 				i++;
