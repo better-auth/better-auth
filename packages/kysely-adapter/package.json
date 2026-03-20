@@ -49,7 +49,7 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
-    "kysely": "^0.27.0 || ^0.28.0"
+    "kysely": "^0.27.0 || >=0.28.12"
   },
   "peerDependenciesMeta": {
     "kysely": {
