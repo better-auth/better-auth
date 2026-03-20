@@ -183,14 +183,9 @@ export const APIMethod = ({
 	);
 
 	const serverTabContent = (
-		<>
+		<div className="border shadow-sm [&_figure]:my-0 [&_figure]:border-0 [&_figure]:shadow-none [&_figure]:rounded-none [&_.fd-scroll-container]:bg-transparent">
 			{isClientOnly || isServerOnly ? null : (
-				<Endpoint
-					method={method || "GET"}
-					path={path}
-					isServerOnly={isServerOnly ?? false}
-					className=""
-				/>
+				<Endpoint method={method || "GET"} path={path} className="" />
 			)}
 			{serverOnlyNote || note ? (
 				<Note>
@@ -212,7 +207,7 @@ export const APIMethod = ({
 				) : null}
 			</div>
 			{!isClientOnly ? <TypeTable props={props} isServer /> : null}
-		</>
+		</div>
 	);
 
 	if (isExternalOnly) {
@@ -234,48 +229,53 @@ export const APIMethod = ({
 				defaultValue={isServerOnly ? "server" : "client"}
 				className="gap-0 w-full"
 			>
-				<ApiMethodTabsList className="relative flex justify-start w-full p-0 bg-background dark:bg-[#050505] hover:[&>div>a>button]:opacity-100">
-					<ApiMethodTabsTrigger
-						value="client"
-						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-fd-secondary hover:bg-fd-secondary/70 bg-fd-secondary/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none dark:bg-[#050505] dark:hover:bg-[#0a0a0a] dark:data-[state=active]:bg-[#0a0a0a] dark:border-white/[0.06] dark:hover:border-white/10 dark:data-[state=active]:border-white/10"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="1em"
-							height="1em"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
+				<ApiMethodTabsList className="relative flex justify-start w-full p-0 bg-background hover:[&>div>a>button]:opacity-100">
+					{(
+						[
+							{
+								value: "client",
+								label: "Client",
+								icon: (
+									<>
+										<rect width="20" height="14" x="2" y="3" rx="2" />
+										<path d="M8 21h8m-4-4v4" />
+									</>
+								),
+							},
+							{
+								value: "server",
+								label: "Server",
+								icon: (
+									<>
+										<rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+										<rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+										<path d="M6 6h.01M6 18h.01" />
+									</>
+								),
+							},
+						] as const
+					).map((tab) => (
+						<ApiMethodTabsTrigger
+							key={tab.value}
+							value={tab.value}
+							className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-fd-muted/80 hover:bg-fd-secondary/70 bg-background border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none dark:bg-[#050505] dark:hover:bg-[#0a0a0a] dark:data-[state=active]:bg-fd-muted/80 dark:border-white/[0.06] dark:hover:border-white/10 dark:data-[state=active]:border-white/10"
 						>
-							<rect width="20" height="14" x="2" y="3" rx="2" />
-							<path d="M8 21h8m-4-4v4" />
-						</svg>
-						<span>Client</span>
-					</ApiMethodTabsTrigger>
-					<ApiMethodTabsTrigger
-						value="server"
-						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-fd-secondary hover:bg-fd-secondary/70 bg-fd-secondary/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none dark:bg-[#050505] dark:hover:bg-[#0a0a0a] dark:data-[state=active]:bg-[#0a0a0a] dark:border-white/[0.06] dark:hover:border-white/10 dark:data-[state=active]:border-white/10"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="1em"
-							height="1em"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						>
-							<rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
-							<rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
-							<path d="M6 6h.01M6 18h.01" />
-						</svg>
-						<span>Server</span>
-					</ApiMethodTabsTrigger>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1em"
+								height="1em"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								{tab.icon}
+							</svg>
+							<span>{tab.label}</span>
+						</ApiMethodTabsTrigger>
+					))}
 					<div className="absolute right-0">
 						<a href={`#api-method${pathId}`}>
 							<Button
@@ -289,43 +289,43 @@ export const APIMethod = ({
 					</div>
 				</ApiMethodTabsList>
 				<ApiMethodTabsContent value="client">
-					{isServerOnly ? null : (
-						<Endpoint
-							method={method || "GET"}
-							path={path}
-							isServerOnly={isServerOnly ?? false}
-						/>
-					)}
-					{clientOnlyNote || note ? (
-						<Note>
-							{note && tsxifyBackticks(note)}
-							{clientOnlyNote ? (
-								<>
-									{note ? <br /> : null}
-									{tsxifyBackticks(clientOnlyNote)}
-								</>
+					<div className="border shadow-sm [&_figure]:my-0 [&_figure]:border-0 [&_figure]:shadow-none [&_figure]:rounded-none [&_.fd-scroll-container]:bg-transparent">
+						{isServerOnly ? null : (
+							<Endpoint method={method || "GET"} path={path} />
+						)}
+						{clientOnlyNote || note ? (
+							<Note>
+								{note && tsxifyBackticks(note)}
+								{clientOnlyNote ? (
+									<>
+										{note ? <br /> : null}
+										{tsxifyBackticks(clientOnlyNote)}
+									</>
+								) : null}
+							</Note>
+						) : null}
+						<div className={cn("relative w-full")}>
+							<DynamicCodeBlock
+								code={`${code_prefix}${
+									noResult
+										? ""
+										: `const { data${
+												resultVariable === "data" ? "" : `: ${resultVariable}`
+											}, error } = `
+								}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
+								lang="ts"
+								allowCopy={!isServerOnly}
+							/>
+							{isServerOnly ? (
+								<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
+									<span>This is a server-only endpoint</span>
+								</div>
 							) : null}
-						</Note>
-					) : null}
-					<div className={cn("relative w-full")}>
-						<DynamicCodeBlock
-							code={`${code_prefix}${
-								noResult
-									? ""
-									: `const { data${
-											resultVariable === "data" ? "" : `: ${resultVariable}`
-										}, error } = `
-							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
-							lang="ts"
-							allowCopy={!isServerOnly}
-						/>
-						{isServerOnly ? (
-							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
-								<span>This is a server-only endpoint</span>
-							</div>
+						</div>
+						{!isServerOnly ? (
+							<TypeTable props={props} isServer={false} />
 						) : null}
 					</div>
-					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
 				</ApiMethodTabsContent>
 				<ApiMethodTabsContent value="server">
 					{serverTabContent}
@@ -389,8 +389,8 @@ function TypeTable({
 	if (!filteredProps.length) return null;
 
 	return (
-		<div className="border border-border dark:border-white/[0.06] bg-fd-secondary/30 dark:bg-[#050505] mt-0">
-			<div className="flex items-center gap-2 px-3.5 py-2 border-b border-border dark:border-white/[0.06]">
+		<div className="mt-0">
+			<div className="flex items-center gap-2 px-3.5 py-2 border-y border-border bg-fd-muted/80">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="12"
@@ -408,46 +408,93 @@ function TypeTable({
 					<path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
 					<path d="m15 9 6-6" />
 				</svg>
-				<span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+				<span className="text-xs font-medium text-muted-foreground tracking-wider">
 					Parameters
 				</span>
 			</div>
-			<div className="divide-y divide-border dark:divide-white/[0.04]">
-				{filteredProps.map((prop) => (
-					<div
-						key={`${prop.path.join(".")}.${prop.propName}`}
-						className="group px-3.5 py-2.5 hover:bg-fd-secondary/50 dark:hover:bg-white/[0.02] transition-colors"
-						style={{
-							paddingLeft: `${0.875 + prop.path.length * 1}rem`,
-						}}
-					>
-						<div className="flex items-center gap-2 flex-wrap">
-							<code className="text-[13px] font-semibold text-foreground/90">
-								{prop.propName}
-							</code>
-							<span className="text-[11px] font-mono text-muted-foreground/60">
-								{prop.type}
-								{prop.isNullable ? " | null" : ""}
-							</span>
-							{!prop.isOptional && (
-								<span className="text-[9px] font-medium uppercase tracking-widest text-amber-600 dark:text-amber-500/80">
-									required
-								</span>
-							)}
-							{prop.isServerOnly && (
-								<span className="text-[9px] font-medium uppercase tracking-widest text-blue-600 dark:text-blue-400/80">
-									server
-								</span>
-							)}
+			<PropertyList props={filteredProps} />
+		</div>
+	);
+}
+
+function PropertyItem({ prop }: { prop: Property }) {
+	return (
+		<div className="flex items-center gap-2 flex-wrap">
+			<code className="text-xs font-semibold text-foreground/90">
+				{prop.propName}
+			</code>
+			<span className="text-xs font-mono text-foreground/60 font-medium">
+				{prop.type}
+				{prop.isNullable ? " | null" : ""}
+			</span>
+			{!prop.isOptional && (
+				<span className="text-[10px] font-mono font-medium text-amber-600 dark:text-amber-500/80">
+					required
+				</span>
+			)}
+			{prop.isServerOnly && (
+				<span className="text-[10px] font-mono font-medium text-blue-600 dark:text-blue-400/80">
+					server
+				</span>
+			)}
+		</div>
+	);
+}
+
+function PropertyList({
+	props,
+	nested = false,
+}: {
+	props: Property[];
+	nested?: boolean;
+}) {
+	const groups: { prop: Property; children: Property[] }[] = [];
+	let i = 0;
+
+	while (i < props.length) {
+		const prop = props[i];
+		if (prop.type === "Object") {
+			const parentSegments = [...prop.path, prop.propName];
+			const children: Property[] = [];
+			i++;
+			while (
+				i < props.length &&
+				props[i].path.length >= parentSegments.length &&
+				parentSegments.every((seg, idx) => props[i].path[idx] === seg)
+			) {
+				children.push(props[i]);
+				i++;
+			}
+			groups.push({ prop, children });
+		} else {
+			groups.push({ prop, children: [] });
+			i++;
+		}
+	}
+
+	return (
+		<div className="divide-y divide-border">
+			{groups.map((group) => (
+				<div
+					key={`${group.prop.path.join(".")}.${group.prop.propName}`}
+					className={cn(
+						nested ? "px-3 py-3" : "px-3.5 py-3",
+						group.children.length > 0 && "pb-3",
+					)}
+				>
+					<PropertyItem prop={group.prop} />
+					{group.prop.description && (
+						<p className="mt-1 mb-0 text-sm leading-relaxed max-w-xl">
+							{tsxifyBackticks(group.prop.description)}
+						</p>
+					)}
+					{group.children.length > 0 && (
+						<div className="mt-3 border rounded-md overflow-hidden">
+							<PropertyList props={group.children} nested />
 						</div>
-						{prop.description && (
-							<p className="mt-1 text-[12px] text-muted-foreground/70 leading-relaxed max-w-xl">
-								{tsxifyBackticks(prop.description)}
-							</p>
-						)}
-					</div>
-				))}
-			</div>
+					)}
+				</div>
+			))}
 		</div>
 	);
 }
@@ -885,11 +932,13 @@ function createServerBody({
 
 function Note({ children }: { children: ReactNode }) {
 	return (
-		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full break-words rounded-md border text-md text-wrap border-border bg-fd-secondary/50">
-			<span className="-mb-1 w-full text-xs select-none text-muted-foreground">
+		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full wrap-break-word rounded-md border-b text-md text-wrap bg-fd-muted/80">
+			<span className="-mb-1 w-full text-xs select-none text-foreground/80 font-medium">
 				Notes
 			</span>
-			<p className="mt-0 mb-0 text-sm">{children as any}</p>
+			<p className="mt-0 mb-0 text-sm text-fd-muted-foreground">
+				{children as any}
+			</p>
 		</div>
 	);
 }
