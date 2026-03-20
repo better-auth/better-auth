@@ -216,12 +216,12 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						<UsersIcon className="w-4 h-4 text-foreground/60" />
 						<span className="text-sm text-foreground/60">Community</span>
 					</div>
-					<h1 className="text-lg md:text-xl lg:text-2xl text-foreground tracking-tight leading-tight">
+					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 						Join the community,
 						<br />
 						<span className="text-foreground/50">build together.</span>
 					</h1>
-					<p className="text-[11px] text-foreground/40 leading-relaxed max-w-[260px]">
+					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
 						Connect with developers building with Better Auth.
 					</p>
 				</div>
@@ -229,7 +229,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 				{/* Quick stats summary */}
 				<div className="flex items-stretch gap-0 border border-foreground/[0.08]">
 					<div className="flex-1 px-3 py-2.5 text-center border-r border-foreground/[0.08]">
-						<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/30 mb-1">
+						<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/50 dark:text-foreground/45 mb-1">
 							NPM
 						</p>
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
@@ -240,7 +240,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						</p>
 					</div>
 					<div className="flex-1 px-3 py-2.5 text-center border-r border-foreground/[0.08] bg-foreground/[0.03]">
-						<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/30 mb-1">
+						<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/50 dark:text-foreground/45 mb-1">
 							Stars
 						</p>
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
@@ -248,7 +248,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						</p>
 					</div>
 					<div className="flex-1 px-3 py-2.5 text-center">
-						<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/30 mb-1">
+						<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/50 dark:text-foreground/45 mb-1">
 							Discord
 						</p>
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
@@ -275,10 +275,10 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 							}}
 							className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-							<span className="text-[11px] text-foreground/40 uppercase tracking-wider">
+							<span className="text-xs text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
 								{item.label}
 							</span>
-							<span className="text-[11px] text-foreground/70 font-mono">
+							<span className="text-xs text-foreground/85 dark:text-foreground/75 font-mono">
 								{item.value}
 							</span>
 						</motion.div>
@@ -362,7 +362,7 @@ function PlatformCard({
 						<span className="text-[9px] text-foreground/30 uppercase tracking-widest font-mono">
 							{platform.label}
 						</span>
-						<span className="text-[11px] text-foreground/60 font-mono">
+						<span className="text-xs text-foreground/60 font-mono">
 							{platform.members}
 						</span>
 					</div>
@@ -401,12 +401,32 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 
 					{/* Right side — Stats & platforms */}
 					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-8">
+						<div className="p-5 pt-8 lg:p-8 lg:pt-16 pb-32 space-y-8">
 							{/* Mobile header */}
-							<div className="flex lg:hidden items-center gap-1.5">
-								<UsersIcon className="w-4 h-4 text-foreground/60" />
-								<span className="text-sm text-foreground/60">Community</span>
+							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6">
+								<HalftoneBackground />
+								<div className="relative space-y-2 py-16">
+									<div className="flex items-center gap-1.5">
+										<UsersIcon className="w-4 h-4 text-foreground/60" />
+										<span className="text-sm text-foreground/60">
+											Community
+										</span>
+									</div>
+									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+										Join the community,
+										<br />
+										<span className="text-foreground/50">build together.</span>
+									</h1>
+									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+										Connect with developers building with Better Auth.
+									</p>
+								</div>
 							</div>
+
+							<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
+								COMMUNITY
+								<span className="flex-1 h-px bg-foreground/15" />
+							</h2>
 
 							{/* Section: Statistics */}
 							<motion.div
@@ -499,7 +519,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 											<line x1="3" y1="6" x2="21" y2="6" />
 											<path d="M16 10a4 4 0 0 1-8 0" />
 										</svg>
-										<span className="text-[11px] font-mono uppercase tracking-widest text-foreground/50 group-hover:text-foreground/70 transition-colors">
+										<span className="text-xs font-mono uppercase tracking-widest text-foreground/50 group-hover:text-foreground/70 transition-colors">
 											Shop our merch collection
 										</span>
 									</div>

@@ -62,7 +62,7 @@ function ApplyDialog({
 				animate={{ opacity: 1, y: 0, scale: 1 }}
 				exit={{ opacity: 0, y: 10, scale: 0.98 }}
 				transition={{ duration: 0.2, ease: "easeOut" }}
-				onClick={(e) => e.stopPropagation()}
+				onClick={(e: React.MouseEvent) => e.stopPropagation()}
 				className="relative w-full max-w-md overflow-hidden border border-foreground/[0.14] bg-background/95 shadow-2xl shadow-black/12 ring-1 ring-black/5 backdrop-blur dark:border-white/[0.08] dark:bg-[#050505]/95 dark:shadow-black/65 dark:ring-white/[0.04]"
 			>
 				{/* Corner marks */}
@@ -111,7 +111,7 @@ function ApplyDialog({
 							<p className="text-sm text-foreground/92 dark:text-foreground/88">
 								Application sent
 							</p>
-							<p className="text-[11px] text-foreground/60 dark:text-foreground/52 leading-relaxed max-w-xs mx-auto">
+							<p className="text-xs text-foreground/60 dark:text-foreground/52 leading-relaxed max-w-xs mx-auto">
 								Thanks for applying for {role.title}. We&apos;ll review your
 								application and get back to you soon.
 							</p>
@@ -253,10 +253,26 @@ function CareersHero() {
 		>
 			<div className="space-y-6">
 				<div className="space-y-2">
-					<h1 className="text-lg md:text-xl lg:text-2xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
-						Careers
+					<div className="flex items-center gap-1.5">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="0.9em"
+							height="0.9em"
+							viewBox="0 0 24 24"
+							className="text-foreground/60"
+							aria-hidden="true"
+						>
+							<path
+								fill="currentColor"
+								d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-2 .89-2 2v11c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2m-6 0h-4V4h4z"
+							/>
+						</svg>
+						<span className="text-sm text-foreground/60">Careers</span>
+					</div>
+					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight text-balance">
+						Join the team
 					</h1>
-					<p className="text-[11px] text-foreground/40 leading-relaxed max-w-[260px]">
+					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
 						Help us build the future of authentication.
 					</p>
 				</div>
@@ -279,10 +295,10 @@ function CareersHero() {
 							}}
 							className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-							<span className="text-[11px] text-foreground/40 uppercase tracking-wider">
+							<span className="text-xs text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
 								{item.label}
 							</span>
-							<span className="text-[11px] text-foreground/70 font-mono">
+							<span className="text-xs text-foreground/85 dark:text-foreground/75 font-mono">
 								{item.value}
 							</span>
 						</motion.div>
@@ -383,7 +399,7 @@ function RoleCard({
 						{role.requirements.map((req) => (
 							<li
 								key={req}
-								className="flex items-start gap-2 text-[11px] leading-relaxed text-foreground/56 transition-colors duration-300 group-hover:text-foreground/68 dark:text-foreground/48 dark:group-hover:text-foreground/60"
+								className="flex items-start gap-2 text-xs leading-relaxed text-foreground/56 transition-colors duration-300 group-hover:text-foreground/68 dark:text-foreground/48 dark:group-hover:text-foreground/60"
 							>
 								<span className="mt-px shrink-0 select-none font-mono text-[9px] leading-none text-foreground/60 dark:text-foreground/46">
 									+
@@ -441,24 +457,40 @@ export function CareersPageClient() {
 
 					{/* Right side */}
 					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-10">
+						<div className="p-5 pt-8 lg:p-8 lg:pt-16 pb-32 space-y-10">
 							{/* Mobile header */}
-							<div className="flex lg:hidden items-center gap-1.5">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="0.9em"
-									height="0.9em"
-									viewBox="0 0 24 24"
-									className="text-foreground/60"
-									aria-hidden="true"
-								>
-									<path
-										fill="currentColor"
-										d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-2 .89-2 2v11c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2m-6 0h-4V4h4z"
-									/>
-								</svg>
-								<span className="text-sm text-foreground/60">Careers</span>
+							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6">
+								<HalftoneBackground />
+								<div className="relative space-y-2 py-16">
+									<div className="flex items-center gap-1.5">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="0.9em"
+											height="0.9em"
+											viewBox="0 0 24 24"
+											className="text-foreground/60"
+											aria-hidden="true"
+										>
+											<path
+												fill="currentColor"
+												d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-2 .89-2 2v11c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2m-6 0h-4V4h4z"
+											/>
+										</svg>
+										<span className="text-sm text-foreground/60">Careers</span>
+									</div>
+									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight text-balance">
+										Join the team
+									</h1>
+									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+										Help us build the future of authentication.
+									</p>
+								</div>
 							</div>
+
+							<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
+								CAREERS
+								<span className="flex-1 h-px bg-foreground/15" />
+							</h2>
 
 							{/* Section: Why Better Auth */}
 							<motion.div
@@ -466,7 +498,7 @@ export function CareersPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-5">
+								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
 									# Why Better Auth
 								</p>
 
@@ -507,7 +539,7 @@ export function CareersPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.15 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-5">
+								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
 									# Open positions
 								</p>
 

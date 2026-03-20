@@ -27,14 +27,30 @@ function EnterpriseHero() {
 		>
 			<div className="space-y-6">
 				<div className="space-y-2">
-					<h1 className="text-lg md:text-xl lg:text-2xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+					<div className="flex items-center gap-1.5">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="0.9em"
+							height="0.9em"
+							viewBox="0 0 24 24"
+							className="text-foreground/60"
+							aria-hidden="true"
+						>
+							<path
+								fill="currentColor"
+								d="M12 7V3H2v18h20V7zM6 19H4v-2h2zm0-4H4v-2h2zm0-4H4V9h2zm0-4H4V5h2zm4 12H8v-2h2zm0-4H8v-2h2zm0-4H8V9h2zm0-4H8V5h2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8zm-2-8h-2v2h2zm0 4h-2v2h2z"
+							/>
+						</svg>
+						<span className="text-sm text-foreground/60">Enterprise</span>
+					</div>
+					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 						Enterprise-grade
 						<br />
 						<span className="text-neutral-500 dark:text-neutral-400">
 							auth at scale.
 						</span>
 					</h1>
-					<p className="text-[11px] text-foreground/65 dark:text-foreground/55 leading-relaxed max-w-[260px]">
+					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
 						Custom plans, unlimited seats, SSO, RBAC, and advanced support for
 						teams that need more.
 					</p>
@@ -56,7 +72,7 @@ function EnterpriseHero() {
 							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-[10px] leading-none select-none shrink-0">
 								+
 							</span>
-							<span className="text-[11px] text-foreground/65 dark:text-foreground/55 font-mono tracking-wide">
+							<span className="text-xs text-foreground/70 dark:text-foreground/50 font-mono tracking-wide">
 								{item}
 							</span>
 						</motion.div>
@@ -143,24 +159,47 @@ export function EnterprisePageClient() {
 
 					{/* Right side — Contact form */}
 					<div className="relative w-full lg:w-[60%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-8 ">
+						<div className="p-5 pt-8 lg:p-8 lg:pt-16 pb-32 space-y-8">
 							{/* Mobile header */}
-							<div className="flex lg:hidden items-center gap-1.5">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="0.9em"
-									height="0.9em"
-									viewBox="0 0 24 24"
-									className="text-foreground/60"
-									aria-hidden="true"
-								>
-									<path
-										fill="currentColor"
-										d="M12 7V3H2v18h20V7zM6 19H4v-2h2zm0-4H4v-2h2zm0-4H4V9h2zm0-4H4V5h2zm4 12H8v-2h2zm0-4H8v-2h2zm0-4H8V9h2zm0-4H8V5h2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8zm-2-8h-2v2h2zm0 4h-2v2h2z"
-									/>
-								</svg>
-								<span className="text-sm text-foreground/60">Enterprise</span>
+							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6">
+								<HalftoneBackground />
+								<div className="relative space-y-2 py-16">
+									<div className="flex items-center gap-1.5">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="0.9em"
+											height="0.9em"
+											viewBox="0 0 24 24"
+											className="text-foreground/60"
+											aria-hidden="true"
+										>
+											<path
+												fill="currentColor"
+												d="M12 7V3H2v18h20V7zM6 19H4v-2h2zm0-4H4v-2h2zm0-4H4V9h2zm0-4H4V5h2zm4 12H8v-2h2zm0-4H8v-2h2zm0-4H8V9h2zm0-4H8V5h2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8zm-2-8h-2v2h2zm0 4h-2v2h2z"
+											/>
+										</svg>
+										<span className="text-sm text-foreground/60">
+											Enterprise
+										</span>
+									</div>
+									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+										Enterprise-grade
+										<br />
+										<span className="text-neutral-500 dark:text-neutral-400">
+											auth at scale.
+										</span>
+									</h1>
+									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+										Custom plans, unlimited seats, SSO, RBAC, and advanced
+										support for teams that need more.
+									</p>
+								</div>
 							</div>
+
+							<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
+								ENTERPRISE
+								<span className="flex-1 h-px bg-foreground/15" />
+							</h2>
 
 							{/* Contact form */}
 							<motion.div
@@ -178,7 +217,7 @@ export function EnterprisePageClient() {
 											<h2 className="text-base font-medium text-foreground/90 dark:text-foreground/85">
 												Get in touch
 											</h2>
-											<p className="text-[11px] text-foreground/50 dark:text-foreground/45">
+											<p className="text-xs text-foreground/50 dark:text-foreground/45">
 												Fill out the form and we&apos;ll be in touch soon.
 											</p>
 										</div>

@@ -1533,15 +1533,16 @@ export function HeroReadMe({
 		>
 			{/* Markdown content */}
 			<div className="flex-1 overflow-y-auto no-scrollbar">
-				<div className="p-5 lg:p-5 pt-8 lg:pt-16">
+				<div className="p-5 pt-8 lg:p-8 lg:pt-16">
 					<motion.article
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						transition={{ duration: 0.4, delay: 0.3 }}
-						className="overflow-y-auto overflow-x-hidden no-scrollbar pt-[30px] pb-0"
+						className="overflow-y-auto overflow-x-hidden no-scrollbar pb-0"
 					>
-						<h1 className="flex items-center gap-2 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 pb-2 sm:pb-3 mb-4 sm:mb-5 border-b border-foreground/15">
+						<h1 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
 							README
+							<span className="flex-1 h-px bg-foreground/15" />
 						</h1>
 
 						<p className="text-sm sm:text-[14px] text-neutral-600 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
