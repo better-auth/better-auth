@@ -41,6 +41,21 @@ export interface PasskeyOptions {
 	 */
 	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
 	/**
+	 * Provide a passkey label based on the authenticator AAGUID.
+	 *
+	 * This callback is only used when no `name` is provided during passkey
+	 * registration verification. It only affects the stored DB label.
+	 *
+	 * Known AAGUID identifiers are sourced from:
+	 * - https://github.com/passkeydeveloper/passkey-authenticator-aaguids
+	 *
+	 * @default A best-effort provider suggestion is inferred from known AAGUID
+	 * values.
+	 */
+	getAuthenticatorName?:
+		| ((context: { aaguid: string }) => string | undefined)
+		| undefined;
+	/**
 	 * Advanced options
 	 */
 	advanced?:

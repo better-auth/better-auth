@@ -1,4 +1,5 @@
 import { APIError } from "@better-auth/core/error";
+import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
@@ -20,6 +21,7 @@ vi.mock("@simplewebauthn/server", async (importOriginal) => {
 	return {
 		...mod,
 		verifyAuthenticationResponse: vi.fn(mod.verifyAuthenticationResponse),
+		verifyRegistrationResponse: vi.fn(mod.verifyRegistrationResponse),
 	};
 });
 
@@ -167,6 +169,155 @@ describe("passkey", async () => {
 			},
 		});
 		expect(deleteResult.status).toBe(true);
+	});
+});
+
+describe("passkey registration naming fallback", async () => {
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [
+			passkey({
+				getAuthenticatorName: ({ aaguid }) => {
+					if (aaguid === "d3452668-01fd-4c12-926c-83a4204853aa") {
+						return "My custom provider";
+					}
+					return undefined;
+				},
+			}),
+		],
+	});
+	const mockWebAuthnRegistrationResponse = {
+		response: { transports: ["internal"] },
+	};
+
+	function mockRegistrationVerification(aaguid: string) {
+		vi.mocked(verifyRegistrationResponse).mockResolvedValue({
+			verified: true,
+			registrationInfo: {
+				aaguid,
+				credentialDeviceType: "singleDevice",
+				credentialBackedUp: false,
+				credential: {
+					id: "mock-credential-id",
+					publicKey: new Uint8Array([1, 2, 3]),
+					counter: 0,
+				},
+			},
+		} as Awaited<ReturnType<typeof verifyRegistrationResponse>>);
+	}
+
+	async function getVerifyHeaders(
+		client: ReturnType<typeof createAuthClient>,
+		headers: HeadersInit,
+	) {
+		let challengeCookie = "";
+		await client.$fetch("/passkey/generate-register-options", {
+			headers,
+			method: "GET",
+			onResponse(context) {
+				challengeCookie =
+					(context.response.headers.get("Set-Cookie") || "").split(";")[0] ||
+					"";
+			},
+		});
+
+		const verifyHeaders = new Headers(headers);
+		verifyHeaders.set(
+			"cookie",
+			[verifyHeaders.get("cookie") || "", challengeCookie]
+				.filter(Boolean)
+				.join("; "),
+		);
+		verifyHeaders.set("content-type", "application/json");
+		verifyHeaders.set("origin", "http://localhost:3000");
+		return verifyHeaders;
+	}
+
+	it("should use explicit name when provided", async () => {
+		const { headers } = await signInWithTestUser();
+		mockRegistrationVerification("d3452668-01fd-4c12-926c-83a4204853aa");
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers,
+				customFetchImpl,
+			},
+		});
+
+		const verifyHeaders = await getVerifyHeaders(client, headers);
+
+		await client.$fetch("/passkey/verify-registration", {
+			method: "POST",
+			headers: verifyHeaders,
+			body: JSON.stringify({
+				response: mockWebAuthnRegistrationResponse,
+				name: "My explicit name",
+			}),
+		});
+
+		const passkeys = await auth.api.listPasskeys({ headers });
+		expect(
+			passkeys.some((passkey) => passkey.name === "My explicit name"),
+		).toBe(true);
+	});
+
+	it("should use getAuthenticatorName return when no explicit name is provided", async () => {
+		const { headers } = await signInWithTestUser();
+		mockRegistrationVerification("d3452668-01fd-4c12-926c-83a4204853aa");
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers,
+				customFetchImpl,
+			},
+		});
+
+		const verifyHeaders = await getVerifyHeaders(client, headers);
+
+		await client.$fetch("/passkey/verify-registration", {
+			method: "POST",
+			headers: verifyHeaders,
+			body: JSON.stringify({
+				response: mockWebAuthnRegistrationResponse,
+			}),
+		});
+
+		const passkeys = await auth.api.listPasskeys({ headers });
+		expect(
+			passkeys.some((passkey) => passkey.name === "My custom provider"),
+		).toBe(true);
+	});
+
+	it("should fall back to known AAGUID suggestion when explicit name and override are absent", async () => {
+		const { headers } = await signInWithTestUser();
+		mockRegistrationVerification("ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4");
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers,
+				customFetchImpl,
+			},
+		});
+
+		const verifyHeaders = await getVerifyHeaders(client, headers);
+
+		await client.$fetch("/passkey/verify-registration", {
+			method: "POST",
+			headers: verifyHeaders,
+			body: JSON.stringify({
+				response: mockWebAuthnRegistrationResponse,
+			}),
+		});
+
+		const passkeys = await auth.api.listPasskeys({ headers });
+		expect(
+			passkeys.some((passkey) => passkey.name === "Google Password Manager"),
+		).toBe(true);
 	});
 });
 
