@@ -1078,7 +1078,12 @@ export const createInternalAdapter = (
 			);
 			return verification as Verification;
 		},
-		findVerificationValue: async (identifier: string) => {
+		findVerificationValue: async (
+			identifier: string,
+			findOptions?: {
+				cleanupBeforeFind?: boolean | undefined;
+			},
+		) => {
 			const storageOption = getStorageOption(
 				identifier,
 				options.verification?.storeIdentifier,
@@ -1125,24 +1130,34 @@ export const createInternalAdapter = (
 				});
 			}
 
+			const cleanupExpiredVerifications = async () => {
+				if (!options.verification?.disableCleanup) {
+					await deleteManyWithHooks(
+						[
+							{
+								field: "expiresAt",
+								value: new Date(),
+								operator: "lt",
+							},
+						],
+						"verification",
+						undefined,
+					);
+				}
+			};
+
+			if (findOptions?.cleanupBeforeFind) {
+				await cleanupExpiredVerifications();
+			}
+
 			let verification = await findByIdentifier(storedIdentifier);
 
 			if (!verification.length && storageOption && storageOption !== "plain") {
 				verification = await findByIdentifier(identifier);
 			}
 
-			if (!options.verification?.disableCleanup) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "expiresAt",
-							value: new Date(),
-							operator: "lt",
-						},
-					],
-					"verification",
-					undefined,
-				);
+			if (!findOptions?.cleanupBeforeFind) {
+				await cleanupExpiredVerifications();
 			}
 
 			return (verification[0] as Verification) || null;

@@ -232,6 +232,24 @@ describe("internal adapter test", async () => {
 		});
 	});
 
+	it("should not return expired verification values when cleanupBeforeFind is enabled", async () => {
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-cleanup-first`,
+			value: "test-id-cleanup-first",
+			expiresAt: new Date(Date.now() - 1000),
+		});
+		expect(hookVerificationCreateBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
+
+		const value = await internalAdapter.findVerificationValue(
+			"test-id-cleanup-first",
+			{ cleanupBeforeFind: true },
+		);
+		expect(value).toBeNull();
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+	});
+
 	it("should delete verification by value with hooks", async () => {
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
