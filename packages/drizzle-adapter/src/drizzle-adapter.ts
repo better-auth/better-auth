@@ -9,6 +9,7 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { safePlural } from "@better-auth/core/utils/pluralize";
 import type { SQL } from "drizzle-orm";
 import {
 	and,
@@ -436,7 +437,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
+							const joinKeyMap = new Map<string, string>();
 							if (join) {
 								includes = {};
 								const joinEntries = Object.entries(join);
@@ -446,12 +447,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
 									const isUnique = joinAttr.relation === "one-to-one";
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
+									const joinKey =
+										isUnique || config.usePlural ? model : safePlural(model);
+									includes[joinKey] = isUnique ? true : { limit };
 									if (!isUnique) {
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
+										joinKeyMap.set(joinKey, model);
 									}
 								}
 							}
@@ -472,13 +472,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const pluralJoinResult of pluralJoinResults) {
-									const singularKey = !config.usePlural
-										? pluralJoinResult.slice(0, -1)
-										: pluralJoinResult;
-									res[singularKey] = res[pluralJoinResult];
-									if (pluralJoinResult !== singularKey) {
-										delete res[pluralJoinResult];
+								for (const [joinKey, originalModel] of joinKeyMap) {
+									res[originalModel] = res[joinKey];
+									if (joinKey !== originalModel) {
+										delete res[joinKey];
 									}
 								}
 							}
@@ -523,7 +520,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
+							const joinKeyMap = new Map<string, string>();
 							if (join) {
 								includes = {};
 								const joinEntries = Object.entries(join);
@@ -533,12 +530,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										joinAttr.limit ??
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
-									if (!isUnique)
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
+									const joinKey =
+										isUnique || config.usePlural ? model : safePlural(model);
+									includes[joinKey] = isUnique ? true : { limit };
+									if (!isUnique) joinKeyMap.set(joinKey, model);
 								}
 							}
 							let orderBy: SQL<unknown>[] | undefined = undefined;
@@ -569,13 +564,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const pluralJoinResult of pluralJoinResults) {
-										const singularKey = !config.usePlural
-											? pluralJoinResult.slice(0, -1)
-											: pluralJoinResult;
-										if (singularKey === pluralJoinResult) continue;
-										item[singularKey] = item[pluralJoinResult];
-										delete item[pluralJoinResult];
+									for (const [joinKey, originalModel] of joinKeyMap) {
+										if (joinKey === originalModel) continue;
+										item[originalModel] = item[joinKey];
+										delete item[joinKey];
 									}
 								}
 							}
