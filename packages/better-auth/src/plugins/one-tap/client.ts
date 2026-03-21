@@ -262,6 +262,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
 						const contextValue = context ?? options.context ?? "signin";
 
+						const useFedCM = options.promptOptions?.fedCM !== false;
 						window.google?.accounts.id.initialize({
 							client_id: options.clientId,
 							callback: async (response: { credential: string }) => {
@@ -277,6 +278,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							ux_mode: opts?.uxMode || "popup",
 							nonce: opts?.nonce,
 							itp_support: true,
+							use_fedcm_for_prompt: useFedCM,
 							...options.additionalOptions,
 						});
 
@@ -314,6 +316,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							const baseDelay = options.promptOptions?.baseDelay ?? 1000;
 							const maxAttempts = options.promptOptions?.maxAttempts ?? 5;
 
+							const useFedCM = options.promptOptions?.fedCM !== false;
 							window.google?.accounts.id.initialize({
 								client_id: options.clientId,
 								callback: async (response: { credential: string }) => {
@@ -335,7 +338,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 								 */
 								itp_support: true,
-
+								use_fedcm_for_prompt: useFedCM,
 								...options.additionalOptions,
 							});
 
@@ -345,10 +348,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								window.google?.accounts.id.prompt((notification: any) => {
 									if (isResolved) return;
 
-									if (
-										notification.isDismissedMoment &&
-										notification.isDismissedMoment()
-									) {
+									if (notification.isDismissedMoment?.()) {
 										const reason = notification.getDismissedReason?.();
 										if (noRetryReasons.dismissed.includes(reason)) {
 											opts?.onPromptNotification?.(notification);
@@ -362,10 +362,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											opts?.onPromptNotification?.(notification);
 											resolve();
 										}
-									} else if (
-										notification.isSkippedMoment &&
-										notification.isSkippedMoment()
-									) {
+									} else if (notification.isSkippedMoment?.()) {
+										// Under FedCM, getSkippedReason() is not available.
+										// Treat missing reason the same as a no-retry reason.
 										const reason = notification.getSkippedReason?.();
 										if (!reason || noRetryReasons.skipped.includes(reason)) {
 											opts?.onPromptNotification?.(notification);
@@ -379,10 +378,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											opts?.onPromptNotification?.(notification);
 											resolve();
 										}
-									} else if (
-										notification.isNotDisplayed &&
-										notification.isNotDisplayed()
-									) {
+									} else if (notification.isNotDisplayed?.()) {
+										// Under FedCM, isNotDisplayed() is deprecated.
+										// Still handle it for non-FedCM fallback.
 										opts?.onPromptNotification?.(notification);
 										resolve();
 									}
