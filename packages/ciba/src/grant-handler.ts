@@ -136,9 +136,6 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 					ctx.body.resource = cibaRequest.resource;
 				}
 
-				// Delete before issuing to prevent replay
-				await deleteCibaRequest(ctx, authReqId);
-
 				// Build extra claims: act (agent identity) + authorization_details (RAR)
 				const extra: {
 					accessTokenClaims: Record<string, unknown>;
@@ -165,6 +162,17 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 						// Ignore malformed agent claims
 					}
 				}
+
+				if (_options.buildAccessTokenClaims) {
+					const custom = await _options.buildAccessTokenClaims(
+						cibaRequest,
+						ctx,
+					);
+					Object.assign(extra.accessTokenClaims, custom);
+				}
+
+				// Delete after building claims but before issuing to prevent replay
+				await deleteCibaRequest(ctx, authReqId);
 
 				return createUserTokens(
 					ctx,

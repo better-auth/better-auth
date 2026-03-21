@@ -638,6 +638,159 @@ describe("ciba", async () => {
 		});
 	});
 
+	describe("buildAccessTokenClaims hook", () => {
+		it("should call the hook with cibaRequest data", async () => {
+			const hookCalls: Array<{ scope: string; userId: string }> = [];
+			const {
+				auth: hookAuth,
+				signInWithTestUser: hookSignIn,
+				customFetchImpl: hookFetch,
+			} = await getTestInstance({
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					ciba({
+						sendNotification: async () => {},
+						buildAccessTokenClaims: (cibaRequest) => {
+							hookCalls.push({
+								scope: cibaRequest.scope,
+								userId: cibaRequest.userId,
+							});
+							return { aap: { level: "high" } };
+						},
+					}),
+				],
+			});
+
+			const { headers: hookHeaders } = await hookSignIn();
+			const hookClient = await hookAuth.api.adminCreateOAuthClient({
+				headers: hookHeaders,
+				body: {
+					redirect_uris: ["http://localhost:5000/callback"],
+					skip_consent: true,
+				},
+			});
+
+			const bcRes = await hookAuth.api.bcAuthorize({
+				body: {
+					client_id: hookClient!.client_id,
+					client_secret: hookClient!.client_secret!,
+					scope: "openid profile",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await hookAuth.api.cibaAuthorize({
+				headers: hookHeaders,
+				body: { auth_req_id: bcRes.auth_req_id as string },
+			});
+
+			const tokenRes = await hookFetch(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "urn:openid:params:grant-type:ciba",
+					client_id: hookClient!.client_id,
+					client_secret: hookClient!.client_secret!,
+					auth_req_id: bcRes.auth_req_id as string,
+				}),
+			});
+
+			expect(tokenRes.status).toBe(200);
+			const tokenBody = await tokenRes.json();
+			expect(tokenBody.access_token).toBeDefined();
+
+			// Verify the hook was called with the correct CIBA request data
+			expect(hookCalls).toHaveLength(1);
+			expect(hookCalls[0]!.scope).toBe("openid profile");
+			expect(hookCalls[0]!.userId).toBeDefined();
+		});
+
+		it("should still prevent replay after hook runs", async () => {
+			const {
+				auth: hookAuth,
+				signInWithTestUser: hookSignIn,
+				customFetchImpl: hookFetch,
+			} = await getTestInstance({
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					ciba({
+						sendNotification: async () => {},
+						buildAccessTokenClaims: () => ({ custom: true }),
+					}),
+				],
+			});
+
+			const { headers: hookHeaders } = await hookSignIn();
+			const hookClient = await hookAuth.api.adminCreateOAuthClient({
+				headers: hookHeaders,
+				body: {
+					redirect_uris: ["http://localhost:5000/callback"],
+					skip_consent: true,
+				},
+			});
+
+			const bcRes = await hookAuth.api.bcAuthorize({
+				body: {
+					client_id: hookClient!.client_id,
+					client_secret: hookClient!.client_secret!,
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await hookAuth.api.cibaAuthorize({
+				headers: hookHeaders,
+				body: { auth_req_id: bcRes.auth_req_id as string },
+			});
+
+			// First poll: success
+			await hookFetch(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "urn:openid:params:grant-type:ciba",
+					client_id: hookClient!.client_id,
+					client_secret: hookClient!.client_secret!,
+					auth_req_id: bcRes.auth_req_id as string,
+				}),
+			});
+
+			// Second poll: should fail (replay)
+			const replayRes = await hookFetch(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "urn:openid:params:grant-type:ciba",
+					client_id: hookClient!.client_id,
+					client_secret: hookClient!.client_secret!,
+					auth_req_id: bcRes.auth_req_id as string,
+				}),
+			});
+
+			expect(replayRes.status).toBe(400);
+			const body = await replayRes.json();
+			expect(body.error).toBe("invalid_grant");
+		});
+	});
+
 	describe("discovery metadata", () => {
 		it("should include CIBA fields in openid-configuration", async () => {
 			const config = await auth.api.getOpenIdConfig();

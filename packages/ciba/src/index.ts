@@ -11,6 +11,7 @@ import { createCibaVerify } from "./verify";
 
 export { deliverPing } from "./push";
 export type { CibaOptions, SendNotificationData } from "./types";
+export type { CibaRequest } from "./utils";
 
 const CIBA_GRANT_TYPE = "urn:openid:params:grant-type:ciba";
 

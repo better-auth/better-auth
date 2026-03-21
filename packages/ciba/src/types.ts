@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { CibaRequest } from "./utils";
 
 /**
  * Data passed to the {@link CibaOptions.sendNotification} callback.
@@ -83,4 +84,16 @@ export interface CibaOptions {
 	 * @default 3
 	 */
 	pushRetryAttempts?: number;
+
+	/**
+	 * Build additional access token claims from the CIBA request.
+	 *
+	 * Called before the request row is deleted, so the full request
+	 * data is still available for lookup if needed.
+	 * Returned claims are merged into the access token.
+	 */
+	buildAccessTokenClaims?: (
+		cibaRequest: CibaRequest,
+		ctx: GenericEndpointContext,
+	) => Promise<Record<string, unknown>> | Record<string, unknown>;
 }
