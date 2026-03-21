@@ -56,8 +56,23 @@ export const isProduction = nodeENV === "production";
 export const isDevelopment = () =>
 	nodeENV === "dev" || nodeENV === "development";
 
+/** Detect if we are currently building a SvelteKit project */
+let _isSvelteKitBuilding = false;
+try {
+	// @ts-expect-error Will only work if we are in SvelteKit
+	const svelteKitEnv = await import("$app/environment");
+	_isSvelteKitBuilding = svelteKitEnv.building;
+} catch (_e) {
+	// If it fails (e.g., we aren't in SvelteKit), it remains false
+}
+
+export function isSvelteKitBuilding() {
+	return _isSvelteKitBuilding;
+}
+
 /** Detect if `NODE_ENV` environment variable is `test` */
-export const isTest = () => nodeENV === "test" || toBoolean(env.TEST);
+export const isTest = () =>
+	nodeENV === "test" || toBoolean(env.TEST) || isSvelteKitBuilding();
 
 /**
  * Get environment variable with fallback
