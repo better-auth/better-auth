@@ -73,6 +73,7 @@ export interface HaveIBeenPwnedOptions {
 	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
 	 */
 	paths?: string[];
+	enable?: boolean | undefined;
 }
 
 export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
@@ -91,6 +92,8 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 					password: {
 						...ctx.password,
 						async hash(password) {
+							if (options?.enable === false) return originalHash(password);
+
 							const c = await getCurrentAuthContext();
 							if (!c.path || !paths.includes(c.path)) {
 								return originalHash(password);
