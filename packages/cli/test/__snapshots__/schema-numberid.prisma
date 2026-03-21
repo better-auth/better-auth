@@ -81,7 +81,7 @@ model TwoFactor {
   backupCodes String
   userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  verified    Boolean? @default(false)
+  verified    Boolean? @default(true)
 
   @@index([secret])
   @@index([userId])
