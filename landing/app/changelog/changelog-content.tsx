@@ -24,7 +24,7 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 				{visible.map((release, i) => (
 					<div
 						key={release.tag}
-						className="group border-b border-dashed border-foreground/[0.06] px-5 sm:px-6 lg:px-8 py-6"
+						className="group border-b border-dashed px-5 sm:px-6 lg:px-8 py-16 first:pt-8"
 					>
 						{/* Release header */}
 						<div className="flex items-baseline justify-between mb-4">
@@ -33,7 +33,7 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 									href={release.url}
 									target="_blank"
 									rel="noopener noreferrer"
-									className="text-sm font-medium tracking-tight text-neutral-800 dark:text-neutral-200 hover:text-neutral-950 dark:hover:text-white transition-colors"
+									className="text-2xl font-medium tracking-tight text-neutral-800 dark:text-neutral-200 hover:text-neutral-950 dark:hover:text-white transition-colors"
 								>
 									{release.title || release.tag}
 								</Link>
@@ -63,7 +63,7 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 									),
 									h3: ({ children, ...props }) => (
 										<h3
-											className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1.5 pb-1 border-b border-dashed border-foreground/[0.06]"
+											className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1.5 pb-1 border-foreground/[0.06]"
 											{...props}
 										>
 											{children}
