@@ -239,9 +239,9 @@ export function ProductsShell({
 
 					{/* Right side — Content */}
 					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 pt-8 lg:p-8 lg:pt-16">
+						<div className="px-5 lg:px-8 lg:pt-16">
 							{/* Mobile header */}
-							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6">
+							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
 								<HalftoneBackground />
 								<div className="relative space-y-2 py-16">
 									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
@@ -269,7 +269,7 @@ export function ProductsShell({
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
 									transition={{ duration: 0.2 }}
-									className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100"
+									className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5"
 								>
 									{isInfrastructure ? "INFRASTRUCTURE" : "FRAMEWORK"}
 									<span className="flex-1 h-px bg-foreground/15" />

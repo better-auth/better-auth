@@ -160,9 +160,9 @@ export function EnterprisePageClient() {
 
 					{/* Right side — Contact form */}
 					<div className="relative w-full lg:w-[60%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 pt-8 lg:p-8 lg:pt-16 space-y-8">
+						<div className="px-5 lg:p-8 lg:pt-16 space-y-8">
 							{/* Mobile header */}
-							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6">
+							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
 								<HalftoneBackground />
 								<div className="relative space-y-2 py-16">
 									<div className="flex items-center gap-1.5">

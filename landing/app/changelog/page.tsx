@@ -163,7 +163,7 @@ export default async function ChangelogPage() {
 					</div>
 				</div>
 
-				<div className="p-5 pt-8 lg:p-8 lg:pt-16">
+				<div className="px-5 pt-5 lg:p-8 lg:pt-16">
 					<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100">
 						CHANGELOG
 						<span className="flex-1 h-px bg-foreground/15" />
