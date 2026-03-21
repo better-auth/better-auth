@@ -55,6 +55,7 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	INVALID_REDIRECT_URL: "Invalid redirectURL",
 	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
 	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+    INVALID_TOKEN_AND_CALLBACK_URL: "Invalid token and callbackURL",
 	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
 	CALLBACK_URL_REQUIRED: "callbackURL is required",
 	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",

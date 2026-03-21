@@ -8,18 +8,18 @@ import { validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { sensitiveSessionMiddleware } from "./session";
 
-function redirectError(
-	ctx: AuthContext,
-	callbackURL: string | undefined,
-	query?: Record<string, string> | undefined,
-): string {
-	const url = callbackURL
-		? new URL(callbackURL, ctx.baseURL)
-		: new URL(`${ctx.baseURL}/error`);
-	if (query)
-		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
-	return url.href;
-}
+// function redirectError(
+// 	ctx: AuthContext,
+// 	callbackURL: string | undefined,
+// 	query?: Record<string, string> | undefined,
+// ): string {
+// 	const url = callbackURL
+// 		? new URL(callbackURL, ctx.baseURL)
+// 		: new URL(`${ctx.baseURL}/error`);
+// 	if (query)
+// 		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
+// 	return url.href;
+// }
 
 function redirectCallback(
 	ctx: AuthContext,
@@ -207,19 +207,35 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	async (ctx) => {
 		const { token } = ctx.params;
 		const { callbackURL } = ctx.query;
-		if (!token || !callbackURL) {
-			throw ctx.redirect(
-				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
-			);
-		}
+
+        if (!token && !callbackURL) {
+            throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN_AND_CALLBACK_URL);
+            // throw ctx.redirect(
+            //     redirectError(ctx.context, undefined, { error: "INVALID_TOKEN_AND_CALLBACK_URL" }),
+            // );
+        }
+        else if (!token && callbackURL) {
+            throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+            // throw ctx.redirect(
+            //     redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+            // );
+        }
+        else if (token && !callbackURL) {
+            throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_CALLBACK_URL);
+            // throw ctx.redirect(
+            //     redirectError(ctx.context, undefined, { error: "INVALID_CALLBACK_URL" }),
+            // );
+        }
+
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(
 				`reset-password:${token}`,
 			);
 		if (!verification || verification.expiresAt < new Date()) {
-			throw ctx.redirect(
-				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
-			);
+            throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+			// throw ctx.redirect(
+			// 	redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+			// );
 		}
 
 		throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));
