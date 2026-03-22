@@ -1982,9 +1982,15 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).not.toContain("error=unsolicited_response");
 	});
 
-	it("should skip InResponseTo validation when not explicitly enabled (backward compatibility)", async () => {
+	it("should skip InResponseTo validation when explicitly disabled", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [
+				sso({
+					saml: {
+						enableInResponseToValidation: false,
+					},
+				}),
+			],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2039,6 +2045,76 @@ describe("SAML SSO", async () => {
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).not.toContain("error=");
+	});
+
+	it("should enable InResponseTo validation by default", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			// No saml config — default behavior
+			plugins: [
+				sso({
+					saml: {
+						allowIdpInitiated: false,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl:
+						"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+					audience: "http://localhost:3000",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+					},
+				},
+			},
+			headers,
+		});
+
+		// Unsolicited response (no prior AuthnRequest) should be rejected
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=unsolicited_response");
 	});
 
 	it("should use verification table for InResponseTo validation", async () => {
