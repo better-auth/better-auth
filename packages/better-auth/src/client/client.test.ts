@@ -119,6 +119,152 @@ describe("run time proxy", async () => {
 		vi.useRealTimers();
 	});
 
+	it("should hydrate session on an existing client", async () => {
+		vi.useFakeTimers();
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(
+						JSON.stringify({
+							user: {
+								id: "2",
+								email: "fresh@email.com",
+							},
+							session: {
+								id: "session-2",
+							},
+						}),
+					),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession({
+			user: {
+				id: "1",
+				name: "Hydrated User",
+				email: "hydrated@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "session-token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const session = client.useSession();
+
+		expect(session()).toMatchObject({
+			data: {
+				user: {
+					id: "1",
+					email: "hydrated@email.com",
+				},
+				session: {
+					id: "session-1",
+				},
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+
+		await vi.runAllTimersAsync();
+
+		expect(session()).toMatchObject({
+			data: {
+				user: {
+					id: "2",
+					email: "fresh@email.com",
+				},
+				session: {
+					id: "session-2",
+				},
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+	});
+
+	it("should not overwrite session when already hydrated", async () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(
+						JSON.stringify({
+							user: { id: "1", email: "fresh@email.com" },
+							session: { id: "session-1" },
+						}),
+					),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession({
+			user: {
+				id: "1",
+				name: "First",
+				email: "first@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		// Second call should be a no-op
+		client.hydrateSession({
+			user: {
+				id: "2",
+				name: "Second",
+				email: "second@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-2",
+				userId: "2",
+				expiresAt: new Date(),
+				token: "token-2",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const session = client.useSession();
+		expect(session().data?.user?.email).toBe("first@email.com");
+	});
+
+	it("should not hydrate when session is null", () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession(null);
+
+		const session = client.useSession();
+		expect(session().data).toBeNull();
+		expect(session().isPending).toBe(true);
+	});
+
 	it("should allow second argument fetch options", async () => {
 		let called = false;
 		const client = createSolidClient({
@@ -201,6 +347,21 @@ describe("type", () => {
 			error: BetterFetchError | null;
 			isPending: boolean;
 		}>();
+	});
+	it("should infer hydrateSession react", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async () => {
+					return new Response();
+				},
+			},
+		});
+		type HydrateSession = typeof client.hydrateSession;
+		expectTypeOf<HydrateSession>().toMatchTypeOf<
+			(session: ReturnType<typeof client.useSession>["data"]) => void
+		>();
 	});
 	it("should infer resolved hooks react", () => {
 		const client = createReactClient({
