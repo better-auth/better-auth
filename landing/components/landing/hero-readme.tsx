@@ -3,13 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Github } from "lucide-react";
 import Link from "next/link";
-import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icons } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { ContributorInfo } from "@/lib/community-stats";
