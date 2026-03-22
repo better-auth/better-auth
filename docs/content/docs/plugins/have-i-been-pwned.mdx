@@ -32,7 +32,7 @@ When a user attempts to create an account or update their password with a compro
 
 ## Options
 
-### `enable`
+### `enabled`
 
 Enable or disable password checks against the HIBP database. Useful for skipping checks in development or testing without removing the plugin. Defaults to `true`.
 
@@ -43,7 +43,7 @@ import { haveIBeenPwned } from "better-auth/plugins"
 const auth = betterAuth({
     plugins: [
         haveIBeenPwned({
-            enable: process.env.NODE_ENV === 'production' // [!code highlight]
+            enabled: process.env.NODE_ENV === 'production' // [!code highlight]
         })
     ]
 })

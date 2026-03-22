@@ -65,10 +65,10 @@ describe("have-i-been-pwned", async () => {
 		expect(result.error?.status).toBe(400);
 	});
 
-	describe("when enable is false", async () => {
+	describe("when enabled is false", async () => {
 		const { client: disabledClient } = await getTestInstance(
 			{
-				plugins: [haveIBeenPwned({ enable: false })],
+				plugins: [haveIBeenPwned({ enabled: false })],
 			},
 			{
 				disableTestUser: true,
