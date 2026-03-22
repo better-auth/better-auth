@@ -31,6 +31,26 @@ function getOAuthStateIdentifier(state: string) {
 	return `${OAUTH_STATE_IDENTIFIER_PREFIX}${state}`;
 }
 
+export async function findStoredOAuthState(
+	c: GenericEndpointContext,
+	state: string,
+) {
+	const identifier = getOAuthStateIdentifier(state);
+	const data =
+		await c.context.internalAdapter.findVerificationValue(identifier);
+	if (data) {
+		return { data, identifier };
+	}
+
+	const legacyData =
+		await c.context.internalAdapter.findVerificationValue(state);
+	if (legacyData) {
+		return { data: legacyData, identifier: state };
+	}
+
+	return null;
+}
+
 export type StateErrorCode =
 	| "state_generation_error"
 	| "state_invalid"
@@ -170,18 +190,15 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 	} else {
 		// Default: database strategy
-		const verificationIdentifier = getOAuthStateIdentifier(state);
-		const data = await c.context.internalAdapter.findVerificationValue(
-			verificationIdentifier,
-		);
-		if (!data) {
+		const storedState = await findStoredOAuthState(c, state);
+		if (!storedState) {
 			throw new StateError("State mismatch: verification not found", {
 				code: "state_mismatch",
 				details: { state },
 			});
 		}
 
-		parsedData = stateDataSchema.parse(JSON.parse(data.value));
+		parsedData = stateDataSchema.parse(JSON.parse(storedState.data.value));
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "state",
@@ -212,7 +229,7 @@ export async function parseGenericState(
 
 		// Delete verification value after retrieval
 		await c.context.internalAdapter.deleteVerificationByIdentifier(
-			verificationIdentifier,
+			storedState.identifier,
 		);
 	}
 

@@ -113,13 +113,16 @@ describe("expo", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
-		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
 		const ctx = await auth.$context;
-		if (!stateId) {
-			throw new Error("State ID not found");
-		}
-		const state = await ctx.internalAdapter.findVerificationValue(stateId);
-		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
+		const states = await ctx.adapter.findMany<{ value: string }>({
+			model: "verification",
+			sortBy: {
+				field: "createdAt",
+				direction: "desc",
+			},
+			limit: 1,
+		});
+		const callbackURL = JSON.parse(states[0]?.value || "{}").callbackURL;
 		expect(callbackURL).toBe("better-auth:///dashboard");
 		expect(res).toMatchObject({
 			url: expect.stringContaining("accounts.google"),

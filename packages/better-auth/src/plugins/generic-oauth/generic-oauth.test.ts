@@ -1153,6 +1153,92 @@ describe("oauth2", async () => {
 		expect(session.data?.user.email).toBe("oauth2-overridden-state@test.com");
 	});
 
+	it("should accept legacy raw oauth-state verification identifiers during callback", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-legacy-state@test.com",
+				name: "OAuth2 Legacy State",
+				sub: "oauth2-legacy-state",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			verification: {
+				storeIdentifier: "hashed",
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-legacy-state",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-legacy-state",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		const state = new URL(res.data?.url || "").searchParams.get("state");
+		expect(state).toBeTruthy();
+
+		const ctx = await auth.$context;
+		const prefixed = await ctx.internalAdapter.findVerificationValue(
+			`oauth-state:${state}`,
+		);
+		expect(prefixed).not.toBeNull();
+
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: state!,
+			value: prefixed!.value,
+			expiresAt: prefixed!.expiresAt,
+		});
+		await ctx.internalAdapter.deleteVerificationByIdentifier(
+			`oauth-state:${state}`,
+		);
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe("oauth2-legacy-state@test.com");
+		expect(await ctx.internalAdapter.findVerificationValue(state!)).toBeNull();
+	});
+
 	it("should await async mapProfileToUser", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
