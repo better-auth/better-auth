@@ -795,7 +795,7 @@ function SentinelSection() {
 	return (
 		<div className="mt-16 mb-4">
 			<div className="flex items-center mb-4">
-				<span className="text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0 bg-muted px-2 py-1 rounded-md border">
+				<span className="text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0 bg-muted px-2 py-1 rounded-md border border-foreground/15">
 					Sentinel
 				</span>
 				<div className="flex-1 border-t border border-dashed" />
@@ -865,52 +865,40 @@ function SentinelSection() {
 						<div className="hidden sm:flex items-center gap-3">
 							<span className="flex items-center gap-1.5 text-[9px] font-mono">
 								<span className="size-1.5 rounded-full bg-red-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Blocked
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									847
-								</span>
+								<span className="text-foreground/50">Blocked</span>
+								<span className="text-foreground/50">847</span>
 							</span>
 							<span className="flex items-center gap-1.5 text-[9px] font-mono">
 								<span className="size-1.5 rounded-full bg-yellow-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Challenged
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									124
-								</span>
+								<span className="text-foreground/50">Challenged</span>
+								<span className="text-foreground/50">124</span>
 							</span>
 							<span className="flex items-center gap-1.5 text-[9px] font-mono">
 								<span className="size-1.5 rounded-full bg-green-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Allowed
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									12.4k
-								</span>
+								<span className="text-foreground/50">Allowed</span>
+								<span className="text-foreground/50">12.4k</span>
 							</span>
 						</div>
 					</div>
 
 					{/* Table header */}
-					<div className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2 border-b border-foreground/[0.06] bg-foreground/[0.01]">
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
+					<div className="grid grid-cols-[90px_1fr_100px_70px_80px] sm:grid-cols-[90px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2 border-b border-foreground/[0.06] bg-foreground/[0.01]">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/50">
 							Action
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/50">
 							Identifier
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/50">
 							Reason
 						</span>
-						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
+						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/50">
 							Location
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/50">
 							Path
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50 text-right">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/50 text-right">
 							Time
 						</span>
 					</div>
@@ -919,7 +907,7 @@ function SentinelSection() {
 					{sentinelEvents.map((event) => (
 						<div
 							key={event.identifier}
-							className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2.5 border-b border-dashed border-foreground/[0.04] hover:bg-foreground/[0.02] transition-colors"
+							className="grid grid-cols-[90px_1fr_100px_70px_80px] sm:grid-cols-[90px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2.5 border-b border-dashed border-foreground/[0.04] hover:bg-foreground/[0.02] transition-colors"
 						>
 							<span className="flex items-center gap-1.5">
 								<span
@@ -937,25 +925,25 @@ function SentinelSection() {
 								</span>
 							</span>
 							<div className="min-w-0 pr-2">
-								<span className="text-[10px] font-mono text-foreground/60 dark:text-foreground/45 block truncate">
+								<span className="text-xs font-mono text-foreground/60 block truncate">
 									{event.identifier}
 								</span>
 								{event.ip && (
-									<span className="text-[9px] font-mono text-foreground/50  block truncate">
+									<span className="text-[11px] font-mono text-foreground/50  block truncate">
 										{event.ip}
 									</span>
 								)}
 							</div>
-							<span className="text-[10px] font-mono text-foreground/40 dark:text-foreground/30 truncate">
+							<span className="text-[10px] font-mono text-foreground/50 truncate">
 								{event.reason}
 							</span>
-							<span className="hidden sm:block text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
+							<span className="hidden sm:block text-[10px] font-mono text-foreground/50 truncate">
 								{event.location}
 							</span>
-							<span className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
+							<span className="text-[10px] font-mono text-foreground/50 truncate">
 								{event.path}
 							</span>
-							<span className="text-[10px] font-mono text-foreground/30 dark:text-foreground/20 text-right">
+							<span className="text-[10px] font-mono text-foreground/50 text-right">
 								{event.time}
 							</span>
 						</div>
@@ -1143,14 +1131,14 @@ function ContributorsSection({
 	];
 
 	return (
-		<div className="mt-12 pt-8">
+		<div className="mt-24">
 			<div className="flex items-center gap-3 mb-5">
 				<span className="text-xl lg:text-2xl font-medium text-foreground/90 dark:text-foreground/80">
 					Contributors
 				</span>
 				<div className="h-px flex-1 bg-foreground/10" />
 			</div>
-			<p className="text-base text-foreground/50 dark:text-foreground/40 mb-8 leading-relaxed">
+			<p className="text-base sm:text-lg text-foreground/50 dark:text-foreground/40 mb-8 leading-relaxed">
 				Built by a community of{" "}
 				<span className="text-foreground/70 dark:text-foreground/60 font-medium tabular-nums">
 					{contributorCount}+
@@ -1469,7 +1457,7 @@ export function HeroReadMe({
 								<div className="flex-1 border-t border-foreground/10" />
 							</div>
 
-							<div className="text-lg text-foreground/70 dark:text-foreground/55 pb-6 space-y-1 leading-relaxed">
+							<div className="text-base sm:text-lg text-foreground/70 dark:text-foreground/55 pb-6 space-y-1 leading-relaxed">
 								<p>Your auth lives in your codebase.</p>
 								<p>Use your favorite framework.</p>
 							</div>
@@ -1478,17 +1466,21 @@ export function HeroReadMe({
 						</div>
 
 						{/* Database */}
-						<div className="pt-16">
+						<div className="pt-24">
 							<DatabaseSection />
 						</div>
 
 						{/* Out of the Box */}
-						<div className="pt-8">
+						<div className="pt-16">
 							<div className="flex items-center gap-3 mb-5 pt-8">
 								<span className="text-xl lg:text-2xl font-medium text-foreground/90 dark:text-foreground/80">
 									Out of the Box
 								</span>
 								<div className="flex-1 border-t border-foreground/10" />
+							</div>
+							<div className="text-base sm:text-lg text-foreground/70 dark:text-foreground/55 pb-6 space-y-1 leading-relaxed">
+								<p>Comprehensive set of features out of the box.</p>
+								<p>Focus on building your service.</p>
 							</div>
 
 							<FeaturesSection />
@@ -1507,7 +1499,7 @@ export function HeroReadMe({
 						</div>
 
 						{/* Infrastructure transition */}
-						<div className="mt-16 mb-8">
+						<div className="mt-24 mb-8">
 							<div className="flex items-center gap-3 mb-5 pt-8">
 								<span className="text-2xl lg:text-3xl font-medium text-foreground/90 dark:text-foreground/80">
 									Infrastructure
@@ -1523,7 +1515,7 @@ export function HeroReadMe({
 						</div>
 
 						<div className="flex items-center pt-4 mb-4">
-							<span className="text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0 bg-muted px-2 py-1 rounded-md border">
+							<span className="text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0 bg-muted px-2 py-1 rounded-md border border-foreground/15">
 								Dash
 							</span>
 							<div className="flex-1 border-t border border-dashed" />
@@ -1596,12 +1588,12 @@ export function HeroReadMe({
 									<div className="flex items-center justify-between px-4 py-2.5 bg-foreground/[0.02] border-b border-dashed border-foreground/[0.08]">
 										<div className="flex items-center gap-2">
 											<div className="flex items-center gap-1.5">
-												<span className="size-2 rounded-full bg-foreground/10" />
-												<span className="size-2 rounded-full bg-foreground/10" />
-												<span className="size-2 rounded-full bg-foreground/10" />
+												<span className="size-2 rounded-full bg-foreground/20" />
+												<span className="size-2 rounded-full bg-foreground/20" />
+												<span className="size-2 rounded-full bg-foreground/20" />
 											</div>
-											<span className="text-[10px] font-mono text-foreground/30 ml-2">
-												dash.better-auth.com/the-next-big-thing
+											<span className="text-[10px] font-mono text-foreground/40 ml-2">
+												dash.better-auth.com
 											</span>
 										</div>
 										<div className="flex items-center gap-3">
@@ -1611,8 +1603,8 @@ export function HeroReadMe({
 													className={cn(
 														"text-[9px] font-mono uppercase tracking-wider",
 														i === 0
-															? "text-foreground/60 dark:text-foreground/45"
-															: "text-foreground/20 dark:text-foreground/12",
+															? "text-foreground/60 font-medium"
+															: "text-foreground/40",
 													)}
 												>
 													{tab}
@@ -1665,14 +1657,14 @@ export function HeroReadMe({
 									<div
 										key={item.label}
 										className={cn(
-											"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
+											"px-3 py-3 border border-dashed bg-foreground/[0.02]",
 											i > 0 && "-ml-px",
 										)}
 									>
-										<div className="text-[11px] font-mono text-foreground/65 uppercase tracking-wider mb-0.5">
+										<div className="text-[12px] font-mono font-medium text-foreground/65 uppercase tracking-wider mb-0.5">
 											{item.label}
 										</div>
-										<div className="text-[11px] font-mono text-foreground/40">
+										<div className="text-[11px] font-mono text-foreground/50">
 											{item.desc}
 										</div>
 									</div>
@@ -1701,14 +1693,14 @@ export function HeroReadMe({
 										<div
 											key={item.label}
 											className={cn(
-												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
+												"px-3 py-3 border border-dashed bg-foreground/[0.02]",
 												i > 0 && "-ml-px",
 											)}
 										>
-											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
+											<div className="text-[12px] font-mono font-medium text-foreground/65 uppercase tracking-wider mb-0.5">
 												{item.label}
 											</div>
-											<div className="text-[11px] font-mono text-foreground/40">
+											<div className="text-[11px] font-mono text-foreground/50">
 												{item.desc}
 											</div>
 										</div>
@@ -1741,14 +1733,14 @@ export function HeroReadMe({
 										<div
 											key={item.label}
 											className={cn(
-												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
+												"px-3 py-3 border border-dashed bg-foreground/[0.02]",
 												i > 0 && "-ml-px",
 											)}
 										>
-											<div className="text-[11px] font-mono text-foreground/65 uppercase tracking-wider mb-0.5">
+											<div className="text-[12px] font-mono font-medium text-foreground/65 uppercase tracking-wider mb-0.5">
 												{item.label}
 											</div>
-											<div className="text-[11px] font-mono text-foreground/40">
+											<div className="text-[11px] font-mono text-foreground/50">
 												{item.desc}
 											</div>
 										</div>
@@ -1764,7 +1756,7 @@ export function HeroReadMe({
 						<div className="mt-8 mb-4">
 							<div className="border border-dashed p-5 flex items-center justify-between">
 								<div>
-									<p className="text-xs font-mono uppercase tracking-widest text-foreground/80 dark:text-foreground/80 mb-1">
+									<p className="text-sm font-mono font-medium uppercase tracking-wide text-foreground/80 dark:text-foreground/80 mb-1">
 										Explore plans
 									</p>
 									<p className="text-[12px] text-foreground/60 dark:text-foreground/40 leading-relaxed">

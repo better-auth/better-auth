@@ -865,7 +865,7 @@ export function FeaturesSection({ className }: { className?: string }) {
 							</span>
 						)}
 					</div>
-					<div className="text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-snug tracking-tight mb-2">
+					<div className="text-base sm:text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-snug tracking-tight mb-2">
 						{card.title}
 					</div>
 					<div className="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
