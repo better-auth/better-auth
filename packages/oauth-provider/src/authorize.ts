@@ -223,9 +223,23 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectUri = client.redirectUris?.find(
-		(url) => url === query.redirect_uri,
-	);
+	const redirectUri = client.redirectUris?.find((url) => {
+		if (url === query.redirect_uri) return true;
+		try {
+			const registered = new URL(url);
+			const requested = new URL(query.redirect_uri);
+			// RFC 8252 §7.3: loopback IPs allow any port
+			if (
+				(registered.hostname === "127.0.0.1" ||
+					registered.hostname === "[::1]") &&
+				registered.hostname === requested.hostname &&
+				registered.pathname === requested.pathname &&
+				registered.protocol === requested.protocol
+			)
+				return true;
+		} catch {}
+		return false;
+	});
 	if (!redirectUri || !query.redirect_uri) {
 		throw ctx.redirect(
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
@@ -494,7 +508,7 @@ async function redirectWithAuthorizationCode(
 		expiresAt: new Date(exp * 1000),
 		value: JSON.stringify({
 			type: "authorization_code",
-			query: ctx.query,
+			query: verificationValue.query,
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
