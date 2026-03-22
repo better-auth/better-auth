@@ -7,6 +7,7 @@ import {
 	createAuthorizationCodeRequest,
 	createAuthorizationURL,
 	createRefreshAccessTokenRequest,
+	generateCodeChallenge,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -14,8 +15,9 @@ import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
+import type { OAuthOptions, Scope, VerificationValue } from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { storeToken } from "./utils";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
@@ -1805,5 +1807,180 @@ describe("oauth token - client secret validation", async () => {
 			},
 		);
 		expect(responseStatus).toBe(500);
+	});
+});
+
+describe("auth_session passthrough", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl, testUser } =
+		await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "passthrough-state";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+	});
+
+	it("should not include auth_session in normal token response", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const url = new URL(callbackRedirectUrl);
+		const code = url.searchParams.get("code")!;
+
+		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			auth_session?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.auth_session).toBeUndefined();
+	});
+
+	it("should include auth_session when verification value has authSession", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const ctx = await auth.$context;
+		const dbUser = await ctx.internalAdapter.findUserByEmail(testUser.email);
+		if (!dbUser) throw Error("test user not found");
+
+		const sessions = await ctx.adapter.findMany<{ id: string }>({
+			model: "session",
+			where: [{ field: "userId", value: dbUser.user.id }],
+			limit: 1,
+		});
+		if (!sessions.length) throw Error("test session not found");
+
+		const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+		const codeVerifier = generateRandomString(32);
+		const codeChallenge = await generateCodeChallenge(codeVerifier);
+		const authTimeMs = Date.now();
+		const expectedAuthSession = "fpa-session-abc123";
+
+		const verificationValue: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				scope: "openid",
+				state,
+				code_challenge: codeChallenge,
+				code_challenge_method: "S256",
+			},
+			userId: dbUser.user.id,
+			sessionId: sessions[0].id,
+			authTime: authTimeMs,
+			authSession: expectedAuthSession,
+		};
+
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: await storeToken("hashed", code, "authorization_code"),
+			expiresAt: new Date(authTimeMs + 600_000),
+			value: JSON.stringify(verificationValue),
+		});
+
+		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			auth_session?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.auth_session).toBe(expectedAuthSession);
 	});
 });
