@@ -11,7 +11,15 @@ export class BetterAuthError extends Error {
 
 export { type APIErrorCode, BASE_ERROR_CODES } from "./codes";
 
+type BaseAPIErrorInstance = InstanceType<typeof BaseAPIError>;
+
 export class APIError extends BaseAPIError {
+	declare status: BaseAPIErrorInstance["status"];
+	declare body: BaseAPIErrorInstance["body"];
+	declare headers: BaseAPIErrorInstance["headers"];
+	declare statusCode: BaseAPIErrorInstance["statusCode"];
+	declare message: string;
+
 	constructor(...args: ConstructorParameters<typeof BaseAPIError>) {
 		super(...args);
 	}
