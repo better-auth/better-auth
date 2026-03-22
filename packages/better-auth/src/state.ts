@@ -122,7 +122,7 @@ export async function generateGenericState(
 export async function parseGenericState(
 	c: GenericEndpointContext,
 	state: string,
-	settings?: { cookieName: string },
+	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
 ) {
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
@@ -186,8 +186,14 @@ export async function parseGenericState(
 		 * This is generally cause security issue and should only be used in
 		 * dev or staging environments. It's currently used by the oauth-proxy
 		 * plugin
+		 *
+		 * Also used by SAML relay state parsing via settings.skipStateCookieCheck,
+		 * where the IdP POST is typically cross-origin and SameSite=Lax cookies
+		 * are not sent.
 		 */
-		const skipStateCookieCheck = c.context.oauthConfig.skipStateCookieCheck;
+		const skipStateCookieCheck =
+			settings?.skipStateCookieCheck ||
+			c.context.oauthConfig.skipStateCookieCheck;
 		if (
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
