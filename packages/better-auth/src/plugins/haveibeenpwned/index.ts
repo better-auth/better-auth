@@ -66,6 +66,9 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
+	/**
+	 * Custom error message shown when a compromised password is detected.
+	 */
 	customPasswordCompromisedMessage?: string | undefined;
 	/**
 	 * Paths to check for password
@@ -73,6 +76,11 @@ export interface HaveIBeenPwnedOptions {
 	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
 	 */
 	paths?: string[];
+	/**
+	 * Enable or disable password checks against the HIBP database.
+	 *
+	 * @default true
+	 */
 	enabled?: boolean | undefined;
 }
 
