@@ -77,9 +77,9 @@ export default async function ChangelogPage() {
 		});
 
 	return (
-		<div className="flex flex-col lg:flex-row lg:h-dvh lg:overflow-hidden min-h-dvh pt-14 lg:pt-0">
-			{/* Left panel — fixed, no scroll */}
-			<div className="hidden lg:block relative w-full lg:w-[30%] lg:h-full shrink-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+		<div className="flex flex-col lg:flex-row min-h-dvh pt-14 lg:pt-0">
+			{/* Left panel — sticky */}
+			<div className="hidden lg:block relative w-full lg:w-[30%] lg:h-dvh shrink-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 				<HalftoneBackground />
 				<div className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full">
 					<div className="space-y-1">
@@ -141,8 +141,8 @@ export default async function ChangelogPage() {
 				</div>
 			</div>
 
-			{/* Right panel — releases (scrollable) */}
-			<div className="w-full lg:w-[70%] lg:overflow-y-auto flex flex-col">
+			{/* Right panel — releases */}
+			<div className="w-full lg:w-[70%] flex flex-col">
 				{/* Mobile header */}
 				<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden px-5 sm:px-6">
 					<HalftoneBackground />

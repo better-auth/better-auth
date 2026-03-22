@@ -32,10 +32,8 @@ function ReleaseBody({
 			setIsExpanded(false);
 			const group = containerRef.current?.closest(".group");
 			if (group) {
-				const scrollContainer = group.closest("[class*='overflow-y']");
-				const target = scrollContainer ?? window;
 				const offset = group.getBoundingClientRect().top - 40;
-				target.scrollBy({ top: offset, behavior: "smooth" });
+				window.scrollBy({ top: offset, behavior: "smooth" });
 			}
 		} else {
 			setIsExpanded(true);

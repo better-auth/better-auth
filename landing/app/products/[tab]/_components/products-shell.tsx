@@ -202,11 +202,11 @@ export function ProductsShell({
 	const isInfrastructure = tab === "infrastructure";
 
 	return (
-		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
-			<div className="relative text-foreground lg:h-full">
-				<div className="flex flex-col lg:h-full lg:flex-row">
+		<div className="relative min-h-dvh pt-14 lg:pt-0">
+			<div className="relative text-foreground">
+				<div className="flex flex-col lg:flex-row">
 					{/* Left side — Hero */}
-					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -238,7 +238,7 @@ export function ProductsShell({
 					</div>
 
 					{/* Right side — Content */}
-					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[70%] overflow-x-hidden no-scrollbar">
 						<div className="px-5 lg:px-8 lg:pt-16">
 							{/* Mobile header */}
 							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
