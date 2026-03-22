@@ -6,10 +6,28 @@ import type { AuthQueryAtom } from "./query";
 import { useAuthQuery } from "./query";
 import { createSessionRefreshManager } from "./session-refresh";
 
-export type SessionAtom = AuthQueryAtom<{
+export type SessionData = {
 	user: User;
 	session: Session;
-}>;
+};
+
+export type SessionAtom = AuthQueryAtom<SessionData>;
+
+export function hydrateSessionAtom(
+	sessionAtom: SessionAtom,
+	session: SessionData | null,
+) {
+	const currentSession = sessionAtom.get();
+	if (currentSession.data !== null || session === null) {
+		return;
+	}
+	sessionAtom.set({
+		...currentSession,
+		data: session,
+		error: null,
+		isPending: false,
+	});
+}
 
 export function getSessionAtom(
 	$fetch: BetterFetch,

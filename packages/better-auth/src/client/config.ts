@@ -8,7 +8,8 @@ import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
-import { getSessionAtom } from "./session-atom";
+import type { SessionData } from "./session-atom";
+import { getSessionAtom, hydrateSessionAtom } from "./session-atom";
 
 const resolvePublicAuthUrl = (basePath?: string) => {
 	if (typeof process === "undefined") return undefined;
@@ -94,6 +95,9 @@ export const getClientConfig = (
 		$fetch,
 		options,
 	);
+	const hydrateSession = (sessionData: SessionData | null) => {
+		hydrateSessionAtom(session, sessionData);
+	};
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	const pluginsAtoms = {
@@ -181,6 +185,7 @@ export const getClientConfig = (
 		pluginsAtoms,
 		pluginPathMethods,
 		atomListeners,
+		hydrateSession,
 		$fetch,
 		$store,
 	};
