@@ -192,7 +192,7 @@ export async function parseGenericState(
 		 * are not sent.
 		 */
 		const skipStateCookieCheck =
-			settings?.skipStateCookieCheck ||
+			settings?.skipStateCookieCheck ??
 			c.context.oauthConfig.skipStateCookieCheck;
 		if (
 			!skipStateCookieCheck &&
