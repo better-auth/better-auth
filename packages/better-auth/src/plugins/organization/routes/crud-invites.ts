@@ -301,16 +301,19 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				);
 			}
 
-			const alreadyMember = phoneNumber
+			const alreadyMemberByEmail = email
+				? await adapter.findMemberByEmail({
+						email,
+						organizationId,
+					})
+				: null;
+			const alreadyMemberByPhone = phoneNumber
 				? await adapter.findMemberByPhoneNumber({
 						phoneNumber,
 						organizationId,
 					})
-				: await adapter.findMemberByEmail({
-						email: email!,
-						organizationId,
-					});
-			if (alreadyMember) {
+				: null;
+			if (alreadyMemberByEmail || alreadyMemberByPhone) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
