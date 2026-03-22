@@ -8,6 +8,7 @@ import {
 	getCurrentAuthContext,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import type { ModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
@@ -26,6 +27,23 @@ import {
 } from "./verification-token-storage";
 import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
+
+declare module "@better-auth/core" {
+	interface InternalAdapter<
+		_Options extends BetterAuthOptions = BetterAuthOptions,
+	> {
+		deleteWithHooks<T extends Record<string, any>>(
+			where: Where[],
+			model: Exclude<ModelNames, "rate-limit">,
+			customDeleteFn?:
+				| {
+						fn: (where: Where[]) => void | Promise<T | null | void>;
+						executeMainFn?: boolean;
+				  }
+				| undefined,
+		): Promise<T | null>;
+	}
+}
 
 function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	const expiresMs =
@@ -731,6 +749,18 @@ export const createInternalAdapter = (
 				"account",
 				undefined,
 			);
+		},
+		deleteWithHooks: async <T extends Record<string, any>>(
+			where: Where[],
+			model: Exclude<ModelNames, "rate-limit">,
+			customDeleteFn?:
+				| {
+						fn: (where: Where[]) => void | Promise<T | null | void>;
+						executeMainFn?: boolean;
+				  }
+				| undefined,
+		) => {
+			return deleteWithHooks(where, model, customDeleteFn);
 		},
 		deleteSessions: async (userIdOrSessionTokens: string | string[]) => {
 			if (secondaryStorage) {
