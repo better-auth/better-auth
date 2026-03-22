@@ -162,7 +162,12 @@ interface InvitationDefaultFields {
 	};
 	email: {
 		type: "string";
-		required: true;
+		required: false;
+		sortable: true;
+	};
+	phoneNumber: {
+		type: "string";
+		required: false;
 		sortable: true;
 	};
 	role: {
@@ -312,7 +317,8 @@ export const memberSchema = z.object({
 export const invitationSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
-	email: z.string(),
+	email: z.string().nullish(),
+	phoneNumber: z.string().nullish(),
 	role: roleSchema,
 	status: invitationStatus,
 	teamId: z.string().nullish(),
@@ -456,7 +462,8 @@ export type InferInvitation<
 		? {
 				id: string;
 				organizationId: string;
-				email: string;
+				email: string | null;
+				phoneNumber: string | null;
 				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
@@ -467,7 +474,8 @@ export type InferInvitation<
 		: {
 				id: string;
 				organizationId: string;
-				email: string;
+				email: string | null;
+				phoneNumber: string | null;
 				role: InferOrganizationRolesFromOption<O>;
 				status: InvitationStatus;
 				inviterId: string;
