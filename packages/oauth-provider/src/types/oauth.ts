@@ -6,13 +6,10 @@ import type { Prompt } from ".";
  */
 export type GrantType =
 	| "authorization_code"
-	// | "implicit" // NEVER SUPPORT - deprecated in oAuth2.1
-	// | "password" // NEVER SUPPORT - deprecated in oAuth2.1
 	| "client_credentials"
-	| "refresh_token";
-// | "urn:ietf:params:oauth:grant-type:device_code"  // specified in oAuth2.1 but not yet implemented
-// | "urn:ietf:params:oauth:grant-type:jwt-bearer"   // unspecified in oAuth2.1
-// | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
+	| "refresh_token"
+	| "urn:openid:params:grant-type:ciba"
+	| (string & {});
 
 export type AuthMethod =
 	| "client_secret_basic" // Basic header
@@ -178,6 +175,23 @@ export interface AuthServerMetadata {
 	 * @default true
 	 */
 	authorization_response_iss_parameter_supported?: boolean;
+	/**
+	 * URL of the backchannel authentication endpoint (CIBA).
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html
+	 */
+	backchannel_authentication_endpoint?: string;
+	/**
+	 * Supported CIBA token delivery modes.
+	 */
+	backchannel_token_delivery_modes_supported?: ("poll" | "ping" | "push")[];
+	/**
+	 * Signing algorithms supported for backchannel authentication requests.
+	 */
+	backchannel_authentication_request_signing_alg_values_supported?: string[];
+	/**
+	 * Whether the server supports the user_code parameter in CIBA requests.
+	 */
+	backchannel_user_code_parameter_supported?: boolean;
 }
 
 /**

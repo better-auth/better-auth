@@ -8,7 +8,7 @@ import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { RawError } from "../utils/error-codes";
-import type { AuthContext } from "./context";
+import type { AuthContext, BetterAuthExtensionRegistry } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -172,4 +172,30 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	adapter?: {
 		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
+	/**
+	 * Typed contributions to host plugins.
+	 *
+	 * Each key is a host plugin ID registered in
+	 * BetterAuthExtensionRegistry. The value must satisfy
+	 * the host's extension contract.
+	 *
+	 * @example
+	 * ```ts
+	 * extensions: {
+	 *   "oauth-provider": {
+	 *     grantTypes: { "urn:custom:grant": myHandler },
+	 *   } satisfies OAuthProviderExtension,
+	 * }
+	 * ```
+	 */
+	extensions?:
+		| {
+				[K in keyof BetterAuthExtensionRegistry]?: BetterAuthExtensionRegistry[K];
+		  }
+		| undefined;
+	/**
+	 * Plugin IDs this plugin requires.
+	 * Validated at startup before any init runs.
+	 */
+	dependencies?: string[] | undefined;
 };

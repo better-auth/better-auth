@@ -35,9 +35,13 @@ export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const grantType: GrantType | undefined = ctx.body?.grant_type;
+	const grantType: string | undefined = ctx.body?.grant_type;
 
-	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
+	if (
+		opts.grantTypes &&
+		grantType &&
+		!opts.grantTypes.includes(grantType as GrantType)
+	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported grant_type ${grantType}`,
 			error: "unsupported_grant_type",
@@ -56,11 +60,24 @@ export async function tokenEndpoint(
 				error_description: "missing required grant_type",
 				error: "unsupported_grant_type",
 			});
-		default:
+		default: {
+			const handlers = (ctx.context as Record<string, unknown>)
+				.oauthGrantHandlers as
+				| Record<string, import("./types/extension").GrantTypeHandler>
+				| undefined;
+			if (
+				handlers != null &&
+				typeof handlers === "object" &&
+				Object.hasOwn(handlers, grantType) &&
+				typeof handlers[grantType] === "function"
+			) {
+				return handlers[grantType](ctx, opts);
+			}
 			throw new APIError("BAD_REQUEST", {
 				error_description: `unsupported grant_type ${grantType}`,
 				error: "unsupported_grant_type",
 			});
+		}
 	}
 }
 
@@ -79,18 +96,41 @@ async function createJwtAccessToken(
 		exp?: number;
 		sid?: string;
 	},
+	extraClaims?: Record<string, unknown>,
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
 	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
-	const customClaims = opts.customAccessTokenClaims
-		? await opts.customAccessTokenClaims({
+	// Extension claims first, user claims last (user wins)
+	const claimContributors =
+		((ctx.context as Record<string, unknown>).oauthClaimContributors as
+			| NonNullable<
+					import("./types/extension").OAuthProviderExtension["tokenClaims"]
+			  >[]
+			| undefined) ?? [];
+	const claimInfo: import("./types/extension").TokenClaimInfo = {
+		user,
+		scopes,
+		client,
+		referenceId,
+	};
+	const customClaims: Record<string, unknown> = {};
+	for (const contributor of claimContributors) {
+		if (contributor.access) {
+			Object.assign(customClaims, await contributor.access(claimInfo));
+		}
+	}
+	if (opts.customAccessTokenClaims) {
+		Object.assign(
+			customClaims,
+			await opts.customAccessTokenClaims({
 				user,
 				scopes,
 				resource: ctx.body.resource,
 				referenceId,
 				metadata: parseClientMetadata(client.metadata),
-			})
-		: {};
+			}),
+		);
+	}
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 
@@ -99,6 +139,7 @@ async function createJwtAccessToken(
 		options: jwtPluginOptions,
 		payload: {
 			...customClaims,
+			...extraClaims,
 			sub: user.id,
 			aud:
 				typeof audience === "string"
@@ -141,13 +182,34 @@ async function createIdToken(
 	// - silver : mfa
 	const acr = "urn:mace:incommon:iap:bronze";
 
-	const customClaims = opts.customIdTokenClaims
-		? await opts.customIdTokenClaims({
+	// Extension claims first, user claims last (user wins)
+	const idClaimContributors =
+		((ctx.context as Record<string, unknown>).oauthClaimContributors as
+			| NonNullable<
+					import("./types/extension").OAuthProviderExtension["tokenClaims"]
+			  >[]
+			| undefined) ?? [];
+	const idClaimInfo: import("./types/extension").TokenClaimInfo = {
+		user,
+		scopes,
+		client,
+	};
+	const customClaims: Record<string, unknown> = {};
+	for (const contributor of idClaimContributors) {
+		if (contributor.id) {
+			Object.assign(customClaims, await contributor.id(idClaimInfo));
+		}
+	}
+	if (opts.customIdTokenClaims) {
+		Object.assign(
+			customClaims,
+			await opts.customIdTokenClaims({
 				user,
 				scopes,
 				metadata: parseClientMetadata(client.metadata),
-			})
-		: {};
+			}),
+		);
+	}
 
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
@@ -322,7 +384,7 @@ async function createRefreshToken(
  * Checks the resource parameter, if provided,
  * and returns a valid audience based on the request
  */
-async function checkResource(
+export async function checkResource(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	scopes: string[],
@@ -362,7 +424,7 @@ async function checkResource(
 	return audience?.length === 1 ? audience.at(0) : audience;
 }
 
-async function createUserTokens(
+export async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
@@ -375,6 +437,10 @@ async function createUserTokens(
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
 	authTime?: Date,
+	extra?: {
+		accessTokenClaims?: Record<string, unknown>;
+		tokenResponse?: Record<string, unknown>;
+	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -434,6 +500,7 @@ async function createUserTokens(
 						exp,
 						sid: sessionId,
 					},
+					extra?.accessTokenClaims,
 				)
 			: createOpaqueAccessToken(
 					ctx,
@@ -484,6 +551,7 @@ async function createUserTokens(
 
 	return ctx.json(
 		{
+			...extra?.tokenResponse,
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
@@ -491,6 +559,7 @@ async function createUserTokens(
 			refresh_token: refreshToken?.token,
 			scope: scopes.join(" "),
 			id_token: idToken,
+			...extra?.tokenResponse,
 		},
 		{
 			headers: {
@@ -615,13 +684,6 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_request",
 		});
 	}
-	if (!redirect_uri) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "redirect_uri is required",
-			error: "invalid_request",
-		});
-	}
-
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 

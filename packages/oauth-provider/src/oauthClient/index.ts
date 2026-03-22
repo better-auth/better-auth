@@ -36,13 +36,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default("client_secret_basic")
 					.optional(),
 				grant_types: z
-					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-					)
+					.array(z.string().trim().min(1))
 					.default(["authorization_code"])
 					.optional(),
 				response_types: z
@@ -249,13 +243,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default("client_secret_basic")
 					.optional(),
 				grant_types: z
-					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-					)
+					.array(z.string().trim().min(1))
 					.default(["authorization_code"])
 					.optional(),
 				response_types: z
@@ -523,15 +511,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
-					grant_types: z
-						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
-						)
-						.optional(),
+					grant_types: z.array(z.string().trim().min(1)).optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
 					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					// SERVER_ONLY applicable fields
@@ -577,15 +557,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
-					grant_types: z
-						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
-						)
-						.optional(),
+					grant_types: z.array(z.string().trim().min(1)).optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
 					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				}),
