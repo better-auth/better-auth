@@ -475,6 +475,14 @@ const hook = createAuthMiddleware(async (ctx) => {
 });
 ```
 
+### `storeStateStrategy`
+
+Controls how OAuth state is stored during social sign-in.
+
+- `"database"` stores OAuth state in Better Auth's shared verification layer
+- `"cookie"` stores OAuth state in an encrypted cookie and bypasses the verification table entirely
+- Default: `"database"` when a database is configured, otherwise `"cookie"`
+
 ### `accountLinking`
 
 Configuration for account linking.
@@ -505,10 +513,10 @@ export const auth = betterAuth({
 - `modelName`: The model name for the verification table
 - `fields`: Map fields to different column names
 - `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
-- `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
+- `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix. Database-backed OAuth state also uses this shared verification layer under the internal `oauth-state:` prefix, so use `overrides: { "oauth-state:": ... }` to target OAuth state specifically.
 - `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
 
-If `secondaryStorage` is configured, verification records are stored there by default. That behavior applies to flows that use Better Auth's shared verification layer, including OTP and magic-link style flows.
+If `secondaryStorage` is configured, verification records are stored there by default. That behavior applies to flows that use Better Auth's shared verification layer, including OTP, magic-link style flows, and database-backed OAuth state. If you set `account.storeStateStrategy` to `"cookie"`, OAuth state bypasses the verification table and this setting does not apply to that flow.
 
 ## `rateLimit`
 
