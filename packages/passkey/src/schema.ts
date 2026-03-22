@@ -44,6 +44,13 @@ export const schema = {
 			createdAt: {
 				type: "date",
 				required: false,
+				defaultValue: () => new Date(),
+			},
+			updatedAt: {
+				type: "date",
+				required: false,
+				defaultValue: () => new Date(),
+				onUpdate: () => new Date(),
 			},
 			aaguid: {
 				type: "string",
