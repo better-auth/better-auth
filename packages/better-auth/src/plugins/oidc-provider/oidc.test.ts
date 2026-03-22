@@ -1655,3 +1655,75 @@ describe("oidc-jwt", async () => {
 		expect(decoded.alg).toBe(expected);
 	});
 });
+
+describe("oidc public client registration", async () => {
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [
+			oidcProvider({
+				loginPage: "/login",
+				consentPage: "/oauth2/authorize",
+				requirePKCE: true,
+				allowDynamicClientRegistration: true,
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		plugins: [oidcClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let server: Listener;
+
+	beforeAll(async () => {
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+	});
+
+	afterAll(async () => {
+		await server.close();
+	});
+
+	it("should register public client when token_endpoint_auth_method is none", async ({
+		expect,
+	}) => {
+		const res = await serverClient.oauth2.register({
+			client_name: "mcp-public-client",
+			redirect_uris: ["http://localhost:3000/callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code"],
+		});
+		expect(res.data).toMatchObject({
+			client_id: expect.any(String),
+			client_name: "mcp-public-client",
+			token_endpoint_auth_method: "none",
+		});
+		// Public clients should not receive client_secret or client_secret_expires_at
+		expect(res.data?.client_id).toBeDefined();
+		expect(res.data).not.toHaveProperty("client_secret");
+		expect(res.data).not.toHaveProperty("client_secret_expires_at");
+	});
+
+	it("should preserve token_endpoint_auth_method none (not falsy-replace)", async ({
+		expect,
+	}) => {
+		const res = await serverClient.oauth2.register({
+			client_name: "mcp-none-check",
+			redirect_uris: ["http://localhost:3000/callback"],
+			token_endpoint_auth_method: "none",
+		});
+		// "none" should not be replaced by "client_secret_basic"
+		expect(res.data?.token_endpoint_auth_method).toBe("none");
+	});
+});
