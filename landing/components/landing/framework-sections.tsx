@@ -892,10 +892,9 @@ export function DatabaseSection() {
 				</span>
 				<div className="h-px flex-1 bg-foreground/10" />
 			</div>
-			<div className="text-base text-foreground/70 dark:text-foreground/55 mb-5 space-y-1 leading-relaxed">
+			<div className="text-lg text-foreground/70 dark:text-foreground/55 pb-6 space-y-1 leading-relaxed">
 				<p>Your data stays in your database.</p>
 				<p>Use your favorite database.</p>
-				<p>Keep your data.</p>
 			</div>
 
 			<div className="border border-foreground/[0.12] overflow-hidden bg-neutral-50/50 dark:bg-black/40">
