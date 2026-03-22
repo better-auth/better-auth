@@ -2114,3 +2114,22 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
 - `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
 -  Database changes are equivalent to the [From OIDC Provider Plugin](#from-oidc-provider-plugin) section.
+
+## Extending OAuth Provider
+
+The oauth-provider supports a **Plugin Extension Protocol** that enables other plugins to contribute custom grant types, discovery metadata, token claims, and authentication methods — without modifying the oauth-provider source code.
+
+See the <Link href="/docs/guides/extending-plugins">Extending Plugins</Link> guide for the full reference, including code examples and the `OAuthProviderExtension` contract.
+
+### Exported Utilities
+
+The following functions are exported for use in custom grant type handlers:
+
+- `createUserTokens` — Issue access token, refresh token, and ID token
+- `validateClientCredentials` — Authenticate the OAuth client
+- `basicToClientCredentials` — Decode a Basic Authorization header
+- `getClient` — Look up an OAuth client by client_id
+- `checkResource` — Validate the resource parameter
+- `storeToken` / `getStoredToken` — Hash tokens for database storage/lookup
+
+Types: `GrantTypeHandler`, `OAuthProviderExtension`, `TokenClaimInfo`.

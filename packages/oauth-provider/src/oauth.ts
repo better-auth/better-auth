@@ -39,6 +39,9 @@ declare module "@better-auth/core" {
 			creator: typeof oauthProvider;
 		};
 	}
+	interface BetterAuthExtensionRegistry {
+		"oauth-provider": import("./types/extension").OAuthProviderExtension;
+	}
 }
 
 export const oAuthState = defineRequestState<{ query?: string } | null>(
@@ -162,6 +165,44 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
+	function mergeExtensionMetadata(
+		ctx: import("@better-auth/core").GenericEndpointContext,
+		metadata: import("./types/oauth").AuthServerMetadata,
+	): Record<string, unknown> {
+		const contributors =
+			((ctx.context as Record<string, unknown>).oauthMetadataContributors as
+				| NonNullable<
+						import("./types/extension").OAuthProviderExtension["metadata"]
+				  >[]
+				| undefined) ?? [];
+		const extraAuthMethods =
+			((ctx.context as Record<string, unknown>).oauthExtraAuthMethods as
+				| string[]
+				| undefined) ?? [];
+
+		if (contributors.length === 0 && extraAuthMethods.length === 0) {
+			return { ...metadata };
+		}
+
+		const extensionFields = Object.assign(
+			{},
+			...contributors.map((fn) => fn({ baseURL: ctx.context.baseURL })),
+		);
+
+		const merged = { ...metadata, ...extensionFields };
+
+		if (extraAuthMethods.length > 0) {
+			const existing =
+				(merged.token_endpoint_auth_methods_supported as string[]) ?? [];
+			merged.token_endpoint_auth_methods_supported = [
+				...existing,
+				...extraAuthMethods,
+			];
+		}
+
+		return merged;
+	}
+
 	return {
 		id: "oauth-provider",
 		options: opts as NoInfer<O>,
@@ -201,6 +242,61 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
+
+			// Aggregate extension contributions
+			const extensions = ctx.getExtensions("oauth-provider");
+
+			const oauthGrantHandlers: Record<
+				string,
+				import("./types/extension").GrantTypeHandler
+			> = {};
+			const extensionGrantURIs: string[] = [];
+			const oauthMetadataContributors: NonNullable<
+				import("./types/extension").OAuthProviderExtension["metadata"]
+			>[] = [];
+			const oauthClaimContributors: NonNullable<
+				import("./types/extension").OAuthProviderExtension["tokenClaims"]
+			>[] = [];
+			const oauthExtraAuthMethods: string[] = [];
+
+			for (const ext of extensions) {
+				if (ext.grantTypes) {
+					Object.assign(oauthGrantHandlers, ext.grantTypes);
+				}
+				if (ext.grantTypeURIs) {
+					extensionGrantURIs.push(...ext.grantTypeURIs);
+				}
+				if (ext.metadata) {
+					oauthMetadataContributors.push(ext.metadata);
+				}
+				if (ext.tokenClaims) {
+					oauthClaimContributors.push(ext.tokenClaims);
+				}
+				if (ext.tokenEndpointAuthMethods) {
+					oauthExtraAuthMethods.push(...ext.tokenEndpointAuthMethods);
+				}
+			}
+
+			// Merge extension grant URIs into the allowlist
+			if (extensionGrantURIs.length > 0) {
+				opts.grantTypes = [
+					...(opts.grantTypes ?? [
+						"authorization_code",
+						"client_credentials",
+						"refresh_token",
+					]),
+					...extensionGrantURIs,
+				];
+			}
+
+			return {
+				context: {
+					oauthGrantHandlers,
+					oauthMetadataContributors,
+					oauthClaimContributors,
+					oauthExtraAuthMethods,
+				},
+			};
 		},
 		hooks: {
 			before: [
@@ -292,14 +388,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
+					let metadata: import("./types/oauth").AuthServerMetadata;
 					if (opts.scopes && opts.scopes.includes("openid")) {
-						const metadata = oidcServerMetadata(ctx, opts);
-						return metadata;
+						metadata = oidcServerMetadata(ctx, opts);
 					} else {
 						const jwtPluginOptions = opts.disableJwtPlugin
 							? undefined
 							: getJwtPlugin(ctx.context)?.options;
-						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
+						metadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 							public_client_supported:
@@ -307,8 +403,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							grant_types_supported: opts.grantTypes,
 							jwt_disabled: opts.disableJwtPlugin,
 						});
-						return authMetadata;
 					}
+					return mergeExtensionMetadata(ctx, metadata);
 				},
 			),
 			/**
@@ -331,7 +427,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const metadata = oidcServerMetadata(ctx, opts);
-					return metadata;
+					return mergeExtensionMetadata(ctx, metadata);
 				},
 			),
 			oauth2Authorize: createAuthEndpoint(
@@ -566,21 +662,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.object({
-						grant_type: z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-						client_id: z.string().optional(),
-						client_secret: z.string().optional(),
-						code: z.string().optional(),
-						code_verifier: z.string().optional(),
-						redirect_uri: SafeUrlSchema.optional(),
-						refresh_token: z.string().optional(),
-						resource: z.string().optional(),
-						scope: z.string().optional(),
-					}),
+					body: z
+						.object({
+							grant_type: z.string().trim().min(1),
+							client_id: z.string().optional(),
+							client_secret: z.string().optional(),
+							code: z.string().optional(),
+							code_verifier: z.string().optional(),
+							redirect_uri: SafeUrlSchema.optional(),
+							refresh_token: z.string().optional(),
+							resource: z.string().optional(),
+							scope: z.string().optional(),
+						})
+						.passthrough(),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
@@ -594,12 +688,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											properties: {
 												grant_type: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
-													description: "OAuth2 grant type",
+													description:
+														"OAuth2 grant type (e.g., authorization_code, client_credentials, refresh_token, or a custom URI registered via extensions)",
 												},
 												client_id: {
 													type: "string",

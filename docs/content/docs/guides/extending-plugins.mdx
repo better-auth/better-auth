@@ -1,0 +1,260 @@
+---
+title: Extending Plugins
+description: Create plugins that extend oauth-provider with custom grant types, metadata, and token claims.
+---
+
+Some plugins act as **platforms**, providing shared infrastructure that other plugins build on. The `oauth-provider` plugin is the primary example: it provides an OAuth 2.1 authorization server that other plugins can extend with custom grant types, discovery metadata, and token claims.
+
+The **Plugin Extension Protocol** enables this composition through a typed, declarative contract. Your plugin declares what it contributes, and the host plugin collects and integrates those contributions automatically.
+
+## Quick Start
+
+A complete plugin that adds a custom OAuth grant type:
+
+```ts
+import type { BetterAuthPlugin } from "@better-auth/core";
+import type { OAuthProviderExtension } from "@better-auth/oauth-provider";
+import {
+  type GrantTypeHandler,
+  createUserTokens,
+  validateClientCredentials,
+  basicToClientCredentials,
+} from "@better-auth/oauth-provider";
+
+const GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
+
+const handler: GrantTypeHandler = async (ctx, opts) => {
+  const authorization = ctx.request?.headers.get("authorization") ?? "";
+  const basic = basicToClientCredentials(authorization);
+  const client = await validateClientCredentials(
+    ctx, opts,
+    ctx.body.client_id ?? basic?.client_id ?? "",
+    ctx.body.client_secret ?? basic?.client_secret,
+  );
+  // Your plugin-specific logic to resolve the subject token
+  const user = await resolveSubjectToken(ctx, ctx.body.subject_token);
+  return createUserTokens(ctx, opts, client, ["openid"], user);
+};
+
+export function tokenExchange(): BetterAuthPlugin {
+  return {
+    id: "token-exchange",
+    dependencies: ["oauth-provider"],
+    extensions: {
+      "oauth-provider": {
+        grantTypes: { [GRANT]: handler },
+        grantTypeURIs: [GRANT],
+      } satisfies OAuthProviderExtension,
+    },
+  };
+}
+```
+
+The user installs it by adding it to their plugins array, with no manual wiring:
+
+```ts
+import { betterAuth } from "better-auth";
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { tokenExchange } from "./my-token-exchange-plugin";
+
+const auth = betterAuth({
+  plugins: [
+    oauthProvider({ loginPage: "/login" }),
+    tokenExchange(),
+  ],
+});
+```
+
+## How It Works
+
+### Host and Guest
+
+A **host plugin** (like `oauth-provider`) defines an extension contract, a TypeScript interface describing what contributions it accepts. A **guest plugin** (like your custom grant type) declares contributions via the `extensions` field on `BetterAuthPlugin`.
+
+At startup, the host calls `ctx.getExtensions("oauth-provider")` to collect all contributions from guest plugins and integrates them into its runtime.
+
+### The `extensions` Field
+
+The `extensions` field is a record keyed by host plugin ID. TypeScript provides autocomplete for registered hosts and type-checking for the contract:
+
+```ts
+{
+  id: "my-plugin",
+  extensions: {
+    "oauth-provider": {
+      // TypeScript knows the shape of OAuthProviderExtension
+      grantTypes: { ... },
+      metadata: ({ baseURL }) => ({ ... }),
+    } satisfies OAuthProviderExtension,
+  },
+}
+```
+
+### The `dependencies` Field
+
+Declare which plugins your plugin requires. The framework validates at startup and gives a clear error if any dependency is missing:
+
+```ts
+{
+  id: "my-plugin",
+  dependencies: ["oauth-provider"],
+}
+```
+
+If the user installs your plugin without `oauth-provider`:
+
+```
+BetterAuthError: Plugin "my-plugin" requires plugin "oauth-provider"
+which is not installed. Add it to your plugins array.
+```
+
+## OAuthProviderExtension Reference
+
+The `oauth-provider` plugin accepts five extension points:
+
+### `grantTypes`
+
+Register custom OAuth grant type handlers on the token endpoint.
+
+```ts
+grantTypes: {
+  "urn:custom:my-grant": async (ctx, opts) => {
+    // Validate client, resolve user, issue tokens
+    return ctx.json({
+      access_token: "...",
+      token_type: "Bearer",
+      expires_in: 3600,
+      scope: "openid",
+    });
+  },
+}
+```
+
+The handler receives the same `(ctx, opts)` as built-in grant handlers. Use the exported utilities (`createUserTokens`, `validateClientCredentials`) to implement standard flows.
+
+The token body schema uses `.passthrough()`, so your grant type can accept arbitrary body fields beyond the standard ones.
+
+### `grantTypeURIs`
+
+Grant type URIs to add to the server's allowlist and advertise in `grant_types_supported` metadata.
+
+```ts
+grantTypeURIs: ["urn:custom:my-grant"],
+```
+
+If your grant type URI is not in this list, the token endpoint rejects it before reaching your handler.
+
+### `metadata`
+
+Contribute fields to OAuth/OIDC discovery metadata (`/.well-known/openid-configuration`).
+
+```ts
+metadata: ({ baseURL }) => ({
+  backchannel_authentication_endpoint: `${baseURL}/oauth2/bc-authorize`,
+  custom_capability: true,
+}),
+```
+
+Use this for non-array fields (endpoint URLs, capability flags). Array fields like `grant_types_supported` are handled via `grantTypeURIs` and `tokenEndpointAuthMethods`, which the host merges additively.
+
+### `tokenClaims`
+
+Contribute claims to access tokens and ID tokens at creation time, before signing.
+
+```ts
+tokenClaims: {
+  access: async (info) => ({
+    custom_role: info.user.role,
+  }),
+  id: async (info) => ({
+    verified_claims: { trust_framework: "eidas" },
+  }),
+},
+```
+
+The `info` parameter provides `{ user, scopes, client, referenceId }`.
+
+Extension claims are applied **before** the user's `customAccessTokenClaims` / `customIdTokenClaims`. If both set the same key, the user's value wins.
+
+### `tokenEndpointAuthMethods`
+
+Additional token endpoint authentication methods to advertise in `token_endpoint_auth_methods_supported`.
+
+```ts
+tokenEndpointAuthMethods: ["private_key_jwt"],
+```
+
+## Exported Utilities
+
+The `@better-auth/oauth-provider` package exports these utilities for grant handler authors:
+
+| Utility | Purpose |
+|---------|---------|
+| `createUserTokens` | Issue access token, refresh token, and ID token for a user |
+| `validateClientCredentials` | Authenticate the OAuth client from the request |
+| `basicToClientCredentials` | Decode a `Basic` Authorization header into client_id and client_secret |
+| `getClient` | Look up an OAuth client by client_id |
+| `checkResource` | Validate the `resource` parameter and resolve the audience |
+| `storeToken` | Hash a token for secure database storage |
+| `getStoredToken` | Hash an incoming token for database lookup |
+
+Types: `GrantTypeHandler`, `OAuthProviderExtension`, `TokenClaimInfo`.
+
+## Creating Your Own Platform Plugin
+
+Any plugin can become a host for extensions. Define an extension contract, augment the registry, and call `getExtensions` in your `init`:
+
+```ts
+// 1. Define the contract
+export interface MyPlatformExtension {
+  customFeature?: (ctx: { baseURL: string }) => Record<string, unknown>;
+}
+
+// 2. Augment the registry
+declare module "@better-auth/core" {
+  interface BetterAuthExtensionRegistry {
+    "my-platform": MyPlatformExtension;
+  }
+}
+
+// 3. Collect in init
+export function myPlatform() {
+  return {
+    id: "my-platform",
+    init(ctx) {
+      const extensions = ctx.getExtensions("my-platform");
+      const features = extensions
+        .map((e) => e.customFeature)
+        .filter(Boolean);
+      return { context: { myPlatformFeatures: features } };
+    },
+  } satisfies BetterAuthPlugin;
+}
+```
+
+Guest plugins then contribute via their `extensions` field:
+
+```ts
+{
+  id: "my-guest",
+  dependencies: ["my-platform"],
+  extensions: {
+    "my-platform": {
+      customFeature: ({ baseURL }) => ({ endpoint: `${baseURL}/custom` }),
+    } satisfies MyPlatformExtension,
+  },
+}
+```
+
+## Migrating from Hooks to Extensions
+
+If you have an existing plugin that uses hooks or init mutations for cross-plugin communication, consider migrating to extensions:
+
+| Legacy pattern | Preferred approach |
+|---------------|-------------------|
+| `hooks.after` matching `/.well-known/` paths to add metadata | `extensions["oauth-provider"].metadata` callback |
+| `init` returning `{ context: { customKey } }` for injecting handlers | `extensions["oauth-provider"].grantTypes` |
+| `getPlugin("oauth-provider").options.grantTypes.push(...)` | `extensions["oauth-provider"].grantTypeURIs` |
+| After-hook that decodes and re-signs JWTs to add claims | `extensions["oauth-provider"].tokenClaims` |
+
+The legacy patterns still work and existing plugins will not break. Extensions are preferred because they are typed, discoverable via IDE autocomplete, and aggregated safely by the host without risk of one plugin clobbering another's contributions.
