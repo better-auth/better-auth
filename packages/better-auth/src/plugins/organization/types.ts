@@ -341,6 +341,23 @@ export interface OrganizationOptions {
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
 	/**
+	 * Allow certain users to manage all organizations without being a member.
+	 * If `true`, users with 'admin' role can manage all organizations.
+	 * If an array, users with any of those roles can manage all organizations.
+	 * If a function, custom logic determines access.
+	 *
+	 * @default false
+	 */
+	globalOrganizationAccess?:
+		| boolean
+		| string[]
+		| ((data: {
+				user: User & Record<string, any>;
+				organizationId: string;
+				session: Session;
+		  }) => Promise<boolean> | boolean)
+		| undefined;
+	/**
 	 * Hooks for organization
 	 */
 	organizationHooks?:
@@ -411,7 +428,7 @@ export interface OrganizationOptions {
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
+					member: (Member & Record<string, any>) | null;
 				}) => Promise<void | {
 					data: {
 						name?: string;
@@ -439,7 +456,7 @@ export interface OrganizationOptions {
 					 */
 					organization: (Organization & Record<string, any>) | null;
 					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
+					member: (Member & Record<string, any>) | null;
 				}) => Promise<void>;
 				/**
 				 * A callback that runs before the organization is deleted
