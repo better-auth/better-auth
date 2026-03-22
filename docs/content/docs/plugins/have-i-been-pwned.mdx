@@ -30,13 +30,37 @@ When a user attempts to create an account or update their password with a compro
 }
 ```
 
-## Config
+## Options
 
-You can customize the error message:
+### Custom error message
 
-```ts
-haveIBeenPwned({
-    customPasswordCompromisedMessage: "Please choose a more secure password."
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { haveIBeenPwned } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        haveIBeenPwned({
+            customPasswordCompromisedMessage: "Please choose a more secure password." // [!code highlight]
+        })
+    ]
+})
+```
+
+### Conditionally enable
+
+Toggle whether the plugin actively checks passwords against the HIBP database. This is useful for disabling checks in development or testing environments without removing the plugin from your config. Defaults to `true`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { haveIBeenPwned } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        haveIBeenPwned({
+            enable: process.env.NODE_ENV === 'production' // [!code highlight]
+        })
+    ]
 })
 ```
 ## Security Notes
