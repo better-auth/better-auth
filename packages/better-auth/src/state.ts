@@ -25,6 +25,12 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
+const OAUTH_STATE_IDENTIFIER_PREFIX = "oauth-state:";
+
+function getOAuthStateIdentifier(state: string) {
+	return `${OAUTH_STATE_IDENTIFIER_PREFIX}${state}`;
+}
+
 export type StateErrorCode =
 	| "state_generation_error"
 	| "state_invalid"
@@ -98,9 +104,10 @@ export async function generateGenericState(
 	const expiresAt = new Date();
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
+	const verificationIdentifier = getOAuthStateIdentifier(state);
 	const verification = await c.context.internalAdapter.createVerificationValue({
 		value: JSON.stringify(stateData),
-		identifier: state,
+		identifier: verificationIdentifier,
 		expiresAt,
 	});
 
@@ -114,7 +121,7 @@ export async function generateGenericState(
 	}
 
 	return {
-		state: verification.identifier,
+		state,
 		codeVerifier: stateData.codeVerifier,
 	};
 }
@@ -163,7 +170,10 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 	} else {
 		// Default: database strategy
-		const data = await c.context.internalAdapter.findVerificationValue(state);
+		const verificationIdentifier = getOAuthStateIdentifier(state);
+		const data = await c.context.internalAdapter.findVerificationValue(
+			verificationIdentifier,
+		);
 		if (!data) {
 			throw new StateError("State mismatch: verification not found", {
 				code: "state_mismatch",
@@ -207,7 +217,9 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationByIdentifier(state);
+		await c.context.internalAdapter.deleteVerificationByIdentifier(
+			verificationIdentifier,
+		);
 	}
 
 	// Check expiration

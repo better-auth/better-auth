@@ -989,6 +989,170 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 
+	it("should work with hashed verification identifiers and database-backed state storage", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-hashed-state@test.com",
+				name: "OAuth2 Hashed State",
+				sub: "oauth2-hashed-state",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			verification: {
+				storeIdentifier: "hashed",
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-hashed-state",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-hashed-state",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		const state = new URL(res.data?.url || "").searchParams.get("state");
+		expect(state).toBeTruthy();
+
+		const ctx = await auth.$context;
+		const verification = await ctx.internalAdapter.findVerificationValue(
+			`oauth-state:${state}`,
+		);
+		expect(verification).not.toBeNull();
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe("oauth2-hashed-state@test.com");
+		expect(
+			await ctx.internalAdapter.findVerificationValue(`oauth-state:${state}`),
+		).toBeNull();
+	});
+
+	it("should respect oauth-state overrides for verification identifier storage", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-overridden-state@test.com",
+				name: "OAuth2 Overridden State",
+				sub: "oauth2-overridden-state",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			verification: {
+				storeIdentifier: {
+					default: "plain",
+					overrides: {
+						"oauth-state:": "hashed",
+					},
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-overridden-state",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-overridden-state",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		const state = new URL(res.data?.url || "").searchParams.get("state");
+		expect(state).toBeTruthy();
+
+		const ctx = await auth.$context;
+		const verifications = await ctx.adapter.findMany<{
+			id: string;
+			identifier: string;
+		}>({
+			model: "verification",
+		});
+		expect(verifications).toHaveLength(1);
+		expect(verifications[0]?.identifier).not.toBe(`oauth-state:${state}`);
+
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe("oauth2-overridden-state@test.com");
+	});
+
 	it("should await async mapProfileToUser", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
