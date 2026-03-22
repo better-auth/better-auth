@@ -119,11 +119,26 @@ export async function handleOAuthUserInfo(
 				});
 			}
 
-			if (Object.keys(freshTokens).length > 0) {
-				await c.context.internalAdapter.updateAccount(
-					linkedAccount.id,
-					freshTokens,
-				);
+			const {
+				accountId: _,
+				providerId: __,
+				accessToken: ___,
+				refreshToken: ____,
+				idToken: _____,
+				accessTokenExpiresAt: ______,
+				refreshTokenExpiresAt: _______,
+				scope: ________,
+				...additionalAccountFields
+			} = account;
+
+			if (
+				Object.keys(freshTokens).length > 0 ||
+				Object.keys(additionalAccountFields).length > 0
+			) {
+				await c.context.internalAdapter.updateAccount(linkedAccount.id, {
+					...freshTokens,
+					...additionalAccountFields,
+				});
 			}
 
 			if (
@@ -158,14 +173,12 @@ export async function handleOAuthUserInfo(
 		}
 		try {
 			const { id: _, ...restUserInfo } = userInfo;
+			const { accessToken, refreshToken, ...restAccount } = account;
 			const accountData = {
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
 				idToken: account.idToken,
-				accessTokenExpiresAt: account.accessTokenExpiresAt,
-				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-				scope: account.scope,
-				providerId: account.providerId,
+				...restAccount,
 				accountId: userInfo.id.toString(),
 			};
 			const { user: createdUser, account: createdAccount } =

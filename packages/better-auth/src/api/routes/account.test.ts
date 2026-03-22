@@ -1,4 +1,6 @@
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { OAuth2UserInfo } from "@better-auth/core/oauth2";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -7,11 +9,14 @@ import {
 	afterAll,
 	afterEach,
 	beforeAll,
+	beforeEach,
 	describe,
 	expect,
 	it,
 	vi,
 } from "vitest";
+import type { AuthClient } from "../../client";
+import type { setCookieToHeader } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -1401,5 +1406,222 @@ describe("account", async () => {
 
 		expect(refreshedSessionCookie).toBe(true);
 		expect(refreshedAccountCookie).toBe(true);
+	});
+
+	describe("with additional account fields in the provider configuration", async () => {
+		let someAccountField = "";
+
+		beforeEach(() => {
+			someAccountField = "initial-value";
+		});
+
+		const authOptions = {
+			disableTestUser: true,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					getAccountFields: async (
+						_token: unknown,
+						userInfo: OAuth2UserInfo,
+					) => {
+						return {
+							someAccountField,
+							providerEmail: userInfo.email,
+						};
+					},
+				},
+			},
+			account: {
+				accountLinking: {
+					allowDifferentEmails: true,
+				},
+				additionalFields: {
+					someAccountField: {
+						type: "string",
+						required: false,
+					},
+					providerEmail: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+		} as const;
+
+		const linkSocial = async (
+			client: AuthClient<BetterAuthClientOptions>,
+			headers: Headers,
+			emailToLink: string,
+		) => {
+			const linkAccountRes = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
+				},
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						headers.set(
+							"cookie",
+							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+						);
+					},
+				},
+			);
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const state =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+					: "";
+			email = emailToLink;
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/callback");
+				},
+			});
+		};
+
+		const signInSocial = async (
+			client: AuthClient<BetterAuthClientOptions>,
+			cookieSetter: typeof setCookieToHeader,
+		) => {
+			const headers = new Headers();
+			email = "oauth-test@test.com";
+
+			// Start OAuth sign-in flow
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			expect(signInRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+
+			const state =
+				signInRes.data && "url" in signInRes.data && signInRes.data.url
+					? new URL(signInRes.data.url).searchParams.get("state") || ""
+					: "";
+
+			// Complete OAuth callback
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				headers,
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					expect(location).toContain("/callback");
+
+					cookieSetter(headers)({ response: context.response });
+				},
+			});
+
+			return {
+				headers,
+			};
+		};
+
+		describe("creating new accounts", async () => {
+			it("should set additional account fields when linking a new account", async () => {
+				const { signInWithTestUser, client } =
+					await getTestInstance(authOptions);
+				const { runWithUser: runWithClient2 } = await signInWithTestUser();
+
+				await runWithClient2(async (headers) => {
+					await linkSocial(client, headers, "test2@test.com");
+				});
+
+				const { runWithUser: runWithClient3 } = await signInWithTestUser();
+				await runWithClient3(async () => {
+					const accounts = await client.listAccounts();
+					expect(accounts.data?.length).toBe(2);
+					const newAccount = accounts.data?.[1] as Record<string, any>;
+					expect(newAccount.someAccountField).toEqual("initial-value");
+					expect(newAccount.providerEmail).toEqual("test2@test.com");
+				});
+			});
+
+			it("should set additional account fields when signing in via oauth flow", async () => {
+				const { client, cookieSetter } = await getTestInstance(authOptions);
+				const { headers } = await signInSocial(client, cookieSetter);
+
+				const accounts = await client.listAccounts({
+					fetchOptions: { headers },
+				});
+				expect(accounts.data?.length).toBe(1);
+				const newAccount = accounts.data?.[0] as Record<string, any>;
+				expect(newAccount.someAccountField).toEqual("initial-value");
+				expect(newAccount.providerEmail).toEqual("oauth-test@test.com");
+			});
+		});
+
+		describe("updating new accounts", async () => {
+			it("should update existing accounts when linking an already-linked account", async () => {
+				const { signInWithTestUser, client } =
+					await getTestInstance(authOptions);
+				const { runWithUser: runWithClient2 } = await signInWithTestUser();
+
+				await runWithClient2(async (headers) => {
+					await linkSocial(client, headers, "test2@test.com");
+				});
+
+				someAccountField = "new-value";
+
+				const { runWithUser: runWithClient3 } = await signInWithTestUser();
+				await runWithClient3(async (headers) => {
+					await linkSocial(client, headers, "test2@test.com");
+				});
+
+				const { runWithUser: runWithClient4 } = await signInWithTestUser();
+				await runWithClient4(async () => {
+					const accounts = await client.listAccounts();
+					expect(accounts.data?.length).toBe(2);
+					const newAccount = accounts.data?.[1] as Record<string, any>;
+					expect(newAccount.someAccountField).toEqual("new-value");
+					expect(newAccount.providerEmail).toEqual("test2@test.com");
+				});
+			});
+
+			it("should update existing accounts when signing in", async () => {
+				const { client, cookieSetter } = await getTestInstance(authOptions);
+				await signInSocial(client, cookieSetter);
+
+				someAccountField = "new-value";
+
+				const { headers } = await signInSocial(client, cookieSetter);
+
+				const accounts = await client.listAccounts({
+					fetchOptions: { headers },
+				});
+				expect(accounts.data?.length).toBe(1);
+				const newAccount = accounts.data?.[0] as Record<string, any>;
+				expect(newAccount.someAccountField).toEqual("new-value");
+				expect(newAccount.providerEmail).toEqual("oauth-test@test.com");
+			});
+		});
 	});
 });

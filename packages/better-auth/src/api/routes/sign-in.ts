@@ -272,10 +272,13 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					});
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
 				}
-				const userInfo = await provider.getUserInfo({
+				const tokens = {
 					idToken: token,
 					accessToken: c.body.idToken.accessToken,
 					refreshToken: c.body.idToken.refreshToken,
+				};
+				const userInfo = await provider.getUserInfo({
+					...tokens,
 					user: c.body.idToken.user,
 				});
 				if (!userInfo || !userInfo?.user) {
