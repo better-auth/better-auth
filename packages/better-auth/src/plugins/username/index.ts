@@ -7,6 +7,7 @@ import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
+import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -525,27 +526,32 @@ export const username = (options?: UsernameOptions | undefined) => {
 									ERROR_CODES.INVALID_USERNAME,
 								);
 							}
-							const user = await ctx.context.adapter.findOne<User>({
+							const normalizedUsername = normalizer(username);
+							const existingUser = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
 									{
 										field: "username",
-										value: username,
+										value: normalizedUsername,
 									},
 								],
 							});
 
-							const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
-							const blockChangeUpdateUser =
-								ctx.path === "/update-user" &&
-								user &&
-								ctx.context.session &&
-								user.id !== ctx.context.session.session.userId;
-							if (blockChangeSignUp || blockChangeUpdateUser) {
+							if (ctx.path === "/sign-up/email" && existingUser) {
 								throw APIError.from(
 									"BAD_REQUEST",
 									ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								);
+							}
+
+							if (ctx.path === "/update-user" && existingUser) {
+								const session = await getSessionFromCtx(ctx);
+								if (!session || existingUser.id !== session.user.id) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+									);
+								}
 							}
 						}
 
