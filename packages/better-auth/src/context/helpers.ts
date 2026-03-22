@@ -5,6 +5,7 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { defu } from "defu";
 import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
@@ -13,6 +14,18 @@ import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
 	const plugins = options.plugins || [];
+
+	const pluginIds = new Set(plugins.map((p) => p.id));
+	for (const plugin of plugins) {
+		for (const dep of plugin.dependencies ?? []) {
+			if (!pluginIds.has(dep)) {
+				throw new BetterAuthError(
+					`Plugin "${plugin.id}" requires plugin "${dep}" which is not installed. Add it to your plugins array.`,
+				);
+			}
+		}
+	}
+
 	const pluginTrustedOrigins: NonNullable<
 		BetterAuthOptions["trustedOrigins"]
 	>[] = [];
