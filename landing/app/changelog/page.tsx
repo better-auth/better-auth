@@ -53,19 +53,28 @@ export default async function ChangelogPage() {
 	);
 	const releases: GitHubRelease[] = await res.json();
 
+	const EXPANDABLE_LINE_THRESHOLD = 15;
+
 	const messages = releases
 		?.filter((release) => !release.prerelease)
-		.map((release) => ({
-			tag: release.tag_name,
-			title: release.name,
-			content: getContent(release.body),
-			date: new Date(release.published_at).toLocaleDateString("en-US", {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-			}),
-			url: release.html_url,
-		}));
+		.map((release) => {
+			const content = getContent(release.body);
+			const lineCount = content
+				.split("\n")
+				.filter((l) => l.trim().length > 0).length;
+			return {
+				tag: release.tag_name,
+				title: release.name,
+				content,
+				date: new Date(release.published_at).toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				}),
+				url: release.html_url,
+				expandable: lineCount > EXPANDABLE_LINE_THRESHOLD,
+			};
+		});
 
 	return (
 		<div className="flex flex-col lg:flex-row lg:h-dvh lg:overflow-hidden min-h-dvh pt-14 lg:pt-0">
