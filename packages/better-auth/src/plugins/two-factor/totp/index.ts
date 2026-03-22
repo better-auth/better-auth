@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
@@ -237,14 +238,17 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			}
 			const { session, valid, invalid } = await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
+			const isSignIn = !session.session;
+			const whereClause: Where[] = [{ field: "userId", value: user.id }];
+			// During sign-in, only consider verified TOTP secrets.
+			// Unverified rows (from abandoned enrollment) must be ignored
+			// so the sign-in flow falls through to OTP instead.
+			if (isSignIn) {
+				whereClause.push({ field: "verified", value: true });
+			}
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
-				where: [
-					{
-						field: "userId",
-						value: user.id,
-					},
-				],
+				where: whereClause,
 			});
 
 			if (!twoFactor) {
@@ -265,30 +269,42 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				return invalid("INVALID_CODE");
 			}
 
-			if (!user.twoFactorEnabled) {
-				if (!session.session) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-					);
-				}
-				const updatedUser = await ctx.context.internalAdapter.updateUser(
-					user.id,
-					{
-						twoFactorEnabled: true,
-					},
-				);
-				const newSession = await ctx.context.internalAdapter
-					.createSession(user.id, false, session.session)
-					.catch((e) => {
-						throw e;
-					});
-
-				await ctx.context.internalAdapter.deleteSession(session.session.token);
-				await setSessionCookie(ctx, {
-					session: newSession,
-					user: updatedUser,
+			// Enrollment mode: TOTP row exists but hasn't been verified yet.
+			// This covers both fresh TOTP setup (twoFactorEnabled=false) and
+			// adding TOTP to an OTP-only account (twoFactorEnabled=true).
+			if (!twoFactor.verified) {
+				await ctx.context.adapter.update({
+					model: twoFactorTable,
+					update: { verified: true },
+					where: [{ field: "id", value: twoFactor.id }],
 				});
+				if (!user.twoFactorEnabled) {
+					if (!session.session) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
+					}
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
+						{
+							twoFactorEnabled: true,
+						},
+					);
+					const newSession = await ctx.context.internalAdapter
+						.createSession(user.id, false, session.session)
+						.catch((e) => {
+							throw e;
+						});
+
+					await ctx.context.internalAdapter.deleteSession(
+						session.session.token,
+					);
+					await setSessionCookie(ctx, {
+						session: newSession,
+						user: updatedUser,
+					});
+				}
 			}
 			return valid(ctx);
 		},

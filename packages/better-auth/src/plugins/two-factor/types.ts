@@ -74,4 +74,5 @@ export interface TwoFactorTable {
 	secret: string;
 	backupCodes: string;
 	enabled: boolean;
+	verified: boolean;
 }
