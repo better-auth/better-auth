@@ -526,7 +526,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									ERROR_CODES.INVALID_USERNAME,
 								);
 							}
-							const normalizedUsername = normalizer(username);
+							const normalizedUsername = normalizer(ctx.body.username);
 							const existingUser = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
