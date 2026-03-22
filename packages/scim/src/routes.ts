@@ -879,9 +879,8 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 				Object.keys(userPatch).length === 0 &&
 				Object.keys(accountPatch).length === 0
 			) {
-				throw new SCIMAPIError("BAD_REQUEST", {
-					detail: "No valid fields to update",
-				});
+				ctx.setStatus(204);
+				return;
 			}
 
 			await Promise.all([
