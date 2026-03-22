@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { createServer } from "node:http";
+import { inflateRawSync } from "node:zlib";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -313,7 +314,8 @@ const generateRequestID = () => {
 	return "_" + randomUUID();
 };
 const createTemplateCallback =
-	(idp: any, sp: any, email: string) => (template: any) => {
+	(idp: any, sp: any, email: string, inResponseTo?: string) =>
+	(template: any) => {
 		const assertionConsumerServiceUrl =
 			sp.entityMeta.getAssertionConsumerService(
 				saml.Constants.wording.binding.post,
@@ -343,7 +345,7 @@ const createTemplateCallback =
 			SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater.toISOString(),
 			NameIDFormat: selectedNameIDFormat,
 			NameID: email,
-			InResponseTo: "null",
+			InResponseTo: inResponseTo ?? "null",
 			AuthnStatement: "",
 			attrFirstName: "Test",
 			attrLastName: "User",
@@ -400,6 +402,7 @@ const createMockSAMLIdP = (port: number) => {
 		"/api/sso/saml2/idp/post",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const emailCase = req.query.emailCase as string;
+			const inResponseTo = req.query.inResponseTo as string | undefined;
 			const emailValue =
 				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
 			const user = {
@@ -412,7 +415,7 @@ const createMockSAMLIdP = (port: number) => {
 				{} as any,
 				saml.Constants.wording.binding.post,
 				user,
-				createTemplateCallback(idp, sp, user.emailAddress),
+				createTemplateCallback(idp, sp, user.emailAddress, inResponseTo),
 			);
 			res.status(200).send({ samlResponse: context, entityEndpoint });
 		},
@@ -421,6 +424,7 @@ const createMockSAMLIdP = (port: number) => {
 		"/api/sso/saml2/idp/redirect",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const emailCase = req.query.emailCase as string;
+			const inResponseTo = req.query.inResponseTo as string | undefined;
 			const emailValue =
 				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
 			const user = {
@@ -433,7 +437,7 @@ const createMockSAMLIdP = (port: number) => {
 				{} as any,
 				saml.Constants.wording.binding.post,
 				user,
-				createTemplateCallback(idp, sp, user.emailAddress),
+				createTemplateCallback(idp, sp, user.emailAddress, inResponseTo),
 			);
 			res.status(200).send({ samlResponse: context, entityEndpoint });
 		},
@@ -1890,11 +1894,14 @@ describe("SAML SSO", async () => {
 		});
 
 		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?inResponseTo=",
+			{
+				onSuccess: async (context) => {
+					samlResponse = await context.data;
+				},
 			},
-		});
+		);
 
 		const response = await auth.handler(
 			new Request(
@@ -1956,11 +1963,14 @@ describe("SAML SSO", async () => {
 		});
 
 		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?inResponseTo=",
+			{
+				onSuccess: async (context) => {
+					samlResponse = await context.data;
+				},
 			},
-		});
+		);
 
 		const response = await auth.handler(
 			new Request(
@@ -2080,14 +2090,15 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		// Try to use an unsolicited response - should be rejected since allowIdpInitiated is false
-		// This proves the validation is working via the verification table fallback
 		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?inResponseTo=",
+			{
+				onSuccess: async (context) => {
+					samlResponse = await context.data;
+				},
 			},
-		});
+		);
 
 		const response = await auth.handler(
 			new Request(
@@ -2104,10 +2115,95 @@ describe("SAML SSO", async () => {
 			),
 		);
 
-		// Should reject unsolicited response, proving validation is active
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).toContain("error=unsolicited_response");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8607
+	 */
+	it("should accept SP-initiated SAML response with valid InResponseTo", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					saml: {
+						enableInResponseToValidation: true,
+						allowIdpInitiated: false,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "sp-initiated-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "sp-initiated-provider",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		const signInUrl = new URL(signInResponse.url!);
+		const samlRequestParam = signInUrl.searchParams.get("SAMLRequest")!;
+		const deflatedBuffer = Buffer.from(samlRequestParam, "base64");
+		const xml = inflateRawSync(deflatedBuffer).toString("utf-8");
+		const idMatch = xml.match(/ID="([^"]+)"/);
+		const authnRequestId = idMatch![1] as string;
+
+		let samlResponse: any;
+		await betterFetch(
+			`http://localhost:8081/api/sso/saml2/idp/post?inResponseTo=${encodeURIComponent(authnRequestId)}`,
+			{
+				onSuccess: async (context) => {
+					samlResponse = await context.data;
+				},
+			},
+		);
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/sp-initiated-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).not.toContain("error=");
 	});
 
 	/**
