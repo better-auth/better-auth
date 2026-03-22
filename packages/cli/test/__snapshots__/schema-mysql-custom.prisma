@@ -133,5 +133,6 @@ model WorkspaceInvitation {
 
   @@index([organizationId(length: 191)])
   @@index([email(length: 191)])
+  @@index([phoneNumber(length: 191)])
   @@map("workspaceInvitation")
 }
