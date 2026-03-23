@@ -8,8 +8,10 @@ import type { Auth } from "../types";
 import {
 	getBaseURL,
 	getOrigin,
-	isDynamicBaseURLConfig,
+	isFunctionBaseURLConfig,
+	isPerRequestBaseURL,
 	resolveBaseURL,
+	resolveFunctionBaseURL,
 } from "../utils/url";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
@@ -34,14 +36,16 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 
 			let handlerCtx: AuthContext;
 
-			if (isDynamicBaseURLConfig(options.baseURL)) {
+			if (isPerRequestBaseURL(options.baseURL)) {
 				// Create per-request context to avoid concurrent request race conditions.
 				// Each request may resolve to a different host, so we must not mutate the shared ctx.
 				handlerCtx = Object.create(
 					Object.getPrototypeOf(ctx),
 					Object.getOwnPropertyDescriptors(ctx),
 				) as AuthContext;
-				const baseURL = resolveBaseURL(options.baseURL, basePath, request);
+				const baseURL = isFunctionBaseURLConfig(options.baseURL)
+					? await resolveFunctionBaseURL(options.baseURL, request, basePath)
+					: resolveBaseURL(options.baseURL, basePath, request);
 				if (baseURL) {
 					handlerCtx.baseURL = baseURL;
 					handlerCtx.options = {
@@ -50,14 +54,17 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 					};
 				} else {
 					throw new BetterAuthError(
-						"Could not resolve base URL from request. Check your allowedHosts config.",
+						"Could not resolve base URL from request. Check your baseURL config.",
 					);
 				}
-				// Use a typed variable so the baseURL override doesn't need
-				// an unsafe cast — the spread is structurally BetterAuthOptions.
+				// For allowedHosts configs, pass the original config so
+				// getTrustedOrigins can extract all hosts. For function configs,
+				// pass the resolved string origin.
 				const trustedOriginOptions: BetterAuthOptions = {
 					...handlerCtx.options,
-					baseURL: options.baseURL,
+					baseURL: isFunctionBaseURLConfig(options.baseURL)
+						? handlerCtx.options.baseURL
+						: options.baseURL,
 				};
 				handlerCtx.trustedOrigins = await getTrustedOrigins(
 					trustedOriginOptions,

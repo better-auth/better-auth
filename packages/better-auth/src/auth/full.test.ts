@@ -470,3 +470,373 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		expect(internalAdapter).toBeDefined();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ */
+describe("auth with function baseURL", () => {
+	test("should resolve baseURL from function return value", async () => {
+		let baseURL: string | undefined;
+		let optionsBaseURL: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "fallback.com";
+				const proto = request.headers.get("x-forwarded-proto") || "https";
+				return `${proto}://${host}`;
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					baseURL = ctx.context.baseURL;
+					optionsBaseURL = ctx.context.options.baseURL as string;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "tenant-a.example.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(baseURL).toBe("https://tenant-a.example.com/api/auth");
+		expect(optionsBaseURL).toBe("https://tenant-a.example.com");
+	});
+
+	test("should handle async functions", async () => {
+		let baseURL: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: async (request: Request) => {
+				// Simulate async lookup (e.g. database query)
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					baseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "white-label.customer.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(baseURL).toBe("https://white-label.customer.com/api/auth");
+	});
+
+	test("should isolate per-request context for concurrent requests", async () => {
+		const resolvedBaseURLs: string[] = [];
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					if (ctx.context.baseURL) {
+						resolvedBaseURLs.push(ctx.context.baseURL);
+					}
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		// Clear any URLs captured during test setup
+		resolvedBaseURLs.length = 0;
+
+		// Fire two requests with different hosts concurrently
+		await Promise.all([
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-a.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-b.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		]);
+
+		expect(resolvedBaseURLs).toContain("https://tenant-a.example.com/api/auth");
+		expect(resolvedBaseURLs).toContain("https://tenant-b.example.com/api/auth");
+		// Verify no cross-contamination
+		const tenantACount = resolvedBaseURLs.filter(
+			(u) => u === "https://tenant-a.example.com/api/auth",
+		).length;
+		const tenantBCount = resolvedBaseURLs.filter(
+			(u) => u === "https://tenant-b.example.com/api/auth",
+		).length;
+		expect(tenantACount).toBe(1);
+		expect(tenantBCount).toBe(1);
+	});
+
+	test("should include resolved origin in trustedOrigins", async () => {
+		let trustedOrigins: string[] = [];
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					trustedOrigins = ctx.context.trustedOrigins;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "myapp.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+
+		expect(trustedOrigins).toContain("https://myapp.com");
+	});
+
+	test("should set cookie domain dynamically with crossSubDomainCookies", async () => {
+		let cookieDomain: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+				},
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					cookieDomain = ctx.context.authCookies.sessionToken.attributes.domain;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "auth.example1.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(cookieDomain).toBe("auth.example1.com");
+
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "auth.example2.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(cookieDomain).toBe("auth.example2.com");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ *
+ * Behavioral tests that verify end-to-end outcomes (HTTP responses,
+ * headers, redirects) rather than internal context state.
+ */
+describe("auth with function baseURL (behavioral)", () => {
+	test("OAuth redirect_uri should use the resolved host", async () => {
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			socialProviders: {
+				github: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		const res = await client.signIn.social({
+			provider: "github",
+			callbackURL: "/callback",
+			fetchOptions: {
+				headers: {
+					"x-forwarded-host": "tenant-a.example.com",
+					"x-forwarded-proto": "https",
+				},
+			},
+		});
+		expect(res.data?.url).toBeDefined();
+		const authorizationURL = new URL(res.data!.url!);
+		const redirectURI = authorizationURL.searchParams.get("redirect_uri");
+		expect(redirectURI).toBe(
+			"https://tenant-a.example.com/api/auth/callback/github",
+		);
+	});
+
+	test("handler should throw when function throws", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: () => {
+				throw new Error("DB connection failed");
+			},
+		});
+
+		await expect(
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+				}),
+			),
+		).rejects.toThrow("baseURL function threw an error");
+	});
+
+	test("handler should throw when function returns empty", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: (() => "") as any,
+		});
+
+		await expect(
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+				}),
+			),
+		).rejects.toThrow("baseURL function returned an empty value");
+	});
+
+	test("CSRF should accept POST from resolved origin", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					"x-forwarded-host": "tenant-a.example.com",
+					"x-forwarded-proto": "https",
+					origin: "https://tenant-a.example.com",
+				},
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.data?.user).toBeDefined();
+	});
+
+	test("CSRF should reject POST from non-matching origin", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					"x-forwarded-host": "tenant-a.example.com",
+					"x-forwarded-proto": "https",
+					origin: "https://evil.com",
+					cookie: "session=123",
+				},
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(res.error?.status).toBe(403);
+	});
+
+	test("Set-Cookie domain should match resolved host with crossSubDomainCookies", async () => {
+		const { auth, testUser } = await getTestInstance({
+			baseURL: (request: Request) => {
+				const host = request.headers.get("x-forwarded-host") || "default.com";
+				return `https://${host}`;
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+				},
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-forwarded-host": "auth.tenant-a.com",
+					"x-forwarded-proto": "https",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const setCookie = response.headers.get("set-cookie") || "";
+		expect(setCookie).toContain("Domain=auth.tenant-a.com");
+	});
+});
