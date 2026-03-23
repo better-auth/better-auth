@@ -100,7 +100,7 @@ To get provider specific account info you can use the `accountInfo` function wit
 
 ```ts
 const info = await authClient.accountInfo({
-  accountId: "accountId", // here you pass in the provider given account id, the provider is automatically detected from the account id
+  query: { accountId: 'accountId' }, // here you pass in the provider given account id, the provider is automatically detected from the account id
 })
 ```
 
