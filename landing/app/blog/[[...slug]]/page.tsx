@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
+import Footer from "@/components/landing/footer";
 import { Callout } from "@/components/ui/callout";
 import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
@@ -33,9 +34,10 @@ function BlogList() {
 
 			{/* Right panel — post list */}
 			<div className="w-full lg:w-[70%] flex flex-col">
-				<div className="px-5 sm:px-6 lg:px-8 pt-8 lg:pt-16">
-					<h2 className="text-[15px] font-mono text-neutral-800 dark:text-neutral-200 pb-3 mb-5 border-b border-foreground/[0.08]">
+				<div className="px-5 pt-5 lg:p-8 lg:pt-16">
+					<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100">
 						BLOGS
+						<span className="flex-1 h-px bg-foreground/15" />
 					</h2>
 				</div>
 
@@ -93,7 +95,7 @@ function BlogList() {
 						</Link>
 					))}
 				</div>
-				<div className="h-16" />
+				<Footer />
 			</div>
 		</div>
 	);
@@ -208,6 +210,7 @@ export default async function Page({
 						/>
 					</article>
 				</div>
+				<Footer />
 			</div>
 		</div>
 	);

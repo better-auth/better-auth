@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { startTransition, useEffect, useRef, useState } from "react";
+import { Terminal } from "@/components/terminal";
 import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
 
 export const providerIcons: Record<string, () => ReactNode> = {
@@ -753,12 +754,8 @@ export const auth = betterAuth({
   },
   socialProviders: {
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    },
-    github: {
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     },
   },
   plugins: [
@@ -890,17 +887,15 @@ export function DatabaseSection() {
 	return (
 		<div>
 			<div className="flex items-center gap-3 mb-5">
-				<span className="text-base text-foreground/85 dark:text-foreground/75">
-					Bring Your Own{" "}
-					<span className="text-amber-600 dark:text-amber-400">Database</span>
+				<span className="text-xl lg:text-2xl font-medium text-foreground/90 dark:text-foreground/80">
+					Bring Your Own Database
 				</span>
 				<div className="h-px flex-1 bg-foreground/10" />
 			</div>
-
-			<p className="text-[13px] text-foreground/55 dark:text-foreground/45 mb-5 max-w-xl leading-relaxed">
-				Use any database you want. Connect directly with a connection string, or
-				use your favorite ORM adapter. Your data stays in your database.
-			</p>
+			<div className="text-base sm:text-lg text-foreground/70 dark:text-foreground/55 pb-6 space-y-1 leading-relaxed">
+				<p>Your data stays in your database.</p>
+				<p>Use your favorite database.</p>
+			</div>
 
 			<div className="border border-foreground/[0.12] overflow-hidden bg-neutral-50/50 dark:bg-black/40">
 				{/* Tabs */}
@@ -1063,7 +1058,7 @@ export function SocialProvidersSection() {
 	);
 
 	return (
-		<div ref={containerRef} className="flex gap-6 items-start">
+		<div ref={containerRef} className="flex gap-12 items-center">
 			<div className="shrink-0">
 				<span className="text-[24px] font-light text-foreground/80 dark:text-foreground/70 tabular-nums leading-none">
 					35+
@@ -1119,18 +1114,14 @@ export function PluginEcosystem() {
 
 	return (
 		<div>
-			<div className="flex items-center justify-between mb-4">
-				<div className="flex items-center gap-2">
-					<span className="text-base text-foreground/85 dark:text-foreground/75">
-						Plugin Ecosystem
-					</span>
-					<span className="text-[11px] font-mono text-foreground/50">
-						{plugins.length} official
-					</span>
-				</div>
+			<div className="flex items-center gap-3 mb-3">
+				<span className="text-xs text-foreground/70 font-mono tracking-wider uppercase shrink-0">
+					Plugin Ecosystem
+				</span>
+				<div className="flex-1 border-t border-foreground/10" />
 				<Link
 					href="/docs/plugins"
-					className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 hover:text-foreground/55 transition-colors uppercase tracking-wider"
+					className="text-[10px] font-mono text-foreground/70 dark:text-foreground/70 hover:text-foreground/55 transition-colors uppercase tracking-wider shrink-0"
 				>
 					browse all &rarr;
 				</Link>
@@ -1142,7 +1133,7 @@ export function PluginEcosystem() {
 					{[...row1, ...row1].map((plugin, i) => (
 						<span
 							key={`${plugin.name}-${i}`}
-							className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 mr-1.5 text-[11px] text-foreground dark:text-foreground/90 border border-foreground/[0.06] rounded-sm cursor-default whitespace-nowrap"
+							className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 mr-1.5 text-xs text-foreground dark:text-foreground/90 border border-foreground/[0.06] rounded-sm cursor-default whitespace-nowrap"
 						>
 							{plugin.name}
 							<span className="text-[7px] font-mono uppercase tracking-wider text-foreground/50 ">
@@ -1175,165 +1166,38 @@ export function PluginEcosystem() {
 	);
 }
 
-const mcpClients = [
-	{ name: "Cursor", cmd: "npx @better-auth/cli mcp --cursor" },
-	{ name: "Claude Code", cmd: "claude mcp add better-auth" },
-	{ name: "Open Code", cmd: "npx @better-auth/cli mcp --open-code" },
-];
-
 export function AiNativeSection() {
-	const steps = [
-		{ label: "mcp", text: "Connected to better-auth docs" },
-		{ label: "skill", text: "better-auth/add-provider → google" },
-		{ label: "skill", text: "better-auth/add-plugin → two-factor" },
-		{ label: "write", text: "lib/auth.ts", lines: 14 },
-		{ label: "done", text: "Google OAuth + 2FA configured" },
-	];
-
 	return (
-		<div className="mt-8">
+		<div className="pt-8">
 			<div className="flex items-center gap-3 mb-3">
-				<div className="flex-1 border-t border-foreground/10" />
-				<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+				<span className="text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 					AI Native
 				</span>
+				<div className="flex-1 border-t border-foreground/10" />
 			</div>
-			<p className="text-[14px] text-foreground/80 dark:text-foreground/70 leading-[1.9] mb-5">
-				Your auth lives in{" "}
-				<span className="text-foreground/90 dark:text-foreground/80">
-					your codebase
-				</span>{" "}
-				&mdash; so AI can configure it. Ships with{" "}
-				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="11"
-						height="11"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						className="opacity-75"
-					>
-						<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
-						<path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
-						<path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
-						<path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
-						<path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
-						<path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
-						<path d="M19.938 10.5a4 4 0 0 1 .585.396" />
-						<path d="M6 18a4 4 0 0 1-1.967-.516" />
-						<path d="M19.967 17.484A4 4 0 0 1 18 18" />
-					</svg>
-					MCP server
-				</span>
-				,{" "}
-				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="11"
-						height="11"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						className="opacity-75"
-					>
-						<polyline points="4 17 10 11 4 5" />
-						<line x1="12" x2="20" y1="19" y2="19" />
-					</svg>
-					Claude Code skills
-				</span>
-				, and{" "}
-				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="11"
-						height="11"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						className="opacity-75"
-					>
-						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-						<polyline points="14 2 14 8 20 8" />
-					</svg>
-					Cursor rules
-				</span>
-				.
-			</p>
 
-			<div className="border border-dashed border-foreground/[0.08] overflow-hidden">
-				{/* Prompt line */}
-				<div className="flex items-center gap-2 px-3 py-2 border-b border-foreground/[0.06] bg-foreground/[0.015]">
-					<span className="text-foreground/50 font-mono text-xs select-none">
-						&rsaquo;
-					</span>
-					<span className="text-[11px] font-mono text-foreground/80 dark:text-foreground/70">
-						Add Google login and 2FA to my app
-					</span>
-				</div>
-
-				{/* Steps */}
-				<div className="divide-y divide-foreground/[0.04]">
-					{steps.map((step) => (
-						<div
-							key={step.text}
-							className="flex items-center gap-2.5 px-3 py-1.5"
-						>
-							<span className="text-[8px] font-mono uppercase tracking-wider text-foreground/60 dark:text-foreground/50 w-8 shrink-0">
-								{step.label}
-							</span>
-							<span className="text-[10px] font-mono text-foreground/75 dark:text-foreground/65 truncate">
-								{step.text}
-							</span>
-							{"lines" in step && typeof step.lines === "number" && (
-								<span className="text-[9px] font-mono text-emerald-600/80 dark:text-emerald-400/70 ml-auto shrink-0">
-									+{step.lines}
-								</span>
-							)}
-							{step.label === "done" && (
-								<svg
-									width="10"
-									height="10"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="3"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									className="text-foreground/60 ml-auto shrink-0"
-								>
-									<polyline points="20 6 9 17 4 12" />
-								</svg>
-							)}
-						</div>
-					))}
-				</div>
-
-				{/* MCP clients */}
-				<div className="border-t border-foreground/[0.06] bg-foreground/[0.015]">
-					<div className="flex divide-x divide-foreground/[0.06]">
-						{mcpClients.map((mc) => (
-							<div key={mc.name} className="flex-1 px-3 py-2">
-								<p className="text-[8px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/45 mb-0.5">
-									{mc.name}
-								</p>
-								<code className="text-[9px] font-mono text-foreground/70 dark:text-foreground/55 truncate block">
-									{mc.cmd}
-								</code>
-							</div>
-						))}
-					</div>
-				</div>
-			</div>
+			<Terminal
+				commands={[
+					"claude mcp add better-auth",
+					"Add Google login and 2FA to my app",
+				]}
+				outputs={{
+					0: ["✓ Connected to better-auth docs"],
+					1: [
+						"  Read   better-auth docs",
+						"  Skill  add-provider → google",
+						"  Skill  add-plugin → two-factor",
+						"  Write  lib/auth.ts  +14",
+						"  ✓ Google OAuth + 2FA configured",
+					],
+				}}
+				thinkingCommands={[1]}
+				username="~"
+				typingSpeed={40}
+				delayBetweenCommands={1000}
+				initialDelay={800}
+				className="max-w-none px-0"
+			/>
 		</div>
 	);
 }

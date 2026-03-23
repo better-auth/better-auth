@@ -392,14 +392,14 @@ export function InfrastructureContent() {
 	];
 
 	return (
-		<div className="px-5 sm:px-6 lg:px-8 pb-32 space-y-10">
+		<div className="px-5 sm:px-6 lg:px-8 pb-16 space-y-10">
 			{/* Product intro */}
 			<motion.div
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.05 }}
 			>
-				<p className="text-[13px] text-foreground/65 dark:text-foreground/55 max-w-lg mb-6">
+				<p className="text-[15px] text-foreground/70 dark:text-foreground/50 max-w-lg mb-8">
 					Managed infrastructure on top of the open-source framework. Dashboard,
 					audit logs, security detection, and more — without building it
 					yourself.
