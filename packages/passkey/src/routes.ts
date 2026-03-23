@@ -19,6 +19,7 @@ import {
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
+import { getKnownAuthenticatorName } from "./authenticator-metadata";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey, PasskeyOptions, WebAuthnChallengeValue } from "./types";
 import { getRpID } from "./utils";
@@ -507,9 +508,13 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				}
 				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
 					registrationInfo;
+				const name =
+					ctx.body.name?.trim() ||
+					options.getAuthenticatorName?.({ aaguid }) ||
+					getKnownAuthenticatorName(aaguid);
 				const pubKey = base64.encode(credential.publicKey);
 				const newPasskey: Omit<Passkey, "id"> = {
-					name: ctx.body.name,
+					name,
 					userId: userData.id,
 					credentialID: credential.id,
 					publicKey: pubKey,
