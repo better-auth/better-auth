@@ -1526,25 +1526,26 @@ export function HeroReadMe({
 
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 12 }}
-			animate={{ opacity: 1, y: 0 }}
+			initial={{ opacity: 0 }}
+			animate={{ opacity: 1 }}
 			transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
 			className="flex flex-col w-full"
 		>
 			{/* Markdown content */}
-			<div className="flex-1 overflow-y-auto no-scrollbar">
-				<div className="p-5 lg:p-5 pt-8 lg:pt-16">
+			<div className="flex-1 overflow-x-hidden no-scrollbar">
+				<div className="p-5 lg:px-8 lg:pt-20">
 					<motion.article
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						transition={{ duration: 0.4, delay: 0.3 }}
-						className="overflow-y-auto overflow-x-hidden no-scrollbar pt-[30px] pb-0"
+						className="overflow-x-hidden no-scrollbar pb-0"
 					>
-						<h1 className="flex items-center gap-2 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 pb-2 sm:pb-3 mb-4 sm:mb-5 border-b border-foreground/15">
+						<h1 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
 							README
+							<span className="flex-1 h-px bg-foreground/15" />
 						</h1>
 
-						<p className="text-sm sm:text-[14px] text-neutral-600 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
+						<p className="text-sm sm:text-[15px] text-foreground/80 mb-6 sm:mb-8">
 							Better Auth is an authentication framework. It provides a
 							comprehensive set of features out of the box and includes a Plugin
 							ecosystem that simplifies adding advanced functionalities and
