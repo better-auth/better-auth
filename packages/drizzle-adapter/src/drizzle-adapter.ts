@@ -380,7 +380,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							if (w.value === null) {
 								return isNotNull(schemaModel[field]);
 							}
-							if (isInsensitive && typeof w.value === "string") {	
+							if (isInsensitive && typeof w.value === "string") {
 								return insensitiveNe(schemaModel[field], w.value);
 							}
 							return ne(schemaModel[field], w.value);
