@@ -32,11 +32,7 @@ const cliCommands = [
 
 const mcpCommands = [
 	{ name: "Cursor", command: "npx auth mcp --cursor" },
-	{
-		name: "Claude Code",
-		command:
-			"claude mcp add --transport http better-auth https://mcp.better-auth.com/mcp",
-	},
+	{ name: "Claude Code", command: "npx auth mcp --claude-code" },
 	{ name: "Open Code", command: "npx auth mcp --open-code" },
 	{ name: "Manual", command: "npx auth mcp --manual" },
 ];
