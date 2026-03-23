@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/sso",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.7-beta.1",
   "description": "SSO plugin for Better Auth",
   "type": "module",
   "license": "MIT",
