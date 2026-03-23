@@ -16,7 +16,7 @@ import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import type { StateData } from "../../state";
-import { parseGenericState } from "../../state";
+import { findStoredOAuthState, parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
 import { getOrigin } from "../../utils/url";
 import {
@@ -520,15 +520,15 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							}
 						} else {
 							// Database mode - read from DB
-							const verification =
-								await ctx.context.internalAdapter.findVerificationValue(
-									originalState,
-								);
-							if (verification) {
+							const storedState = await findStoredOAuthState(
+								ctx,
+								originalState,
+							);
+							if (storedState) {
 								// Encrypt the verification value so it matches cookie mode format
 								stateCookieValue = await symmetricEncrypt({
 									key: getEncryptionKey(ctx),
-									data: verification.value,
+									data: storedState.data.value,
 								});
 							}
 						}
