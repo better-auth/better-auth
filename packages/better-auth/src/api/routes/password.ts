@@ -207,11 +207,25 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	async (ctx) => {
 		const { token } = ctx.params;
 		const { callbackURL } = ctx.query;
-		if (!token || !callbackURL) {
+
+		if (!token && !callbackURL) {
+			throw ctx.redirect(
+				redirectError(ctx.context, undefined, {
+					error: "INVALID_TOKEN_AND_CALLBACK_URL",
+				}),
+			);
+		} else if (!token && callbackURL) {
 			throw ctx.redirect(
 				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
 			);
+		} else if (token && !callbackURL) {
+			throw ctx.redirect(
+				redirectError(ctx.context, undefined, {
+					error: "CALLBACK_URL_REQUIRED",
+				}),
+			);
 		}
+
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(
 				`reset-password:${token}`,
