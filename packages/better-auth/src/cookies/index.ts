@@ -443,48 +443,50 @@ export const getCookieCache = async <
 	}
 	const { cookieName = "session_data", cookiePrefix = "better-auth" } =
 		config || {};
-	const name =
+	const secureName = `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`;
+	const plainName = `${cookiePrefix}.${cookieName}`;
+
+	// when isSecure is unset, try both names — createCookieGetter uses the
+	// baseURL scheme, not NODE_ENV, so the prefix may differ from isProduction.
+	const namesToTry: string[] =
 		config?.isSecure !== undefined
-			? config.isSecure
-				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`
+			? [config.isSecure ? secureName : plainName]
 			: isProduction
-				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`;
+				? [secureName, plainName]
+				: [plainName, secureName];
+
 	const parsedCookie = parseCookies(cookies);
 
-	// Check for chunked cookies
-	let sessionData = parsedCookie.get(name);
-	if (!sessionData) {
+	const getFromParsed = (name: string) => {
+		const value = parsedCookie.get(name);
+		if (value) return value;
 		// Try to reconstruct from chunks
 		const chunks: Array<{ index: number; value: string }> = [];
-		for (const [cookieName, value] of parsedCookie.entries()) {
-			if (cookieName.startsWith(name + ".")) {
-				const parts = cookieName.split(".");
-				const indexStr = parts[parts.length - 1];
-				const index = parseInt(indexStr || "0", 10);
+		for (const [key, val] of parsedCookie.entries()) {
+			if (key.startsWith(`${name}.`)) {
+				const index = parseInt(key.slice(name.length + 1), 10);
 				if (!isNaN(index)) {
-					chunks.push({ index, value });
+					chunks.push({ index, value: val });
 				}
 			}
 		}
+		if (chunks.length === 0) return undefined;
+		chunks.sort((a, b) => a.index - b.index);
+		return chunks.map((c) => c.value).join("");
+	};
 
-		if (chunks.length > 0) {
-			// Sort by index and join
-			chunks.sort((a, b) => a.index - b.index);
-			sessionData = chunks.map((c) => c.value).join("");
-		}
-	}
+	const strategy = config?.strategy || "compact";
 
-	if (sessionData) {
+	for (const name of namesToTry) {
+		const sessionData = getFromParsed(name);
+		if (!sessionData) continue;
+
 		const secret = config?.secret || env.BETTER_AUTH_SECRET;
 		if (!secret) {
 			throw new BetterAuthError(
 				"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
 			);
 		}
-
-		const strategy = config?.strategy || "compact";
 
 		if (strategy === "jwe") {
 			// Use JWE strategy (encrypted)
@@ -511,7 +513,6 @@ export const getCookieCache = async <
 				}
 				return payload;
 			}
-			return null;
 		} else if (strategy === "jwt") {
 			// Use JWT strategy with HMAC signature (HS256), no encryption
 			const payload = await verifyJWT<S>(sessionData, secret);
@@ -533,7 +534,6 @@ export const getCookieCache = async <
 				}
 				return payload;
 			}
-			return null;
 		} else {
 			// Use compact strategy (or legacy base64-hmac)
 			const sessionDataPayload = safeJSONParse<{
@@ -541,9 +541,8 @@ export const getCookieCache = async <
 				expiresAt: number;
 				signature: string;
 			}>(binary.decode(base64Url.decode(sessionData)));
-			if (!sessionDataPayload) {
-				return null;
-			}
+			if (!sessionDataPayload) continue;
+
 			const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
 				secret,
 				JSON.stringify({
@@ -552,9 +551,7 @@ export const getCookieCache = async <
 				}),
 				sessionDataPayload.signature,
 			);
-			if (!isValid) {
-				return null;
-			}
+			if (!isValid) continue;
 
 			// Validate version if provided
 			if (config?.version && sessionDataPayload.session) {
