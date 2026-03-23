@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/memory-adapter",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.1-beta.4",
   "description": "Memory adapter for Better Auth",
   "type": "module",
   "license": "MIT",
