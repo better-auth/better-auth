@@ -48,6 +48,7 @@ export {
 } from "./saml";
 
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 
@@ -113,6 +114,7 @@ type SSOEndpoints<O extends SSOOptions> = {
 
 export type SSOPlugin<O extends SSOOptions> = {
 	id: "sso";
+	version: string;
 	endpoints: SSOEndpoints<O> &
 		(O extends { domainVerification: { enabled: true } }
 			? DomainVerificationEndpoints
@@ -138,6 +140,7 @@ export function sso<
 	options?: O | undefined,
 ): {
 	id: "sso";
+	version: string;
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
 	schema: NonNullable<BetterAuthPlugin["schema"]>;
 	options: O;
@@ -146,6 +149,7 @@ export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): {
 	id: "sso";
+	version: string;
 	endpoints: SSOEndpoints<O>;
 	options: O;
 };
@@ -185,6 +189,7 @@ export function sso<O extends SSOOptions>(
 
 	return {
 		id: "sso",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			const existing = ctx.skipOriginCheck;
 			if (existing === true) {
