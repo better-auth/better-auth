@@ -448,9 +448,9 @@ export const getCookieCache = async <
 
 	// when isSecure is unset, try both names — createCookieGetter uses the
 	// baseURL scheme, not NODE_ENV, so the prefix may differ from isProduction.
-	const [primaryName, fallbackName] =
+	const namesToTry: string[] =
 		config?.isSecure !== undefined
-			? [config.isSecure ? secureName : plainName, undefined]
+			? [config.isSecure ? secureName : plainName]
 			: isProduction
 				? [secureName, plainName]
 				: [plainName, secureName];
@@ -475,21 +475,18 @@ export const getCookieCache = async <
 		return chunks.map((c) => c.value).join("");
 	};
 
-	// Check for chunked cookies
-	let sessionData = getFromParsed(primaryName);
-	if (!sessionData && fallbackName) {
-		sessionData = getFromParsed(fallbackName);
-	}
+	const strategy = config?.strategy || "compact";
 
-	if (sessionData) {
+	for (const name of namesToTry) {
+		const sessionData = getFromParsed(name);
+		if (!sessionData) continue;
+
 		const secret = config?.secret || env.BETTER_AUTH_SECRET;
 		if (!secret) {
 			throw new BetterAuthError(
 				"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
 			);
 		}
-
-		const strategy = config?.strategy || "compact";
 
 		if (strategy === "jwe") {
 			// Use JWE strategy (encrypted)
@@ -516,7 +513,6 @@ export const getCookieCache = async <
 				}
 				return payload;
 			}
-			return null;
 		} else if (strategy === "jwt") {
 			// Use JWT strategy with HMAC signature (HS256), no encryption
 			const payload = await verifyJWT<S>(sessionData, secret);
@@ -538,7 +534,6 @@ export const getCookieCache = async <
 				}
 				return payload;
 			}
-			return null;
 		} else {
 			// Use compact strategy (or legacy base64-hmac)
 			const sessionDataPayload = safeJSONParse<{
@@ -546,9 +541,8 @@ export const getCookieCache = async <
 				expiresAt: number;
 				signature: string;
 			}>(binary.decode(base64Url.decode(sessionData)));
-			if (!sessionDataPayload) {
-				return null;
-			}
+			if (!sessionDataPayload) continue;
+
 			const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
 				secret,
 				JSON.stringify({
@@ -557,9 +551,7 @@ export const getCookieCache = async <
 				}),
 				sessionDataPayload.signature,
 			);
-			if (!isValid) {
-				return null;
-			}
+			if (!isValid) continue;
 
 			// Validate version if provided
 			if (config?.version && sessionDataPayload.session) {
