@@ -496,6 +496,7 @@ export const createAdapterFactory =
 					value,
 					operator = "eq",
 					connector = "AND",
+					mode = "sensitive",
 				} = w;
 				if (operator === "in") {
 					if (!Array.isArray(value)) {
@@ -606,6 +607,7 @@ export const createAdapterFactory =
 					connector,
 					field: fieldName,
 					value: newValue,
+					mode,
 				} satisfies CleanedWhere;
 			}) as any;
 		};

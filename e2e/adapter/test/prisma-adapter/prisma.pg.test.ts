@@ -3,6 +3,7 @@ import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { testAdapter } from "@better-auth/test-utils/adapter";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -42,6 +43,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite({}),
+		caseInsensitiveTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",

@@ -5,6 +5,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import { expect } from "vitest";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	transactionsTestSuite,
@@ -83,6 +84,7 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 		joinsTestSuite(),
+		caseInsensitiveTestSuite(),
 		updateObjectIdTestSuite(),
 		uuidTestSuite(),
 		// numberIdTestSuite(), // no support

@@ -7,6 +7,7 @@ import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -49,6 +50,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		caseInsensitiveTestSuite(),
 	],
 	async onFinish() {
 		database.close();

@@ -9,6 +9,16 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
+import {
+	escapeForMongoRegex,
+	insensitiveContains,
+	insensitiveEndsWith,
+	insensitiveEq,
+	insensitiveIn,
+	insensitiveNe,
+	insensitiveNotIn,
+	insensitiveStartsWith,
+} from "./query-builders";
 
 class MongoAdapterError extends Error {
 	constructor(
@@ -157,37 +167,64 @@ export const mongodbAdapter = (
 						value,
 						operator = "eq",
 						connector = "AND",
+						mode = "sensitive",
 					} = w;
 					let condition: any;
 					let field = getFieldName({ model, field: field_ });
 					if (field === "id") field = "_id";
+					const fieldAttributes = getFieldAttributes({ model, field: field_ });
+					const isIdOrIdReference =
+						field === "_id" || fieldAttributes?.references?.field === "id";
+					const isInsensitive =
+						!isIdOrIdReference &&
+						mode === "insensitive" &&
+						(typeof value === "string" ||
+							(Array.isArray(value) &&
+								value.every((v) => typeof v === "string")));
+
 					switch (operator.toLowerCase()) {
 						case "eq":
-							condition = {
-								[field]: serializeID({
-									field,
-									value,
-									model,
-								}),
-							};
+							if (isInsensitive && typeof value === "string") {
+								condition = insensitiveEq(field, value);
+							} else {
+								condition = {
+									[field]: serializeID({
+										field,
+										value,
+										model,
+									}),
+								};
+							}
 							break;
 						case "in":
-							condition = {
-								[field]: {
-									$in: Array.isArray(value)
-										? value.map((v) => serializeID({ field, value: v, model }))
-										: [serializeID({ field, value, model })],
-								},
-							};
+							if (isInsensitive && Array.isArray(value)) {
+								condition = insensitiveIn(field, value as string[]);
+							} else {
+								condition = {
+									[field]: {
+										$in: Array.isArray(value)
+											? value.map((v) =>
+													serializeID({ field, value: v, model }),
+												)
+											: [serializeID({ field, value, model })],
+									},
+								};
+							}
 							break;
 						case "not_in":
-							condition = {
-								[field]: {
-									$nin: Array.isArray(value)
-										? value.map((v) => serializeID({ field, value: v, model }))
-										: [serializeID({ field, value, model })],
-								},
-							};
+							if (isInsensitive && Array.isArray(value)) {
+								condition = insensitiveNotIn(field, value as string[]);
+							} else {
+								condition = {
+									[field]: {
+										$nin: Array.isArray(value)
+											? value.map((v) =>
+													serializeID({ field, value: v, model }),
+												)
+											: [serializeID({ field, value, model })],
+									},
+								};
+							}
 							break;
 						case "gt":
 							condition = {
@@ -234,32 +271,46 @@ export const mongodbAdapter = (
 							};
 							break;
 						case "ne":
-							condition = {
-								[field]: {
-									$ne: serializeID({
-										field,
-										value,
-										model,
-									}),
-								},
-							};
+							if (isInsensitive && typeof value === "string") {
+								condition = insensitiveNe(field, value);
+							} else {
+								condition = {
+									[field]: {
+										$ne: serializeID({
+											field,
+											value,
+											model,
+										}),
+									},
+								};
+							}
 							break;
 						case "contains":
-							condition = {
-								[field]: {
-									$regex: `.*${escapeForMongoRegex(value as string)}.*`,
-								},
-							};
+							condition = isInsensitive
+								? insensitiveContains(field, value as string)
+								: {
+										[field]: {
+											$regex: `.*${escapeForMongoRegex(value as string)}.*`,
+										},
+									};
 							break;
 						case "starts_with":
-							condition = {
-								[field]: { $regex: `^${escapeForMongoRegex(value as string)}` },
-							};
+							condition = isInsensitive
+								? insensitiveStartsWith(field, value as string)
+								: {
+										[field]: {
+											$regex: `^${escapeForMongoRegex(value as string)}`,
+										},
+									};
 							break;
 						case "ends_with":
-							condition = {
-								[field]: { $regex: `${escapeForMongoRegex(value as string)}$` },
-							};
+							condition = isInsensitive
+								? insensitiveEndsWith(field, value as string)
+								: {
+										[field]: {
+											$regex: `${escapeForMongoRegex(value as string)}$`,
+										},
+									};
 							break;
 						default:
 							throw new MongoAdapterError(
@@ -720,20 +771,3 @@ export const mongodbAdapter = (
 		return lazyAdapter(options);
 	};
 };
-
-/**
- * Safely escape user input for use in a MongoDB regex.
- * This ensures the resulting pattern is treated as literal text,
- * and not as a regex with special syntax.
- *
- * @param input - The input string to escape. Any type that isn't a string will be converted to an empty string.
- * @param maxLength - The maximum length of the input string to escape. Defaults to 256. This is to prevent DOS attacks.
- * @returns The escaped string.
- */
-function escapeForMongoRegex(input: string, maxLength = 256): string {
-	if (typeof input !== "string") return "";
-
-	// Escape all PCRE special characters
-	// Source: PCRE docs — https://www.pcre.org/original/doc/html/pcrepattern.html
-	return input.slice(0, maxLength).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
