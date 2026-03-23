@@ -10,6 +10,7 @@ import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
 import { getSchema } from "./schema";
@@ -137,6 +138,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 	return {
 		id: "username",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			return {
 				options: {

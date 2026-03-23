@@ -17,6 +17,7 @@ import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { validatePassword } from "../../utils/password";
+import { PACKAGE_VERSION } from "../../version";
 import type { BackupCodeOptions } from "./backup-codes";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
@@ -74,6 +75,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 
 	return {
 		id: "two-factor",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			...totp.endpoints,
 			...otp.endpoints,
