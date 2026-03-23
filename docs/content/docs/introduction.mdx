@@ -33,39 +33,35 @@ npx skills add better-auth/skills
 
 Better Auth provides an MCP server so you can use it with any AI model that supports the Model Context Protocol (MCP).
 
-<AddToCursor />
+#### with CLI
 
-#### Manual Configuration
+You can use the `auth` CLI to add Better Auth MCP to your AI model.
 
-Alternatively, you can manually configure the MCP server for each client:
-
-<Tabs items={["Claude Code", "Open Code", "Manual"]}>
+<Tabs items={["Claude Code", "Cursor", "Open Code", "Manual"]}>
     <Tab value="Claude Code">
       ```bash title="terminal"
-      claude mcp add --transport http better-auth https://context7.com/better-auth/better-auth
+      npx auth mcp --claude-code
+      ```
+    </Tab>
+        <Tab value="Cursor">
+      ```bash title="terminal"
+      npx auth mcp --cursor
       ```
     </Tab>
     <Tab value="Open Code">
-      ```json title="opencode.json"
-        {
-            "$schema": "https://opencode.ai/config.json",
-            "mcp": {
-                "better-auth": {
-                    "type": "remote",
-                    "url": "https://context7.com/better-auth/better-auth",
-                    "enabled": true,
-                }
-            }
-        }
+      ```bash title="terminal"
+      npx auth mcp --open-code
       ```
     </Tab>
     <Tab value="Manual">
-     ```json title="mcp.json"
-    {
-        "better-auth": {
-            "url": "https://context7.com/better-auth/better-auth"
-        }
-    }
-    ```
+      ```bash title="terminal"
+      npx auth mcp --manual
+      ```
     </Tab>
 </Tabs>
+
+#### with Cursor
+
+If you're using Cursor, you can also use the button below.
+
+<AddToCursor />
