@@ -1545,7 +1545,7 @@ export function HeroReadMe({
 							<span className="flex-1 h-px bg-foreground/15" />
 						</h1>
 
-						<p className="text-sm sm:text-[15px] text-foreground/80 mb-6 sm:mb-8">
+						<p className="text-sm sm:text-[15px] text-foreground/80 mb-6 sm:mb-8 leading-relaxed">
 							Better Auth is an authentication framework. It provides a
 							comprehensive set of features out of the box and includes a Plugin
 							ecosystem that simplifies adding advanced functionalities and

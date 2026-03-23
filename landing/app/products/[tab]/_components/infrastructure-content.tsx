@@ -399,7 +399,7 @@ export function InfrastructureContent() {
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.05 }}
 			>
-				<p className="text-[15px] text-foreground/70 dark:text-foreground/50 max-w-lg mb-8">
+				<p className="text-sm sm:text-[15px] text-foreground/80 leading-relaxed max-w-lg mb-8">
 					Managed infrastructure on top of the open-source framework. Dashboard,
 					audit logs, security detection, and more — without building it
 					yourself.

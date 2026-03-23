@@ -47,7 +47,7 @@ export function FrameworkContent() {
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.05 }}
 			>
-				<p className="text-[15px] text-foreground/70 dark:text-foreground/50 max-w-lg mb-8">
+				<p className="text-sm sm:text-[15px] text-foreground/80 leading-relaxed max-w-lg mb-8">
 					Everything you need to build production-ready auth. Free and open
 					source under the MIT license.
 				</p>
