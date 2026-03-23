@@ -1003,6 +1003,47 @@ oauthProvider({
 })
 ```
 
+### Custom Redirect URI Validation
+
+By default, the OAuth provider performs exact string matching against registered redirect URIs. The `validateRedirectUri` option allows you to implement custom validation logic, such as wildcard pattern matching for preview deployments. The validator can be synchronous or asynchronous (e.g., for fetching tenant configuration from a database).
+
+**Common Use Cases:**
+- **Preview deployments**: Platforms like Vercel, Netlify, or Cloudflare Pages generate unique subdomains for each PR/branch (e.g., `pr-123.preview.example.com`). Instead of registering each preview URL individually, you can use wildcard matching.
+- **Multi-tenant applications**: Match `*.tenants.example.com` where each tenant has their own subdomain.
+- **Development environments**: Match `localhost` with any port for local development.
+
+```ts title="auth.ts"
+oauthProvider({
+  validateRedirectUri: (uri, registeredUris) => {
+    // First check exact match
+    if (registeredUris.includes(uri)) {
+      return true;
+    }
+    
+    // Custom wildcard matching logic
+    return registeredUris.some((pattern) => {
+      if (!pattern.includes('*')) {
+        return false;
+      }
+      // Convert *.example.com to regex pattern
+      // First escape all regex special chars including *
+      const escaped = pattern.replace(/[.+?^${}()|[\]\\*]/g, '\\$&');
+      // Then replace escaped \* with pattern to match single subdomain label
+      const regex = new RegExp('^' + escaped.replace(/\\\*/g, '[^.]+') + '$');
+      return regex.test(uri);
+    });
+  },
+})
+```
+
+<Callout type="warn">
+**Security Considerations:**
+- Never allow overly broad patterns like `*` or `*.com`
+- Wildcard should only match a single subdomain level (per RFC 6125)
+- Consider using a library like `tldts` to prevent wildcards on public suffixes (e.g., `*.co.uk`, `*.github.io`)
+- Always require HTTPS (except for localhost)
+</Callout>
+
 ### Claims
 
 Internally, we support the following claims are supported: ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].

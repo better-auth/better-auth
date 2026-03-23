@@ -49,6 +49,38 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
+	 * Custom redirect URI validation function.
+	 *
+	 * By default, the OAuth provider performs exact string matching against
+	 * registered redirect URIs. This option allows you to implement custom
+	 * validation logic, such as wildcard pattern matching.
+	 *
+	 * **Use Cases:**
+	 * - **Preview deployments**: Match `*.preview.example.com` for platforms
+	 *   like Vercel, Netlify, or Cloudflare Pages where each PR/branch gets
+	 *   a unique subdomain (e.g., `pr-123.preview.example.com`).
+	 * - **Multi-tenant applications**: Match `*.tenants.example.com` where
+	 *   each tenant has their own subdomain.
+	 * - **Development environments**: Match `localhost` with any port.
+	 *
+	 * **Security Considerations:**
+	 * - Never allow overly broad patterns like `*` or `*.com`
+	 * - Wildcard should only match a single subdomain level (RFC 6125)
+	 * - Consider using a library like `tldts` to prevent wildcards on
+	 *   public suffixes (e.g., `*.co.uk`, `*.github.io`)
+	 * - Always require HTTPS (except for localhost)
+	 *
+	 * @param redirectUri - The redirect_uri from the authorization request
+	 * @param registeredUris - Array of registered redirect URIs for the client
+	 * @returns `true` if the redirect URI is valid, `false` otherwise.
+	 *   Supports both sync and async validators (returns `Awaitable<boolean>`).
+	 * @default Exact string match against registered URIs
+	 */
+	validateRedirectUri?: (
+		redirectUri: string,
+		registeredUris: string[],
+	) => Awaitable<boolean>;
+	/**
 	 * List of valid audiences if there are multiple.
 	 *
 	 * @default baseURL
