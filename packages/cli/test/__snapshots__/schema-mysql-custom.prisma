@@ -122,7 +122,8 @@ model WorkspaceInvitation {
   id             String    @id
   organizationId String
   workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email          String    @db.Text
+  email          String?   @db.Text
+  phoneNumber    String?   @db.Text
   role           String?   @db.Text
   status         String    @db.Text
   expiresAt      DateTime
@@ -132,5 +133,6 @@ model WorkspaceInvitation {
 
   @@index([organizationId(length: 191)])
   @@index([email(length: 191)])
+  @@index([phoneNumber(length: 191)])
   @@map("workspaceInvitation")
 }

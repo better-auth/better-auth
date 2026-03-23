@@ -566,7 +566,8 @@ export interface OrganizationOptions {
 				 */
 				beforeCreateInvitation?: (data: {
 					invitation: {
-						email: string;
+						email?: string | null;
+						phoneNumber?: string | null;
 						role: string;
 						organizationId: string;
 						inviterId: string;
