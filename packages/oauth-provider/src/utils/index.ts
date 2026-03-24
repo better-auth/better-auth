@@ -60,6 +60,70 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	return plugin;
 };
 
+/**
+ * Normalizes timestamp-like values returned by adapters.
+ *
+ * Accepts Date instances, epoch milliseconds as numbers, and strings that are
+ * either ISO dates or numeric millisecond values such as "1774295570569.0".
+ */
+export function normalizeTimestampValue(value: unknown): Date | undefined {
+	if (value == null) {
+		return undefined;
+	}
+
+	if (value instanceof Date) {
+		return Number.isFinite(value.getTime()) ? value : undefined;
+	}
+
+	if (typeof value === "number") {
+		return Number.isFinite(value) ? new Date(value) : undefined;
+	}
+
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+
+		const numeric = Number(trimmed);
+		if (Number.isFinite(numeric)) {
+			return new Date(numeric);
+		}
+
+		const parsed = new Date(trimmed);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	return undefined;
+}
+
+/**
+ * Resolves a session auth time from common adapter return shapes.
+ */
+export function resolveSessionAuthTime(value: unknown): Date | undefined {
+	if (!value || typeof value !== "object") {
+		return normalizeTimestampValue(value);
+	}
+
+	const direct =
+		normalizeTimestampValue((value as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((value as Record<string, unknown>).created_at);
+
+	if (direct) {
+		return direct;
+	}
+
+	const nested = (value as Record<string, unknown>).session;
+	if (!nested || typeof nested !== "object") {
+		return undefined;
+	}
+
+	return (
+		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
+	);
+}
+
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
 
 export async function verifyOAuthQueryParams(
