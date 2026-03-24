@@ -33,24 +33,14 @@ export const oauthProviderClient = () => {
 									: safeJSONParse<Record<string, unknown>>(ctx.body ?? "{}")
 								: ctx.body;
 						if (body?.oauth_query) return;
-						const pathname =
-							typeof ctx.url === "string"
-								? new URL(ctx.url).pathname
-								: ctx.url.pathname;
-						// Should only need to run for /sign-in/email, /sign-in/social, /sign-in/oauth2, /oauth2/consent, /oauth2/continue
 						if (
-							pathname.endsWith("/sign-in/email") ||
-							pathname.endsWith("/sign-in/social") ||
-							pathname.endsWith("/sign-in/oauth2") ||
-							pathname.endsWith("/oauth2/consent") ||
-							pathname.endsWith("/oauth2/continue")
+							typeof window !== "undefined" &&
+							window?.location?.search &&
+							!(ctx.method === "GET" || ctx.method === "DELETE")
 						) {
 							ctx.body = JSON.stringify({
 								...body,
-								oauth_query:
-									typeof window !== "undefined"
-										? parseSignedQuery(window?.location?.search)
-										: undefined,
+								oauth_query: parseSignedQuery(window.location.search),
 							});
 						}
 					},

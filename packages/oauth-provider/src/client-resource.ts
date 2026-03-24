@@ -32,11 +32,14 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 		}
 		return jwtPlugin?.options;
 	};
-	const getAuthorizationServer = async () => {
+	const authServerBaseUrl =
+		typeof auth?.options.baseURL === "string"
+			? auth.options.baseURL
+			: undefined;
+	const getAuthorizationServer = async (): Promise<string | undefined> => {
 		const jwtPluginOptions = await getJwtPluginOptions();
 		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 	};
-	const authServerBaseUrl = auth?.options.baseURL;
 	const authServerBasePath = auth?.options.basePath;
 
 	return {

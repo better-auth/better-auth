@@ -19,6 +19,7 @@ import {
 	verifyEmailOTP,
 } from "./routes";
 import type { EmailOTPOptions } from "./types";
+import { toOTPIdentifier } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -105,7 +106,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							const storedOTP = await storeOTP(ctx, opts, otp);
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: `${storedOTP}:0`,
-								identifier: `email-verification-otp-${email}`,
+								identifier: toOTPIdentifier("email-verification", email),
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
 							await ctx.context.runInBackgroundOrAwait(
