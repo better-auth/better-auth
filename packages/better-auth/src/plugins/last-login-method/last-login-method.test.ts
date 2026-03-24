@@ -1,7 +1,16 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import { createAuthMiddleware } from "../../api";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -151,8 +160,7 @@ describe("lastLoginMethod", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,
 		});
-		const token =
-			new URL(magicLinkEmail.url).searchParams.get("token") || "";
+		const token = new URL(magicLinkEmail.url).searchParams.get("token") || "";
 		const headers = new Headers();
 		await client.$fetch("/magic-link/verify", {
 			method: "GET",
@@ -196,8 +204,7 @@ describe("lastLoginMethod", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,
 		});
-		const token =
-			new URL(magicLinkEmail.url).searchParams.get("token") || "";
+		const token = new URL(magicLinkEmail.url).searchParams.get("token") || "";
 		let sessionToken = "";
 		await client.magicLink.verify(
 			{
@@ -216,9 +223,7 @@ describe("lastLoginMethod", async () => {
 						const cookies = parseSetCookieHeader(
 							context.response.headers.get("set-cookie") || "",
 						);
-						const sessionCookie = cookies.get(
-							"better-auth.session_token",
-						);
+						const sessionCookie = cookies.get("better-auth.session_token");
 						if (sessionCookie?.value) {
 							sessionToken = sessionCookie.value;
 						}
@@ -334,6 +339,131 @@ describe("lastLoginMethod", async () => {
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
 	});
+
+	it("should ignore missing path in after hooks", async () => {
+		const plugin = lastLoginMethod();
+		const handler = plugin.hooks?.after?.[0]?.handler;
+		const setCookie = vi.fn();
+
+		await expect(
+			handler?.({
+				path: undefined,
+				setCookie,
+				context: {
+					responseHeaders: undefined,
+					authCookies: {
+						sessionToken: {
+							name: "better-auth.session_token",
+							attributes: {},
+						},
+					},
+				},
+			} as any),
+		).resolves.toBeUndefined();
+
+		expect(setCookie).not.toHaveBeenCalled();
+	});
+
+	it("should ignore missing path in database hooks", async () => {
+		const updateUser = vi.fn();
+		const plugin = lastLoginMethod({ storeInDatabase: true });
+		const initResult = await plugin.init?.({
+			internalAdapter: {
+				updateUser,
+			},
+			logger: {
+				error: vi.fn(),
+			},
+		} as any);
+		const userCreateBefore =
+			initResult?.options?.databaseHooks?.user?.create?.before;
+		const sessionCreateAfter =
+			initResult?.options?.databaseHooks?.session?.create?.after;
+
+		await expect(
+			userCreateBefore?.(
+				{
+					email: "test@example.com",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		await expect(
+			sessionCreateAfter?.(
+				{
+					userId: "user-123",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		expect(updateUser).not.toHaveBeenCalled();
+	});
+
+	it("should normalize missing path for custom resolver in database hooks", async () => {
+		const customResolveMethod = vi.fn((ctx) => {
+			return ctx.path.startsWith("/magic-link") ? "magic-link" : null;
+		});
+		const updateUser = vi.fn();
+		const plugin = lastLoginMethod({
+			storeInDatabase: true,
+			customResolveMethod,
+		});
+		const initResult = await plugin.init?.({
+			internalAdapter: {
+				updateUser,
+			},
+			logger: {
+				error: vi.fn(),
+			},
+		} as any);
+		const userCreateBefore =
+			initResult?.options?.databaseHooks?.user?.create?.before;
+		const sessionCreateAfter =
+			initResult?.options?.databaseHooks?.session?.create?.after;
+
+		await expect(
+			userCreateBefore?.(
+				{
+					email: "test@example.com",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		await expect(
+			sessionCreateAfter?.(
+				{
+					userId: "user-123",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		expect(customResolveMethod).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				path: "",
+			}),
+		);
+		expect(customResolveMethod).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				path: "",
+			}),
+		);
+		expect(updateUser).not.toHaveBeenCalled();
+	});
+
 	it("should update the last login method in the database on subsequent logins", async () => {
 		const { client, auth } = await getTestInstance({
 			plugins: [lastLoginMethod({ storeInDatabase: true })],
@@ -549,5 +679,77 @@ describe("lastLoginMethod", async () => {
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe(
 			"my-provider-id",
 		);
+	});
+
+	it("should handle multiple set-cookie headers correctly", async () => {
+		// Create a custom plugin that sets an additional cookie to simulate multiple Set-Cookie headers
+		const multiCookiePlugin = {
+			id: "multi-cookie-test",
+			hooks: {
+				after: [
+					{
+						matcher() {
+							return true;
+						},
+						handler: createAuthMiddleware(async (ctx) => {
+							const setCookieHeaders =
+								ctx.context.responseHeaders?.getSetCookie?.() || [];
+							const sessionTokenName =
+								ctx.context.authCookies.sessionToken.name;
+							// If session token is being set, also set an additional cookie BEFORE checking
+							const hasSessionToken = setCookieHeaders.some((cookie) =>
+								cookie.includes(sessionTokenName),
+							);
+							if (hasSessionToken) {
+								ctx.setCookie("additional-test-cookie", "test-value", {
+									maxAge: 60 * 60 * 24 * 30,
+									httpOnly: false,
+								});
+							}
+						}),
+					},
+				],
+			},
+		};
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [multiCookiePlugin, lastLoginMethod()],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient()],
+				},
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+
+					// Verify that multiple cookies are present in the response
+					const setCookieHeaders =
+						context.response.headers.getSetCookie?.() || [];
+					expect(setCookieHeaders.length).toBeGreaterThan(1);
+
+					// Verify both cookies are present
+					const cookieStrings = setCookieHeaders.join(";");
+					expect(cookieStrings).toContain("additional-test-cookie=test-value");
+					expect(cookieStrings).toContain(
+						"better-auth.last_used_login_method=email",
+					);
+				},
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+		expect(cookies.get("additional-test-cookie")).toBe("test-value");
 	});
 });

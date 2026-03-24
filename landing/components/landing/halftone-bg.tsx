@@ -1,7 +1,7 @@
 // spell-checker:disable
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 const VERTEX_SHADER = `
 attribute vec2 a_position;
@@ -14,9 +14,6 @@ precision highp float;
 
 uniform float u_time;
 uniform vec2 u_resolution;
-uniform vec2 u_mouse;
-uniform float u_click;
-uniform vec2 u_clickPos;
 
 //
 // Simplex 2D noise (Ashima Arts)
@@ -74,31 +71,6 @@ void main() {
 
   float t = u_time * 0.04;
 
-  // Mouse disruption - push noise coordinates away from cursor
-  vec2 mouseUV = u_mouse;
-  mouseUV.x *= aspect;
-  mouseUV *= 2.5;
-  vec2 diff = p - mouseUV;
-  float dist = length(diff);
-  float radius = 0.5;
-  if (u_mouse.x > 0.0 && dist < radius) {
-    float strength = smoothstep(radius, 0.0, dist) * 0.2;
-    vec2 push = normalize(diff) * strength;
-    p += push;
-  }
-
-  // Click disruption - ripple outward from click point
-  if (u_click > 0.01) {
-    vec2 clickUV = u_clickPos;
-    clickUV.x *= aspect;
-    clickUV *= 2.5;
-    vec2 cdiff = p - clickUV;
-    float cdist = length(cdiff);
-    float ripple = sin(cdist * 12.0 - u_time * 8.0) * u_click * 0.4;
-    float falloff = exp(-cdist * 2.0);
-    p += normalize(cdiff + 0.001) * ripple * falloff;
-  }
-
   // Domain warping - feed noise into noise for organic flowing shapes
   vec2 q = vec2(
     fbm(p + vec2(0.0, 0.0) + t * 0.3),
@@ -133,16 +105,11 @@ void main() {
 
 export function HalftoneBackground() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const wrapperRef = useRef<HTMLDivElement>(null);
 	const frameRef = useRef<number>(0);
-	const mouseRef = useRef({ x: -1, y: -1 });
-	const smoothMouseRef = useRef({ x: -1, y: -1 });
-	const clickRef = useRef({ strength: 0, x: 0, y: 0 });
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const canvas = canvasRef.current;
-		const wrapper = wrapperRef.current;
-		if (!canvas || !wrapper) return;
+		if (!canvas) return;
 
 		const gl = canvas.getContext("webgl", {
 			alpha: false,
@@ -183,9 +150,6 @@ export function HalftoneBackground() {
 
 		const uTime = gl.getUniformLocation(program, "u_time");
 		const uResolution = gl.getUniformLocation(program, "u_resolution");
-		const uMouse = gl.getUniformLocation(program, "u_mouse");
-		const uClick = gl.getUniformLocation(program, "u_click");
-		const uClickPos = gl.getUniformLocation(program, "u_clickPos");
 
 		const startTime = performance.now();
 
@@ -200,64 +164,26 @@ export function HalftoneBackground() {
 		resize();
 		window.addEventListener("resize", resize);
 
-		const onMouseMove = (e: MouseEvent) => {
-			const rect = wrapper.getBoundingClientRect();
-			mouseRef.current.x = (e.clientX - rect.left) / rect.width;
-			mouseRef.current.y = 1.0 - (e.clientY - rect.top) / rect.height;
-		};
-
-		const onMouseLeave = () => {
-			mouseRef.current.x = -1;
-			mouseRef.current.y = -1;
-		};
-
-		const onClick = (e: MouseEvent) => {
-			const rect = wrapper.getBoundingClientRect();
-			clickRef.current.x = (e.clientX - rect.left) / rect.width;
-			clickRef.current.y = 1.0 - (e.clientY - rect.top) / rect.height;
-			clickRef.current.strength = 1.0;
-		};
-
-		window.addEventListener("mousemove", onMouseMove, { passive: true });
-		wrapper.addEventListener("mouseleave", onMouseLeave);
-		wrapper.addEventListener("click", onClick);
-
 		const draw = () => {
 			const elapsed = (performance.now() - startTime) / 1000;
 
-			// Smooth mouse interpolation for fluid feel
-			const lerp = 0.08;
-			const target = mouseRef.current;
-			const smooth = smoothMouseRef.current;
-			if (target.x < 0) {
-				// Mouse left - smoothly fade out
-				smooth.x += (target.x - smooth.x) * 0.02;
-				smooth.y += (target.y - smooth.y) * 0.02;
-			} else {
-				smooth.x += (target.x - smooth.x) * lerp;
-				smooth.y += (target.y - smooth.y) * lerp;
-			}
-
-			// Decay click strength
-			clickRef.current.strength *= 0.96;
-
 			gl.uniform1f(uTime, elapsed);
 			gl.uniform2f(uResolution, canvas.width, canvas.height);
-			gl.uniform2f(uMouse, smooth.x, smooth.y);
-			gl.uniform1f(uClick, clickRef.current.strength);
-			gl.uniform2f(uClickPos, clickRef.current.x, clickRef.current.y);
 			gl.drawArrays(gl.TRIANGLES, 0, 6);
+
 			frameRef.current = requestAnimationFrame(draw);
 		};
+
+		// Draw the first frame synchronously so the canvas has content before paint
+		gl.uniform1f(uTime, 0);
+		gl.uniform2f(uResolution, canvas.width, canvas.height);
+		gl.drawArrays(gl.TRIANGLES, 0, 6);
 
 		frameRef.current = requestAnimationFrame(draw);
 
 		return () => {
 			cancelAnimationFrame(frameRef.current);
 			window.removeEventListener("resize", resize);
-			window.removeEventListener("mousemove", onMouseMove);
-			wrapper.removeEventListener("mouseleave", onMouseLeave);
-			wrapper.removeEventListener("click", onClick);
 			gl.deleteProgram(program);
 			gl.deleteShader(vs);
 			gl.deleteShader(fs);
@@ -267,11 +193,13 @@ export function HalftoneBackground() {
 
 	return (
 		<div
-			ref={wrapperRef}
-			className="absolute inset-0 overflow-hidden bg-white dark:bg-black"
+			className="absolute inset-0 overflow-hidden bg-background pointer-events-none"
 			aria-hidden="true"
 		>
-			<canvas ref={canvasRef} className="w-full h-full invert dark:invert-0" />
+			<canvas
+				ref={canvasRef}
+				className="w-full h-full invert opacity-50 dark:invert-0 dark:opacity-100"
+			/>
 		</div>
 	);
 }

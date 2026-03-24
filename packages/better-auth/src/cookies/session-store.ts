@@ -286,7 +286,7 @@ export async function setAccountCookie(
 	};
 	const data = await symmetricEncodeJWT(
 		accountData,
-		c.context.secret,
+		c.context.secretConfig,
 		"better-auth-account",
 		options.maxAge,
 	);
@@ -315,7 +315,7 @@ export async function getAccountCookie(c: GenericEndpointContext) {
 		const accountData = safeJSONParse<Account>(
 			await symmetricDecodeJWT(
 				accountCookie,
-				c.context.secret,
+				c.context.secretConfig,
 				"better-auth-account",
 			),
 		);

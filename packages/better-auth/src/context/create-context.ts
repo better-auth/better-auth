@@ -1,4 +1,8 @@
-import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	SecretConfig,
+} from "@better-auth/core";
 import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
@@ -26,6 +30,11 @@ import {
 	getTrustedProviders,
 	runPluginInit,
 } from "./helpers";
+import {
+	buildSecretConfig,
+	parseSecretsEnv,
+	validateSecretsArray,
+} from "./secret-utils";
 
 /**
  * Estimates the entropy of a string in bits.
@@ -93,6 +102,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 					enabled: true,
 					strategy: "jwe" as const,
 					refreshCache: true,
+					maxAge: options.session?.expiresIn || 60 * 60 * 24 * 7, // match session expiresIn, default 7 days
 				},
 			},
 			account: {
@@ -142,13 +152,24 @@ Most of the features of Better Auth will not work correctly.`,
 		);
 	}
 
-	const secret =
-		options.secret ||
-		env.BETTER_AUTH_SECRET ||
-		env.AUTH_SECRET ||
-		DEFAULT_SECRET;
+	const secretsArray =
+		options.secrets ?? parseSecretsEnv(env.BETTER_AUTH_SECRETS);
 
-	validateSecret(secret, logger);
+	const legacySecret =
+		options.secret || env.BETTER_AUTH_SECRET || env.AUTH_SECRET || "";
+
+	let secret: string;
+	let secretConfig: string | SecretConfig;
+
+	if (secretsArray) {
+		validateSecretsArray(secretsArray, logger);
+		secret = secretsArray[0]!.value;
+		secretConfig = buildSecretConfig(secretsArray, legacySecret);
+	} else {
+		secret = legacySecret || DEFAULT_SECRET;
+		validateSecret(secret, logger);
+		secretConfig = secret;
+	}
 
 	options = {
 		...options,
@@ -301,6 +322,7 @@ Most of the features of Better Auth will not work correctly.`,
 			})(),
 		},
 		secret,
+		secretConfig,
 		rateLimit: {
 			...options.rateLimit,
 			enabled: options.rateLimit?.enabled ?? isProduction,
@@ -332,7 +354,9 @@ Most of the features of Better Auth will not work correctly.`,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			logger,
-			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			hooks: options.databaseHooks
+				? [{ source: "user", hooks: options.databaseHooks }]
+				: [],
 			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),

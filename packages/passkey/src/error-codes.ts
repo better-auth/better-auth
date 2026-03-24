@@ -9,4 +9,8 @@ export const PASSKEY_ERROR_CODES = defineErrorCodes({
 	AUTHENTICATION_FAILED: "Authentication failed",
 	UNABLE_TO_CREATE_SESSION: "Unable to create session",
 	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
+	PREVIOUSLY_REGISTERED: "Previously registered",
+	REGISTRATION_CANCELLED: "Registration cancelled",
+	AUTH_CANCELLED: "Auth cancelled",
+	UNKNOWN_ERROR: "Unknown error",
 });

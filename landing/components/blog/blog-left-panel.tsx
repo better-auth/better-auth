@@ -1,10 +1,101 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+
+interface BlogPostData {
+	title: string;
+	description?: string;
+	date?: Date;
+	author?: { name?: string; twitter?: string };
+	toc?: { title: ReactNode; url: string; depth: number }[];
+}
 
 interface BlogLeftPanelProps {
 	postCount?: number;
+	post?: BlogPostData;
 }
 
-export function BlogLeftPanel({ postCount }: BlogLeftPanelProps) {
+function formatDate(date: Date) {
+	return new Date(date).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	});
+}
+
+export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
+	if (post) {
+		return (
+			<div className="relative w-full lg:w-[30%] lg:h-dvh lg:sticky lg:top-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+				<div className="hidden lg:block">
+					<HalftoneBackground />
+				</div>
+				<div className="relative w-full py-16 lg:py-0 flex flex-col justify-center lg:h-dvh">
+					<div className="space-y-4">
+						<Link
+							href="/blog"
+							className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors group w-fit"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="12"
+								height="12"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								className="transition-transform group-hover:-translate-x-0.5"
+							>
+								<path d="m15 18-6-6 6-6" />
+							</svg>
+							<span className="text-[11px] uppercase tracking-wider">
+								All posts
+							</span>
+						</Link>
+
+						<div className="space-y-1 pt-1 max-w-md">
+							<h1 className="text-2xl lg:text-3xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+								{post.title}
+							</h1>
+							{post.description && (
+								<p className="text-xs text-foreground/40 leading-relaxed pt-0.5">
+									{post.description}
+								</p>
+							)}
+						</div>
+
+						<div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-foreground/40">
+							{post.author?.name && (
+								<span className="text-foreground/60">{post.author.name}</span>
+							)}
+							{post.author?.twitter && (
+								<>
+									<span className="text-foreground/20">&middot;</span>
+									<a
+										href={`https://x.com/${post.author.twitter}`}
+										target="_blank"
+										rel="noreferrer noopener"
+										className="text-foreground/40 hover:text-foreground/70 transition-colors"
+									>
+										@{post.author.twitter}
+									</a>
+								</>
+							)}
+							{post.date && (
+								<>
+									<span className="text-foreground/20">&middot;</span>
+									<span>{formatDate(post.date)}</span>
+								</>
+							)}
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="relative w-full lg:w-[30%] lg:h-dvh lg:sticky lg:top-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
 			<HalftoneBackground />
@@ -79,7 +170,7 @@ export function BlogLeftPanel({ postCount }: BlogLeftPanelProps) {
 							</svg>
 						</a>
 						<a
-							href="/rss.xml"
+							href="/blog/rss.xml"
 							className="flex items-center gap-1.5 text-foreground/30 hover:text-foreground/70 transition-colors"
 							aria-label="RSS Feed"
 						>
@@ -97,7 +188,6 @@ export function BlogLeftPanel({ postCount }: BlogLeftPanelProps) {
 						</a>
 					</div>
 
-					{/* Post count - only shown when postCount is provided */}
 					{postCount !== undefined && (
 						<div className="hidden lg:block border-t border-foreground/[0.06] pt-4">
 							<div className="flex items-baseline justify-between">

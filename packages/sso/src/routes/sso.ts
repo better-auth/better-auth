@@ -1,5 +1,5 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { User, Verification } from "better-auth";
+import type { User } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -19,11 +19,11 @@ import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
 import { decodeJwt } from "jose";
-import saml from "samlify";
+import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
-import z from "zod/v4";
+import * as z from "zod";
 import { getVerificationIdentifier } from "./domain-verification";
 
 interface AuthnRequestRecord {
@@ -910,15 +910,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				domainVerified = false;
 				domainVerificationToken = generateRandomString(24);
 
-				await ctx.context.adapter.create<Verification>({
-					model: "verification",
-					data: {
-						identifier: getVerificationIdentifier(options, provider.providerId),
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						value: domainVerificationToken as string,
-						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-					},
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: getVerificationIdentifier(options, provider.providerId),
+					value: domainVerificationToken as string,
+					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 				});
 			}
 
@@ -1606,6 +1601,7 @@ async function handleOIDCCallback(
 				? "post"
 				: "basic",
 	}).catch((e) => {
+		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {
 			throw ctx.redirect(
 				`${
@@ -1630,7 +1626,43 @@ async function handleOIDCCallback(
 		emailVerified?: boolean;
 		[key: string]: any;
 	} | null = null;
-	if (tokenResponse.idToken) {
+	const mapping = config.mapping || {};
+
+	if (config.userInfoEndpoint) {
+		const userInfoResponse = await betterFetch<Record<string, unknown>>(
+			config.userInfoEndpoint,
+			{
+				headers: {
+					Authorization: `Bearer ${tokenResponse.accessToken}`,
+				},
+			},
+		);
+		if (userInfoResponse.error) {
+			throw ctx.redirect(
+				`${errorURL || callbackURL}?error=invalid_provider&error_description=${
+					userInfoResponse.error.message
+				}`,
+			);
+		}
+		const rawUserInfo = userInfoResponse.data;
+		userInfo = {
+			...Object.fromEntries(
+				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
+					key,
+					rawUserInfo[value],
+				]),
+			),
+			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
+			email: rawUserInfo[mapping.email || "email"] as string | undefined,
+			emailVerified: options?.trustEmailVerified
+				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
+						| boolean
+						| undefined)
+				: false,
+			name: rawUserInfo[mapping.name || "name"] as string | undefined,
+			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
+		};
+	} else if (tokenResponse.idToken) {
 		const idToken = decodeJwt(tokenResponse.idToken);
 		if (!config.jwksEndpoint) {
 			throw ctx.redirect(
@@ -1658,7 +1690,6 @@ async function handleOIDCCallback(
 			);
 		}
 
-		const mapping = config.mapping || {};
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1680,35 +1711,12 @@ async function handleOIDCCallback(
 			image?: string;
 			emailVerified?: boolean;
 		};
-	}
-
-	if (!userInfo) {
-		if (!config.userInfoEndpoint) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
-			);
-		}
-		const userInfoResponse = await betterFetch<{
-			email?: string;
-			name?: string;
-			id?: string;
-			image?: string;
-			emailVerified?: boolean;
-		}>(config.userInfoEndpoint, {
-			headers: {
-				Authorization: `Bearer ${tokenResponse.accessToken}`,
-			},
-		});
-		if (userInfoResponse.error) {
-			throw ctx.redirect(
-				`${errorURL || callbackURL}?error=invalid_provider&error_description=${
-					userInfoResponse.error.message
-				}`,
-			);
-		}
-		userInfo = userInfoResponse.data;
+	} else {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
+		);
 	}
 
 	if (!userInfo.email || !userInfo.id) {
@@ -3116,7 +3124,7 @@ async function handleLogoutResponse(
 		}
 
 		await ctx.context.internalAdapter
-			.deleteVerificationValue(key)
+			.deleteVerificationByIdentifier(key)
 			.catch((e: unknown) =>
 				ctx.context.logger.warn(
 					"Failed to delete logout request verification value",
@@ -3183,7 +3191,7 @@ async function handleLogoutRequest(
 						}),
 					);
 				await ctx.context.internalAdapter
-					.deleteVerificationValue(
+					.deleteVerificationByIdentifier(
 						`${constants.SAML_SESSION_BY_ID_PREFIX}${data.sessionId}`,
 					)
 					.catch((e: unknown) =>
@@ -3204,7 +3212,7 @@ async function handleLogoutRequest(
 			}
 		}
 		await ctx.context.internalAdapter
-			.deleteVerificationValue(key)
+			.deleteVerificationByIdentifier(key)
 			.catch((e: unknown) =>
 				ctx.context.logger.warn(
 					"Failed to delete SAML session key during SLO",
@@ -3339,7 +3347,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 
 			if (samlSessionKey) {
 				await ctx.context.internalAdapter
-					.deleteVerificationValue(samlSessionKey)
+					.deleteVerificationByIdentifier(samlSessionKey)
 					.catch((e) =>
 						ctx.context.logger.warn(
 							"Failed to delete SAML session key during logout",
@@ -3348,7 +3356,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					);
 			}
 			await ctx.context.internalAdapter
-				.deleteVerificationValue(sessionLookupKey)
+				.deleteVerificationByIdentifier(sessionLookupKey)
 				.catch((e) =>
 					ctx.context.logger.warn(
 						"Failed to delete session lookup key during logout",

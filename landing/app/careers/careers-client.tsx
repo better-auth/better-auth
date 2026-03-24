@@ -54,7 +54,7 @@ function ApplyDialog({
 			onClick={onClose}
 		>
 			{/* Backdrop */}
-			<div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+			<div className="absolute inset-0 bg-black/40 backdrop-blur-md dark:bg-black/72" />
 
 			{/* Dialog */}
 			<motion.div
@@ -63,19 +63,19 @@ function ApplyDialog({
 				exit={{ opacity: 0, y: 10, scale: 0.98 }}
 				transition={{ duration: 0.2, ease: "easeOut" }}
 				onClick={(e) => e.stopPropagation()}
-				className="relative w-full max-w-md border border-dashed border-foreground/[0.08] bg-background overflow-hidden"
+				className="relative w-full max-w-md overflow-hidden border border-foreground/[0.14] bg-background/95 shadow-2xl shadow-black/12 ring-1 ring-black/5 backdrop-blur dark:border-white/[0.08] dark:bg-[#050505]/95 dark:shadow-black/65 dark:ring-white/[0.04]"
 			>
 				{/* Corner marks */}
-				<span className="absolute top-2 left-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+				<span className="absolute top-2 left-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
 					+
 				</span>
-				<span className="absolute top-2 right-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+				<span className="absolute top-2 right-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
 					+
 				</span>
-				<span className="absolute bottom-2 left-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+				<span className="absolute bottom-2 left-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
 					+
 				</span>
-				<span className="absolute bottom-2 right-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+				<span className="absolute bottom-2 right-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
 					+
 				</span>
 
@@ -84,13 +84,15 @@ function ApplyDialog({
 					<button
 						type="button"
 						onClick={onClose}
-						className="absolute top-4 right-4 text-foreground/30 hover:text-foreground/60 transition-colors"
+						aria-label="Close dialog"
+						className="absolute top-4 right-4 text-foreground/50 hover:text-foreground/80 transition-colors"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="14"
 							height="14"
 							viewBox="0 0 24 24"
+							aria-hidden="true"
 						>
 							<path
 								fill="currentColor"
@@ -106,15 +108,17 @@ function ApplyDialog({
 							transition={{ duration: 0.3 }}
 							className="text-center py-6 space-y-3"
 						>
-							<p className="text-sm text-foreground/80">Application sent</p>
-							<p className="text-[11px] text-foreground/40 leading-relaxed max-w-xs mx-auto">
+							<p className="text-sm text-foreground/92 dark:text-foreground/88">
+								Application sent
+							</p>
+							<p className="text-[11px] text-foreground/60 dark:text-foreground/52 leading-relaxed max-w-xs mx-auto">
 								Thanks for applying for {role.title}. We&apos;ll review your
 								application and get back to you soon.
 							</p>
 							<button
 								type="button"
 								onClick={onClose}
-								className="mt-4 inline-flex items-center px-4 py-2 border border-foreground/[0.12] text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 transition-all font-mono text-[10px] uppercase tracking-widest"
+								className="mt-4 inline-flex items-center px-4 py-2 border border-foreground/[0.18] bg-foreground/[0.03] text-foreground/72 hover:text-foreground/90 hover:border-foreground/28 hover:bg-foreground/[0.06] transition-all font-mono text-[10px] uppercase tracking-widest dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/68 dark:hover:text-foreground/84 dark:hover:bg-white/[0.05]"
 							>
 								Close
 							</button>
@@ -122,15 +126,17 @@ function ApplyDialog({
 					) : (
 						<>
 							<div className="mb-6 space-y-1">
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono">
+								<p className="text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/50 font-mono">
 									# Apply
 								</p>
-								<h3 className="text-sm text-foreground/80">{role.title}</h3>
+								<h3 className="text-sm text-foreground/92 dark:text-foreground/86">
+									{role.title}
+								</h3>
 								<div className="flex items-center gap-2 pt-1">
-									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/40 border border-dashed border-foreground/[0.1] px-1.5 py-0.5 leading-none">
+									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/50 border border-foreground/[0.15] bg-foreground/[0.03] px-1.5 py-0.5 leading-none dark:border-white/[0.08] dark:bg-white/[0.03]">
 										{role.type}
 									</span>
-									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/40 border border-dashed border-foreground/[0.1] px-1.5 py-0.5 leading-none">
+									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/50 border border-foreground/[0.15] bg-foreground/[0.03] px-1.5 py-0.5 leading-none dark:border-white/[0.08] dark:bg-white/[0.03]">
 										{role.location}
 									</span>
 								</div>
@@ -146,7 +152,7 @@ function ApplyDialog({
 								<div className="space-y-1.5">
 									<label
 										htmlFor="careers-name"
-										className="text-[9px] text-foreground/30 uppercase tracking-widest font-mono"
+										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
 									>
 										Name
 									</label>
@@ -154,7 +160,7 @@ function ApplyDialog({
 										id="careers-name"
 										type="text"
 										required
-										className="w-full bg-transparent border border-dashed border-foreground/[0.1] px-3 py-2 text-[12px] text-foreground/70 placeholder:text-foreground/20 focus:outline-none focus:border-foreground/25 transition-colors"
+										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
 										placeholder="Your full name"
 									/>
 								</div>
@@ -162,7 +168,7 @@ function ApplyDialog({
 								<div className="space-y-1.5">
 									<label
 										htmlFor="careers-email"
-										className="text-[9px] text-foreground/30 uppercase tracking-widest font-mono"
+										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
 									>
 										Email
 									</label>
@@ -170,7 +176,7 @@ function ApplyDialog({
 										id="careers-email"
 										type="email"
 										required
-										className="w-full bg-transparent border border-dashed border-foreground/[0.1] px-3 py-2 text-[12px] text-foreground/70 placeholder:text-foreground/20 focus:outline-none focus:border-foreground/25 transition-colors"
+										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
 										placeholder="you@example.com"
 									/>
 								</div>
@@ -178,7 +184,7 @@ function ApplyDialog({
 								<div className="space-y-1.5">
 									<label
 										htmlFor="careers-portfolio"
-										className="text-[9px] text-foreground/30 uppercase tracking-widest font-mono"
+										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
 									>
 										Portfolio / GitHub
 									</label>
@@ -186,7 +192,7 @@ function ApplyDialog({
 										id="careers-portfolio"
 										type="url"
 										required
-										className="w-full bg-transparent border border-dashed border-foreground/[0.1] px-3 py-2 text-[12px] text-foreground/70 placeholder:text-foreground/20 focus:outline-none focus:border-foreground/25 transition-colors"
+										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
 										placeholder="https://"
 									/>
 								</div>
@@ -194,7 +200,7 @@ function ApplyDialog({
 								<div className="space-y-1.5">
 									<label
 										htmlFor="careers-why"
-										className="text-[9px] text-foreground/30 uppercase tracking-widest font-mono"
+										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
 									>
 										Why Better Auth?
 									</label>
@@ -202,7 +208,7 @@ function ApplyDialog({
 										id="careers-why"
 										required
 										rows={3}
-										className="w-full bg-transparent border border-dashed border-foreground/[0.1] px-3 py-2 text-[12px] text-foreground/70 placeholder:text-foreground/20 focus:outline-none focus:border-foreground/25 transition-colors resize-none"
+										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors resize-none"
 										placeholder="Tell us why you want to join..."
 									/>
 								</div>
@@ -210,13 +216,13 @@ function ApplyDialog({
 								<div className="pt-2">
 									<button
 										type="submit"
-										className="inline-flex items-center gap-1.5 px-4 py-2 border border-foreground/[0.12] text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
+										className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background hover:opacity-90 transition-all"
 									>
 										<span className="font-mono text-[10px] uppercase tracking-widest">
 											Submit Application
 										</span>
 										<svg
-											className="h-2.5 w-2.5 opacity-50"
+											className="h-2.5 w-2.5 opacity-80"
 											viewBox="0 0 10 10"
 											fill="none"
 										>
@@ -326,58 +332,60 @@ function RoleCard({
 				delay: 0.2 + index * 0.08,
 				ease: "easeOut",
 			}}
-			className="relative border border-dashed border-foreground/[0.08] hover:border-foreground/[0.14] transition-all duration-300 group"
+			className="group relative overflow-hidden border border-foreground/[0.1] bg-foreground/[0.018] shadow-sm shadow-black/[0.03] transition-all duration-300 hover:z-10 hover:-translate-y-px hover:border-foreground/[0.18] hover:bg-foreground/[0.03] hover:shadow-lg hover:shadow-black/[0.06] dark:border-white/[0.07] dark:bg-white/[0.015] dark:shadow-black/[0.2] dark:hover:border-white/[0.12] dark:hover:bg-white/[0.03] dark:hover:shadow-black/[0.35]"
 		>
+			<div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/18 to-transparent dark:via-white/[0.14]" />
+
 			{/* Corner marks */}
-			<span className="absolute top-2 left-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+			<span className="absolute top-2 left-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
 				+
 			</span>
-			<span className="absolute top-2 right-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+			<span className="absolute top-2 right-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
 				+
 			</span>
-			<span className="absolute bottom-2 left-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+			<span className="absolute bottom-2 left-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
 				+
 			</span>
-			<span className="absolute bottom-2 right-2 text-[9px] font-mono text-foreground/15 select-none leading-none">
+			<span className="absolute bottom-2 right-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
 				+
 			</span>
 
 			<div className="p-5 sm:p-6 space-y-4">
 				{/* Header */}
 				<div className="space-y-3">
-					<h3 className="text-sm sm:text-base text-foreground/90 tracking-tight">
+					<h3 className="text-sm sm:text-base text-foreground/92 dark:text-foreground/86 tracking-tight">
 						{role.title}
 					</h3>
 					<div className="flex items-center gap-2">
-						<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/40 border border-dashed border-foreground/[0.1] px-1.5 py-0.5 leading-none">
+						<span className="border border-foreground/[0.14] bg-foreground/[0.03] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest text-foreground/58 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-foreground/48 leading-none">
 							{role.type}
 						</span>
-						<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/40 border border-dashed border-foreground/[0.1] px-1.5 py-0.5 leading-none">
+						<span className="border border-foreground/[0.14] bg-foreground/[0.03] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest text-foreground/58 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-foreground/48 leading-none">
 							{role.location}
 						</span>
 					</div>
 				</div>
 
 				{/* Description */}
-				<p className="text-[11px] text-foreground/50 leading-relaxed max-w-lg">
+				<p className="max-w-lg text-[12px] leading-relaxed text-foreground/66 dark:text-foreground/56">
 					{role.description}
 				</p>
 
 				{/* Divider */}
-				<div className="border-t border-dashed border-foreground/[0.06]" />
+				<div className="border-t border-foreground/[0.08] dark:border-white/[0.06]" />
 
 				{/* Requirements */}
 				<div>
-					<p className="text-[9px] text-foreground/30 uppercase tracking-widest font-mono mb-3">
+					<p className="mb-3 text-[9px] font-mono uppercase tracking-[0.18em] text-foreground/52 dark:text-foreground/44">
 						Requirements
 					</p>
 					<ul className="space-y-2">
 						{role.requirements.map((req) => (
 							<li
 								key={req}
-								className="flex items-start gap-2 text-[11px] text-foreground/45 group-hover:text-foreground/55 transition-colors duration-300"
+								className="flex items-start gap-2 text-[11px] leading-relaxed text-foreground/56 transition-colors duration-300 group-hover:text-foreground/68 dark:text-foreground/48 dark:group-hover:text-foreground/60"
 							>
-								<span className="text-foreground/25 mt-px font-mono text-[9px] leading-none select-none shrink-0">
+								<span className="mt-px shrink-0 select-none font-mono text-[9px] leading-none text-foreground/60 dark:text-foreground/46">
 									+
 								</span>
 								<span>{req}</span>
@@ -391,13 +399,13 @@ function RoleCard({
 					<button
 						type="button"
 						onClick={onApply}
-						className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-foreground/[0.12] text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all cursor-pointer"
+						className="inline-flex items-center gap-1.5 bg-foreground px-3.5 py-2 text-background transition-all hover:opacity-90 cursor-pointer"
 					>
 						<span className="font-mono text-[10px] uppercase tracking-widest">
 							Apply
 						</span>
 						<svg
-							className="h-2.5 w-2.5 opacity-50"
+							className="h-2.5 w-2.5 opacity-80"
 							viewBox="0 0 10 10"
 							fill="none"
 						>
@@ -420,11 +428,11 @@ export function CareersPageClient() {
 	>(null);
 
 	return (
-		<div className="relative h-full overflow-x-hidden pt-14 lg:pt-0">
-			<div className="relative text-foreground h-full">
-				<div className="flex flex-col lg:flex-row h-full">
+		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
+			<div className="relative text-foreground lg:h-full">
+				<div className="flex flex-col lg:h-full lg:flex-row">
 					{/* Left side */}
-					<div className="hidden lg:block relative w-full lg:w-[30%] border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -432,7 +440,7 @@ export function CareersPageClient() {
 					</div>
 
 					{/* Right side */}
-					<div className="relative w-full lg:w-[70%] overflow-y-auto overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
 						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-10">
 							{/* Mobile header */}
 							<div className="flex lg:hidden items-center gap-1.5">
@@ -503,7 +511,7 @@ export function CareersPageClient() {
 									# Open positions
 								</p>
 
-								<div className="space-y-0">
+								<div className="space-y-4">
 									{roles.map((role, i) => (
 										<RoleCard
 											key={role.title}

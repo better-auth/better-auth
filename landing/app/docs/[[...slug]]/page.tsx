@@ -13,19 +13,18 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
-import { groupTocItems } from "@/components/docs/group-toc-items";
+import { Features } from "@/components/docs/features";
 import {
 	AddToCursor,
 	DatabaseTable,
 	DividerText,
 	Endpoint,
-	Features,
 	ForkButton,
 	GenerateAppleJwt,
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
-import { StepperTOC } from "@/components/docs/stepper-toc";
 import { Callout } from "@/components/ui/callout";
+import { createMetadata } from "@/lib/metadata";
 import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
@@ -46,16 +45,16 @@ export default async function Page({
 		return notFound();
 	}
 
-	const MDX = page.data.body;
-	const groupedToc = groupTocItems(page.data.toc);
+	const { body: MDX, toc } = await page.data.load();
 	const gitBranch = branch === "canary" ? "canary" : "main";
 
 	return (
 		<DocsPage
-			toc={page.data.toc}
+			toc={toc}
 			full={false}
-			tableOfContent={{ enabled: false }}
-			tableOfContentPopover={{ enabled: false }}
+			tableOfContent={{
+				style: "clerk",
+			}}
 			breadcrumb={{ enabled: false }}
 			editOnGithub={{
 				owner: "better-auth",
@@ -64,14 +63,18 @@ export default async function Page({
 				path: `docs/content/docs/${page.path}`,
 			}}
 		>
-			<StepperTOC items={groupedToc}>
-				<LLMCopyButton />
-				<ViewOptions
-					markdownUrl={`${page.url}.mdx`}
-					githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
-				/>
-			</StepperTOC>
-			<DocsTitle>{page.data.title}</DocsTitle>
+			<div className="flex items-center justify-between gap-4">
+				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
+				<div className="flex items-center gap-2 not-prose shrink-0">
+					<LLMCopyButton
+						rawUrl={`https://raw.githubusercontent.com/better-auth/better-auth/${gitBranch}/docs/content/docs/${page.path}`}
+					/>
+					<ViewOptions
+						markdownUrl={`${page.url}.mdx`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
+					/>
+				</div>
+			</div>
 			{page.data.description && (
 				<DocsDescription>{page.data.description}</DocsDescription>
 			)}
@@ -155,8 +158,34 @@ export async function generateMetadata({
 	const page = source.getPage(slug);
 	if (!page) return notFound();
 
-	return {
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", page.data.title);
+	ogSearchParams.set("type", "documentation");
+	ogSearchParams.set("mode", "dark");
+
+	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
+
+	return createMetadata({
 		title: page.data.title,
 		description: page.data.description,
-	};
+		openGraph: {
+			title: page.data.title,
+			description: page.data.description,
+			type: "article",
+			images: [
+				{
+					url: ogUrl,
+					width: 1200,
+					height: 630,
+					alt: page.data.title,
+				},
+			],
+		},
+		twitter: {
+			card: "summary_large_image",
+			title: page.data.title,
+			description: page.data.description,
+			images: [ogUrl],
+		},
+	});
 }

@@ -6,12 +6,10 @@ import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { genericOAuth } from "../generic-oauth";
 import { oAuthProxy } from ".";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
-const GENERIC_PROVIDER_ID = "generic-test";
 
 const server = setupServer();
 
@@ -43,13 +41,6 @@ beforeAll(async () => {
 				id_token: testIdToken,
 			});
 		}),
-		http.post("https://oauth.example.com/token", () => {
-			return HttpResponse.json({
-				access_token: "test",
-				refresh_token: "test",
-				id_token: testIdToken,
-			});
-		}),
 	];
 
 	server.listen({ onUnhandledRequest: "bypass" });
@@ -64,106 +55,6 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
-	it("should redirect generic oauth callback to proxy url with profile data", async () => {
-		const { client } = await getTestInstance({
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: GENERIC_PROVIDER_ID,
-							authorizationUrl: "https://oauth.example.com/authorize",
-							tokenUrl: "https://oauth.example.com/token",
-							clientId: "test",
-							clientSecret: "test",
-						},
-					],
-				}),
-				oAuthProxy({
-					currentURL: "http://preview-localhost:3000",
-				}),
-			],
-		});
-
-		const signInRes = (await client.$fetch("/sign-in/oauth2", {
-			method: "POST",
-			body: {
-				providerId: GENERIC_PROVIDER_ID,
-				callbackURL: "/dashboard",
-			},
-		})) as { url: string };
-
-		const state = new URL(signInRes.url).searchParams.get("state");
-		expect(state).toBeTruthy();
-
-		await client.$fetch(
-			`/oauth2/callback/${GENERIC_PROVIDER_ID}?code=test&state=${encodeURIComponent(state!)}`,
-			{
-				onError(context) {
-					const location = context.response.headers.get("location") ?? "";
-					if (!location) {
-						throw new Error("Location header not found");
-					}
-					expect(location).toContain(
-						"http://preview-localhost:3000/api/auth/oauth-proxy-callback",
-					);
-					expect(location).toContain("callbackURL");
-					const profile = new URL(location).searchParams.get("profile");
-					expect(profile).toBeTruthy();
-				},
-			},
-		);
-	});
-
-	it("shouldn't redirect generic oauth callback to proxy on same origin", async () => {
-		const { client, cookieSetter } = await getTestInstance({
-			baseURL: "https://myapp.com",
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: GENERIC_PROVIDER_ID,
-							authorizationUrl: "https://oauth.example.com/authorize",
-							tokenUrl: "https://oauth.example.com/token",
-							clientId: "test",
-							clientSecret: "test",
-						},
-					],
-				}),
-				oAuthProxy({
-					productionURL: "https://myapp.com",
-				}),
-			],
-		});
-
-		const headers = new Headers();
-		const signInRes = (await client.$fetch("/sign-in/oauth2", {
-			method: "POST",
-			body: {
-				providerId: GENERIC_PROVIDER_ID,
-				callbackURL: "/dashboard",
-			},
-			onSuccess: cookieSetter(headers),
-		})) as { url: string };
-
-		const state = new URL(signInRes.url).searchParams.get("state");
-		expect(state).toBeTruthy();
-
-		await client.$fetch(
-			`/oauth2/callback/${GENERIC_PROVIDER_ID}?code=test&state=${encodeURIComponent(state!)}`,
-			{
-				headers,
-				onError(context) {
-					const location = context.response.headers.get("location");
-					if (!location) {
-						throw new Error("Location header not found");
-					}
-					expect(location).not.toContain("/oauth-proxy-callback");
-					expect(location).toContain("/dashboard");
-				},
-			},
-		);
-	});
-
 	it("should redirect to proxy url with profile data (passthrough)", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
@@ -1009,6 +900,113 @@ describe("oauth-proxy", async () => {
 					},
 				},
 			);
+		});
+
+		it("should use dedicated secret instead of global secret", async () => {
+			const dedicatedSecret = "oauth-proxy-dedicated-secret-key";
+
+			const production = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview.example.com",
+							secret: dedicatedSecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							secret: dedicatedSecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Step 1: Start OAuth on production
+			const res = await production.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			// Step 2: Complete OAuth callback on production
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+
+			// Verify: encrypted with dedicated secret, NOT with global secret
+			const decryptedWithDedicated = await symmetricDecrypt({
+				key: dedicatedSecret,
+				data: encryptedProfile!,
+			});
+			expect(decryptedWithDedicated).toContain("user@email.com");
+
+			const { secret: globalSecret } = await production.auth.$context;
+			await expect(
+				symmetricDecrypt({
+					key: globalSecret,
+					data: encryptedProfile!,
+				}),
+			).rejects.toThrow();
+
+			// Step 3: Preview can decrypt and create user
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const users = await previewCtx.internalAdapter.listUsers();
+			expect(users.length).toBe(1);
+			expect(users[0]?.email).toBe("user@email.com");
 		});
 
 		it("should handle existing user on preview", async () => {

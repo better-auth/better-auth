@@ -33,21 +33,19 @@ npx skills add better-auth/skills
 
 Better Auth provides an MCP server so you can use it with any AI model that supports the Model Context Protocol (MCP).
 
-<AddToCursor />
+#### with CLI
 
-#### CLI Options
+You can use the `auth` CLI to add Better Auth MCP to your MCP client (such as Cursor, Claude Code, or Open Code).
 
-Use the Better Auth CLI to easily add the MCP server to your preferred client:
-
-<Tabs items={["Cursor", "Claude Code", "Open Code", "Manual"]}>
-    <Tab value="Cursor">
-      ```bash title="terminal"
-      npx auth mcp --cursor
-      ```
-    </Tab>
+<Tabs items={["Claude Code", "Cursor", "Open Code", "Manual"]}>
     <Tab value="Claude Code">
       ```bash title="terminal"
       npx auth mcp --claude-code
+      ```
+    </Tab>
+        <Tab value="Cursor">
+      ```bash title="terminal"
+      npx auth mcp --cursor
       ```
     </Tab>
     <Tab value="Open Code">
@@ -62,42 +60,8 @@ Use the Better Auth CLI to easily add the MCP server to your preferred client:
     </Tab>
 </Tabs>
 
-#### Manual Configuration
+#### with Cursor
 
-Alternatively, you can manually configure the MCP server for each client:
+If you're using Cursor, you can also use the button below.
 
-<Tabs items={["Claude Code", "Open Code", "Manual"]}>
-    <Tab value="Claude Code">
-      ```bash title="terminal"
-      claude mcp add --transport http better-auth https://mcp.inkeep.com/better-auth/mcp
-      ```
-    </Tab>
-    <Tab value="Open Code">
-      ```json title="opencode.json"
-        {
-            "$schema": "https://opencode.ai/config.json",
-            "mcp": {
-                "better-auth": {
-                    "type": "remote",
-                    "url": "https://mcp.inkeep.com/better-auth/mcp",
-                    "enabled": true,
-                }
-            }
-        }
-      ```
-    </Tab>
-    <Tab value="Manual">
-     ```json title="mcp.json"
-    {
-        "better-auth": {
-            "url": "https://mcp.inkeep.com/better-auth/mcp"
-        }
-    }
-    ```
-    </Tab>
-</Tabs>
-
-<Callout>
-We provide a first‑party MCP, powered by [Inkeep](https://inkeep.com). You can alternatively use [`context7`](https://context7.com/) and other MCP providers.
-</Callout>
-
+<AddToCursor />

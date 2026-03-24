@@ -5,11 +5,11 @@ import type {
 	Item as PageTreeItem,
 	Separator as PageTreeSeparator,
 } from "fumadocs-core/page-tree";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { FC, ReactNode } from "react";
 import { useState } from "react";
-import { useCommandMenu } from "@/components/command-menu";
 
 // ─── Item ───────────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ export const CustomItem: FC<{ item: PageTreeItem }> = ({ item }) => {
         ${
 					active
 						? "text-foreground bg-foreground/[0.06] border-l-2 border-foreground font-medium"
-						: "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] border-l-2 border-transparent"
+						: "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/[0.04] border-l-2 border-transparent"
 				}
       `}
 		>
@@ -54,7 +54,7 @@ export const CustomFolder: FC<{
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
-				className="flex items-center justify-between px-3 py-1.5 text-sm font-mono font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+				className="flex items-center justify-between px-3 py-1.5 text-sm font-mono font-medium text-muted-foreground/80 hover:text-foreground transition-colors cursor-pointer"
 			>
 				<span className="flex items-center gap-2">
 					{item.icon && <span className="shrink-0 size-4">{item.icon}</span>}
@@ -98,7 +98,7 @@ export const CustomSeparator: FC<{ item: PageTreeSeparator }> = ({ item }) => {
 	return (
 		<div className="mt-5 mb-1.5 px-3">
 			{item.name ? (
-				<span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+				<span className="text-xs font-mono uppercase tracking-wider text-muted-foreground/80">
 					{item.name}
 				</span>
 			) : (
@@ -111,13 +111,13 @@ export const CustomSeparator: FC<{ item: PageTreeSeparator }> = ({ item }) => {
 // ─── Search Button (sidebar banner) ─────────────────────────────────────────
 
 export const SearchButton: FC = () => {
-	const { setOpen } = useCommandMenu();
+	const { setOpenSearch: setOpen } = useSearchContext();
 
 	return (
 		<button
 			type="button"
 			onClick={() => setOpen(true)}
-			className="flex items-center gap-2 w-full px-3 py-2 mb-2 text-sm font-mono text-muted-foreground border border-border hover:text-foreground hover:bg-foreground/[0.04] transition-colors cursor-pointer"
+			className="flex items-center gap-2 w-full px-3 py-2 mb-2 text-sm font-mono text-muted-foreground/80 border border-border hover:text-foreground hover:bg-foreground/[0.04] transition-colors cursor-pointer"
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -135,7 +135,7 @@ export const SearchButton: FC = () => {
 				<path d="m21 21-4.3-4.3" />
 			</svg>
 			<span className="flex-1 text-left">Search...</span>
-			<kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono bg-foreground/[0.06] border border-border text-muted-foreground">
+			<kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono bg-foreground/[0.06] border border-border text-muted-foreground/70">
 				<span className="text-xs">&#8984;</span>K
 			</kbd>
 		</button>

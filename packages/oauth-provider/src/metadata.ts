@@ -89,7 +89,9 @@ export function oidcServerMetadata(
 		claims_supported:
 			opts?.advertisedMetadata?.claims_supported ?? opts?.claims ?? [],
 		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
-		subject_types_supported: ["public"],
+		subject_types_supported: opts.pairwiseSecret
+			? ["public", "pairwise"]
+			: ["public"],
 		id_token_signing_alg_values_supported: jwtPluginOptions?.jwks?.keyPairConfig
 			?.alg
 			? [jwtPluginOptions?.jwks?.keyPairConfig?.alg]
@@ -98,7 +100,13 @@ export function oidcServerMetadata(
 				: ["EdDSA"],
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
 		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
-		prompt_values_supported: ["login", "consent", "create", "select_account"],
+		prompt_values_supported: [
+			"login",
+			"consent",
+			"create",
+			"select_account",
+			"none",
+		],
 	};
 	return metadata;
 }

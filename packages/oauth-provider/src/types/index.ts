@@ -116,6 +116,11 @@ export interface OAuthOptions<
 		[K in Scopes[number]]?: number | string | Date;
 	};
 	/**
+	 * Allows /oauth2/public-client-prelogin endpoint to be
+	 * requestable prior to login via a valid oauth_query.
+	 */
+	allowPublicClientPrelogin?: boolean;
+	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
 	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
@@ -664,6 +669,14 @@ export interface OAuthOptions<
 		 */
 		userinfo?: { window: number; max: number } | false;
 	};
+	/**
+	 * Secret used to compute pairwise subject identifiers (HMAC-SHA256).
+	 * When set, clients with `subject_type: "pairwise"` receive unique,
+	 * unlinkable `sub` values per sector identifier.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+	 */
+	pairwiseSecret?: string;
 }
 
 export interface OAuthAuthorizationQuery {
@@ -907,6 +920,8 @@ export interface SchemaClient<
 	skipConsent?: boolean;
 	/** Used to enable client to logout via the `/oauth2/end-session` endpoint */
 	enableEndSession?: boolean;
+	/** Subject identifier type: "public" (default) or "pairwise" */
+	subjectType?: "public" | "pairwise";
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
@@ -77,16 +77,19 @@ describe("username", async () => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8689
+	 */
 	it("should fail on duplicate username in update-user if user is different", async () => {
 		const newHeaders = new Headers();
 		await client.signUp.email({
-			email: "new-email-2@gamil.com",
-			username: "duplicate-username",
+			email: "duplicate_user@gmail.com",
+			username: "duplicate_user",
 			password: "new_password",
-			name: "new-name",
+			name: "duplicate-user",
 			fetchOptions: {
 				headers: newHeaders,
 			},
@@ -94,7 +97,32 @@ describe("username", async () => {
 
 		const { headers: testUserHeaders } = await signInWithTestUser();
 		const res = await client.updateUser({
-			username: "duplicate-username",
+			username: "duplicate_user",
+			fetchOptions: {
+				headers: testUserHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8689
+	 */
+	it("should fail on duplicate username in update-user with different casing", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			email: "case-test@gmail.com",
+			username: "casetestuser",
+			password: "new_password",
+			name: "case-test",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const { headers: testUserHeaders } = await signInWithTestUser();
+		const res = await client.updateUser({
+			username: "CaseTestUser",
 			fetchOptions: {
 				headers: testUserHeaders,
 			},
@@ -522,6 +550,14 @@ describe("isUsernameAvailable with custom validator", async () => {
 			username: "invalid_user",
 			password: "password1234",
 		});
+
+		type Error = Exclude<typeof signInRes.error, null>;
+		expectTypeOf<Error>().toEqualTypeOf<{
+			message?: string | undefined;
+			code?: string;
+			statusText: string;
+			status: number;
+		}>();
 
 		expect(signInRes.error).toBeDefined();
 		expect(signInRes.error?.code).toBe(

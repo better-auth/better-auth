@@ -490,7 +490,7 @@ export const deleteUser = createAuthEndpoint(
 		}
 
 		if (ctx.body.token) {
-			//@ts-expect-error
+			// @ts-expect-error
 			await deleteUserCallback({
 				...ctx,
 				query: {
@@ -643,7 +643,9 @@ export const deleteUserCallback = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			`delete-account-${ctx.query.token}`,
+		);
 
 		deleteSessionCookie(ctx);
 
