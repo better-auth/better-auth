@@ -13,7 +13,7 @@ interface MCPOptions {
 	manual?: boolean;
 }
 
-const REMOTE_MCP_URL = "https://mcp.inkeep.com/better-auth/mcp";
+const REMOTE_MCP_URL = "https://mcp.better-auth.com/mcp";
 
 async function mcpAction(options: MCPOptions) {
 	if (options.cursor) {
