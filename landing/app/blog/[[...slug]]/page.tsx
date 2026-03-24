@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
 import { Callout } from "@/components/ui/callout";
+import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
 import { cn } from "@/lib/utils";
 
@@ -45,9 +46,9 @@ function BlogList() {
 							href={`/blog/${post.slugs.join("/")}`}
 							className="group block border-b border-dashed border-foreground/[0.06] px-5 sm:px-6 lg:px-8 py-5 transition-colors hover:bg-foreground/[0.02]"
 						>
-							<div className="flex gap-5 items-start">
+							<div className="flex gap-5 items-center">
 								{post.data?.image && (
-									<div className="shrink-0 w-40 h-24 overflow-hidden border border-foreground/[0.06] hidden sm:block">
+									<div className="shrink-0 w-56 aspect-[1200/630] overflow-hidden border border-foreground/[0.06] hidden sm:block">
 										<Image
 											src={post.data.image}
 											alt={post.data.title}
@@ -58,15 +59,15 @@ function BlogList() {
 									</div>
 								)}
 								<div className="flex-1 min-w-0">
-									<h2 className="text-sm font-medium tracking-tight text-neutral-800 dark:text-neutral-200 group-hover:text-neutral-950 dark:group-hover:text-white transition-colors">
+									<h2 className="text-lg font-medium tracking-tight text-neutral-800 dark:text-neutral-200 group-hover:text-neutral-950 dark:group-hover:text-white transition-colors">
 										{post.data.title}
 									</h2>
 									{post.data.description && (
-										<p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-1">
+										<p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-1 max-w-4xl">
 											{post.data.description}
 										</p>
 									)}
-									<div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-neutral-400 dark:text-neutral-500">
+									<div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-mono text-neutral-400 dark:text-neutral-500">
 										{post.data.author?.name && (
 											<>
 												<span className="text-neutral-500 dark:text-neutral-400">
@@ -76,20 +77,14 @@ function BlogList() {
 											</>
 										)}
 										<span>{formatDate(post.data.date)}</span>
-										{post.data.tags && post.data.tags.length > 0 && (
-											<>
-												<span>&middot;</span>
-												{post.data.tags.slice(0, 3).map((tag: string) => (
-													<span
-														key={tag}
-														className="text-neutral-400 dark:text-neutral-600"
-													>
-														#{tag}
-													</span>
-												))}
-											</>
-										)}
 									</div>
+									{post.data.tags && post.data.tags.length > 0 && (
+										<div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-mono text-neutral-400 dark:text-neutral-500">
+											{post.data.tags.slice(0, 3).map((tag: string) => (
+												<span key={tag}>#{tag}</span>
+											))}
+										</div>
+									)}
 								</div>
 								<span className="shrink-0 text-[11px] font-mono text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 transition-colors self-center">
 									&rarr;
@@ -137,52 +132,7 @@ export default async function Page({
 
 			{/* Right panel — blog content */}
 			<div className="w-full lg:w-[70%] flex flex-col">
-				<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:pt-16">
-					{/* Header */}
-					<h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-neutral-800 dark:text-neutral-200">
-						{title}
-					</h1>
-					{description && (
-						<p className="mt-2 text-neutral-500 dark:text-neutral-400">
-							{description}
-						</p>
-					)}
-
-					{/* Author & date */}
-					<div className="mt-4 mb-8 flex items-center gap-3 text-sm text-neutral-500 dark:text-neutral-400">
-						{page.data?.author?.name && (
-							<span className="font-medium text-neutral-700 dark:text-neutral-300">
-								{page.data.author.name}
-							</span>
-						)}
-						{page.data?.author?.twitter && (
-							<>
-								<span>&middot;</span>
-								<a
-									href={`https://x.com/${page.data.author.twitter}`}
-									target="_blank"
-									rel="noreferrer noopener"
-									className="text-xs font-mono hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
-								>
-									@{page.data.author.twitter}
-								</a>
-							</>
-						)}
-						{date && (
-							<>
-								<span>&middot;</span>
-								<time
-									dateTime={String(date)}
-									className="text-xs font-mono text-neutral-400 dark:text-neutral-500"
-								>
-									{formatDate(date)}
-								</time>
-							</>
-						)}
-					</div>
-
-					<div className="border-t border-dashed border-foreground/10 mb-8" />
-
+				<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-24">
 					{/* Article body */}
 					<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none">
 						<MDX
@@ -270,10 +220,10 @@ export async function generateMetadata({
 }) {
 	const { slug } = await params;
 	if (!slug) {
-		return {
+		return createMetadata({
 			title: "Blog - Better Auth",
 			description: "Latest updates, articles, and insights about Better Auth",
-		};
+		});
 	}
 	const page = blogs.getPage(slug);
 	if (!page || page.data.draft) return notFound();
@@ -296,7 +246,7 @@ export async function generateMetadata({
 
 	const ogImage = image || ogUrl;
 
-	return {
+	return createMetadata({
 		title,
 		description,
 		openGraph: {
@@ -311,7 +261,7 @@ export async function generateMetadata({
 			description,
 			images: [ogImage],
 		},
-	};
+	});
 }
 
 export function generateStaticParams() {

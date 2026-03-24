@@ -55,12 +55,28 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
-		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
 };
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+
+export async function verifyOAuthQueryParams(
+	oauth_query: string,
+	secret: string,
+) {
+	const queryParams = new URLSearchParams(oauth_query);
+	const sig = queryParams.get("sig");
+	const exp = Number(queryParams.get("exp"));
+	queryParams.delete("sig");
+	const verifySig = await makeSignature(queryParams.toString(), secret);
+	return (
+		!!sig &&
+		constantTimeEqual(sig, verifySig) &&
+		new Date(exp * 1000) >= new Date()
+	);
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database

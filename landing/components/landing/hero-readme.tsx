@@ -32,11 +32,7 @@ const cliCommands = [
 
 const mcpCommands = [
 	{ name: "Cursor", command: "npx auth mcp --cursor" },
-	{
-		name: "Claude Code",
-		command:
-			"claude mcp add --transport http better-auth https://mcp.inkeep.com/better-auth/mcp",
-	},
+	{ name: "Claude Code", command: "npx auth mcp --claude-code" },
 	{ name: "Open Code", command: "npx auth mcp --open-code" },
 	{ name: "Manual", command: "npx auth mcp --manual" },
 ];
@@ -1216,10 +1212,18 @@ function SentinelSection() {
 
 const EMPTY_CONTRIBUTORS: ContributorInfo[] = [];
 
+type CommunityHeroStats = {
+	npmDownloads: number;
+	githubStars: number;
+	contributors: number;
+};
+
 function ContributorsSection({
 	contributors = EMPTY_CONTRIBUTORS,
+	contributorCount,
 }: {
 	contributors: ContributorInfo[];
+	contributorCount: number;
 }) {
 	if (contributors.length === 0) return null;
 
@@ -1245,7 +1249,7 @@ function ContributorsSection({
 			<p className="text-[13px] text-foreground/50 dark:text-foreground/40 mb-5 leading-relaxed">
 				Built by a community of{" "}
 				<span className="text-foreground/70 dark:text-foreground/60 font-medium tabular-nums">
-					746+
+					{contributorCount}+
 				</span>{" "}
 				contributors.
 			</p>
@@ -1328,18 +1332,14 @@ function formatCount(num: number | null | undefined): string {
 }
 
 const footerLinks = [
-	{ label: "Terms", href: "/terms" },
-	{ label: "Privacy", href: "/privacy" },
+	{ label: "Terms", href: "/legal/terms" },
+	{ label: "Privacy", href: "/legal/privacy" },
 	{ label: "Blog", href: "/blog" },
 	{ label: "Community", href: "/community" },
 	{ label: "Changelog", href: "/changelog" },
 ];
 
-function ReadmeFooter({
-	stats,
-}: {
-	stats: { npmDownloads: number; githubStars: number };
-}) {
+function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 	return (
 		<div className="relative mt-10 pt-8 pb-0 overflow-hidden">
 			{/* Watermark logo */}
@@ -1383,7 +1383,7 @@ function ReadmeFooter({
 
 				<div className="flex items-center justify-center gap-4 mt-4">
 					<a
-						href="/sign-in"
+						href="https://dash.better-auth.com/sign-in"
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
 					>
 						Get Started
@@ -1516,7 +1516,7 @@ export function HeroReadMe({
 	stats,
 }: {
 	contributors: ContributorInfo[];
-	stats: { npmDownloads: number; githubStars: number };
+	stats: CommunityHeroStats;
 }) {
 	const [socialHovered, setSocialHovered] = useState(false);
 
@@ -1565,7 +1565,7 @@ export function HeroReadMe({
 							<div className="flex-1 border-t border-foreground/10"></div>
 						</div>
 
-						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/15 overflow-hidden">
+						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/[0.08] overflow-hidden">
 							{[
 								{
 									label: "Framework Agnostic",
@@ -1654,7 +1654,7 @@ export function HeroReadMe({
 											}
 										}}
 										className={cn(
-											"group/card relative p-4 lg:p-5 border-foreground/[0.15] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
+											"group/card relative p-4 lg:p-5 border-foreground/[0.08] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
 											// Bottom border: all except last; 3-col last row starts at 6
 											i < 8 && "border-b",
 											i >= 6 && "md:border-b-0",
@@ -2336,7 +2336,7 @@ export function HeroReadMe({
 												<span className="size-2 rounded-full bg-foreground/10" />
 											</div>
 											<span className="text-[10px] font-mono text-foreground/30 ml-2">
-												better-auth.com/dashboard/the-next-big-thing
+												dash.better-auth.com/the-next-big-thing
 											</span>
 										</div>
 										<div className="flex items-center gap-3">
@@ -2359,7 +2359,7 @@ export function HeroReadMe({
 									{/* Dashboard demo video — crop top border from video */}
 									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
-											src={"https://docs.better-auth.com/demo-dark.mp4"}
+											src={"/demo-dark.mp4"}
 											autoPlay
 											loop
 											muted
@@ -2368,7 +2368,7 @@ export function HeroReadMe({
 											suppressHydrationWarning
 										/>
 										<video
-											src={"https://docs.better-auth.com/demo-light.mp4"}
+											src={"/demo-light.mp4"}
 											autoPlay
 											loop
 											muted
@@ -2522,7 +2522,10 @@ export function HeroReadMe({
 							</div>
 						</div>
 
-						<ContributorsSection contributors={contributors} />
+						<ContributorsSection
+							contributors={contributors}
+							contributorCount={stats.contributors}
+						/>
 
 						<ReadmeFooter stats={stats} />
 					</motion.article>

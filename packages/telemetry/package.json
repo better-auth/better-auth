@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.7-beta.1",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -36,6 +36,7 @@
     ".": {
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
+      "node": "./dist/node.mjs",
       "default": "./dist/index.mjs"
     }
   },

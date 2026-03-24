@@ -77,7 +77,7 @@ export const getPasskeyActions = (
 				data: null,
 				error: {
 					code: "AUTH_CANCELLED",
-					message: "auth cancelled",
+					message: PASSKEY_ERROR_CODES.AUTH_CANCELLED.message,
 					status: 400,
 					statusText: "BAD_REQUEST",
 				},
@@ -158,7 +158,7 @@ export const getPasskeyActions = (
 						data: null,
 						error: {
 							code: e.code,
-							message: "previously registered",
+							message: PASSKEY_ERROR_CODES.PREVIOUSLY_REGISTERED.message,
 							status: 400,
 							statusText: "BAD_REQUEST",
 						},
@@ -169,7 +169,7 @@ export const getPasskeyActions = (
 						data: null,
 						error: {
 							code: e.code,
-							message: "registration cancelled",
+							message: PASSKEY_ERROR_CODES.REGISTRATION_CANCELLED.message,
 							status: 400,
 							statusText: "BAD_REQUEST",
 						},
@@ -189,7 +189,10 @@ export const getPasskeyActions = (
 				data: null,
 				error: {
 					code: "UNKNOWN_ERROR",
-					message: e instanceof Error ? e.message : "unknown error",
+					message:
+						e instanceof Error
+							? e.message
+							: PASSKEY_ERROR_CODES.UNKNOWN_ERROR.message,
 					status: 500,
 					statusText: "INTERNAL_SERVER_ERROR",
 				},

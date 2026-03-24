@@ -205,7 +205,7 @@ const platforms = [
 function CommunityHero({ stats }: { stats: CommunityStats }) {
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 12 }}
+			initial={false}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.5, ease: "easeOut" }}
 			className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full"
@@ -235,7 +235,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
 							{formatNumber(stats.npmDownloads)}
 							<span className="text-[9px] text-foreground/50 font-mono">
-								/mo
+								/year
 							</span>
 						</p>
 					</div>
@@ -266,7 +266,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 					].map((item, i) => (
 						<motion.div
 							key={item.label}
-							initial={{ opacity: 0, x: -8 }}
+							initial={false}
 							animate={{ opacity: 1, x: 0 }}
 							transition={{
 								duration: 0.25,
@@ -283,19 +283,6 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 							</span>
 						</motion.div>
 					))}
-				</div>
-
-				{/* CTA */}
-				<div className="flex items-center gap-3 pt-1">
-					<Link
-						href="https://github.com/better-auth/better-auth"
-						target="_blank"
-						rel="noreferrer"
-						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-colors"
-					>
-						<GitHubIcon className="w-4 h-4" />
-						<span className="ml-1">Star on GitHub</span>
-					</Link>
 				</div>
 			</div>
 		</motion.div>
@@ -317,7 +304,7 @@ function StatCard({
 }) {
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 10 }}
+			initial={false}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.3, delay: 0.1 + index * 0.06, ease: "easeOut" }}
 			className="relative border border-dashed border-foreground/[0.08] hover:border-foreground/[0.14] transition-all duration-300 group"
@@ -329,13 +316,13 @@ function StatCard({
 						{label}
 					</span>
 				</div>
-				<div className="flex items-baseline gap-2">
+				<div>
 					<span className="text-4xl font-light text-foreground tabular-nums">
 						<AnimatedCounter value={value} />
 					</span>
-					<span className="text-[10px] text-foreground/30 font-mono">
+					<p className="text-[10px] text-foreground/40 font-mono mt-1">
 						{subtext}
-					</span>
+					</p>
 				</div>
 			</div>
 		</motion.div>
@@ -353,7 +340,7 @@ function PlatformCard({
 
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 10 }}
+			initial={false}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.3, delay: 0.2 + index * 0.06, ease: "easeOut" }}
 			className="relative border border-dashed border-foreground/[0.08] hover:border-foreground/[0.14] transition-all duration-300 group"
@@ -388,7 +375,7 @@ function PlatformCard({
 					rel="noreferrer"
 					className="block"
 				>
-					<div className="w-full py-2.5 text-center border flex items-center justify-center border-dashed border-foreground/[0.12] text-foreground/50 hover:text-foreground/80 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all cursor-pointer">
+					<div className="w-full py-2.5 text-center border flex items-center justify-center border-dashed border-foreground/20 text-foreground/70 hover:text-foreground/90 hover:border-foreground/30 hover:bg-foreground/5 transition-all cursor-pointer">
 						<span className="font-mono text-[10px] uppercase tracking-widest">
 							{platform.cta}
 						</span>
@@ -401,11 +388,11 @@ function PlatformCard({
 
 export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 	return (
-		<div className="relative h-full overflow-x-hidden pt-14 lg:pt-0">
-			<div className="relative text-foreground h-full">
-				<div className="flex flex-col lg:flex-row h-full">
+		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
+			<div className="relative text-foreground lg:h-full">
+				<div className="flex flex-col lg:h-full lg:flex-row">
 					{/* Left side — Community hero */}
-					<div className="hidden lg:block relative w-full lg:w-[30%] border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -413,7 +400,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 					</div>
 
 					{/* Right side — Stats & platforms */}
-					<div className="relative w-full lg:w-[70%] overflow-y-auto overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
 						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-8">
 							{/* Mobile header */}
 							<div className="flex lg:hidden items-center gap-1.5">
@@ -423,11 +410,11 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 
 							{/* Section: Statistics */}
 							<motion.div
-								initial={{ opacity: 0, y: 6 }}
+								initial={false}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-5">
+								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
 									# In Numbers
 								</p>
 
@@ -465,11 +452,11 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 
 							{/* Section: Platforms */}
 							<motion.div
-								initial={{ opacity: 0 }}
+								initial={false}
 								animate={{ opacity: 1 }}
 								transition={{ duration: 0.4, delay: 0.25 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-5">
+								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
 									# Join Us On
 								</p>
 
@@ -486,7 +473,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 
 							{/* Merch */}
 							<motion.div
-								initial={{ opacity: 0, y: 6 }}
+								initial={false}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.35 }}
 							>
@@ -494,7 +481,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 									href="https://better-merch.dev"
 									target="_blank"
 									rel="noreferrer"
-									className="flex items-center justify-between w-full px-5 py-4 border border-dashed border-foreground/[0.08] hover:border-foreground/[0.14] hover:bg-foreground/[0.02] transition-all group"
+									className="flex items-center justify-between w-full px-5 py-4 border border-dashed border-foreground/20 hover:border-foreground/30 hover:bg-foreground/5 transition-all group"
 								>
 									<div className="flex items-center gap-2.5">
 										<svg
