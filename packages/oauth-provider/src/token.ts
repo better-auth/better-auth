@@ -21,7 +21,9 @@ import {
 	getJwtPlugin,
 	getStoredToken,
 	isPKCERequired,
+	normalizeTimestampValue,
 	parseClientMetadata,
+	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
 	validateClientCredentials,
@@ -759,8 +761,8 @@ async function handleAuthorizationCodeGrant(
 
 	const authTime =
 		verificationValue.authTime != null
-			? new Date(verificationValue.authTime)
-			: new Date(session.createdAt);
+			? normalizeTimestampValue(verificationValue.authTime)
+			: resolveSessionAuthTime(session);
 
 	return createUserTokens(
 		ctx,
@@ -1063,7 +1065,9 @@ async function handleRefreshTokenGrant(
 	}
 
 	const authTime =
-		refreshToken.authTime != null ? new Date(refreshToken.authTime) : undefined;
+		refreshToken.authTime != null
+			? normalizeTimestampValue(refreshToken.authTime)
+			: undefined;
 
 	// Generate new tokens
 	return createUserTokens(
