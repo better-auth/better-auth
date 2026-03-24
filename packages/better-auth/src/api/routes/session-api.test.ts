@@ -68,6 +68,10 @@ describe("session", async () => {
 	});
 
 	it("should require a fresh session based on session creation time", async () => {
+		vi.useFakeTimers();
+		const now = new Date("2026-01-01T00:00:00.000Z");
+		vi.setSystemTime(now);
+
 		const freshSessionPlugin = {
 			id: "fresh-session-test",
 			endpoints: {
@@ -83,7 +87,7 @@ describe("session", async () => {
 		};
 		const { auth, client, signInWithTestUser, db } = await getTestInstance({
 			session: {
-				freshAge: 1,
+				freshAge: 60,
 			},
 			plugins: [freshSessionPlugin],
 		});
@@ -102,8 +106,8 @@ describe("session", async () => {
 				},
 			],
 			update: {
-				createdAt: new Date(Date.now() - 5_000),
-				updatedAt: new Date(),
+				createdAt: new Date(now.getTime() - 5 * 60 * 1000),
+				updatedAt: now,
 			},
 		});
 
