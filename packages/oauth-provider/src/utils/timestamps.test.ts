@@ -13,6 +13,8 @@ describe("normalizeTimestampValue", () => {
 	it("returns undefined for invalid values", () => {
 		expect(normalizeTimestampValue("not-a-date")).toBeUndefined();
 		expect(normalizeTimestampValue(Number.NaN)).toBeUndefined();
+		expect(normalizeTimestampValue(9e15)).toBeUndefined();
+		expect(normalizeTimestampValue("9e15")).toBeUndefined();
 	});
 });
 
@@ -33,6 +35,12 @@ describe("resolveSessionAuthTime", () => {
 		});
 
 		expect(result?.getTime()).toBe(1774295570569);
+	});
+
+	it("normalizes direct Date values", () => {
+		const date = new Date(1774295570569);
+
+		expect(resolveSessionAuthTime(date)?.getTime()).toBe(1774295570569);
 	});
 
 	it("does not fall back to updatedAt timestamps", () => {

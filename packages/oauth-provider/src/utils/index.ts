@@ -76,7 +76,12 @@ export function normalizeTimestampValue(value: unknown): Date | undefined {
 	}
 
 	if (typeof value === "number") {
-		return Number.isFinite(value) ? new Date(value) : undefined;
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+
+		const parsed = new Date(value);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
 	}
 
 	if (typeof value === "string") {
@@ -87,7 +92,8 @@ export function normalizeTimestampValue(value: unknown): Date | undefined {
 
 		const numeric = Number(trimmed);
 		if (Number.isFinite(numeric)) {
-			return new Date(numeric);
+			const parsed = new Date(numeric);
+			return Number.isFinite(parsed.getTime()) ? parsed : undefined;
 		}
 
 		const parsed = new Date(trimmed);
@@ -101,6 +107,10 @@ export function normalizeTimestampValue(value: unknown): Date | undefined {
  * Resolves a session auth time from common adapter return shapes.
  */
 export function resolveSessionAuthTime(value: unknown): Date | undefined {
+	if (value instanceof Date) {
+		return normalizeTimestampValue(value);
+	}
+
 	if (!value || typeof value !== "object") {
 		return normalizeTimestampValue(value);
 	}
