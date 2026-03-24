@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
@@ -15,6 +16,7 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
+import { freshSessionMiddleware } from "./session";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -63,6 +65,58 @@ describe("session", async () => {
 	it("should return null when not authenticated", async () => {
 		const response = await client.getSession();
 		expect(response.data).toBeNull();
+	});
+
+	it("should require a fresh session based on session creation time", async () => {
+		const freshSessionPlugin = {
+			id: "fresh-session-test",
+			endpoints: {
+				freshSessionCheck: createAuthEndpoint(
+					"/fresh-session-check",
+					{
+						method: "GET",
+						use: [freshSessionMiddleware],
+					},
+					async () => ({ status: true }),
+				),
+			},
+		};
+		const { auth, client, signInWithTestUser, db } = await getTestInstance({
+			session: {
+				freshAge: 1,
+			},
+			plugins: [freshSessionPlugin],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await auth.api.getSession({ headers });
+		const sessionId = currentSession?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(Date.now() - 5_000),
+				updatedAt: new Date(),
+			},
+		});
+
+		const response = await client.$fetch("/fresh-session-check", {
+			method: "GET",
+			headers,
+		});
+		expect(response.data).toBeNull();
+		expect(response.error).toMatchObject({
+			status: 403,
+			statusText: "FORBIDDEN",
+			code: "SESSION_NOT_FRESH",
+		});
 	});
 
 	it("should update session when update age is reached", async () => {
