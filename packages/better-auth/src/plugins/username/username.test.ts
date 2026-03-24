@@ -436,6 +436,7 @@ describe("username with displayUsername validation", async () => {
 			{
 				email: "update-display@email.com",
 				displayUsername: "Initial_Name",
+				username: "initial_name",
 				password: "test-password",
 				name: "test-name",
 			},
@@ -468,7 +469,7 @@ describe("username with displayUsername validation", async () => {
 			},
 		});
 		expect(sessionAfter?.user.displayUsername).toBe("Updated_Name-123");
-		expect(sessionAfter?.user.username).toBe("updated_name-123");
+		expect(sessionAfter?.user.username).toBe("initial_name");
 	});
 
 	it("should reject invalid displayUsername on update", async () => {
