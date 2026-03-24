@@ -16,6 +16,13 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
+import {
+	insensitiveEq,
+	insensitiveIlike,
+	insensitiveIn,
+	insensitiveNe,
+	insensitiveNotIn,
+} from "./query-builders";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
@@ -160,8 +167,9 @@ export const kyselyAdapter = (
 					const {
 						field: _field,
 						value: _value,
-						operator = "=",
+						operator = "eq",
 						connector = "AND",
+						mode = "sensitive",
 					} = condition;
 					const value: any = _value;
 					const field: string | any = getFieldName({
@@ -169,36 +177,73 @@ export const kyselyAdapter = (
 						field: _field,
 					});
 
+					const isInsensitive =
+						mode === "insensitive" &&
+						(typeof value === "string" ||
+							(Array.isArray(value) &&
+								value.every((v) => typeof v === "string")));
+
 					const expr = (eb: any) => {
 						const f = `${model}.${field}`;
 						if (operator.toLowerCase() === "in") {
+							if (isInsensitive) {
+								const arr = Array.isArray(value) ? value : [value];
+								const { lhs, values } = insensitiveIn(f, arr);
+								return eb(lhs, "in", values);
+							}
 							return eb(f, "in", Array.isArray(value) ? value : [value]);
 						}
 
 						if (operator.toLowerCase() === "not_in") {
+							if (isInsensitive) {
+								const arr = Array.isArray(value) ? value : [value];
+								const { lhs, values } = insensitiveNotIn(f, arr);
+								return eb(lhs, "not in", values);
+							}
 							return eb(f, "not in", Array.isArray(value) ? value : [value]);
 						}
 
 						if (operator === "contains") {
+							if (isInsensitive && typeof value === "string") {
+								return insensitiveIlike(f, `%${value}%`, config?.type);
+							}
 							return eb(f, "like", `%${value}%`);
 						}
 
 						if (operator === "starts_with") {
+							if (isInsensitive && typeof value === "string") {
+								return insensitiveIlike(f, `${value}%`, config?.type);
+							}
 							return eb(f, "like", `${value}%`);
 						}
 
 						if (operator === "ends_with") {
+							if (isInsensitive && typeof value === "string") {
+								return insensitiveIlike(f, `%${value}`, config?.type);
+							}
 							return eb(f, "like", `%${value}`);
 						}
 
 						if (operator === "eq") {
-							return value === null ? eb(f, "is", null) : eb(f, "=", value);
+							if (value === null) {
+								return eb(f, "is", null);
+							}
+							if (isInsensitive && typeof value === "string") {
+								const { lhs, value: v } = insensitiveEq(f, value);
+								return eb(lhs, "=", v);
+							}
+							return eb(f, "=", value);
 						}
 
 						if (operator === "ne") {
-							return value === null
-								? eb(f, "is not", null)
-								: eb(f, "<>", value);
+							if (value === null) {
+								return eb(f, "is not", null);
+							}
+							if (isInsensitive && typeof value === "string") {
+								const { lhs, value: v } = insensitiveNe(f, value);
+								return eb(lhs, "<>", v);
+							}
+							return eb(f, "<>", value);
 						}
 
 						if (operator === "gt") {
