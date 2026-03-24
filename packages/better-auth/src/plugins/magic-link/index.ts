@@ -291,10 +291,16 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 			),
 			/**
+			 * ### Endpoint
+			 *
+			 * POST `/magic-link/generate-magic-link`
+			 *
 			 * ### API Methods
 			 *
 			 * **server:**
 			 * `auth.api.generateMagicLink`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/magic-link#api-method-magic-link-generate-magic-link)
 			 */
 			generateMagicLink: createAuthEndpoint(
 				{

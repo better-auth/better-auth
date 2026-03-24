@@ -107,23 +107,44 @@ If the user has not signed up, unless `disableSignUp` is set to `true`, the user
 For trusted server-side workflows, you can generate a magic link without calling
 `sendMagicLink` by using `auth.api.generateMagicLink()`.
 
+<APIMethod
+  path="/magic-link/generate-magic-link"
+  method="POST"
+  isServerOnly
+  requireHeaders
+  resultVariable="response"
+>
 ```ts
-const response = await auth.api.generateMagicLink({
-  body: {
-    email: "user@email.com",
-    callbackURL: "/dashboard",
-  },
-  headers: request.headers,
-});
-
-response.status;
-response.url;
-response.token;
+type generateMagicLink = {
+    /**
+     * Email address to generate the magic link for.
+     */
+    email: string = "user@email.com"
+    /**
+     * User display name. Only used if the user is registering for the first time.
+     */
+    name?: string = "my-name"
+    /**
+     * URL to redirect after magic link verification.
+     */
+    callbackURL?: string = "/dashboard"
+    /**
+     * URL to redirect after new user signup.
+     */
+    newUserCallbackURL?: string = "/welcome"
+    /**
+     * URL to redirect if an error happens on verification.
+     * If only callbackURL is provided but without an `errorCallbackURL` then they will be
+     * redirected to the callbackURL with an `error` query parameter.
+     */
+    errorCallbackURL?: string = "/error"
+}
 ```
+</APIMethod>
 
-`generateMagicLink` is server-only, returns the generated `url` and raw `token`,
-and leaves delivery to your own code. It uses the same server-side link
-generation behavior as `auth.api.signInMagicLink()`.
+`generateMagicLink` returns the generated `url` and raw `token`, and leaves
+delivery to your own code. It uses the same server-side link generation
+behavior as `auth.api.signInMagicLink()`.
 
 Unlike `signInMagicLink`, `generateMagicLink()` does not accept `metadata`
 because it never calls `sendMagicLink`.
