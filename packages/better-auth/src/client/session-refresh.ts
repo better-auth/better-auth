@@ -6,6 +6,8 @@ import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
 import type { AuthQueryAtom } from "./query";
+import { getStableAuthQueryState } from "./query";
+import { getStableReference } from "./stable-reference";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -120,14 +122,23 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 					}
 
 					const sessionData = data?.session && data?.user ? data : null;
-
-					sessionAtom.set({
+					const nextSessionData =
+						currentSession.data == null || sessionData == null
+							? sessionData
+							: getStableReference(currentSession.data, sessionData);
+					const nextSession = getStableAuthQueryState(currentSession, {
 						...currentSession,
-						data: sessionData,
+						data: nextSessionData,
 						error: error as Parameters<typeof sessionAtom.set>[0]["error"],
 					});
+
+					if (nextSession !== currentSession) {
+						sessionAtom.set(nextSession);
+					}
 					state.lastSync = now();
-					sessionSignal.set(!sessionSignal.get());
+					if (currentSession.data !== nextSessionData) {
+						sessionSignal.set(!sessionSignal.get());
+					}
 				})
 				.catch(() => {});
 		};
