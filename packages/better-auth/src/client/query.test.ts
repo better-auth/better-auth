@@ -170,7 +170,7 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBe(initialData);
 	});
 
-	it("should avoid a second session fetch on focus when the refreshed payload is unchanged", async () => {
+	it("should avoid an extra post-focus session fetch when the refreshed payload is unchanged", async () => {
 		let fetchCallCount = 0;
 		const getSessionPayload = () => ({
 			user: { id: "1", email: "test@test.com" },
