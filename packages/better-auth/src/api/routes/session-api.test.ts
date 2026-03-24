@@ -695,6 +695,7 @@ describe("cookie cache with JWT strategy", async () => {
 	});
 
 	it("should have max age expiry", async () => {
+		vi.useFakeTimers();
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -711,8 +712,10 @@ describe("cookie cache with JWT strategy", async () => {
 			throw new Error("JWT not found");
 		}
 		const payload = await verifyJWT(jwt, ctx.secret);
-		//should be greater than 299 seconds from now - (default max age is 300 seconds)
-		expect(payload.exp).toBeGreaterThanOrEqual(Date.now() / 1000 + 299);
+		// should be greater than 299 seconds from now - (default max age is 300 seconds)
+		expect(payload.exp).toBeGreaterThanOrEqual(
+			Math.floor(Date.now() / 1000) + 299,
+		);
 	});
 
 	it("should handle multiple concurrent requests with JWT cache", async () => {
