@@ -3,7 +3,7 @@
 import { ExternalLink, Key, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
 import type {
@@ -128,7 +128,7 @@ function TypeIcon({ type }: { type: string }) {
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				className={cn(className, "text-emerald-600 dark:text-emerald-500/70")}
+				className={cn(className, "text-emerald-600")}
 			>
 				<path d="M4 7V4h16v3" />
 				<path d="M9 20h6" />
@@ -147,7 +147,7 @@ function TypeIcon({ type }: { type: string }) {
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				className={cn(className, "text-violet-600 dark:text-violet-400/70")}
+				className={cn(className, "text-violet-600 dark:text-violet-500")}
 			>
 				<rect width="20" height="12" x="2" y="6" rx="6" />
 				<circle cx="16" cy="12" r="2" />
@@ -165,7 +165,7 @@ function TypeIcon({ type }: { type: string }) {
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				className={cn(className, "text-sky-600 dark:text-sky-400/70")}
+				className={cn(className, "text-sky-600")}
 			>
 				<path d="M8 2v4" />
 				<path d="M16 2v4" />
@@ -185,7 +185,7 @@ function TypeIcon({ type }: { type: string }) {
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				className={cn(className, "text-orange-600 dark:text-orange-400/70")}
+				className={cn(className, "text-orange-500 dark:text-orange-600")}
 			>
 				<path d="M4 9h16" />
 				<path d="M4 15h16" />
@@ -281,7 +281,7 @@ function generateSchema(
 
 function SchemaCodeBlock({ code, lang }: { code: string; lang: string }) {
 	return (
-		<div className="[&_figure]:my-0 [&_figure]:border-0 [&_figure]:rounded-none">
+		<div className="[&_figure]:my-0 [&_figure]:border-0 [&_figure]:rounded-none [&_pre]:text-[13px]">
 			<DynamicCodeBlock code={code} lang={lang} allowCopy />
 		</div>
 	);
@@ -313,9 +313,9 @@ export function DatabaseTable({
 	const tableName = name || "table";
 
 	return (
-		<div className="my-4 border border-foreground/[0.06] overflow-hidden dark:bg-[#030303]">
+		<div className="my-4 border shadow-sm overflow-hidden dark:bg-[#030303]">
 			{/* Header */}
-			<div className="flex items-center justify-between px-4 py-2.5 border-b border-foreground/[0.06]">
+			<div className="flex items-center justify-between px-4 py-2 border-b">
 				<div className="flex items-center gap-2">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -327,7 +327,7 @@ export function DatabaseTable({
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className="text-foreground/50"
+						className="text-foreground/60"
 					>
 						<ellipse cx="12" cy="5" rx="9" ry="3" />
 						<path d="M3 5v14a9 3 0 0 0 18 0V5" />
@@ -339,17 +339,12 @@ export function DatabaseTable({
 							{name}
 						</span>
 					) : (
-						<span className="text-[11px] text-foreground/40 font-mono uppercase tracking-widest">
+						<span className="text-xs text-foreground/60 font-mono font-medium uppercase tracking-wider">
 							Table
 						</span>
 					)}
-					{name && (
-						<span className="text-[10px] text-foreground/35 font-mono">
-							({fields.length})
-						</span>
-					)}
 				</div>
-				<div className="flex items-center gap-0.5">
+				<div className="flex items-center">
 					{(
 						[
 							{ key: "table", label: "Table" },
@@ -361,15 +356,18 @@ export function DatabaseTable({
 						<button
 							key={opt.key}
 							type="button"
-							onClick={() => setView(opt.key)}
+							onClick={() => startTransition(() => setView(opt.key))}
 							className={cn(
-								"px-2 py-0.5 font-mono text-[10px] tracking-wide transition-colors cursor-pointer",
+								"relative px-2 py-0.5 font-mono text-xs font-medium transition-colors cursor-pointer",
 								view === opt.key
-									? "text-foreground/80 bg-foreground/[0.05]"
-									: "text-foreground/55 hover:text-foreground/65",
+									? "text-foreground/80"
+									: "text-foreground/40 hover:text-foreground/60",
 							)}
 						>
 							{opt.label}
+							{view === opt.key && (
+								<span className="absolute inset-x-2 -bottom-2 h-[1.5px] bg-foreground/80" />
+							)}
 						</button>
 					))}
 				</div>
@@ -377,107 +375,109 @@ export function DatabaseTable({
 
 			{/* Sub-selector for SQL dialect or Drizzle provider */}
 			{view === "sql" && (
-				<div className="flex items-center gap-0.5 px-4 py-1.5 border-b border-foreground/[0.06] bg-foreground/[0.01]">
+				<div className="flex items-center px-4 py-1 border-b">
 					{sqlDialects.map((d) => (
 						<button
 							key={d.key}
 							type="button"
-							onClick={() => setSqlDialect(d.key)}
+							onClick={() => startTransition(() => setSqlDialect(d.key))}
 							className={cn(
-								"px-1.5 py-0.5 font-mono text-[9px] tracking-wide transition-colors cursor-pointer",
+								"relative px-1.5 py-1 font-mono text-xs font-medium transition-colors cursor-pointer",
 								sqlDialect === d.key
-									? "text-foreground/70 bg-foreground/[0.05]"
-									: "text-foreground/35 hover:text-foreground/50",
+									? "text-foreground/80"
+									: "text-foreground/40 hover:text-foreground/60",
 							)}
 						>
 							{d.label}
+							{sqlDialect === d.key && (
+								<span className="absolute inset-x-1.5 -bottom-1 h-[1.5px] bg-foreground/80" />
+							)}
 						</button>
 					))}
 				</div>
 			)}
 			{view === "drizzle" && (
-				<div className="flex items-center gap-0.5 px-4 py-1.5 border-b border-foreground/[0.06] bg-foreground/[0.01]">
+				<div className="flex items-center px-4 py-1 border-b">
 					{drizzleProviders.map((d) => (
 						<button
 							key={d.key}
 							type="button"
-							onClick={() => setDrizzleProvider(d.key)}
+							onClick={() => startTransition(() => setDrizzleProvider(d.key))}
 							className={cn(
-								"px-1.5 py-0.5 font-mono text-[9px] tracking-wide transition-colors cursor-pointer",
+								"relative px-1.5 py-1 font-mono text-xs font-medium transition-colors cursor-pointer",
 								drizzleProvider === d.key
-									? "text-foreground/70 bg-foreground/[0.05]"
-									: "text-foreground/35 hover:text-foreground/50",
+									? "text-foreground/80"
+									: "text-foreground/40 hover:text-foreground/60",
 							)}
 						>
 							{d.label}
+							{drizzleProvider === d.key && (
+								<span className="absolute inset-x-1.5 -bottom-1 h-[1.5px] bg-foreground/80" />
+							)}
 						</button>
 					))}
 				</div>
 			)}
 
 			{view === "table" ? (
-				<>
+				<div className="overflow-x-auto">
 					{/* Column headers */}
-					<div className="grid grid-cols-[minmax(120px,1.2fr)_minmax(100px,0.8fr)_minmax(40px,0.4fr)_minmax(150px,2fr)] border-b border-foreground/[0.06] bg-foreground/[0.02]">
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
-							Field
-						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
-							Type
-						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
-							Key
-						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
-							Description
-						</div>
+					<div className="grid grid-cols-[minmax(160px,1.2fr)_minmax(100px,0.8fr)_minmax(40px,0.4fr)_minmax(150px,2fr)] min-w-[600px] border-b bg-foreground/2">
+						{["Field", "Type", "Key", "Description"].map((label) => (
+							<div
+								key={label}
+								className="px-4 py-1 text-[11px] font-mono font-medium uppercase tracking-wider text-foreground/60"
+							>
+								{label}
+							</div>
+						))}
 					</div>
 
 					{/* Rows */}
 					{fields.map((field) => (
 						<div
 							key={field.name}
-							className="grid grid-cols-[minmax(120px,1.2fr)_minmax(100px,0.8fr)_minmax(40px,0.4fr)_minmax(150px,2fr)] border-b border-dashed border-foreground/[0.04] last:border-b-0 hover:bg-foreground/[0.02] transition-colors"
+							className="grid grid-cols-[minmax(160px,1.2fr)_minmax(100px,0.8fr)_minmax(40px,0.4fr)_minmax(150px,2fr)] min-w-[600px] items-center border-b border-dashed border-foreground/10 last:border-b-0 hover:bg-foreground/[0.02] transition-colors"
 						>
-							<div className="px-4 py-2 font-mono text-[12px] text-foreground/80">
+							<div className="px-4 py-2 font-mono text-[13px] text-foreground/80 break-all">
 								{field.name}
 							</div>
 							<div className="px-4 py-2 flex items-center gap-1.5">
 								<TypeIcon type={field.type} />
-								<span className="font-mono text-[11px] text-foreground/55">
+								<span className="font-mono text-[13px] text-foreground/80">
 									{field.type}
 								</span>
 							</div>
 							<div className="px-4 py-2">
 								{field.isPrimaryKey && (
-									<span className="inline-flex items-center gap-1 font-mono text-[10px] text-amber-600 dark:text-amber-500/70">
+									<span className="inline-flex items-center gap-1 font-mono text-[13px] text-amber-600 dark:text-amber-500 uppercase">
 										<Key className="size-2.5" />
-										pk
+										PK
 									</span>
 								)}
 								{field.isForeignKey && (
-									<span className="inline-flex items-center gap-1 font-mono text-[10px] text-blue-600 dark:text-blue-400/70">
+									<span className="inline-flex items-center gap-1 font-mono text-[13px] text-blue-600 dark:text-blue-400 uppercase">
 										<LinkIcon className="size-2.5" />
-										fk
+										FK
 									</span>
 								)}
 								{field.isOptional && (
-									<span className="font-mono text-[10px] text-foreground/35">
+									<span className="font-mono text-[13px] text-foreground/60 uppercase">
 										?
 									</span>
 								)}
 								{!field.isPrimaryKey &&
 									!field.isForeignKey &&
 									!field.isOptional && (
-										<span className="text-foreground/20">—</span>
+										<span className="text-foreground/20 uppercase">-</span>
 									)}
 							</div>
-							<div className="px-4 py-2 text-[11px] text-foreground/55 leading-relaxed">
+							<div className="px-4 py-2 text-[13px] text-foreground/70 leading-relaxed">
 								{field.description}
 							</div>
 						</div>
 					))}
-				</>
+				</div>
 			) : (
 				<SchemaCodeBlock
 					code={generateSchema(
@@ -570,7 +570,7 @@ export function AddToCursor() {
 	return (
 		<div className="w-max">
 			<Link
-				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5pbmtlZXAuY29tL2JldHRlci1hdXRoL21jcCJ9"
+				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5iZXR0ZXItYXV0aC5jb20vbWNwIn0="
 				className="dark:hidden"
 			>
 				<img
@@ -581,7 +581,7 @@ export function AddToCursor() {
 			</Link>
 
 			<Link
-				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5pbmtlZXAuY29tL2JldHRlci1hdXRoL21jcCJ9"
+				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5iZXR0ZXItYXV0aC5jb20vbWNwIn0="
 				className="dark:block hidden"
 			>
 				<img
