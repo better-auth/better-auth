@@ -300,27 +300,14 @@ type createSubscription = {
 
 **Simple Example:**
 
-```ts title="client.ts"
+This will create a Chargebee Hosted Page and redirect the user to the Chargebee checkout page.
+
+```ts
 await authClient.subscription.create({
     itemPriceId: "pro-USD-Monthly",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
-    referenceId: "org_123", // Optional: defaults based on customerType
-    seats: 5, // Optional: for team plans
 });
-```
-
-This will create a Chargebee Hosted Page and redirect the user to the Chargebee checkout page.
-
-```ts
-const { error } = await authClient.subscription.create({
-    itemPriceId: "pro-USD-Monthly",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
-});
-if(error) {
-    alert(error.message);
-}
 ```
 
 <Callout type="info">
