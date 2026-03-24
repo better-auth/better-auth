@@ -570,7 +570,7 @@ export function AddToCursor() {
 	return (
 		<div className="w-max">
 			<Link
-				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5pbmtlZXAuY29tL2JldHRlci1hdXRoL21jcCJ9"
+				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5iZXR0ZXItYXV0aC5jb20vbWNwIn0="
 				className="dark:hidden"
 			>
 				<img
@@ -581,7 +581,7 @@ export function AddToCursor() {
 			</Link>
 
 			<Link
-				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5pbmtlZXAuY29tL2JldHRlci1hdXRoL21jcCJ9"
+				href="cursor://anysphere.cursor-deeplink/mcp/install?name=Better%20Auth&config=eyJ1cmwiOiJodHRwczovL21jcC5iZXR0ZXItYXV0aC5jb20vbWNwIn0="
 				className="dark:block hidden"
 			>
 				<img
