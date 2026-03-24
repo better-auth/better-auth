@@ -2,12 +2,13 @@ import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import { atom, onMount } from "nanostores";
+import { getStableReference } from "./stable-reference";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection
 const isServer = () => typeof window === "undefined";
 
-export type AuthQueryAtom<T> = PreinitializedWritableAtom<{
+export type AuthQueryState<T> = {
 	data: null | T;
 	error: null | BetterFetchError;
 	isPending: boolean;
@@ -15,7 +16,36 @@ export type AuthQueryAtom<T> = PreinitializedWritableAtom<{
 	refetch: (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	) => Promise<void>;
-}>;
+};
+
+export type AuthQueryAtom<T> = PreinitializedWritableAtom<AuthQueryState<T>>;
+
+export function getStableAuthQueryState<T>(
+	current: AuthQueryState<T>,
+	next: AuthQueryState<T>,
+): AuthQueryState<T> {
+	const nextData =
+		current.data == null || next.data == null
+			? next.data
+			: getStableReference(current.data, next.data);
+	const nextError = current.error === next.error ? current.error : next.error;
+
+	if (
+		current.data === nextData &&
+		current.error === nextError &&
+		current.isPending === next.isPending &&
+		current.isRefetching === next.isRefetching &&
+		current.refetch === next.refetch
+	) {
+		return current;
+	}
+
+	return {
+		...next,
+		data: nextData,
+		error: nextError,
+	};
+}
 
 export const useAuthQuery = <T>(
 	initializedAtom:
@@ -62,16 +92,21 @@ export const useAuthQuery = <T>(
 					...queryParams?.query,
 				},
 				async onSuccess(context) {
-					value.set({
+					const currentValue = value.get();
+					const nextValue = getStableAuthQueryState(currentValue, {
 						data: context.data,
 						error: null,
 						isPending: false,
 						isRefetching: false,
-						refetch: value.value.refetch,
+						refetch: currentValue.refetch,
 					});
+					if (nextValue !== currentValue) {
+						value.set(nextValue);
+					}
 					await opts?.onSuccess?.(context);
 				},
 				async onError(context) {
+					const currentValue = value.get();
 					const { request } = context;
 					const retryAttempts =
 						typeof request.retry === "number"
@@ -80,37 +115,47 @@ export const useAuthQuery = <T>(
 					const retryAttempt = request.retryAttempt || 0;
 					if (retryAttempts && retryAttempt < retryAttempts) return;
 					const isUnauthorized = context.error.status === 401;
-					value.set({
+					const nextValue = getStableAuthQueryState(currentValue, {
 						error: context.error,
 						data: isUnauthorized
 							? null // clear session on HTTP 401
-							: value.get().data, // preserve stale data on other errors
+							: currentValue.data, // preserve stale data on other errors
 						isPending: false,
 						isRefetching: false,
-						refetch: value.value.refetch,
+						refetch: currentValue.refetch,
 					});
+					if (nextValue !== currentValue) {
+						value.set(nextValue);
+					}
 					await opts?.onError?.(context);
 				},
 				async onRequest(context) {
 					const currentValue = value.get();
-					value.set({
+					const nextValue = getStableAuthQueryState(currentValue, {
 						isPending: currentValue.data === null,
 						data: currentValue.data,
 						error: null,
 						isRefetching: true,
-						refetch: value.value.refetch,
+						refetch: currentValue.refetch,
 					});
+					if (nextValue !== currentValue) {
+						value.set(nextValue);
+					}
 					await opts?.onRequest?.(context);
 				},
 			})
 				.catch((error) => {
-					value.set({
+					const currentValue = value.get();
+					const nextValue = getStableAuthQueryState(currentValue, {
 						error,
-						data: value.get().data,
+						data: currentValue.data,
 						isPending: false,
 						isRefetching: false,
-						refetch: value.value.refetch,
+						refetch: currentValue.refetch,
 					});
+					if (nextValue !== currentValue) {
+						value.set(nextValue);
+					}
 				})
 				.finally(() => {
 					resolve(void 0);

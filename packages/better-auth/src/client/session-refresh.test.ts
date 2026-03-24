@@ -172,8 +172,9 @@ describe("session-refresh", () => {
 		manager.triggerRefetch({ event: "visibilitychange" });
 		await vi.runAllTimersAsync();
 
-		// Signal should change because rate limit has expired
-		expect(signalChangeCount).toBeGreaterThan(initialSignalCount);
+		// The focus refetch should happen after the rate limit window expires
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+		expect(signalChangeCount).toBe(initialSignalCount);
 
 		unsubscribeSignal();
 		manager.cleanup();
