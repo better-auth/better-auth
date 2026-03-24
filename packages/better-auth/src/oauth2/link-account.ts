@@ -94,6 +94,19 @@ export async function handleOAuthUserInfo(
 					emailVerified: true,
 				});
 			}
+
+			if (
+				c.context.options.account?.accountLinking?.updateUserInfoOnLink === true
+			) {
+				try {
+					await c.context.internalAdapter.updateUser(dbUser.user.id, {
+						name: userInfo.name,
+						image: userInfo.image,
+					});
+				} catch (e) {
+					logger.warn("Could not update user", e);
+				}
+			}
 		} else {
 			const freshTokens =
 				c.context.options.account?.updateAccountOnSignIn !== false

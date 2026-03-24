@@ -500,6 +500,21 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						return redirectOnError("unable_to_link_account");
 					}
 				}
+
+				if (
+					ctx.context.options.account?.accountLinking?.updateUserInfoOnLink ===
+					true
+				) {
+					try {
+						await ctx.context.internalAdapter.updateUser(link.userId, {
+							name: userInfo.name,
+							image: userInfo.image,
+						});
+					} catch (e) {
+						ctx.context.logger.warn("Could not update user", e);
+					}
+				}
+
 				let toRedirectTo: string;
 				try {
 					const url = callbackURL;
