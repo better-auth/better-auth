@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.7-beta.1",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -160,7 +160,7 @@
     "better-call": "catalog:",
     "@cloudflare/workers-types": "^4.20250121.0",
     "jose": "^6.1.3",
-    "kysely": "^0.28.12",
+    "kysely": "^0.28.14",
     "nanostores": "^1.1.1",
     "tsdown": "catalog:"
   },
