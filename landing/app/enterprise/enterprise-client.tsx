@@ -51,7 +51,7 @@ function EnterpriseHero() {
 							auth at scale.
 						</span>
 					</h1>
-					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
+					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-65">
 						Custom plans, unlimited seats, SSO, RBAC, and advanced support for
 						teams that need more.
 					</p>
@@ -68,7 +68,7 @@ function EnterpriseHero() {
 								delay: 0.3 + i * 0.05,
 								ease: "easeOut",
 							}}
-							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
+							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/6 last:border-0"
 						>
 							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-[10px] leading-none select-none shrink-0">
 								+
@@ -151,7 +151,7 @@ export function EnterprisePageClient() {
 			<div className="relative text-foreground">
 				<div className="flex flex-col lg:flex-row">
 					{/* Left side — Enterprise hero */}
-					<div className="hidden lg:block relative w-full shrink-0 lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/6 overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -162,7 +162,7 @@ export function EnterprisePageClient() {
 					<div className="relative w-full lg:w-[60%] overflow-x-hidden no-scrollbar">
 						<div className="px-5 lg:p-8 lg:pt-20 space-y-8">
 							{/* Mobile header */}
-							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
+							<div className="lg:hidden relative border-b border-foreground/6 overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
 								<HalftoneBackground />
 								<div className="relative space-y-2 py-16">
 									<div className="flex items-center gap-1.5">
@@ -212,7 +212,7 @@ export function EnterprisePageClient() {
 									# Get a demo
 								</p>
 
-								<div className="relative border border-foreground/[0.12] overflow-hidden">
+								<div className="relative border border-foreground/12 overflow-hidden">
 									<div className="px-4 py-4 sm:px-5 sm:py-5">
 										<div className="space-y-1.5 mb-5">
 											<h2 className="text-base font-medium text-foreground/90 dark:text-foreground/85">
@@ -236,7 +236,7 @@ export function EnterprisePageClient() {
 													name="fullName"
 													type="text"
 													placeholder="Your name"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/15 text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
 												/>
 											</div>
 
@@ -252,7 +252,7 @@ export function EnterprisePageClient() {
 													name="company"
 													type="text"
 													placeholder="Company name"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/15 text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
 												/>
 											</div>
 
@@ -268,7 +268,7 @@ export function EnterprisePageClient() {
 													type="email"
 													name="email"
 													placeholder="name@company.com"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/15 text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
 												/>
 											</div>
 
@@ -282,7 +282,7 @@ export function EnterprisePageClient() {
 												<select
 													id="enterprise-size"
 													name="companySize"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm focus:outline-none focus:border-foreground/40 transition-colors appearance-none cursor-pointer font-mono"
+													className="w-full px-3 py-2 bg-background border border-foreground/15 text-foreground/85 dark:text-foreground/75 text-sm focus:outline-none focus:border-foreground/40 transition-colors appearance-none cursor-pointer font-mono"
 												>
 													<option value="">Select</option>
 													<option value="1-10">1-10</option>
@@ -305,7 +305,7 @@ export function EnterprisePageClient() {
 													name="description"
 													rows={4}
 													placeholder="Tell us about your project and requirements..."
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors resize-none font-mono"
+													className="w-full px-3 py-2 bg-transparent border border-foreground/15 text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors resize-none font-mono"
 												/>
 											</div>
 
