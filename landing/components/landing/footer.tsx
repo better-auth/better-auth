@@ -13,7 +13,7 @@ const footerLinks = [
 
 export default function Footer() {
 	return (
-		<div className="relative mt-10 py-6 px-5 sm:px-6 lg:px-8">
+		<footer className="relative mt-10 py-6 px-5 sm:px-6 lg:px-8">
 			<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 				<div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
 					{footerLinks.map((link, i) => (
@@ -64,6 +64,6 @@ export default function Footer() {
 					</div>
 				</div>
 			</div>
-		</div>
+		</footer>
 	);
 }
