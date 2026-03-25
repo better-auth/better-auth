@@ -68,12 +68,32 @@ description: Apple provider setup and usage.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
+        import { importPKCS8, SignJWT } from "jose";
+
+        // Apple requires a JWT secret with a maximum expiration of 6 months.
+        async function generateAppleClientSecret(clientId, teamId, keyId, privateKey) {
+            const key = await importPKCS8(privateKey, "ES256");
+            const now = Math.floor(Date.now() / 1000);
+            return new SignJWT({})
+                .setProtectedHeader({ alg: "ES256", kid: keyId })
+                .setIssuer(teamId)
+                .setSubject(clientId)
+                .setAudience("https://appleid.apple.com")
+                .setIssuedAt(now)
+                .setExpirationTime(now + 180 * 24 * 60 * 60)
+                .sign(key);
+        }
 
         export const auth = betterAuth({
             socialProviders: {
                 apple: { // [!code highlight]
                     clientId: process.env.APPLE_CLIENT_ID as string, // [!code highlight]
-                    clientSecret: process.env.APPLE_CLIENT_SECRET as string, // [!code highlight]
+                    clientSecret: await generateAppleClientSecret(
+                        process.env.APPLE_CLIENT_ID!, // [!code highlight]
+                        process.env.APPLE_TEAM_ID!, // [!code highlight]
+                        process.env.APPLE_KEY_ID!, // [!code highlight]
+                        process.env.APPLE_PRIVATE_KEY!, // [!code highlight]
+                    ), // [!code highlight]
                     // Optional
                     appBundleIdentifier: process.env.APPLE_APP_BUNDLE_IDENTIFIER as string, // [!code highlight]
                 }, // [!code highlight]
