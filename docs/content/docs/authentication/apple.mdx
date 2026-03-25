@@ -61,6 +61,20 @@ description: Apple provider setup and usage.
 
     </Step>
     <Step>
+        Apple's OAuth implementation requires a JWT (JSON Web Token) as the `clientSecret` instead of a static secret string.
+
+        According to [Apple's documentation](https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret), these JWTs:
+
+        - Have a maximum expiration of 6 months
+        - Must be cryptographically signed with your private key
+
+        Install `jose` package to generate the client secret JWT.
+
+        ```package-install
+        npm install jose
+        ```
+    </Step>
+    <Step>
         ### Configure the provider
         To configure the provider, you need to add it to the `socialProviders` option of the auth instance.
 
@@ -70,7 +84,7 @@ description: Apple provider setup and usage.
         import { betterAuth } from "better-auth"
         import { importPKCS8, SignJWT } from "jose";
 
-        // Apple requires a JWT secret with a maximum expiration of 6 months.
+        // Generate the client secret JWT required for 'Sign in with Apple'.
         async function generateAppleClientSecret(clientId, teamId, keyId, privateKey) {
             const key = await importPKCS8(privateKey, "ES256");
             const now = Math.floor(Date.now() / 1000);
