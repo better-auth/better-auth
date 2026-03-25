@@ -176,6 +176,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		expect((res.data as any)?.twoFactorMethods).toEqual(["totp", "otp"]);
 		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,

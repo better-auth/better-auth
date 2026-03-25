@@ -488,8 +488,13 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
+						const twoFactorMethods = [
+							!options?.totpOptions?.disable && "totp",
+							!!options?.otpOptions?.sendOTP && "otp",
+						].filter(Boolean) as string[];
 						return ctx.json({
 							twoFactorRedirect: true,
+							twoFactorMethods,
 						});
 					}),
 				},
