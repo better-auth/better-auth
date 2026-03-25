@@ -2198,6 +2198,163 @@ describe("SAML SSO", async () => {
 		expect(acsRedirectLocation).not.toContain("error");
 	});
 
+	it("should redirect to signIn callbackURL when relay_state cookie is missing on callback route (cross-site POST)", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl:
+						"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+					audience: "http://localhost:3000",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+					},
+				},
+			},
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provider",
+				callbackURL: "/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const signInResponse = signInRes.response;
+		const samlRedirectUrl = new URL(signInResponse?.url);
+		const relayStateParam = samlRedirectUrl.searchParams.get("RelayState");
+		expect(relayStateParam).toBeTruthy();
+
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// IdP POSTs back without relay_state cookie (SameSite=Lax blocks cross-site POST cookies)
+		const callbackResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayStateParam!,
+					}),
+				},
+			),
+		);
+
+		expect(callbackResponse.status).toBe(302);
+		const redirectLocation = callbackResponse.headers.get("location") || "";
+		expect(redirectLocation).toContain("/dashboard");
+		expect(redirectLocation).not.toContain("/sso/saml2/callback/");
+		expect(redirectLocation).not.toContain("error");
+	});
+
+	it("should redirect to signIn callbackURL when relay_state cookie is missing on ACS route (cross-site POST)", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl:
+						"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
+					audience: "http://localhost:3000",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+					},
+				},
+			},
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provider",
+				callbackURL: "/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const signInResponse = signInRes.response;
+		const samlRedirectUrl = new URL(signInResponse?.url);
+		const relayStateParam = samlRedirectUrl.searchParams.get("RelayState");
+		expect(relayStateParam).toBeTruthy();
+
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const acsResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayStateParam!,
+					}),
+				},
+			),
+		);
+
+		expect(acsResponse.status).toBe(302);
+		const redirectLocation = acsResponse.headers.get("location") || "";
+		expect(redirectLocation).toContain("/dashboard");
+		expect(redirectLocation).not.toContain("/sso/saml2/sp/acs/");
+		expect(redirectLocation).not.toContain("error");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7777
 	 */

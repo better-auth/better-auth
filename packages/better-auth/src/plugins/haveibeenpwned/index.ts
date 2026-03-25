@@ -66,6 +66,9 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
+	/**
+	 * Custom error message shown when a compromised password is detected.
+	 */
 	customPasswordCompromisedMessage?: string | undefined;
 	/**
 	 * Paths to check for password
@@ -73,6 +76,12 @@ export interface HaveIBeenPwnedOptions {
 	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
 	 */
 	paths?: string[];
+	/**
+	 * Enable or disable password checks against the HIBP database.
+	 *
+	 * @default true
+	 */
+	enabled?: boolean | undefined;
 }
 
 export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
@@ -91,6 +100,8 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 					password: {
 						...ctx.password,
 						async hash(password) {
+							if (options?.enabled === false) return originalHash(password);
+
 							const c = await getCurrentAuthContext();
 							if (!c.path || !paths.includes(c.path)) {
 								return originalHash(password);
