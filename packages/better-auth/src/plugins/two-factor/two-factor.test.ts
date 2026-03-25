@@ -2112,3 +2112,196 @@ describe("checkPassword must not leak credential presence via error codes", asyn
 		}
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4101
+ */
+describe("twoFactorMethods in sign-in response", () => {
+	describe("totp enabled in config, otp disabled", async () => {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor()],
+		});
+		const { user } = await signInWithTestUser();
+
+		it("should not redirect when user has not verified totp", async () => {
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+			expect(signInRes.user).toBeDefined();
+			expect((signInRes as any).twoFactorRedirect).toBeUndefined();
+		});
+
+		it("should return twoFactorMethods: ['totp'] when user has verified totp", async () => {
+			const { headers } = await auth.api
+				.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					asResponse: true,
+				})
+				.then((res) => ({
+					headers: convertSetCookieToCookie(res.headers),
+				}));
+
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+
+			const twoFactorRow = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+			});
+			const decrypted = await symmetricDecrypt({
+				key: DEFAULT_SECRET,
+				data: twoFactorRow!.secret,
+			});
+			const code = await createOTP(decrypted).totp();
+			await auth.api.verifyTOTP({
+				body: { code },
+				headers,
+			});
+
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+			expect((signInRes as any).twoFactorRedirect).toBe(true);
+			expect((signInRes as any).twoFactorMethods).toEqual(["totp"]);
+		});
+	});
+
+	describe("totp enabled in config, otp enabled", async () => {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+
+		it("should return twoFactorMethods: ['otp'] when user has 2fa enabled but no totp row", async () => {
+			await db.update({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				update: { twoFactorEnabled: true },
+			});
+
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+			expect((signInRes as any).twoFactorRedirect).toBe(true);
+			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
+		});
+
+		it("should return twoFactorMethods: ['totp', 'otp'] when user has verified totp", async () => {
+			// reset twoFactorEnabled so we can sign in normally
+			await db.update({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				update: { twoFactorEnabled: false },
+			});
+
+			const { headers } = await auth.api
+				.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					asResponse: true,
+				})
+				.then((res) => ({
+					headers: convertSetCookieToCookie(res.headers),
+				}));
+
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+
+			const twoFactorRow = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+			});
+			const decrypted = await symmetricDecrypt({
+				key: DEFAULT_SECRET,
+				data: twoFactorRow!.secret,
+			});
+			const code = await createOTP(decrypted).totp();
+			await auth.api.verifyTOTP({
+				body: { code },
+				headers,
+			});
+
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+			expect((signInRes as any).twoFactorRedirect).toBe(true);
+			expect((signInRes as any).twoFactorMethods).toEqual(["totp", "otp"]);
+		});
+	});
+
+	describe("totp disabled in config, otp enabled", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					totpOptions: { disable: true },
+					otpOptions: {
+						sendOTP() {},
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+		await signInWithTestUser();
+
+		it("should return twoFactorMethods: ['otp'] even when user has a totp row", async () => {
+			const { headers } = await auth.api
+				.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					asResponse: true,
+				})
+				.then((res) => ({
+					headers: convertSetCookieToCookie(res.headers),
+				}));
+
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+			expect((signInRes as any).twoFactorRedirect).toBe(true);
+			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
+		});
+	});
+});

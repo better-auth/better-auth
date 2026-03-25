@@ -488,10 +488,35 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
-						const twoFactorMethods = [
-							!options?.totpOptions?.disable && "totp",
-							!!options?.otpOptions?.sendOTP && "otp",
-						].filter(Boolean) as string[];
+						const twoFactorMethods: string[] = [];
+
+						/**
+						 * totp requires per-user setup, so we check
+						 * that the user actually has a secret stored.
+						 */
+						if (!options?.totpOptions?.disable) {
+							const userTotpSecret = await ctx.context.adapter.findOne({
+								model: opts.twoFactorTable,
+								where: [
+									{
+										field: "userId",
+										value: data.user.id,
+									},
+								],
+							});
+							if (userTotpSecret) {
+								twoFactorMethods.push("totp");
+							}
+						}
+
+						/**
+						 * otp is server-level — if sendOTP is configured,
+						 * any user with 2fa enabled can receive a code.
+						 */
+						if (options?.otpOptions?.sendOTP) {
+							twoFactorMethods.push("otp");
+						}
+
 						return ctx.json({
 							twoFactorRedirect: true,
 							twoFactorMethods,
