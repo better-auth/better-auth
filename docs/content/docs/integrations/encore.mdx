@@ -1,0 +1,142 @@
+---
+title: Encore Integration
+description: Integrate Better Auth with Encore.
+---
+
+Better Auth can be integrated with your [Encore](https://encore.dev) application (an open source TypeScript framework with automated infrastructure and observability).
+
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+
+### Getting Started
+
+Install the Encore CLI and create a new application. This will scaffold a TypeScript project with the required structure:
+
+```bash title="Terminal"
+brew install encoredev/tap/encore # if you don't have Encore installed
+encore app create my-app --example=ts/hello-world
+cd my-app
+npm install better-auth
+```
+
+### Mount the handler
+
+To handle auth requests, mount Better Auth on a catch-all endpoint using Encore's `api.raw()`:
+
+```ts title="auth/handler.ts"
+import { api } from "encore.dev/api";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./auth"; // Your Better Auth instance
+
+export const authHandler = api.raw(
+  { expose: true, path: "/api/auth/*path", method: "*" },
+  toNodeHandler(auth)
+);
+```
+
+<Callout>
+Encore's `api.raw()` provides Node.js request/response types. We use `toNodeHandler` from `better-auth/node` to bridge these to Better Auth's Web API handler.
+</Callout>
+
+### CORS
+
+If your frontend runs on a different origin, configure CORS in your `encore.app` file to allow credentials (cookies) to be sent with requests:
+
+```json title="encore.app"
+{
+  "id": "your-app",
+  "global_cors": {
+    "allow_origins_with_credentials": ["http://localhost:3000"]
+  }
+}
+```
+
+### Trusted Origins
+
+When requests come from a different origin, they are blocked by default. Add trusted origins to your Better Auth config:
+
+```ts title="auth/auth.ts"
+export const auth = betterAuth({
+  trustedOrigins: ["http://localhost:3000", "https://your-app.com"],
+  // ... rest of config
+});
+```
+
+### Local Development
+
+Start your app with the Encore CLI. Make sure Docker is running as Encore uses it to manage local infrastructure:
+
+```bash title="Terminal"
+encore run
+```
+
+<Callout type="tip">
+Open the local dashboard at `localhost:9400` to see traces for all requests, including auth handler execution and session validation. Useful for debugging auth issues.
+</Callout>
+
+### Protecting Endpoints
+
+Encore has a built-in auth handler pattern for protecting endpoints. Create an auth handler that validates Better Auth sessions:
+
+```ts title="auth/gateway.ts"
+import { APIError, Gateway, Header } from "encore.dev/api";
+import { authHandler } from "encore.dev/auth";
+import { auth } from "./auth";
+
+interface AuthParams {
+  authorization: Header<"Authorization">;
+  cookie: Header<"Cookie">;
+}
+
+interface AuthData {
+  userID: string;
+  email: string;
+  name: string;
+}
+
+const handler = authHandler(async (params: AuthParams): Promise<AuthData> => {
+  const headers = new Headers();
+  if (params.authorization) {
+    headers.set("Authorization", params.authorization);
+  }
+  if (params.cookie) {
+    headers.set("Cookie", params.cookie);
+  }
+
+  const session = await auth.api.getSession({ headers });
+
+  if (!session?.user) {
+    throw APIError.unauthenticated("invalid session");
+  }
+
+  return {
+    userID: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+  };
+});
+
+export const gateway = new Gateway({ authHandler: handler });
+```
+
+Then protect any endpoint with `auth: true`:
+
+```ts
+import { api } from "encore.dev/api";
+import { getAuthData } from "~encore/auth";
+
+export const getProfile = api(
+  { expose: true, auth: true, method: "GET", path: "/profile" },
+  async () => {
+    const authData = getAuthData()!;
+    return { id: authData.userID, email: authData.email };
+  }
+);
+```
+
+<Callout type="tip">
+If you want to manage session cookies directly in your Encore endpoints, check out Encore's [typed cookie support](https://encore.dev/docs/ts/primitives/cookies).
+</Callout>
+
+### Learn More
+
+For a complete walkthrough including database setup and deployment, see the [Better Auth with Encore tutorial](https://encore.dev/blog/betterauth-tutorial).

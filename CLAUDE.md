@@ -88,7 +88,7 @@ run specific tests.
 
 ## Git Workflow
 
-* PRs should target the `canary` branch
+* PRs should target the `main` branch
 * Commit format: `feat(scope): description` or `fix(scope): description`,
   following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 * Use `docs:` for documentation, `chore:` for non-functional changes

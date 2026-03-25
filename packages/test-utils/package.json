@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.7-beta.1",
   "description": "Testing utilities for Better Auth adapter development",
   "type": "module",
   "license": "MIT",
@@ -28,7 +28,7 @@
   ],
   "exports": {
     "./adapter": {
-      "dev-source": "./src/adapter.ts",
+      "dev-source": "./src/adapter/index.ts",
       "default": "./dist/adapter.mjs",
       "types": "./dist/adapter.d.mts"
     }

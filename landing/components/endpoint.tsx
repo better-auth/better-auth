@@ -1,18 +1,20 @@
 "use client";
 import { cn } from "@/lib/utils";
 
-const methodColors: Record<string, string> = {
-	GET: "text-emerald-700 dark:text-emerald-400",
-	POST: "text-blue-700 dark:text-blue-400",
-	PUT: "text-amber-700 dark:text-amber-400",
-	DELETE: "text-red-700 dark:text-red-400",
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+const methodColors: Record<HttpMethod, string> = {
+	GET: "text-green-600 dark:text-green-500",
+	POST: "text-yellow-600 dark:text-yellow-600",
+	PUT: "text-blue-600 dark:text-blue-400",
+	DELETE: "text-red-600 dark:text-red-400",
 };
 
-function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
+function Method({ method }: { method: HttpMethod }) {
 	return (
 		<span
 			className={cn(
-				"text-[11px] font-bold font-mono uppercase tracking-wider",
+				"text-xs font-bold font-mono uppercase",
 				methodColors[method],
 			)}
 		>
@@ -24,23 +26,21 @@ function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
 export function Endpoint({
 	path,
 	method,
-	isServerOnly,
 	className,
 }: {
 	path: string;
-	method: "POST" | "GET" | "DELETE" | "PUT";
-	isServerOnly?: boolean;
+	method: HttpMethod;
 	className?: string;
 }) {
 	return (
 		<div
 			className={cn(
-				"relative flex items-center w-full gap-3 px-3.5 py-2.5 border-t border-x border-border bg-fd-secondary/50 dark:border-white/[0.06] dark:bg-[#050505] group",
+				"relative flex items-center w-full gap-2 px-3.5 py-1 border-b border-border bg-fd-muted/80 group",
 				className,
 			)}
 		>
 			<Method method={method} />
-			<span className="font-mono text-[12px] text-muted-foreground/70">
+			<span className="font-mono text-[13px] text-foreground/80 font-medium">
 				{path}
 			</span>
 		</div>

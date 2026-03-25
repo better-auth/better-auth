@@ -411,13 +411,33 @@ export const auth = betterAuth({
 
 When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `TOO_MANY_ATTEMPTS`.
 
-- `storeOTP`: The method to store the OTP in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+- `resendStrategy`: Controls what happens when a user requests a new OTP while an existing one is still valid. Defaults to `"rotate"`.
+  - `"rotate"`: Always generates a new OTP (default behavior).
+  - `"reuse"`: Resends the same OTP and extends its expiry. This prevents multiple valid codes from existing simultaneously when emails are delayed. Only works when the OTP is recoverable (`plain`, `encrypted`, or custom encrypt/decrypt). Falls back to `"rotate"` when the OTP is hashed. If the allowed attempts have been exhausted, a fresh OTP is generated instead of reusing the exhausted one.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { emailOTP } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            resendStrategy: "reuse", // [!code highlight]
+            async sendVerificationOTP({ email, otp, type }) {
+                // send the OTP
+            },
+        })
+    ]
+})
+```
+
+- `storeOTP`: The method used to transform the OTP before it is stored by Better Auth's verification layer, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 <Callout>
-Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database.
+Note: This will not affect the OTP sent to the user. It only affects the stored OTP value. The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config, so if you configure `secondaryStorage`, these verification records can live there instead of the database.
 </Callout>
 
-Alternatively, you can pass a custom encryptor or hasher to store the OTP in your database.
+Alternatively, you can pass a custom encryptor or hasher to control how the stored OTP value is persisted.
 
 **Custom encryptor**
 

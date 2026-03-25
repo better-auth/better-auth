@@ -27,36 +27,8 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 	if (post) {
 		return (
 			<div className="relative w-full lg:w-[30%] lg:h-dvh lg:sticky lg:top-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
-				<div className="hidden lg:block">
-					<HalftoneBackground />
-				</div>
-				{/* Mobile: just a back link */}
-				<div className="relative w-full py-4 lg:hidden">
-					<Link
-						href="/blog"
-						className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors group w-fit"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="12"
-							height="12"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							className="transition-transform group-hover:-translate-x-0.5"
-						>
-							<path d="m15 18-6-6 6-6" />
-						</svg>
-						<span className="text-[11px] uppercase tracking-wider">
-							All posts
-						</span>
-					</Link>
-				</div>
-				{/* Desktop: full panel with title, meta, TOC */}
-				<div className="relative w-full hidden lg:flex flex-col justify-center lg:h-dvh">
+				<HalftoneBackground />
+				<div className="relative w-full py-16 lg:py-0 flex flex-col justify-center lg:h-dvh">
 					<div className="space-y-4">
 						<Link
 							href="/blog"
@@ -76,30 +48,45 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 							>
 								<path d="m15 18-6-6 6-6" />
 							</svg>
-							<span className="text-[11px] uppercase tracking-wider">
+							<span className="text-xs uppercase tracking-wider">
 								All posts
 							</span>
 						</Link>
 
-						<div className="space-y-1 pt-1">
-							<h1 className="text-lg md:text-xl lg:text-2xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+						<div className="space-y-1 pt-1 max-w-md">
+							<h1 className="text-2xl lg:text-3xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 								{post.title}
 							</h1>
 							{post.description && (
-								<p className="text-[11px] text-foreground/40 leading-relaxed max-w-[280px] pt-0.5">
+								<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed pt-0.5">
 									{post.description}
 								</p>
 							)}
 						</div>
 
-						<div className="flex items-center gap-2 text-[11px] font-mono text-foreground/40">
+						<div className="flex flex-wrap items-center gap-2 text-xs font-mono text-foreground/60 dark:text-foreground/50">
 							{post.author?.name && (
 								<span className="text-foreground/60">{post.author.name}</span>
 							)}
-							{post.author?.name && post.date && (
-								<span className="text-foreground/20">&middot;</span>
+							{post.author?.twitter && (
+								<>
+									<span className="text-foreground/20">&middot;</span>
+									<a
+										href={`https://x.com/${post.author.twitter}`}
+										target="_blank"
+										rel="noreferrer noopener"
+										className="text-foreground/40 hover:text-foreground/70 transition-colors"
+									>
+										@{post.author.twitter}
+									</a>
+								</>
 							)}
-							{post.date && <span>{formatDate(post.date)}</span>}
+							{post.date && (
+								<>
+									<span className="text-foreground/20">&middot;</span>
+									<span>{formatDate(post.date)}</span>
+								</>
+							)}
 						</div>
 					</div>
 				</div>
@@ -110,7 +97,7 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 	return (
 		<div className="relative w-full lg:w-[30%] lg:h-dvh lg:sticky lg:top-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
 			<HalftoneBackground />
-			<div className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-dvh">
+			<div className="relative w-full py-16 lg:py-0 flex flex-col justify-center lg:h-dvh">
 				<div className="space-y-4">
 					<div className="space-y-1">
 						<div className="flex items-center gap-1.5">
@@ -119,7 +106,7 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 								width="0.9em"
 								height="0.9em"
 								viewBox="0 0 24 24"
-								className="text-neutral-600 dark:text-neutral-100"
+								className="text-foreground/60"
 								aria-hidden="true"
 							>
 								<path
@@ -127,14 +114,12 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 									d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"
 								/>
 							</svg>
-							<span className="text-sm text-neutral-600 dark:text-neutral-100">
-								Blog
-							</span>
+							<span className="text-sm text-foreground/60">Blog</span>
 						</div>
-						<h1 className="text-lg md:text-xl lg:text-2xl xl:text-3xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+						<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 							News, releases, and insights
 						</h1>
-						<p className="text-[11px] text-foreground/40 leading-relaxed max-w-[240px] pt-1">
+						<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[240px] pt-1">
 							Follow along as we build the most comprehensive authentication
 							framework for the web.
 						</p>
@@ -181,7 +166,7 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 							</svg>
 						</a>
 						<a
-							href="/rss.xml"
+							href="/blog/rss.xml"
 							className="flex items-center gap-1.5 text-foreground/30 hover:text-foreground/70 transition-colors"
 							aria-label="RSS Feed"
 						>
@@ -202,10 +187,10 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 					{postCount !== undefined && (
 						<div className="hidden lg:block border-t border-foreground/[0.06] pt-4">
 							<div className="flex items-baseline justify-between">
-								<span className="text-[11px] text-foreground/40 uppercase tracking-wider">
+								<span className="text-xs text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
 									Posts
 								</span>
-								<span className="text-[11px] text-foreground/70 font-mono">
+								<span className="text-xs text-foreground/85 dark:text-foreground/75 font-mono">
 									{postCount}
 								</span>
 							</div>
