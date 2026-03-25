@@ -64,7 +64,7 @@ export default async function HomePage() {
 					</div>
 
 					{/* Right side — Sign in */}
-					<div className="relative z-0 w-full lg:w-[60%] overflow-hidden">
+					<div className="relative z-0 w-full lg:w-[60%] overflow-x-hidden">
 						<div className="flex items-start lg:items-center justify-center">
 							<HeroReadMe
 								contributors={contributors}
