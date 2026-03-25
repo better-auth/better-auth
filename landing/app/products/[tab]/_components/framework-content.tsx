@@ -41,13 +41,13 @@ export function FrameworkContent() {
 	];
 
 	return (
-		<div className="px-5 sm:px-6 lg:px-8 pb-32 space-y-8">
+		<div className="px-5 sm:px-6 lg:px-8 pb-16 space-y-8">
 			<motion.div
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.05 }}
 			>
-				<p className="text-[13px] text-foreground/55 dark:text-foreground/45 max-w-lg mb-5">
+				<p className="text-sm sm:text-[15px] text-foreground/80 leading-relaxed max-w-lg mb-8">
 					Everything you need to build production-ready auth. Free and open
 					source under the MIT license.
 				</p>

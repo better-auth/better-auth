@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 
 function FrameworkHero() {
@@ -16,12 +17,12 @@ function FrameworkHero() {
 		>
 			<div className="space-y-6">
 				<div className="space-y-2">
-					<h1 className="text-lg md:text-xl lg:text-2xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 						<span className="underline underline-offset-4 decoration-foreground/30">
 							Open Source
 						</span>
 					</h1>
-					<p className="text-[11px] text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
+					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
 						A comprehensive, framework-agnostic authentication library for
 						TypeScript. Free and open source under the MIT license.
 					</p>
@@ -105,12 +106,12 @@ function InfrastructureHero() {
 		>
 			<div className="space-y-6">
 				<div className="space-y-2">
-					<h1 className="text-lg md:text-xl lg:text-2xl text-neutral-800 dark:text-neutral-100 tracking-tight leading-tight">
+					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-100 tracking-tight leading-tight">
 						<span className="underline underline-offset-4 decoration-foreground/40">
 							Infrastructure
 						</span>
 					</h1>
-					<p className="text-[11px] text-foreground/75 dark:text-foreground/65 leading-relaxed max-w-[260px]">
+					<p className="text-sm text-foreground/75 dark:text-foreground/65 leading-relaxed max-w-[260px]">
 						Dashboard, security, audit logs, and more for your auth.
 					</p>
 				</div>
@@ -201,11 +202,11 @@ export function ProductsShell({
 	const isInfrastructure = tab === "infrastructure";
 
 	return (
-		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
-			<div className="relative text-foreground lg:h-full">
-				<div className="flex flex-col lg:h-full lg:flex-row">
+		<div className="relative min-h-dvh pt-14 lg:pt-0">
+			<div className="relative text-foreground">
+				<div className="flex flex-col lg:flex-row">
 					{/* Left side — Hero */}
-					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -237,8 +238,30 @@ export function ProductsShell({
 					</div>
 
 					{/* Right side — Content */}
-					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="px-5 sm:px-6 lg:px-8 pt-16 lg:pt-16 pb-4">
+					<div className="relative w-full lg:w-[70%] overflow-x-hidden no-scrollbar">
+						<div className="px-5 lg:px-8 lg:pt-20">
+							{/* Mobile header */}
+							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
+								<HalftoneBackground />
+								<div className="relative space-y-2 py-16">
+									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+										{isInfrastructure ? (
+											<span className="underline underline-offset-4 decoration-foreground/40">
+												Infrastructure
+											</span>
+										) : (
+											<span className="underline underline-offset-4 decoration-foreground/30">
+												Open Source
+											</span>
+										)}
+									</h1>
+									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+										{isInfrastructure
+											? "Dashboard, security, audit logs, and more for your auth."
+											: "A comprehensive, framework-agnostic authentication library for TypeScript. Free and open source under the MIT license."}
+									</p>
+								</div>
+							</div>
 							<AnimatePresence mode="wait">
 								<motion.h2
 									key={tab}
@@ -246,16 +269,16 @@ export function ProductsShell({
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
 									transition={{ duration: 0.2 }}
-									className="text-base text-foreground/90 tracking-tight"
+									className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5"
 								>
-									{isInfrastructure
-										? "Infrastructure"
-										: "Better Auth Framework"}
+									{isInfrastructure ? "INFRASTRUCTURE" : "FRAMEWORK"}
+									<span className="flex-1 h-px bg-foreground/15" />
 								</motion.h2>
 							</AnimatePresence>
 						</div>
 
 						{children}
+						<Footer />
 					</div>
 				</div>
 			</div>
