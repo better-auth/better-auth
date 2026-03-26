@@ -1,3 +1,110 @@
 # https://help.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners
+#
+# Order matters: later rules override earlier ones (most specific wins)
 
-* @Bekacru @himself65
+# ── Global fallback ──
+* @Bekacru
+
+# ── 1. Core Infrastructure ──
+
+# Core — foundation types, context, utilities, crypto
+/packages/core/ @better-auth/core-infra
+/packages/better-auth/src/auth/ @better-auth/core-infra
+/packages/better-auth/src/context/ @better-auth/core-infra
+/packages/better-auth/src/types/ @better-auth/core-infra
+/packages/better-auth/src/utils/ @better-auth/core-infra
+/packages/better-auth/src/crypto/ @better-auth/core-infra
+
+# Database — DB abstraction, adapters, schema, migrations
+/packages/better-auth/src/db/ @better-auth/data
+/packages/better-auth/src/adapters/ @better-auth/data
+/packages/drizzle-adapter/ @better-auth/data
+/packages/prisma-adapter/ @better-auth/data
+/packages/mongo-adapter/ @better-auth/data
+/packages/kysely-adapter/ @better-auth/data
+/packages/memory-adapter/ @better-auth/data
+
+# Session & Token — cookies, JWT, bearer, multi-session, secondary storage
+/packages/better-auth/src/cookies/ @better-auth/core-infra
+/packages/better-auth/src/plugins/jwt/ @better-auth/core-infra
+/packages/better-auth/src/plugins/bearer/ @better-auth/core-infra
+/packages/better-auth/src/plugins/multi-session/ @better-auth/core-infra
+/packages/better-auth/src/plugins/custom-session/ @better-auth/core-infra
+/packages/redis-storage/ @better-auth/core-infra
+
+# ── 2. Authentication Methods ──
+
+# API routes — core HTTP routing layer
+/packages/better-auth/src/api/ @better-auth/core-infra
+
+# OAuth & Social — social providers, OAuth flows, account linking
+/packages/core/src/social-providers/ @better-auth/plugins
+/packages/core/src/oauth2/ @better-auth/identity
+/packages/better-auth/src/oauth2/ @better-auth/identity
+/packages/better-auth/src/plugins/generic-oauth/ @better-auth/plugins
+/packages/better-auth/src/plugins/oauth-proxy/ @better-auth/plugins
+/packages/better-auth/src/plugins/one-tap/ @better-auth/plugins
+
+# Credential Auth — magic-link, email-otp, phone, username, anonymous, siwe
+/packages/better-auth/src/plugins/magic-link/ @better-auth/plugins
+/packages/better-auth/src/plugins/email-otp/ @better-auth/plugins
+/packages/better-auth/src/plugins/phone-number/ @better-auth/plugins
+/packages/better-auth/src/plugins/username/ @better-auth/plugins
+/packages/better-auth/src/plugins/anonymous/ @better-auth/plugins
+/packages/better-auth/src/plugins/siwe/ @better-auth/plugins
+
+# Passkeys
+/packages/passkey/ @better-auth/plugins
+
+# ── 3. Feature Plugins ──
+
+# Organization & Authorization — org, teams, roles, permissions, admin
+/packages/better-auth/src/plugins/organization/ @better-auth/plugins
+/packages/better-auth/src/plugins/admin/ @better-auth/plugins
+/packages/better-auth/src/plugins/access/ @better-auth/plugins
+
+# Security — 2FA, rate limiting, captcha, pwned passwords
+/packages/better-auth/src/plugins/two-factor/ @better-auth/plugins
+/packages/better-auth/src/api/rate-limiter/ @better-auth/core-infra
+/packages/better-auth/src/plugins/captcha/ @better-auth/plugins
+/packages/better-auth/src/plugins/haveibeenpwned/ @better-auth/plugins
+
+# Identity Provider — OAuth2/OIDC provider, MCP, device flow
+/packages/oauth-provider/ @better-auth/identity
+/packages/better-auth/src/plugins/oidc-provider/ @better-auth/identity
+/packages/better-auth/src/plugins/mcp/ @better-auth/identity
+/packages/better-auth/src/plugins/device-authorization/ @better-auth/identity
+
+# Enterprise — SSO (OIDC + SAML), SCIM provisioning
+/packages/sso/ @better-auth/plugins
+/packages/scim/ @better-auth/plugins
+
+# Billing — Stripe, API keys
+/packages/stripe/ @better-auth/plugins
+/packages/api-key/ @better-auth/plugins
+
+# ── 4. Surface & Integrations ──
+
+# Client SDK — proxy client, session state, framework stores
+/packages/better-auth/src/client/ @better-auth/core-infra
+
+# Platform — Expo, Electron, framework integrations
+/packages/expo/ @better-auth/platform
+/packages/electron/ @better-auth/platform
+/packages/better-auth/src/integrations/ @better-auth/platform
+
+# Developer Tools — CLI, OpenAPI, telemetry, i18n, test-utils
+/packages/cli/ @better-auth/core-infra
+/packages/better-auth/src/plugins/open-api/ @better-auth/core-infra
+/packages/telemetry/ @better-auth/core-infra
+/packages/i18n/ @better-auth/core-infra
+/packages/test-utils/ @better-auth/core-infra
+
+# Documentation
+/docs/ @better-auth/docs
+
+# E2E & Testing
+/e2e/ @better-auth/core-infra
+
+# Demo apps
+/demo/ @better-auth/docs
