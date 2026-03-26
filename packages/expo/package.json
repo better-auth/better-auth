@@ -1,55 +1,14 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.5.0-beta.2",
-  "type": "module",
+  "version": "1.5.7-beta.1",
   "description": "Better Auth integration for Expo and React Native applications.",
-  "main": "dist/index.mjs",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.mts",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/expo"
-  },
-  "homepage": "https://www.better-auth.com/docs/integrations/expo",
-  "scripts": {
-    "test": "vitest",
-    "coverage": "vitest run --coverage",
-    "lint:types": "attw --profile esm-only --pack .",
-    "lint:package": "publint run --strict",
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
-  },
-  "exports": {
-    ".": {
-      "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
-    },
-    "./client": {
-      "dev-source": "./src/client.ts",
-      "types": "./dist/client.d.mts",
-      "default": "./dist/client.mjs"
-    },
-    "./plugins": {
-      "dev-source": "./src/plugins/index.ts",
-      "types": "./dist/plugins/index.d.mts",
-      "default": "./dist/plugins/index.mjs"
-    }
-  },
-  "typesVersions": {
-    "*": {
-      "*": [
-        "./dist/index.d.mts"
-      ],
-      "client": [
-        "./dist/client.d.mts"
-      ],
-      "plugins": [
-        "./dist/plugins/index.d.mts"
-      ]
-    }
   },
   "keywords": [
     "auth",
@@ -61,24 +20,73 @@
   "publishConfig": {
     "access": "public"
   },
-  "license": "MIT",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./plugins": {
+      "dev-source": "./src/plugins/index.ts",
+      "types": "./dist/plugins/index.d.ts",
+      "default": "./dist/plugins/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ],
+      "plugins": [
+        "./dist/plugins/index.d.ts"
+      ]
+    }
+  },
+  "dependencies": {
+    "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "expo-constants": "~17.1.7",
-    "expo-network": "^8.0.7",
-    "expo-linking": "~7.1.7",
-    "expo-web-browser": "~14.2.0",
-    "react-native": "~0.80.2",
+    "expo-constants": "~55.0.7",
+    "expo-linking": "~55.0.7",
+    "expo-network": "~55.0.8",
+    "expo-web-browser": "~55.0.9",
+    "react-native": "~0.84.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*",
     "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",
-    "expo-network": "^8.0.7",
+    "expo-network": ">=8.0.7",
     "expo-web-browser": ">=14.0.0"
   },
   "peerDependenciesMeta": {
@@ -88,16 +96,11 @@
     "expo-linking": {
       "optional": true
     },
+    "expo-network": {
+      "optional": true
+    },
     "expo-web-browser": {
       "optional": true
     }
-  },
-  "dependencies": {
-    "@better-fetch/fetch": "catalog:",
-    "better-call": "catalog:",
-    "zod": "^4.1.12"
-  },
-  "files": [
-    "dist"
-  ]
+  }
 }

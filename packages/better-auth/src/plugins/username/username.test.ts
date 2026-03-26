@@ -1,9 +1,9 @@
-import { describe, expect } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
 
-describe("username", async (it) => {
+describe("username", async () => {
 	const { client, sessionSetter, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
@@ -77,16 +77,19 @@ describe("username", async (it) => {
 			password: "new_password",
 			name: "new-name",
 		});
-		expect(res.error?.status).toBe(422);
+		expect(res.error?.status).toBe(400);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8689
+	 */
 	it("should fail on duplicate username in update-user if user is different", async () => {
 		const newHeaders = new Headers();
 		await client.signUp.email({
-			email: "new-email-2@gamil.com",
-			username: "duplicate-username",
+			email: "duplicate_user@gmail.com",
+			username: "duplicate_user",
 			password: "new_password",
-			name: "new-name",
+			name: "duplicate-user",
 			fetchOptions: {
 				headers: newHeaders,
 			},
@@ -94,7 +97,32 @@ describe("username", async (it) => {
 
 		const { headers: testUserHeaders } = await signInWithTestUser();
 		const res = await client.updateUser({
-			username: "duplicate-username",
+			username: "duplicate_user",
+			fetchOptions: {
+				headers: testUserHeaders,
+			},
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8689
+	 */
+	it("should fail on duplicate username in update-user with different casing", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			email: "case-test@gmail.com",
+			username: "casetestuser",
+			password: "new_password",
+			name: "case-test",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		const { headers: testUserHeaders } = await signInWithTestUser();
+		const res = await client.updateUser({
+			username: "CaseTestUser",
 			fetchOptions: {
 				headers: testUserHeaders,
 			},
@@ -296,7 +324,7 @@ describe("username", async (it) => {
 	});
 });
 
-describe("username custom normalization", async (it) => {
+describe("username custom normalization", async () => {
 	const { client } = await getTestInstance(
 		{
 			plugins: [
@@ -362,7 +390,7 @@ describe("username custom normalization", async (it) => {
 	});
 });
 
-describe("username with displayUsername validation", async (it) => {
+describe("username with displayUsername validation", async () => {
 	const { client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
@@ -408,6 +436,7 @@ describe("username with displayUsername validation", async (it) => {
 			{
 				email: "update-display@email.com",
 				displayUsername: "Initial_Name",
+				username: "initial_name",
 				password: "test-password",
 				name: "test-name",
 			},
@@ -440,7 +469,7 @@ describe("username with displayUsername validation", async (it) => {
 			},
 		});
 		expect(sessionAfter?.user.displayUsername).toBe("Updated_Name-123");
-		expect(sessionAfter?.user.username).toBe("updated_name-123");
+		expect(sessionAfter?.user.username).toBe("initial_name");
 	});
 
 	it("should reject invalid displayUsername on update", async () => {
@@ -471,7 +500,7 @@ describe("username with displayUsername validation", async (it) => {
 	});
 });
 
-describe("isUsernameAvailable with custom validator", async (it) => {
+describe("isUsernameAvailable with custom validator", async () => {
 	const { client } = await getTestInstance(
 		{
 			plugins: [
@@ -522,6 +551,14 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 			password: "password1234",
 		});
 
+		type Error = Exclude<typeof signInRes.error, null>;
+		expectTypeOf<Error>().toEqualTypeOf<{
+			message?: string | undefined;
+			code?: string;
+			statusText: string;
+			status: number;
+		}>();
+
 		expect(signInRes.error).toBeDefined();
 		expect(signInRes.error?.code).toBe(
 			USERNAME_ERROR_CODES.INVALID_USERNAME.code,
@@ -529,7 +566,7 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 	});
 });
 
-describe("post normalization flow", async (it) => {
+describe("post normalization flow", async () => {
 	it("should set displayUsername to username if only username is provided", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
@@ -562,7 +599,7 @@ describe("post normalization flow", async (it) => {
 	});
 });
 
-describe("username email verification flow (no info leak)", async (it) => {
+describe("username email verification flow (no info leak)", async () => {
 	const { client } = await getTestInstance(
 		{
 			emailAndPassword: { enabled: true, requireEmailVerification: true },

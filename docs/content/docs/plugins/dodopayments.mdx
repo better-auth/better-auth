@@ -5,11 +5,15 @@ description: Better Auth Plugin for Dodo Payments
 
 [Dodo Payments](https://dodopayments.com) is a global Merchant-of-Record platform that lets AI, SaaS and digital businesses sell in 150+ countries without touching tax, fraud, or compliance. A single, developer-friendly API powers checkout, billing, and payouts so you can launch worldwide in minutes.
 
+<Callout>
+  This plugin is maintained by the Dodo Payments team. For bugs, issues or feature requests,
+  please visit the [Dodo Payments GitHub repo](https://github.com/dodopayments/dodo-adapters).
+</Callout>
+
 <Card
   href="https://discord.gg/bYqAp4ayYh"
   title="Get support on Dodo Payments' Discord"
 >
-  This plugin is maintained by the Dodo Payments team.<br />
   Have questions? Our team is available on Discord to assist you anytime.
 </Card>
 
@@ -95,6 +99,7 @@ export const auth = betterAuth({
   <Step title="Set up client-side integration">
     Create or update `src/lib/auth-client.ts`:
 ```typescript
+import { createAuthClient } from "better-auth/react";
 import { dodopaymentsClient } from "@dodopayments/better-auth";
 
 export const authClient = createAuthClient({
@@ -110,26 +115,20 @@ export const authClient = createAuthClient({
 ### Creating a Checkout Session
 
 ```typescript
-const { data: checkout, error } = await authClient.dodopayments.checkout({
+const { data: checkoutSession, error } =
+  await authClient.dodopayments.checkoutSession({
   slug: "premium-plan",
-  customer: {
-    email: "customer@example.com",
-    name: "John Doe",
-  },
-  billing: {
-    city: "San Francisco",
-    country: "US",
-    state: "CA",
-    street: "123 Market St",
-    zipcode: "94103",
-  },
-  referenceId: "order_123",
 });
 
-if (checkout) {
-  window.location.href = checkout.url;
+if (checkoutSession) {
+  window.location.href = checkoutSession.url;
 }
 ```
+
+<Callout type="warn">
+  `authClient.dodopayments.checkout()` is deprecated. Use
+  `authClient.dodopayments.checkoutSession()` for new integrations.
+</Callout>
 
 ### Accessing the Customer Portal
 

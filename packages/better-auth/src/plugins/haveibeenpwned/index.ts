@@ -1,14 +1,13 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getCurrentAuthContext } from "@better-auth/core/context";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"have-i-been-pwned": {
 			creator: typeof haveIBeenPwned;
 		};
@@ -67,6 +66,9 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
+	/**
+	 * Custom error message shown when a compromised password is detected.
+	 */
 	customPasswordCompromisedMessage?: string | undefined;
 	/**
 	 * Paths to check for password
@@ -74,6 +76,12 @@ export interface HaveIBeenPwnedOptions {
 	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
 	 */
 	paths?: string[];
+	/**
+	 * Enable or disable password checks against the HIBP database.
+	 *
+	 * @default true
+	 */
+	enabled?: boolean | undefined;
 }
 
 export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
@@ -86,20 +94,23 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 	return {
 		id: "have-i-been-pwned",
 		init(ctx) {
+			const originalHash = ctx.password.hash;
 			return {
 				context: {
 					password: {
 						...ctx.password,
 						async hash(password) {
+							if (options?.enabled === false) return originalHash(password);
+
 							const c = await getCurrentAuthContext();
 							if (!c.path || !paths.includes(c.path)) {
-								return ctx.password.hash(password);
+								return originalHash(password);
 							}
 							await checkPasswordCompromise(
 								password,
 								options?.customPasswordCompromisedMessage,
 							);
-							return ctx.password.hash(password);
+							return originalHash(password);
 						},
 					},
 				},

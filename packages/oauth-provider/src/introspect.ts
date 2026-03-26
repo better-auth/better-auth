@@ -17,6 +17,8 @@ import {
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	parseClientMetadata,
+	resolveSubjectIdentifier,
 	validateClientCredentials,
 } from "./utils";
 
@@ -101,7 +103,7 @@ async function validateJwtAccessToken(
 	}
 
 	// Validate JWT against its session if it exists
-	let sessionId = jwtPayload.sid;
+	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
@@ -218,7 +220,7 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
-				metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: parseClientMetadata(client?.metadata),
 			})
 		: {};
 
@@ -235,8 +237,8 @@ async function validateOpaqueAccessToken(
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(accessToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(accessToken.createdAt.getTime() / 1000),
+		exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
 		scope: accessToken.scopes?.join(" "),
 	} as JWTPayload;
 }
@@ -322,8 +324,8 @@ async function validateRefreshToken(
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(refreshToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(refreshToken.createdAt.getTime() / 1000),
+		exp: Math.floor(new Date(refreshToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(new Date(refreshToken.createdAt).getTime() / 1000),
 		scope: refreshToken.scopes?.join(" "),
 	} as JWTPayload;
 }
@@ -368,6 +370,27 @@ export async function validateAccessToken(
 		error_description: "Invalid access token",
 		error: "invalid_request",
 	});
+}
+
+/**
+ * Resolves pairwise sub on an introspection payload.
+ * Applied at the presentation layer so internal validation functions
+ * keep real user.id (needed for user lookup in /userinfo).
+ */
+async function resolveIntrospectionSub(
+	opts: OAuthOptions<Scope[]>,
+	payload: JWTPayload,
+	client: SchemaClient<Scope[]>,
+): Promise<JWTPayload> {
+	if (payload.active && payload.sub) {
+		const resolvedSub = await resolveSubjectIdentifier(
+			payload.sub as string,
+			client,
+			opts,
+		);
+		return { ...payload, sub: resolvedSub };
+	}
+	return payload;
 }
 
 export async function introspectEndpoint(
@@ -428,7 +451,7 @@ export async function introspectEndpoint(
 					token,
 					client.clientId,
 				);
-				return payload;
+				return resolveIntrospectionSub(opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "access_token") {
@@ -451,7 +474,7 @@ export async function introspectEndpoint(
 					refreshToken.token,
 					client.clientId,
 				);
-				return payload;
+				return resolveIntrospectionSub(opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "refresh_token") {

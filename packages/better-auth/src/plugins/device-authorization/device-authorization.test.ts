@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
@@ -120,7 +120,7 @@ describe("client validation", async () => {
 });
 
 describe("device authorization flow", async () => {
-	const { auth, signInWithTestUser } = await getTestInstance(
+	const { auth, signInWithTestUser, db } = await getTestInstance(
 		{
 			plugins: [
 				deviceAuthorization({
@@ -172,6 +172,10 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device token polling", () => {
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
 		it("should return authorization_pending when not approved", async () => {
 			const { device_code } = await auth.api.deviceCode({
 				body: {
@@ -314,6 +318,8 @@ describe("device authorization flow", async () => {
 		});
 
 		it("should deny device authorization", async () => {
+			const { headers } = await signInWithTestUser();
+
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
@@ -323,7 +329,7 @@ describe("device authorization flow", async () => {
 			// Deny the device
 			const denyResponse = await auth.api.deviceDeny({
 				body: { userCode: user_code },
-				headers: new Headers(),
+				headers,
 			});
 			expect("success" in denyResponse && denyResponse.success).toBe(true);
 
@@ -469,6 +475,69 @@ describe("device authorization flow", async () => {
 			expect("scope" in tokenResponse && tokenResponse.scope).toBe(
 				"read write profile",
 			);
+		});
+
+		it("should require authentication for deny", async () => {
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			await expect(
+				auth.api.deviceDeny({
+					body: { userCode: user_code },
+					headers: new Headers(),
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "unauthorized",
+					error_description: "Authentication required",
+				},
+			});
+		});
+
+		it("should allow first user to approve but prevent re-approval", async () => {
+			// Sign in as user
+			const { headers } = await signInWithTestUser();
+
+			// Request device code
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			// User approves - this should succeed
+			const approveResponse = await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+			expect("success" in approveResponse && approveResponse.success).toBe(
+				true,
+			);
+
+			// Verify the device code is now approved
+			const cleanUserCode = user_code.replace(/-/g, "");
+			const deviceCodeRecord = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "userCode", value: cleanUserCode }],
+			});
+			expect(deviceCodeRecord?.status).toBe("approved");
+			expect(deviceCodeRecord?.userId).toBeDefined();
+
+			// Try to approve again - should fail because already processed
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode: user_code },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_request",
+					error_description: "Device code already processed",
+				},
+			});
 		});
 	});
 });

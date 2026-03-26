@@ -20,8 +20,7 @@ export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"generic-oauth": {
 			creator: typeof genericOAuth;
 		};
@@ -54,6 +53,23 @@ export type BaseOAuthProviderOptions = Omit<
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
+	const seenIds = new Set<string>();
+	const nonUniqueIds = new Set<string>();
+
+	for (const config of options.config) {
+		const id = config.providerId;
+		if (seenIds.has(id)) {
+			nonUniqueIds.add(id);
+		}
+		seenIds.add(id);
+	}
+
+	if (nonUniqueIds.size > 0) {
+		console.warn(
+			`Duplicate provider IDs found: ${Array.from(nonUniqueIds).join(", ")}`,
+		);
+	}
+
 	return {
 		id: "generic-oauth",
 		init: (ctx: AuthContext) => {

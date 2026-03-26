@@ -1,8 +1,8 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
-import { generateId } from "../../utils";
 import { getDate } from "../../utils/date";
 import { validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
@@ -84,6 +84,7 @@ export const requestPasswordReset = createAuthEndpoint(
 				},
 			},
 		},
+		use: [originCheck((ctx) => ctx.body.redirectTo)],
 	},
 	async (ctx) => {
 		if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
@@ -308,7 +309,7 @@ export const resetPassword = createAuthEndpoint(
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(id);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			const user = await ctx.context.internalAdapter.findUserById(userId);
@@ -378,7 +379,7 @@ export const verifyPassword = createAuthEndpoint(
 		});
 
 		if (!isValid) {
-			throw new APIError("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 		}
 
 		return ctx.json({

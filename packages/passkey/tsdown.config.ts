@@ -4,13 +4,16 @@ export default defineConfig({
 	dts: { build: true, incremental: true },
 	format: ["esm"],
 	entry: ["./src/index.ts", "./src/client.ts"],
-	external: [
-		"nanostores",
-		"@better-auth/utils",
-		"better-call",
-		"@better-fetch/fetch",
-		"@better-auth/core",
-		"better-auth",
-	],
+	deps: {
+		neverBundle: [
+			"nanostores",
+			"@better-auth/utils",
+			"better-call",
+			"@better-fetch/fetch",
+			"@better-auth/core",
+			"better-auth",
+		],
+	},
+	sourcemap: true,
 	treeshake: true,
 });

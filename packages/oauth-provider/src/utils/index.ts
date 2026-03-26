@@ -4,6 +4,7 @@ import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
+	makeSignature,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
@@ -52,10 +53,104 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
  * @internal
  */
 export const getJwtPlugin = (ctx: AuthContext) => {
-	return ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	if (!plugin) {
+		throw new BetterAuthError("jwt_config");
+	}
+	return plugin;
 };
 
+/**
+ * Normalizes timestamp-like values returned by adapters.
+ *
+ * Accepts Date instances, epoch milliseconds as numbers, and strings that are
+ * either ISO dates or numeric millisecond values such as "1774295570569.0".
+ */
+export function normalizeTimestampValue(value: unknown): Date | undefined {
+	if (value == null) {
+		return undefined;
+	}
+
+	if (value instanceof Date) {
+		return Number.isFinite(value.getTime()) ? value : undefined;
+	}
+
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+
+		const parsed = new Date(value);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+
+		const numeric = Number(trimmed);
+		if (Number.isFinite(numeric)) {
+			const parsed = new Date(numeric);
+			return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+		}
+
+		const parsed = new Date(trimmed);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	return undefined;
+}
+
+/**
+ * Resolves a session auth time from common adapter return shapes.
+ */
+export function resolveSessionAuthTime(value: unknown): Date | undefined {
+	if (value instanceof Date) {
+		return normalizeTimestampValue(value);
+	}
+
+	if (!value || typeof value !== "object") {
+		return normalizeTimestampValue(value);
+	}
+
+	const direct =
+		normalizeTimestampValue((value as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((value as Record<string, unknown>).created_at);
+
+	if (direct) {
+		return direct;
+	}
+
+	const nested = (value as Record<string, unknown>).session;
+	if (!nested || typeof nested !== "object") {
+		return undefined;
+	}
+
+	return (
+		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
+	);
+}
+
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+
+export async function verifyOAuthQueryParams(
+	oauth_query: string,
+	secret: string,
+) {
+	const queryParams = new URLSearchParams(oauth_query);
+	const sig = queryParams.get("sig");
+	const exp = Number(queryParams.get("exp"));
+	queryParams.delete("sig");
+	const verifySig = await makeSignature(queryParams.toString(), secret);
+	return (
+		!!sig &&
+		constantTimeEqual(sig, verifySig) &&
+		new Date(exp * 1000) >= new Date()
+	);
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -109,7 +204,7 @@ export async function decryptStoredClientSecret(
 ) {
 	if (storageMethod === "encrypted") {
 		return await symmetricDecrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: storedClientSecret,
 		});
 	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
@@ -169,10 +264,20 @@ async function verifyStoredClientSecret(
 				constantTimeEqual(hashedClientSecret, storedClientSecret)
 			);
 		}
-	} else if (
-		storageMethod === "encrypted" ||
-		(typeof storageMethod === "object" && "decrypt" in storageMethod)
-	) {
+	} else if (storageMethod === "encrypted") {
+		try {
+			const decryptedClientSecret = await decryptStoredClientSecret(
+				ctx,
+				storageMethod,
+				storedClientSecret,
+			);
+			return (
+				!!clientSecret && constantTimeEqual(decryptedClientSecret, clientSecret)
+			);
+		} catch {
+			return false;
+		}
+	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
 		const decryptedClientSecret = await decryptStoredClientSecret(
 			ctx,
 			storageMethod,
@@ -203,7 +308,7 @@ export async function storeClientSecret(
 
 	if (storageMethod === "encrypted") {
 		return await symmetricEncrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: clientSecret,
 		});
 	} else if (storageMethod === "hashed") {
@@ -370,6 +475,19 @@ export async function validateClientCredentials(
 }
 
 /**
+ * Parse client metadata that may be stored as JSON string or already parsed object.
+ * Handles database adapters that auto-parse JSON columns.
+ *
+ * @internal
+ */
+export function parseClientMetadata(
+	metadata: string | object | undefined,
+): object | undefined {
+	if (!metadata) return undefined;
+	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+}
+
+/**
  * Parse space-separated prompt string into a set of prompts
  *
  * @param prompt
@@ -392,13 +510,61 @@ export function parsePrompt(prompt: string) {
 }
 
 /**
+ * Extracts the sector identifier (hostname) from a client's first redirect URI.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+	const uri = client.redirectUris?.[0];
+	if (!uri) {
+		throw new BetterAuthError(
+			"Client has no redirect URIs for sector identifier",
+		);
+	}
+	return new URL(uri).host;
+}
+
+/**
+ * Computes a pairwise subject identifier using HMAC-SHA256.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+export async function computePairwiseSub(
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	secret: string,
+): Promise<string> {
+	const sectorId = getSectorIdentifier(client);
+	return makeSignature(`${sectorId}.${userId}`, secret);
+}
+
+/**
+ * Returns the appropriate subject identifier for a user+client pair.
+ * Uses pairwise when the client opts in and the server has a secret configured.
+ *
+ * @internal
+ */
+export async function resolveSubjectIdentifier(
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	opts: OAuthOptions<Scope[]>,
+): Promise<string> {
+	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
+		return computePairwiseSub(userId, client, opts.pairwiseSecret);
+	}
+	return userId;
+}
+
+/**
  * Deletes a prompt value
  *
  * @param ctx
  * @param prompt - the prompt value to delete
  */
 export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	let prompts = query.get("prompt")?.split(" ");
+	const prompts = query.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
@@ -407,4 +573,51 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 			: query.delete("prompt");
 	}
 	return Object.fromEntries(query);
+}
+
+enum PKCERequirementErrors {
+	PUBLIC_CLIENT = "pkce is required for public clients",
+	OFFLINE_ACCESS_SCOPE = "pkce is required when requesting offline_access scope",
+	CLIENT_REQUIRE_PKCE = "pkce is required for this client",
+}
+/**
+ * Determines if PKCE is required for a given client and scope.
+ *
+ * PKCE is always required for:
+ * 1. Public clients (cannot securely store client_secret)
+ * 2. Requests with offline_access scope (refresh token security)
+ *
+ * For confidential clients without offline_access:
+ * - Uses client.requirePKCE if set (defaults to true)
+ *
+ * Returns false if PKCE is not required, or the reason it is required.
+ *
+ * @internal
+ */
+export function isPKCERequired(
+	client: SchemaClient<Scope[]>,
+	requestedScopes?: string[],
+): false | PKCERequirementErrors {
+	// Determine if client is public
+	const isPublicClient =
+		client.tokenEndpointAuthMethod === "none" ||
+		client.type === "native" ||
+		client.type === "user-agent-based" ||
+		client.public === true;
+
+	// PKCE always required for public clients
+	if (isPublicClient) {
+		return PKCERequirementErrors.PUBLIC_CLIENT;
+	}
+
+	// PKCE always required for offline_access scope (refresh tokens)
+	if (requestedScopes?.includes("offline_access")) {
+		return PKCERequirementErrors.OFFLINE_ACCESS_SCOPE;
+	}
+
+	if (client.requirePKCE ?? true) {
+		return PKCERequirementErrors.CLIENT_REQUIRE_PKCE;
+	}
+
+	return false;
 }

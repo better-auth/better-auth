@@ -1,12 +1,12 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { describe, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { originCheck } from "./origin-check";
 
-describe("Origin Check", async (it) => {
+describe("Origin Check", async () => {
 	const { customFetchImpl, testUser } = await getTestInstance({
 		trustedOrigins: [
 			"http://localhost:5000",
@@ -245,7 +245,7 @@ describe("Origin Check", async (it) => {
 	});
 });
 
-describe("Fetch Metadata CSRF Protection", async (it) => {
+describe("Fetch Metadata CSRF Protection", async () => {
 	const { testUser, auth } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
 		emailAndPassword: {
@@ -493,10 +493,13 @@ describe("Fetch Metadata CSRF Protection", async (it) => {
 	});
 });
 
-describe("origin check middleware", async (it) => {
+describe("origin check middleware", async () => {
 	it("should return invalid origin", async () => {
 		const { client } = await getTestInstance({
 			trustedOrigins: ["https://trusted-site.com"],
+			advanced: {
+				disableOriginCheck: false,
+			},
 			plugins: [
 				{
 					id: "test",
@@ -534,9 +537,64 @@ describe("origin check middleware", async (it) => {
 		);
 		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
 	});
+
+	it("should skip origin check for matched paths when skipOriginCheck is set to an array", async () => {
+		const { client } = await getTestInstance({
+			trustedOrigins: ["https://trusted-site.com"],
+			advanced: {
+				disableOriginCheck: false,
+			},
+			plugins: [
+				{
+					id: "test",
+					init() {
+						return {
+							context: {
+								skipOriginCheck: ["/public/data"],
+							},
+						};
+					},
+					endpoints: {
+						publicEndpoint: createAuthEndpoint(
+							"/public/data",
+							{
+								method: "GET",
+								query: z.object({
+									callbackURL: z.string(),
+								}),
+								use: [originCheck((c) => c.query.callbackURL)],
+							},
+							async (c) => c.query.callbackURL,
+						),
+						protectedEndpoint: createAuthEndpoint(
+							"/protected/data",
+							{
+								method: "GET",
+								query: z.object({
+									callbackURL: z.string(),
+								}),
+								use: [originCheck((c) => c.query.callbackURL)],
+							},
+							async (c) => c.query.callbackURL,
+						),
+					},
+				},
+			],
+		});
+
+		const skipped = await client.$fetch(
+			"/public/data?callbackURL=https://malicious.com",
+		);
+		expect(skipped.data).toBe("https://malicious.com");
+
+		const blocked = await client.$fetch(
+			"/protected/data?callbackURL=https://malicious.com",
+		);
+		expect(blocked.error?.status).toBe(403);
+	});
 });
 
-describe("trusted origins with baseURL inferred from request", async (it) => {
+describe("trusted origins with baseURL inferred from request", async () => {
 	it("should respect trustedOrigins array when baseURL is NOT in config", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
 			baseURL: undefined,
@@ -726,5 +784,226 @@ describe("trusted origins with baseURL inferred from request", async (it) => {
 		} finally {
 			vi.unstubAllEnvs();
 		}
+	});
+});
+
+describe("disableCSRFCheck and disableOriginCheck separation", async () => {
+	it("disableCSRFCheck should allow untrusted origins with cookies (CSRF bypass)", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: true,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://evil-site.com",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		// Should succeed because CSRF check is disabled (origin header not validated)
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			// But callbackURL should still be validated by origin check
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("disableCSRFCheck should still validate callbackURL (origin check still active)", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: true,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://evil-site.com",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		// Origin header passes (CSRF disabled), but callbackURL should fail
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://malicious-site.com/steal",
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+
+	it("disableOriginCheck should allow untrusted callbackURL", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: true,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://localhost:3000",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		// Origin header is trusted, and callbackURL validation is disabled
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://any-site.com/redirect",
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("disableOriginCheck also disables CSRF for backward compatibility", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableOriginCheck: true,
+			},
+		});
+
+		const warnFn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://evil-site.com",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		expect(warnFn).toHaveBeenCalledTimes(0);
+		// disableOriginCheck: true also disables CSRF for backward compatibility
+		// so this should succeed even with an untrusted origin
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://any-site.com/redirect",
+		});
+		expect(warnFn).toHaveBeenCalledTimes(1);
+
+		expect(warnFn).toHaveBeenCalledWith(
+			expect.stringMatching(/^\[Deprecation]/),
+		);
+
+		expect(res.data?.user).toBeDefined();
+		{
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://any-site.com/redirect",
+			});
+			expect(warnFn).toHaveBeenCalledTimes(1);
+		}
+	});
+
+	it("disableCSRFCheck should bypass Fetch Metadata CSRF protection", async () => {
+		const { auth, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: true,
+				disableOriginCheck: false,
+			},
+		});
+
+		// Cross-site navigation that would normally be blocked
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		// Should NOT be blocked because CSRF check is disabled
+		expect(response.status).not.toBe(403);
+	});
+
+	it("both flags disabled should bypass all checks", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: true,
+				disableOriginCheck: true,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://evil-site.com",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		// Both CSRF and origin checks are disabled
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://malicious-site.com/steal",
+		});
+
+		expect(res.data?.user).toBeDefined();
 	});
 });

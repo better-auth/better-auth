@@ -1,0 +1,49 @@
+{
+  "name": "@better-auth/electron-demo",
+  "productName": "Better Auth + Electron",
+  "private": true,
+  "version": "1.0.0",
+  "description": "An Electron application with React and TypeScript",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:unpack": "npm run build && electron-builder --dir",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:linux": "electron-vite build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@better-auth/electron": "link:../../packages/electron",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@radix-ui/react-avatar": "^1.1.11",
+    "@radix-ui/react-slot": "^1.2.4",
+    "better-auth": "link:../../packages/better-auth",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "conf": "^15.1.0",
+    "electron-store": "^11.0.2",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron": "^39.7.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

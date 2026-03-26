@@ -1,4 +1,9 @@
 import * as z from "zod";
+import type { BetterAuthOptions, Prettify } from "../../types";
+import type {
+	InferDBFieldsFromOptions,
+	InferDBFieldsFromPlugins,
+} from "../type";
 import { coreSchema } from "./shared";
 
 export const userSchema = coreSchema.extend({
@@ -8,9 +13,16 @@ export const userSchema = coreSchema.extend({
 	image: z.string().nullish(),
 });
 
+export type BaseUser = z.infer<typeof userSchema>;
+
 /**
  * User schema type used by better-auth, note that it's possible that user could have additional fields
- *
- * todo: we should use generics to extend this type with additional fields from plugins and options in the future
  */
-export type User = z.infer<typeof userSchema>;
+export type User<
+	DBOptions extends BetterAuthOptions["user"] = BetterAuthOptions["user"],
+	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+> = Prettify<
+	BaseUser &
+		InferDBFieldsFromOptions<DBOptions> &
+		InferDBFieldsFromPlugins<"user", Plugins>
+>;
