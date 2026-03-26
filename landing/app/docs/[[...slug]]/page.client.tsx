@@ -61,7 +61,7 @@ function CopyMdLinkButton({ rawMdUrl }: { rawMdUrl: string }) {
 				? window.location.origin
 				: "https://better-auth.com",
 		);
-		navigator.clipboard.writeText(url.toString());
+		return navigator.clipboard.writeText(url.toString());
 	});
 
 	return (
