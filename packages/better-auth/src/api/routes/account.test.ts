@@ -6,6 +6,7 @@ import type { MockInstance } from "vitest";
 import {
 	afterAll,
 	afterEach,
+	assert,
 	beforeAll,
 	describe,
 	expect,
@@ -549,7 +550,7 @@ describe("account", async () => {
 		expect(accessTokenRes.data?.accessToken).toBe("test");
 	});
 
-	it("should match account cookie by accountId (not internal id) in getAccessToken", async () => {
+	it("should use account cookie when accountId is omitted in getAccessToken", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				google: {
@@ -662,9 +663,9 @@ describe("account", async () => {
 			fetchOptions: { headers },
 		});
 		const googleAccount = accounts.data?.find((a) => a.providerId === "google");
-		expect(googleAccount).toBeDefined();
+		assert(googleAccount, "google account should exist");
 		// Internal id and provider accountId must differ
-		expect(googleAccount!.id).not.toBe(googleAccount!.accountId);
+		assert(googleAccount.id !== googleAccount.accountId);
 
 		const findAccountsSpy = vi.spyOn(testCtx.internalAdapter, "findAccounts");
 
@@ -672,7 +673,7 @@ describe("account", async () => {
 		const accessTokenRes = await client.getAccessToken(
 			{
 				providerId: "google",
-				accountId: googleAccount!.accountId,
+				accountId: googleAccount.accountId,
 			},
 			{
 				headers,
