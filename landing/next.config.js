@@ -51,6 +51,16 @@ const nextConfig = {
 				destination: "/products/infrastructure",
 				permanent: true,
 			},
+			{
+				source: "/terms",
+				destination: "/legal/terms",
+				permanent: true,
+			},
+			{
+				source: "/privacy",
+				destination: "/legal/privacy",
+				permanent: true,
+			},
 		];
 	},
 };

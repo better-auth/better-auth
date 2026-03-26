@@ -19,7 +19,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
 import { decodeJwt } from "jose";
-import saml from "samlify";
+import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
@@ -1601,6 +1601,7 @@ async function handleOIDCCallback(
 				? "post"
 				: "basic",
 	}).catch((e) => {
+		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {
 			throw ctx.redirect(
 				`${
