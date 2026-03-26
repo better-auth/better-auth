@@ -521,7 +521,7 @@
     "@opentelemetry/sdk-trace-node": "^1.30.0",
     "better-sqlite3": "^12.6.2",
     "deepmerge": "^4.3.1",
-    "happy-dom": "^20.7.0",
+    "happy-dom": "^20.8.8",
     "listhen": "^1.9.0",
     "msw": "^2.12.10",
     "next": "^16.2.0",
