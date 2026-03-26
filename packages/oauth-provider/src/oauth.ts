@@ -166,11 +166,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		id: "oauth-provider",
 		options: opts as NoInfer<O>,
 		init: (ctx) => {
-			// OAuth Provider requires sessions in the DB (secondary-storage-only is not supported)
-			if (
-				ctx.options.secondaryStorage &&
-				!ctx.options.session?.storeSessionInDatabase
-			) {
+			// Require session id storage on database (secondary-storage only solution not yet supported)
+			if (ctx.options.session && !ctx.options.session.storeSessionInDatabase) {
 				throw new BetterAuthError(
 					"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
 				);
