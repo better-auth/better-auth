@@ -596,10 +596,7 @@ describe("account", async () => {
 		});
 
 		// Spy on findAccounts to verify cookie path is used (no DB fallback)
-		const findAccountsSpy = vi.spyOn(
-			testCtx.internalAdapter,
-			"findAccounts",
-		);
+		const findAccountsSpy = vi.spyOn(testCtx.internalAdapter, "findAccounts");
 
 		const accessTokenRes = await client.getAccessToken(
 			{
@@ -664,17 +661,12 @@ describe("account", async () => {
 		const accounts = await client.listAccounts({
 			fetchOptions: { headers },
 		});
-		const googleAccount = accounts.data?.find(
-			(a) => a.providerId === "google",
-		);
+		const googleAccount = accounts.data?.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeDefined();
 		// Internal id and provider accountId must differ
 		expect(googleAccount!.id).not.toBe(googleAccount!.accountId);
 
-		const findAccountsSpy = vi.spyOn(
-			testCtx.internalAdapter,
-			"findAccounts",
-		);
+		const findAccountsSpy = vi.spyOn(testCtx.internalAdapter, "findAccounts");
 
 		// Pass explicit accountId (provider-issued) - this should match cookie
 		const accessTokenRes = await client.getAccessToken(
