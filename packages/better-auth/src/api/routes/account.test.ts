@@ -549,6 +549,150 @@ describe("account", async () => {
 		expect(accessTokenRes.data?.accessToken).toBe("test");
 	});
 
+	it("should match account cookie by accountId (not internal id) in getAccessToken", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+
+		const testCtx = await auth.$context;
+		const headers = new Headers();
+		email = "account-cookie-match@test.com";
+
+		// Start OAuth sign-in flow
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		// Complete OAuth callback
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		// Spy on findAccounts to verify cookie path is used (no DB fallback)
+		const findAccountsSpy = vi.spyOn(
+			testCtx.internalAdapter,
+			"findAccounts",
+		);
+
+		const accessTokenRes = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+		// Cookie should have matched directly, no DB lookup needed
+		expect(findAccountsSpy).not.toHaveBeenCalled();
+		findAccountsSpy.mockRestore();
+	});
+
+	it("should match account cookie by accountId in getAccessToken when accountId is provided", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+
+		const testCtx = await auth.$context;
+		const headers = new Headers();
+		email = "account-cookie-accountid@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		// Get the provider accountId from the cookie/DB
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers },
+		});
+		const googleAccount = accounts.data?.find(
+			(a) => a.providerId === "google",
+		);
+		expect(googleAccount).toBeDefined();
+		// Internal id and provider accountId must differ
+		expect(googleAccount!.id).not.toBe(googleAccount!.accountId);
+
+		const findAccountsSpy = vi.spyOn(
+			testCtx.internalAdapter,
+			"findAccounts",
+		);
+
+		// Pass explicit accountId (provider-issued) - this should match cookie
+		const accessTokenRes = await client.getAccessToken(
+			{
+				providerId: "google",
+				accountId: googleAccount!.accountId,
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+		// Cookie should have matched by accountId, no DB fallback
+		expect(findAccountsSpy).not.toHaveBeenCalled();
+		findAccountsSpy.mockRestore();
+	});
+
 	it("should persist refreshed idToken in database during getAccessToken auto-refresh", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {

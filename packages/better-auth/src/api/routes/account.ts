@@ -525,7 +525,7 @@ export const getAccessToken = createAuthEndpoint(
 		if (
 			accountData &&
 			providerId === accountData.providerId &&
-			(!accountId || accountData.id === accountId)
+			(!accountId || accountData.accountId === accountId)
 		) {
 			account = accountData;
 		} else {
