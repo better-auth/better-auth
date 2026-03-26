@@ -34,6 +34,7 @@ import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
 import { wechat } from "./wechat";
+import { zoho } from "./zoho";
 import { zoom } from "./zoom";
 
 export const socialProviders = {
@@ -72,6 +73,7 @@ export const socialProviders = {
 	railway,
 	vercel,
 	wechat,
+	zoho,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -129,6 +131,7 @@ export * from "./twitter";
 export * from "./vercel";
 export * from "./vk";
 export * from "./wechat";
+export * from "./zoho";
 export * from "./zoom";
 
 export type SocialProviderList = typeof socialProviderList;

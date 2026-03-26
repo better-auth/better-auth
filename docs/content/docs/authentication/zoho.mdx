@@ -1,0 +1,98 @@
+---
+title: Zoho
+description: Zoho provider setup and usage.
+---
+
+<Steps>
+    <Step>
+        ### Get your Zoho credentials
+        To use Zoho sign in, you need a client ID and client secret. You can get them from the [Zoho API Console](https://api-console.zoho.com/).
+
+        Choose **Server-based Applications** when creating your app.
+
+        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/zoho` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+    </Step>
+
+  <Step>
+        ### Configure the provider
+        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            socialProviders: {
+                zoho: { // [!code highlight]
+                    clientId: process.env.ZOHO_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.ZOHO_CLIENT_SECRET as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Sign In with Zoho
+
+To sign in with Zoho, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+- `provider`: The provider to use. It should be set to `zoho`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+const authClient = createAuthClient()
+
+const signIn = async () => {
+    const data = await authClient.signIn.social({
+        provider: "zoho"
+    })
+}
+```
+
+## Options
+
+For the full list of options supported by all social providers, check the [Provider Options](/docs/concepts/oauth#provider-options).
+
+### Multi Data Center Support
+
+Zoho operates across multiple data centers. By default, the provider uses the US data center (`https://accounts.zoho.com`). If your app is registered in a different data center, set the `accountsServer` option:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        zoho: {
+            clientId: process.env.ZOHO_CLIENT_ID as string,
+            clientSecret: process.env.ZOHO_CLIENT_SECRET as string,
+            accountsServer: "https://accounts.zoho.in", // [!code highlight]
+        },
+    },
+})
+```
+
+| Data Center | URL |
+|---|---|
+| United States | `https://accounts.zoho.com` (default) |
+| Europe | `https://accounts.zoho.eu` |
+| India | `https://accounts.zoho.in` |
+| Australia | `https://accounts.zoho.com.au` |
+| Japan | `https://accounts.zoho.jp` |
+| Canada | `https://accounts.zoho.ca` |
+| Saudi Arabia | `https://accounts.zoho.sa` |
+| United Kingdom | `https://accounts.zoho.uk` |
+
+### Refresh Tokens
+
+By default, the Zoho provider requests offline access, which provides a refresh token. You can disable this by setting `accessType` to `"online"`:
+
+```ts title="auth.ts"
+socialProviders: {
+    zoho: {
+        clientId: process.env.ZOHO_CLIENT_ID as string,
+        clientSecret: process.env.ZOHO_CLIENT_SECRET as string,
+        accessType: "online", // [!code highlight]
+    },
+}
+```
