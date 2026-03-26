@@ -5,9 +5,11 @@ import { MongoClient, ObjectId } from "mongodb";
 import { expect } from "vitest";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../adapter-factory";
 
 const dbClient = async (connectionString: string, dbName: string) => {
@@ -82,9 +84,10 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 		joinsTestSuite(),
+		caseInsensitiveTestSuite(),
 		updateObjectIdTestSuite(),
+		uuidTestSuite(),
 		// numberIdTestSuite(), // no support
-		// uuidTestSuite() // no support
 	],
 	customIdGenerator: () => new ObjectId().toHexString(),
 });

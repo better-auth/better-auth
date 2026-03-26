@@ -1,5 +1,6 @@
 export {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	getNormalTestSuiteTests,
 	joinsTestSuite,
 	normalTestSuite,
