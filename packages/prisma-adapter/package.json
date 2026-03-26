@@ -43,7 +43,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0",
+    "@better-auth/utils": "catalog:",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
@@ -57,7 +57,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.1",
+    "@better-auth/utils": "catalog:",
     "prisma": "^7.4.1",
     "tsdown": "catalog:",
     "typescript": "catalog:"
