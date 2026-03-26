@@ -1,0 +1,91 @@
+---
+title: AI tooling
+description: Use LLMs.txt, skills, MCP, and the docs assistant to build and debug Better Auth with AI coding tools.
+---
+
+## LLMs.txt
+
+Better Auth publishes an LLMs-friendly index of the documentation. Point your assistant at it, or paste the URL into tools that ingest project context.
+
+- **Index:** [https://www.better-auth.com/llms.txt](https://www.better-auth.com/llms.txt)
+
+The index links to per-page Markdown under `/llms.txt/docs/...` so tools can fetch only the sections they need.
+
+## Skills (`better-auth/skills`)
+
+[Agent skills](https://agentskills.io) are portable instruction files (for example `SKILL.md`) that teach your coding agent project conventions, safe patterns, and where to look in the docs. The **Better Auth** skill pack lives in the [`better-auth/skills`](https://github.com/better-auth/skills) repository.
+
+Install it with the [`skills` CLI](https://www.npmjs.com/package/skills) (uses `npx` so nothing global is required):
+
+```bash title="terminal"
+npx skills add better-auth/skills
+```
+
+Your editor or agent loads skills from its configured skills directory (often project-level). After installing, restart the agent or reload skills if your tool requires it.
+
+## Documentation MCP server
+
+Better Auth hosts a **remote MCP server** that exposes documentation search, examples, and setup help to any MCP-capable client (Cursor, Claude Code, Open Code, and others).
+
+**Endpoint:** `https://mcp.better-auth.com/mcp`
+
+### Using the CLI
+
+Run the [Better Auth CLI](/docs/concepts/cli) and pick your client:
+
+```bash title="terminal"
+npx auth@latest mcp
+```
+
+With no flags, the command lists supported targets. You can pass a target directly:
+
+<Tabs items={["Cursor", "Claude Code", "Open Code", "Manual"]}>
+    <Tab value="Cursor">
+      ```bash title="terminal"
+      npx auth@latest mcp --cursor
+      ```
+
+      This opens Cursor with a deeplink so the server is added to your MCP configuration.
+
+      You can also use the one-click control on this site:
+
+      <AddToCursor />
+    </Tab>
+    <Tab value="Claude Code">
+      ```bash title="terminal"
+      npx auth@latest mcp --claude-code
+      ```
+
+      This runs `claude mcp add` with the Better Auth URL. If that fails, the CLI prints the exact command to run yourself.
+    </Tab>
+    <Tab value="Open Code">
+      ```bash title="terminal"
+      npx auth@latest mcp --open-code
+      ```
+
+      This merges a `better-auth` entry into `opencode.json` in the current directory (remote transport, URL above).
+    </Tab>
+    <Tab value="Manual">
+      ```bash title="terminal"
+      npx auth@latest mcp --manual
+      ```
+
+      Writes or merges `mcp.json` in the current working directory with:
+
+      ```json
+      {
+        "better-auth": {
+          "url": "https://mcp.better-auth.com/mcp"
+        }
+      }
+      ```
+
+      For **Cursor**, you can add the same `better-auth` entry to MCP config—commonly `~/.cursor/mcp.json` (user) or `.cursor/mcp.json` (project)—using the shape your Cursor version expects for HTTP servers (`url` for remote MCP).
+
+      Restart or reload MCP in your client after changes.
+    </Tab>
+</Tabs>
+
+## Ask AI on this site
+
+The docs layout includes an **Ask AI** button (`cmd/ctrl + I`) which allows you to ask questions about the documentation.

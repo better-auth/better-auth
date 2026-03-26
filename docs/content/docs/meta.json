@@ -3,6 +3,7 @@
   "root": true,
   "pages": [
     "introduction",
+    "ai-tooling",
     "installation",
     "basic-usage",
     "email-password/sign-in-and-sign-up",

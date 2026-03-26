@@ -21,6 +21,7 @@ import {
 	ScanFace,
 	Server,
 	ShieldCheck,
+	Sparkles,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
@@ -197,6 +198,11 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "AI tooling",
+				href: "/docs/ai-tooling",
+				icon: () => <Sparkles className="size-4" />,
 			},
 		],
 	},
