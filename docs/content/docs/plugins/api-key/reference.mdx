@@ -129,13 +129,11 @@ Customize the rate-limiting.
 
     `timeWindow` <span className="opacity-70">`number`</span>
 
-    The duration in milliseconds where each request is counted.
-    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+    Length of each fixed rate-limit window in milliseconds (`[rateLimitWindowStart, rateLimitWindowStart + timeWindow)`).
 
     `maxRequests` <span className="opacity-70">`number`</span>
 
-    Maximum amount of requests allowed within a window.
-    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+    Maximum successful validations allowed in each fixed window before the next window boundary (`rateLimitWindowStart + timeWindow`).
 
   </Accordion>
 </Accordions>
@@ -508,21 +506,29 @@ Table: `apikey`
     {
       name: "rateLimitTimeWindow",
       type: "number",
-      description: "The time window in milliseconds for the rate limit.",
+      description:
+        "Length of each fixed rate-limit window in milliseconds (`[rateLimitWindowStart, rateLimitWindowStart + rateLimitTimeWindow)`).",
       isOptional: true,
     },
     {
       name: "rateLimitMax",
       type: "number",
       description:
-        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
+        "Maximum successful validations allowed within each fixed window (see `rateLimitWindowStart`).",
       isOptional: true,
     },
     {
       name: "requestCount",
       type: "number",
       description:
-        "The number of requests made within the rate limit time window.",
+        "Successful validations counted in the current fixed window (since `rateLimitWindowStart`).",
+      isOptional: true,
+    },
+    {
+      name: "rateLimitWindowStart",
+      type: "Date",
+      description:
+        "Start time (inclusive) of the current fixed rate-limit window; `null` until the first validation in a new period.",
       isOptional: true,
     },
     {

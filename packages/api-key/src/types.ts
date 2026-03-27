@@ -352,6 +352,11 @@ export type ApiKey = {
 	 */
 	requestCount: number;
 	/**
+	 * Start of the current fixed rate-limit window (inclusive). The window ends at
+	 * `rateLimitWindowStart + rateLimitTimeWindow` (exclusive).
+	 */
+	rateLimitWindowStart: Date | null;
+	/**
 	 * Remaining requests (every time API key is used this should updated and should be updated on refill as well)
 	 */
 	remaining: number | null;

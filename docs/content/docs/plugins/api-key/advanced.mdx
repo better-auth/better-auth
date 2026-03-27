@@ -572,8 +572,8 @@ export const auth = betterAuth({
     apiKey({
       rateLimit: {
         enabled: true,
-        timeWindow: 1000 * 60 * 60 * 24, // 1 day
-        maxRequests: 10, // 10 requests per day
+        timeWindow: 1000 * 60 * 60 * 24, // window length (here: 24h)
+        maxRequests: 10, // at most 10 successful validations per window
       },
     }),
   ],
@@ -592,8 +592,8 @@ import { auth } from "@/lib/auth"
 const apiKey = await auth.api.createApiKey({
   body: {
     rateLimitEnabled: true,
-    rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 1 day
-    rateLimitMax: 10, // 10 requests per day
+    rateLimitTimeWindow: 1000 * 60 * 60 * 24, // window length (here: 24h)
+    rateLimitMax: 10, // at most 10 successful validations per window
   },
   headers: await headers() // headers containing the user's session token
 });
@@ -601,22 +601,29 @@ const apiKey = await auth.api.createApiKey({
 
 ### How does it work?
 
-The rate limiting system uses a sliding window approach:
+The rate limit uses a **fixed window** per key:
 
-1. **First Request**: When an API key is used for the first time (no previous `lastRequest`), the request is allowed and `requestCount` is set to 1.
+- Each window is the half-open interval **`[rateLimitWindowStart, rateLimitWindowStart + rateLimitTimeWindow)`**.
+- While you are inside that interval, each successful validation increments `requestCount` (the window start does **not** move on each request).
+- When `requestCount` reaches `rateLimitMax`, further validations fail until the **current window ends** (when `now >= rateLimitWindowStart + rateLimitTimeWindow`). Then a **new** window starts at the current time with a fresh `requestCount` of 1.
+- The first time a key is used (or after counters are reset), `rateLimitWindowStart` is unset until the first successful validation, which starts the first window.
 
-2. **Within Window**: For subsequent requests within the `timeWindow`, the `requestCount` is incremented. If `requestCount` reaches `rateLimitMax`, the request is rejected with a `RATE_LIMITED` error code.
+1. **First use in a window**: The request is allowed, `rateLimitWindowStart` is set to now, and `requestCount` is set to `1`. `lastRequest` is updated for auditing.
 
-3. **Window Reset**: If the time since the last request exceeds the `timeWindow`, the window resets: `requestCount` is reset to 1 and `lastRequest` is updated to the current time.
+2. **Within the same window**: `requestCount` increases on each allowed validation. `lastRequest` is updated; `rateLimitWindowStart` stays fixed until the window ends.
 
-4. **Rate Limit Exceeded**: When a request is rejected due to rate limiting, the error response includes a `tryAgainIn` value (in milliseconds) indicating how long to wait before the window resets.
+3. **Window boundary**: When the interval since `rateLimitWindowStart` is **greater than or equal to** `rateLimitTimeWindow`, the next successful validation **starts a new window** (`rateLimitWindowStart` becomes now, `requestCount` is `1`). This is why a limit like “1000 per hour” means **up to 1000 validations in each fixed hour-long period** starting from the first validation that opened that window—not “wait one hour after your last request before the quota returns.”
+
+4. **Rate limit exceeded**: While `requestCount` is already at `rateLimitMax` and the window has not ended, validation fails with `RATE_LIMITED`. The error includes `tryAgainIn` (milliseconds) until **`rateLimitWindowStart + rateLimitTimeWindow`**.
 
 **Disabling Rate Limiting**:
 - **Globally**: Set `rateLimit.enabled: false` in plugin options
 - **Per Key**: Set `rateLimitEnabled: false` when creating or updating an API key
 - **Null Values**: If `rateLimitTimeWindow` or `rateLimitMax` is `null`, rate limiting is effectively disabled for that key
 
-When rate limiting is disabled (globally or per-key), requests are still allowed but `lastRequest` is updated for tracking purposes.
+When rate limiting is disabled via the global or per-key `enabled` flags, requests are still allowed and `lastRequest` is updated for tracking. If rate limiting is disabled because `rateLimitTimeWindow` or `rateLimitMax` is `null`, the rate-limit hook does not apply and those counters are not updated by this mechanism.
+
+Changing `rateLimitEnabled`, `rateLimitTimeWindow`, or `rateLimitMax` on a key resets `rateLimitWindowStart` and `requestCount` so the next validation starts from a clean window.
 
 ## Remaining, refill, and expiration
 
