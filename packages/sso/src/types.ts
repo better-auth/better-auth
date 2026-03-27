@@ -41,7 +41,7 @@ export interface OIDCConfig {
 export interface SAMLConfig {
 	issuer: string;
 	entryPoint: string;
-	cert: string;
+	cert: string | string[];
 	callbackUrl: string;
 	audience?: string | undefined;
 	idpMetadata?:
@@ -50,7 +50,7 @@ export interface SAMLConfig {
 				entityID?: string;
 				entityURL?: string;
 				redirectURL?: string;
-				cert?: string;
+				cert?: string | string[];
 				privateKey?: string;
 				privateKeyPass?: string;
 				isAssertionEncrypted?: boolean;

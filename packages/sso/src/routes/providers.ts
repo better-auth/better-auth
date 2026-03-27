@@ -142,7 +142,14 @@ function sanitizeProvider(
 					digestAlgorithm: samlConfig.digestAlgorithm,
 					certificate: (() => {
 						try {
-							return parseCertificate(samlConfig.cert);
+							const certs = Array.isArray(samlConfig.cert)
+								? samlConfig.cert
+								: [samlConfig.cert];
+							if (certs.length === 0) {
+								return { error: "No certificates provided" };
+							}
+							const parsed = certs.map((cert) => parseCertificate(cert));
+							return parsed.length === 1 ? parsed[0] : parsed;
 						} catch {
 							return { error: "Failed to parse certificate" };
 						}
