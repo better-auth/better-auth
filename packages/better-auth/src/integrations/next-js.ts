@@ -46,10 +46,11 @@ export const nextCookies = () => {
 							return;
 						}
 						try {
-							cookieStore.set("__better-auth-cookie-store", "1", { maxAge: 0 });
-							// If cookie was set successfully, we should clean up.
-							cookieStore.delete("__better-auth-cookie-store");
+							// Try to set a cookie to detect if we're in a Server Component
+							// (where cookies are read-only). Use a unique name to avoid conflicts.
+							cookieStore.set("__better_auth_sc_test", "1", { maxAge: 0 });
 						} catch {
+							// If set throws, we're in a Server Component - skip session refresh
 							await setShouldSkipSessionRefresh(true);
 						}
 					}),
