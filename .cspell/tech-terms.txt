@@ -48,3 +48,6 @@ SIEM
 sess
 reactivations
 whsec
+moonshotai
+kimi
+ilike

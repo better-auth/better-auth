@@ -516,6 +516,121 @@ describe("seat-based billing", () => {
 			expect(updateCall[1]!.proration_behavior).toBe("create_prorations");
 		});
 
+		it("should use custom prorationBehavior from plan config", async () => {
+			const customProrationOptions: StripeOptions = {
+				...seatPlanOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: "price_team_base",
+							name: "team",
+							seatPriceId: "price_team_seat",
+							prorationBehavior: "always_invoice",
+						},
+						{
+							priceId: "price_enterprise_base",
+							name: "enterprise",
+							seatPriceId: "price_enterprise_seat",
+							prorationBehavior: "always_invoice",
+						},
+					],
+					authorizeReference: async () => true,
+				},
+			};
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(customProrationOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "proration-test@test.com",
+					password: "password",
+					name: "Proration User",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "proration-test@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Proration Org",
+				slug: "proration-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_proration" },
+				where: [{ field: "id", value: orgId }],
+			});
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_proration",
+					stripeSubscriptionId: "sub_proration",
+					status: "active",
+					plan: "team",
+					seats: 2,
+				},
+			});
+
+			mockStripe.subscriptions.list.mockResolvedValue({
+				data: [
+					{
+						id: "sub_proration",
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: null,
+						items: {
+							data: [
+								{
+									id: "si_base",
+									price: { id: "price_team_base", lookup_key: null },
+									quantity: 1,
+								},
+								{
+									id: "si_seat",
+									price: { id: "price_team_seat", lookup_key: null },
+									quantity: 2,
+								},
+							],
+						},
+					},
+				],
+			});
+
+			const res = await client.subscription.upgrade({
+				plan: "enterprise",
+				customerType: "organization",
+				referenceId: orgId,
+				fetchOptions: { headers },
+			});
+
+			expect(res.data?.url).toBeDefined();
+
+			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			expect(updateCall[1]!.proration_behavior).toBe("always_invoice");
+		});
+
 		it("should skip seat item swap when seat pricing is unchanged", async () => {
 			const sameSeatOptions: StripeOptions = {
 				...seatPlanOptions,
@@ -993,6 +1108,130 @@ describe("seat-based billing", () => {
 			// Owner only remains → quantity = 1
 			expect(seatItems).toContainEqual(
 				expect.objectContaining({ id: "si_seat", quantity: 1 }),
+			);
+		});
+
+		it("should use custom prorationBehavior on member removal", async () => {
+			mockStripe.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_seat_remove_proration",
+				status: "active",
+				items: {
+					data: [
+						{
+							id: "si_base",
+							price: { id: "price_team_base" },
+							quantity: 1,
+						},
+						{
+							id: "si_seat",
+							price: { id: "price_team_seat" },
+							quantity: 2,
+						},
+					],
+				},
+			});
+
+			const customProrationOptions: StripeOptions = {
+				...seatPlanOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: "price_team_base",
+							name: "team",
+							seatPriceId: "price_team_seat",
+							prorationBehavior: "none",
+						},
+						{
+							priceId: "price_enterprise_base",
+							name: "enterprise",
+							seatPriceId: "price_enterprise_seat",
+							prorationBehavior: "none",
+						},
+					],
+					authorizeReference: async () => true,
+				},
+			};
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(customProrationOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "proration-remove@test.com",
+					password: "password",
+					name: "Proration Remove User",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "proration-remove@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Proration Remove Org",
+				slug: "proration-remove-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_proration_remove" },
+				where: [{ field: "id", value: orgId }],
+			});
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_proration_remove",
+					stripeSubscriptionId: "sub_seat_remove_proration",
+					status: "active",
+					plan: "team",
+					seats: 2,
+				},
+			});
+
+			const memberUser = await ctx.adapter.create({
+				model: "user",
+				data: { email: "proration-removable@test.com", name: "Removable" },
+			});
+			const member = await ctx.adapter.create({
+				model: "member",
+				data: {
+					userId: memberUser.id,
+					organizationId: orgId,
+					role: "member",
+					createdAt: new Date(),
+				},
+			});
+
+			await client.organization.removeMember({
+				memberIdOrEmail: member.id,
+				organizationId: orgId,
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+				"sub_seat_remove_proration",
+				expect.objectContaining({
+					proration_behavior: "none",
+				}),
 			);
 		});
 	});

@@ -769,12 +769,12 @@ Now when users from `acmecorp.com` sign in through this provider, they'll automa
 
 #### Self-Service SSO Dashboard
 
-If you're using [Better Auth Infrastructure](https://better-auth.com/sign-in), you get access to a self-service SSO dashboard that simplifies onboarding enterprise customers. Instead of manually exchanging SAML metadata and certificates, organization admins can generate a shareable onboarding link that guides enterprise IT teams through configuring their identity provider.
+If you're using [Better Auth Infrastructure](https://dash.better-auth.com/sign-in), you get access to a self-service SSO dashboard that simplifies onboarding enterprise customers. Instead of manually exchanging SAML metadata and certificates, organization admins can generate a shareable onboarding link that guides enterprise IT teams through configuring their identity provider.
 
 The dashboard is available at:
 
 ```
-https://better-auth.com/dashboard/[project]/organization/[orgId]/enterprise
+https://dash.better-auth.com/[project]/organization/[orgId]/enterprise
 ```
 
 From the dashboard you can:
@@ -1406,15 +1406,15 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 <DatabaseTable
     fields={[
         {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
+            name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
         },
-        { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
-        { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
-        { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isRequired: false },
-        { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
-        { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false }
+        { name: "issuer", type: "string", description: "The issuer identifier" },
+        { name: "domain", type: "string", description: "The domain of the provider" },
+        { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isOptional: true },
+        { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isOptional: true },
+        { name: "userId", type: "string", description: "The user ID", isForeignKey: true },
+        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isUnique: true },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isOptional: true }
     ]}
 />
 
@@ -1424,7 +1424,7 @@ The `ssoProvider` schema is extended as follows:
 
 <DatabaseTable
     fields={[
-        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isRequired: false },
+        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isOptional: true },
     ]}
 />
 

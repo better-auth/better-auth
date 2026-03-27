@@ -1,6 +1,6 @@
 ---
 title: Rate Limit
-description: How to limit the number of requests a user can make to the server in a given time period.
+description: Learn how to configure rate limiting in Better Auth, including IP address detection, IPv6 support, custom rate limit windows, storage backends, error handling, and per-endpoint rules.
 ---
 
 Better Auth includes a built-in rate limiter to help manage traffic and prevent abuse. By default, in production mode, the rate limiter is set to:
@@ -291,18 +291,19 @@ Table Name: `rateLimit`
         isPrimaryKey: true
         },
         { 
-        name: "key", 
-        type: "string", 
+        name: "key",
+        type: "string",
         description: "Unique identifier for each rate limit key",
+        isUnique: true,
         },
         { 
-        name: "count", 
-        type: "integer", 
-        description: "Time window in seconds" 
+        name: "count",
+        type: "integer",
+        description: "Number of requests made in the current window"
         },
-        { 
-        name: "lastRequest", 
-        type: "bigint", 
-        description: "Max requests in the window" 
+        {
+        name: "lastRequest",
+        type: "bigint",
+        description: "Timestamp of the last request (epoch ms)" 
         }]}
     />

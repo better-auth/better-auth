@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.7-beta.1",
   "description": "Drizzle adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -43,12 +43,17 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0",
+    "@better-auth/utils": "catalog:",
     "drizzle-orm": ">=0.41.0"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.1",
+    "@better-auth/utils": "catalog:",
     "drizzle-orm": "^0.45.1",
     "tsdown": "catalog:",
     "typescript": "catalog:"
