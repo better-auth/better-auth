@@ -85,6 +85,50 @@ describe("oauth - init", () => {
 			}),
 		).resolves.not.toThrowError();
 	});
+
+	it("should pass with dynamic baseURL config when ctx.baseURL is unresolved during init", async () => {
+		await expect(
+			getTestInstance({
+				baseURL: {
+					allowedHosts: ["localhost:3000"],
+					protocol: "http",
+				},
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			}),
+		).resolves.not.toThrowError();
+	});
+
+	it("should still fail for an invalid configured jwt issuer", async () => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: "not-a-valid-url",
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			}),
+		).rejects.toThrowError("Invalid URL");
+	});
 });
 
 describe("oauth", async () => {

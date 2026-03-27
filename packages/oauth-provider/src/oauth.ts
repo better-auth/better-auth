@@ -180,7 +180,21 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
-				const issuerPath = new URL(issuer).pathname;
+				const isDynamicBaseURLInit =
+					jwtPluginOptions?.jwt?.issuer == null &&
+					typeof ctx.options.baseURL === "object" &&
+					ctx.options.baseURL !== null &&
+					"allowedHosts" in ctx.options.baseURL;
+				let issuerPath: string;
+				try {
+					issuerPath = new URL(issuer).pathname;
+				} catch (error) {
+					// baseURL may not be available during init when using dynamic baseURL config
+					if (isDynamicBaseURLInit && issuer === "") {
+						return;
+					}
+					throw error;
+				}
 				// oAuth Server Config
 				if (
 					!opts.silenceWarnings?.oauthAuthServerConfig &&
