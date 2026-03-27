@@ -21,7 +21,6 @@ import {
 	ScanFace,
 	Server,
 	ShieldCheck,
-	Sparkles,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
@@ -200,9 +199,22 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "AI tooling",
-				href: "/docs/ai-tooling",
-				icon: () => <Sparkles className="size-4" />,
+				title: "AI resources",
+				href: "/docs/ai-resources",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+						aria-hidden
+					>
+						<path
+							fill="currentColor"
+							d="M12 2.25c.41 0 .78.25.93.63l1.42 3.55l3.55 1.42a.99.99 0 0 1 0 1.84l-3.55 1.42l-1.42 3.55a.99.99 0 0 1-1.86 0l-1.42-3.55L6.1 9.69a.99.99 0 0 1 0-1.84l3.55-1.42l1.42-3.55c.15-.38.52-.63.93-.63m6.5 11.5c.28 0 .54.15.68.4l.87 1.56l1.56.87c.48.27.48.97 0 1.24l-1.56.87l-.87 1.56a.78.78 0 0 1-1.36 0l-.87-1.56l-1.56-.87a.78.78 0 0 1 0-1.36l1.56-.87l.87-1.56c.14-.25.4-.4.68-.4M4.75 13c.21 0 .4.11.52.28l.72 1.12l1.12.72c.35.22.35.74 0 .96l-1.12.72l-.72 1.12a.59.59 0 0 1-1 0l-.72-1.12l-1.12-.72a.59.59 0 0 1 0-1l1.12-.72l.72-1.12a.59.59 0 0 1 .48-.24"
+						/>
+					</svg>
+				),
 			},
 		],
 	},

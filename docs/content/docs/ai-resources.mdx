@@ -1,7 +1,11 @@
 ---
-title: AI tooling
-description: Use LLMs.txt, skills, MCP, and the docs assistant to build and debug Better Auth with AI coding tools.
+title: AI resources
+description: Ask AI in the docs, LLMs.txt, the documentation MCP server, and Better Auth skills for coding assistants.
 ---
+
+## AI Chat
+
+The docs layout includes an **Ask AI** button (`cmd/ctrl + I`) which allows you to ask questions about the documentation.
 
 ## LLMs.txt
 
@@ -11,19 +15,7 @@ Better Auth publishes an LLMs-friendly index of the documentation. Point your as
 
 The index links to per-page Markdown under `/llms.txt/docs/...` so tools can fetch only the sections they need.
 
-## Skills (`better-auth/skills`)
-
-[Agent skills](https://agentskills.io) are portable instruction files (for example `SKILL.md`) that teach your coding agent project conventions, safe patterns, and where to look in the docs. The **Better Auth** skill pack lives in the [`better-auth/skills`](https://github.com/better-auth/skills) repository.
-
-Install it with the [`skills` CLI](https://www.npmjs.com/package/skills) (uses `npx` so nothing global is required):
-
-```bash title="terminal"
-npx skills add better-auth/skills
-```
-
-Your editor or agent loads skills from its configured skills directory (often project-level). After installing, restart the agent or reload skills if your tool requires it.
-
-## Documentation MCP server
+## MCP Server
 
 Better Auth hosts a **remote MCP server** that exposes documentation search, examples, and setup help to any MCP-capable client (Cursor, Claude Code, Open Code, and others).
 
@@ -86,6 +78,14 @@ With no flags, the command lists supported targets. You can pass a target direct
     </Tab>
 </Tabs>
 
-## Ask AI on this site
+## Skills
 
-The docs layout includes an **Ask AI** button (`cmd/ctrl + I`) which allows you to ask questions about the documentation.
+[Agent skills](https://agentskills.io) are portable instruction files (for example `SKILL.md`) that teach your coding agent project conventions, safe patterns, and where to look in the docs. The **Better Auth** skill pack lives in the [`better-auth/skills`](https://github.com/better-auth/skills) repository.
+
+Install it with the [`skills` CLI](https://www.npmjs.com/package/skills) (uses `npx` so nothing global is required):
+
+```bash title="terminal"
+npx skills add better-auth/skills
+```
+
+Your editor or agent loads skills from its configured skills directory (often project-level). After installing, restart the agent or reload skills if your tool requires it.
