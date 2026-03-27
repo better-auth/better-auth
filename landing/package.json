@@ -67,6 +67,7 @@
     "react-hook-form": "^7.62.0",
     "react-markdown": "^10.1.0",
     "react-remove-scroll": "^2.7.2",
+    "resend": "^6.8.0",
     "react-svg-worldmap": "^2.0.0-alpha.16",
     "rehype-highlight": "^7.0.2",
     "remark": "^15.0.1",

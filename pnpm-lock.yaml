@@ -928,6 +928,9 @@ importers:
       remark-rehype:
         specifier: ^11.1.2
         version: 11.1.2
+      resend:
+        specifier: ^6.8.0
+        version: 6.9.2(@react-email/render@2.0.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       shiki:
         specifier: ^4.0.0
         version: 4.0.1
