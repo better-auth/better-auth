@@ -13,10 +13,6 @@ The Agent Auth plugin lets your Better Auth server act as an **Agent Auth provid
 
 It gives AI agents a standard way to discover your service, register themselves, request approval, and execute scoped capabilities using short-lived signed JWTs. It comes with adapters for **OpenAPI** and **MCP** — so you can turn an existing REST API or MCP server into an agent-auth-enabled service without writing capabilities by hand.
 
-<Callout type="warn">
-This plugin is an implementation of a standard on heavy development. It's not yet stable and may change in the future. Please report any issues or bugs on [Github](https://github.com/better-auth/agent-auth).
-</Callout>
-
 ## Features
 
 - **OpenAPI adapter** — derive capabilities, input/output schemas, and a proxy `onExecute` handler directly from an OpenAPI 3.x spec
@@ -536,4 +532,3 @@ The Agent Auth plugin supports many options. These are the ones you will usually
     },
   }}
 />
-
