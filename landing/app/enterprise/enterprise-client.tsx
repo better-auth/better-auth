@@ -114,11 +114,7 @@ export function EnterprisePageClient() {
 
 			try {
 				const formData = new FormData(e.currentTarget);
-				const url =
-					process.env.NODE_ENV === "development"
-						? "http://localhost:3001/api/enterprise/contact"
-						: "https://dash.better-auth.com/api/enterprise/contact";
-				const response = await fetch(url, {
+				const response = await fetch("/api/enterprise/contact", {
 					method: "POST",
 					body: JSON.stringify({
 						fullName: formData.get("fullName"),
