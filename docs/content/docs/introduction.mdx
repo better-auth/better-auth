@@ -15,53 +15,16 @@ Better Auth aims to be the most comprehensive auth library. It provides a wide r
 
 ---
 
-## AI tooling
+## AI resources
 
-### LLMs.txt
+Your auth lives in your codebase. Better Auth fits well into agentic workflows. We provide the following resources:
 
-Better Auth exposes an `LLMs.txt` that helps AI models understand how to integrate and interact with your authentication system. See it at [https://better-auth.com/llms.txt](https://better-auth.com/llms.txt).
+**AI Chat:** Ask questions about the documentation from this site using **Ask AI** (`cmd/ctrl + I`), grounded in the same docs you are reading.
 
-### Skills
+**LLMs.txt:** A machine-friendly index of the docs at [better-auth.com/llms.txt](https://www.better-auth.com/llms.txt), with links to per-page Markdown for assistants and tools.
 
-Better Auth provides skills that can be added to your AI coding assistant to help it understand Better Auth best practices and implementation patterns.
+**MCP Server:** A remote documentation MCP at `https://mcp.better-auth.com/mcp` so clients such as Cursor, Claude Code, and Open Code can search docs, see examples, and help with setup.
 
-```bash title="terminal"
-npx skills add better-auth/skills
-```
+**Skills:** Curated [agent skills](https://agentskills.io) for Better Auth—install with `npx skills add better-auth/skills` so your coding agent follows library conventions and patterns.
 
-### MCP
-
-Better Auth provides an MCP server so you can use it with any AI model that supports the Model Context Protocol (MCP).
-
-#### with CLI
-
-You can use the `auth` CLI to add Better Auth MCP to your MCP client (such as Cursor, Claude Code, or Open Code).
-
-<Tabs items={["Claude Code", "Cursor", "Open Code", "Manual"]}>
-    <Tab value="Claude Code">
-      ```bash title="terminal"
-      npx auth mcp --claude-code
-      ```
-    </Tab>
-        <Tab value="Cursor">
-      ```bash title="terminal"
-      npx auth mcp --cursor
-      ```
-    </Tab>
-    <Tab value="Open Code">
-      ```bash title="terminal"
-      npx auth mcp --open-code
-      ```
-    </Tab>
-    <Tab value="Manual">
-      ```bash title="terminal"
-      npx auth mcp --manual
-      ```
-    </Tab>
-</Tabs>
-
-#### with Cursor
-
-If you're using Cursor, you can also use the button below.
-
-<AddToCursor />
+For more information, see [AI resources](/docs/ai-resources).
