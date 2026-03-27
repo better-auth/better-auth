@@ -1,12 +1,12 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { describe, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 /**
  * More test can be found in `session.test.ts`
  */
-describe("sign-in", async (it) => {
+describe("sign-in", async () => {
 	const { auth, testUser, cookieSetter } = await getTestInstance();
 
 	it("should return a response with a set-cookie header", async () => {
@@ -105,7 +105,7 @@ describe("sign-in", async (it) => {
 	});
 });
 
-describe("url checks", async (it) => {
+describe("url checks", async () => {
 	it("should reject untrusted origins", async () => {
 		const { client } = await getTestInstance({
 			advanced: {
@@ -137,7 +137,7 @@ describe("url checks", async (it) => {
 	});
 });
 
-describe("sign-in CSRF protection", async (it) => {
+describe("sign-in CSRF protection", async () => {
 	const { auth, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {
@@ -246,7 +246,53 @@ describe("sign-in CSRF protection", async (it) => {
 	});
 });
 
-describe("sign-in with form data", async (it) => {
+describe("sign-in with additionalFields", async () => {
+	const { auth } = await getTestInstance(
+		{
+			user: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						required: false,
+					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: true,
+						input: false,
+					},
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should return additionalFields in signInEmail response", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "signin-additional@test.com",
+				password: "password",
+				name: "SignIn Test",
+				newField: "signin-value",
+			},
+		});
+
+		const res = await auth.api.signInEmail({
+			body: {
+				email: "signin-additional@test.com",
+				password: "password",
+			},
+		});
+
+		// additionalFields should be returned in API response
+		expect(res.user).toBeDefined();
+		expect(res.user.newField).toBe("signin-value");
+		expect(res.user.isAdmin).toBe(true);
+	});
+});
+
+describe("sign-in with form data", async () => {
 	const { auth, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {

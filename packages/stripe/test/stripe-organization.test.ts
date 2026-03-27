@@ -81,10 +81,6 @@ describe("stripe - organization customer", () => {
 		},
 	} satisfies StripeOptions;
 
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
 	it("should create a Stripe customer for organization when upgrading subscription", async () => {
 		const onCustomerCreate = vi.fn();
 		const stripeOptionsWithOrgCallback: StripeOptions = {
@@ -832,7 +828,7 @@ describe("stripe - organization customer", () => {
 		expect(cancelRes.error?.code).toBe("UNAUTHORIZED");
 	});
 
-	it("should reject organization subscription when organization.enabled is false", async () => {
+	it("should reject organization subscription when authorizeReference is not configured", async () => {
 		const stripeOptionsWithoutOrg: StripeOptions = {
 			...baseOrgStripeOptions,
 			organization: undefined, // Disable organization support
@@ -878,7 +874,7 @@ describe("stripe - organization customer", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
+		expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 	});
 
 	it("should keep user and organization subscriptions separate", async () => {
@@ -1668,6 +1664,172 @@ describe("stripe - organization customer", () => {
 			}),
 		);
 	});
+
+	it("should not match user customer with organizationId in metadata during org customer lookup", async () => {
+		const userCustomerId = "cus_user_with_org_metadata";
+		const orgCustomerId = "cus_org_new";
+
+		const mockStripeCustomerType = {
+			prices: {
+				list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
+			},
+			customers: {
+				create: vi.fn().mockResolvedValue({
+					id: orgCustomerId,
+					metadata: { customerType: "organization" },
+				}),
+				list: vi.fn().mockResolvedValue({ data: [] }),
+				// First call (user upgrade): no existing customer
+				// Second call (org upgrade): returns user customer only if query
+				// lacks customerType filter — verifies the fix actually matters
+				search: vi.fn().mockResolvedValueOnce({ data: [] }),
+				retrieve: vi.fn(),
+				update: vi.fn(),
+			},
+			checkout: {
+				sessions: {
+					create: vi.fn().mockResolvedValue({
+						url: "https://checkout.stripe.com/mock",
+						id: "cs_mock123",
+					}),
+				},
+			},
+			billingPortal: {
+				sessions: {
+					create: vi
+						.fn()
+						.mockResolvedValue({ url: "https://billing.stripe.com/mock" }),
+				},
+			},
+			subscriptions: {
+				retrieve: vi.fn(),
+				list: vi.fn().mockResolvedValue({ data: [] }),
+				update: vi.fn(),
+			},
+			webhooks: { constructEventAsync: vi.fn() },
+		};
+
+		const stripeOptionsCustomerType: StripeOptions = {
+			...baseOrgStripeOptions,
+			stripeClient: mockStripeCustomerType as unknown as Stripe,
+		};
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				plugins: [organization(), stripe(stripeOptionsCustomerType)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [organizationClient(), stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		// User A signs up
+		await client.signUp.email(
+			{ ...testUser, email: "user-a@email.com" },
+			{ throw: true },
+		);
+		const userAHeaders = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "user-a@email.com" },
+			{ throw: true, onSuccess: sessionSetter(userAHeaders) },
+		);
+
+		// User B signs up and creates an organization
+		await client.signUp.email(
+			{ ...testUser, email: "user-b@email.com" },
+			{ throw: true },
+		);
+		const userBHeaders = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "user-b@email.com" },
+			{ throw: true, onSuccess: sessionSetter(userBHeaders) },
+		);
+
+		const org = await client.organization.create({
+			name: "Test Org",
+			slug: "customer-type-filter-org",
+			fetchOptions: { headers: userBHeaders },
+		});
+		const orgId = org.data?.id as string;
+
+		// User A upgrades with metadata containing the org's ID
+		mockStripeCustomerType.customers.create.mockResolvedValueOnce({
+			id: userCustomerId,
+			metadata: {
+				userId: "user-a",
+				customerType: "user",
+				organizationId: orgId,
+			},
+		});
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			metadata: { organizationId: orgId },
+			fetchOptions: { headers: userAHeaders },
+		});
+
+		// Organization upgrades
+		mockStripeCustomerType.customers.search.mockImplementationOnce(
+			(params: { query?: string }) => {
+				const query = params?.query ?? "";
+				if (query.includes(orgId) && !query.includes("customerType")) {
+					// Without the fix: user customer would be returned
+					return Promise.resolve({
+						data: [
+							{
+								id: userCustomerId,
+								metadata: {
+									userId: "user-a",
+									customerType: "user",
+									organizationId: orgId,
+								},
+							},
+						],
+					});
+				}
+				// With the fix: customerType filter excludes user customer
+				return Promise.resolve({ data: [] });
+			},
+		);
+
+		mockStripeCustomerType.customers.create.mockResolvedValueOnce({
+			id: orgCustomerId,
+			metadata: { organizationId: orgId, customerType: "organization" },
+		});
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			customerType: "organization",
+			referenceId: orgId,
+			fetchOptions: { headers: userBHeaders },
+		});
+
+		// Organization should have its own customer, not User A's
+		const updatedOrg = await ctx.adapter.findOne<{
+			id: string;
+			stripeCustomerId?: string;
+		}>({
+			model: "organization",
+			where: [{ field: "id", value: orgId }],
+		});
+		expect(updatedOrg?.stripeCustomerId).toBe(orgCustomerId);
+
+		// Find the org lookup search call and verify the full query
+		const orgSearchCall =
+			mockStripeCustomerType.customers.search.mock.calls.find(
+				([arg]) =>
+					typeof arg?.query === "string" &&
+					arg.query.includes(orgId) &&
+					arg.query.includes("organizationId"),
+			);
+		expect(orgSearchCall?.[0]?.query).toContain(
+			`metadata["organizationId"]:"${orgId}" AND metadata["customerType"]:"organization"`,
+		);
+	});
 });
 
 describe("stripe - organizationHooks integration", () => {
@@ -1736,7 +1898,6 @@ describe("stripe - organizationHooks integration", () => {
 	};
 
 	beforeEach(() => {
-		vi.resetAllMocks();
 		mockStripeHooks.subscriptions.list.mockResolvedValue({ data: [] });
 		mockStripeHooks.customers.list.mockResolvedValue({ data: [] });
 	});

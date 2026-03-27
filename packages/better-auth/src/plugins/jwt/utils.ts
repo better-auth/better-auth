@@ -63,7 +63,7 @@ export async function createJwk(
 	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
-	let jwk: Omit<Jwk, "id"> = {
+	const jwk: Omit<Jwk, "id"> = {
 		alg,
 		...(cfg && "crv" in cfg
 			? {
@@ -74,7 +74,7 @@ export async function createJwk(
 		privateKey: privateKeyEncryptionEnabled
 			? JSON.stringify(
 					await symmetricEncrypt({
-						key: ctx.context.secret,
+						key: ctx.context.secretConfig,
 						data: stringifiedPrivateWebKey,
 					}),
 				)

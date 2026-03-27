@@ -577,6 +577,8 @@ export const deviceApprove = createAuthEndpoint(
 					"invalid_request",
 					"expired_token",
 					"device_code_already_processed",
+					"unauthorized",
+					"access_denied",
 				])
 				.meta({
 					description: "Error code",
@@ -657,6 +659,18 @@ export const deviceApprove = createAuthEndpoint(
 			});
 		}
 
+		// Check if userId is set and matches the current user
+		if (
+			deviceCodeRecord.userId &&
+			deviceCodeRecord.userId !== session.user.id
+		) {
+			throw new APIError("FORBIDDEN", {
+				error: "access_denied",
+				error_description:
+					"You are not authorized to approve this device authorization",
+			});
+		}
+
 		// Update device code with approved status and user ID
 		await ctx.context.adapter.update({
 			model: "deviceCode",
@@ -688,13 +702,21 @@ export const deviceDeny = createAuthEndpoint(
 			}),
 		}),
 		error: z.object({
-			error: z.enum(["invalid_request", "expired_token"]).meta({
-				description: "Error code",
-			}),
+			error: z
+				.enum([
+					"invalid_request",
+					"expired_token",
+					"unauthorized",
+					"access_denied",
+				])
+				.meta({
+					description: "Error code",
+				}),
 			error_description: z.string().meta({
 				description: "Detailed error description",
 			}),
 		}),
+		requireHeaders: true,
 		metadata: {
 			openapi: {
 				description: "Deny device authorization",
@@ -719,6 +741,15 @@ export const deviceDeny = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED", {
+				error: "unauthorized",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+			});
+		}
+
 		const { userCode } = ctx.body;
 		const cleanUserCode = userCode.replace(/-/g, "");
 
@@ -757,7 +788,19 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Update device code with denied status
+		// Check if userId is set and matches the current user
+		if (
+			deviceCodeRecord.userId &&
+			deviceCodeRecord.userId !== session.user.id
+		) {
+			throw new APIError("FORBIDDEN", {
+				error: "access_denied",
+				error_description:
+					"You are not authorized to deny this device authorization",
+			});
+		}
+
+		// Update device code with denied status and userId if not already set
 		await ctx.context.adapter.update({
 			model: "deviceCode",
 			where: [
@@ -768,6 +811,7 @@ export const deviceDeny = createAuthEndpoint(
 			],
 			update: {
 				status: "denied",
+				userId: deviceCodeRecord.userId || session.user.id,
 			},
 		});
 

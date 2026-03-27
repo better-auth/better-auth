@@ -5,8 +5,7 @@ import type {
 import { createAuthMiddleware } from "@better-auth/core/api";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"last-login-method": {
 			creator: typeof lastLoginMethod;
 		};
@@ -58,22 +57,34 @@ export interface LastLoginMethodOptions {
 export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	userConfig?: O | undefined,
 ) => {
-	const paths = [
-		"/callback/:id",
-		"/oauth2/callback/:providerId",
-		"/sign-in/email",
-		"/sign-up/email",
-	];
-
 	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
-		if (paths.includes(ctx.path)) {
-			return (
-				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
-			);
+		const path = ctx.path;
+		if (!path) {
+			return null;
 		}
-		if (ctx.path.includes("siwe")) return "siwe";
-		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
+
+		// Check for OAuth callbacks (/callback/:id or /oauth2/callback/:providerId)
+		if (path.startsWith("/callback/") || path.startsWith("/oauth2/callback/")) {
+			return ctx.params?.id || ctx.params?.providerId || path.split("/").pop();
+		}
+		// Check for email sign-in/sign-up
+		if (path === "/sign-in/email" || path === "/sign-up/email") {
+			return "email";
+		}
+		if (path.includes("siwe")) return "siwe";
+		if (path.includes("/passkey/verify-authentication")) return "passkey";
+		if (path.startsWith("/magic-link/verify")) return "magic-link";
 		return null;
+	};
+	const getResolveContext = (ctx: GenericEndpointContext) => {
+		return ctx.path ? ctx : ({ ...ctx, path: "" } as GenericEndpointContext);
+	};
+	const resolveMethod = (ctx: GenericEndpointContext) => {
+		const resolveContext = getResolveContext(ctx);
+		return (
+			config.customResolveMethod?.(resolveContext) ??
+			defaultResolveMethod(resolveContext)
+		);
 	};
 
 	const config = {
@@ -93,9 +104,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								async before(user, context) {
 									if (!config.storeInDatabase) return;
 									if (!context) return;
-									const lastUsedLoginMethod =
-										config.customResolveMethod?.(context) ??
-										defaultResolveMethod(context);
+									const lastUsedLoginMethod = resolveMethod(context);
 									if (lastUsedLoginMethod) {
 										return {
 											data: {
@@ -112,9 +121,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								async after(session, context) {
 									if (!config.storeInDatabase) return;
 									if (!context) return;
-									const lastUsedLoginMethod =
-										config.customResolveMethod?.(context) ??
-										defaultResolveMethod(context);
+									const lastUsedLoginMethod = resolveMethod(context);
 									if (lastUsedLoginMethod && session?.userId) {
 										try {
 											await ctx.internalAdapter.updateUser(session.userId, {
@@ -141,19 +148,20 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const lastUsedLoginMethod =
-							config.customResolveMethod?.(ctx) ?? defaultResolveMethod(ctx);
+						const lastUsedLoginMethod = resolveMethod(ctx);
 						if (lastUsedLoginMethod) {
-							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
+							const setCookieHeaders =
+								ctx.context.responseHeaders?.getSetCookie?.() || [];
 							const sessionTokenName =
 								ctx.context.authCookies.sessionToken.name;
-							const hasSessionToken =
-								setCookie && setCookie.includes(sessionTokenName);
+							const hasSessionToken = setCookieHeaders.some((cookie) =>
+								cookie.includes(sessionTokenName),
+							);
 							if (hasSessionToken) {
 								// Inherit cookie attributes from Better Auth's centralized cookie system
 								// This ensures consistency with cross-origin, cross-subdomain, and security settings
 								const cookieAttributes = {
-									...ctx.context.authCookies.sessionToken.options,
+									...ctx.context.authCookies.sessionToken.attributes,
 									maxAge: config.maxAge,
 									httpOnly: false, // Override: plugin cookies are not httpOnly
 								};

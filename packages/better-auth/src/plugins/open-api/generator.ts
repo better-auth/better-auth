@@ -6,7 +6,7 @@ import type {
 } from "@better-auth/core/db";
 import type {
 	Endpoint,
-	EndpointOptions,
+	EndpointRuntimeOptions,
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
@@ -123,7 +123,7 @@ function getFieldSchema(field: DBFieldAttribute) {
 	return schema;
 }
 
-function getParameters(options: EndpointOptions) {
+function getParameters(options: EndpointRuntimeOptions) {
 	const parameters: OpenAPIParameter[] = [];
 	if (options.metadata?.openapi?.parameters) {
 		parameters.push(...options.metadata.openapi.parameters);
@@ -150,7 +150,7 @@ function getParameters(options: EndpointOptions) {
 	return parameters;
 }
 
-function getRequestBody(options: EndpointOptions): any {
+function getRequestBody(options: EndpointRuntimeOptions): any {
 	if (options.metadata?.openapi?.requestBody) {
 		return options.metadata.openapi.requestBody;
 	}
@@ -422,13 +422,16 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
-		const options = value.options as EndpointOptions;
+		const options = value.options as EndpointRuntimeOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
-		if (options.method === "GET" || options.method === "DELETE") {
+		const methods = Array.isArray(options.method)
+			? options.method
+			: [options.method];
+		for (const method of methods.filter((m) => m === "GET" || m === "DELETE")) {
 			paths[path] = {
 				...paths[path],
-				[options.method.toLowerCase()]: {
+				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -442,16 +445,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				},
 			};
 		}
-
-		if (
-			options.method === "POST" ||
-			options.method === "PATCH" ||
-			options.method === "PUT"
-		) {
+		for (const method of methods.filter(
+			(m) => m === "POST" || m === "PATCH" || m === "PUT",
+		)) {
 			const body = getRequestBody(options);
 			paths[path] = {
 				...paths[path],
-				[options.method.toLowerCase()]: {
+				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -503,13 +503,18 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		Object.entries(api).forEach(([key, value]) => {
 			if (!value.path || ctx.options.disabledPaths?.includes(value.path))
 				return;
-			const options = value.options as EndpointOptions;
+			const options = value.options as EndpointRuntimeOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);
-			if (options.method === "GET" || options.method === "DELETE") {
+			const methods = Array.isArray(options.method)
+				? options.method
+				: [options.method];
+			for (const method of methods.filter(
+				(m) => m === "GET" || m === "DELETE",
+			)) {
 				paths[path] = {
 					...paths[path],
-					[options.method.toLowerCase()]: {
+					[method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
@@ -525,14 +530,12 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					},
 				};
 			}
-			if (
-				options.method === "POST" ||
-				options.method === "PATCH" ||
-				options.method === "PUT"
-			) {
+			for (const method of methods.filter(
+				(m) => m === "POST" || m === "PATCH" || m === "PUT",
+			)) {
 				paths[path] = {
 					...paths[path],
-					[options.method.toLowerCase()]: {
+					[method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],

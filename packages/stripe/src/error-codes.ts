@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const STRIPE_ERROR_CODES = defineErrorCodes({
 	UNAUTHORIZED: "Unauthorized access",
@@ -18,11 +18,18 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	EMAIL_VERIFICATION_REQUIRED:
 		"Email verification is required before you can subscribe to a plan",
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
+	/**
+	 * @deprecated Use `SUBSCRIPTION_NOT_PENDING_CHANGE` instead.
+	 */
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
+	SUBSCRIPTION_NOT_PENDING_CHANGE:
+		"Subscription has no pending cancellation or scheduled plan change",
 	ORGANIZATION_NOT_FOUND: "Organization not found",
 	ORGANIZATION_SUBSCRIPTION_NOT_ENABLED:
 		"Organization subscription is not enabled",
+	AUTHORIZE_REFERENCE_REQUIRED:
+		"Organization subscriptions require authorizeReference callback to be configured",
 	ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION:
 		"Cannot delete organization with active subscription",
 	ORGANIZATION_REFERENCE_ID_REQUIRED:

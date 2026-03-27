@@ -1,10 +1,12 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
+import type { SecretConfig } from "../../../crypto";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
+import { parseUserOutput } from "../../../db/schema";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
@@ -53,7 +55,7 @@ function generateBackupCodesFn(options?: BackupCodeOptions | undefined) {
 }
 
 export async function generateBackupCodes(
-	secret: string,
+	secret: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
 ) {
 	const backupCodes = options?.customBackupCodesGenerate
@@ -91,7 +93,7 @@ export async function verifyBackupCode(
 		backupCodes: string;
 		code: string;
 	},
-	key: string,
+	key: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
 ) {
 	const codes = await getBackupCodes(data.backupCodes, key, options);
@@ -109,7 +111,7 @@ export async function verifyBackupCode(
 
 export async function getBackupCodes(
 	backupCodes: string,
-	key: string,
+	key: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
 ) {
 	if (options?.storeBackupCodes === "encrypted") {
@@ -327,7 +329,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							backupCodes: twoFactor.backupCodes,
 							code: ctx.body.code,
 						},
-						ctx.context.secret,
+						ctx.context.secretConfig,
 						opts,
 					);
 					if (!validate.status) {
@@ -337,7 +339,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						);
 					}
 					const updatedBackupCodes = await symmetricEncrypt({
-						key: ctx.context.secret,
+						key: ctx.context.secretConfig,
 						data: JSON.stringify(validate.updated),
 					});
 
@@ -368,15 +370,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 					return ctx.json({
 						token: session.session?.token,
-						user: {
-							id: session.user?.id,
-							email: session.user.email,
-							emailVerified: session.user.emailVerified,
-							name: session.user.name,
-							image: session.user.image,
-							createdAt: session.user.createdAt,
-							updatedAt: session.user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, session.user),
 					});
 				},
 			),
@@ -464,7 +458,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 
 					const backupCodes = await generateBackupCodes(
-						ctx.context.secret,
+						ctx.context.secretConfig,
 						opts,
 					);
 
@@ -522,7 +516,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 					const decryptedBackupCodes = await getBackupCodes(
 						twoFactor.backupCodes,
-						ctx.context.secret,
+						ctx.context.secretConfig,
 						opts,
 					);
 

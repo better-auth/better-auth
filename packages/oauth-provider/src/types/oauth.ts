@@ -170,6 +170,14 @@ export interface AuthServerMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: "S256"[];
+	/**
+	 * Boolean value specifying whether the authorization server provides
+	 * the iss parameter in the authorization response (RFC 9207)
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9207
+	 * @default true
+	 */
+	authorization_response_iss_parameter_supported?: boolean;
 }
 
 /**
@@ -208,9 +216,9 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 * pairwise: the subject identifier is unique to the client
 	 * public: the subject identifier is unique to the server
 	 *
-	 * only `public` is supported.
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes
 	 */
-	subject_types_supported: "public"[];
+	subject_types_supported: ("public" | "pairwise")[];
 	/**
 	 * Supported ID token signing algorithms.
 	 *
@@ -290,6 +298,21 @@ export interface OAuthClient {
 	disabled?: boolean;
 	skip_consent?: boolean;
 	enable_end_session?: boolean;
+	/**
+	 * Whether this client requires PKCE for authorization code flow.
+	 *
+	 * @default true
+	 *
+	 * Note: PKCE is always required for public clients and when
+	 * requesting offline_access scope, regardless of this setting.
+	 */
+	require_pkce?: boolean;
+	/**
+	 * Subject identifier type for this client.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes
+	 */
+	subject_type?: "public" | "pairwise";
 	//---- All other metadata ----//
 	reference_id?: string;
 	[key: string]: unknown;

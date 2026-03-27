@@ -20,6 +20,7 @@ export interface SpotifyOptions extends ProviderOptions<SpotifyProfile> {
 }
 
 export const spotify = (options: SpotifyOptions) => {
+	const tokenEndpoint = "https://accounts.spotify.com/api/token";
 	return {
 		id: "spotify",
 		name: "Spotify",
@@ -43,7 +44,7 @@ export const spotify = (options: SpotifyOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://accounts.spotify.com/api/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -56,7 +57,7 @@ export const spotify = (options: SpotifyOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://accounts.spotify.com/api/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

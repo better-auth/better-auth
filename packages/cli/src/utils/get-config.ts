@@ -7,10 +7,11 @@ import babelPresetTypeScript from "@babel/preset-typescript";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
+import type { TsConfigResult } from "get-tsconfig";
+import { getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
-import { getTsconfigInfo } from "./get-tsconfig-info";
 
 let possiblePaths = [
 	"auth.ts",
@@ -42,90 +43,104 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function resolveReferencePath(configDir: string, refPath: string): string {
-	const resolvedPath = path.resolve(configDir, refPath);
-
-	// If it ends with .json, treat as direct file reference
-	if (refPath.endsWith(".json")) {
-		return resolvedPath;
-	}
-
-	// If the exact path exists and is a file, use it
-	if (fs.existsSync(resolvedPath)) {
-		try {
-			const stats = fs.statSync(resolvedPath);
-			if (stats.isFile()) {
-				return resolvedPath;
-			}
-		} catch {
-			// Fall through to directory handling
+function mergeAliases(
+	target: Record<string, string>,
+	source: Record<string, string>,
+): void {
+	for (const [alias, aliasPath] of Object.entries(source)) {
+		if (!(alias in target)) {
+			target[alias] = aliasPath;
 		}
 	}
-
-	// Otherwise, assume directory reference
-	return path.resolve(configDir, refPath, "tsconfig.json");
 }
 
-function getPathAliasesRecursive(
+function extractAliases(tsconfig: TsConfigResult): Record<string, string> {
+	const { paths = {}, baseUrl } = tsconfig.config.compilerOptions ?? {};
+	const result: Record<string, string> = {};
+	const configDir = path.dirname(tsconfig.path);
+	const resolvedBaseUrl = baseUrl
+		? path.resolve(configDir, baseUrl)
+		: configDir;
+
+	for (const [alias, aliasPaths = []] of Object.entries(paths)) {
+		for (const aliasedPath of aliasPaths) {
+			const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
+			const finalAliasedPath =
+				aliasedPath.slice(-1) === "*" ? aliasedPath.slice(0, -1) : aliasedPath;
+
+			result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
+		}
+	}
+	return result;
+}
+
+/**
+ * Reads raw tsconfig JSON to get `references` (which get-tsconfig strips out).
+ */
+function readRawTsconfigReferences(
+	tsconfigPath: string,
+): Array<{ path: string }> | undefined {
+	try {
+		const text = fs.readFileSync(tsconfigPath, "utf-8");
+		const stripped = text
+			.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
+				g ? "" : m,
+			)
+			.replace(/,(?=\s*[}\]])/g, "");
+		const raw = JSON.parse(stripped);
+		return raw.references;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Collect path aliases from tsconfig references recursively.
+ */
+function collectReferencesAliases(
 	tsconfigPath: string,
 	visited = new Set<string>(),
 ): Record<string, string> {
-	if (visited.has(tsconfigPath)) {
-		return {};
-	}
-	visited.add(tsconfigPath);
+	const result: Record<string, string> = {};
+	const refs = readRawTsconfigReferences(tsconfigPath);
+	if (!refs) return result;
 
-	if (!fs.existsSync(tsconfigPath)) {
-		console.warn(`Referenced tsconfig not found: ${tsconfigPath}`);
-		return {};
-	}
+	const configDir = path.dirname(tsconfigPath);
+	for (const ref of refs) {
+		const resolvedRef = path.resolve(configDir, ref.path);
+		const refTsconfigPath = resolvedRef.endsWith(".json")
+			? resolvedRef
+			: path.join(resolvedRef, "tsconfig.json");
 
-	try {
-		const tsConfig = getTsconfigInfo(undefined, tsconfigPath);
-		const { paths = {}, baseUrl = "." } = tsConfig.compilerOptions || {};
-		const result: Record<string, string> = {};
+		if (visited.has(refTsconfigPath)) continue;
+		visited.add(refTsconfigPath);
 
-		const configDir = path.dirname(tsconfigPath);
-		const obj = Object.entries(paths) as [string, string[]][];
-		for (const [alias, aliasPaths] of obj) {
-			for (const aliasedPath of aliasPaths) {
-				const resolvedBaseUrl = path.resolve(configDir, baseUrl);
-				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
-				const finalAliasedPath =
-					aliasedPath.slice(-1) === "*"
-						? aliasedPath.slice(0, -1)
-						: aliasedPath;
-
-				result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
-			}
+		try {
+			const refConfig = parseTsconfig(refTsconfigPath);
+			mergeAliases(
+				result,
+				extractAliases({ path: refTsconfigPath, config: refConfig }),
+			);
+		} catch {
+			continue;
 		}
 
-		if (tsConfig.references) {
-			for (const ref of tsConfig.references) {
-				const refPath = resolveReferencePath(configDir, ref.path);
-				const refAliases = getPathAliasesRecursive(refPath, visited);
-				for (const [alias, aliasPath] of Object.entries(refAliases)) {
-					if (!(alias in result)) {
-						result[alias] = aliasPath;
-					}
-				}
-			}
-		}
-
-		return result;
-	} catch (error) {
-		console.warn(`Error parsing tsconfig at ${tsconfigPath}: ${error}`);
-		return {};
+		mergeAliases(result, collectReferencesAliases(refTsconfigPath, visited));
 	}
+	return result;
 }
 
 function getPathAliases(cwd: string): Record<string, string> | null {
-	const tsConfigPath = path.join(cwd, "tsconfig.json");
-	if (!fs.existsSync(tsConfigPath)) {
+	const configName = fs.existsSync(path.join(cwd, "tsconfig.json"))
+		? "tsconfig.json"
+		: "jsconfig.json";
+	const tsconfig = getTsconfig(cwd, configName);
+	if (!tsconfig) {
 		return null;
 	}
 	try {
-		const result = getPathAliasesRecursive(tsConfigPath);
+		const result = extractAliases(tsconfig);
+		mergeAliases(result, collectReferencesAliases(tsconfig.path));
 		addSvelteKitEnvModules(result);
 		addCloudflareModules(result);
 		return result;
@@ -195,7 +210,9 @@ export async function getConfig({
 				  }
 			>({
 				configFile: resolvedPath,
-				dotenv: true,
+				dotenv: {
+					fileName: [".env", ".env.local"],
+				},
 				jitiOptions: jitiOptions(cwd),
 				cwd,
 			});
@@ -225,6 +242,9 @@ export async function getConfig({
 						};
 					}>({
 						configFile: possiblePath,
+						dotenv: {
+							fileName: [".env", ".env.local"],
+						},
 						jitiOptions: jitiOptions(cwd),
 						cwd,
 					});

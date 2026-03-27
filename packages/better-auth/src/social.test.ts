@@ -1,75 +1,81 @@
+import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	GoogleProfile,
+	MicrosoftEntraIDProfile,
+	RailwayProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
-import Database from "better-sqlite3";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createAuthMiddleware, getOAuthState } from "./api";
+import { createAuthMiddleware } from "./api";
+import { getOAuthState } from "./api/state/oauth";
 import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
-import { getMigrations } from "./db";
+import { getMigrations } from "./db/get-migration";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
-let server = new OAuth2Server();
-let port = 8005;
+const server = new OAuth2Server();
+const port = 8005;
 
 const mswServer = setupServer();
 let shouldUseUpdatedProfile = false;
 
 beforeAll(async () => {
 	mswServer.listen({ onUnhandledRequest: "bypass" });
+	const serverEndpoint = async () => {
+		const data: GoogleProfile = shouldUseUpdatedProfile
+			? {
+					email: "user@email.com",
+					email_verified: true,
+					name: "Updated User",
+					picture: "https://test.com/picture.png",
+					exp: 1234567890,
+					sub: "1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Updated",
+					family_name: "User",
+				}
+			: {
+					email: "user@email.com",
+					email_verified: true,
+					name: "First Last",
+					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+					exp: 1234567890,
+					sub: "1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "First",
+					family_name: "Last",
+				};
+		const testIdToken = await signJWT(data, DEFAULT_SECRET);
+		return HttpResponse.json({
+			access_token: "test",
+			refresh_token: "test",
+			id_token: testIdToken,
+		});
+	};
 	mswServer.use(
-		http.post("https://oauth2.googleapis.com/token", async () => {
-			const data: GoogleProfile = shouldUseUpdatedProfile
-				? {
-						email: "user@email.com",
-						email_verified: true,
-						name: "Updated User",
-						picture: "https://test.com/picture.png",
-						exp: 1234567890,
-						sub: "1234567890",
-						iat: 1234567890,
-						aud: "test",
-						azp: "test",
-						nbf: 1234567890,
-						iss: "test",
-						locale: "en",
-						jti: "test",
-						given_name: "Updated",
-						family_name: "User",
-					}
-				: {
-						email: "user@email.com",
-						email_verified: true,
-						name: "First Last",
-						picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-						exp: 1234567890,
-						sub: "1234567890",
-						iat: 1234567890,
-						aud: "test",
-						azp: "test",
-						nbf: 1234567890,
-						iss: "test",
-						locale: "en",
-						jti: "test",
-						given_name: "First",
-						family_name: "Last",
-					};
-			const testIdToken = await signJWT(data, DEFAULT_SECRET);
-			return HttpResponse.json({
-				access_token: "test",
-				refresh_token: "test",
-				id_token: testIdToken,
-			});
-		}),
+		http.post("https://oauth2.googleapis.com/token", serverEndpoint),
+		http.post("https://appleid.apple.com/auth/token", serverEndpoint),
 		http.post(`http://localhost:${port}/token`, async () => {
 			const data: GoogleProfile = {
 				email: "user@email.com",
@@ -135,10 +141,10 @@ describe("Social Providers", async (c) => {
 						};
 					},
 				},
-				apple: {
+				apple: async () => ({
 					clientId: "test",
 					clientSecret: "test",
-				},
+				}),
 			},
 			advanced: {
 				disableOriginCheck: false,
@@ -210,6 +216,7 @@ describe("Social Providers", async (c) => {
 		});
 		return tokens;
 	}
+
 	it("should be able to add social providers", async () => {
 		const signInRes = await client.signIn.social({
 			provider: "google",
@@ -245,6 +252,37 @@ describe("Social Providers", async (c) => {
 				const location = context.response.headers.get("location");
 				expect(location).toBeDefined();
 				expect(location).toContain("/welcome");
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			},
+		});
+	});
+
+	it("should be able to sign in with async social provider", async () => {
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/apple", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
 				);
@@ -614,7 +652,7 @@ describe("Disable signup", async () => {
 });
 
 describe("signin", async () => {
-	const database = new Database(":memory:");
+	const database = new DatabaseSync(":memory:");
 
 	beforeAll(async () => {
 		const migrations = await getMigrations({
@@ -785,7 +823,6 @@ describe("signin", async () => {
 			expiresAt: expect.any(Number),
 			invitedBy: "user-123",
 			errorURL: "http://localhost:3000/api/auth/error",
-			state: expect.any(String),
 		});
 	});
 
@@ -952,6 +989,277 @@ describe("updateAccountOnSignIn", async () => {
 			session2.data?.user.id!,
 		);
 		expect(userAccounts2[0]!.accessToken).toBe("new-access-token");
+	});
+});
+
+describe("Apple Provider", async () => {
+	it("should not use email as fallback for name when name is not provided", async () => {
+		const appleProfile = {
+			sub: "001341.example.1128",
+			email: "user@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+			// No name field
+		};
+
+		mswServer.use(
+			http.post("https://appleid.apple.com/auth/token", async () => {
+				const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "apple_access_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						// Disable ID token verification for testing
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/apple", {
+			query: {
+				state,
+				code: "apple_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Name should NOT be the email address
+		expect(session.data?.user.name).not.toBe("user@privaterelay.appleid.com");
+		// Name should be empty string when not provided
+		expect(session.data?.user.name).toBe("");
+	});
+
+	it("should use firstName and lastName when provided in token.user", async () => {
+		const appleProfile = {
+			sub: "001341.example.1129",
+			email: "user2@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+		};
+
+		mswServer.use(
+			http.post("https://appleid.apple.com/auth/token", async () => {
+				const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "apple_access_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		const userData = JSON.stringify({
+			name: {
+				firstName: "Better",
+				lastName: "Auth",
+			},
+			email: "user2@privaterelay.appleid.com",
+		});
+
+		let redirectLocation: string | null = null;
+
+		await client.$fetch("/callback/apple", {
+			body: {
+				state,
+				code: "apple_test_code",
+				user: userData,
+			},
+			headers,
+			method: "POST",
+			onError(context) {
+				// Expecting 302 redirect
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location");
+				expect(redirectLocation).toBeDefined();
+				expect(redirectLocation).toContain("/callback/apple");
+				expect(redirectLocation).toContain("user=");
+			},
+		});
+
+		const redirectUrl = new URL(redirectLocation!);
+		await client.$fetch("/callback/apple", {
+			query: Object.fromEntries(redirectUrl.searchParams),
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.name).toBe("Better Auth");
+	});
+
+	it("should pass user name via idToken body for Apple sign-in", async () => {
+		const appleProfile = {
+			sub: "001341.example.idtoken",
+			email: "idtoken-user@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+			/**
+			 * Apple id_token JWT does not include the user's name.
+			 * Name is available via the `user` field in the response.
+			 * @see https://developer.apple.com/documentation/signinwithapplejs/authorizationi/id_token
+			 * @see https://developer.apple.com/documentation/signinwithapple/incorporating-sign-in-with-apple-into-other-platforms#Handle-the-response
+			 */
+		};
+
+		const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+				user: {
+					name: {
+						firstName: "First",
+						lastName: "Last",
+					},
+					email: "idtoken-user@privaterelay.appleid.com",
+				},
+			},
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as {
+			token: string;
+			user: { email: string; name: string };
+		};
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("idtoken-user@privaterelay.appleid.com");
+		expect(data.user.name).toBe("First Last");
+	});
+
+	it("should result in empty name when idToken body has no user field for Apple", async () => {
+		const appleProfile = {
+			sub: "001341.example.idtoken-noname",
+			email: "noname-user@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+		};
+
+		const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as {
+			token: string;
+			user: { email: string; name: string };
+		};
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("noname-user@privaterelay.appleid.com");
+		expect(data.user.name).toBe("");
 	});
 });
 
@@ -1329,5 +1637,540 @@ describe("Vercel Provider", async () => {
 				expect(location).not.toContain("/welcome");
 			},
 		});
+	});
+});
+
+describe("Microsoft Provider", async () => {
+	const rsaKeyPair = await generateKeyPair("RS256");
+	const rsaJwk = await exportJWK(rsaKeyPair.publicKey);
+	const msKid = "test-microsoft-kid";
+	rsaJwk.kid = msKid;
+	rsaJwk.alg = "RS256";
+	rsaJwk.use = "sig";
+
+	it("should support verifyIdToken with custom function", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-user-123",
+			email: "msuser@outlook.com",
+			name: "Microsoft User",
+			oid: "ms-oid-123",
+			tid: "ms-tenant-123",
+		};
+
+		mswServer.use(
+			http.post(
+				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+				async () => {
+					const idToken = await signJWT(microsoftProfile, DEFAULT_SECRET);
+					return HttpResponse.json({
+						access_token: "ms_access_token",
+						id_token: idToken,
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client",
+						clientSecret: "test-ms-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/microsoft", {
+			query: {
+				state,
+				code: "ms_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.email).toBe("msuser@outlook.com");
+		expect(session.data?.user.name).toBe("Microsoft User");
+	});
+
+	it("should verify id token using JWKS endpoint", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-jwks-user-456",
+			email: "jwksuser@outlook.com",
+			name: "JWKS User",
+			oid: "ms-oid-456",
+			tid: "ms-tenant-456",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setAudience("test-ms-client-jwks")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+			http.post(
+				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+				async () => {
+					return HttpResponse.json({
+						access_token: "ms_access_token_jwks",
+						id_token: idToken,
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-jwks",
+						clientSecret: "test-ms-secret-jwks",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/microsoft", {
+			query: {
+				state,
+				code: "ms_test_code_jwks",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.email).toBe("jwksuser@outlook.com");
+		expect(session.data?.user.name).toBe("JWKS User");
+	});
+
+	it("should support id token sign in", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-id-token-user-789",
+			email: "id-tokenuser@outlook.com",
+			name: "IdToken User",
+			oid: "ms-oid-789",
+			tid: "ms-tenant-789",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setAudience("test-ms-client-id-token")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-id-token",
+						clientSecret: "test-ms-secret-id-token",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as {
+			token: string;
+			user: { email: string; name: string };
+		};
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("id-tokenuser@outlook.com");
+		expect(data.user.name).toBe("IdToken User");
+	});
+
+	it("should return false when disableIdTokenSignIn is true", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-disabled-user",
+			email: "disabled@outlook.com",
+			name: "Disabled User",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setAudience("test-ms-client-disabled")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-disabled",
+						clientSecret: "test-ms-secret-disabled",
+						disableIdTokenSignIn: true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("should verify issuer when specific tenant is configured", async () => {
+		const tenantId = "my-specific-tenant-id";
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-tenant-user",
+			email: "tenant@outlook.com",
+			name: "Tenant User",
+		};
+
+		const validToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setIssuer(`https://login.microsoftonline.com/${tenantId}/v2.0`)
+			.setAudience("test-ms-client-tenant")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		const wrongIssuerToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/wrong-tenant/v2.0")
+			.setAudience("test-ms-client-tenant")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
+				async () => {
+					return HttpResponse.json({ keys: [rsaJwk] });
+				},
+			),
+			http.get(
+				"https://graph.microsoft.com/v1.0/me/photos/*",
+				async () => new HttpResponse(null, { status: 404 }),
+			),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-tenant",
+						clientSecret: "test-ms-secret-tenant",
+						tenantId,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const validRes = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: { token: validToken },
+		});
+		expect(validRes.data).toBeDefined();
+		expect(validRes.data!.redirect).toBe(false);
+
+		const { client: client2 } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-tenant",
+						clientSecret: "test-ms-secret-tenant",
+						tenantId,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const invalidRes = await client2.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: { token: wrongIssuerToken },
+		});
+		expect(invalidRes.error?.status).toBe(401);
+	});
+});
+
+describe("Railway Provider", async () => {
+	beforeAll(() => {
+		mswServer.use(
+			http.post(
+				"https://backboard.railway.com/oauth/token",
+				async ({ request }) => {
+					const authHeader = request.headers.get("authorization");
+					expect(authHeader).toMatch(/^Basic /);
+
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+					expect(params.get("grant_type")).toBe("authorization_code");
+					expect(params.get("code")).toBeDefined();
+					expect(params.get("redirect_uri")).toBeDefined();
+
+					// Verify PKCE code_verifier is present (Better Auth uses PKCE by default)
+					const codeVerifier = params.get("code_verifier");
+					expect(codeVerifier).not.toBeNull();
+					expect(codeVerifier).not.toBe("");
+
+					return HttpResponse.json({
+						access_token: "railway_access_token",
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://backboard.railway.com/oauth/me", async () => {
+				return HttpResponse.json({
+					sub: "user_railway_123",
+					email: "railway@test.com",
+					name: "Railway User",
+					picture: "https://avatars.githubusercontent.com/u/12345",
+				} satisfies RailwayProfile);
+			}),
+		);
+	});
+
+	it("should configure Railway provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				railway: {
+					clientId: "railway-test-client-id",
+					clientSecret: "railway-test-client-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const railwayProvider = ctx.socialProviders.find((p) => p.id === "railway");
+
+		expect(railwayProvider).toBeDefined();
+		expect(railwayProvider?.id).toBe("railway");
+		expect(railwayProvider?.name).toBe("Railway");
+	});
+
+	it("should initiate Railway OAuth flow with PKCE", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				railway: {
+					clientId: "railway-test-client-id",
+					clientSecret: "railway-test-client-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "railway",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("backboard.railway.com/oauth/auth");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("scope")).toContain("openid");
+		expect(authUrl.searchParams.get("scope")).toContain("email");
+		expect(authUrl.searchParams.get("scope")).toContain("profile");
+
+		// Verify PKCE parameters are present (Better Auth uses PKCE by default)
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+	});
+
+	it("should complete Railway OAuth flow and create user", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					railway: {
+						clientId: "railway-test-client-id",
+						clientSecret: "railway-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "railway",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toBeDefined();
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/railway", {
+			query: {
+				state,
+				code: "railway_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data).toBeDefined();
+		expect(session.data?.user.email).toBe("railway@test.com");
+		expect(session.data?.user.name).toBe("Railway User");
+		expect(session.data?.user.image).toBe(
+			"https://avatars.githubusercontent.com/u/12345",
+		);
+		// Railway does not provide email_verified claim, defaults to false
+		expect(session.data?.user.emailVerified).toBe(false);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("railway");
+		expect(accounts[0]?.accountId).toBe("user_railway_123");
 	});
 });

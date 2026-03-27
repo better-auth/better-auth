@@ -1,19 +1,44 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { deprecate } from "@better-auth/core/utils";
+import { deprecate } from "@better-auth/core/utils/deprecate";
+import { normalizePathname } from "@better-auth/core/utils/url";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
 
 /**
  * Checks if CSRF should be skipped for backward compatibility.
  * Previously, disableOriginCheck also disabled CSRF checks.
  * This maintains that behavior when disableCSRFCheck isn't explicitly set.
+ * Only triggers for skipOriginCheck === true, not for path arrays.
  */
 function shouldSkipCSRFForBackwardCompat(ctx: GenericEndpointContext): boolean {
 	return (
-		ctx.context.skipOriginCheck &&
+		ctx.context.skipOriginCheck === true &&
 		ctx.context.options.advanced?.disableCSRFCheck === undefined
 	);
+}
+
+/**
+ * Checks if the origin check should be skipped for the current request.
+ * Handles both boolean (skip all) and array (skip specific paths) configurations.
+ */
+function shouldSkipOriginCheck(ctx: GenericEndpointContext): boolean {
+	const skipOriginCheck = ctx.context.skipOriginCheck;
+	if (skipOriginCheck === true) {
+		return true;
+	}
+	if (Array.isArray(skipOriginCheck) && ctx.request) {
+		try {
+			const basePath = new URL(ctx.context.baseURL).pathname;
+			const currentPath = normalizePathname(ctx.request.url, basePath);
+			return skipOriginCheck.some((skipPath) =>
+				currentPath.startsWith(skipPath),
+			);
+		} catch {
+			//
+		}
+	}
+	return false;
 }
 
 /**
@@ -43,7 +68,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	await validateOrigin(ctx);
 
-	if (ctx.context.skipOriginCheck) {
+	if (shouldSkipOriginCheck(ctx)) {
 		return;
 	}
 
@@ -115,7 +140,7 @@ export const originCheck = (
 		if (!ctx.request) {
 			return;
 		}
-		if (ctx.context.skipOriginCheck) {
+		if (shouldSkipOriginCheck(ctx)) {
 			return;
 		}
 		const callbackURL = getValue(ctx);
@@ -197,6 +222,10 @@ async function validateOrigin(
 		return;
 	}
 
+	if (shouldSkipOriginCheck(ctx)) {
+		return;
+	}
+
 	const shouldValidate = forceValidate || useCookies;
 
 	if (!shouldValidate) {
@@ -227,7 +256,7 @@ async function validateOrigin(
 			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
-		throw new APIError("FORBIDDEN", { message: "Invalid origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
 	}
 }
 

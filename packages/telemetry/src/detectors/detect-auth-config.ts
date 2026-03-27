@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { TelemetryContext } from "../types";
 
-export function getTelemetryAuthConfig(
+export async function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
 	context?: TelemetryContext | undefined,
 ) {
@@ -15,7 +15,8 @@ export function getTelemetryAuthConfig(
 			autoSignInAfterVerification:
 				!!options.emailVerification?.autoSignInAfterVerification,
 			expiresIn: options.emailVerification?.expiresIn,
-			onEmailVerification: !!options.emailVerification?.onEmailVerification,
+			beforeEmailVerification:
+				!!options.emailVerification?.beforeEmailVerification,
 			afterEmailVerification:
 				!!options.emailVerification?.afterEmailVerification,
 		},
@@ -38,25 +39,30 @@ export function getTelemetryAuthConfig(
 			revokeSessionsOnPasswordReset:
 				!!options.emailAndPassword?.revokeSessionsOnPasswordReset,
 		},
-		socialProviders: Object.keys(options.socialProviders || {}).map((p) => {
-			const provider =
-				options.socialProviders?.[p as keyof typeof options.socialProviders];
-			if (!provider) return {};
-			return {
-				id: p,
-				mapProfileToUser: !!provider.mapProfileToUser,
-				disableDefaultScope: !!provider.disableDefaultScope,
-				disableIdTokenSignIn: !!provider.disableIdTokenSignIn,
-				disableImplicitSignUp: provider.disableImplicitSignUp,
-				disableSignUp: provider.disableSignUp,
-				getUserInfo: !!provider.getUserInfo,
-				overrideUserInfoOnSignIn: !!provider.overrideUserInfoOnSignIn,
-				prompt: provider.prompt,
-				verifyIdToken: !!provider.verifyIdToken,
-				scope: provider.scope,
-				refreshAccessToken: !!provider.refreshAccessToken,
-			};
-		}),
+		socialProviders: await Promise.all(
+			Object.keys(options.socialProviders || {}).map(async (key) => {
+				const p =
+					options.socialProviders?.[
+						key as keyof typeof options.socialProviders
+					];
+				if (!p) return {};
+				const provider = typeof p === "function" ? await p() : p;
+				return {
+					id: key,
+					mapProfileToUser: !!provider.mapProfileToUser,
+					disableDefaultScope: !!provider.disableDefaultScope,
+					disableIdTokenSignIn: !!provider.disableIdTokenSignIn,
+					disableImplicitSignUp: provider.disableImplicitSignUp,
+					disableSignUp: provider.disableSignUp,
+					getUserInfo: !!provider.getUserInfo,
+					overrideUserInfoOnSignIn: !!provider.overrideUserInfoOnSignIn,
+					prompt: provider.prompt,
+					verifyIdToken: !!provider.verifyIdToken,
+					scope: provider.scope,
+					refreshAccessToken: !!provider.refreshAccessToken,
+				};
+			}),
+		),
 		plugins: options.plugins?.map((p) => p.id.toString()),
 		user: {
 			modelName: options.user?.modelName,
@@ -64,8 +70,8 @@ export function getTelemetryAuthConfig(
 			additionalFields: options.user?.additionalFields,
 			changeEmail: {
 				enabled: options.user?.changeEmail?.enabled,
-				sendChangeEmailVerification:
-					!!options.user?.changeEmail?.sendChangeEmailVerification,
+				sendChangeEmailConfirmation:
+					!!options.user?.changeEmail?.sendChangeEmailConfirmation,
 			},
 		},
 		verification: {
@@ -117,9 +123,6 @@ export function getTelemetryAuthConfig(
 					options.advanced?.crossSubDomainCookies?.additionalCookies,
 			},
 			database: {
-				useNumberId:
-					!!options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial",
 				generateId: options.advanced?.database?.generateId,
 				defaultFindManyLimit: options.advanced?.database?.defaultFindManyLimit,
 			},
