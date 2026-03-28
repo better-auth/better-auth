@@ -2410,7 +2410,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser) {
+			if (options?.provisionUser && result.isRegister) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
@@ -2926,7 +2926,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser) {
+			if (options?.provisionUser && result.isRegister) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
