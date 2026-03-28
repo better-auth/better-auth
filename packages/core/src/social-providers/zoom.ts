@@ -148,6 +148,8 @@ export const zoom = (userOptions: ZoomOptions) => {
 		pkce: true,
 		...userOptions,
 	};
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://api.zoom.us/v2/users/me";
 
 	return {
 		id: "zoom",
@@ -201,7 +203,7 @@ export const zoom = (userOptions: ZoomOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<ZoomProfile>(
-				"https://api.zoom.us/v2/users/me",
+				userInfoEndpoint,
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,

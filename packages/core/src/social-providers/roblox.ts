@@ -41,16 +41,20 @@ export const roblox = (options: RobloxOptions) => {
 			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return new URL(
-				`${
-					options.authorizationEndpoint ??
-					"https://apis.roblox.com/oauth/v1/authorize"
-				}?scope=${_scopes.join("+")}&response_type=code&client_id=${
-					options.clientId
-				}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}&prompt=${options.prompt || "select_account consent"}`,
+			const url = new URL(
+				options.authorizationEndpoint ??
+					"https://apis.roblox.com/oauth/v1/authorize",
 			);
+			url.searchParams.set("scope", _scopes.join(" "));
+			url.searchParams.set("response_type", "code");
+			url.searchParams.set("client_id", options.clientId);
+			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
+			url.searchParams.set("state", state);
+			url.searchParams.set(
+				"prompt",
+				options.prompt || "select_account consent",
+			);
+			return url;
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

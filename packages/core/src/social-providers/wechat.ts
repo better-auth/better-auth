@@ -52,6 +52,11 @@ export interface WeChatOptions extends ProviderOptions<WeChatProfile> {
 	 * @default "cn" if left undefined
 	 */
 	lang?: "cn" | "en";
+	/**
+	 * Custom refresh token endpoint URL.
+	 * WeChat uses a separate refresh endpoint from the authorization code exchange.
+	 */
+	refreshTokenEndpoint?: string;
 }
 
 export const wechat = (options: WeChatOptions) => {
@@ -149,8 +154,10 @@ export const wechat = (options: WeChatOptions) => {
 						errcode?: number;
 						errmsg?: string;
 					}>(
-						"https://api.weixin.qq.com/sns/oauth2/refresh_token?" +
-							params.toString(),
+						`${
+							options.refreshTokenEndpoint ??
+							"https://api.weixin.qq.com/sns/oauth2/refresh_token"
+						}?${params.toString()}`,
 						{
 							method: "GET",
 						},

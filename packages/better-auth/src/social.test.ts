@@ -8,6 +8,14 @@ import type {
 	RailwayProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
+import {
+	paypal,
+	reddit,
+	roblox,
+	slack,
+	vk,
+	zoom,
+} from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -711,6 +719,285 @@ describe("Social Providers", async (c) => {
 		expect(gitlabTokenEndpointHit).toBe(true);
 		expect(gitlabUserInfoEndpointHit).toBe(true);
 		expect(userInfo?.user.email).toBe("gitlab-emulator@example.com");
+	});
+
+	it("should support WeChat refresh endpoint overrides", async () => {
+		let wechatRefreshEndpointHit = false;
+
+		mswServer.use(
+			http.get(
+				`http://localhost:${port}/emulator/wechat/refresh-token`,
+				async ({ request }) => {
+					wechatRefreshEndpointHit = true;
+					const url = new URL(request.url);
+					expect(url.searchParams.get("appid")).toBe("wechat-emulator-client");
+					expect(url.searchParams.get("grant_type")).toBe("refresh_token");
+					expect(url.searchParams.get("refresh_token")).toBe(
+						"wechat-emulator-refresh-token",
+					);
+
+					return HttpResponse.json({
+						access_token: "wechat-emulator-access-token",
+						expires_in: 3600,
+						refresh_token: "wechat-emulator-refresh-token-next",
+						openid: "wechat-emulator-openid",
+						scope: "snsapi_login",
+					});
+				},
+			),
+		);
+
+		const { auth } = await getTestInstance(
+			{
+				socialProviders: {
+					wechat: {
+						clientId: "wechat-emulator-client",
+						clientSecret: "wechat-emulator-secret",
+						refreshTokenEndpoint: `http://localhost:${port}/emulator/wechat/refresh-token`,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await auth.$context;
+		const wechatProvider = ctx.socialProviders.find((p) => p.id === "wechat");
+		expect(wechatProvider?.refreshAccessToken).toBeDefined();
+
+		const tokens = await wechatProvider!.refreshAccessToken!(
+			"wechat-emulator-refresh-token",
+		);
+
+		expect(wechatRefreshEndpointHit).toBe(true);
+		expect(tokens.accessToken).toBe("wechat-emulator-access-token");
+		expect(tokens.refreshToken).toBe("wechat-emulator-refresh-token-next");
+	});
+
+	it("should use Reddit token endpoint overrides for auth code exchange", async () => {
+		let redditTokenEndpointHit = false;
+
+		mswServer.use(
+			http.post(`http://localhost:${port}/emulator/reddit/token`, async () => {
+				redditTokenEndpointHit = true;
+				return HttpResponse.json({
+					access_token: "reddit-emulator-access-token",
+					refresh_token: "reddit-emulator-refresh-token",
+					token_type: "bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const redditProvider = reddit({
+			clientId: "reddit-emulator-client",
+			clientSecret: "reddit-emulator-secret",
+			tokenEndpoint: `http://localhost:${port}/emulator/reddit/token`,
+		});
+
+		const tokens = await redditProvider.validateAuthorizationCode({
+			code: "reddit_emulator_code",
+			redirectURI: "http://localhost:3000/callback/reddit",
+		});
+
+		expect(redditTokenEndpointHit).toBe(true);
+		expect(tokens?.accessToken).toBe("reddit-emulator-access-token");
+		expect(tokens?.refreshToken).toBe("reddit-emulator-refresh-token");
+	});
+
+	it("should use Slack user info endpoint overrides", async () => {
+		let slackUserInfoEndpointHit = false;
+
+		mswServer.use(
+			http.get(`http://localhost:${port}/emulator/slack/userinfo`, async () => {
+				slackUserInfoEndpointHit = true;
+				return HttpResponse.json({
+					ok: true,
+					sub: "slack-emulator-sub",
+					"https://slack.com/user_id": "slack-emulator-user",
+					"https://slack.com/team_id": "team-1",
+					email: "slack-emulator@example.com",
+					email_verified: true,
+					date_email_verified: 1234567890,
+					name: "Slack Emulator",
+					picture: "https://test.com/slack-emulator.png",
+					given_name: "Slack",
+					family_name: "Emulator",
+					locale: "en-US",
+					"https://slack.com/team_name": "Emulator Team",
+					"https://slack.com/team_domain": "emulator",
+					"https://slack.com/user_image_24": "",
+					"https://slack.com/user_image_32": "",
+					"https://slack.com/user_image_48": "",
+					"https://slack.com/user_image_72": "",
+					"https://slack.com/user_image_192": "",
+					"https://slack.com/user_image_512": "",
+					"https://slack.com/team_image_34": "",
+					"https://slack.com/team_image_44": "",
+					"https://slack.com/team_image_68": "",
+					"https://slack.com/team_image_88": "",
+					"https://slack.com/team_image_102": "",
+					"https://slack.com/team_image_132": "",
+					"https://slack.com/team_image_230": "",
+					"https://slack.com/team_image_default": false,
+				});
+			}),
+		);
+
+		const slackProvider = slack({
+			clientId: "slack-emulator-client",
+			userInfoEndpoint: `http://localhost:${port}/emulator/slack/userinfo`,
+		});
+
+		const userInfo = await slackProvider.getUserInfo({
+			accessToken: "slack-emulator-access-token",
+		});
+
+		expect(slackUserInfoEndpointHit).toBe(true);
+		expect(userInfo?.user.email).toBe("slack-emulator@example.com");
+	});
+
+	it("should preserve query params when overriding PayPal user info endpoints", async () => {
+		let paypalUserInfoEndpointHit = false;
+
+		mswServer.use(
+			http.get(
+				`http://localhost:${port}/emulator/paypal/userinfo`,
+				async ({ request }) => {
+					paypalUserInfoEndpointHit = true;
+					const url = new URL(request.url);
+					expect(url.searchParams.get("existing")).toBe("1");
+					expect(url.searchParams.get("schema")).toBe("paypalv1.1");
+
+					return HttpResponse.json({
+						user_id: "paypal-emulator-user",
+						name: "PayPal Emulator",
+						given_name: "PayPal",
+						family_name: "Emulator",
+						email: "paypal-emulator@example.com",
+						email_verified: true,
+					});
+				},
+			),
+		);
+
+		const paypalProvider = paypal({
+			clientId: "paypal-emulator-client",
+			clientSecret: "paypal-emulator-secret",
+			userInfoEndpoint: `http://localhost:${port}/emulator/paypal/userinfo?existing=1`,
+		});
+
+		const userInfo = await paypalProvider.getUserInfo({
+			accessToken: "paypal-emulator-access-token",
+		});
+
+		expect(paypalUserInfoEndpointHit).toBe(true);
+		expect(userInfo?.user.email).toBe("paypal-emulator@example.com");
+	});
+
+	it("should preserve query params when overriding Roblox authorization endpoints", async () => {
+		const robloxProvider = roblox({
+			clientId: "roblox-emulator-client",
+			authorizationEndpoint: `http://localhost:${port}/emulator/roblox/authorize?existing=1`,
+		});
+
+		const authorizationUrl = await robloxProvider.createAuthorizationURL({
+			state: "roblox-emulator-state",
+			codeVerifier: "roblox-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/roblox",
+		});
+
+		expect(authorizationUrl.origin).toBe(`http://localhost:${port}`);
+		expect(authorizationUrl.pathname).toBe("/emulator/roblox/authorize");
+		expect(authorizationUrl.searchParams.get("existing")).toBe("1");
+		expect(authorizationUrl.searchParams.get("client_id")).toBe(
+			"roblox-emulator-client",
+		);
+		expect(authorizationUrl.searchParams.get("state")).toBe(
+			"roblox-emulator-state",
+		);
+	});
+
+	it("should use Zoom user info endpoint overrides", async () => {
+		let zoomUserInfoEndpointHit = false;
+
+		mswServer.use(
+			http.get(`http://localhost:${port}/emulator/zoom/userinfo`, async () => {
+				zoomUserInfoEndpointHit = true;
+				return HttpResponse.json({
+					id: "zoom-emulator-user",
+					display_name: "Zoom Emulator",
+					pic_url: "https://test.com/zoom-emulator.png",
+					email: "zoom-emulator@example.com",
+					verified: 1,
+				});
+			}),
+		);
+
+		const zoomProvider = zoom({
+			clientId: "zoom-emulator-client",
+			clientSecret: "zoom-emulator-secret",
+			userInfoEndpoint: `http://localhost:${port}/emulator/zoom/userinfo`,
+		});
+
+		const userInfo = await zoomProvider.getUserInfo({
+			accessToken: "zoom-emulator-access-token",
+		});
+
+		expect(zoomUserInfoEndpointHit).toBe(true);
+		expect(userInfo?.user.email).toBe("zoom-emulator@example.com");
+	});
+
+	it("should use VK authorization and user info endpoint overrides", async () => {
+		let vkUserInfoEndpointHit = false;
+
+		mswServer.use(
+			http.post(
+				`http://localhost:${port}/emulator/vk/userinfo`,
+				async ({ request }) => {
+					vkUserInfoEndpointHit = true;
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+					expect(params.get("client_id")).toBe("vk-emulator-client");
+					expect(params.get("access_token")).toBe("vk-emulator-access-token");
+
+					return HttpResponse.json({
+						user: {
+							user_id: "vk-emulator-user",
+							first_name: "VK",
+							last_name: "Emulator",
+							email: "vk-emulator@example.com",
+							avatar: "https://test.com/vk-emulator.png",
+							birthday: "2000-01-01",
+						},
+					});
+				},
+			),
+		);
+
+		const vkProvider = vk({
+			clientId: "vk-emulator-client",
+			clientSecret: "vk-emulator-secret",
+			authorizationEndpoint: `http://localhost:${port}/emulator/vk/authorize`,
+			userInfoEndpoint: `http://localhost:${port}/emulator/vk/userinfo`,
+		});
+
+		const authorizationUrl = await vkProvider.createAuthorizationURL({
+			state: "vk-emulator-state",
+			scopes: ["profile"],
+			codeVerifier: "vk-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/vk",
+		});
+		const userInfo = await vkProvider.getUserInfo({
+			accessToken: "vk-emulator-access-token",
+		});
+
+		expect(authorizationUrl.toString()).toContain(
+			`http://localhost:${port}/emulator/vk/authorize`,
+		);
+		expect(vkUserInfoEndpointHit).toBe(true);
+		expect(userInfo?.user.email).toBe("vk-emulator@example.com");
 	});
 });
 describe("Redirect URI", async () => {

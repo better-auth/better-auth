@@ -27,6 +27,10 @@ export interface VkOption extends ProviderOptions {
 
 export const vk = (options: VkOption) => {
 	const tokenEndpoint = "https://id.vk.com/oauth2/auth";
+	const authorizationEndpoint =
+		options.authorizationEndpoint ?? "https://id.vk.com/authorize";
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://id.vk.com/oauth2/user_info";
 	return {
 		id: "vk",
 		name: "VK",
@@ -34,7 +38,6 @@ export const vk = (options: VkOption) => {
 			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			const authorizationEndpoint = "https://id.vk.com/authorize";
 
 			return createAuthorizationURL({
 				id: "vk",
@@ -86,7 +89,7 @@ export const vk = (options: VkOption) => {
 				client_id: options.clientId,
 			}).toString();
 			const { data: profile, error } = await betterFetch<VkProfile>(
-				"https://id.vk.com/oauth2/user_info",
+				userInfoEndpoint,
 				{
 					method: "POST",
 					headers: {

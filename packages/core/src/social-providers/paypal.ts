@@ -227,8 +227,13 @@ export const paypal = (options: PayPalOptions) => {
 			}
 
 			try {
+				const userInfoUrl = new URL(
+					options.userInfoEndpoint ?? userInfoEndpoint,
+				);
+				userInfoUrl.searchParams.set("schema", "paypalv1.1");
+
 				const response = await betterFetch<PayPalProfile>(
-					`${options.userInfoEndpoint ?? userInfoEndpoint}?schema=paypalv1.1`,
+					userInfoUrl.toString(),
 					{
 						headers: {
 							Authorization: `Bearer ${token.accessToken}`,

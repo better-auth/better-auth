@@ -39,6 +39,8 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 
 export const slack = (options: SlackOptions) => {
 	const tokenEndpoint = "https://slack.com/api/openid.connect.token";
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://slack.com/api/openid.connect.userInfo";
 	return {
 		id: "slack",
 		name: "Slack",
@@ -85,7 +87,7 @@ export const slack = (options: SlackOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<SlackProfile>(
-				"https://slack.com/api/openid.connect.userInfo",
+				userInfoEndpoint,
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,
