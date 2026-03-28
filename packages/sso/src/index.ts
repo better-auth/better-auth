@@ -140,14 +140,14 @@ export function sso<
 	id: "sso";
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
 	schema: NonNullable<BetterAuthPlugin["schema"]>;
-	options: O;
+	options: NoInfer<O>;
 };
 export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O>;
-	options: O;
+	options: NoInfer<O>;
 };
 
 export function sso<O extends SSOOptions>(
