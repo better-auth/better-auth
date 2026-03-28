@@ -63,7 +63,7 @@ export const roblox = (options: RobloxOptions) => {
 				code,
 				redirectURI: options.redirectURI || redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 				authentication: "post",
 			});
 		},
@@ -77,7 +77,7 @@ export const roblox = (options: RobloxOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -85,7 +85,7 @@ export const roblox = (options: RobloxOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<RobloxProfile>(
-				"https://apis.roblox.com/oauth/v1/userinfo",
+				options.userInfoEndpoint ?? "https://apis.roblox.com/oauth/v1/userinfo",
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,

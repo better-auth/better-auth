@@ -141,7 +141,7 @@ export const discord = (options: DiscordOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -154,7 +154,7 @@ export const discord = (options: DiscordOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

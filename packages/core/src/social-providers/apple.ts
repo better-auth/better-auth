@@ -119,11 +119,11 @@ export const apple = (options: AppleOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		idToken: {
-			jwks: (header) => getApplePublicKey(header.kid!),
+			jwks: (header) => getApplePublicKey(header.kid!, options.jwksEndpoint),
 			issuer: "https://appleid.apple.com",
 			algorithms: ["RS256"],
 			audience:
@@ -141,7 +141,7 @@ export const apple = (options: AppleOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options,
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -187,7 +187,7 @@ export const apple = (options: AppleOptions) => {
 	} satisfies OAuthProvider<AppleProfile>;
 };
 
-export const getApplePublicKey = async (kid: string) => {
+export const getApplePublicKey = async (kid: string, jwksEndpoint?: string) => {
 	const APPLE_BASE_URL = "https://appleid.apple.com";
 	const JWKS_APPLE_URI = "/auth/keys";
 	const { data } = await fetchRefusingRedirects<{
@@ -199,7 +199,7 @@ export const getApplePublicKey = async (kid: string) => {
 			n: string;
 			e: string;
 		}>;
-	}>(`${APPLE_BASE_URL}${JWKS_APPLE_URI}`);
+	}>(jwksEndpoint ?? `${APPLE_BASE_URL}${JWKS_APPLE_URI}`);
 	if (!data?.keys) {
 		throw new APIError("BAD_REQUEST", {
 			message: "Keys not found",

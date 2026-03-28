@@ -62,7 +62,7 @@ export const linear = (options: LinearOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -75,7 +75,7 @@ export const linear = (options: LinearOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

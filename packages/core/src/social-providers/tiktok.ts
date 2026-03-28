@@ -154,7 +154,10 @@ export const tiktok = (options: TiktokOptions) => {
 			if (scopes) _scopes.push(...scopes);
 			// TikTok uses `client_key` instead of the standard `client_id`, so the
 			// shared createAuthorizationURL helper cannot be used directly.
-			const url = new URL("https://www.tiktok.com/v2/auth/authorize");
+			const url = new URL(
+				options.authorizationEndpoint ??
+					"https://www.tiktok.com/v2/auth/authorize",
+			);
 			url.searchParams.set("scope", _scopes.join(","));
 			url.searchParams.set("response_type", "code");
 			url.searchParams.set("client_key", options.clientKey);
@@ -176,7 +179,7 @@ export const tiktok = (options: TiktokOptions) => {
 				codeVerifier,
 				redirectURI: options.redirectURI || redirectURI,
 				options: {},
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 				tokenEndpointAuth,
 			});
 		},
@@ -186,7 +189,7 @@ export const tiktok = (options: TiktokOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 						tokenEndpointAuth,
 					});
 				},

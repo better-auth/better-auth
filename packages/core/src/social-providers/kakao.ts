@@ -176,7 +176,7 @@ export const kakao = (options: KakaoOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -189,7 +189,7 @@ export const kakao = (options: KakaoOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		idToken: {

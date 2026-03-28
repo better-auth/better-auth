@@ -66,7 +66,7 @@ export const vk = (options: VkOption) => {
 				redirectURI: options.redirectURI || redirectURI,
 				options,
 				deviceId,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -79,7 +79,7 @@ export const vk = (options: VkOption) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(data) {

@@ -64,7 +64,7 @@ export const naver = (options: NaverOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -77,7 +77,7 @@ export const naver = (options: NaverOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

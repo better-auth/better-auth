@@ -26,7 +26,8 @@ export interface RedditOptions extends ProviderOptions<RedditProfile> {
 }
 
 export const reddit = (options: RedditOptions) => {
-	const tokenEndpoint = "https://www.reddit.com/api/v1/access_token";
+	const tokenEndpoint =
+		options.tokenEndpoint ?? "https://www.reddit.com/api/v1/access_token";
 	const tokenRequestOptions = {
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,

@@ -152,6 +152,8 @@ export async function validateAuthorizationCode({
 	resource,
 	fetch,
 }: ValidateAuthorizationCodeInput) {
+	options = typeof options === "function" ? await options() : options;
+
 	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
 		codeVerifier,
@@ -167,12 +169,15 @@ export async function validateAuthorizationCode({
 		resource,
 	});
 
-	const { data, error } = await fetchRefusingRedirects<object>(tokenEndpoint, {
-		method: "POST",
-		body: body,
-		headers: requestHeaders,
-		customFetchImpl: fetch,
-	});
+	const { data, error } = await fetchRefusingRedirects<object>(
+		options.tokenEndpoint ?? tokenEndpoint,
+		{
+			method: "POST",
+			body: body,
+			headers: requestHeaders,
+			customFetchImpl: fetch,
+		},
+	);
 	if (error) {
 		throw error;
 	}

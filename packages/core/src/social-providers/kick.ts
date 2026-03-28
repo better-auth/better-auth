@@ -61,7 +61,8 @@ export const kick = (options: KickOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://id.kick.com/oauth/token",
+				tokenEndpoint:
+					options.tokenEndpoint ?? "https://id.kick.com/oauth/token",
 				codeVerifier,
 			});
 		},
@@ -74,7 +75,8 @@ export const kick = (options: KickOptions) => {
 							clientId: options.clientId,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://id.kick.com/oauth/token",
+						tokenEndpoint:
+							options.tokenEndpoint ?? "https://id.kick.com/oauth/token",
 					});
 				},
 		async getUserInfo(token) {

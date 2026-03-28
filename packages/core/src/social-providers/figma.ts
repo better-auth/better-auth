@@ -65,7 +65,7 @@ export const figma = (options: FigmaOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 				authentication: "basic",
 			});
 		},
@@ -79,7 +79,7 @@ export const figma = (options: FigmaOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 						authentication: "basic",
 					});
 				},

@@ -136,7 +136,7 @@ export const paypal = (options: PayPalOptions) => {
 					codeVerifier,
 					redirectURI: options.redirectURI || redirectURI,
 					options: tokenRequestOptions,
-					tokenEndpoint,
+					tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					tokenEndpointAuth,
 				});
 			} catch (error) {
@@ -152,7 +152,7 @@ export const paypal = (options: PayPalOptions) => {
 						return await refreshAccessToken({
 							refreshToken,
 							options: tokenRequestOptions,
-							tokenEndpoint,
+							tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 							tokenEndpointAuth,
 						});
 					} catch (error) {
@@ -172,8 +172,13 @@ export const paypal = (options: PayPalOptions) => {
 			}
 
 			try {
+				const userInfoUrl = new URL(
+					options.userInfoEndpoint ?? userInfoEndpoint,
+				);
+				userInfoUrl.searchParams.set("schema", "paypalv1.1");
+
 				const response = await betterFetch<PayPalProfile>(
-					`${userInfoEndpoint}?schema=paypalv1.1`,
+					userInfoUrl.toString(),
 					{
 						headers: {
 							Authorization: `Bearer ${token.accessToken}`,
