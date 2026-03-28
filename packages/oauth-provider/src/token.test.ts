@@ -1832,8 +1832,10 @@ describe("id token claim override security", async () => {
 					sub: "evil",
 					iss: "https://evil.com",
 					aud: "evil-client",
+					nonce: "evil-nonce",
 					iat: 0,
 					exp: 0,
+					sid: "evil-sid",
 				}),
 			}),
 		],
@@ -1944,7 +1946,9 @@ describe("id token claim override security", async () => {
 		expect(claims.sub).not.toBe("evil");
 		expect(claims.iss).not.toBe("https://evil.com");
 		expect(claims.aud).not.toBe("evil-client");
+		expect(claims.nonce).not.toBe("evil-nonce");
 		expect(claims.iat).not.toBe(0);
 		expect(claims.exp).not.toBe(0);
+		expect(claims.sid).not.toBe("evil-sid");
 	});
 });
