@@ -157,9 +157,9 @@ async function createIdToken(
 
 	const payload: JWTPayload = {
 		...userClaims,
-		...customClaims,
 		auth_time: authTimeSec,
 		acr,
+		...customClaims,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: resolvedSub,
 		aud: client.clientId,
