@@ -1,7 +1,7 @@
 name: E2E
 on:
   push:
-    branches: [ main, canary ]
+    branches: [ main ]
   merge_group:
   pull_request:
 
