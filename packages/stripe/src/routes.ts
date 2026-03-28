@@ -1613,10 +1613,14 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 					const plan = plans.find(
 						(p) => p.name.toLowerCase() === sub.plan.toLowerCase(),
 					);
+					const priceId =
+						sub.billingInterval === "year"
+							? (plan?.annualDiscountPriceId ?? plan?.priceId)
+							: plan?.priceId;
 					return {
 						...sub,
 						limits: plan?.limits,
-						priceId: plan?.priceId,
+						priceId,
 					};
 				})
 				.filter((sub) => isActiveOrTrialing(sub));
