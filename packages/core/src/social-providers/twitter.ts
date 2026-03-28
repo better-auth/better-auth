@@ -131,7 +131,7 @@ export const twitter = (options: TwitterOption) => {
 				authentication: "basic",
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 
@@ -146,7 +146,7 @@ export const twitter = (options: TwitterOption) => {
 							clientSecret: options.clientSecret,
 						},
 						authentication: "basic",
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

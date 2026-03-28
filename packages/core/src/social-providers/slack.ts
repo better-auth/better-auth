@@ -48,7 +48,10 @@ export const slack = (options: SlackOptions) => {
 				: ["openid", "profile", "email"];
 			if (scopes) _scopes.push(...scopes);
 			if (options.scope) _scopes.push(...options.scope);
-			const url = new URL("https://slack.com/openid/connect/authorize");
+			const url = new URL(
+				options.authorizationEndpoint ??
+					"https://slack.com/openid/connect/authorize",
+			);
 			url.searchParams.set("scope", _scopes.join(" "));
 			url.searchParams.set("response_type", "code");
 			url.searchParams.set("client_id", options.clientId);
@@ -61,7 +64,7 @@ export const slack = (options: SlackOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -74,7 +77,7 @@ export const slack = (options: SlackOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

@@ -42,9 +42,10 @@ export const roblox = (options: RobloxOptions) => {
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 			return new URL(
-				`https://apis.roblox.com/oauth/v1/authorize?scope=${_scopes.join(
-					"+",
-				)}&response_type=code&client_id=${
+				`${
+					options.authorizationEndpoint ??
+					"https://apis.roblox.com/oauth/v1/authorize"
+				}?scope=${_scopes.join("+")}&response_type=code&client_id=${
 					options.clientId
 				}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
@@ -56,7 +57,7 @@ export const roblox = (options: RobloxOptions) => {
 				code,
 				redirectURI: options.redirectURI || redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 				authentication: "post",
 			});
 		},
@@ -70,7 +71,7 @@ export const roblox = (options: RobloxOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -78,7 +79,7 @@ export const roblox = (options: RobloxOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<RobloxProfile>(
-				"https://apis.roblox.com/oauth/v1/userinfo",
+				options.userInfoEndpoint ?? "https://apis.roblox.com/oauth/v1/userinfo",
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,

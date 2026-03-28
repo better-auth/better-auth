@@ -166,7 +166,9 @@ export const zoom = (userOptions: ZoomOptions) => {
 				params.set("code_challenge", codeChallenge);
 			}
 
-			const url = new URL("https://zoom.us/oauth/authorize");
+			const url = new URL(
+				options.authorizationEndpoint ?? "https://zoom.us/oauth/authorize",
+			);
 			url.search = params.toString();
 
 			return url;
@@ -177,7 +179,7 @@ export const zoom = (userOptions: ZoomOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				codeVerifier,
 				options,
-				tokenEndpoint: "https://zoom.us/oauth/token",
+				tokenEndpoint: options.tokenEndpoint ?? "https://zoom.us/oauth/token",
 				authentication: "post",
 			});
 		},
@@ -191,7 +193,8 @@ export const zoom = (userOptions: ZoomOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://zoom.us/oauth/token",
+						tokenEndpoint:
+							options.tokenEndpoint ?? "https://zoom.us/oauth/token",
 					}),
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

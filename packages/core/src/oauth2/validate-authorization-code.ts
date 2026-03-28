@@ -161,7 +161,9 @@ export async function validateAuthorizationCode({
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
-	const { body, headers: requestHeaders } = await authorizationCodeRequest({
+	options = typeof options === "function" ? await options() : options;
+
+	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
 		code,
 		codeVerifier,
 		redirectURI,
@@ -175,11 +177,14 @@ export async function validateAuthorizationCode({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<object>(tokenEndpoint, {
-		method: "POST",
-		body: body,
-		headers: requestHeaders,
-	});
+	const { data, error } = await betterFetch<object>(
+		options.tokenEndpoint ?? tokenEndpoint,
+		{
+			method: "POST",
+			body: body,
+			headers: requestHeaders,
+		},
+	);
 	if (error) {
 		throw error;
 	}

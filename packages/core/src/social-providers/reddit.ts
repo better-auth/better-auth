@@ -81,7 +81,9 @@ export const reddit = (options: RedditOptions) => {
 							clientSecret: options.clientSecret,
 						},
 						authentication: "basic",
-						tokenEndpoint: "https://www.reddit.com/api/v1/access_token",
+						tokenEndpoint:
+							options.tokenEndpoint ??
+							"https://www.reddit.com/api/v1/access_token",
 					});
 				},
 		async getUserInfo(token) {

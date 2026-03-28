@@ -117,20 +117,23 @@ export const paypal = (options: PayPalOptions) => {
 			);
 
 			try {
-				const response = await betterFetch(tokenEndpoint, {
-					method: "POST",
-					headers: {
-						Authorization: `Basic ${credentials}`,
-						Accept: "application/json",
-						"Accept-Language": "en_US",
-						"Content-Type": "application/x-www-form-urlencoded",
+				const response = await betterFetch(
+					options.tokenEndpoint ?? tokenEndpoint,
+					{
+						method: "POST",
+						headers: {
+							Authorization: `Basic ${credentials}`,
+							Accept: "application/json",
+							"Accept-Language": "en_US",
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							grant_type: "authorization_code",
+							code: code,
+							redirect_uri: redirectURI,
+						}).toString(),
 					},
-					body: new URLSearchParams({
-						grant_type: "authorization_code",
-						code: code,
-						redirect_uri: redirectURI,
-					}).toString(),
-				});
+				);
 
 				if (!response.data) {
 					throw new BetterAuthError("FAILED_TO_GET_ACCESS_TOKEN");
@@ -162,19 +165,22 @@ export const paypal = (options: PayPalOptions) => {
 					);
 
 					try {
-						const response = await betterFetch(tokenEndpoint, {
-							method: "POST",
-							headers: {
-								Authorization: `Basic ${credentials}`,
-								Accept: "application/json",
-								"Accept-Language": "en_US",
-								"Content-Type": "application/x-www-form-urlencoded",
+						const response = await betterFetch(
+							options.tokenEndpoint ?? tokenEndpoint,
+							{
+								method: "POST",
+								headers: {
+									Authorization: `Basic ${credentials}`,
+									Accept: "application/json",
+									"Accept-Language": "en_US",
+									"Content-Type": "application/x-www-form-urlencoded",
+								},
+								body: new URLSearchParams({
+									grant_type: "refresh_token",
+									refresh_token: refreshToken,
+								}).toString(),
 							},
-							body: new URLSearchParams({
-								grant_type: "refresh_token",
-								refresh_token: refreshToken,
-							}).toString(),
-						});
+						);
 
 						if (!response.data) {
 							throw new BetterAuthError("FAILED_TO_REFRESH_ACCESS_TOKEN");
@@ -222,7 +228,7 @@ export const paypal = (options: PayPalOptions) => {
 
 			try {
 				const response = await betterFetch<PayPalProfile>(
-					`${userInfoEndpoint}?schema=paypalv1.1`,
+					`${options.userInfoEndpoint ?? userInfoEndpoint}?schema=paypalv1.1`,
 					{
 						headers: {
 							Authorization: `Bearer ${token.accessToken}`,

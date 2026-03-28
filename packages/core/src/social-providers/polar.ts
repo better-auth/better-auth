@@ -60,7 +60,7 @@ export const polar = (options: PolarOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -73,7 +73,7 @@ export const polar = (options: PolarOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -81,7 +81,7 @@ export const polar = (options: PolarOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<PolarProfile>(
-				"https://api.polar.sh/v1/oauth2/userinfo",
+				options.userInfoEndpoint ?? "https://api.polar.sh/v1/oauth2/userinfo",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,

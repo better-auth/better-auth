@@ -451,6 +451,267 @@ describe("Social Providers", async (c) => {
 			refreshToken: "new-refresh-token",
 		});
 	});
+
+	it("should support Google emulator endpoint overrides", async () => {
+		const googleKid = "google-emulator-kid";
+		const googleKeyPair = await generateKeyPair("RS256");
+		const googleJwk = await exportJWK(googleKeyPair.publicKey);
+		googleJwk.kid = googleKid;
+		googleJwk.alg = "RS256";
+		googleJwk.use = "sig";
+
+		let googleTokenEndpointHit = false;
+		let googleJwksEndpointHit = false;
+
+		mswServer.use(
+			http.post(`http://localhost:${port}/emulator/google/token`, async () => {
+				googleTokenEndpointHit = true;
+				const profile: GoogleProfile = {
+					aud: "google-emulator-client",
+					azp: "google-emulator-client",
+					email: "google-emulator@example.com",
+					email_verified: true,
+					exp: 1234567890,
+					family_name: "Emulator",
+					given_name: "Google",
+					iat: 1234567890,
+					iss: "https://accounts.google.com",
+					name: "Google Emulator",
+					picture: "https://test.com/google-emulator.png",
+					sub: "google-emulator-user",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "google-emulator-access-token",
+					refresh_token: "google-emulator-refresh-token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+			http.get(`http://localhost:${port}/emulator/google/jwks`, async () => {
+				googleJwksEndpointHit = true;
+				return HttpResponse.json({
+					keys: [googleJwk],
+				});
+			}),
+		);
+
+		const { auth } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "google-emulator-client",
+						clientSecret: "google-emulator-secret",
+						authorizationEndpoint: `http://localhost:${port}/emulator/google/authorize`,
+						tokenEndpoint: `http://localhost:${port}/emulator/google/token`,
+						jwksEndpoint: `http://localhost:${port}/emulator/google/jwks`,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await auth.$context;
+		const googleProvider = ctx.socialProviders.find((p) => p.id === "google");
+		expect(googleProvider).toBeDefined();
+		expect(googleProvider?.options?.tokenEndpoint).toBe(
+			`http://localhost:${port}/emulator/google/token`,
+		);
+
+		const authorizationUrl = await googleProvider!.createAuthorizationURL({
+			state: "google-emulator-state",
+			codeVerifier: "google-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/google",
+		});
+
+		expect(authorizationUrl.toString()).toContain(
+			`http://localhost:${port}/emulator/google/authorize`,
+		);
+
+		const tokens = await googleProvider!.validateAuthorizationCode({
+			code: "google_emulator_code",
+			codeVerifier: "google-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/google",
+		});
+
+		expect(tokens?.accessToken).toBe("google-emulator-access-token");
+		expect(googleTokenEndpointHit).toBe(true);
+
+		const emulatorIdToken = await new SignJWT({
+			email: "google-emulator@example.com",
+			email_verified: true,
+			family_name: "Emulator",
+			given_name: "Google",
+			name: "Google Emulator",
+			picture: "https://test.com/google-emulator.png",
+			sub: "google-emulator-user",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience("google-emulator-client")
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+		const validIdToken = await googleProvider!.verifyIdToken?.(emulatorIdToken);
+		expect(validIdToken).toBe(true);
+		expect(googleJwksEndpointHit).toBe(true);
+	});
+
+	it("should support user info endpoint overrides", async () => {
+		let railwayTokenEndpointHit = false;
+		let railwayUserInfoEndpointHit = false;
+
+		mswServer.use(
+			http.post(`http://localhost:${port}/emulator/railway/token`, async () => {
+				railwayTokenEndpointHit = true;
+				return HttpResponse.json({
+					access_token: "railway-emulator-access-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+			http.get(
+				`http://localhost:${port}/emulator/railway/userinfo`,
+				async () => {
+					railwayUserInfoEndpointHit = true;
+					return HttpResponse.json({
+						sub: "railway-emulator-user",
+						email: "railway-emulator@example.com",
+						name: "Railway Emulator User",
+						picture: "https://test.com/railway-emulator.png",
+					} satisfies RailwayProfile);
+				},
+			),
+		);
+
+		const { auth } = await getTestInstance(
+			{
+				socialProviders: {
+					railway: {
+						clientId: "railway-emulator-client",
+						clientSecret: "railway-emulator-secret",
+						authorizationEndpoint: `http://localhost:${port}/emulator/railway/authorize`,
+						tokenEndpoint: `http://localhost:${port}/emulator/railway/token`,
+						userInfoEndpoint: `http://localhost:${port}/emulator/railway/userinfo`,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await auth.$context;
+		const railwayProvider = ctx.socialProviders.find((p) => p.id === "railway");
+		expect(railwayProvider).toBeDefined();
+
+		const authorizationUrl = await railwayProvider!.createAuthorizationURL({
+			state: "railway-emulator-state",
+			codeVerifier: "railway-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/railway",
+		});
+
+		expect(authorizationUrl.toString()).toContain(
+			`http://localhost:${port}/emulator/railway/authorize`,
+		);
+
+		const tokens = await railwayProvider!.validateAuthorizationCode({
+			code: "railway_emulator_code",
+			codeVerifier: "railway-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/railway",
+		});
+
+		const userInfo = await railwayProvider!.getUserInfo(tokens!);
+
+		expect(railwayTokenEndpointHit).toBe(true);
+		expect(railwayUserInfoEndpointHit).toBe(true);
+		expect(userInfo?.user.email).toBe("railway-emulator@example.com");
+		expect(userInfo?.user.name).toBe("Railway Emulator User");
+	});
+
+	it("should prefer explicit overrides over issuer-derived GitLab endpoints", async () => {
+		let gitlabTokenEndpointHit = false;
+		let gitlabUserInfoEndpointHit = false;
+
+		mswServer.use(
+			http.post(`http://localhost:${port}/emulator/gitlab/token`, async () => {
+				gitlabTokenEndpointHit = true;
+				return HttpResponse.json({
+					access_token: "gitlab-emulator-access-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+			http.get(
+				`http://localhost:${port}/emulator/gitlab/userinfo`,
+				async () => {
+					gitlabUserInfoEndpointHit = true;
+					return HttpResponse.json({
+						id: 42,
+						username: "gitlab-emulator",
+						email: "gitlab-emulator@example.com",
+						name: "GitLab Emulator User",
+						state: "active",
+						avatar_url: "https://test.com/gitlab-emulator.png",
+						web_url: "https://gitlab.example.com/gitlab-emulator",
+						created_at: "2024-01-01T00:00:00.000Z",
+						bot: false,
+					});
+				},
+			),
+		);
+
+		const { auth } = await getTestInstance(
+			{
+				socialProviders: {
+					gitlab: {
+						clientId: "gitlab-emulator-client",
+						clientSecret: "gitlab-emulator-secret",
+						issuer: "https://gitlab.example.com",
+						authorizationEndpoint: `http://localhost:${port}/emulator/gitlab/authorize`,
+						tokenEndpoint: `http://localhost:${port}/emulator/gitlab/token`,
+						userInfoEndpoint: `http://localhost:${port}/emulator/gitlab/userinfo`,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await auth.$context;
+		const gitlabProvider = ctx.socialProviders.find((p) => p.id === "gitlab");
+		expect(gitlabProvider).toBeDefined();
+
+		const authorizationUrl = await gitlabProvider!.createAuthorizationURL({
+			state: "gitlab-emulator-state",
+			codeVerifier: "gitlab-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/gitlab",
+		});
+
+		expect(authorizationUrl.toString()).toContain(
+			`http://localhost:${port}/emulator/gitlab/authorize`,
+		);
+		expect(authorizationUrl.toString()).not.toContain(
+			"gitlab.example.com/oauth/authorize",
+		);
+
+		const tokens = await gitlabProvider!.validateAuthorizationCode({
+			code: "gitlab_emulator_code",
+			codeVerifier: "gitlab-emulator-code-verifier",
+			redirectURI: "http://localhost:3000/callback/gitlab",
+		});
+
+		const userInfo = await gitlabProvider!.getUserInfo(tokens!);
+
+		expect(gitlabTokenEndpointHit).toBe(true);
+		expect(gitlabUserInfoEndpointHit).toBe(true);
+		expect(userInfo?.user.email).toBe("gitlab-emulator@example.com");
+	});
 });
 describe("Redirect URI", async () => {
 	it("should infer redirect uri", async () => {

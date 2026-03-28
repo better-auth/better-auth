@@ -136,7 +136,10 @@ export const tiktok = (options: TiktokOptions) => {
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 			return new URL(
-				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
+				`${
+					options.authorizationEndpoint ??
+					"https://www.tiktok.com/v2/auth/authorize"
+				}?scope=${_scopes.join(
 					",",
 				)}&response_type=code&client_key=${options.clientKey}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
@@ -152,7 +155,7 @@ export const tiktok = (options: TiktokOptions) => {
 					clientKey: options.clientKey,
 					clientSecret: options.clientSecret,
 				},
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -163,7 +166,7 @@ export const tiktok = (options: TiktokOptions) => {
 						options: {
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 						authentication: "post",
 						extraParams: {
 							client_key: options.clientKey,

@@ -94,9 +94,10 @@ export const discord = (options: DiscordOptions) => {
 					? `&permissions=${options.permissions}`
 					: "";
 			return new URL(
-				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
-					"+",
-				)}&response_type=code&client_id=${
+				`${
+					options.authorizationEndpoint ??
+					"https://discord.com/api/oauth2/authorize"
+				}?scope=${_scopes.join("+")}&response_type=code&client_id=${
 					options.clientId
 				}&redirect_uri=${encodeURIComponent(
 					options.redirectURI || redirectURI,
@@ -110,7 +111,7 @@ export const discord = (options: DiscordOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -123,7 +124,7 @@ export const discord = (options: DiscordOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

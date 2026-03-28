@@ -147,7 +147,7 @@ export async function refreshAccessToken({
 		token_type?: string | undefined;
 		scope?: string | undefined;
 		id_token?: string | undefined;
-	}>(tokenEndpoint, {
+	}>(options.tokenEndpoint ?? tokenEndpoint, {
 		method: "POST",
 		body,
 		headers,

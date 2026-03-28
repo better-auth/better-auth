@@ -48,7 +48,8 @@ export const vercel = (options: VercelOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://api.vercel.com/login/oauth/token",
+				tokenEndpoint:
+					options.tokenEndpoint ?? "https://api.vercel.com/login/oauth/token",
 			});
 		},
 		async getUserInfo(token) {
@@ -57,7 +58,8 @@ export const vercel = (options: VercelOptions) => {
 			}
 
 			const { data: profile, error } = await betterFetch<VercelProfile>(
-				"https://api.vercel.com/login/oauth/userinfo",
+				options.userInfoEndpoint ??
+					"https://api.vercel.com/login/oauth/userinfo",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,
