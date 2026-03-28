@@ -175,13 +175,15 @@ export async function authorizeEndpoint(
 	});
 
 	if (!query.client_id) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 
 	if (!query.response_type) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
 	}
@@ -191,7 +193,8 @@ export async function authorizeEndpoint(
 		: undefined;
 	const promptNone = promptSet?.has("none") ?? false;
 	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(
 				ctx,
 				`unsupported_prompt_select_account`,
@@ -201,7 +204,8 @@ export async function authorizeEndpoint(
 	}
 
 	if (!(query.response_type === "code")) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(
 				ctx,
 				"unsupported_response_type",
@@ -213,12 +217,14 @@ export async function authorizeEndpoint(
 	// Check client
 	const client = await getClient(ctx, opts, query.client_id);
 	if (!client) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 	if (client.disabled) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
 		);
 	}
@@ -227,7 +233,8 @@ export async function authorizeEndpoint(
 		(url) => url === query.redirect_uri,
 	);
 	if (!redirectUri || !query.redirect_uri) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
 		);
 	}
@@ -240,7 +247,8 @@ export async function authorizeEndpoint(
 			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_scope",
@@ -263,7 +271,8 @@ export async function authorizeEndpoint(
 	// Validate PKCE parameters if required
 	if (pkceRequired) {
 		if (!query.code_challenge || !query.code_challenge_method) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_request",
@@ -279,7 +288,8 @@ export async function authorizeEndpoint(
 	if (query.code_challenge || query.code_challenge_method) {
 		// Both parameters must be provided together
 		if (!query.code_challenge || !query.code_challenge_method) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_request",
@@ -293,7 +303,8 @@ export async function authorizeEndpoint(
 		// Check code challenge method is supported (only S256)
 		const codeChallengesSupported = ["S256"];
 		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_request",
