@@ -283,13 +283,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!session) return;
 						ctx.context.session = session;
 
-						const requestContentType = ctx.request?.headers
-							?.get("content-type")
-							?.split(";")[0]
+						const secFetchMode = ctx.request?.headers
+							?.get("sec-fetch-mode")
 							?.toLowerCase();
+						const acceptHeader =
+							ctx.request?.headers?.get("accept")?.toLowerCase() ?? "";
 						const isNavigationRequest =
-							ctx.request?.headers?.get("sec-fetch-mode") === "navigate" ||
-							requestContentType === "application/x-www-form-urlencoded";
+							secFetchMode === "navigate" ||
+							(!secFetchMode &&
+								(acceptHeader.includes("text/html") ||
+									acceptHeader.includes("application/xhtml+xml")));
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
