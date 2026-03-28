@@ -1761,7 +1761,10 @@ async function handleOIDCCallback(
 	}
 	const { session, user } = linked.data!;
 
-	if (options?.provisionUser && linked.isRegister) {
+	if (
+		options?.provisionUser &&
+		(linked.isRegister || options.provisionUserOnEveryLogin)
+	) {
 		await options.provisionUser({
 			user,
 			userInfo,
@@ -2410,7 +2413,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser && result.isRegister) {
+			if (
+				options?.provisionUser &&
+				(result.isRegister || options.provisionUserOnEveryLogin)
+			) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
@@ -2926,7 +2932,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser && result.isRegister) {
+			if (
+				options?.provisionUser &&
+				(result.isRegister || options.provisionUserOnEveryLogin)
+			) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
