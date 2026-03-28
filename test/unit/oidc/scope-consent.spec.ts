@@ -115,7 +115,7 @@ describe("oidc scope consent", async () => {
 		const config = await client.discovery(
 			new URL(`${url}/api/auth/.well-known/openid-configuration`),
 			clientReg.client_id,
-			clientReg.client_secret,
+			clientReg.client_secret ?? undefined,
 		);
 
 		// 4. Initial request with base scopes

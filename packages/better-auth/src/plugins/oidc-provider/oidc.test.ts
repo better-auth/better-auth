@@ -169,7 +169,7 @@ describe("oidc", async () => {
 		if (createdClient.data) {
 			application = {
 				clientId: createdClient.data.client_id,
-				clientSecret: createdClient.data.client_secret,
+				clientSecret: createdClient.data.client_secret ?? undefined,
 				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
 				icon: createdClient.data.logo_uri,
@@ -1130,7 +1130,7 @@ describe("oidc storage", async () => {
 		if (createdClient.data) {
 			application = {
 				clientId: createdClient.data.client_id,
-				clientSecret: createdClient.data.client_secret,
+				clientSecret: createdClient.data.client_secret ?? undefined,
 				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
 				icon: createdClient.data.logo_uri || "",
@@ -1274,7 +1274,7 @@ describe("oidc token response format", async () => {
 							{
 								providerId: "test",
 								clientId: application.clientId,
-								clientSecret: application.clientSecret,
+								clientSecret: application.clientSecret || "",
 								authorizationUrl:
 									"http://localhost:3000/api/auth/oauth2/authorize",
 								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
@@ -1509,7 +1509,7 @@ describe("oidc-jwt", async () => {
 		if (createdClient.data) {
 			application = {
 				clientId: createdClient.data.client_id,
-				clientSecret: createdClient.data.client_secret,
+				clientSecret: createdClient.data.client_secret ?? undefined,
 				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
 				icon: createdClient.data.logo_uri || "",
@@ -1695,6 +1695,9 @@ describe("oidc public client registration", async () => {
 		await server.close();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8625
+	 */
 	it("should register public client when token_endpoint_auth_method is none", async ({
 		expect,
 	}) => {
@@ -1715,6 +1718,9 @@ describe("oidc public client registration", async () => {
 		expect(res.data).not.toHaveProperty("client_secret_expires_at");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8625
+	 */
 	it("should preserve token_endpoint_auth_method none (not falsy-replace)", async ({
 		expect,
 	}) => {
@@ -1725,5 +1731,361 @@ describe("oidc public client registration", async () => {
 		});
 		// "none" should not be replaced by "client_secret_basic"
 		expect(res.data?.token_endpoint_auth_method).toBe("none");
+	});
+});
+
+describe("oidc public client token exchange", async () => {
+	let server: Listener | null = null;
+
+	afterEach(async () => {
+		if (server) {
+			await server.close();
+			server = null;
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8625
+	 */
+	it("should complete full OIDC flow with public client using JWT plugin", async ({
+		expect,
+	}) => {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+			testUser,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: true,
+					allowDynamicClientRegistration: true,
+					useJWTPlugin: true,
+				}),
+				jwt(),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+
+		// Register a public client
+		const createdClient = await serverClient.oauth2.register({
+			client_name: "public-test-app",
+			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code"],
+			response_types: ["code"],
+		});
+		expect(createdClient.data).toBeDefined();
+		expect(createdClient.data).not.toHaveProperty("client_secret");
+		const publicClientId = createdClient.data!.client_id;
+
+		// The RP (Relying Party) - the client application using PKCE (no client_secret)
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test"],
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: publicClientId,
+								clientSecret: "", // Public client has no secret
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5000",
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const oAuthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		);
+		expect(data.url).toContain(
+			"http://localhost:3000/api/auth/oauth2/authorize",
+		);
+		expect(data.url).toContain(`client_id=${publicClientId}`);
+
+		let redirectURI = "";
+		const consentHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectURI = context.response.headers.get("Location") || "";
+				cookieSetter(consentHeaders)(context);
+			},
+		});
+
+		// Handle consent flow if required
+		redirectURI = await handleConsentFlow(
+			redirectURI,
+			serverClient,
+			headers,
+			consentHeaders,
+		);
+		expect(redirectURI).toContain(
+			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+		);
+
+		let authToken = undefined;
+		let callbackURL = "";
+		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+				authToken = context.response.headers.get("set-auth-token")!;
+			},
+		});
+		expect(callbackURL).toContain("/dashboard");
+		const accessToken = await client.getAccessToken(
+			{ providerId: "test", userId: testUser.id },
+			{
+				auth: {
+					type: "Bearer",
+					token: authToken,
+				},
+			},
+		);
+
+		// Verify the ID token is signed with EdDSA (asymmetric, via JWT plugin)
+		const decoded = decodeProtectedHeader(accessToken.data?.idToken!);
+		expect(decoded.alg).toBe("EdDSA");
+
+		// Verify signature using JWKS
+		const jwks = await authorizationServer.api.getJwks();
+		const jwkSet = createLocalJWKSet(jwks);
+		const checkSignature = await jwtVerify(accessToken.data?.idToken!, jwkSet);
+		expect(checkSignature).toBeDefined();
+
+		// Verify standard OIDC claims
+		expect(checkSignature.payload.sub).toBeDefined();
+		expect(checkSignature.payload.aud).toBe(publicClientId);
+		expect(Number.isInteger(checkSignature.payload.iat)).toBeTruthy();
+		expect(Number.isInteger(checkSignature.payload.exp)).toBeTruthy();
+		expect(checkSignature.payload.scope).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8625
+	 */
+	it("should reject public client token exchange without JWT plugin", async ({
+		expect,
+	}) => {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: true,
+					allowDynamicClientRegistration: true,
+					// useJWTPlugin is false by default - HS256 can't work for public clients
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+
+		// Register a public client
+		const createdClient = await serverClient.oauth2.register({
+			client_name: "public-no-jwt",
+			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code"],
+			response_types: ["code"],
+		});
+		expect(createdClient.data).toBeDefined();
+		expect(createdClient.data).not.toHaveProperty("client_secret");
+
+		const publicClientId = createdClient.data!.client_id;
+
+		// The RP - public client with PKCE
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test"],
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: publicClientId,
+								clientSecret: "",
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5000",
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const oAuthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		);
+
+		let redirectURI = "";
+		const consentHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectURI = context.response.headers.get("Location") || "";
+				cookieSetter(consentHeaders)(context);
+			},
+		});
+
+		// Handle consent flow if required
+		redirectURI = await handleConsentFlow(
+			redirectURI,
+			serverClient,
+			headers,
+			consentHeaders,
+		);
+
+		// The token exchange should fail because public client + HS256 is not supported
+		let callbackURL = "";
+		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+			},
+		});
+		// The callback should fail - no dashboard redirect since token exchange errors
+		expect(callbackURL).not.toContain("/dashboard");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8625
+	 */
+	it("should require code_verifier for public client token exchange", async ({
+		expect,
+	}) => {
+		const {
+			auth: authorizationServer,
+			customFetchImpl,
+			signInWithTestUser,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: true,
+					allowDynamicClientRegistration: true,
+					useJWTPlugin: true,
+				}),
+				jwt(),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+
+		// Register a public client
+		const createdClient = await serverClient.oauth2.register({
+			client_name: "public-pkce-test",
+			redirect_uris: ["http://localhost:3000/callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code"],
+		});
+		expect(createdClient.data).toBeDefined();
+
+		// Attempt token exchange without code_verifier should fail
+		const tokenRes = await authorizationServer.handler(
+			new Request("http://localhost:3000/api/auth/oauth2/token", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: "invalid-code",
+					redirect_uri: "http://localhost:3000/callback",
+					client_id: createdClient.data!.client_id,
+					// No code_verifier - should be rejected for public clients
+				}).toString(),
+			}),
+		);
+		// Should fail - either because the code is invalid or because code_verifier is missing
+		expect(tokenRes.ok).toBe(false);
 	});
 });

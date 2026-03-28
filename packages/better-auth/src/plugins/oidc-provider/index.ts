@@ -753,6 +753,46 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "invalid_grant",
 							});
 						}
+
+						// Validate client credentials for refresh token exchange
+						const client = await getClient(
+							client_id.toString(),
+							trustedClients,
+						);
+						if (!client) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_id",
+								error: "invalid_client",
+							});
+						}
+						if (client.disabled) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "client is disabled",
+								error: "invalid_client",
+							});
+						}
+						if (client.type !== "public") {
+							// Confidential clients must authenticate with client_secret
+							if (!client.clientSecret || !client_secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description:
+										"client_secret is required for confidential clients",
+									error: "invalid_client",
+								});
+							}
+							const isValidSecret = await verifyStoredClientSecret(
+								ctx,
+								client.clientSecret,
+								client_secret.toString(),
+							);
+							if (!isValidSecret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid client_secret",
+									error: "invalid_client",
+								});
+							}
+						}
+
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
 
@@ -993,7 +1033,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						Math.floor(Date.now() / 1000) +
 						(opts?.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN);
 
-					let idToken: string;
+					let idToken: string | undefined;
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
 					if (options.useJWTPlugin) {
@@ -1052,7 +1092,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 						);
 
 						// If the JWT token is not enabled, create a key and use it to sign
-					} else {
+					} else if (requestedScopes.includes("openid")) {
+						if (client.type === "public") {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description:
+									"Public clients require the JWT plugin for ID token signing. " +
+									"Set `useJWTPlugin: true` in oidcProvider options and add the JWT plugin to your plugins array.",
+								error: "server_error",
+							});
+						}
 						idToken = await new SignJWT(payload)
 							.setProtectedHeader({ alg: "HS256" })
 							.setIssuedAt(iat)
@@ -1290,7 +1338,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 													},
 													clientSecret: {
 														type: "string",
-														description: "Secret key for the client",
+														nullable: true,
+														description:
+															"Secret key for the client. Null for public clients.",
 													},
 													redirectURLs: {
 														type: "array",
@@ -1300,13 +1350,17 @@ export const oidcProvider = (options: OIDCOptions) => {
 													type: {
 														type: "string",
 														description: "Type of the client",
-														enum: ["web"],
+														enum: ["web", "public"],
 													},
 													authenticationScheme: {
 														type: "string",
 														description:
 															"Authentication scheme used by the client",
-														enum: ["client_secret"],
+														enum: [
+															"client_secret_basic",
+															"client_secret_post",
+															"none",
+														],
 													},
 													disabled: {
 														type: "boolean",
@@ -1333,7 +1387,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 												required: [
 													"name",
 													"clientId",
-													"clientSecret",
 													"redirectURLs",
 													"type",
 													"authenticationScheme",
@@ -1403,11 +1456,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const clientId =
 						options.generateClientId?.() ||
 						generateRandomString(32, "a-z", "A-Z");
-					const clientSecret =
-						options.generateClientSecret?.() ||
-						generateRandomString(32, "a-z", "A-Z");
+					const isPublicClient = body.token_endpoint_auth_method === "none";
+					const clientSecret = isPublicClient
+						? null
+						: options.generateClientSecret?.() ||
+							generateRandomString(32, "a-z", "A-Z");
 
-					const storedClientSecret = await storeClientSecret(ctx, clientSecret);
+					const storedClientSecret = clientSecret
+						? await storeClientSecret(ctx, clientSecret)
+						: null;
 
 					// Create the client with the existing schema
 					const client: Client = await ctx.context.adapter.create({
