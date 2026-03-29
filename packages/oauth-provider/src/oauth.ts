@@ -283,6 +283,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!session) return;
 						ctx.context.session = session;
 
+						const secFetchMode = ctx.request?.headers
+							?.get("sec-fetch-mode")
+							?.toLowerCase();
+						const acceptHeader =
+							ctx.request?.headers?.get("accept")?.toLowerCase() ?? "";
+						const isNavigationRequest =
+							secFetchMode === "navigate" ||
+							(!secFetchMode &&
+								(acceptHeader.includes("text/html") ||
+									acceptHeader.includes("application/xhtml+xml")));
+						if (!isNavigationRequest) {
+							ctx.headers?.set("accept", "application/json");
+						}
 						ctx.query = deleteFromPrompt(query, "login");
 						return await authorizeEndpoint(ctx, opts);
 					}),

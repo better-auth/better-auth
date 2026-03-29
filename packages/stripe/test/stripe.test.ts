@@ -583,6 +583,121 @@ describe("stripe", () => {
 		expect(listAfterRes.data?.length).toBeGreaterThan(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7721
+	 */
+	it("should return annualDiscountPriceId when subscription billingInterval is year", async () => {
+		const annualPriceId = "price_annual_starter";
+		const monthlyPriceId = "price_monthly_starter";
+		const optionsWithAnnual = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: monthlyPriceId,
+						annualDiscountPriceId: annualPriceId,
+						name: "starter",
+					},
+					{
+						priceId: process.env.STRIPE_PRICE_ID_2!,
+						name: "premium",
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(optionsWithAnnual)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "annual-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+		const userId = userRes.user.id;
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "annual-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Simulate an active annual subscription
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				billingInterval: "year",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userId,
+				},
+			],
+		});
+
+		const listRes = await client.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(listRes.data?.length).toBeGreaterThan(0);
+		expect(listRes.data?.[0]?.priceId).toBe(annualPriceId);
+
+		// Verify monthly subscription returns monthly priceId
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				billingInterval: "month",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userId,
+				},
+			],
+		});
+
+		const monthlyListRes = await client.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(monthlyListRes.data?.[0]?.priceId).toBe(monthlyPriceId);
+	});
+
 	it("should handle subscription webhook events", async () => {
 		const { auth: testAuth } = await getTestInstance(
 			{
