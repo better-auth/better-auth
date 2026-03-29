@@ -170,6 +170,34 @@ describe("passkey", async () => {
 	});
 });
 
+describe("passkey attestationType option", () => {
+	it("should default attestationType to 'none'", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const options = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		expect(options.attestation).toBe("none");
+	});
+
+	it("should forward attestationType 'direct' into registration options", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey({ attestationType: "direct" })],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const options = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		expect(options.attestation).toBe("direct");
+	});
+});
+
 describe("passkey expirationTime per-request", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
