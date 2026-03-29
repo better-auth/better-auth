@@ -13,16 +13,17 @@ export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
 	InferDBFieldsFromPluginsInput<"session", Options["plugins"]> &
 		InferDBFieldsFromOptionsInput<Options["session"]>;
 
-export type InferPluginTypes<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
-		? UnionToIntersection<
-				P extends BetterAuthPlugin
-					? P["$Infer"] extends Record<string, any>
-						? P["$Infer"]
-						: {}
+export type InferPluginTypes<O extends BetterAuthOptions> = O["plugins"] extends
+	| Array<infer P>
+	| ReadonlyArray<infer P>
+	? UnionToIntersection<
+			P extends BetterAuthPlugin
+				? P["$Infer"] extends Record<string, any>
+					? P["$Infer"]
 					: {}
-			>
-		: {};
+				: {}
+		>
+	: {};
 
 export type {
 	Account,

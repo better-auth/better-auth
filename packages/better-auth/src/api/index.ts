@@ -183,7 +183,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		}, {}) ?? {};
 
 	type PluginEndpoint = UnionToIntersection<
-		Option["plugins"] extends Array<infer T>
+		Option["plugins"] extends Array<infer T> | ReadonlyArray<infer T>
 			? T extends BetterAuthPlugin
 				? T extends {
 						endpoints: infer E;

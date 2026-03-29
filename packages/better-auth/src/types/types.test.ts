@@ -1,7 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { organization, twoFactor } from "../plugins";
+import { betterAuth } from "../auth/full";
+import { admin, organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
 type TestTypeOptions = {
@@ -221,5 +222,45 @@ describe("general types", async () => {
 		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
 
 		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
+
+	it("should preserve plugin endpoint types in lazy singleton pattern", () => {
+		// Common pattern: betterAuth() inside a factory function,
+		// with `typeof auth` used downstream.
+		// Without readonly support + const generic, plugin endpoints
+		// are erased when the plugins tuple widens to BetterAuthPlugin[].
+		function createAuth() {
+			return betterAuth({
+				database: {} as any,
+				plugins: [admin()],
+			});
+		}
+
+		type LazyAuth = ReturnType<typeof createAuth>;
+
+		// Admin plugin endpoints must be present on auth.api
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("createUser");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("removeUser");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("listUsers");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("banUser");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("setRole");
+	});
+
+	it("should preserve plugin endpoint types with mixed plugins", () => {
+		// When multiple plugins are combined (some with endpoints, some without),
+		// the array should not widen and lose endpoint types.
+		function createAuth() {
+			return betterAuth({
+				database: {} as any,
+				plugins: [admin(), twoFactor()],
+			});
+		}
+
+		type MixedAuth = ReturnType<typeof createAuth>;
+
+		// Admin endpoints
+		expectTypeOf<MixedAuth["api"]>().toHaveProperty("createUser");
+		expectTypeOf<MixedAuth["api"]>().toHaveProperty("removeUser");
+		expectTypeOf<MixedAuth["api"]>().toHaveProperty("listUsers");
 	});
 });
