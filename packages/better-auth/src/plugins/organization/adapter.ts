@@ -1,6 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { WhereOperator } from "@better-auth/core/db/adapter";
+import type { Where, WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { parseJSON } from "../../client/parser";
@@ -13,6 +13,7 @@ import type {
 	InferOrganization,
 	InferTeam,
 	InvitationInput,
+	InvitationStatus,
 	Member,
 	MemberInput,
 	OrganizationInput,
@@ -1029,7 +1030,49 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				(invite) => new Date(invite.expiresAt) > new Date(),
 			);
 		},
-		listInvitations: async (data: { organizationId: string }) => {
+		listInvitations: async (data: {
+			organizationId: string;
+			email?: string;
+			role?: string[];
+			status?: InvitationStatus;
+			inviterId?: string;
+			limit?: number;
+			offset?: number;
+			sortBy?: string | undefined;
+			sortOrder?: ("asc" | "desc") | undefined;
+		}) => {
+			const filters: Where[] = [];
+
+			if (data.email) {
+				filters.push({
+					field: "email",
+					value: data.email,
+				});
+			}
+
+			if (data.role !== undefined && data.role.length > 0) {
+				filters.push({
+					operator: "in",
+					field: "role",
+					value: data.role,
+				});
+			}
+
+			if (data.status !== undefined) {
+				filters.push({
+					operator: "in",
+					field: "status",
+					value: data.status,
+				});
+			}
+
+			if (data.inviterId) {
+				filters.push({
+					field: "inviterId",
+					value: data.inviterId,
+				});
+			}
+
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
@@ -1038,7 +1081,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						field: "organizationId",
 						value: data.organizationId,
 					},
+					...filters,
 				],
+				limit: data.limit,
+				offset: data.offset,
+				sortBy: data.sortBy
+					? { field: data.sortBy, direction: data.sortOrder || "asc" }
+					: undefined,
 			});
 			return invitations;
 		},

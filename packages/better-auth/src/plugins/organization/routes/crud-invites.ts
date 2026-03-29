@@ -1079,6 +1079,56 @@ const listInvitationQuerySchema = z
 				description: "The ID of the organization to list invitations for",
 			})
 			.optional(),
+		email: z
+			.string()
+			.meta({
+				description: "The Email address of the invitation",
+			})
+			.optional(),
+		role: z
+			.union([z.string(), z.array(z.string())])
+			.transform((val) => (Array.isArray(val) ? val : [val]))
+			.meta({
+				description: "Array of roles to filter invitation for",
+			})
+			.optional(),
+		status: z
+			.union([
+				z.enum(["pending", "accepted", "rejected", "canceled"]),
+				z.array(z.enum(["pending", "accepted", "rejected", "canceled"])),
+			])
+			.transform((val) => (Array.isArray(val) ? val : [val]))
+			.optional(),
+		inviterId: z
+			.string()
+			.meta({
+				description: "Id of the user who sent the invitation",
+			})
+			.optional(),
+		limit: z.coerce
+			.number()
+			.meta({
+				description: "The number of users to return",
+			})
+			.optional(),
+		offset: z.coerce
+			.number()
+			.meta({
+				description: "The offset to start from",
+			})
+			.optional(),
+		sortBy: z
+			.string()
+			.meta({
+				description: "The field to sort by",
+			})
+			.optional(),
+		sortDirection: z
+			.enum(["asc", "desc"])
+			.meta({
+				description: "The direction to sort by",
+			})
+			.optional(),
 	})
 	.optional();
 
@@ -1117,6 +1167,14 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 			}
 			const invitations = await adapter.listInvitations({
 				organizationId: orgId,
+				email: ctx?.query?.email,
+				role: ctx?.query?.role,
+				status: ctx?.query?.status,
+				inviterId: ctx?.query?.inviterId,
+				limit: ctx?.query?.limit,
+				offset: ctx?.query?.offset,
+				sortBy: ctx?.query?.sortBy,
+				sortOrder: ctx?.query?.sortDirection,
 			});
 			return ctx.json(invitations);
 		},
