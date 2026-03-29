@@ -9,10 +9,13 @@ import type {
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import {
+	discord,
+	github,
 	paypal,
 	reddit,
 	roblox,
 	slack,
+	tiktok,
 	vk,
 	zoom,
 } from "@better-auth/core/social-providers";
@@ -998,6 +1001,109 @@ describe("Social Providers", async (c) => {
 		);
 		expect(vkUserInfoEndpointHit).toBe(true);
 		expect(userInfo?.user.email).toBe("vk-emulator@example.com");
+	});
+
+	it("should preserve GitHub email fallback for custom user endpoints", async () => {
+		let githubProfileEndpointHit = false;
+		let githubEmailEndpointHit = false;
+
+		mswServer.use(
+			http.get(`http://localhost:${port}/emulator/github/user`, async () => {
+				githubProfileEndpointHit = true;
+				return HttpResponse.json({
+					id: "github-emulator-user",
+					login: "github-emulator",
+					name: "GitHub Emulator",
+					avatar_url: "https://test.com/github-emulator.png",
+					email: null,
+				});
+			}),
+			http.get(
+				`http://localhost:${port}/emulator/github/user/emails`,
+				async () => {
+					githubEmailEndpointHit = true;
+					return HttpResponse.json([
+						{
+							email: "github-emulator@example.com",
+							primary: true,
+							verified: true,
+							visibility: "private",
+						},
+					]);
+				},
+			),
+		);
+
+		const githubProvider = github({
+			clientId: "github-emulator-client",
+			clientSecret: "github-emulator-secret",
+			userInfoEndpoint: `http://localhost:${port}/emulator/github/user`,
+		});
+
+		const userInfo = await githubProvider.getUserInfo({
+			accessToken: "github-emulator-access-token",
+		});
+
+		expect(githubProfileEndpointHit).toBe(true);
+		expect(githubEmailEndpointHit).toBe(true);
+		expect(userInfo?.user.email).toBe("github-emulator@example.com");
+		expect(userInfo?.user.emailVerified).toBe(true);
+	});
+
+	it("should preserve query params when overriding TikTok authorization endpoints", async () => {
+		const tiktokProvider = tiktok({
+			clientKey: "tiktok-emulator-client-key",
+			clientSecret: "tiktok-emulator-secret",
+			authorizationEndpoint: `http://localhost:${port}/emulator/tiktok/authorize?existing=1`,
+		});
+
+		const authorizationUrl = await tiktokProvider.createAuthorizationURL({
+			state: "tiktok-emulator-state",
+			codeVerifier: "tiktok-emulator-code-verifier",
+			scopes: ["video.list"],
+			redirectURI: "http://localhost:3000/callback/tiktok",
+		});
+
+		expect(authorizationUrl.origin).toBe(`http://localhost:${port}`);
+		expect(authorizationUrl.pathname).toBe("/emulator/tiktok/authorize");
+		expect(authorizationUrl.searchParams.get("existing")).toBe("1");
+		expect(authorizationUrl.searchParams.get("client_key")).toBe(
+			"tiktok-emulator-client-key",
+		);
+		expect(authorizationUrl.searchParams.get("state")).toBe(
+			"tiktok-emulator-state",
+		);
+		expect(authorizationUrl.searchParams.get("scope")).toContain(
+			"user.info.profile",
+		);
+		expect(authorizationUrl.searchParams.get("scope")).toContain("video.list");
+	});
+
+	it("should preserve query params when overriding Discord authorization endpoints", async () => {
+		const discordProvider = discord({
+			clientId: "discord-emulator-client",
+			authorizationEndpoint: `http://localhost:${port}/emulator/discord/authorize?existing=1`,
+			permissions: 8,
+		});
+
+		const authorizationUrl = await discordProvider.createAuthorizationURL({
+			state: "discord-emulator-state",
+			codeVerifier: "discord-emulator-code-verifier",
+			scopes: ["bot"],
+			redirectURI: "http://localhost:3000/callback/discord",
+		});
+
+		expect(authorizationUrl.origin).toBe(`http://localhost:${port}`);
+		expect(authorizationUrl.pathname).toBe("/emulator/discord/authorize");
+		expect(authorizationUrl.searchParams.get("existing")).toBe("1");
+		expect(authorizationUrl.searchParams.get("client_id")).toBe(
+			"discord-emulator-client",
+		);
+		expect(authorizationUrl.searchParams.get("state")).toBe(
+			"discord-emulator-state",
+		);
+		expect(authorizationUrl.searchParams.get("permissions")).toBe("8");
+		expect(authorizationUrl.searchParams.get("scope")).toContain("bot");
 	});
 });
 describe("Redirect URI", async () => {

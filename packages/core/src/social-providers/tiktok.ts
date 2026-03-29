@@ -135,16 +135,16 @@ export const tiktok = (options: TiktokOptions) => {
 			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return new URL(
-				`${
-					options.authorizationEndpoint ??
-					"https://www.tiktok.com/v2/auth/authorize"
-				}?scope=${_scopes.join(
-					",",
-				)}&response_type=code&client_key=${options.clientKey}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}`,
+			const url = new URL(
+				options.authorizationEndpoint ??
+					"https://www.tiktok.com/v2/auth/authorize",
 			);
+			url.searchParams.set("scope", _scopes.join(","));
+			url.searchParams.set("response_type", "code");
+			url.searchParams.set("client_key", options.clientKey);
+			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
+			url.searchParams.set("state", state);
+			return url;
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

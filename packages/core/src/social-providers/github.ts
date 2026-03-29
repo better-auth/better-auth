@@ -62,6 +62,22 @@ export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	const userInfoEndpoint =
 		options.userInfoEndpoint ?? "https://api.github.com/user";
+	const emailEndpoint = (() => {
+		try {
+			const url = new URL(userInfoEndpoint);
+			const normalizedPathname = url.pathname.endsWith("/")
+				? url.pathname.slice(0, -1)
+				: url.pathname;
+			if (!normalizedPathname.endsWith("/user")) {
+				return undefined;
+			}
+			url.pathname = `${normalizedPathname}/emails`;
+			url.search = "";
+			return url.toString();
+		} catch {
+			return undefined;
+		}
+	})();
 	return {
 		id: "github",
 		name: "GitHub",
@@ -147,9 +163,8 @@ export const github = (options: GithubOptions) => {
 			if (error) {
 				return null;
 			}
-			const emails = options.userInfoEndpoint
-				? undefined
-				: (
+			const emails = emailEndpoint
+				? (
 						await betterFetch<
 							{
 								email: string;
@@ -157,13 +172,14 @@ export const github = (options: GithubOptions) => {
 								verified: boolean;
 								visibility: "public" | "private";
 							}[]
-						>("https://api.github.com/user/emails", {
+						>(emailEndpoint, {
 							headers: {
 								Authorization: `Bearer ${token.accessToken}`,
 								"User-Agent": "better-auth",
 							},
 						})
-					).data;
+					).data
+				: undefined;
 
 			if (!profile.email && emails) {
 				profile.email = (emails.find((e) => e.primary) ?? emails[0])

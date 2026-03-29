@@ -89,22 +89,20 @@ export const discord = (options: DiscordOptions) => {
 			if (scopes) _scopes.push(...scopes);
 			if (options.scope) _scopes.push(...options.scope);
 			const hasBotScope = _scopes.includes("bot");
-			const permissionsParam =
-				hasBotScope && options.permissions !== undefined
-					? `&permissions=${options.permissions}`
-					: "";
-			return new URL(
-				`${
-					options.authorizationEndpoint ??
-					"https://discord.com/api/oauth2/authorize"
-				}?scope=${_scopes.join("+")}&response_type=code&client_id=${
-					options.clientId
-				}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}&prompt=${
-					options.prompt || "none"
-				}${permissionsParam}`,
+			const url = new URL(
+				options.authorizationEndpoint ??
+					"https://discord.com/api/oauth2/authorize",
 			);
+			url.searchParams.set("scope", _scopes.join(" "));
+			url.searchParams.set("response_type", "code");
+			url.searchParams.set("client_id", options.clientId);
+			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
+			url.searchParams.set("state", state);
+			url.searchParams.set("prompt", options.prompt || "none");
+			if (hasBotScope && options.permissions !== undefined) {
+				url.searchParams.set("permissions", `${options.permissions}`);
+			}
+			return url;
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({
