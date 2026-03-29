@@ -296,8 +296,16 @@ describe("general types", async () => {
 		type ContextAuth = ReturnType<typeof createAuth>;
 		type Context = Awaited<ContextAuth["$context"]>;
 
-		// hasPlugin should return `true` (not just `boolean`) for known plugins
-		type HasAdmin = ReturnType<Context["hasPlugin"]>;
-		expectTypeOf<HasAdmin>().not.toEqualTypeOf<never>();
+		// hasPlugin should narrow to `true` for known plugin IDs
+		const hasPlugin = {} as Context["hasPlugin"];
+		const hasAdmin = hasPlugin("admin");
+		expectTypeOf(hasAdmin).toEqualTypeOf<true>();
+
+		// hasPlugin should stay `boolean` for unknown plugin IDs
+		const hasUnknown = hasPlugin("not-installed");
+		expectTypeOf(hasUnknown).toEqualTypeOf<boolean>();
+
+		// getPlugin type should be callable (not never)
+		expectTypeOf<Context["getPlugin"]>().not.toEqualTypeOf<never>();
 	});
 });
