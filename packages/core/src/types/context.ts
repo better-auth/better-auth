@@ -23,12 +23,13 @@ import type { SecretConfig } from "./secret";
 /**
  * @internal
  */
-type InferPluginID<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
-		? P extends BetterAuthPlugin
-			? P["id"]
-			: never
-		: never;
+type InferPluginID<O extends BetterAuthOptions> = O["plugins"] extends
+	| Array<infer P>
+	| ReadonlyArray<infer P>
+	? P extends BetterAuthPlugin
+		? P["id"]
+		: never
+	: never;
 
 /**
  * @internal
@@ -36,16 +37,15 @@ type InferPluginID<O extends BetterAuthOptions> =
 type InferPluginOptions<
 	O extends BetterAuthOptions,
 	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
-> =
-	O["plugins"] extends Array<infer P>
-		? P extends BetterAuthPlugin
-			? P["id"] extends ID
-				? P extends { options: infer O }
-					? O
-					: never
+> = O["plugins"] extends Array<infer P> | ReadonlyArray<infer P>
+	? P extends BetterAuthPlugin
+		? P["id"] extends ID
+			? P extends { options: infer O }
+				? O
 				: never
 			: never
-		: never;
+		: never
+	: never;
 
 /**
  * Mutators are defined in each plugin

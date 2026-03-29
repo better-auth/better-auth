@@ -263,4 +263,41 @@ describe("general types", async () => {
 		expectTypeOf<MixedAuth["api"]>().toHaveProperty("removeUser");
 		expectTypeOf<MixedAuth["api"]>().toHaveProperty("listUsers");
 	});
+
+	it("should preserve plugin types with explicit readonly plugins", () => {
+		// When plugins are declared as a readonly tuple (e.g., via `as const`
+		// or `satisfies`), endpoint types must still be preserved.
+		function createAuth() {
+			const plugins = [admin(), twoFactor()] as const;
+			return betterAuth({
+				database: {} as any,
+				plugins,
+			});
+		}
+
+		type ReadonlyAuth = ReturnType<typeof createAuth>;
+
+		// Admin endpoints must be present
+		expectTypeOf<ReadonlyAuth["api"]>().toHaveProperty("createUser");
+		expectTypeOf<ReadonlyAuth["api"]>().toHaveProperty("removeUser");
+		expectTypeOf<ReadonlyAuth["api"]>().toHaveProperty("listUsers");
+	});
+
+	it("should preserve plugin context types (hasPlugin / getPlugin)", async () => {
+		// The $context.hasPlugin() and getPlugin() methods rely on
+		// InferPluginID which must also handle readonly plugin arrays.
+		function createAuth() {
+			return betterAuth({
+				database: {} as any,
+				plugins: [admin(), twoFactor()],
+			});
+		}
+
+		type ContextAuth = ReturnType<typeof createAuth>;
+		type Context = Awaited<ContextAuth["$context"]>;
+
+		// hasPlugin should return `true` (not just `boolean`) for known plugins
+		type HasAdmin = ReturnType<Context["hasPlugin"]>;
+		expectTypeOf<HasAdmin>().not.toEqualTypeOf<never>();
+	});
 });
