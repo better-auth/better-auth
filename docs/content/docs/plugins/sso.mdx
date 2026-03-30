@@ -1001,7 +1001,7 @@ const auth = betterAuth({
     plugins: [
         sso({
             saml: {
-                // Enable InResponseTo validation
+                // InResponseTo validation is enabled by default
                 enableInResponseToValidation: true,
                 // Optionally reject IdP-initiated SSO (stricter security)
                 allowIdpInitiated: false,
@@ -1017,7 +1017,7 @@ const auth = betterAuth({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enableInResponseToValidation` | `boolean` | `false` | Enable InResponseTo validation for SP-initiated flows. |
+| `enableInResponseToValidation` | `boolean` | `true` | Enable InResponseTo validation for SP-initiated flows. |
 | `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
 | `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
 
@@ -1571,9 +1571,9 @@ If you want to allow account linking for specific trusted providers, enable the 
         type: "object",
         properties: {
             enableInResponseToValidation: {
-                description: "Enable InResponseTo validation for SP-initiated SAML flows. Opt-in for backward compatibility.",
+                description: "Enable InResponseTo validation for SP-initiated SAML flows.",
                 type: "boolean",
-                default: false,
+                default: true,
             },
             allowIdpInitiated: {
                 description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",

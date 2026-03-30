@@ -1418,7 +1418,8 @@ export const signInSSO = (options?: SSOOptions) => {
 				);
 
 				const shouldSaveRequest =
-					loginRequest.id && options?.saml?.enableInResponseToValidation;
+					loginRequest.id &&
+					options?.saml?.enableInResponseToValidation !== false;
 				if (shouldSaveRequest) {
 					const ttl =
 						options?.saml?.requestTTL ?? constants.DEFAULT_AUTHN_REQUEST_TTL_MS;
@@ -2181,7 +2182,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				| string
 				| undefined;
 			const shouldValidateInResponseTo =
-				options?.saml?.enableInResponseToValidation;
+				options?.saml?.enableInResponseToValidation !== false;
 
 			if (shouldValidateInResponseTo) {
 				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
@@ -2700,7 +2701,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				| string
 				| undefined;
 			const shouldValidateInResponseToAcs =
-				options?.saml?.enableInResponseToValidation;
+				options?.saml?.enableInResponseToValidation !== false;
 
 			if (shouldValidateInResponseToAcs) {
 				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
