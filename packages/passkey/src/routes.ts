@@ -947,6 +947,7 @@ export const deletePasskey = createAuthEndpoint(
 				idParam: "id",
 				idSource: "body",
 				notFoundError: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+				forbiddenStatus: "UNAUTHORIZED",
 			}),
 		],
 		metadata: {
@@ -1024,6 +1025,7 @@ export const updatePasskey = createAuthEndpoint(
 				notFoundError: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
 				forbiddenError:
 					PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+				forbiddenStatus: "UNAUTHORIZED",
 			}),
 		],
 		metadata: {

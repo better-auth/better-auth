@@ -34,8 +34,14 @@ export function requireResourceOwnership(config: {
 	 * Default: generic FORBIDDEN.
 	 */
 	forbiddenError?: { code: string; message: string };
+	/**
+	 * HTTP status for ownership failures.
+	 * @default "FORBIDDEN" (403)
+	 */
+	forbiddenStatus?: "FORBIDDEN" | "UNAUTHORIZED";
 }) {
 	const ownerField = config.ownerField ?? "userId";
+	const forbiddenStatus = config.forbiddenStatus ?? "FORBIDDEN";
 	return createAuthMiddleware(async (ctx) => {
 		const session = ctx.context.session as { user: { id: string } } | undefined;
 		if (!session?.user?.id) {
@@ -64,9 +70,9 @@ export function requireResourceOwnership(config: {
 
 		if ((resource as Record<string, unknown>)[ownerField] !== session.user.id) {
 			if (config.forbiddenError) {
-				throw APIError.from("FORBIDDEN", config.forbiddenError);
+				throw APIError.from(forbiddenStatus, config.forbiddenError);
 			}
-			throw new APIError("FORBIDDEN");
+			throw new APIError(forbiddenStatus);
 		}
 
 		return { verifiedResource: resource };
