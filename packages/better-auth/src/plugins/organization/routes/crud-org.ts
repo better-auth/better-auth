@@ -453,6 +453,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						organization: ["update"],
 					},
 					role: member.role,
+					memberActive: member.active,
 					options: ctx.context.orgOptions,
 					organizationId,
 				},
@@ -579,6 +580,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			const canDeleteOrg = await hasPermission(
 				{
 					role: member.role,
+					memberActive: member.active,
 					permissions: {
 						organization: ["delete"],
 					},
@@ -837,6 +839,13 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+			if (!isMember.active) {
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.MEMBER_IS_NOT_ACTIVE,
 				);
 			}
 

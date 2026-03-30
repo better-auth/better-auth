@@ -7,6 +7,7 @@ export const hasPermissionFn = (
 		[x: string]: Role<any> | undefined;
 	},
 ) => {
+	if (input.memberActive === false) return false;
 	if (!input.permissions) return false;
 
 	const roles = input.role.split(",");
@@ -41,4 +42,5 @@ export type HasPermissionBaseInput = {
 	role: string;
 	options: OrganizationOptions;
 	allowCreatorAllPermissions?: boolean | undefined;
+	memberActive?: boolean | undefined;
 } & PermissionExclusive;

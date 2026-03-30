@@ -1216,9 +1216,59 @@ To leave organization you can use `organization.leave` function. This function w
 ```ts
 type leaveOrganization = {
     /**
-     * The organization ID for the member to leave. 
+     * The organization ID for the member to leave.
      */
     organizationId: string = "organization-id"
+}
+```
+</APIMethod>
+
+### Activate Member
+
+To activate a previously deactivated member, you can use `organization.activateMember`. This requires the `member: ["update"]` permission.
+
+<APIMethod
+  path="/organization/activate-member"
+  method="POST"
+  requireSession
+>
+```ts
+type activateMember = {
+    /**
+     * The member id to activate.
+     */
+    memberId: string = "member-id"
+    /**
+     * An optional organization ID. If not provided, will default to the user's active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+### Deactivate Member
+
+To deactivate a member without removing them from the organization, you can use `organization.deactivateMember`. Deactivated members are blocked from performing any organization actions, including setting the organization as active and passing any permission checks. This requires the `member: ["update"]` permission.
+
+<Callout>
+  You cannot deactivate the last active owner of an organization.
+</Callout>
+
+<APIMethod
+  path="/organization/deactivate-member"
+  method="POST"
+  requireSession
+>
+```ts
+type deactivateMember = {
+    /**
+     * The member id to deactivate.
+     */
+    memberId: string = "member-id"
+    /**
+     * An optional organization ID. If not provided, will default to the user's active organization.
+     */
+    organizationId?: string = "org-id"
 }
 ```
 </APIMethod>
@@ -2218,6 +2268,11 @@ Table Name: `member`
       name: "role",
       type: "string",
       description: "The role of the user in the organization",
+    },
+    {
+      name: "active",
+      type: "boolean",
+      description: "Whether the member is active in the organization. Defaults to true. Inactive members are blocked from performing any organization actions.",
     },
     {
       name: "createdAt",

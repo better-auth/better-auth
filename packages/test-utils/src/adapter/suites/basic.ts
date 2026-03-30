@@ -2579,6 +2579,7 @@ export const getNormalTestSuiteTests = (
 						organizationId: organizationData.id,
 						userId: user.id,
 						role: "owner",
+						active: true,
 						createdAt: new Date(),
 					},
 					forceAllowId: true,

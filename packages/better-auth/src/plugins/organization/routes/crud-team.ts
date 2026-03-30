@@ -123,6 +123,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				const canCreate = await hasPermission(
 					{
 						role: member.role,
+						memberActive: member.active,
 						options: ctx.context.orgOptions,
 						permissions: {
 							team: ["create"],
@@ -288,6 +289,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				const canRemove = await hasPermission(
 					{
 						role: member.role,
+						memberActive: member.active,
 						options: ctx.context.orgOptions,
 						permissions: {
 							team: ["delete"],
@@ -467,6 +469,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			const canUpdate = await hasPermission(
 				{
 					role: member.role,
+					memberActive: member.active,
 					options: ctx.context.orgOptions,
 					permissions: {
 						team: ["update"],
@@ -1000,6 +1003,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const canUpdateMember = await hasPermission(
 				{
 					role: currentMember.role,
+					memberActive: currentMember.active,
 					options: ctx.context.orgOptions,
 					permissions: {
 						member: ["update"],
@@ -1174,6 +1178,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const canDeleteMember = await hasPermission(
 				{
 					role: currentMember.role,
+					memberActive: currentMember.active,
 					options: ctx.context.orgOptions,
 					permissions: {
 						member: ["delete"],
