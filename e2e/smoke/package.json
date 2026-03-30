@@ -1,6 +1,10 @@
 {
   "name": "@better-auth-test/smoke",
   "type": "module",
+  "dependencies": {
+    "@better-auth/passkey": "workspace:*",
+    "better-auth": "workspace:*"
+  },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/redis-storage": "workspace:*",
