@@ -348,11 +348,11 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 					);
 				}
-        const { members } = await adapter.listMembers({
-          organizationId: organizationId,
+				const { members } = await adapter.listMembers({
+					organizationId: organizationId,
 					limit: 2,
 					filter: { field: "role", operator: "contains", value: creatorRole },
-        });
+				});
 				if (members.length <= 1) {
 					throw APIError.from(
 						"BAD_REQUEST",
@@ -819,11 +819,11 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwnerLeaving = member.role.split(",").includes(creatorRole);
 			if (isOwnerLeaving) {
-        const { members } = await adapter.listMembers({
-          organizationId: ctx.body.organizationId,
-          limit: 2,
-          filter: { field: "role", operator: "contains", value: creatorRole },
-        });
+				const { members } = await adapter.listMembers({
+					organizationId: ctx.body.organizationId,
+					limit: 2,
+					filter: { field: "role", operator: "contains", value: creatorRole },
+				});
 
 				if (members.length <= 1) {
 					throw APIError.from(
