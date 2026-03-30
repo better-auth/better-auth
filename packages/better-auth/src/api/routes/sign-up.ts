@@ -232,7 +232,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const shouldReturnGenericDuplicateResponse =
-					ctx.context.options.emailAndPassword.requireEmailVerification;
+    ctx.context.options.emailAndPassword.requireEmailVerification ||
+    ctx.context.options.emailAndPassword.autoSignIn === false;
 				const shouldSkipAutoSignIn =
 					ctx.context.options.emailAndPassword.autoSignIn === false ||
 					shouldReturnGenericDuplicateResponse;
