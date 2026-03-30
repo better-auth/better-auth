@@ -41,6 +41,15 @@ export interface PasskeyOptions {
 	 */
 	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
 	/**
+	 * The attestation conveyance preference for passkey registration.
+	 *
+	 * - `"none"`: The relying party is not interested in attestation.
+	 * - `"direct"`: The relying party wants to receive the attestation as-is from the authenticator.
+	 *
+	 * @default "none"
+	 */
+	attestationType?: "none" | "direct" | undefined;
+	/**
 	 * Advanced options
 	 */
 	advanced?:

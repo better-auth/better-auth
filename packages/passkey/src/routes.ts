@@ -192,7 +192,7 @@ export const generatePasskeyRegistrationOptions = (
 				userID,
 				userName: ctx.query?.name || session.user.email || session.user.id,
 				userDisplayName: session.user.email || session.user.id,
-				attestationType: "none",
+				attestationType: opts.attestationType || "none",
 				excludeCredentials: userPasskeys.map((passkey) => ({
 					id: passkey.credentialID,
 					transports: passkey.transports?.split(

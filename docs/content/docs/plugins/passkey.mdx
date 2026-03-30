@@ -323,6 +323,11 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
 
 **origin**: The origin URL at which your better-auth server is hosted. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
 
+**attestationType**: Specifies the attestation type. Helpful for identifying the make and model of the device.
+- `direct`: Requests attestation data from the authenticator
+- `none`: No attestation is requested (most private)
+- Default: `none`
+
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
 
 - `authenticatorAttachment`: Specifies the type of authenticator
