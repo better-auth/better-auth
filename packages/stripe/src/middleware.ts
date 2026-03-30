@@ -75,7 +75,7 @@ export const referenceMiddleware = (
 			return;
 		}
 
-		// Pass if referenceId is user id
+		// Pass if referenceId matches the session user
 		if (explicitReferenceId === ctxSession.user.id) {
 			return;
 		}
