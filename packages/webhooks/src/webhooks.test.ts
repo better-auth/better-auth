@@ -51,34 +51,37 @@ describe("deliverWebhook", () => {
 			.mockResolvedValue(new Response(null, { status: 200 }));
 		vi.stubGlobal("fetch", fetchMock);
 		const logger = createLogger({ disabled: true });
-		await deliverWebhook({
-			url: "https://example.com/webhooks/auth",
-			secret,
-			payload: {
-				id: "evt_test",
-				type: "user.created",
-				timestamp: "2026-03-30T12:00:00.000Z",
-				data: { email: "a@b.com" },
-			},
-			timeoutMs: 5000,
-			retries: 0,
-			logger,
-		});
-		vi.unstubAllGlobals();
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
-		expect(init?.method).toBe("POST");
-		const rawBody = init?.body as string;
-		const headers = new Headers(init?.headers as HeadersInit);
-		const sig = headers.get(WEBHOOK_SIGNATURE_HEADER);
-		await expect(
-			verifyWebhookSignature({
-				rawBody,
-				signatureHeader: sig,
+		try {
+			await deliverWebhook({
+				url: "https://example.com/webhooks/auth",
 				secret,
-				maxAgeSeconds: 600,
-			}),
-		).resolves.toBe(true);
+				payload: {
+					id: "evt_test",
+					type: "user.created",
+					timestamp: "2026-03-30T12:00:00.000Z",
+					data: { email: "a@b.com" },
+				},
+				timeoutMs: 5000,
+				retries: 0,
+				logger,
+			});
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+			expect(init?.method).toBe("POST");
+			const rawBody = init?.body as string;
+			const headers = new Headers(init?.headers as HeadersInit);
+			const sig = headers.get(WEBHOOK_SIGNATURE_HEADER);
+			await expect(
+				verifyWebhookSignature({
+					rawBody,
+					signatureHeader: sig,
+					secret,
+					maxAgeSeconds: 600,
+				}),
+			).resolves.toBe(true);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 });
 
