@@ -524,8 +524,8 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 							data: {
 								userId: userId,
 								role: "member",
-								createdAt: new Date(),
 								active: true,
+								createdAt: new Date(),
 								organizationId,
 							},
 						});
@@ -535,22 +535,25 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 
 			let user: User;
 			let account: Account;
+			let member: Member | null | undefined = null;
 
 			if (existingUser) {
 				user = existingUser;
-				account = await ctx.context.adapter.transaction<Account>(async () => {
+				[account, member] = await ctx.context.adapter.transaction<
+					[Account, Member | null | undefined]
+				>(async () => {
 					const account = await createAccount(user.id);
-					await createOrgMembership(user.id);
-					return account;
+					const member = await createOrgMembership(user.id);
+					return [account, member];
 				});
 			} else {
-				[user, account] = await ctx.context.adapter.transaction<
-					[User, Account]
+				[user, account, member] = await ctx.context.adapter.transaction<
+					[User, Account, Member | null | undefined]
 				>(async () => {
 					const user = await createUser();
 					const account = await createAccount(user.id);
-					await createOrgMembership(user.id);
-					return [user, account];
+					const member = await createOrgMembership(user.id);
+					return [user, account, member];
 				});
 			}
 
@@ -558,6 +561,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				ctx.context.baseURL,
 				user,
 				account,
+				member,
 			);
 
 			ctx.setStatus(201);
@@ -600,11 +604,14 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const { organizationId, providerId } = ctx.context.scimProvider;
 			const accountId = getAccountId(body.userName, body.externalId);
 
-			const { user, account } = await findUserById(ctx.context.adapter, {
-				userId,
-				providerId,
-				organizationId,
-			});
+			const { user, account, member } = await findUserById(
+				ctx.context.adapter,
+				{
+					userId,
+					providerId,
+					organizationId,
+				},
+			);
 
 			if (!user) {
 				throw new SCIMAPIError("NOT_FOUND", {
@@ -641,6 +648,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 				ctx.context.baseURL,
 				updatedUser!,
 				updatedAccount,
+				member,
 			);
 
 			return ctx.json(userResource);
@@ -724,6 +732,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			];
 
 			const organizationId = ctx.context.scimProvider.organizationId;
+			let memberMap: Map<string, Member> | null = null;
 			if (organizationId) {
 				const members = await ctx.context.adapter.findMany<Member>({
 					model: "member",
@@ -741,6 +750,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 					return ctx.json(emptyListResponse);
 				}
 
+				memberMap = new Map(members.map((m) => [m.userId, m]));
 				userFilters = [{ field: "id", value: memberUserIds, operator: "in" }];
 			}
 
@@ -756,7 +766,12 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				itemsPerPage: users.length,
 				Resources: users.map((user) => {
 					const account = accounts.find((a) => a.userId === user.id);
-					return createUserResource(ctx.context.baseURL, user, account);
+					return createUserResource(
+						ctx.context.baseURL,
+						user,
+						account,
+						memberMap?.get(user.id),
+					);
 				}),
 			});
 		},
@@ -794,11 +809,14 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const providerId = ctx.context.scimProvider.providerId;
 			const organizationId = ctx.context.scimProvider.organizationId;
 
-			const { user, account } = await findUserById(ctx.context.adapter, {
-				userId,
-				providerId,
-				organizationId,
-			});
+			const { user, account, member } = await findUserById(
+				ctx.context.adapter,
+				{
+					userId,
+					providerId,
+					organizationId,
+				},
+			);
 
 			if (!user) {
 				throw new SCIMAPIError("NOT_FOUND", {
@@ -806,7 +824,9 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
-			return ctx.json(createUserResource(ctx.context.baseURL, user, account));
+			return ctx.json(
+				createUserResource(ctx.context.baseURL, user, account, member),
+			);
 		},
 	);
 
@@ -859,11 +879,14 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const organizationId = ctx.context.scimProvider.organizationId;
 			const providerId = ctx.context.scimProvider.providerId;
 
-			const { user, account } = await findUserById(ctx.context.adapter, {
-				userId,
-				providerId,
-				organizationId,
-			});
+			const { user, account, member } = await findUserById(
+				ctx.context.adapter,
+				{
+					userId,
+					providerId,
+					organizationId,
+				},
+			);
 
 			if (!user) {
 				throw new SCIMAPIError("NOT_FOUND", {
@@ -871,14 +894,16 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
-			const { user: userPatch, account: accountPatch } = buildUserPatch(
-				user,
-				ctx.body.Operations,
-			);
+			const {
+				user: userPatch,
+				account: accountPatch,
+				member: memberPatch,
+			} = buildUserPatch(user, ctx.body.Operations);
 
 			if (
 				Object.keys(userPatch).length === 0 &&
-				Object.keys(accountPatch).length === 0
+				Object.keys(accountPatch).length === 0 &&
+				Object.keys(memberPatch).length === 0
 			) {
 				throw new SCIMAPIError("BAD_REQUEST", {
 					detail: "No valid fields to update",
@@ -896,6 +921,13 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 					? ctx.context.internalAdapter.updateAccount(account.id, {
 							...accountPatch,
 							updatedAt: new Date(),
+						})
+					: Promise.resolve(),
+				Object.keys(memberPatch).length > 0 && member
+					? ctx.context.adapter.update({
+							model: "member",
+							where: [{ field: "id", value: member.id }],
+							update: memberPatch,
 						})
 					: Promise.resolve(),
 			]);
@@ -1219,7 +1251,7 @@ const findUserById = async (
 	// Account is not associated to the provider
 
 	if (!account) {
-		return { user: null, account: null };
+		return { user: null, account: null, member: null };
 	}
 
 	let member: Member | null = null;
@@ -1237,7 +1269,7 @@ const findUserById = async (
 	// Token is restricted to an org and the member is not part of it
 
 	if (organizationId && !member) {
-		return { user: null, account: null };
+		return { user: null, account: null, member: null };
 	}
 
 	const user = await adapter.findOne<User>({
@@ -1246,10 +1278,10 @@ const findUserById = async (
 	});
 
 	if (!user) {
-		return { user: null, account: null };
+		return { user: null, account: null, member: null };
 	}
 
-	return { user, account };
+	return { user, account, member };
 };
 
 const parseSCIMAPIUserFilter = (filter?: string) => {

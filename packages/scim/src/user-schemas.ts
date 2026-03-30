@@ -109,7 +109,7 @@ export const SCIMUserResourceSchema = {
 			description:
 				"A Boolean value indicating the User's administrative status.",
 			required: false,
-			mutability: "readOnly",
+			mutability: "readWrite",
 			returned: "default",
 		},
 		{
