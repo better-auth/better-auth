@@ -182,6 +182,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						ac: ["create"],
 					},
 					role: member.role,
+					memberActive: member.active,
 				},
 				ctx,
 			);
@@ -374,6 +375,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						ac: ["delete"],
 					},
 					role: member.role,
+					memberActive: member.active,
 				},
 				ctx,
 			);
@@ -603,6 +605,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						ac: ["read"],
 					},
 					role: member.role,
+					memberActive: member.active,
 				},
 				ctx,
 			);
@@ -742,6 +745,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 						ac: ["read"],
 					},
 					role: member.role,
+					memberActive: member.active,
 				},
 				ctx,
 			);
@@ -943,6 +947,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					options,
 					organizationId,
 					role: member.role,
+					memberActive: member.active,
 					permissions: {
 						ac: ["update"],
 					},
@@ -1161,6 +1166,7 @@ async function checkIfMemberHasPermission({
 						permissions: { [resource]: [perm] },
 						useMemoryCache: true,
 						role: member.role,
+						memberActive: member.active,
 					},
 					ctx,
 				),

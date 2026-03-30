@@ -145,6 +145,11 @@ interface MemberDefaultFields {
 		required: true;
 		defaultValue: "member";
 	};
+	active: {
+		type: "boolean";
+		required: false;
+		defaultValue: true;
+	};
 	createdAt: {
 		type: "date";
 		required: true;
@@ -306,6 +311,7 @@ export const memberSchema = z.object({
 	organizationId: z.string(),
 	userId: z.coerce.string(),
 	role: roleSchema,
+	active: z.boolean().default(true),
 	createdAt: z.date().default(() => new Date()),
 });
 
@@ -408,6 +414,7 @@ export type InferMember<
 				id: string;
 				organizationId: string;
 				role: InferOrganizationRolesFromOption<O>;
+				active: boolean;
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -422,6 +429,7 @@ export type InferMember<
 				id: string;
 				organizationId: string;
 				role: InferOrganizationRolesFromOption<O>;
+				active: boolean;
 				createdAt: Date;
 				userId: string;
 				user: {

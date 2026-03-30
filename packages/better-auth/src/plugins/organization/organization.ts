@@ -30,7 +30,9 @@ import {
 	rejectInvitation,
 } from "./routes/crud-invites";
 import {
+	activateMember,
 	addMember,
+	deactivateMember,
 	getActiveMember,
 	getActiveMemberRole,
 	leaveOrganization,
@@ -158,6 +160,8 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listUserInvitations: ReturnType<typeof listUserInvitations<O>>;
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
+	activateMember: ReturnType<typeof activateMember<O>>;
+	deactivateMember: ReturnType<typeof deactivateMember<O>>;
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
 };
 
@@ -277,6 +281,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			const result = await hasPermission(
 				{
 					role: member.role,
+					memberActive: member.active,
 					options: options,
 					permissions: ctx.body.permissions as any,
 					organizationId: activeOrganizationId,
@@ -718,6 +723,38 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		/**
 		 * ### Endpoint
 		 *
+		 * POST `/organization/activate-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.activateMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.activateMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#activate-member)
+		 */
+		activateMember: activateMember(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/deactivate-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.deactivateMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.deactivateMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#deactivate-member)
+		 */
+		deactivateMember: deactivateMember(opts),
+		/**
+		 * ### Endpoint
+		 *
 		 * POST `/organization/leave`
 		 *
 		 * ### API Methods
@@ -1117,6 +1154,12 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 						sortable: true,
 						defaultValue: "member",
 						fieldName: opts.schema?.member?.fields?.role,
+					},
+					active: {
+						type: "boolean",
+						required: false,
+						defaultValue: true,
+						fieldName: opts.schema?.member?.fields?.active,
 					},
 					createdAt: {
 						type: "date",
