@@ -1,5 +1,9 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { User } from "better-auth";
+import type {
+	AssertionSigningAlgorithm,
+	ClientAssertionConfig,
+	User,
+} from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -309,8 +313,9 @@ const ssoProviderBodySchema = z.object({
 			clientId: z.string({}).meta({
 				description: "The client ID",
 			}),
-			clientSecret: z.string({}).meta({
-				description: "The client secret",
+			clientSecret: z.string({}).optional().meta({
+				description:
+					"The client secret. Required for client_secret_basic/client_secret_post. Optional for private_key_jwt.",
 			}),
 			authorizationEndpoint: z
 				.string({})
@@ -331,8 +336,10 @@ const ssoProviderBodySchema = z.object({
 				})
 				.optional(),
 			tokenEndpointAuthentication: z
-				.enum(["client_secret_post", "client_secret_basic"])
+				.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
 				.optional(),
+			privateKeyId: z.string().optional(),
+			privateKeyAlgorithm: z.string().optional(),
 			jwksEndpoint: z
 				.string({})
 				.meta({
@@ -819,6 +826,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						tokenEndpointAuthentication:
 							body.oidcConfig.tokenEndpointAuthentication ||
 							"client_secret_basic",
+						privateKeyId: body.oidcConfig.privateKeyId,
+						privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
 						jwksEndpoint: body.oidcConfig.jwksEndpoint,
 						pkce: body.oidcConfig.pkce,
 						discoveryEndpoint:
@@ -844,6 +853,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
 					tokenEndpointAuthentication:
 						hydratedOIDCConfig.tokenEndpointAuthentication,
+					privateKeyId: body.oidcConfig.privateKeyId,
+					privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
 					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
 					pkce: body.oidcConfig.pkce,
 					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
@@ -876,7 +887,42 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
-					oidcConfig: buildOIDCConfig(),
+					oidcConfig: (() => {
+						const config = buildOIDCConfig();
+						if (config) {
+							const parsed = JSON.parse(config) as {
+								tokenEndpointAuthentication?: string;
+								clientSecret?: string;
+							};
+							// clientSecret required for secret-based auth
+							if (
+								parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
+								!parsed.clientSecret
+							) {
+								throw new APIError("BAD_REQUEST", {
+									message:
+										"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+								});
+							}
+							// private_key_jwt requires a key source
+							if (
+								parsed.tokenEndpointAuthentication === "private_key_jwt" &&
+								!options?.resolvePrivateKey &&
+								!options?.defaultSSO?.some(
+									(p: Record<string, unknown>) =>
+										p.providerId === body.providerId &&
+										"privateKey" in p &&
+										p.privateKey,
+								)
+							) {
+								throw new APIError("BAD_REQUEST", {
+									message:
+										"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+								});
+							}
+						}
+						return config;
+					})(),
 					samlConfig: body.samlConfig
 						? JSON.stringify({
 								issuer: body.issuer,
@@ -1585,6 +1631,82 @@ async function handleOIDCCallback(
 		);
 	}
 
+	let authMethod: "basic" | "post" | "private_key_jwt" = "basic";
+	if (config.tokenEndpointAuthentication === "client_secret_post") {
+		authMethod = "post";
+	} else if (config.tokenEndpointAuthentication === "private_key_jwt") {
+		authMethod = "private_key_jwt";
+	}
+
+	let clientAssertionConfig: ClientAssertionConfig | undefined;
+	if (authMethod === "private_key_jwt") {
+		// Check defaultSSO inline keys first, then resolvePrivateKey callback
+		let resolved:
+			| {
+					privateKeyJwk?: JsonWebKey;
+					privateKeyPem?: string;
+					kid?: string;
+					algorithm?: string;
+			  }
+			| undefined;
+
+		if (options?.defaultSSO) {
+			const defaultProvider = options.defaultSSO.find(
+				(p: Record<string, unknown>) => p.providerId === provider.providerId,
+			);
+			if (
+				defaultProvider &&
+				"privateKey" in defaultProvider &&
+				defaultProvider.privateKey
+			) {
+				resolved = defaultProvider.privateKey as typeof resolved;
+			}
+		}
+
+		if (!resolved && options?.resolvePrivateKey) {
+			resolved = await options.resolvePrivateKey({
+				providerId: provider.providerId,
+				keyId: config.privateKeyId,
+				issuer: config.issuer,
+			});
+		}
+
+		if (!resolved) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=invalid_provider&error_description=private_key_jwt_missing_key`,
+			);
+		}
+
+		const validAlgorithms = new Set<AssertionSigningAlgorithm>([
+			"RS256",
+			"RS384",
+			"RS512",
+			"PS256",
+			"PS384",
+			"PS512",
+			"ES256",
+			"ES384",
+			"ES512",
+			"EdDSA",
+		]);
+		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm ?? "RS256";
+		const algorithm: AssertionSigningAlgorithm = validAlgorithms.has(
+			rawAlg as AssertionSigningAlgorithm,
+		)
+			? (rawAlg as AssertionSigningAlgorithm)
+			: "RS256";
+
+		clientAssertionConfig = {
+			privateKeyJwk: resolved.privateKeyJwk,
+			privateKeyPem: resolved.privateKeyPem,
+			kid: config.privateKeyId ?? resolved.kid,
+			algorithm,
+			tokenEndpoint: config.tokenEndpoint,
+		};
+	}
+
 	const tokenResponse = await validateAuthorizationCode({
 		code,
 		codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
@@ -1598,10 +1720,8 @@ async function handleOIDCCallback(
 			clientSecret: config.clientSecret,
 		},
 		tokenEndpoint: config.tokenEndpoint,
-		authentication:
-			config.tokenEndpointAuthentication === "client_secret_post"
-				? "post"
-				: "basic",
+		authentication: authMethod,
+		clientAssertion: clientAssertionConfig,
 	}).catch((e) => {
 		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {

@@ -2,6 +2,8 @@ import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
+import type { ClientAssertionConfig } from "./client-assertion";
+import { signClientAssertion } from "./client-assertion";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
@@ -11,6 +13,8 @@ export async function authorizationCodeRequest({
 	redirectURI,
 	options,
 	authentication,
+	clientAssertion,
+	tokenEndpoint,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -21,12 +25,51 @@ export async function authorizationCodeRequest({
 	options: AwaitableFunction<Partial<ProviderOptions>>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
+	/** Token endpoint URL. Used as the JWT `aud` claim when signing assertions. */
+	tokenEndpoint?: string | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+
+	if (authentication === "private_key_jwt") {
+		if (!clientAssertion) {
+			throw new Error(
+				"private_key_jwt authentication requires a clientAssertion configuration",
+			);
+		}
+		let assertion = clientAssertion.assertion;
+		if (!assertion) {
+			const primaryClientId = Array.isArray(options.clientId)
+				? options.clientId[0]
+				: options.clientId;
+			const audEndpoint = tokenEndpoint ?? clientAssertion.tokenEndpoint;
+			if (!audEndpoint) {
+				throw new Error(
+					"private_key_jwt requires a tokenEndpoint for the JWT audience claim",
+				);
+			}
+			assertion = await signClientAssertion({
+				clientId: primaryClientId,
+				tokenEndpoint: audEndpoint,
+				privateKeyJwk: clientAssertion.privateKeyJwk,
+				privateKeyPem: clientAssertion.privateKeyPem,
+				kid: clientAssertion.kid,
+				algorithm: clientAssertion.algorithm,
+				expiresIn: clientAssertion.expiresIn,
+			});
+		}
+		additionalParams = {
+			...additionalParams,
+			client_assertion: assertion,
+			client_assertion_type:
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		};
+	}
+
 	return createAuthorizationCodeRequest({
 		code,
 		codeVerifier,
@@ -59,7 +102,7 @@ export function createAuthorizationCodeRequest({
 	options: Partial<ProviderOptions>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -96,6 +139,12 @@ export function createAuthorizationCodeRequest({
 			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
+	} else if (authentication === "private_key_jwt") {
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		body.set("client_id", primaryClientId);
+		// client_assertion + client_assertion_type flow through additionalParams
 	} else {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
@@ -123,6 +172,7 @@ export async function validateAuthorizationCode({
 	options,
 	tokenEndpoint,
 	authentication,
+	clientAssertion,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -134,7 +184,8 @@ export async function validateAuthorizationCode({
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
 	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -145,6 +196,8 @@ export async function validateAuthorizationCode({
 		redirectURI,
 		options,
 		authentication,
+		clientAssertion,
+		tokenEndpoint,
 		deviceId,
 		headers,
 		additionalParams,

@@ -116,6 +116,13 @@ export interface OAuthOptions<
 		[K in Scopes[number]]?: number | string | Date;
 	};
 	/**
+	 * Maximum lifetime in seconds for client assertion JWTs
+	 * used with `private_key_jwt` authentication.
+	 *
+	 * @default 300 (5 minutes)
+	 */
+	assertionMaxLifetime?: number;
+	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
@@ -897,9 +904,14 @@ export interface SchemaClient<
 	tokenEndpointAuthMethod?:
 		| "none"
 		| "client_secret_basic"
-		| "client_secret_post";
+		| "client_secret_post"
+		| "private_key_jwt";
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
+	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */
+	jwks?: string;
+	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
+	jwksUri?: string;
 	//---- RFC6749 Spec ----//
 	/**
 	 * Indicates whether the client is public or confidential.

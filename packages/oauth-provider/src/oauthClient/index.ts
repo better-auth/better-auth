@@ -32,9 +32,21 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_statement: z.string().optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
+					.enum([
+						"none",
+						"client_secret_basic",
+						"client_secret_post",
+						"private_key_jwt",
+					])
 					.default("client_secret_basic")
 					.optional(),
+				jwks: z
+					.union([
+						z.array(z.record(z.string(), z.unknown())),
+						z.object({ keys: z.array(z.record(z.string(), z.unknown())) }),
+					])
+					.optional(),
+				jwks_uri: z.string().optional(),
 				grant_types: z
 					.array(
 						z.enum([
@@ -245,9 +257,21 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_statement: z.string().optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
+					.enum([
+						"none",
+						"client_secret_basic",
+						"client_secret_post",
+						"private_key_jwt",
+					])
 					.default("client_secret_basic")
 					.optional(),
+				jwks: z
+					.union([
+						z.array(z.record(z.string(), z.unknown())),
+						z.object({ keys: z.array(z.record(z.string(), z.unknown())) }),
+					])
+					.optional(),
+				jwks_uri: z.string().optional(),
 				grant_types: z
 					.array(
 						z.enum([

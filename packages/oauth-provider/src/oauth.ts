@@ -616,6 +616,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						]),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						code: z.string().optional(),
 						code_verifier: z.string().optional(),
 						redirect_uri: SafeUrlSchema.optional(),
@@ -760,6 +762,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
@@ -901,6 +905,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
@@ -1158,9 +1164,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_statement: z.string().optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.enum([
+								"none",
+								"client_secret_basic",
+								"client_secret_post",
+								"private_key_jwt",
+							])
 							.default("client_secret_basic")
 							.optional(),
+						jwks: z
+							.union([
+								z.array(z.record(z.string(), z.unknown())),
+								z.object({
+									keys: z.array(z.record(z.string(), z.unknown())),
+								}),
+							])
+							.optional(),
+						jwks_uri: z.string().optional(),
 						grant_types: z
 							.array(
 								z.enum([

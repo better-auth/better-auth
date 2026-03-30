@@ -1,3 +1,8 @@
+export type {
+	AssertionSigningAlgorithm,
+	ClientAssertionConfig,
+} from "./client-assertion";
+export { signClientAssertion } from "./client-assertion";
 export {
 	clientCredentialsToken,
 	clientCredentialsTokenRequest,

@@ -13,7 +13,7 @@ import type {
 	Scope,
 } from "./types";
 import {
-	basicToClientCredentials,
+	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
@@ -397,26 +397,26 @@ export async function introspectEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
-		token,
-		token_type_hint,
-	}: {
-		client_id?: string;
-		client_secret?: string;
+	let { token, token_type_hint } = ctx.body as {
 		token: string;
 		token_type_hint?: "access_token" | "refresh_token";
-	} = ctx.body;
+	};
 
-	// Convert basic authorization
-	const authorization = ctx.request?.headers.get("authorization") || null;
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
-	if (!client_id || !client_secret) {
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/introspect`,
+	);
+	const client_id = credentials?.clientId;
+	const client_secret =
+		credentials?.method === "client_secret_basic" ||
+		credentials?.method === "client_secret_post"
+			? credentials.clientSecret
+			: undefined;
+	const preVerifiedClient =
+		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+
+	if (!client_id || (!client_secret && !preVerifiedClient)) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing required credentials",
 			error: "invalid_client",
@@ -440,6 +440,8 @@ export async function introspectEndpoint(
 		opts,
 		client_id,
 		client_secret,
+		undefined,
+		preVerifiedClient,
 	);
 
 	try {

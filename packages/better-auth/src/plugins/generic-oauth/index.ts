@@ -167,6 +167,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
+							clientAssertion:
+								c.authentication === "private_key_jwt" && c.clientAssertion
+									? {
+											...c.clientAssertion,
+											tokenEndpoint: finalTokenUrl,
+										}
+									: undefined,
 						});
 					},
 					async refreshAccessToken(
@@ -197,6 +204,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
+							clientAssertion:
+								c.authentication === "private_key_jwt" && c.clientAssertion
+									? {
+											...c.clientAssertion,
+											tokenEndpoint: finalTokenUrl,
+										}
+									: undefined,
 							tokenEndpoint: finalTokenUrl,
 						});
 					},

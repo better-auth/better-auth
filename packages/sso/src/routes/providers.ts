@@ -382,6 +382,9 @@ function mergeOIDCConfig(
 		tokenEndpointAuthentication:
 			updates.tokenEndpointAuthentication ??
 			current.tokenEndpointAuthentication,
+		privateKeyId: updates.privateKeyId ?? current.privateKeyId,
+		privateKeyAlgorithm:
+			updates.privateKeyAlgorithm ?? current.privateKeyAlgorithm,
 	};
 }
 
@@ -495,6 +498,31 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						currentOidcConfig.issuer ||
 						existingProvider.issuer,
 				);
+
+				// Validate: clientSecret is required for non-private_key_jwt auth
+				if (
+					updatedOidcConfig.tokenEndpointAuthentication !== "private_key_jwt" &&
+					!updatedOidcConfig.clientSecret
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+					});
+				}
+				// Validate: private_key_jwt requires a key source at runtime
+				if (
+					updatedOidcConfig.tokenEndpointAuthentication === "private_key_jwt" &&
+					!options?.resolvePrivateKey &&
+					!options?.defaultSSO?.some(
+						(p: Record<string, unknown>) =>
+							p.providerId === providerId && "privateKey" in p && p.privateKey,
+					)
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+					});
+				}
 
 				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 			}

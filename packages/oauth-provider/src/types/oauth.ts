@@ -16,8 +16,8 @@ export type GrantType =
 
 export type AuthMethod =
 	| "client_secret_basic" // Basic header
-	| "client_secret_post"; // POST
-// | "private_key_jwt" // must also add alg_values_supported for that endpoint
+	| "client_secret_post" // POST
+	| "private_key_jwt"; // JWT signed with client's private key (RFC 7523)
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
 export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
 export type BearerMethodsSupported = "header" | "body";
@@ -275,7 +275,8 @@ export interface OAuthClient {
 	tos_uri?: string;
 	policy_uri?: string;
 	//---- Jwks (only one can be used) ----//
-	jwks?: string[];
+	/** JWK Set — accepts either a bare key array or an RFC 7517 JWKS object `{"keys":[...]}` */
+	jwks?: Record<string, unknown>[] | { keys: Record<string, unknown>[] };
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;
@@ -287,7 +288,8 @@ export interface OAuthClient {
 	token_endpoint_auth_method?:
 		| "none"
 		| "client_secret_basic"
-		| "client_secret_post";
+		| "client_secret_post"
+		| "private_key_jwt";
 	grant_types?: GrantType[];
 	response_types?: "code"[];
 	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1

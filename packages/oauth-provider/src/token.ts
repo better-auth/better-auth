@@ -16,8 +16,8 @@ import type {
 import type { GrantType } from "./types/oauth";
 import { userNormalClaims } from "./userinfo";
 import {
-	basicToClientCredentials,
 	decryptStoredClientSecret,
+	extractClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
 	isPKCERequired,
@@ -583,27 +583,25 @@ async function handleAuthorizationCodeGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
+	const credentials = await extractClientCredentials(ctx, opts);
+	const client_id = credentials?.clientId;
+	const client_secret =
+		credentials?.method === "client_secret_basic" ||
+		credentials?.method === "client_secret_post"
+			? credentials.clientSecret
+			: undefined;
+	const preVerifiedClient =
+		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+
+	const {
 		code,
 		code_verifier,
 		redirect_uri,
 	}: {
-		client_id?: string;
-		client_secret?: string;
 		code?: string;
 		code_verifier?: string;
 		redirect_uri?: string;
 	} = ctx.body;
-	const authorization = ctx.request?.headers.get("authorization") || null;
-
-	// Convert basic authorization
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -627,7 +625,7 @@ async function handleAuthorizationCodeGrant(
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 
-	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce) {
+	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce && !preVerifiedClient) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Either code_verifier or client_secret is required",
 			error: "invalid_request",
@@ -657,6 +655,7 @@ async function handleAuthorizationCodeGrant(
 		client_id,
 		client_secret,
 		scopes,
+		preVerifiedClient,
 	);
 
 	// Parse scopes from the authorization request
@@ -676,11 +675,11 @@ async function handleAuthorizationCodeGrant(
 			});
 		}
 	} else {
-		// PKCE is optional - must have either PKCE or client_secret
-		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
+		// PKCE is optional - must have either PKCE, client_secret, or client_assertion
+		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret || preVerifiedClient)) {
 			throw new APIError("BAD_REQUEST", {
 				error_description:
-					"Either PKCE (code_verifier) or client authentication (client_secret) is required",
+					"Either PKCE (code_verifier) or client authentication (client_secret or client_assertion) is required",
 				error: "invalid_request",
 			});
 		}
@@ -788,23 +787,17 @@ async function handleClientCredentialsGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
-		scope,
-	}: {
-		client_id?: string;
-		client_secret?: string;
-		scope?: string;
-	} = ctx.body;
-	const authorization = ctx.request?.headers.get("authorization") || null;
+	const credentials = await extractClientCredentials(ctx, opts);
+	const client_id = credentials?.clientId;
+	const client_secret =
+		credentials?.method === "client_secret_basic" ||
+		credentials?.method === "client_secret_post"
+			? credentials.clientSecret
+			: undefined;
+	const preVerifiedClient =
+		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
 
-	// Convert basic authorization
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
+	const { scope }: { scope?: string } = ctx.body;
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -812,7 +805,7 @@ async function handleClientCredentialsGrant(
 			error: "invalid_grant",
 		});
 	}
-	if (!client_secret) {
+	if (!client_secret && !preVerifiedClient) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing a required client_secret",
 			error: "invalid_grant",
@@ -825,6 +818,8 @@ async function handleClientCredentialsGrant(
 		opts,
 		client_id,
 		client_secret,
+		undefined,
+		preVerifiedClient,
 	);
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
@@ -938,26 +933,23 @@ async function handleRefreshTokenGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
+	const credentials = await extractClientCredentials(ctx, opts);
+	const client_id = credentials?.clientId;
+	const client_secret =
+		credentials?.method === "client_secret_basic" ||
+		credentials?.method === "client_secret_post"
+			? credentials.clientSecret
+			: undefined;
+	const preVerifiedClient =
+		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+
+	const {
 		refresh_token,
 		scope,
 	}: {
-		client_id?: string;
-		client_secret?: string;
 		refresh_token?: string;
 		scope?: string;
 	} = ctx.body;
-
-	const authorization = ctx.request?.headers.get("authorization") || null;
-
-	// Convert basic authorization
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -1052,6 +1044,7 @@ async function handleRefreshTokenGrant(
 		client_id,
 		client_secret, // Optional for refresh_grant but required on confidential clients
 		requestedScopes ?? scopes,
+		preVerifiedClient,
 	);
 
 	const user = await ctx.context.internalAdapter.findUserById(

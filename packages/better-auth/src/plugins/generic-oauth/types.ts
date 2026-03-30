@@ -163,7 +163,31 @@ export interface GenericOAuthConfig {
 	 * Authentication method for token requests.
 	 * @default "post"
 	 */
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	/**
+	 * Client assertion config for `private_key_jwt` authentication.
+	 * Required when `authentication` is `"private_key_jwt"`.
+	 */
+	clientAssertion?:
+		| {
+				privateKeyJwk?: JsonWebKey;
+				privateKeyPem?: string;
+				kid?: string;
+				algorithm?:
+					| "RS256"
+					| "RS384"
+					| "RS512"
+					| "PS256"
+					| "PS384"
+					| "PS512"
+					| "ES256"
+					| "ES384"
+					| "ES512"
+					| "EdDSA";
+				/** Assertion lifetime in seconds. @default 120 */
+				expiresIn?: number;
+		  }
+		| undefined;
 	/**
 	 * Custom headers to include in the discovery request.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
