@@ -148,6 +148,16 @@ export interface SSOOptions {
 		  }) => Awaitable<void>)
 		| undefined;
 	/**
+	 * If true, the `provisionUser` callback will be called on every login,
+	 * not just when a new user is registered. This is useful when you need
+	 * to sync upstream identity provider profile changes on each sign-in.
+	 *
+	 * The `provisionUser` callback should be idempotent when this is enabled.
+	 *
+	 * @default false
+	 */
+	provisionUserOnEveryLogin?: boolean;
+	/**
 	 * Organization provisioning options
 	 */
 	organizationProvisioning?:
