@@ -291,11 +291,15 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				ctx.context.options.advanced?.backgroundTasks?.handler &&
 				sendOTPResult instanceof Promise
 			) {
-				ctx.context.runInBackground(
-					sendOTPResult.catch((e) => {
-						ctx.context.logger.error("Failed to run background task:", e);
-					}),
-				);
+				try {
+					ctx.context.runInBackground(
+						sendOTPResult.catch((e) => {
+							ctx.context.logger.error("Failed to run background task:", e);
+						}),
+					);
+				} catch (e) {
+					ctx.context.logger.error("Failed to run background task:", e);
+				}
 			} else {
 				await sendOTPResult;
 			}

@@ -177,6 +177,44 @@ describe("phone-number send otp background task handling", async () => {
 	});
 });
 
+describe("phone-number send otp background handler failures", async () => {
+	const sendOTP = vi.fn(async () => {});
+	const backgroundTaskHandler = vi.fn(() => {
+		throw new Error("Background task handler error");
+	});
+
+	const { client } = await getTestInstance(
+		{
+			advanced: {
+				backgroundTasks: {
+					handler: backgroundTaskHandler,
+				},
+			},
+			plugins: [
+				phoneNumber({
+					sendOTP,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("should keep succeeding when the background task handler throws", async () => {
+		const res = await client.phoneNumber.sendOtp({
+			phoneNumber: "+251988776655",
+		});
+
+		expect(sendOTP).toHaveBeenCalledOnce();
+		expect(backgroundTaskHandler).toHaveBeenCalledOnce();
+		expect(res.error).toBe(null);
+		expect(res.data?.message).toBe("code sent");
+	});
+});
+
 describe("phone auth flow", async () => {
 	let otp = "";
 
