@@ -1098,6 +1098,9 @@ const listInvitationQuerySchema = z
 				z.array(z.enum(["pending", "accepted", "rejected", "canceled"])),
 			])
 			.transform((val) => (Array.isArray(val) ? val : [val]))
+			.meta({
+				description: "Array of status to filter invitation for",
+			})
 			.optional(),
 		inviterId: z
 			.string()

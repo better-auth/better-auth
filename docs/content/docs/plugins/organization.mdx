@@ -1024,6 +1024,38 @@ type listInvitations = {
      * An optional ID of the organization to list invitations for. If not provided, will default to the user's active organization. 
      */
     organizationId?: string = "organization-id"
+    /**
+     * The Email address of the invitation
+     */
+    email?: string = "user@example.com"
+    /**
+     * Array of roles to filter invitation for
+     */
+    role?: string[] = ["member"]
+    /**
+     * Array of status to filter invitation for
+     */
+    status?: string[] = ["pending", "accepted", "rejected", "canceled"]
+    /**
+     * Id of the user who sent the invitation
+     */
+    inviterId?: string[] = "some_user_id"
+    /**
+     * The limit of members to return.
+     */
+    limit?: number = 100
+    /**
+     * The offset to start from.
+     */
+    offset?: number = 0
+    /**
+     * The field to sort by.
+     */
+    sortBy?: string = "createdAt"
+    /**
+     * The direction to sort by.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
 }
 ```
 </APIMethod>
