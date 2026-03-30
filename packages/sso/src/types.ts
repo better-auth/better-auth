@@ -315,7 +315,7 @@ export interface SSOOptions {
 		 *
 		 * This works correctly in serverless environments without any additional configuration.
 		 *
-		 * @default false
+		 * @default true
 		 */
 		enableInResponseToValidation?: boolean;
 		/**
