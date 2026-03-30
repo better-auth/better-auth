@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
@@ -7,6 +7,7 @@ import type { SecretConfig } from "../../../crypto";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
 import { parseUserOutput } from "../../../db/schema";
+import { shouldRequirePassword } from "../../../utils/password";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
@@ -45,6 +46,13 @@ export interface BackupCodeOptions {
 				  }
 		  )
 		| undefined;
+	/**
+	 * Allow generating backup codes without a password when the user does not
+	 * have a credential account.
+	 * When enabled, password is still required if a credential account exists.
+	 * @default false
+	 */
+	allowPasswordless?: boolean | undefined;
 }
 
 function generateBackupCodesFn(options?: BackupCodeOptions | undefined) {
@@ -162,14 +170,18 @@ const viewBackupCodesBodySchema = z.object({
 	}),
 });
 
-const generateBackupCodesBodySchema = z.object({
-	password: z.string().meta({
-		description: "The users password.",
-	}),
-});
-
 export const backupCode2fa = (opts: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
+	const passwordSchema = z.string().meta({
+		description: "The users password.",
+	});
+	const generateBackupCodesBodySchema = opts.allowPasswordless
+		? z.object({
+				password: passwordSchema.optional(),
+			})
+		: z.object({
+				password: passwordSchema,
+			});
 
 	return {
 		id: "backup_code",
@@ -437,7 +449,20 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
 						);
 					}
-					await ctx.context.password.checkPassword(user.id, ctx);
+					const requirePassword = await shouldRequirePassword(
+						ctx,
+						user.id,
+						opts.allowPasswordless,
+					);
+					if (requirePassword) {
+						if (!ctx.body.password) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.INVALID_PASSWORD,
+							);
+						}
+						await ctx.context.password.checkPassword(user.id, ctx);
+					}
 
 					// First, find the twoFactor record to get its id
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
