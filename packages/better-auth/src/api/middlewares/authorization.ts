@@ -106,6 +106,12 @@ export function requireOrgRole(config: {
 			throw new APIError("UNAUTHORIZED");
 		}
 
+		if (!ctx.context.hasPlugin("organization")) {
+			throw new APIError("BAD_REQUEST", {
+				message: "Organization plugin is required for org role authorization",
+			});
+		}
+
 		const source = config.orgIdSource === "body" ? ctx.body : ctx.query;
 		const organizationId = source?.[config.orgIdParam];
 		if (!organizationId) {
@@ -129,9 +135,9 @@ export function requireOrgRole(config: {
 		}
 
 		if (config.allowedRoles?.length) {
-			const memberRoles = parseMemberRoles(
-				(member as Record<string, unknown>).role as string,
-			);
+			const rawRole =
+				((member as Record<string, unknown>).role as string) ?? "";
+			const memberRoles = parseMemberRoles(rawRole);
 			if (!memberRoles.some((role) => config.allowedRoles!.includes(role))) {
 				throw new APIError("FORBIDDEN", {
 					message: "Insufficient role for this operation",

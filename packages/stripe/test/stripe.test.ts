@@ -2805,6 +2805,7 @@ describe("stripe", () => {
 	});
 
 	it("should create billing portal session for an existing custom referenceId", async () => {
+		// cspell:disable-next-line -- random test workspace ID
 		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
 
 		const testOptions = {
@@ -2878,6 +2879,7 @@ describe("stripe", () => {
 	});
 
 	it("should not update personal subscription when upgrading with a custom referenceId", async () => {
+		// cspell:disable-next-line -- random test workspace ID
 		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
 
 		const testOptions = {
