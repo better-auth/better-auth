@@ -106,6 +106,77 @@ describe("phone-number", async () => {
 	});
 });
 
+describe("phone-number send otp error handling", async () => {
+	const sendOTP = vi.fn(async () => {
+		throw new Error("SMS provider error");
+	});
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					sendOTP,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("should return an error when sendOTP fails without background tasks", async () => {
+		const res = await client.phoneNumber.sendOtp({
+			phoneNumber: "+251922334455",
+		});
+
+		expect(sendOTP).toHaveBeenCalledOnce();
+		expect(res.error?.status).toBe(500);
+		expect(res.data).toBe(null);
+	});
+});
+
+describe("phone-number send otp background task handling", async () => {
+	const sendOTP = vi.fn(async () => {
+		throw new Error("SMS provider error");
+	});
+	const backgroundTaskHandler = vi.fn((promise: Promise<unknown>) => {
+		void promise;
+	});
+
+	const { client } = await getTestInstance(
+		{
+			advanced: {
+				backgroundTasks: {
+					handler: backgroundTaskHandler,
+				},
+			},
+			plugins: [
+				phoneNumber({
+					sendOTP,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("should keep succeeding when sendOTP fails in a background task", async () => {
+		const res = await client.phoneNumber.sendOtp({
+			phoneNumber: "+251955667788",
+		});
+
+		expect(sendOTP).toHaveBeenCalledOnce();
+		expect(backgroundTaskHandler).toHaveBeenCalledOnce();
+		expect(res.error).toBe(null);
+		expect(res.data?.message).toBe("code sent");
+	});
+});
+
 describe("phone auth flow", async () => {
 	let otp = "";
 
