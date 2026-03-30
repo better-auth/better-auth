@@ -525,6 +525,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 								userId: userId,
 								role: "member",
 								createdAt: new Date(),
+								active: true,
 								organizationId,
 							},
 						});
