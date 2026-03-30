@@ -36,6 +36,18 @@
     "typecheck": "tsc --build",
     "typecheck:dist": "tsc --project tsconfig.dist-check.json"
   },
+  "pnpm": {
+    "overrides": {
+      "node-forge": ">=1.4.0",
+      "h3@<2": ">=1.15.9",
+      "brace-expansion@<2": "1.1.13",
+      "brace-expansion@>=2 <4": "2.0.3",
+      "brace-expansion@>=4": "5.0.5",
+      "path-to-regexp@>=8": "8.4.0",
+      "dompurify": ">=3.3.2",
+      "happy-dom": ">=20.8.9"
+    }
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
     "@biomejs/biome": "2.4.4",
