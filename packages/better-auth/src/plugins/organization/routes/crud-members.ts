@@ -348,14 +348,12 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 					);
 				}
-				const { members } = await adapter.listMembers({
-					organizationId: organizationId,
-				});
-				const owners = members.filter((member) => {
-					const roles = member.role.split(",");
-					return roles.includes(creatorRole);
-				});
-				if (owners.length <= 1) {
+        const { members } = await adapter.listMembers({
+          organizationId: organizationId,
+					limit: 2,
+					filter: { field: "role", operator: "contains", value: creatorRole },
+        });
+				if (members.length <= 1) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
@@ -821,19 +819,13 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwnerLeaving = member.role.split(",").includes(creatorRole);
 			if (isOwnerLeaving) {
-				const members = await ctx.context.adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{
-							field: "organizationId",
-							value: ctx.body.organizationId,
-						},
-					],
-				});
-				const owners = members.filter((member) =>
-					member.role.split(",").includes(creatorRole),
-				);
-				if (owners.length <= 1) {
+        const { members } = await adapter.listMembers({
+          organizationId: ctx.body.organizationId,
+          limit: 2,
+          filter: { field: "role", operator: "contains", value: creatorRole },
+        });
+
+				if (members.length <= 1) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
@@ -1223,12 +1215,14 @@ export const deactivateMember = <O extends OrganizationOptions>(option: O) =>
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const roles = toBeDeactivatedMember.role.split(",");
 			if (roles.includes(creatorRole)) {
-				const { members } = await adapter.listMembers({
-					organizationId,
-				});
-				const activeOwners = members.filter((m) => {
-					const memberRoles = m.role.split(",");
-					return memberRoles.includes(creatorRole) && m.active !== false;
+				const activeOwners = await ctx.context.adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{ field: "organizationId", value: organizationId },
+						{ field: "role", operator: "contains", value: creatorRole },
+						{ field: "active", operator: "ne", value: false },
+					],
+					limit: 2,
 				});
 				if (activeOwners.length <= 1) {
 					throw APIError.from(
