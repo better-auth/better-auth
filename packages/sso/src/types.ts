@@ -1,6 +1,15 @@
 import type { Awaitable, OAuth2Tokens, User } from "better-auth";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
+export interface Organization {
+	id: string;
+	name: string;
+	slug: string;
+	logo?: string | null;
+	metadata?: Record<string, any> | null;
+	createdAt: Date;
+}
+
 export interface OIDCMapping {
 	id?: string | undefined;
 	email?: string | undefined;
@@ -182,6 +191,60 @@ export interface SSOOptions {
 					 */
 					provider: SSOProvider<SSOOptions>;
 				}) => Promise<"member" | "admin">;
+				/**
+				 * Custom function to provide additional member data when auto-provisioning
+				 * organization members via SSO.
+				 *
+				 * Use this to populate required fields on the member table (like "name")
+				 * or any additional fields defined in the organization plugin's member schema.
+				 *
+				 * @example
+				 * ```ts
+				 * getMemberData: async ({ user, userInfo, defaultData }) => {
+				 *   return {
+				 *     ...defaultData,
+				 *     name: userInfo.name || user.name,
+				 *     department: userInfo.department,
+				 *   };
+				 * }
+				 * ```
+				 */
+				getMemberData?: (data: {
+					/**
+					 * The user object from the database
+					 */
+					user: User & Record<string, any>;
+					/**
+					 * The raw user info/attributes from the SSO provider
+					 * (SAML attributes or OIDC claims)
+					 */
+					userInfo: Record<string, any>;
+					/**
+					 * The OAuth2 tokens from the provider (OIDC only)
+					 */
+					token?: OAuth2Tokens;
+					/**
+					 * The SSO provider configuration
+					 */
+					provider: SSOProvider<SSOOptions>;
+					/**
+					 * The organization the user is being added to
+					 */
+					organization: Organization & Record<string, any>;
+					/**
+					 * The default member data that will be used if this function
+					 * is not provided or returns undefined
+					 */
+					defaultData: {
+						organizationId: string;
+						userId: string;
+						role: string;
+						createdAt: Date;
+					};
+				}) =>
+					| Promise<Record<string, any> | undefined>
+					| Record<string, any>
+					| undefined;
 		  }
 		| undefined;
 	/**
