@@ -8,7 +8,7 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseUserOutput } from "../../db/schema";
+import { parseSessionOutput, parseUserOutput } from "../../db";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
@@ -39,6 +39,7 @@ export interface MagicLinkOptions {
 			email: string;
 			url: string;
 			token: string;
+			metadata?: Record<string, any>;
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
@@ -110,6 +111,12 @@ const signInMagicLinkBodySchema = z.object({
 		.string()
 		.meta({
 			description: "URL to redirect after error.",
+		})
+		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "Additional metadata to pass to sendMagicLink.",
 		})
 		.optional(),
 });
@@ -208,7 +215,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, metadata } = ctx.body;
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
@@ -243,6 +250,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							email,
 							url: url.toString(),
 							token: verificationToken,
+							metadata,
 						},
 						ctx,
 					);
@@ -429,6 +437,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						return ctx.json({
 							token: session.token,
 							user: parseUserOutput(ctx.context.options, user),
+							session: parseSessionOutput(ctx.context.options, session),
 						});
 					}
 					if (isNewUser) {

@@ -1,6 +1,6 @@
 ---
 title: Hooks
-description: Better Auth Hooks let you customize BetterAuth's behavior
+description: Learn how to use before and after hooks to customize endpoint behavior, modify requests and responses, handle cookies, throw errors, access auth context, and run background tasks.
 ---
 
 Hooks in Better Auth let you "hook into" the lifecycle and execute custom logic. They provide a way to customize Better Auth's behavior without writing a full plugin. 
@@ -137,8 +137,8 @@ const hook = createAuthMiddleware(async (ctx) => {
 
 #### Cookies
 
-- Set cookies: `ctx.setCookies` or `ctx.setSignedCookie`.
-- Get cookies: `ctx.getCookies` or `ctx.getSignedCookie`.
+- Set cookies: `ctx.setCookie` or `ctx.setSignedCookie`.
+- Get cookies: `ctx.getCookie` or `ctx.getSignedCookie`.
 
 Example:
 
@@ -146,12 +146,12 @@ Example:
 import { createAuthMiddleware } from "better-auth/api";
 
 const hook = createAuthMiddleware(async (ctx) => {
-    ctx.setCookies("my-cookie", "value");
+    ctx.setCookie("my-cookie", "value");
     await ctx.setSignedCookie("my-signed-cookie", "value", ctx.context.secret, {
         maxAge: 1000,
     });
 
-    const cookie = ctx.getCookies("my-cookie");
+    const cookie = ctx.getCookie("my-cookie");
     const signedCookie = await ctx.getSignedCookie("my-signed-cookie");
 });
 ```

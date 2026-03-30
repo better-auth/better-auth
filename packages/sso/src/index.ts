@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
-import saml from "samlify";
+import * as saml from "samlify";
 import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
@@ -140,14 +140,14 @@ export function sso<
 	id: "sso";
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
 	schema: NonNullable<BetterAuthPlugin["schema"]>;
-	options: O;
+	options: NoInfer<O>;
 };
 export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O>;
-	options: O;
+	options: NoInfer<O>;
 };
 
 export function sso<O extends SSOOptions>(

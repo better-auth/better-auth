@@ -151,6 +151,24 @@ const authClient = createAuthClient({
 });
 ```
 
+Using the `twoFactorPage` config:
+
+```ts title="sign-in.ts"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
+
+const authClient = createAuthClient({
+    plugins: [
+        twoFactorClient({
+            twoFactorPage: "/two-factor", // the page to redirect if a user needs to verify their 2nd factor
+        }),
+    ],
+});
+```
+
+<Callout type="warn">
+Using the `twoFactorPage` option will cause a full page reload when redirecting users to the two-factor authentication page. If you want to avoid page reloads, consider using the `onTwoFactorRedirect` callback instead to handle the redirect programmatically within your application.
+</Callout>
 
 
 
@@ -482,8 +500,8 @@ Table: `twoFactor`
     fields={[
         { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
         { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
-        { name: "secret", type: "string", description: "The secret used to generate the TOTP code.", isOptional: true },
-        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email.", isOptional: true },
+        { name: "secret", type: "string", description: "The secret used to generate the TOTP code." },
+        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
     ]}
 />
 
@@ -534,7 +552,7 @@ these are options for OTP.
         default: 3,
     },
     storeOTP: {
-        description: "How to store the otp in the database. Whether to store it as plain text, encrypted or hashed. You can also provide a custom encryptor or hasher.",
+        description: "How to transform the stored OTP value, whether plain text, encrypted, or hashed. You can also provide a custom encryptor or hasher. The storage backend is controlled by the global verification config, so secondary storage can be used instead of the database.",
         type: "string",
         default: "plain",
     },

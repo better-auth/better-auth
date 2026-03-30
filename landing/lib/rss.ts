@@ -1,6 +1,6 @@
 import { Feed } from "feed";
+import { baseUrl } from "./metadata";
 import { blogs } from "./source";
-import { baseUrl } from "./utils";
 
 export function getRSS() {
 	const feed = new Feed({
@@ -25,10 +25,12 @@ export function getRSS() {
 			title: page.data.title,
 			description: page.data.description,
 			image: page.data.image
-				? `${baseUrl}${page.data.image.startsWith("/") ? page.data.image.slice(1) : page.data.image}`
+				? page.data.image.startsWith("/")
+					? `${baseUrl}${page.data.image.slice(1)}`
+					: page.data.image
 				: undefined,
-			link: `${baseUrl}${url.startsWith("/") ? url.slice(1) : url}`,
-			date: new Date(page.data.lastModified ?? page.data.date),
+			link: url.startsWith("/") ? `${baseUrl}${url.slice(1)}` : url,
+			date: new Date(page.data.date),
 			author: page.data.author
 				? [
 						{

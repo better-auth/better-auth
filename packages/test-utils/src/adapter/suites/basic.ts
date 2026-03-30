@@ -5,7 +5,6 @@ import type {
 	User,
 	Verification,
 } from "@better-auth/core/db";
-import { createTestSuite } from "@better-auth/test-utils/adapter";
 import type {
 	Invitation,
 	Member,
@@ -14,6 +13,7 @@ import type {
 } from "better-auth/plugins/organization";
 import { organization } from "better-auth/plugins/organization";
 import { expect } from "vitest";
+import { createTestSuite } from "../create-test-suite";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.
@@ -3173,6 +3173,171 @@ export const getNormalTestSuiteTests = (
 				expect(result!.name).toBe("Updated Name");
 				expect(result!.email).toBe(user.email);
 				expect(result!.id).toBe(user.id);
+			},
+
+		"findMany - eq operator with null value (single condition) should use IS NULL":
+			async () => {
+				const withNull = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")), image: null },
+					forceAllowId: true,
+				});
+				const withImage = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						image: "https://example.com/avatar.png",
+					},
+					forceAllowId: true,
+				});
+
+				const nullResult = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "image", operator: "eq", value: null }],
+				});
+				const nullIds = nullResult.map((u) => u.id);
+				expect(nullIds).toContain(withNull.id);
+				expect(nullIds).not.toContain(withImage.id);
+
+				const notNullResult = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "image", operator: "ne", value: null }],
+				});
+				const notNullIds = notNullResult.map((u) => u.id);
+				expect(notNullIds).not.toContain(withNull.id);
+				expect(notNullIds).toContain(withImage.id);
+			},
+
+		"findMany - eq and ne operators with null value in AND group should use IS NULL / IS NOT NULL":
+			async () => {
+				const nullVerified = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						image: null,
+						emailVerified: true,
+					},
+					forceAllowId: true,
+				});
+				const nullUnverified = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						image: null,
+						emailVerified: false,
+					},
+					forceAllowId: true,
+				});
+				const imageVerified = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						image: "https://example.com/avatar.png",
+						emailVerified: true,
+					},
+					forceAllowId: true,
+				});
+
+				// image IS NULL AND emailVerified = true → only nullVerified
+				const eqResult = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{ field: "image", operator: "eq", value: null, connector: "AND" },
+						{ field: "emailVerified", value: true, connector: "AND" },
+					],
+				});
+				const eqIds = eqResult.map((u) => u.id);
+				expect(eqIds).toContain(nullVerified.id);
+				expect(eqIds).not.toContain(nullUnverified.id);
+				expect(eqIds).not.toContain(imageVerified.id);
+
+				// image IS NOT NULL AND emailVerified = true → only imageVerified
+				const neResult = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{ field: "image", operator: "ne", value: null, connector: "AND" },
+						{ field: "emailVerified", value: true, connector: "AND" },
+					],
+				});
+				const neIds = neResult.map((u) => u.id);
+				expect(neIds).not.toContain(nullVerified.id);
+				expect(neIds).not.toContain(nullUnverified.id);
+				expect(neIds).toContain(imageVerified.id);
+			},
+
+		"findMany - eq and ne operators with null value in OR group should use IS NULL / IS NOT NULL":
+			async () => {
+				const withNull = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")), image: null },
+					forceAllowId: true,
+				});
+				const targetImage = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						image: "https://example.com/target.png",
+					},
+					forceAllowId: true,
+				});
+				const otherImage = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						image: "https://example.com/other.png",
+					},
+					forceAllowId: true,
+				});
+
+				// image IS NULL OR email = targetImage.email → withNull + targetImage
+				const eqResult = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{ field: "image", operator: "eq", value: null, connector: "OR" },
+						{ field: "email", value: targetImage.email, connector: "OR" },
+					],
+				});
+				const eqIds = eqResult.map((u) => u.id);
+				expect(eqIds).toContain(withNull.id);
+				expect(eqIds).toContain(targetImage.id);
+				expect(eqIds).not.toContain(otherImage.id);
+
+				// image IS NOT NULL OR email = withNull.email → targetImage + otherImage + withNull (by email)
+				const neResult = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{ field: "image", operator: "ne", value: null, connector: "OR" },
+						{ field: "email", value: withNull.email, connector: "OR" },
+					],
+				});
+				const neIds = neResult.map((u) => u.id);
+				expect(neIds).toContain(withNull.id); // matched by email OR clause
+				expect(neIds).toContain(targetImage.id);
+				expect(neIds).toContain(otherImage.id);
+			},
+
+		"update - should return updated record when where condition uses null value":
+			async () => {
+				const withNull = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")), image: null },
+					forceAllowId: true,
+				});
+
+				// Update WHERE image IS NULL AND id = withNull.id
+				const result = await adapter.update<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: withNull.id },
+						{ field: "image", operator: "eq", value: null },
+					],
+					update: { name: "null-where-updated" },
+				});
+
+				// On MySQL the re-fetch after UPDATE must use IS NULL, not = NULL
+				expect(result).toBeDefined();
+				expect(result!.id).toBe(withNull.id);
+				expect(result!.name).toBe("null-where-updated");
 			},
 	};
 };

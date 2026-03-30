@@ -1,5 +1,7 @@
 import Link from "next/link";
+import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { createMetadata } from "@/lib/metadata";
 import { ChangelogContent } from "./changelog-content";
 
 export const dynamic = "force-static";
@@ -51,24 +53,33 @@ export default async function ChangelogPage() {
 	);
 	const releases: GitHubRelease[] = await res.json();
 
+	const EXPANDABLE_LINE_THRESHOLD = 15;
+
 	const messages = releases
 		?.filter((release) => !release.prerelease)
-		.map((release) => ({
-			tag: release.tag_name,
-			title: release.name,
-			content: getContent(release.body),
-			date: new Date(release.published_at).toLocaleDateString("en-US", {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-			}),
-			url: release.html_url,
-		}));
+		.map((release) => {
+			const content = getContent(release.body);
+			const lineCount = content
+				.split("\n")
+				.filter((l) => l.trim().length > 0).length;
+			return {
+				tag: release.tag_name,
+				title: release.name,
+				content,
+				date: new Date(release.published_at).toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				}),
+				url: release.html_url,
+				expandable: lineCount > EXPANDABLE_LINE_THRESHOLD,
+			};
+		});
 
 	return (
-		<div className="flex flex-col lg:flex-row lg:h-dvh lg:overflow-hidden min-h-dvh pt-14 lg:pt-0">
-			{/* Left panel — fixed, no scroll */}
-			<div className="relative w-full lg:w-[30%] lg:h-full shrink-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+		<div className="flex flex-col lg:flex-row min-h-dvh pt-14 lg:pt-0">
+			{/* Left panel — sticky */}
+			<div className="hidden lg:block relative w-full lg:w-[30%] lg:h-dvh shrink-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 				<HalftoneBackground />
 				<div className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full">
 					<div className="space-y-1">
@@ -78,7 +89,7 @@ export default async function ChangelogPage() {
 								width="0.9em"
 								height="0.9em"
 								viewBox="0 0 24 24"
-								className="text-neutral-600 dark:text-neutral-100"
+								className="text-foreground/60"
 								aria-hidden="true"
 							>
 								<path
@@ -86,24 +97,22 @@ export default async function ChangelogPage() {
 									d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89l.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7s-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54l.72-1.21l-3.5-2.08V8H12z"
 								/>
 							</svg>
-							<span className="text-sm text-neutral-600 dark:text-neutral-100">
-								Changelog
-							</span>
+							<span className="text-sm text-foreground/60">Changelog</span>
 						</div>
-						<h1 className="text-lg md:text-xl lg:text-2xl xl:text-3xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+						<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 							All changes, fixes, and updates
 						</h1>
-						<p className="text-[11px] text-foreground/40 leading-relaxed max-w-[240px]">
+						<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[240px]">
 							Every release shipped to Better Auth, straight from GitHub.
 						</p>
 					</div>
 
 					<div className="border-t border-foreground/10 pt-4 mt-5 space-y-0">
 						<div className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06]">
-							<span className="text-[11px] text-foreground/40 uppercase tracking-wider">
+							<span className="text-xs text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
 								Latest
 							</span>
-							<span className="text-[11px] text-foreground/70 font-mono">
+							<span className="text-xs text-foreground/85 dark:text-foreground/75 font-mono">
 								{messages?.[0]?.tag ?? "\u2014"}
 							</span>
 						</div>
@@ -114,7 +123,7 @@ export default async function ChangelogPage() {
 							href="https://github.com/better-auth/better-auth/releases"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="inline-flex items-center gap-1.5 text-[12px] text-foreground/40 hover:text-foreground/70 font-mono uppercase tracking-wider transition-colors"
+							className="inline-flex items-center gap-1.5 text-[12px] text-foreground/70 dark:text-foreground/50 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -132,23 +141,53 @@ export default async function ChangelogPage() {
 				</div>
 			</div>
 
-			{/* Right panel — releases (scrollable) */}
-			<div className="w-full lg:w-[70%] lg:overflow-y-auto flex flex-col">
-				<div className="px-5 sm:px-6 lg:px-8 pt-8 lg:pt-16">
-					<h2 className="text-[15px] font-mono text-neutral-800 dark:text-neutral-200 pb-3 mb-5 border-b border-foreground/[0.08]">
-						RELEASES
+			{/* Right panel — releases */}
+			<div className="w-full lg:w-[70%] flex flex-col">
+				{/* Mobile header */}
+				<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden px-5 sm:px-6">
+					<HalftoneBackground />
+					<div className="relative space-y-2 py-16">
+						<div className="flex items-center gap-1.5">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="0.9em"
+								height="0.9em"
+								viewBox="0 0 24 24"
+								className="text-foreground/60"
+								aria-hidden="true"
+							>
+								<path
+									fill="currentColor"
+									d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89l.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7s-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54l.72-1.21l-3.5-2.08V8H12z"
+								/>
+							</svg>
+							<span className="text-sm text-foreground/60">Changelog</span>
+						</div>
+						<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+							All changes, fixes, and updates
+						</h1>
+						<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+							Every release shipped to Better Auth, straight from GitHub.
+						</p>
+					</div>
+				</div>
+
+				<div className="px-5 pt-5 lg:p-8 lg:pt-20">
+					<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100">
+						CHANGELOG
+						<span className="flex-1 h-px bg-foreground/15" />
 					</h2>
 				</div>
 
 				<ChangelogContent messages={messages ?? []} />
 
-				<div className="h-16" />
+				<Footer />
 			</div>
 		</div>
 	);
 }
 
-export const metadata = {
-	title: "Changelog - Better Auth",
+export const metadata = createMetadata({
+	title: "Changelog",
 	description: "Latest changes, fixes, and updates to Better Auth",
-};
+});

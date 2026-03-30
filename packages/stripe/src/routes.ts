@@ -347,7 +347,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							let stripeCustomer: Stripe.Customer | undefined;
 							try {
 								const result = await client.customers.search({
-									query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
+									query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}" AND metadata["${customerMetadata.keys.customerType}"]:"organization"`,
 									limit: 1,
 								});
 								stripeCustomer = result.data[0];
@@ -362,7 +362,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									if (
 										customer.metadata?.[
 											customerMetadata.keys.organizationId
-										] === org.id
+										] === org.id &&
+										customer.metadata?.[customerMetadata.keys.customerType] ===
+											"organization"
 									) {
 										stripeCustomer = customer;
 										break;
@@ -908,7 +910,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					await client.subscriptions
 						.update(activeSubscription.id, {
 							items: itemUpdates,
-							proration_behavior: "create_prorations",
+							proration_behavior: plan.prorationBehavior ?? "create_prorations",
 						})
 						.catch(async (e) => {
 							throw ctx.error("BAD_REQUEST", {
@@ -1611,10 +1613,14 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 					const plan = plans.find(
 						(p) => p.name.toLowerCase() === sub.plan.toLowerCase(),
 					);
+					const priceId =
+						sub.billingInterval === "year"
+							? (plan?.annualDiscountPriceId ?? plan?.priceId)
+							: plan?.priceId;
 					return {
 						...sub,
 						limits: plan?.limits,
-						priceId: plan?.priceId,
+						priceId,
 					};
 				})
 				.filter((sub) => isActiveOrTrialing(sub));
@@ -1640,7 +1646,7 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			use: [originCheck((ctx) => ctx.query.callbackURL)],
 		},
 		async (ctx) => {
-			const callbackURL = ctx.query?.callbackURL || "/";
+			let callbackURL = ctx.query?.callbackURL || "/";
 
 			const session = await getSessionFromCtx<User & WithStripeCustomerId>(ctx);
 			if (!session) {
@@ -1652,6 +1658,15 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			if (!ctx.query?.checkoutSessionId) {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
+
+			/**
+			 * Replace the Stripe {CHECKOUT_SESSION_ID} template variable in callbackURL.
+			 * @see https://docs.stripe.com/payments/checkout/custom-success-page?payment-ui=stripe-hosted#modify-the-success-url
+			 */
+			callbackURL = callbackURL.replaceAll(
+				"{CHECKOUT_SESSION_ID}",
+				ctx.query.checkoutSessionId,
+			);
 
 			// Resolve subscriptionId from Stripe checkout session metadata.
 			// The metadata is set server-side when creating the checkout session,

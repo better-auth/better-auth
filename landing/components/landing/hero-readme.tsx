@@ -32,11 +32,7 @@ const cliCommands = [
 
 const mcpCommands = [
 	{ name: "Cursor", command: "npx auth mcp --cursor" },
-	{
-		name: "Claude Code",
-		command:
-			"claude mcp add --transport http better-auth https://mcp.inkeep.com/better-auth/mcp",
-	},
+	{ name: "Claude Code", command: "npx auth mcp --claude-code" },
 	{ name: "Open Code", command: "npx auth mcp --open-code" },
 	{ name: "Manual", command: "npx auth mcp --manual" },
 ];
@@ -1216,10 +1212,18 @@ function SentinelSection() {
 
 const EMPTY_CONTRIBUTORS: ContributorInfo[] = [];
 
+type CommunityHeroStats = {
+	npmDownloads: number;
+	githubStars: number;
+	contributors: number;
+};
+
 function ContributorsSection({
 	contributors = EMPTY_CONTRIBUTORS,
+	contributorCount,
 }: {
 	contributors: ContributorInfo[];
+	contributorCount: number;
 }) {
 	if (contributors.length === 0) return null;
 
@@ -1245,7 +1249,7 @@ function ContributorsSection({
 			<p className="text-[13px] text-foreground/50 dark:text-foreground/40 mb-5 leading-relaxed">
 				Built by a community of{" "}
 				<span className="text-foreground/70 dark:text-foreground/60 font-medium tabular-nums">
-					746+
+					{contributorCount}+
 				</span>{" "}
 				contributors.
 			</p>
@@ -1335,11 +1339,7 @@ const footerLinks = [
 	{ label: "Changelog", href: "/changelog" },
 ];
 
-function ReadmeFooter({
-	stats,
-}: {
-	stats: { npmDownloads: number; githubStars: number };
-}) {
+function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 	return (
 		<div className="relative mt-10 pt-8 pb-0 overflow-hidden">
 			{/* Watermark logo */}
@@ -1516,31 +1516,32 @@ export function HeroReadMe({
 	stats,
 }: {
 	contributors: ContributorInfo[];
-	stats: { npmDownloads: number; githubStars: number };
+	stats: CommunityHeroStats;
 }) {
 	const [socialHovered, setSocialHovered] = useState(false);
 
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 12 }}
-			animate={{ opacity: 1, y: 0 }}
+			initial={{ opacity: 0 }}
+			animate={{ opacity: 1 }}
 			transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
 			className="flex flex-col w-full"
 		>
 			{/* Markdown content */}
-			<div className="flex-1 overflow-y-auto no-scrollbar">
-				<div className="p-5 lg:p-5 pt-8 lg:pt-16">
+			<div className="flex-1 overflow-x-hidden no-scrollbar">
+				<div className="p-5 lg:px-8 lg:pt-20">
 					<motion.article
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						transition={{ duration: 0.4, delay: 0.3 }}
-						className="overflow-y-auto overflow-x-hidden no-scrollbar pt-[30px] pb-0"
+						className="overflow-x-hidden no-scrollbar pb-0"
 					>
-						<h1 className="flex items-center gap-2 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 pb-2 sm:pb-3 mb-4 sm:mb-5 border-b border-foreground/15">
+						<h1 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
 							README
+							<span className="flex-1 h-px bg-foreground/15" />
 						</h1>
 
-						<p className="text-sm sm:text-[14px] text-neutral-600 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
+						<p className="text-sm sm:text-[15px] text-foreground/80 mb-6 sm:mb-8 leading-relaxed">
 							Better Auth is an authentication framework. It provides a
 							comprehensive set of features out of the box and includes a Plugin
 							ecosystem that simplifies adding advanced functionalities and
@@ -1565,7 +1566,7 @@ export function HeroReadMe({
 							<div className="flex-1 border-t border-foreground/10"></div>
 						</div>
 
-						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/15 overflow-hidden">
+						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/[0.08] overflow-hidden">
 							{[
 								{
 									label: "Framework Agnostic",
@@ -1654,7 +1655,7 @@ export function HeroReadMe({
 											}
 										}}
 										className={cn(
-											"group/card relative p-4 lg:p-5 border-foreground/[0.15] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
+											"group/card relative p-4 lg:p-5 border-foreground/[0.08] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
 											// Bottom border: all except last; 3-col last row starts at 6
 											i < 8 && "border-b",
 											i >= 6 && "md:border-b-0",
@@ -2522,7 +2523,10 @@ export function HeroReadMe({
 							</div>
 						</div>
 
-						<ContributorsSection contributors={contributors} />
+						<ContributorsSection
+							contributors={contributors}
+							contributorCount={stats.contributors}
+						/>
 
 						<ReadmeFooter stats={stats} />
 					</motion.article>

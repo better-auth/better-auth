@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 import type { CommunityStats } from "@/lib/community-stats";
 
@@ -205,7 +206,7 @@ const platforms = [
 function CommunityHero({ stats }: { stats: CommunityStats }) {
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 12 }}
+			initial={false}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.5, ease: "easeOut" }}
 			className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full"
@@ -216,12 +217,12 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						<UsersIcon className="w-4 h-4 text-foreground/60" />
 						<span className="text-sm text-foreground/60">Community</span>
 					</div>
-					<h1 className="text-lg md:text-xl lg:text-2xl text-foreground tracking-tight leading-tight">
+					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 						Join the community,
 						<br />
 						<span className="text-foreground/50">build together.</span>
 					</h1>
-					<p className="text-[11px] text-foreground/40 leading-relaxed max-w-[260px]">
+					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
 						Connect with developers building with Better Auth.
 					</p>
 				</div>
@@ -229,18 +230,18 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 				{/* Quick stats summary */}
 				<div className="flex items-stretch gap-0 border border-foreground/[0.08]">
 					<div className="flex-1 px-3 py-2.5 text-center border-r border-foreground/[0.08]">
-						<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/30 mb-1">
+						<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/50 dark:text-foreground/45 mb-1">
 							NPM
 						</p>
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
 							{formatNumber(stats.npmDownloads)}
 							<span className="text-[9px] text-foreground/50 font-mono">
-								/mo
+								/year
 							</span>
 						</p>
 					</div>
 					<div className="flex-1 px-3 py-2.5 text-center border-r border-foreground/[0.08] bg-foreground/[0.03]">
-						<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/30 mb-1">
+						<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/50 dark:text-foreground/45 mb-1">
 							Stars
 						</p>
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
@@ -248,7 +249,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						</p>
 					</div>
 					<div className="flex-1 px-3 py-2.5 text-center">
-						<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/30 mb-1">
+						<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/50 dark:text-foreground/45 mb-1">
 							Discord
 						</p>
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
@@ -266,7 +267,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 					].map((item, i) => (
 						<motion.div
 							key={item.label}
-							initial={{ opacity: 0, x: -8 }}
+							initial={false}
 							animate={{ opacity: 1, x: 0 }}
 							transition={{
 								duration: 0.25,
@@ -275,27 +276,14 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 							}}
 							className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-							<span className="text-[11px] text-foreground/40 uppercase tracking-wider">
+							<span className="text-xs text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
 								{item.label}
 							</span>
-							<span className="text-[11px] text-foreground/70 font-mono">
+							<span className="text-xs text-foreground/85 dark:text-foreground/75 font-mono">
 								{item.value}
 							</span>
 						</motion.div>
 					))}
-				</div>
-
-				{/* CTA */}
-				<div className="flex items-center gap-3 pt-1">
-					<Link
-						href="https://github.com/better-auth/better-auth"
-						target="_blank"
-						rel="noreferrer"
-						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-colors"
-					>
-						<GitHubIcon className="w-4 h-4" />
-						<span className="ml-1">Star on GitHub</span>
-					</Link>
 				</div>
 			</div>
 		</motion.div>
@@ -317,7 +305,7 @@ function StatCard({
 }) {
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 10 }}
+			initial={false}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.3, delay: 0.1 + index * 0.06, ease: "easeOut" }}
 			className="relative border border-dashed border-foreground/[0.08] hover:border-foreground/[0.14] transition-all duration-300 group"
@@ -329,13 +317,13 @@ function StatCard({
 						{label}
 					</span>
 				</div>
-				<div className="flex items-baseline gap-2">
+				<div>
 					<span className="text-4xl font-light text-foreground tabular-nums">
 						<AnimatedCounter value={value} />
 					</span>
-					<span className="text-[10px] text-foreground/30 font-mono">
+					<p className="text-[10px] text-foreground/40 font-mono mt-1">
 						{subtext}
-					</span>
+					</p>
 				</div>
 			</div>
 		</motion.div>
@@ -353,7 +341,7 @@ function PlatformCard({
 
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 10 }}
+			initial={false}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.3, delay: 0.2 + index * 0.06, ease: "easeOut" }}
 			className="relative border border-dashed border-foreground/[0.08] hover:border-foreground/[0.14] transition-all duration-300 group"
@@ -375,7 +363,7 @@ function PlatformCard({
 						<span className="text-[9px] text-foreground/30 uppercase tracking-widest font-mono">
 							{platform.label}
 						</span>
-						<span className="text-[11px] text-foreground/60 font-mono">
+						<span className="text-xs text-foreground/60 font-mono">
 							{platform.members}
 						</span>
 					</div>
@@ -388,7 +376,7 @@ function PlatformCard({
 					rel="noreferrer"
 					className="block"
 				>
-					<div className="w-full py-2.5 text-center border flex items-center justify-center border-dashed border-foreground/[0.12] text-foreground/50 hover:text-foreground/80 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all cursor-pointer">
+					<div className="w-full py-2.5 text-center border flex items-center justify-center border-dashed border-foreground/20 text-foreground/70 hover:text-foreground/90 hover:border-foreground/30 hover:bg-foreground/5 transition-all cursor-pointer">
 						<span className="font-mono text-[10px] uppercase tracking-widest">
 							{platform.cta}
 						</span>
@@ -401,11 +389,11 @@ function PlatformCard({
 
 export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 	return (
-		<div className="relative min-h-dvh overflow-x-hidden pt-14 lg:h-dvh lg:overflow-hidden lg:pt-0">
-			<div className="relative text-foreground lg:h-full">
-				<div className="flex flex-col lg:h-full lg:flex-row">
+		<div className="relative min-h-dvh pt-14 lg:pt-0">
+			<div className="relative text-foreground">
+				<div className="flex flex-col lg:flex-row">
 					{/* Left side — Community hero */}
-					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-full border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-hidden px-5 sm:px-6 lg:px-10">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -413,21 +401,41 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 					</div>
 
 					{/* Right side — Stats & platforms */}
-					<div className="relative w-full lg:w-[70%] lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
-						<div className="p-5 sm:p-6 lg:p-8 pt-8 lg:pt-16 pb-32 space-y-8">
+					<div className="relative w-full lg:w-[70%] overflow-x-hidden no-scrollbar">
+						<div className="px-5 lg:p-8 lg:pt-20 space-y-8">
 							{/* Mobile header */}
-							<div className="flex lg:hidden items-center gap-1.5">
-								<UsersIcon className="w-4 h-4 text-foreground/60" />
-								<span className="text-sm text-foreground/60">Community</span>
+							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
+								<HalftoneBackground />
+								<div className="relative space-y-2 py-16">
+									<div className="flex items-center gap-1.5">
+										<UsersIcon className="w-4 h-4 text-foreground/60" />
+										<span className="text-sm text-foreground/60">
+											Community
+										</span>
+									</div>
+									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+										Join the community,
+										<br />
+										<span className="text-foreground/50">build together.</span>
+									</h1>
+									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+										Connect with developers building with Better Auth.
+									</p>
+								</div>
 							</div>
+
+							<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
+								COMMUNITY
+								<span className="flex-1 h-px bg-foreground/15" />
+							</h2>
 
 							{/* Section: Statistics */}
 							<motion.div
-								initial={{ opacity: 0, y: 6 }}
+								initial={false}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-5">
+								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
 									# In Numbers
 								</p>
 
@@ -465,11 +473,11 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 
 							{/* Section: Platforms */}
 							<motion.div
-								initial={{ opacity: 0 }}
+								initial={false}
 								animate={{ opacity: 1 }}
 								transition={{ duration: 0.4, delay: 0.25 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-5">
+								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
 									# Join Us On
 								</p>
 
@@ -486,7 +494,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 
 							{/* Merch */}
 							<motion.div
-								initial={{ opacity: 0, y: 6 }}
+								initial={false}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.35 }}
 							>
@@ -494,7 +502,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 									href="https://better-merch.dev"
 									target="_blank"
 									rel="noreferrer"
-									className="flex items-center justify-between w-full px-5 py-4 border border-dashed border-foreground/[0.08] hover:border-foreground/[0.14] hover:bg-foreground/[0.02] transition-all group"
+									className="flex items-center justify-between w-full px-5 py-4 border border-dashed border-foreground/20 hover:border-foreground/30 hover:bg-foreground/5 transition-all group"
 								>
 									<div className="flex items-center gap-2.5">
 										<svg
@@ -512,7 +520,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 											<line x1="3" y1="6" x2="21" y2="6" />
 											<path d="M16 10a4 4 0 0 1-8 0" />
 										</svg>
-										<span className="text-[11px] font-mono uppercase tracking-widest text-foreground/50 group-hover:text-foreground/70 transition-colors">
+										<span className="text-xs font-mono uppercase tracking-widest text-foreground/50 group-hover:text-foreground/70 transition-colors">
 											Shop our merch collection
 										</span>
 									</div>
@@ -533,6 +541,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 								</Link>
 							</motion.div>
 						</div>
+						<Footer />
 					</div>
 				</div>
 			</div>

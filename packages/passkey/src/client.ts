@@ -13,6 +13,12 @@ import {
 	startRegistration,
 	WebAuthnError,
 } from "@simplewebauthn/browser";
+import type {
+	AuthenticationExtensionsClientInputs,
+	AuthenticationExtensionsClientOutputs,
+	AuthenticationResponseJSON,
+	RegistrationResponseJSON,
+} from "@simplewebauthn/server";
 import { useAuthQuery } from "better-auth/client";
 import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
@@ -34,6 +40,8 @@ export const getPasskeyActions = (
 		opts?:
 			| {
 					autoFill?: boolean;
+					extensions?: AuthenticationExtensionsClientInputs;
+					returnWebAuthnResponse?: boolean;
 					fetchOptions?: ClientFetchOption;
 			  }
 			| undefined,
@@ -50,16 +58,27 @@ export const getPasskeyActions = (
 			return response;
 		}
 		try {
+			const mergedExtensions =
+				response.data.extensions || opts?.extensions
+					? {
+							...(response.data.extensions || {}),
+							...(opts?.extensions || {}),
+						}
+					: undefined;
 			const res = await startAuthentication({
-				optionsJSON: response.data,
+				optionsJSON: {
+					...response.data,
+					extensions: mergedExtensions,
+				},
 				useBrowserAutofill: opts?.autoFill,
 			});
+			const { clientExtensionResults, ...responseBody } = res;
 			const verified = await $fetch<{
 				session: Session;
 				user: User;
 			}>("/passkey/verify-authentication", {
 				body: {
-					response: res,
+					response: responseBody,
 				},
 				...opts?.fetchOptions,
 				...options,
@@ -69,6 +88,17 @@ export const getPasskeyActions = (
 			$listPasskeys.set(Math.random());
 			$store.notify("$sessionSignal");
 
+			if (opts?.returnWebAuthnResponse) {
+				return {
+					...verified,
+					webauthn: {
+						response: res as AuthenticationResponseJSON,
+						clientExtensionResults:
+							clientExtensionResults as AuthenticationExtensionsClientOutputs,
+					},
+				};
+			}
+
 			return verified;
 		} catch (err) {
 			// Error logs ran on the front-end
@@ -77,7 +107,7 @@ export const getPasskeyActions = (
 				data: null,
 				error: {
 					code: "AUTH_CANCELLED",
-					message: "auth cancelled",
+					message: PASSKEY_ERROR_CODES.AUTH_CANCELLED.message,
 					status: 400,
 					statusText: "BAD_REQUEST",
 				},
@@ -100,6 +130,14 @@ export const getPasskeyActions = (
 					 * platform and cross-platform allowed, with platform preferred.
 					 */
 					authenticatorAttachment?: "platform" | "cross-platform";
+					/**
+					 * Optional context for passkey-first registration flows.
+					 */
+					context?: string | null;
+					/**
+					 * Optional WebAuthn extensions to include during registration.
+					 */
+					extensions?: AuthenticationExtensionsClientInputs;
 
 					/**
 					 * Try to silently create a passkey with the password manager that the user just signed
@@ -107,6 +145,10 @@ export const getPasskeyActions = (
 					 * @default false
 					 */
 					useAutoRegister?: boolean;
+					/**
+					 * Return WebAuthn response and extension results.
+					 */
+					returnWebAuthnResponse?: boolean;
 			  }
 			| undefined,
 		fetchOpts?: ClientFetchOption | undefined,
@@ -122,6 +164,9 @@ export const getPasskeyActions = (
 					...(opts?.name && {
 						name: opts.name,
 					}),
+					...(opts?.context && {
+						context: opts.context,
+					}),
 				},
 				throw: false,
 			},
@@ -131,15 +176,26 @@ export const getPasskeyActions = (
 			return options;
 		}
 		try {
+			const mergedExtensions =
+				options.data.extensions || opts?.extensions
+					? {
+							...(options.data.extensions || {}),
+							...(opts?.extensions || {}),
+						}
+					: undefined;
 			const res = await startRegistration({
-				optionsJSON: options.data,
+				optionsJSON: {
+					...options.data,
+					extensions: mergedExtensions,
+				},
 				useAutoRegister: opts?.useAutoRegister,
 			});
+			const { clientExtensionResults, ...responseBody } = res;
 			const verified = await $fetch<Passkey>("/passkey/verify-registration", {
 				...opts?.fetchOptions,
 				...fetchOpts,
 				body: {
-					response: res,
+					response: responseBody,
 					name: opts?.name,
 				},
 				method: "POST",
@@ -150,6 +206,16 @@ export const getPasskeyActions = (
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
+			if (opts?.returnWebAuthnResponse) {
+				return {
+					...verified,
+					webauthn: {
+						response: res as RegistrationResponseJSON,
+						clientExtensionResults:
+							clientExtensionResults as AuthenticationExtensionsClientOutputs,
+					},
+				};
+			}
 			return verified;
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
@@ -158,7 +224,7 @@ export const getPasskeyActions = (
 						data: null,
 						error: {
 							code: e.code,
-							message: "previously registered",
+							message: PASSKEY_ERROR_CODES.PREVIOUSLY_REGISTERED.message,
 							status: 400,
 							statusText: "BAD_REQUEST",
 						},
@@ -169,7 +235,7 @@ export const getPasskeyActions = (
 						data: null,
 						error: {
 							code: e.code,
-							message: "registration cancelled",
+							message: PASSKEY_ERROR_CODES.REGISTRATION_CANCELLED.message,
 							status: 400,
 							statusText: "BAD_REQUEST",
 						},
@@ -189,7 +255,10 @@ export const getPasskeyActions = (
 				data: null,
 				error: {
 					code: "UNKNOWN_ERROR",
-					message: e instanceof Error ? e.message : "unknown error",
+					message:
+						e instanceof Error
+							? e.message
+							: PASSKEY_ERROR_CODES.UNKNOWN_ERROR.message,
 					status: 500,
 					statusText: "INTERNAL_SERVER_ERROR",
 				},

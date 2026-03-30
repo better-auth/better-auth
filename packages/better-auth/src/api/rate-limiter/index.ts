@@ -169,7 +169,7 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		if (!ipWarningLogged) {
 			ctx.logger.warn(
 				"Rate limiting skipped: could not determine client IP address. " +
-					"If you're behind a reverse proxy, make sure to configure `trustedProxies` in your auth config.",
+					"Ensure your runtime forwards a trusted client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.",
 			);
 			ipWarningLogged = true;
 		}

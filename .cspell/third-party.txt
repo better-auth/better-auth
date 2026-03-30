@@ -40,3 +40,5 @@ vite
 electronjs
 wagmi
 tldts
+headimgurl
+encoredev

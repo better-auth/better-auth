@@ -86,6 +86,7 @@
 				"better-auth",
 				"c12",
 				"chalk",
+				"get-tsconfig",
 				"open",
 				"prettier",
 				"prompts",
@@ -115,6 +116,18 @@
 				"electron"
 			],
 			"project": ["src/**/*.ts", "test/**/*.ts"]
+		},
+		"packages/kysely-adapter": {
+			"ignoreDependencies": [
+				// optional peer dependency
+				"kysely"
+			]
+		},
+		"packages/mongo-adapter": {
+			"ignoreDependencies": [
+				// optional peer dependency
+				"mongodb"
+			]
 		},
 		"packages/stripe": {
 			"ignoreDependencies": [
