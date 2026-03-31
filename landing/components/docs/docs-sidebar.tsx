@@ -341,7 +341,12 @@ function SidebarSection({
 					);
 				}
 				if (item.external && item.href) {
-					return <SidebarExternalNavRow key={item.href} item={item} />;
+					return (
+						<SidebarExternalNavRow
+							key={item.href}
+							item={{ ...item, href: item.href }}
+						/>
+					);
 				}
 				if (!item.href) return null;
 				const hasSubpages = !!(item.subpages && item.subpages.length > 0);
