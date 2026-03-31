@@ -462,6 +462,7 @@ describe("base context creation", () => {
 
 		it("should not override explicit storeSessionInDatabase: false", async () => {
 			const res = await initBase({
+				database: new DatabaseSync(":memory:"),
 				secondaryStorage: {
 					get: vi.fn(),
 					set: vi.fn(),
