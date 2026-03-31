@@ -18,6 +18,7 @@ import {
 	electronTransferUser,
 } from "./routes";
 import type { ElectronOptions } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -109,6 +110,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 	return {
 		id: "electron",
+		version: PACKAGE_VERSION,
 		async onRequest(request, _ctx) {
 			if (opts.disableOriginOverride || request.headers.get("origin")) {
 				return;

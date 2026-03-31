@@ -22,6 +22,7 @@ import {
 	isProcessType,
 	parseProtocolScheme,
 } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 const { app, safeStorage, webContents } = electron;
 
@@ -91,6 +92,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 
 	return {
 		id: "electron",
+		version: PACKAGE_VERSION,
 		fetchPlugins: [
 			{
 				id: "electron",

@@ -3,6 +3,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -95,6 +96,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 
 	return {
 		id: "last-login-method",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			return {
 				options: {

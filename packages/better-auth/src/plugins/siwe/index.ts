@@ -8,6 +8,7 @@ import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import type { WalletAddressSchema } from "./schema";
 import { schema } from "./schema";
 import type {
@@ -46,6 +47,7 @@ const getSiweNonceBodySchema = z.object({
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
+		version: PACKAGE_VERSION,
 		schema: mergeSchema(schema, options?.schema) as WalletAddressSchema,
 		endpoints: {
 			getSiweNonce: createAuthEndpoint(

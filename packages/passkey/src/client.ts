@@ -25,6 +25,7 @@ import { atom } from "nanostores";
 import type { passkey } from ".";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
@@ -292,6 +293,7 @@ export const passkeyClient = () => {
 	const $listPasskeys = atom<any>();
 	return {
 		id: "passkey",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof passkey>,
 		getActions: ($fetch, $store) =>
 			getPasskeyActions($fetch, {

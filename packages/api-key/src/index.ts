@@ -13,6 +13,7 @@ import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
 import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
 import { getDate, getIp } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -162,6 +163,7 @@ export function apiKey(
 
 	return {
 		id: "api-key",
+		version: PACKAGE_VERSION,
 		$ERROR_CODES: API_KEY_ERROR_CODES,
 		hooks: {
 			before: [

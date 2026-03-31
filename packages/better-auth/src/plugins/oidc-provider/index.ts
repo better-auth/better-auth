@@ -21,6 +21,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import { HIDE_METADATA } from "../../utils";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
@@ -381,6 +382,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 	return {
 		id: "oidc-provider",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{

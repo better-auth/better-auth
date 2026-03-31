@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader } from "../cookies";
+import { PACKAGE_VERSION } from "../version";
 
 export function toNextJsHandler(
 	auth:
@@ -25,6 +26,7 @@ export function toNextJsHandler(
 export const nextCookies = () => {
 	return {
 		id: "next-cookies",
+		version: PACKAGE_VERSION,
 		hooks: {
 			before: [
 				{

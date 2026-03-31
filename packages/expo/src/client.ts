@@ -14,6 +14,7 @@ import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
+import { PACKAGE_VERSION } from "./version";
 
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
@@ -286,6 +287,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	}
 	return {
 		id: "expo",
+		version: PACKAGE_VERSION,
 		getActions(_, $store) {
 			store = $store;
 			return {

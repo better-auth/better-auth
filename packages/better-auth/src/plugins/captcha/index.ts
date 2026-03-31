@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getIp } from "../../utils/get-request-ip";
 import { middlewareResponse } from "../../utils/middleware-response";
+import { PACKAGE_VERSION } from "../../version";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
 import type { CaptchaOptions } from "./types";
@@ -20,6 +21,7 @@ export type * from "./types";
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
+		version: PACKAGE_VERSION,
 		$ERROR_CODES: EXTERNAL_ERROR_CODES,
 		onRequest: async (request, ctx) => {
 			try {

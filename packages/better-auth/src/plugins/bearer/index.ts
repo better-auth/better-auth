@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -40,6 +41,7 @@ function tryDecode(str: string): string {
 export const bearer = (options?: BearerOptions | undefined) => {
 	return {
 		id: "bearer",
+		version: PACKAGE_VERSION,
 		hooks: {
 			before: [
 				{

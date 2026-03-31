@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { RequiredPhoneNumberOptions } from "./routes";
 import {
@@ -37,6 +38,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 
 	return {
 		id: "phone-number",
+		version: PACKAGE_VERSION,
 		hooks: {
 			before: [
 				{

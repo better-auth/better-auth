@@ -9,6 +9,7 @@ import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
+import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
@@ -168,6 +169,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 	return {
 		id: "magic-link",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint

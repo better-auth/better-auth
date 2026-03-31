@@ -8,6 +8,7 @@ import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
@@ -67,6 +68,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 
 	return {
 		id: "jwt",
+		version: PACKAGE_VERSION,
 		options: options as NoInfer<O>,
 		endpoints: {
 			getJwks: createAuthEndpoint(

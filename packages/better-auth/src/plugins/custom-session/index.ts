@@ -12,6 +12,7 @@ import * as z from "zod";
 import { getSession } from "../../api";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -68,6 +69,7 @@ export const customSession = <
 ) => {
 	return {
 		id: "custom-session",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{

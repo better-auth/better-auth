@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../../version";
 
 /**
  * Configuration for the client-side last login method plugin
@@ -33,6 +34,7 @@ export const lastLoginMethodClient = (
 
 	return {
 		id: "last-login-method-client",
+		version: PACKAGE_VERSION,
 		getActions() {
 			return {
 				/**

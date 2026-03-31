@@ -12,6 +12,7 @@ import {
 } from "./routes";
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -37,6 +38,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 
 	return {
 		id: "passkey",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			generatePasskeyRegistrationOptions: generatePasskeyRegistrationOptions(
 				opts,

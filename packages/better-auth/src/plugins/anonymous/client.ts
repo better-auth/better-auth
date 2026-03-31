@@ -1,10 +1,12 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../../version";
 import type { anonymous } from ".";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 
 export const anonymousClient = () => {
 	return {
 		id: "anonymous",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof anonymous>,
 		pathMethods: {
 			"/sign-in/anonymous": "POST",

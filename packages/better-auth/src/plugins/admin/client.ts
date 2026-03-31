@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, userAc } from "./access";
@@ -42,6 +43,7 @@ export const adminClient = <O extends AdminClientOptions>(
 
 	return {
 		id: "admin-client",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<
 			typeof admin<{
 				ac: O["ac"] extends AccessControl

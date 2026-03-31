@@ -3,6 +3,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../version";
 
 export * from "./broadcast-channel";
 export {
@@ -24,6 +25,7 @@ export * from "./vanilla";
 export const InferPlugin = <T extends BetterAuthPlugin>() => {
 	return {
 		id: "infer-server-plugin",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as T,
 	} satisfies BetterAuthClientPlugin;
 };

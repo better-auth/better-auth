@@ -18,6 +18,7 @@ import {
 	updateSCIMUser,
 } from "./routes";
 import type { SCIMOptions } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -38,6 +39,7 @@ export const scim = (options?: SCIMOptions) => {
 
 	return {
 		id: "scim",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
 			listSCIMProviderConnections: listSCIMProviderConnections(),
