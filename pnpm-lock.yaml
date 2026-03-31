@@ -55,6 +55,9 @@ catalogs:
       specifier: ^4.0.18
       version: 4.0.18
 
+overrides:
+  axios: <1.14.0
+
 importers:
 
   .:
