@@ -56,6 +56,22 @@ export interface TwoFactorOptions {
 	 * @default 2592000 (30 days)
 	 */
 	trustDeviceMaxAge?: number | undefined;
+	/**
+	 * A callback function that is triggered when a user
+	 * enables two-factor authentication.
+	 */
+	onTotpEnabled?: (
+		data: { user: UserWithTwoFactor },
+		request?: Request,
+	) => Promise<void>;
+	/**
+	 * A callback function that is triggered when a user
+	 * disables two-factor authentication.
+	 */
+	onTotpDisabled?: (
+		data: { user: UserWithTwoFactor },
+		request?: Request,
+	) => Promise<void>;
 }
 
 export interface UserWithTwoFactor extends User {

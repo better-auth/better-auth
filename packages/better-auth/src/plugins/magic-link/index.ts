@@ -45,6 +45,15 @@ export interface MagicLinkOptions {
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
 	/**
+	 * A lifecycle callback triggered when a magic link is
+	 * sent. Use for logging, analytics, or notifications.
+	 * Runs alongside sendMagicLink, not instead of it.
+	 */
+	onMagicLinkRequested?: (
+		data: { email: string },
+		ctx?: GenericEndpointContext | undefined,
+	) => Awaitable<void>;
+	/**
 	 * Disable sign up if user is not found.
 	 *
 	 * @default false
@@ -256,6 +265,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						},
 						ctx,
 					);
+					if (options.onMagicLinkRequested) {
+						await options.onMagicLinkRequested({ email }, ctx);
+					}
 					return ctx.json({
 						status: true,
 					});

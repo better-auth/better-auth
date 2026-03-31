@@ -657,6 +657,16 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					verificationToken,
 				);
+
+				if (options.onPasskeyAdded) {
+					await ctx.context.runInBackgroundOrAwait(
+						options.onPasskeyAdded(
+							{ userId: newPasskeyRes.userId, passkey: newPasskeyRes },
+							ctx.request,
+						),
+					);
+				}
+
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
@@ -935,39 +945,41 @@ const deletePasskeyBodySchema = z.object({
  *
  * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/passkey#api-method-passkey-delete-passkey)
  */
-export const deletePasskey = createAuthEndpoint(
-	"/passkey/delete-passkey",
-	{
-		method: "POST",
-		body: deletePasskeyBodySchema,
-		use: [
-			sessionMiddleware,
-			requireResourceOwnership({
-				model: "passkey",
-				idParam: "id",
-				idSource: "body",
-				notFoundError: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
-				forbiddenStatus: "UNAUTHORIZED",
-			}),
-		],
-		metadata: {
-			openapi: {
-				description: "Delete a specific passkey",
-				responses: {
-					"200": {
-						description: "Passkey deleted successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-											description:
-												"Indicates whether the deletion was successful",
+export const deletePasskey = (pluginOptions?: PasskeyOptions) =>
+	createAuthEndpoint(
+		"/passkey/delete-passkey",
+		{
+			method: "POST",
+			body: deletePasskeyBodySchema,
+			use: [
+				sessionMiddleware,
+				requireResourceOwnership({
+					model: "passkey",
+					idParam: "id",
+					idSource: "body",
+					notFoundError: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+					forbiddenStatus: "UNAUTHORIZED",
+				}),
+			],
+			metadata: {
+				openapi: {
+					description: "Delete a specific passkey",
+					responses: {
+						"200": {
+							description: "Passkey deleted successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+												description:
+													"Indicates whether the deletion was successful",
+											},
 										},
+										required: ["status"],
 									},
-									required: ["status"],
 								},
 							},
 						},
@@ -975,17 +987,26 @@ export const deletePasskey = createAuthEndpoint(
 				},
 			},
 		},
-	},
-	async (ctx) => {
-		await ctx.context.adapter.delete({
-			model: "passkey",
-			where: [{ field: "id", value: ctx.body.id }],
-		});
-		return ctx.json({
-			status: true,
-		});
-	},
-);
+		async (ctx) => {
+			await ctx.context.adapter.delete({
+				model: "passkey",
+				where: [{ field: "id", value: ctx.body.id }],
+			});
+
+			if (pluginOptions?.onPasskeyDeleted) {
+				await ctx.context.runInBackgroundOrAwait(
+					pluginOptions.onPasskeyDeleted(
+						{ userId: ctx.context.session.user.id, passkeyId: ctx.body.id },
+						ctx.request,
+					),
+				);
+			}
+
+			return ctx.json({
+				status: true,
+			});
+		},
+	);
 
 const updatePassKeyBodySchema = z.object({
 	id: z.string().meta({

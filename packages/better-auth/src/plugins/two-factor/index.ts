@@ -265,6 +265,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
 					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
+					if (options?.onTotpEnabled) {
+						await ctx.context.runInBackgroundOrAwait(
+							options.onTotpEnabled(
+								{ user: user as UserWithTwoFactor },
+								ctx.request,
+							),
+						);
+					}
+
 					return ctx.json({
 						method: "totp" as const,
 						totpURI,
@@ -375,6 +384,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					await ctx.context.internalAdapter.deleteSession(
 						ctx.context.session.session.token,
 					);
+					if (options?.onTotpDisabled) {
+						await ctx.context.runInBackgroundOrAwait(
+							options.onTotpDisabled(
+								{ user: updatedUser as UserWithTwoFactor },
+								ctx.request,
+							),
+						);
+					}
+
 					const disableTrustCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{

@@ -585,6 +585,18 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				ctx.body.rememberMe === false,
 			);
 
+			if (ctx.context.options.onLogin) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.options.onLogin(
+						{
+							user: user.user,
+							session: { id: session.id, token: session.token },
+						},
+						ctx.request,
+					),
+				);
+			}
+
 			if (ctx.body.callbackURL) {
 				ctx.setHeader("Location", ctx.body.callbackURL);
 			}

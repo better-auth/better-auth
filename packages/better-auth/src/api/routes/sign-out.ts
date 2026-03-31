@@ -36,14 +36,25 @@ export const signOut = createAuthEndpoint(
 			ctx.context.authCookies.sessionToken.name,
 			ctx.context.secret,
 		);
+		let userId: string | undefined;
 		if (sessionCookieToken) {
 			try {
+				const session =
+					await ctx.context.internalAdapter.findSession(sessionCookieToken);
+				if (session) {
+					userId = session.session.userId;
+				}
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 			} catch (e) {
 				ctx.context.logger.error("Failed to delete session from database", e);
 			}
 		}
 		deleteSessionCookie(ctx);
+		if (userId && ctx.context.options.onLogout) {
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.onLogout({ userId }, ctx.request),
+			);
+		}
 		return ctx.json({
 			success: true,
 		});

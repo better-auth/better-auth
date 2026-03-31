@@ -51,7 +51,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			verifyPasskeyRegistration: verifyPasskeyRegistration(opts),
 			verifyPasskeyAuthentication: verifyPasskeyAuthentication(opts),
 			listPasskeys,
-			deletePasskey,
+			deletePasskey: deletePasskey(options),
 			updatePasskey,
 		},
 		schema: mergeSchema(schema, options?.schema),
