@@ -4,6 +4,7 @@
     "lib": ["esnext", "dom", "dom.iterable"]
   },
   "include": ["./src"],
+  "exclude": ["**/*.test.ts"],
   "references": [
     {
       "path": "../core/tsconfig.json"
