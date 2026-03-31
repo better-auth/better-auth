@@ -255,9 +255,7 @@ export async function POST(req: Request) {
 		const rateLimitResult = await checkRateLimit(ip);
 
 		if (!rateLimitResult.success) {
-			const retryAfter = Math.ceil(
-				(rateLimitResult.reset - Date.now()) / 1000,
-			);
+			const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
 			return new Response(
 				JSON.stringify({
 					error: "Rate limit exceeded. Please try again later.",
