@@ -628,19 +628,12 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 			code: "UNAUTHORIZED",
 		});
 	}
-	if (ctx.context.sessionConfig.freshAge === 0) {
-		return {
-			session,
-		};
-	}
-	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated = new Date(
-		session.session.updatedAt || session.session.createdAt,
-	).getTime();
-	const now = Date.now();
-	const isFresh = now - lastUpdated < freshAge * 1000;
-	if (!isFresh) {
-		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
+	if (ctx.context.sessionConfig.freshAge !== 0) {
+		const createdAt = new Date(session.session.createdAt).getTime();
+		const freshAge = ctx.context.sessionConfig.freshAge * 1000;
+		if (Date.now() - createdAt >= freshAge) {
+			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
+		}
 	}
 	return {
 		session,
