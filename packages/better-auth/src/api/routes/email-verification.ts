@@ -64,15 +64,15 @@ export async function sendVerificationEmailFn(
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-	await ctx.context.runInBackgroundOrAwait(
-		ctx.context.options.emailVerification.sendVerificationEmail(
-			{
-				user: user,
-				url,
-				token,
-			},
-			ctx.request,
-		),
+	// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors (see #8757).
+	// This path only runs once a real unverified user is known, so timing here does not weaken the unauthenticated anti-enumeration behavior above.
+	await ctx.context.options.emailVerification.sendVerificationEmail(
+		{
+			user: user,
+			url,
+			token,
+		},
+		ctx.request,
 	);
 }
 export const sendVerificationEmail = createAuthEndpoint(
