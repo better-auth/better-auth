@@ -5,7 +5,10 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
-import { getAwaitableValue } from "./helpers";
+import {
+	applySecondaryStorageSessionDefaults,
+	getAwaitableValue,
+} from "./helpers";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
@@ -13,6 +16,7 @@ describe("base context creation", () => {
 			baseURL: "http://localhost:3000",
 			...options,
 		};
+		applySecondaryStorageSessionDefaults(opts);
 		const adapter = await getAdapter(opts);
 		const getDatabaseType = () => "memory";
 		return createAuthContext(adapter, opts, getDatabaseType);
@@ -442,6 +446,32 @@ describe("base context creation", () => {
 				},
 			});
 			expect(res.rateLimit.storage).toBe("secondary-storage");
+		});
+
+		it("should default storeSessionInDatabase to true when database and secondaryStorage are set", async () => {
+			const res = await initBase({
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+			});
+			expect(res.options.session?.storeSessionInDatabase).toBe(true);
+		});
+
+		it("should not override explicit storeSessionInDatabase: false", async () => {
+			const res = await initBase({
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+				session: {
+					storeSessionInDatabase: false,
+				},
+			});
+			expect(res.options.session?.storeSessionInDatabase).toBe(false);
 		});
 
 		it("should use default window and max values", async () => {

@@ -121,6 +121,55 @@ describe("secondary storage - get returns already-parsed object", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4203
+ */
+describe("secondary storage - database fallback when KV entry expires", () => {
+	it("should recover the session from the database after secondary storage loses the session key", async () => {
+		const store = new Map<string, string>();
+
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value, _ttl) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) ?? null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+			rateLimit: {
+				enabled: false,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const s1 = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(s1.data).not.toBeNull();
+		const token = s1.data!.session.token;
+		expect(store.has(token)).toBe(true);
+
+		store.delete(token);
+		store.delete(`active-sessions-${s1.data!.session.userId}`);
+
+		const afterKvLoss = await client.getSession({
+			query: { disableCookieCache: true },
+			fetchOptions: { headers },
+		});
+		expect(afterKvLoss.data).not.toBeNull();
+		expect(afterKvLoss.data?.session.token).toBe(token);
+	});
+});
+
 describe("secondary storage - storeSessionInDatabase", () => {
 	describe("preserveSessionInDatabase: false", async () => {
 		const store = new Map<string, string>();

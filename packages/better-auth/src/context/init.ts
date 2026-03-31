@@ -4,8 +4,10 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
+import { applySecondaryStorageSessionDefaults } from "./helpers";
 
 export const init = async (options: BetterAuthOptions) => {
+	applySecondaryStorageSessionDefaults(options);
 	const adapter = await getAdapter(options);
 
 	// Get database type using Kysely's dialect detection

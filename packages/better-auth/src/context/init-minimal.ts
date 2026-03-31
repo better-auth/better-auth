@@ -2,8 +2,10 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getBaseAdapter } from "../db/adapter-base";
 import { createAuthContext } from "./create-context";
+import { applySecondaryStorageSessionDefaults } from "./helpers";
 
 export const initMinimal = async (options: BetterAuthOptions) => {
+	applySecondaryStorageSessionDefaults(options);
 	const adapter = await getBaseAdapter(options, async () => {
 		throw new BetterAuthError(
 			"Direct database connection requires Kysely. Please use `better-auth` instead of `better-auth/minimal`, or provide an adapter (drizzleAdapter, prismaAdapter, etc.)",

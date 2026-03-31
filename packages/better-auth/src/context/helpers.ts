@@ -10,6 +10,33 @@ import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
 import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
+/**
+ * When both a database and secondary storage are configured, persist sessions in
+ * the database by default so valid sessions can be recovered when secondary
+ * storage TTL expires or the entry is evicted before the session expires.
+ *
+ * Must run before `getAdapter` / `getBaseAdapter` so the session table is
+ * included in the schema when appropriate.
+ *
+ * Mutates `options` in place so the same object referenced by `betterAuth({...})`
+ * (e.g. `auth.options`) stays aligned with the adapter schema.
+ */
+export function applySecondaryStorageSessionDefaults(
+	options: BetterAuthOptions,
+): BetterAuthOptions {
+	if (
+		options.database &&
+		options.secondaryStorage &&
+		options.session?.storeSessionInDatabase === undefined
+	) {
+		options.session = {
+			...options.session,
+			storeSessionInDatabase: true,
+		};
+	}
+	return options;
+}
+
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
 	const plugins = options.plugins || [];

@@ -886,9 +886,14 @@ export type BetterAuthOptions = {
 				 * Set this to true to store the session in the database
 				 * as well.
 				 *
-				 * Reads are always done from the secondary storage.
+				 * Reads are always done from the secondary storage first, then the
+				 * database when `storeSessionInDatabase` is true.
 				 *
-				 * @default false
+				 * When both `database` and `secondaryStorage` are configured,
+				 * this defaults to `true` so sessions remain valid if secondary
+				 * storage TTL expires before the session does.
+				 *
+				 * @default false (or `true` when both `database` and `secondaryStorage` are set)
 				 */
 				storeSessionInDatabase?: boolean;
 				/**

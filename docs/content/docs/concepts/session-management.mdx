@@ -316,11 +316,11 @@ betterAuth({
 
 ### Storing Sessions in the Database
 
-By default, Better Auth already stores sessions in the database, however if you provide a secondary storage,
-Better Auth will store sessions in the secondary storage instead of the database.
+If you provide a database and secondary storage together, sessions are stored in **both** by default (`storeSessionInDatabase` defaults to `true`). That way, if the secondary storage entry expires (for example, KV TTL) before the session does, Better Auth can still resolve the session from the database.
 
-You can choose to store sessions in the database instead of secondary storage by passing
-`storeSessionInDatabase: true` in the session configuration.
+If you use secondary storage **without** a database, sessions live only in secondary storage.
+
+If you use secondary storage with a database but want sessions only in secondary storage (not in the database), set `storeSessionInDatabase: false`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -328,7 +328,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
     secondaryStorage: { /** your secondary storage implementation here */ },
     session: { // [!code highlight]
-        storeSessionInDatabase: true, // [!code highlight]
+        storeSessionInDatabase: false, // opt out of DB persistence when using secondary storage + database // [!code highlight]
     } // [!code highlight]
 });
 ```
