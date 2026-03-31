@@ -74,6 +74,14 @@ export async function sendVerificationEmailFn(
 			ctx.request,
 		),
 	);
+	if (ctx.context.options.emailVerification?.onEmailVerificationRequested) {
+		await ctx.context.runInBackgroundOrAwait(
+			ctx.context.options.emailVerification.onEmailVerificationRequested(
+				{ user },
+				ctx.request,
+			),
+		);
+	}
 }
 export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
