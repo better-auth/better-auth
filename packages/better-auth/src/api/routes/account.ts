@@ -524,8 +524,9 @@ export const getAccessToken = createAuthEndpoint(
 		let account: Account | undefined = undefined;
 		if (
 			accountData &&
+			accountData.userId === resolvedUserId &&
 			providerId === accountData.providerId &&
-			(!accountId || accountData.id === accountId)
+			(!accountId || accountData.accountId === accountId)
 		) {
 			account = accountData;
 		} else {
@@ -715,6 +716,7 @@ export const refreshToken = createAuthEndpoint(
 		const accountData = await getAccountCookie(ctx);
 		if (
 			accountData &&
+			accountData.userId === resolvedUserId &&
 			(!providerId || providerId === accountData?.providerId)
 		) {
 			account = accountData;

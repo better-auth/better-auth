@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
@@ -15,6 +16,7 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
+import { freshSessionMiddleware } from "./session";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -63,6 +65,62 @@ describe("session", async () => {
 	it("should return null when not authenticated", async () => {
 		const response = await client.getSession();
 		expect(response.data).toBeNull();
+	});
+
+	it("should require a fresh session based on session creation time", async () => {
+		vi.useFakeTimers();
+		const now = new Date("2026-01-01T00:00:00.000Z");
+		vi.setSystemTime(now);
+
+		const freshSessionPlugin = {
+			id: "fresh-session-test",
+			endpoints: {
+				freshSessionCheck: createAuthEndpoint(
+					"/fresh-session-check",
+					{
+						method: "GET",
+						use: [freshSessionMiddleware],
+					},
+					async () => ({ status: true }),
+				),
+			},
+		};
+		const { auth, client, signInWithTestUser, db } = await getTestInstance({
+			session: {
+				freshAge: 60,
+			},
+			plugins: [freshSessionPlugin],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await auth.api.getSession({ headers });
+		const sessionId = currentSession?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(now.getTime() - 5 * 60 * 1000),
+				updatedAt: now,
+			},
+		});
+
+		const response = await client.$fetch("/fresh-session-check", {
+			method: "GET",
+			headers,
+		});
+		expect(response.data).toBeNull();
+		expect(response.error).toMatchObject({
+			status: 403,
+			statusText: "FORBIDDEN",
+			code: "SESSION_NOT_FRESH",
+		});
 	});
 
 	it("should update session when update age is reached", async () => {
@@ -695,6 +753,7 @@ describe("cookie cache with JWT strategy", async () => {
 	});
 
 	it("should have max age expiry", async () => {
+		vi.useFakeTimers();
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -711,8 +770,10 @@ describe("cookie cache with JWT strategy", async () => {
 			throw new Error("JWT not found");
 		}
 		const payload = await verifyJWT(jwt, ctx.secret);
-		//should be greater than 299 seconds from now - (default max age is 300 seconds)
-		expect(payload.exp).toBeGreaterThanOrEqual(Date.now() / 1000 + 299);
+		// should be greater than 299 seconds from now - (default max age is 300 seconds)
+		expect(payload.exp).toBeGreaterThanOrEqual(
+			Math.floor(Date.now() / 1000) + 299,
+		);
 	});
 
 	it("should handle multiple concurrent requests with JWT cache", async () => {
