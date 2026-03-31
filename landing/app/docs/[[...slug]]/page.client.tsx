@@ -53,6 +53,29 @@ const cache = new Map<string, string>();
 const tocAction =
 	"inline-flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-wider whitespace-nowrap transition-all duration-200 text-foreground/60 hover:text-foreground border border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer select-none [&_svg]:size-3";
 
+function CopyMdLinkButton({ rawMdUrl }: { rawMdUrl: string }) {
+	const [checked, onClick] = useCopyButton(() => {
+		const url = new URL(
+			rawMdUrl,
+			typeof window !== "undefined"
+				? window.location.origin
+				: "https://better-auth.com",
+		);
+		return navigator.clipboard.writeText(url.toString());
+	});
+
+	return (
+		<button
+			type="button"
+			className="flex items-center gap-2.5 px-2.5 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-colors duration-150 [&_svg]:size-3.5 [&_svg]:shrink-0 w-full"
+			onClick={onClick}
+		>
+			{checked ? <Check /> : <Copy />}
+			{checked ? "Copied!" : "Copy MD Link"}
+		</button>
+	);
+}
+
 export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
 	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
@@ -96,7 +119,11 @@ export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
 	);
 }
 
-export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
+export function ViewOptions(props: {
+	markdownUrl: string;
+	githubUrl: string;
+	rawMdUrl: string;
+}) {
 	const markdownUrl = new URL(
 		props.markdownUrl,
 		typeof window !== "undefined"
@@ -133,6 +160,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 				<ChevronDown />
 			</PopoverTrigger>
 			<PopoverContent className="flex flex-col p-1 min-w-[200px]">
+				<CopyMdLinkButton rawMdUrl={props.rawMdUrl} />
 				{[
 					{
 						title: "GitHub",
