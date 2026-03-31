@@ -266,14 +266,22 @@ export function StaggeredNavFiles() {
 								if (opening) {
 									setMobileView(isDocs ? "docs" : "nav");
 									if (isDocs) {
-										const idx = contents.findIndex((s) =>
-											s.list.some(
+										const idx = contents.findIndex((s) => {
+											const prefix = s.expandSectionForPathPrefix;
+											if (
+												prefix &&
+												(pathname === prefix ||
+													pathname.startsWith(`${prefix}/`))
+											) {
+												return true;
+											}
+											return s.list.some(
 												(l) =>
 													l.href === pathname ||
 													(l.subpages?.length &&
 														pathname.startsWith(`${l.href}/`)),
-											),
-										);
+											);
+										});
 										setMobileDocSection(idx === -1 ? 0 : idx);
 									}
 								}

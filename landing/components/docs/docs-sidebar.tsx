@@ -26,16 +26,23 @@ export function DocsSidebar() {
 	const branchQuery = branch === "canary" ? "?branch=canary" : "";
 
 	const getDefaultOpen = (sections: Section[]) => {
-		const defaultValue = sections.findIndex((item) =>
-			item.list.some(
+		const defaultValue = sections.findIndex((item) => {
+			const prefix = item.expandSectionForPathPrefix;
+			if (
+				prefix &&
+				(pathname === prefix || pathname.startsWith(`${prefix}/`))
+			) {
+				return true;
+			}
+			return item.list.some(
 				(listItem) =>
 					listItem.href === pathname ||
 					(listItem.subpages &&
 						listItem.subpages.length > 0 &&
 						pathname.startsWith(`${listItem.href}/`)) ||
 					listItem.subpages?.some((sp) => sp.href && pathname === sp.href),
-			),
-		);
+			);
+		});
 		return defaultValue === -1 ? 0 : defaultValue;
 	};
 
