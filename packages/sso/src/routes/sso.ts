@@ -1418,7 +1418,8 @@ export const signInSSO = (options?: SSOOptions) => {
 				);
 
 				const shouldSaveRequest =
-					loginRequest.id && options?.saml?.enableInResponseToValidation;
+					loginRequest.id &&
+					options?.saml?.enableInResponseToValidation !== false;
 				if (shouldSaveRequest) {
 					const ttl =
 						options?.saml?.requestTTL ?? constants.DEFAULT_AUTHN_REQUEST_TTL_MS;
@@ -1761,7 +1762,10 @@ async function handleOIDCCallback(
 	}
 	const { session, user } = linked.data!;
 
-	if (options?.provisionUser && linked.isRegister) {
+	if (
+		options?.provisionUser &&
+		(linked.isRegister || options.provisionUserOnEveryLogin)
+	) {
 		await options.provisionUser({
 			user,
 			userInfo,
@@ -2178,7 +2182,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				| string
 				| undefined;
 			const shouldValidateInResponseTo =
-				options?.saml?.enableInResponseToValidation;
+				options?.saml?.enableInResponseToValidation !== false;
 
 			if (shouldValidateInResponseTo) {
 				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
@@ -2410,7 +2414,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser) {
+			if (
+				options?.provisionUser &&
+				(result.isRegister || options.provisionUserOnEveryLogin)
+			) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
@@ -2694,7 +2701,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				| string
 				| undefined;
 			const shouldValidateInResponseToAcs =
-				options?.saml?.enableInResponseToValidation;
+				options?.saml?.enableInResponseToValidation !== false;
 
 			if (shouldValidateInResponseToAcs) {
 				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
@@ -2926,7 +2933,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser) {
+			if (
+				options?.provisionUser &&
+				(result.isRegister || options.provisionUserOnEveryLogin)
+			) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,

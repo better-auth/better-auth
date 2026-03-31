@@ -7,7 +7,8 @@ packages:
 
 blockExoticSubdeps: true
 
-enableGlobalVirtualStore: true
+overrides:
+  axios: <1.14.0
 
 catalog:
   '@better-auth/utils': 0.4.0

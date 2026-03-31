@@ -180,7 +180,21 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
-				const issuerPath = new URL(issuer).pathname;
+				const isDynamicBaseURLInit =
+					jwtPluginOptions?.jwt?.issuer == null &&
+					typeof ctx.options.baseURL === "object" &&
+					ctx.options.baseURL !== null &&
+					"allowedHosts" in ctx.options.baseURL;
+				let issuerPath: string;
+				try {
+					issuerPath = new URL(issuer).pathname;
+				} catch (error) {
+					// baseURL may not be available during init when using dynamic baseURL config
+					if (isDynamicBaseURLInit && issuer === "") {
+						return;
+					}
+					throw error;
+				}
 				// oAuth Server Config
 				if (
 					!opts.silenceWarnings?.oauthAuthServerConfig &&
@@ -269,6 +283,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!session) return;
 						ctx.context.session = session;
 
+						const secFetchMode = ctx.request?.headers
+							?.get("sec-fetch-mode")
+							?.toLowerCase();
+						const acceptHeader =
+							ctx.request?.headers?.get("accept")?.toLowerCase() ?? "";
+						const isNavigationRequest =
+							secFetchMode === "navigate" ||
+							(!secFetchMode &&
+								(acceptHeader.includes("text/html") ||
+									acceptHeader.includes("application/xhtml+xml")));
+						if (!isNavigationRequest) {
+							ctx.headers?.set("accept", "application/json");
+						}
 						ctx.query = deleteFromPrompt(query, "login");
 						return await authorizeEndpoint(ctx, opts);
 					}),

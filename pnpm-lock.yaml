@@ -55,6 +55,9 @@ catalogs:
       specifier: ^4.0.18
       version: 4.0.18
 
+overrides:
+  axios: <1.14.0
+
 importers:
 
   .:
@@ -624,6 +627,13 @@ importers:
         version: 7.3.1(@types/node@25.5.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.2)
 
   e2e/smoke:
+    dependencies:
+      '@better-auth/passkey':
+        specifier: workspace:*
+        version: link:../../packages/passkey
+      better-auth:
+        specifier: workspace:*
+        version: link:../../packages/better-auth
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -634,9 +644,6 @@ importers:
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../packages/sso
-      better-auth:
-        specifier: workspace:*
-        version: link:../../packages/better-auth
       ioredis:
         specifier: ^5.9.3
         version: 5.9.3
@@ -928,6 +935,9 @@ importers:
       remark-rehype:
         specifier: ^11.1.2
         version: 11.1.2
+      resend:
+        specifier: ^6.8.0
+        version: 6.9.2(@react-email/render@2.0.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       shiki:
         specifier: ^4.0.0
         version: 4.0.1
