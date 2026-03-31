@@ -19,6 +19,7 @@ import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
 import { getOrigin } from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import {
 	checkSkipProxy,
 	redirectOnError,
@@ -126,6 +127,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 	return {
 		id: "oauth-proxy",
+		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
