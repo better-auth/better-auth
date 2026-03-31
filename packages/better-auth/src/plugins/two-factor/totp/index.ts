@@ -5,8 +5,8 @@ import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
-import { PACKAGE_VERSION } from "../../../version";
 import { shouldRequirePassword } from "../../../utils/password";
+import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {

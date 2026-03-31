@@ -8,8 +8,8 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { PACKAGE_VERSION } from "../../version";
 import { parseSessionOutput, parseUserOutput } from "../../db";
+import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
