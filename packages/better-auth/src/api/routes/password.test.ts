@@ -6,6 +6,7 @@ import type { Account } from "../../types";
 describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
 	const mockOnPasswordReset = vi.fn();
+	const mockOnResetPasswordRequested = vi.fn();
 	let token = "";
 
 	const { client, testUser, db } = await getTestInstance(
@@ -18,6 +19,9 @@ describe("forgot password", async () => {
 				},
 				onPasswordReset: async ({ user }) => {
 					await mockOnPasswordReset(user);
+				},
+				onResetPasswordRequested: async ({ user }) => {
+					await mockOnResetPasswordRequested(user);
 				},
 			},
 		},
@@ -35,6 +39,17 @@ describe("forgot password", async () => {
 			redirectTo: "http://localhost:3000",
 		});
 		expect(token.length).toBeGreaterThan(10);
+	});
+
+	it("should call onResetPasswordRequested when requesting password reset", async () => {
+		mockOnResetPasswordRequested.mockClear();
+		await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+		expect(mockOnResetPasswordRequested).toHaveBeenCalledWith(
+			expect.objectContaining({ email: testUser.email }),
+		);
 	});
 
 	it("should reject untrusted redirectTo", async () => {

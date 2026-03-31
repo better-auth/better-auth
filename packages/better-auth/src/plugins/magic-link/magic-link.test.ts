@@ -857,4 +857,28 @@ describe("magic link send origin/CSRF protection", async () => {
 		expect(response.status).toBe(200);
 		expect(sendMagicLink).toHaveBeenCalledTimes(1);
 	});
+
+	it("should call onMagicLinkRequested when sending magic link", async () => {
+		const mockOnMagicLinkRequested = vi.fn();
+		const { customFetchImpl, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink() {},
+					onMagicLinkRequested: async ({ email }) => {
+						await mockOnMagicLinkRequested(email);
+					},
+				}),
+			],
+		});
+		const testClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: { customFetchImpl },
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+		await testClient.signIn.magicLink({
+			email: testUser.email,
+		});
+		expect(mockOnMagicLinkRequested).toHaveBeenCalledWith(testUser.email);
+	});
 });
