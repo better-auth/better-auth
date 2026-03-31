@@ -30,6 +30,7 @@ Configure Better Auth to process authentication requests by creating a catch-all
 
 ```ts title="server.ts"
 import Fastify from "fastify";
+import { fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth"; // Your configured Better Auth instance
 
 const fastify = Fastify({ logger: true });
@@ -44,16 +45,13 @@ fastify.route({
       const url = new URL(request.url, `http://${request.headers.host}`);
       
       // Convert Fastify headers to standard Headers object
-      const headers = new Headers();
-      Object.entries(request.headers).forEach(([key, value]) => {
-        if (value) headers.append(key, value.toString());
-      });
+      const headers = fromNodeHeaders(request.headers);
 
       // Create Fetch API-compatible request
       const req = new Request(url.toString(), {
         method: request.method,
         headers,
-        body: request.body ? JSON.stringify(request.body) : undefined,
+        ...(request.body ? { body: JSON.stringify(request.body) } : {}),
       });
 
       // Process authentication request
@@ -119,3 +117,24 @@ fastify.register(fastifyCors, {
 ```
 
 <Callout type="warning"> Always restrict CORS origins in production environments. Use environment variables for dynamic configuration. </Callout>
+
+### Getting the User Session
+
+To retrieve the user's session in your Fastify routes, use the `auth.api.getSession` method. Better Auth provides a `fromNodeHeaders` helper function that converts Node.js request headers to the format expected by Better Auth.
+
+```ts title="server.ts"
+import { fromNodeHeaders } from "better-auth/node";
+import { auth } from "./auth"; // Your Better Auth instance
+
+fastify.get("/api/me", async (request, reply) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(request.headers),
+  });
+
+  if (!session) {
+    return reply.status(401).send({ error: "Unauthorized" });
+  }
+
+  return reply.send(session);
+});
+```

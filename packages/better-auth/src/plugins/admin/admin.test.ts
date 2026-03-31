@@ -17,7 +17,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
 import { admin } from "./admin";
-import { adminClient } from "./client";
+import { ADMIN_ERROR_CODES, adminClient } from "./client";
 import type { UserWithRole } from "./types";
 
 let testIdToken: string;
@@ -112,6 +112,11 @@ describe("Admin plugin", async () => {
 	});
 
 	const { headers: adminHeaders } = await signInWithTestUser();
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	let newUser: UserWithRole | undefined;
 	const testNonAdminUser = {
 		id: "123",
@@ -171,6 +176,39 @@ describe("Admin plugin", async () => {
 		);
 		newUser = res.data?.user;
 		expect(newUser?.role).toBe("user");
+	});
+
+	it("should allow admin to create users without password", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Passwordless User",
+				email: "passwordless@email.com",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.email).toBe("passwordless@email.com");
+		expect(res.data?.user?.name).toBe("Passwordless User");
+		expect(res.data?.user?.role).toBe("user");
+
+		// User should not be able to sign in with password since no credential account exists
+		const signInRes = await client.signIn.email({
+			email: "passwordless@email.com",
+			password: "anypassword",
+		});
+		expect(signInRes.error).toBeDefined();
+
+		// Clean up
+		await client.admin.removeUser(
+			{
+				userId: res.data?.user?.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
 	});
 
 	it("should allow admin to create user with multiple roles", async () => {
@@ -335,6 +373,52 @@ describe("Admin plugin", async () => {
 			fetchOptions: {
 				headers: adminHeaders,
 			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7837
+	 */
+	it("should apply filter when filterValue is defined", async () => {
+		// Create a dedicated user for this test to avoid invalidating shared sessions
+		const { data: tempUser } = await client.signUp.email({
+			email: "falsy-filter-test@test.com",
+			password: "password",
+			name: "Falsy Filter Test",
+		});
+		const tempUserId = tempUser!.user.id;
+
+		const allUsers = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {},
+		});
+		const totalBefore = allUsers.total;
+		expect(totalBefore).toBeGreaterThanOrEqual(2);
+
+		// Ban the temp user so the dataset has both banned=true and banned=false
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
+		});
+
+		// Filter by banned = false should exclude the banned user
+		const res = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {
+				filterField: "banned",
+				filterOperator: "eq",
+				filterValue: false,
+			},
+		});
+
+		expect(res.users.length).toBe(totalBefore - 1);
+		expect(res.users.every((u) => u.banned === false)).toBe(true);
+		expect(res.users.every((u) => u.id !== tempUserId)).toBe(true);
+
+		// Cleanup: unban the user
+		await auth.api.unbanUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
 		});
 	});
 
@@ -654,7 +738,7 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
-	it("should not allow to impersonate admins", async () => {
+	it("should not allow to impersonate admins without impersonate-admins permission", async () => {
 		const userToImpersonate = await client.signUp.email({
 			email: "impersonate-admin@mail.com",
 			password: "password",
@@ -676,6 +760,190 @@ describe("Admin plugin", async () => {
 		);
 
 		expect(res.error?.status).toBe(403);
+	});
+
+	it("should allow impersonating admins with impersonate-admins permission", async () => {
+		const ac = createAccessControl({
+			user: [
+				"create",
+				"list",
+				"set-role",
+				"ban",
+				"impersonate",
+				"impersonate-admins",
+				"delete",
+				"set-password",
+				"get",
+				"update",
+			],
+			session: ["list", "revoke", "delete"],
+		} as const);
+
+		const superAdminRole = ac.newRole({
+			user: [
+				"create",
+				"list",
+				"set-role",
+				"ban",
+				"impersonate",
+				"impersonate-admins",
+				"delete",
+				"set-password",
+				"get",
+				"update",
+			],
+			session: ["list", "revoke", "delete"],
+		});
+		const regularAdminRole = ac.newRole({
+			user: [
+				"create",
+				"list",
+				"set-role",
+				"ban",
+				"impersonate",
+				"delete",
+				"set-password",
+				"get",
+				"update",
+			],
+			session: ["list", "revoke", "delete"],
+		});
+		const userRole = ac.newRole({
+			user: [],
+			session: [],
+		});
+
+		const {
+			signInWithTestUser: signInSuperAdmin,
+			signInWithUser: signInAsUser,
+			customFetchImpl: fetchImpl,
+		} = await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							"super-admin": superAdminRole,
+							admin: regularAdminRole,
+							user: userRole,
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Super Admin") {
+									return { data: { ...user, role: "super-admin" } };
+								}
+							},
+						},
+					},
+				},
+			},
+			{ testUser: { name: "Super Admin" } },
+		);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [
+				adminClient({
+					ac,
+					roles: {
+						"super-admin": superAdminRole,
+						admin: regularAdminRole,
+						user: userRole,
+					},
+				}),
+			],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: superAdminHeaders } = await signInSuperAdmin();
+
+		const { data: targetAdmin } = await c.signUp.email({
+			email: "target-admin-perm@test.com",
+			password: "password",
+			name: "Target Admin Perm",
+		});
+		await c.admin.setRole(
+			{ userId: targetAdmin!.user.id, role: "admin" },
+			{ headers: superAdminHeaders },
+		);
+
+		// super-admin has impersonate-admins permission, should succeed
+		const res = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: superAdminHeaders },
+		);
+		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user?.id).toBe(targetAdmin!.user.id);
+
+		// regular admin does NOT have impersonate-admins permission, should fail
+		const { data: regularAdmin } = await c.signUp.email({
+			email: "regular-admin-perm@test.com",
+			password: "password",
+			name: "Regular Admin Perm",
+		});
+		await c.admin.setRole(
+			{ userId: regularAdmin!.user.id, role: "admin" },
+			{ headers: superAdminHeaders },
+		);
+		const { headers: regularAdminHeaders } = await signInAsUser(
+			"regular-admin-perm@test.com",
+			"password",
+		);
+		const res2 = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: regularAdminHeaders },
+		);
+		expect(res2.error?.status).toBe(403);
+	});
+
+	it("should allow impersonating admins with legacy allowImpersonatingAdmins option", async () => {
+		const { signInWithTestUser: signInAdmin, customFetchImpl: fetchImpl } =
+			await getTestInstance(
+				{
+					plugins: [
+						admin({
+							allowImpersonatingAdmins: true,
+						}),
+					],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => {
+									if (user.name === "Admin") {
+										return { data: { ...user, role: "admin" } };
+									}
+								},
+							},
+						},
+					},
+				},
+				{ testUser: { name: "Admin" } },
+			);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: aHeaders } = await signInAdmin();
+
+		const { data: targetAdmin } = await c.signUp.email({
+			email: "target-admin-legacy@test.com",
+			password: "password",
+			name: "Target Admin Legacy",
+		});
+		await c.admin.setRole(
+			{ userId: targetAdmin!.user.id, role: "admin" },
+			{ headers: aHeaders },
+		);
+
+		const res = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: aHeaders },
+		);
+		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user?.id).toBe(targetAdmin!.user.id);
 	});
 
 	it("should filter impersonated sessions", async () => {
@@ -935,7 +1203,7 @@ describe("Admin plugin", async () => {
 	});
 });
 
-describe("access control", async (it) => {
+describe("access control", async () => {
 	const ac = createAccessControl({
 		user: [
 			"create",
@@ -1136,7 +1404,7 @@ describe("access control", async (it) => {
 		// To be removed when `permission` will be removed entirely
 		const canCreateOrderLegacy = client.admin.checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				order: ["create"],
 				user: ["read"],
 			},
@@ -1271,7 +1539,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1282,7 +1550,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "user", // user role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1312,7 +1580,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: bannedUserId, // banned user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1322,7 +1590,7 @@ describe("access control", async (it) => {
 		const checkWithoutRole = await auth.api.userHasPermission({
 			body: {
 				userId: bannedUserId, // banned user ID only
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1398,7 +1666,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },
@@ -1429,7 +1697,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },
@@ -1443,5 +1711,124 @@ describe("access control", async (it) => {
 				adminRoles: ["non-existent-role"],
 			}),
 		).toThrowError(BetterAuthError);
+	});
+
+	it("should properly type custom roles in createUser", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User with Support Role",
+				email: "support-role@test.com",
+				password: "test",
+				role: "support", // This should be accepted as "support" is a custom role
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("support");
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+});
+
+describe("edge cases: userId validation", async () => {
+	const { signInWithTestUser, customFetchImpl, auth } = await getTestInstance(
+		{
+			advanced: {
+				database: {
+					generateId: "serial",
+				},
+			},
+			plugins: [
+				admin({
+					bannedUserMessage: "Custom banned user message",
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("should allow admin to check permissions with useNumberId", async () => {
+		const res = await client.admin.hasPermission(
+			{
+				role: "admin",
+				permissions: {
+					user: ["create"],
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.success).toBe(true);
+	});
+
+	it("should return correct error when userId is missing and not call DB with undefined", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user id or role is required");
+	});
+
+	it("should return user not found when userId is empty string", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					userId: "",
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user id or role is required");
+	});
+
+	it("should not crash if userId is 'NaN'", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					userId: "NaN",
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user not found");
 	});
 });

@@ -6,7 +6,9 @@ import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
 import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
+import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
+import type { WalletAddressSchema } from "./schema";
 import { schema } from "./schema";
 import type {
 	ENSLookupArgs,
@@ -14,6 +16,14 @@ import type {
 	SIWEVerifyMessageArgs,
 	WalletAddress,
 } from "./types";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		siwe: {
+			creator: typeof siwe;
+		};
+	}
+}
 
 export interface SIWEPluginOptions {
 	domain: string;
@@ -30,13 +40,13 @@ const getSiweNonceBodySchema = z.object({
 		.string()
 		.regex(/^0[xX][a-fA-F0-9]{40}$/i)
 		.length(42),
-	chainId: z.number().int().positive().max(2147483647).optional().default(1),
+	chainId: z.number().int().positive().optional().default(1),
 });
 
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(schema, options?.schema) as WalletAddressSchema,
 		endpoints: {
 			getSiweNonce: createAuthEndpoint(
 				"/siwe/nonce",
@@ -71,13 +81,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.string()
 								.regex(/^0[xX][a-fA-F0-9]{40}$/i)
 								.length(42),
-							chainId: z
-								.number()
-								.int()
-								.positive()
-								.max(2147483647)
-								.optional()
-								.default(1),
+							chainId: z.number().int().positive().optional().default(1),
 							email: z.email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
@@ -99,7 +103,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 					const isAnon = options.anonymous ?? true;
 
 					if (!isAnon && !email) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: "Email is required when anonymous is disabled.",
 							status: 400,
 						});
@@ -114,7 +118,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						// Ensure nonce is valid and not expired
 						if (!verification || new Date() > verification.expiresAt) {
-							throw new APIError("UNAUTHORIZED", {
+							throw APIError.fromStatus("UNAUTHORIZED", {
 								message: "Unauthorized: Invalid or expired nonce",
 								status: 401,
 								code: "UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE",
@@ -142,15 +146,15 @@ export const siwe = (options: SIWEPluginOptions) =>
 						});
 
 						if (!verified) {
-							throw new APIError("UNAUTHORIZED", {
+							throw APIError.fromStatus("UNAUTHORIZED", {
 								message: "Unauthorized: Invalid SIWE signature",
 								status: 401,
 							});
 						}
 
 						// Clean up used nonce
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`siwe:${walletAddress}:${chainId}`,
 						);
 
 						// Look for existing user by their wallet addresses
@@ -270,7 +274,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 						);
 
 						if (!session) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
+							throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 								message: "Internal Server Error",
 								status: 500,
 							});
@@ -288,8 +292,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 							},
 						});
 					} catch (error: unknown) {
-						if (error instanceof APIError) throw error;
-						throw new APIError("UNAUTHORIZED", {
+						if (isAPIError(error)) throw error;
+						throw APIError.fromStatus("UNAUTHORIZED", {
 							message: "Something went wrong. Please try again later.",
 							error: error instanceof Error ? error.message : "Unknown error",
 							status: 401,

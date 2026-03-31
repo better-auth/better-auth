@@ -13,8 +13,8 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
     <Step>
         ### Install the plugin
 
-        ```bash
-        npm install @better-auth/sso
+        ```package-install
+        @better-auth/sso
         ```
     </Step>
     <Step>
@@ -22,12 +22,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { sso } from "@better-auth/sso";
+        import { sso } from "@better-auth/sso"; // [!code highlight]
 
         const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [
                 sso() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -39,12 +39,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
             ```package-install
-            npx @better-auth/cli migrate
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
             ```package-install
-            npx @better-auth/cli generate
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -55,12 +55,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { ssoClient } from "@better-auth/sso/client"
+        import { ssoClient } from "@better-auth/sso/client" // [!code highlight]
 
         const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
+            plugins: [
                 ssoClient() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -73,6 +73,10 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+
+<Callout type="info">
+If you need all providers to share a single callback URL (e.g., when migrating from another auth provider), see [Shared Redirect URI](#shared-redirect-uri).
+</Callout>
 
 <Callout type="info">
 When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
@@ -250,7 +254,12 @@ trustedOrigins: [
 2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
 
 ```ts
-trustedOrigins: async (request: Request) => {
+trustedOrigins: async (request) => {
+    // request is undefined during initialization and auth.api calls
+    if (!request) {
+        return ["https://my-frontend.com"];
+    }
+
     // SSO trusted origin list
     if (request.url.endsWith("/sso/register")) {
         const trustedOrigins = await fetchOriginList();
@@ -425,6 +434,30 @@ await auth.api.registerSSOProvider({
     </Tab>
 </Tabs>
 
+### IdP-Initiated SSO
+
+ For IdP-initiated flows (e.g., via Okta dashboard), your framework may require an explicit route handler to manage the redirect if the default handler doesn't support the `GET` request following the SAML POST.
+
+ <Tabs items={["next-js-app-router"]}>
+   <Tab value="next-js-app-router">
+     Create this file to prevent 404 errors:
+
+     ```ts title="app/api/auth/sso/saml2/callback/[providerId]/route.ts"
+     import { auth } from "@/lib/auth";
+     import { NextResponse } from "next/server";
+
+     export async function POST(req: Request) {
+         return auth.handler(req);
+     }
+
+     export async function GET(req: Request) {
+         // Required: IdP-initiated flows redirect to this URL after POST
+         return NextResponse.redirect(new URL("/", req.url));
+     }
+     ```
+   </Tab>
+</Tabs>
+
 ### Get Service Provider Metadata
 
 For SAML providers, you can retrieve the Service Provider metadata XML that needs to be configured in your Identity Provider:
@@ -448,6 +481,8 @@ To sign in with an SSO provider, you can call `signIn.sso`
 You can sign in using the email with domain matching:
 
 ```ts title="sign-in.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     email: "user@example.com",
     callbackURL: "/dashboard",
@@ -457,6 +492,8 @@ const res = await authClient.signIn.sso({
 or you can specify the domain:
 
 ```ts title="sign-in-domain.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     domain: "example.com",
     callbackURL: "/dashboard",
@@ -466,6 +503,8 @@ const res = await authClient.signIn.sso({
 You can also sign in using the organization slug if a provider is associated with an organization:
 
 ```ts title="sign-in-org.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     organizationSlug: "example-org",
     callbackURL: "/dashboard",
@@ -475,6 +514,8 @@ const res = await authClient.signIn.sso({
 Alternatively, you can sign in using the provider's ID:
 
 ```ts title="sign-in-provider-id.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     callbackURL: "/dashboard",
@@ -484,6 +525,8 @@ const res = await authClient.signIn.sso({
 Optionally, you can pass a login hint (for example, an email address or another identifier) to prefill or direct the identity provider:
 
 ```ts title="sign-in-with-login-hint.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     loginHint: "user@example.com",
@@ -494,6 +537,8 @@ const res = await authClient.signIn.sso({
 To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await auth.api.signInSSO({
     body: {
         organizationSlug: "example-org",
@@ -553,15 +598,19 @@ type signInSSO = {
 
 Note: If email is provided and loginHint is not specified, email will be sent as the login_hint to OIDC providers automatically. SAML flows do not support login_hint.
 
-When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
+When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. By default, `provisionUser` only runs when a new user is registered. If you want to run it on every login (e.g. to sync upstream identity provider profile changes), set `provisionUserOnEveryLogin` to `true`. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
             provisionUser: async (user) => {
                 // provision user
             },
+            provisionUserOnEveryLogin: true, // optional, default: false
             organizationProvisioning: {
                 disabled: false,
                 defaultRole: "member",
@@ -580,7 +629,7 @@ The SSO plugin provides powerful provisioning capabilities to automatically set 
 
 ### User Provisioning
 
-User provisioning allows you to run custom logic whenever a user signs in through an SSO provider. This is useful for:
+User provisioning allows you to run custom logic when a user signs in through an SSO provider. By default, `provisionUser` only runs for new users (on registration). To run it on every login, set `provisionUserOnEveryLogin` to `true`. This is useful for:
 
 - Setting up user profiles with additional data from the SSO provider
 - Synchronizing user attributes with external systems
@@ -589,6 +638,9 @@ User provisioning allows you to run custom logic whenever a user signs in throug
 - Updating user information from the SSO provider
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -640,6 +692,9 @@ Organization provisioning automatically manages user memberships in organization
 #### Basic Organization Provisioning
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -655,6 +710,9 @@ const auth = betterAuth({
 #### Advanced Organization Provisioning with Custom Roles
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -692,6 +750,8 @@ const auth = betterAuth({
 When registering an SSO provider, you can link it to a specific organization:
 
 ```ts title="register-org-provider.ts"
+import { auth } from "@/lib/auth"
+
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp-saml",
@@ -702,17 +762,37 @@ await auth.api.registerSSOProvider({
             // SAML configuration...
         },
     },
-    headers,
+    headers: await headers() // headers containing the user's session token
 });
 ```
 
 Now when users from `acmecorp.com` sign in through this provider, they'll automatically be added to the "Acme Corp" organization with the appropriate role.
+
+#### Self-Service SSO Dashboard
+
+If you're using [Better Auth Infrastructure](https://dash.better-auth.com/sign-in), you get access to a self-service SSO dashboard that simplifies onboarding enterprise customers. Instead of manually exchanging SAML metadata and certificates, organization admins can generate a shareable onboarding link that guides enterprise IT teams through configuring their identity provider.
+
+The dashboard is available at:
+
+```
+https://dash.better-auth.com/[project]/organization/[orgId]/enterprise
+```
+
+From the dashboard you can:
+
+- **Generate onboarding links** for enterprise customers to self-configure their SAML provider
+- **Monitor SSO connection status** for each organization
+- **Manage provider configurations** without writing code
+
+This eliminates the back-and-forth typically required when setting up enterprise SSO, reducing onboarding time from days to minutes.
 
 #### Multiple Organizations Example
 
 You can set up multiple SSO providers for different organizations:
 
 ```ts title="multi-org-setup.ts"
+import { auth } from "@/lib/auth"
+
 // Acme Corp SAML provider
 await auth.api.registerSSOProvider({
     body: {
@@ -750,7 +830,7 @@ await auth.api.registerSSOProvider({
 ### Provisioning Best Practices
 
 #### 1. Idempotent Operations
-Make sure your provisioning functions can be safely run multiple times:
+If you enable `provisionUserOnEveryLogin`, make sure your provisioning functions can be safely run multiple times:
 
 ```ts
 provisionUser: async ({ user, userInfo }) => {
@@ -803,6 +883,9 @@ organizationProvisioning: {
 ### Default SSO Provider
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -838,11 +921,27 @@ When registering a SAML provider, you need to provide Service Provider (SP) meta
 
 - **metadata**: XML metadata for the Service Provider
 - **binding**: The binding method, typically "post" or "redirect"
-- **privateKey**: Private key for signing (optional)
-- **privateKeyPass**: Password for the private key (if encrypted)
+- **privateKey**: Private key for signing AuthnRequests
+- **privateKeyPass**: Password for the private key
 - **isAssertionEncrypted**: Whether assertions should be encrypted
 - **encPrivateKey**: Private key for decryption (if encryption is enabled)
 - **encPrivateKeyPass**: Password for the encryption private key
+
+### Signed AuthnRequests
+
+Some enterprise IdPs (Okta, Azure AD, ADFS) require signed AuthnRequests. Enable this with:
+
+```ts
+samlConfig: {
+    // ... other config
+    authnRequestsSigned: true,
+    spMetadata: {
+        privateKey: "-----BEGIN RSA PRIVATE KEY-----\n...",
+    }
+}
+```
+
+The SP metadata endpoint will automatically include `AuthnRequestsSigned="true"` when enabled.
 
 ### Identity Provider Configuration
 
@@ -902,7 +1001,7 @@ const auth = betterAuth({
     plugins: [
         sso({
             saml: {
-                // Enable InResponseTo validation
+                // InResponseTo validation is enabled by default
                 enableInResponseToValidation: true,
                 // Optionally reject IdP-initiated SSO (stricter security)
                 allowIdpInitiated: false,
@@ -918,7 +1017,7 @@ const auth = betterAuth({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enableInResponseToValidation` | `boolean` | `false` | Enable InResponseTo validation for SP-initiated flows. |
+| `enableInResponseToValidation` | `boolean` | `true` | Enable InResponseTo validation for SP-initiated flows. |
 | `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
 | `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
 
@@ -1075,6 +1174,86 @@ sso({
 })
 ```
 
+#### Supported Algorithms
+
+**Signature algorithms:**
+- `RSA-SHA256`, `RSA-SHA384`, `RSA-SHA512`
+- `ECDSA-SHA256`, `ECDSA-SHA384`, `ECDSA-SHA512`
+
+**Digest algorithms:**
+- `SHA256`, `SHA384`, `SHA512`
+
+**Deprecated (triggers warning/rejection):**
+- `RSA-SHA1` (signature)
+- `SHA1` (digest)
+- `RSA 1.5` (key encryption)
+- `3DES` (data encryption)
+
+### Size Limits
+
+Better Auth enforces size limits on SAML payloads to protect against denial-of-service attacks via oversized XML.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `maxResponseSize` | 256KB | Maximum SAML response size in bytes |
+| `maxMetadataSize` | 100KB | Maximum IdP metadata size in bytes |
+
+#### Customizing Limits
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        maxResponseSize: 512 * 1024, // 512KB for enterprise IdPs with large group claims
+        maxMetadataSize: 100 * 1024, // 100KB
+    },
+})
+```
+
+<Callout type="info">
+For true early rejection of oversized payloads (before they reach your application), configure size limits at your infrastructure level (nginx `client_max_body_size`, CDN settings, load balancer).
+</Callout>
+
+## Shared Redirect URI
+
+By default, each OIDC provider gets its own callback URL (`/sso/callback/:providerId`). You can configure all providers to share a single redirect URI instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            redirectURI: "/sso/callback" // [!code highlight]
+        })
+    ]
+});
+```
+
+The value can be a relative path or a full URL:
+
+```ts
+// Relative path (appended to your baseURL)
+sso({ redirectURI: "/sso/callback" })
+
+// Full URL
+sso({ redirectURI: "https://login.example.com/callback" })
+```
+
+The provider ID is stored in the OAuth state so the callback can identify which provider initiated the flow.
+
+<Callout type="info">
+When using a full URL, make sure it routes to your Better Auth instance.
+</Callout>
+
+<Callout type="info">
+This option only affects OIDC providers. SAML providers already support custom callback URLs via `callbackUrl` in `samlConfig`.
+</Callout>
+
+<Callout type="info">
+Both the shared endpoint (`/sso/callback`) and the per-provider endpoints (`/sso/callback/:providerId`) are always registered for backward compatibility, so existing integrations continue to work regardless of this setting.
+</Callout>
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1099,6 +1278,9 @@ const authClient = createAuthClient({
 
     <Tab value="server">
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({ // [!code highlight]
@@ -1117,17 +1299,17 @@ Once enabled, make sure you migrate the database schema (again).
 <Tabs items={["migrate", "generate"]}>
     <Tab value="migrate">
     ```bash
-    npx @better-auth/cli migrate
+    npx auth migrate
     ```
     </Tab>
     <Tab value="generate">
     ```bash
-    npx @better-auth/cli generate
+    npx auth generate
     ```
     </Tab>
 </Tabs>
 
-See the [Schema](#schema-for-domain-verification) section to add the fields manually.
+See the [Schema](#if-you-have-enabled-domain-verification) section to add the fields manually.
 
 ### Verify your domain
 
@@ -1146,7 +1328,7 @@ You can use this token to prove ownership over the domain.
 #### Create `TXT` DNS record
 To do this, you'll need to add a `TXT` record to your domain's DNS settings:
 
-    *   **Host:** `better-auth-token-{your-provider-id}` (**Note:** This assumes the default token prefix, which can be customized through the `domainVerification.tokenPrefix` option)
+    *   **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
     *   **Value:** The verification token you were given.
 
 **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
@@ -1198,7 +1380,25 @@ type requestDomainVerification = {
 The plugin automatically creates the following SAML endpoints:
 
 - **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
-- **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}`
+- **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}` (supports both GET and POST)
+
+### SAML Callback URL Configuration
+
+The SAML callback endpoint (`/api/auth/sso/saml2/callback/{providerId}`) handles both **SP-initiated** and **IdP-initiated** SSO flows:
+
+- **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
+- **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
+
+**Important**: The `callbackUrl` in your SAML configuration should point to your application's destination URL (e.g., `/dashboard`), **not** the callback route itself. Better Auth automatically handles the callback route and redirects users to your specified `callbackUrl` after successful authentication.
+
+```ts
+samlConfig: {
+  callbackUrl: "/dashboard", // Correct - points to your app destination
+  // callbackUrl: "/api/auth/sso/saml2/callback/my-provider" // Incorrect - don't point to callback route
+}
+```
+
+The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
 
 ## Schema
 
@@ -1207,15 +1407,15 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 <DatabaseTable
     fields={[
         {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
+            name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
         },
-        { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
-        { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
-        { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isRequired: false },
-        { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
-        { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false }
+        { name: "issuer", type: "string", description: "The issuer identifier" },
+        { name: "domain", type: "string", description: "The domain of the provider" },
+        { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isOptional: true },
+        { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isOptional: true },
+        { name: "userId", type: "string", description: "The user ID", isForeignKey: true },
+        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isUnique: true },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isOptional: true }
     ]}
 />
 
@@ -1225,9 +1425,30 @@ The `ssoProvider` schema is extended as follows:
 
 <DatabaseTable
     fields={[
-        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isRequired: false },
+        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isOptional: true },
     ]}
 />
+
+### IdP-Initiated SAML SSO
+
+Better Auth supports **IdP-initiated SSO flows**, where users access your application directly from their Identity Provider dashboard (e.g., Okta, Azure AD, OneLogin). This is common in enterprise environments where IT admins prefer centralized app access.
+
+**How it works:**
+
+1. User clicks your app icon in the IdP dashboard
+2. IdP POSTs SAMLResponse to `/api/auth/sso/saml2/callback/{providerId}`
+3. Better Auth processes the assertion, creates a session, and redirects to your `callbackUrl`
+4. Browser follows the redirect with a GET request (handled automatically)
+
+**No additional configuration required** - the callback route automatically handles both GET and POST requests.
+
+<Callout type="info">
+If you previously created a manual GET handler for the SAML callback route as a workaround, you can remove it after upgrading. Better Auth now handles GET requests automatically.
+</Callout>
+
+<Callout type="info">
+**Security:** Better Auth validates all redirect URLs to prevent open redirect attacks. Only relative paths (e.g., `/dashboard`) and URLs matching your configured `trustedOrigins` are allowed. Malicious URLs like `https://evil.com` or protocol-relative URLs (`//evil.com`) are automatically blocked.
+</Callout>
 
 For a detailed guide on setting up SAML SSO with examples for Okta and testing with DummyIDP, see our [SAML SSO with Okta](/docs/guides/saml-sso-with-okta).
 
@@ -1236,6 +1457,8 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 ### Server
 
 **provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
+
+**provisionUserOnEveryLogin**: If `true`, the `provisionUser` callback runs on every login, not just on registration. Defaults to `false`.
 
 **organizationProvisioning**: Options for provisioning users to an organization.
 
@@ -1250,6 +1473,11 @@ If you want to allow account linking for specific trusted providers, enable the 
     provisionUser: {
         description: "A custom function to provision a user when they sign in with an SSO provider.",
         type: "function",
+    },
+    provisionUserOnEveryLogin: {
+        description: "If true, the provisionUser callback will be called on every login, not just when a new user is registered.",
+        type: "boolean",
+        default: false,
     },
     organizationProvisioning: {
         description: "Options for provisioning users to an organization.",
@@ -1287,6 +1515,11 @@ If you want to allow account linking for specific trusted providers, enable the 
         type: "number | function",
         default: 10,
     },
+    redirectURI: {
+        description: "Custom redirect URI for OIDC SSO callbacks. When set, all OIDC providers share this single callback URL instead of per-provider URLs. The provider ID is stored in the OAuth state. Can be a relative path (e.g., '/sso/callback') or a full URL.",
+        type: "string",
+        required: false,
+    },
     domainVerification: {
         description: "Configure the domain verification feature",
         type: "object",
@@ -1297,10 +1530,10 @@ If you want to allow account linking for specific trusted providers, enable the 
                 required: false
             },
             tokenPrefix: {
-                description: "Prefix to append to the verification token identifier",
+                description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
                 type: "string",
                 required: false,
-                default: "better-auth-token-"
+                default: "better-auth-token"
             },
         },
     },
@@ -1338,9 +1571,9 @@ If you want to allow account linking for specific trusted providers, enable the 
         type: "object",
         properties: {
             enableInResponseToValidation: {
-                description: "Enable InResponseTo validation for SP-initiated SAML flows. Opt-in for backward compatibility.",
+                description: "Enable InResponseTo validation for SP-initiated SAML flows.",
                 type: "boolean",
-                default: false,
+                default: true,
             },
             allowIdpInitiated: {
                 description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",
@@ -1373,6 +1606,16 @@ If you want to allow account linking for specific trusted providers, enable the 
                         default: "warn",
                     },
                 },
+            },
+            maxResponseSize: {
+                description: "Maximum allowed size for SAML responses in bytes.",
+                type: "number",
+                default: 262144,
+            },
+            maxMetadataSize: {
+                description: "Maximum allowed size for IdP metadata XML in bytes.",
+                type: "number",
+                default: 102400,
             },
         },
     },

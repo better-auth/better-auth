@@ -5,7 +5,7 @@ date: 2025-08-25
 author:
   name: "Dagmawi Esayas"
   avatar: ""
-image: "/blogs/supabase-ps.png"
+image: "https://docs.better-auth.com/blogs/supabase-ps.png"
 tags: ["migration", "guides", "supabase", "planetscale"]
 ---
 
@@ -25,7 +25,7 @@ We’ve noticed that some users are migrating from Supabase to PlanetScale Postg
   Open the PlanetScale [dashboard](https://app.planetscale.com/)
 </Step>
 <Step>
-  Create a [new database](<[https://app.planetscale.com/new](https://app.planetscale.com/new?org=better-auth)>)
+  Create a [new database](https://app.planetscale.com/new?org=better-auth)
 </Step>
 <Step>
   Get your connection string (PostgreSQL URI)
@@ -81,14 +81,14 @@ npm install --save-dev @types/pg
 <Step>
   Run this cli command to generate all the schema needed to setup Better Auth:
 ```bash 
-npx @better-auth/cli generate 
+npx auth generate 
 ```
 </Step>
 <Step>
   Then run this command to apply the generated schema to your PlanetScale
     database:
 ```bash 
-npx @better-auth/cli migrate 
+npx auth migrate 
 ```
 </Step>
 

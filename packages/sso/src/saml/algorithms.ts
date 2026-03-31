@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { XMLParser } from "fast-xml-parser";
+import { findNode, xmlParser } from "./parser";
 
 export const SignatureAlgorithm = {
 	RSA_SHA1: "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
@@ -46,6 +46,8 @@ const DEPRECATED_DATA_ENCRYPTION_ALGORITHMS: readonly string[] = [
 	DataEncryptionAlgorithm.TRIPLEDES_CBC,
 ];
 
+const DEPRECATED_DIGEST_ALGORITHMS: readonly string[] = [DigestAlgorithm.SHA1];
+
 const SECURE_SIGNATURE_ALGORITHMS: readonly string[] = [
 	SignatureAlgorithm.RSA_SHA256,
 	SignatureAlgorithm.RSA_SHA384,
@@ -55,6 +57,41 @@ const SECURE_SIGNATURE_ALGORITHMS: readonly string[] = [
 	SignatureAlgorithm.ECDSA_SHA512,
 ];
 
+const SECURE_DIGEST_ALGORITHMS: readonly string[] = [
+	DigestAlgorithm.SHA256,
+	DigestAlgorithm.SHA384,
+	DigestAlgorithm.SHA512,
+];
+
+const SHORT_FORM_SIGNATURE_TO_URI: Record<string, string> = {
+	sha1: SignatureAlgorithm.RSA_SHA1,
+	sha256: SignatureAlgorithm.RSA_SHA256,
+	sha384: SignatureAlgorithm.RSA_SHA384,
+	sha512: SignatureAlgorithm.RSA_SHA512,
+	"rsa-sha1": SignatureAlgorithm.RSA_SHA1,
+	"rsa-sha256": SignatureAlgorithm.RSA_SHA256,
+	"rsa-sha384": SignatureAlgorithm.RSA_SHA384,
+	"rsa-sha512": SignatureAlgorithm.RSA_SHA512,
+	"ecdsa-sha256": SignatureAlgorithm.ECDSA_SHA256,
+	"ecdsa-sha384": SignatureAlgorithm.ECDSA_SHA384,
+	"ecdsa-sha512": SignatureAlgorithm.ECDSA_SHA512,
+};
+
+const SHORT_FORM_DIGEST_TO_URI: Record<string, string> = {
+	sha1: DigestAlgorithm.SHA1,
+	sha256: DigestAlgorithm.SHA256,
+	sha384: DigestAlgorithm.SHA384,
+	sha512: DigestAlgorithm.SHA512,
+};
+
+function normalizeSignatureAlgorithm(alg: string): string {
+	return SHORT_FORM_SIGNATURE_TO_URI[alg.toLowerCase()] ?? alg;
+}
+
+function normalizeDigestAlgorithm(alg: string): string {
+	return SHORT_FORM_DIGEST_TO_URI[alg.toLowerCase()] ?? alg;
+}
+
 export type DeprecatedAlgorithmBehavior = "reject" | "warn" | "allow";
 
 export interface AlgorithmValidationOptions {
@@ -63,36 +100,6 @@ export interface AlgorithmValidationOptions {
 	allowedDigestAlgorithms?: string[];
 	allowedKeyEncryptionAlgorithms?: string[];
 	allowedDataEncryptionAlgorithms?: string[];
-}
-
-const xmlParser = new XMLParser({
-	ignoreAttributes: false,
-	attributeNamePrefix: "@_",
-	removeNSPrefix: true,
-});
-
-function findNode(obj: unknown, nodeName: string): unknown {
-	if (!obj || typeof obj !== "object") return null;
-
-	const record = obj as Record<string, unknown>;
-
-	if (nodeName in record) {
-		return record[nodeName];
-	}
-
-	for (const value of Object.values(record)) {
-		if (Array.isArray(value)) {
-			for (const item of value) {
-				const found = findNode(item, nodeName);
-				if (found) return found;
-			}
-		} else if (typeof value === "object" && value !== null) {
-			const found = findNode(value, nodeName);
-			if (found) return found;
-		}
-	}
-
-	return null;
 }
 
 function extractEncryptionAlgorithms(xml: string): {
@@ -255,5 +262,77 @@ export function validateSAMLAlgorithms(
 	if (hasEncryptedAssertion(response.samlContent)) {
 		const encAlgs = extractEncryptionAlgorithms(response.samlContent);
 		validateEncryptionAlgorithms(encAlgs, options);
+	}
+}
+
+export interface ConfigAlgorithmValidationOptions {
+	onDeprecated?: DeprecatedAlgorithmBehavior;
+	allowedSignatureAlgorithms?: string[];
+	allowedDigestAlgorithms?: string[];
+}
+
+export function validateConfigAlgorithms(
+	config: {
+		signatureAlgorithm?: string | undefined;
+		digestAlgorithm?: string | undefined;
+	},
+	options: ConfigAlgorithmValidationOptions = {},
+): void {
+	const {
+		onDeprecated = "warn",
+		allowedSignatureAlgorithms,
+		allowedDigestAlgorithms,
+	} = options;
+
+	if (config.signatureAlgorithm) {
+		const normalized = normalizeSignatureAlgorithm(config.signatureAlgorithm);
+		if (allowedSignatureAlgorithms) {
+			const normalizedAllowList = allowedSignatureAlgorithms.map(
+				normalizeSignatureAlgorithm,
+			);
+			if (!normalizedAllowList.includes(normalized)) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML signature algorithm not in allow-list: ${config.signatureAlgorithm}`,
+					code: "SAML_ALGORITHM_NOT_ALLOWED",
+				});
+			}
+		} else if (DEPRECATED_SIGNATURE_ALGORITHMS.includes(normalized)) {
+			handleDeprecatedAlgorithm(
+				`SAML config uses deprecated signature algorithm: ${config.signatureAlgorithm}. Consider using SHA-256 or stronger.`,
+				onDeprecated,
+				"SAML_DEPRECATED_CONFIG_ALGORITHM",
+			);
+		} else if (!SECURE_SIGNATURE_ALGORITHMS.includes(normalized)) {
+			throw new APIError("BAD_REQUEST", {
+				message: `SAML signature algorithm not recognized: ${config.signatureAlgorithm}`,
+				code: "SAML_UNKNOWN_ALGORITHM",
+			});
+		}
+	}
+
+	if (config.digestAlgorithm) {
+		const normalized = normalizeDigestAlgorithm(config.digestAlgorithm);
+		if (allowedDigestAlgorithms) {
+			const normalizedAllowList = allowedDigestAlgorithms.map(
+				normalizeDigestAlgorithm,
+			);
+			if (!normalizedAllowList.includes(normalized)) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML digest algorithm not in allow-list: ${config.digestAlgorithm}`,
+					code: "SAML_ALGORITHM_NOT_ALLOWED",
+				});
+			}
+		} else if (DEPRECATED_DIGEST_ALGORITHMS.includes(normalized)) {
+			handleDeprecatedAlgorithm(
+				`SAML config uses deprecated digest algorithm: ${config.digestAlgorithm}. Consider using SHA-256 or stronger.`,
+				onDeprecated,
+				"SAML_DEPRECATED_CONFIG_ALGORITHM",
+			);
+		} else if (!SECURE_DIGEST_ALGORITHMS.includes(normalized)) {
+			throw new APIError("BAD_REQUEST", {
+				message: `SAML digest algorithm not recognized: ${config.digestAlgorithm}`,
+				code: "SAML_UNKNOWN_ALGORITHM",
+			});
+		}
 	}
 }

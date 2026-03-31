@@ -16,18 +16,29 @@ import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import {
-	parseSessionInput,
+	getSessionDefaultFields,
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
+import {
+	getStorageOption,
+	processIdentifier,
+} from "./verification-token-storage";
+import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
+
+function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
+	const expiresMs =
+		typeof expiresAt === "number" ? expiresAt : expiresAt.getTime();
+	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
+}
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
 		logger: InternalLogger;
-		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		hooks: DatabaseHooksEntry[];
 		generateId: AuthContext["generateId"];
 	},
 ): InternalAdapter => {
@@ -61,10 +72,7 @@ export const createInternalAdapter = (
 				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
 				if (!parsed) return;
 
-				const sessionTTL = Math.max(
-					Math.floor(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
-					0,
-				);
+				const sessionTTL = getTTLSeconds(parsed.session.expiresAt, now);
 
 				await secondaryStorage.set(
 					token,
@@ -148,7 +156,10 @@ export const createInternalAdapter = (
 			);
 			return createdAccount as T & Account;
 		},
-		listSessions: async (userId: string) => {
+		listSessions: async (
+			userId: string,
+			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
+		) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -159,22 +170,33 @@ export const createInternalAdapter = (
 					safeJSONParse(currentList) || [];
 				const now = Date.now();
 
-				const validSessions = list.filter((s) => s.expiresAt > now);
-				const sessions = [];
+				const seenTokens = new Set<string>();
+				const sessions: Session[] = [];
 
-				for (const session of validSessions) {
-					const sessionStringified = await secondaryStorage.get(session.token);
-					if (sessionStringified) {
-						const s = safeJSONParse<{
+				for (const { token, expiresAt } of list) {
+					if (expiresAt <= now || seenTokens.has(token)) continue;
+					seenTokens.add(token);
+
+					const data = await secondaryStorage.get(token);
+					if (!data) continue;
+
+					try {
+						const parsed = (
+							typeof data === "string" ? JSON.parse(data) : data
+						) as {
 							session: Session;
 							user: User;
-						}>(sessionStringified);
-						if (!s) return [];
-						const parsedSession = parseSessionOutput(ctx.options, {
-							...s.session,
-							expiresAt: new Date(s.session.expiresAt),
-						});
-						sessions.push(parsedSession);
+						};
+						if (!parsed?.session) continue;
+
+						sessions.push(
+							parseSessionOutput(ctx.options, {
+								...parsed.session,
+								expiresAt: new Date(parsed.session.expiresAt),
+							}),
+						);
+					} catch {
+						continue;
 					}
 				}
 				return sessions;
@@ -189,6 +211,15 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 			});
 			return sessions;
@@ -264,19 +295,21 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const ctx = await getCurrentAuthContext().catch(() => null);
-			const headers = ctx?.headers || ctx?.request?.headers;
-			const { id: _, ...rest } = override || {};
-			//we're parsing default values for session additional fields
-			const defaultAdditionalFields = parseSessionInput(
-				ctx?.context.options ?? options,
-				{},
-			);
-			const data: Omit<Session, "id"> = {
-				ipAddress:
-					ctx?.request || ctx?.headers
-						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
-						: "",
+			const headers: Headers | undefined = await (async () => {
+				const ctx = await getCurrentAuthContext().catch(() => null);
+				return ctx?.headers || ctx?.request?.headers;
+			})();
+			const storeInDb = options.session?.storeSessionInDatabase;
+			const {
+				// always ignore override id - new sessions must have new ids
+				id: _,
+				...rest
+			} = override || {};
+
+			// we're parsing default values for session additional fields
+			const defaultAdditionalFields = getSessionDefaultFields(options);
+			const data = {
+				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -294,7 +327,7 @@ export const createInternalAdapter = (
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
-			};
+			} satisfies Partial<Session>;
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -314,25 +347,21 @@ export const createInternalAdapter = (
 
 								if (currentList) {
 									list = safeJSONParse(currentList) || [];
-									list = list.filter((session) => session.expiresAt > now);
+									list = list.filter(
+										(session) =>
+											session.expiresAt > now && session.token !== data.token,
+									);
 								}
 
-								const sorted = list.sort((a, b) => a.expiresAt - b.expiresAt);
-								let furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-								sorted.push({
-									token: data.token,
-									expiresAt: data.expiresAt.getTime(),
-								});
-								if (
-									!furthestSessionExp ||
-									furthestSessionExp < data.expiresAt.getTime()
-								) {
-									furthestSessionExp = data.expiresAt.getTime();
-								}
-								const furthestSessionTTL = Math.max(
-									Math.floor((furthestSessionExp - now) / 1000),
-									0,
+								const sorted = [
+									...list,
+									{ token: data.token, expiresAt: data.expiresAt.getTime() },
+								].sort((a, b) => a.expiresAt - b.expiresAt);
+								const furthestSessionExp =
+									sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
+								const furthestSessionTTL = getTTLSeconds(
+									furthestSessionExp,
+									now,
 								);
 								if (furthestSessionTTL > 0) {
 									await secondaryStorage.set(
@@ -342,7 +371,9 @@ export const createInternalAdapter = (
 									);
 								}
 
-								const user = await adapter.findOne<User>({
+								const user = await (
+									await getCurrentAdapter(adapter)
+								).findOne<User>({
 									model: "user",
 									where: [
 										{
@@ -351,10 +382,7 @@ export const createInternalAdapter = (
 										},
 									],
 								});
-								const sessionTTL = Math.max(
-									Math.floor((data.expiresAt.getTime() - now) / 1000),
-									0,
-								);
+								const sessionTTL = getTTLSeconds(data.expiresAt, now);
 								if (sessionTTL > 0) {
 									await secondaryStorage.set(
 										data.token,
@@ -368,7 +396,7 @@ export const createInternalAdapter = (
 
 								return sessionData;
 							},
-							executeMainFn: options.session?.storeSessionInDatabase,
+							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
@@ -382,7 +410,14 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+				// When preserveSessionInDatabase is enabled, revoked sessions
+				// remain in the database for audit purposes. Skip the database
+				// fallback to prevent those revoked sessions from being restored.
+				if (
+					!sessionStringified &&
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase)
+				) {
 					return null;
 				}
 				if (sessionStringified) {
@@ -445,7 +480,14 @@ export const createInternalAdapter = (
 				user: parsedUser,
 			};
 		},
-		findSessions: async (sessionTokens: string[]) => {
+		findSessions: async (
+			sessionTokens: string[],
+			options?:
+				| {
+						onlyActiveSessions?: boolean | undefined;
+				  }
+				| undefined,
+		) => {
 			if (secondaryStorage) {
 				const sessions: {
 					session: Session;
@@ -454,26 +496,39 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
-						const s = safeJSONParse<{
-							session: Session;
-							user: User;
-						}>(sessionStringified);
-						if (!s) return [];
-						const session = {
-							session: {
-								...s.session,
-								expiresAt: new Date(s.session.expiresAt),
-							},
-							user: {
-								...s.user,
-								createdAt: new Date(s.user.createdAt),
-								updatedAt: new Date(s.user.updatedAt),
-							},
-						} as {
-							session: Session;
-							user: User;
-						};
-						sessions.push(session);
+						try {
+							const s = (
+								typeof sessionStringified === "string"
+									? JSON.parse(sessionStringified)
+									: sessionStringified
+							) as {
+								session: Session;
+								user: User;
+							};
+							if (!s) return [];
+							const expiresAt = new Date(s.session.expiresAt);
+							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
+								continue;
+							}
+							const session = {
+								session: {
+									...s.session,
+									expiresAt: new Date(s.session.expiresAt),
+								},
+								user: {
+									...s.user,
+									createdAt: new Date(s.user.createdAt),
+									updatedAt: new Date(s.user.updatedAt),
+								},
+							} as {
+								session: Session;
+								user: User;
+							};
+							sessions.push(session);
+						} catch {
+							// Skip invalid/corrupt session data
+							continue;
+						}
 					}
 				}
 				return sessions;
@@ -489,6 +544,15 @@ export const createInternalAdapter = (
 						value: sessionTokens,
 						operator: "in",
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 				join: {
 					user: true,
@@ -518,21 +582,76 @@ export const createInternalAdapter = (
 					? {
 							async fn(data) {
 								const currentSession = await secondaryStorage.get(sessionToken);
-								let updatedSession: Session | null = null;
-								if (currentSession) {
-									const parsedSession = safeJSONParse<{
-										session: Session;
-										user: User;
-									}>(currentSession);
-									if (!parsedSession) return null;
-									updatedSession = {
-										...parsedSession.session,
-										...data,
-									};
-									return updatedSession;
-								} else {
+								if (!currentSession) {
 									return null;
 								}
+
+								const parsedSession = safeJSONParse<{
+									session: Session;
+									user: User;
+								}>(currentSession);
+								if (!parsedSession) return null;
+
+								const mergedSession = {
+									...parsedSession.session,
+									...data,
+									expiresAt: new Date(
+										data.expiresAt ?? parsedSession.session.expiresAt,
+									),
+									createdAt: new Date(parsedSession.session.createdAt),
+									updatedAt: new Date(
+										data.updatedAt ?? parsedSession.session.updatedAt,
+									),
+								};
+
+								const updatedSession = parseSessionOutput(
+									ctx.options,
+									mergedSession,
+								);
+
+								const now = Date.now();
+								const expiresMs = new Date(updatedSession.expiresAt).getTime();
+								const sessionTTL = getTTLSeconds(expiresMs, now);
+
+								if (sessionTTL > 0) {
+									await secondaryStorage.set(
+										sessionToken,
+										JSON.stringify({
+											session: updatedSession,
+											user: parsedSession.user,
+										}),
+										sessionTTL,
+									);
+
+									const listKey = `active-sessions-${updatedSession.userId}`;
+									const listRaw = await secondaryStorage.get(listKey);
+									const list: { token: string; expiresAt: number }[] = listRaw
+										? safeJSONParse(listRaw) || []
+										: [];
+
+									const filtered = list
+										.filter(
+											(s) => s.token !== sessionToken && s.expiresAt > now,
+										)
+										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+
+									const sorted = filtered.sort(
+										(a, b) => a.expiresAt - b.expiresAt,
+									);
+									const furthestSessionExp = sorted.at(-1)?.expiresAt;
+
+									if (furthestSessionExp && furthestSessionExp > now) {
+										await secondaryStorage.set(
+											listKey,
+											JSON.stringify(sorted),
+											getTTLSeconds(furthestSessionExp, now),
+										);
+									} else {
+										await secondaryStorage.delete(listKey);
+									}
+								}
+
+								return updatedSession;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
@@ -560,7 +679,7 @@ export const createInternalAdapter = (
 						`active-sessions-${userId}`,
 					);
 					if (currentList) {
-						let list: { token: string; expiresAt: number }[] =
+						const list: { token: string; expiresAt: number }[] =
 							safeJSONParse(currentList) || [];
 						const now = Date.now();
 
@@ -578,7 +697,7 @@ export const createInternalAdapter = (
 							await secondaryStorage.set(
 								`active-sessions-${userId}`,
 								JSON.stringify(filtered),
-								Math.floor((furthestSessionExp - now) / 1000),
+								getTTLSeconds(furthestSessionExp, now),
 							);
 						} else {
 							await secondaryStorage.delete(`active-sessions-${userId}`);
@@ -673,26 +792,29 @@ export const createInternalAdapter = (
 			providerId: string,
 		) => {
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter))
-				.findMany<Account & { user: User | null }>({
-					model: "account",
-					where: [
-						{
-							value: accountId,
-							field: "accountId",
-						},
-					],
-					join: {
-						user: true,
+			const account = await (await getCurrentAdapter(adapter)).findOne<
+				Account & { user: User | null }
+			>({
+				model: "account",
+				where: [
+					{
+						value: accountId,
+						field: "accountId",
 					},
-				})
-				.then((accounts) => {
-					return accounts.find((a) => a.providerId === providerId);
-				});
+					{
+						value: providerId,
+						field: "providerId",
+					},
+				],
+				join: {
+					user: true,
+				},
+			});
 			if (account) {
 				if (account.user) {
 					return {
 						user: account.user,
+						linkedAccount: account,
 						accounts: [account],
 					};
 				} else {
@@ -708,6 +830,7 @@ export const createInternalAdapter = (
 					if (user) {
 						return {
 							user,
+							linkedAccount: account,
 							accounts: [account],
 						};
 					}
@@ -737,6 +860,7 @@ export const createInternalAdapter = (
 					});
 					return {
 						user,
+						linkedAccount: null,
 						accounts: accounts || [],
 					};
 				} else {
@@ -815,7 +939,6 @@ export const createInternalAdapter = (
 				undefined,
 			);
 			await refreshUserSessions(user);
-			await refreshUserSessions(user);
 			return user;
 		},
 		updateUserByEmail: async (
@@ -833,7 +956,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
 			await refreshUserSessions(user);
 			return user;
 		},
@@ -929,35 +1051,96 @@ export const createInternalAdapter = (
 			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 				Partial<Verification>,
 		) => {
+			const storageOption = getStorageOption(
+				data.identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				data.identifier,
+				storageOption,
+			);
+
 			const verification = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...data,
+					identifier: storedIdentifier,
 				},
 				"verification",
-				undefined,
+				secondaryStorage
+					? {
+							async fn(verificationData) {
+								const ttl = getTTLSeconds(verificationData.expiresAt);
+								if (ttl > 0) {
+									await secondaryStorage.set(
+										`verification:${storedIdentifier}`,
+										JSON.stringify(verificationData),
+										ttl,
+									);
+								}
+								return verificationData;
+							},
+							executeMainFn: options.verification?.storeInDatabase,
+						}
+					: undefined,
 			);
 			return verification as Verification;
 		},
 		findVerificationValue: async (identifier: string) => {
-			const verification = await (
-				await getCurrentAdapter(adapter)
-			).findMany<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-				sortBy: {
-					field: "createdAt",
-					direction: "desc",
-				},
-				limit: 1,
-			});
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const cached = await secondaryStorage.get(
+					`verification:${storedIdentifier}`,
+				);
+				if (cached) {
+					const parsed = safeJSONParse<Verification>(cached);
+					if (parsed) {
+						return parsed;
+					}
+				}
+				if (storageOption && storageOption !== "plain") {
+					const plainCached = await secondaryStorage.get(
+						`verification:${identifier}`,
+					);
+					if (plainCached) {
+						const parsed = safeJSONParse<Verification>(plainCached);
+						if (parsed) {
+							return parsed;
+						}
+					}
+				}
+				if (!options.verification?.storeInDatabase) {
+					return null;
+				}
+			}
+
+			const currentAdapter = await getCurrentAdapter(adapter);
+
+			async function findByIdentifier(id: string) {
+				return currentAdapter.findMany<Verification>({
+					model: "verification",
+					where: [{ field: "identifier", value: id }],
+					sortBy: { field: "createdAt", direction: "desc" },
+					limit: 1,
+				});
+			}
+
+			let verification = await findByIdentifier(storedIdentifier);
+
+			if (!verification.length && storageOption && storageOption !== "plain") {
+				verification = await findByIdentifier(identifier);
+			}
+
 			if (!options.verification?.disableCleanup) {
 				await deleteManyWithHooks(
 					[
@@ -971,34 +1154,80 @@ export const createInternalAdapter = (
 					undefined,
 				);
 			}
-			const lastVerification = verification[0];
-			return lastVerification as Verification | null;
-		},
-		deleteVerificationValue: async (id: string) => {
-			await deleteWithHooks(
-				[{ field: "id", value: id }],
-				"verification",
-				undefined,
-			);
+
+			return (verification[0] as Verification) || null;
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
-			await deleteWithHooks(
-				[{ field: "identifier", value: identifier }],
-				"verification",
-				undefined,
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
 			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				await secondaryStorage.delete(`verification:${storedIdentifier}`);
+			}
+
+			if (!secondaryStorage || options.verification?.storeInDatabase) {
+				await deleteWithHooks(
+					[{ field: "identifier", value: storedIdentifier }],
+					"verification",
+					undefined,
+				);
+			}
 		},
-		updateVerificationValue: async (
-			id: string,
+		updateVerificationByIdentifier: async (
+			identifier: string,
 			data: Partial<Verification>,
 		) => {
-			const verification = await updateWithHooks<Verification>(
-				data,
-				[{ field: "id", value: id }],
-				"verification",
-				undefined,
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
 			);
-			return verification;
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const cached = await secondaryStorage.get(
+					`verification:${storedIdentifier}`,
+				);
+				if (cached) {
+					const parsed = safeJSONParse<Verification>(cached);
+					if (parsed) {
+						const updated = { ...parsed, ...data };
+						const expiresAt = updated.expiresAt ?? parsed.expiresAt;
+						const ttl = getTTLSeconds(
+							expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
+						);
+						if (ttl > 0) {
+							await secondaryStorage.set(
+								`verification:${storedIdentifier}`,
+								JSON.stringify(updated),
+								ttl,
+							);
+						}
+						if (!options.verification?.storeInDatabase) {
+							return updated;
+						}
+					}
+				}
+			}
+
+			if (!secondaryStorage || options.verification?.storeInDatabase) {
+				const verification = await updateWithHooks<Verification>(
+					data,
+					[{ field: "identifier", value: storedIdentifier }],
+					"verification",
+					undefined,
+				);
+				return verification;
+			}
+			return data as Verification;
 		},
 	};
 };

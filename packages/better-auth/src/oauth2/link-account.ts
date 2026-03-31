@@ -1,8 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
-import { APIError, createEmailVerificationToken } from "../api";
+import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
+import { isAPIError } from "../utils/is-api-error";
 import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
@@ -34,23 +35,25 @@ export async function handleOAuthUserInfo(
 			throw c.redirect(`${errorURL}?error=internal_server_error`);
 		});
 	let user = dbUser?.user;
-	let isRegister = !user;
+	const isRegister = !user;
 
 	if (dbUser) {
-		const hasBeenLinked = dbUser.accounts.find(
-			(a) =>
-				a.providerId === account.providerId &&
-				a.accountId === account.accountId,
-		);
-		if (!hasBeenLinked) {
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
+		const linkedAccount =
+			dbUser.linkedAccount ??
+			dbUser.accounts.find(
+				(acc) =>
+					acc.providerId === account.providerId &&
+					acc.accountId === account.accountId,
+			);
+		if (!linkedAccount) {
+			const accountLinking = c.context.options.account?.accountLinking;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				trustedProviders?.includes(account.providerId as "apple");
+				c.context.trustedProviders.includes(account.providerId);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				accountLinking?.enabled === false ||
+				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
 					logger.warn(
@@ -92,30 +95,35 @@ export async function handleOAuthUserInfo(
 				});
 			}
 		} else {
-			if (c.context.options.account?.updateAccountOnSignIn !== false) {
-				const updateData = Object.fromEntries(
-					Object.entries({
-						idToken: account.idToken,
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-					}).filter(([_, value]) => value !== undefined),
-				);
-				if (c.context.options.account?.storeAccountCookie) {
-					await setAccountCookie(c, {
-						...account,
-						...updateData,
-					});
-				}
+			const freshTokens =
+				c.context.options.account?.updateAccountOnSignIn !== false
+					? Object.fromEntries(
+							Object.entries({
+								idToken: account.idToken,
+								accessToken: await setTokenUtil(account.accessToken, c.context),
+								refreshToken: await setTokenUtil(
+									account.refreshToken,
+									c.context,
+								),
+								accessTokenExpiresAt: account.accessTokenExpiresAt,
+								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+								scope: account.scope,
+							}).filter(([_, value]) => value !== undefined),
+						)
+					: {};
 
-				if (Object.keys(updateData).length > 0) {
-					await c.context.internalAdapter.updateAccount(
-						hasBeenLinked.id,
-						updateData,
-					);
-				}
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, {
+					...linkedAccount,
+					...freshTokens,
+				});
+			}
+
+			if (Object.keys(freshTokens).length > 0) {
+				await c.context.internalAdapter.updateAccount(
+					linkedAccount.id,
+					freshTokens,
+				);
 			}
 
 			if (
@@ -175,7 +183,8 @@ export async function handleOAuthUserInfo(
 			if (
 				!userInfo.emailVerified &&
 				user &&
-				c.context.options.emailVerification?.sendOnSignUp
+				c.context.options.emailVerification?.sendOnSignUp &&
+				c.context.options.emailVerification?.sendVerificationEmail
 			) {
 				const token = await createEmailVerificationToken(
 					c.context.secret,
@@ -184,18 +193,20 @@ export async function handleOAuthUserInfo(
 					c.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-				await c.context.options.emailVerification?.sendVerificationEmail?.(
-					{
-						user,
-						url,
-						token,
-					},
-					c.request,
+				await c.context.runInBackgroundOrAwait(
+					c.context.options.emailVerification.sendVerificationEmail(
+						{
+							user,
+							url,
+							token,
+						},
+						c.request,
+					),
 				);
 			}
 		} catch (e: any) {
 			logger.error(e);
-			if (e instanceof APIError) {
+			if (isAPIError(e)) {
 				return {
 					error: e.message,
 					data: null,

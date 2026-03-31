@@ -1,11 +1,31 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
+import type { Session, User } from "../types";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
+import type { AuthQueryAtom } from "./query";
 
 const now = () => Math.floor(Date.now() / 1000);
+
+/**
+ * Normalize $fetch response: `throw: true` returns data directly, otherwise `{ data, error }`.
+ */
+function normalizeSessionResponse(res: unknown): {
+	data: SessionResponse | null;
+	error: unknown;
+} {
+	if (
+		typeof res === "object" &&
+		res !== null &&
+		"data" in res &&
+		"error" in res
+	) {
+		return res as { data: SessionResponse | null; error: unknown };
+	}
+	return { data: res as SessionResponse, error: null };
+}
 
 /**
  * Rate limit: don't refetch on focus if a session request was made within this many seconds
@@ -13,7 +33,12 @@ const now = () => Math.floor(Date.now() / 1000);
 const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
-	sessionAtom: WritableAtom<any>;
+	sessionAtom: AuthQueryAtom<
+		{
+			user: User;
+			session: Session;
+		} & Record<string, any>
+	>;
 	sessionSignal: WritableAtom<boolean>;
 	$fetch: BetterFetch;
 	options?: BetterAuthClientOptions | undefined;
@@ -28,6 +53,20 @@ interface SessionRefreshState {
 	unsubscribeFocus?: (() => void) | undefined;
 	unsubscribeOnline?: (() => void) | undefined;
 }
+
+export type SessionResponse = (
+	| {
+			session: null;
+			user: null;
+			needsRefresh?: boolean;
+	  }
+	| {
+			session: Session;
+			user: User;
+			needsRefresh?: boolean;
+	  }
+) &
+	Record<string, any>;
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const { sessionAtom, sessionSignal, $fetch, options = {} } = opts;
@@ -65,42 +104,54 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		const currentSession = sessionAtom.get();
 
-		if (event?.event === "poll") {
+		const fetchSessionWithRefresh = () => {
 			state.lastSessionRequest = now();
-			$fetch("/get-session")
-				.then((res) => {
+			$fetch<SessionResponse>("/get-session")
+				.then(async (res) => {
+					let { data, error } = normalizeSessionResponse(res);
+
+					if (data?.needsRefresh) {
+						try {
+							const refreshRes = await $fetch<SessionResponse>("/get-session", {
+								method: "POST",
+							});
+							({ data, error } = normalizeSessionResponse(refreshRes));
+						} catch {}
+					}
+
+					const sessionData = data?.session && data?.user ? data : null;
+
 					sessionAtom.set({
 						...currentSession,
-						data: res.data,
-						error: res.error || null,
+						data: sessionData,
+						error: error as Parameters<typeof sessionAtom.set>[0]["error"],
 					});
 					state.lastSync = now();
 					sessionSignal.set(!sessionSignal.get());
 				})
 				.catch(() => {});
+		};
+
+		if (event?.event === "poll") {
+			fetchSessionWithRefresh();
 			return;
 		}
 
 		// Rate limit: don't refetch on focus if a session request was made recently
 		if (event?.event === "visibilitychange") {
 			const timeSinceLastRequest = now() - state.lastSessionRequest;
-			if (
-				timeSinceLastRequest < FOCUS_REFETCH_RATE_LIMIT_SECONDS &&
-				currentSession?.data !== null &&
-				currentSession?.data !== undefined
-			) {
+			if (timeSinceLastRequest < FOCUS_REFETCH_RATE_LIMIT_SECONDS) {
 				return;
 			}
+			state.lastSessionRequest = now();
 		}
 
-		if (
-			currentSession?.data === null ||
-			currentSession?.data === undefined ||
-			event?.event === "visibilitychange"
-		) {
-			if (event?.event === "visibilitychange") {
-				state.lastSessionRequest = now();
-			}
+		if (event?.event === "visibilitychange") {
+			fetchSessionWithRefresh();
+			return;
+		}
+
+		if (currentSession?.data === null || currentSession?.data === undefined) {
 			state.lastSync = now();
 			sessionSignal.set(!sessionSignal.get());
 		}

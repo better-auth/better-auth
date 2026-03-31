@@ -26,7 +26,9 @@ export const matchesOriginPattern = (
 		return false;
 	}
 
-	if (pattern.includes("*")) {
+	// Check if pattern contains wildcard characters (*, **, or ?)
+	const hasWildcard = pattern.includes("*") || pattern.includes("?");
+	if (hasWildcard) {
 		// For protocol-specific wildcards, match the full origin
 		if (pattern.includes("://")) {
 			return wildcardMatch(pattern)(getOrigin(url) || url);

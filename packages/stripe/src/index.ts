@@ -1,10 +1,12 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin, User } from "better-auth";
+import { APIError } from "better-auth";
+import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
+import { STRIPE_ERROR_CODES } from "./error-codes";
+import { customerMetadata } from "./metadata";
 import {
 	cancelSubscription,
-	cancelSubscriptionCallback,
 	createBillingPortal,
 	listActiveSubscriptions,
 	restoreSubscription,
@@ -17,28 +19,23 @@ import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
-	SubscriptionOptions,
+	WithStripeCustomerId,
 } from "./types";
+import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
 
-const STRIPE_ERROR_CODES = defineErrorCodes({
-	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
-	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
-	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
-	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
-	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
-	EMAIL_VERIFICATION_REQUIRED:
-		"Email verification is required before you can subscribe to a plan",
-	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
-	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
-		"Subscription is not scheduled for cancellation",
-});
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		stripe: {
+			creator: typeof stripe;
+		};
+	}
+}
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
 	const subscriptionEndpoints = {
 		upgradeSubscription: upgradeSubscription(options),
-		cancelSubscriptionCallback: cancelSubscriptionCallback(options),
 		cancelSubscription: cancelSubscription(options),
 		restoreSubscription: restoreSubscription(options),
 		listActiveSubscriptions: listActiveSubscriptions(options),
@@ -59,31 +56,280 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				: {}),
 		},
 		init(ctx) {
+			// Validate: seatPriceId requires organization to be enabled
+			if (options.subscription?.enabled && !options.organization?.enabled) {
+				const warnIfSeatPricing = (plans: StripePlan[]) => {
+					if (plans.some((p) => p.seatPriceId)) {
+						ctx.logger.error(
+							"seatPriceId is configured on a plan but stripe organization option is not enabled. " +
+								"Seat-based billing requires `organization: { enabled: true }` in stripe plugin options.",
+						);
+					}
+				};
+				const { plans } = options.subscription;
+				if (typeof plans === "function") {
+					void Promise.resolve(plans())
+						.then(warnIfSeatPricing)
+						.catch((e: any) => {
+							ctx.logger.error(
+								`Failed to resolve plans for seat pricing validation: ${e.message}`,
+							);
+						});
+				} else {
+					warnIfSeatPricing(plans);
+				}
+			}
+
+			if (options.organization?.enabled) {
+				const orgPlugin = ctx.getPlugin("organization");
+				if (!orgPlugin) {
+					ctx.logger.error(`Organization plugin not found`);
+					return;
+				}
+
+				const existingHooks = orgPlugin.options.organizationHooks ?? {};
+
+				/**
+				 * Sync organization name to Stripe customer
+				 */
+				const afterUpdateStripeOrg = async (data: {
+					organization: (Organization & WithStripeCustomerId) | null;
+					user: User;
+				}) => {
+					const { organization } = data;
+					if (!organization?.stripeCustomerId) return;
+
+					try {
+						const stripeCustomer = await client.customers.retrieve(
+							organization.stripeCustomerId,
+						);
+
+						if (stripeCustomer.deleted) {
+							ctx.logger.warn(
+								`Stripe customer ${organization.stripeCustomerId} was deleted`,
+							);
+							return;
+						}
+
+						// Update Stripe customer if name changed
+						if (organization.name !== stripeCustomer.name) {
+							await client.customers.update(organization.stripeCustomerId, {
+								name: organization.name,
+							});
+							ctx.logger.info(
+								`Synced organization name to Stripe: "${stripeCustomer.name}" → "${organization.name}"`,
+							);
+						}
+					} catch (e: any) {
+						ctx.logger.error(
+							`Failed to sync organization to Stripe: ${e.message}`,
+						);
+					}
+				};
+
+				/**
+				 * Block deletion if organization has active subscriptions
+				 */
+				const beforeDeleteStripeOrg = async (data: {
+					organization: Organization & WithStripeCustomerId;
+					user: User;
+				}) => {
+					const { organization } = data;
+					if (!organization.stripeCustomerId) return;
+
+					try {
+						// Check if organization has any active subscriptions
+						const subscriptions = await client.subscriptions.list({
+							customer: organization.stripeCustomerId,
+							status: "all",
+							limit: 100, // 1 ~ 100
+						});
+						for (const sub of subscriptions.data) {
+							if (
+								sub.status !== "canceled" &&
+								sub.status !== "incomplete" &&
+								sub.status !== "incomplete_expired"
+							) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									STRIPE_ERROR_CODES.ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION,
+								);
+							}
+						}
+					} catch (error: any) {
+						if (error instanceof APIError) {
+							throw error;
+						}
+						ctx.logger.error(
+							`Failed to check organization subscriptions: ${error.message}`,
+						);
+						throw error;
+					}
+				};
+
+				/**
+				 * Sync seat quantity to Stripe when organization members change.
+				 * quantity = memberCount; Stripe graduated pricing handles free tiers.
+				 */
+				const syncSeatsAfterMemberChange = async (data: {
+					organization: Organization & WithStripeCustomerId;
+				}) => {
+					if (
+						!options.subscription?.enabled ||
+						!data.organization?.stripeCustomerId
+					) {
+						return;
+					}
+
+					try {
+						const memberCount = await ctx.adapter.count({
+							model: "member",
+							where: [
+								{
+									field: "organizationId",
+									value: data.organization.id,
+								},
+							],
+						});
+
+						const plans = await getPlans(options.subscription);
+						const seatPlans = plans.filter((p) => p.seatPriceId);
+						if (seatPlans.length === 0) return;
+
+						const seatPlanNames = new Set(
+							seatPlans.map((p) => p.name.toLowerCase()),
+						);
+						const dbSub = await ctx.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: data.organization.id,
+								},
+							],
+						});
+						if (
+							!dbSub?.stripeSubscriptionId ||
+							!isActiveOrTrialing(dbSub) ||
+							!seatPlanNames.has(dbSub.plan)
+						) {
+							return;
+						}
+
+						const plan = seatPlans.find(
+							(p) => p.name.toLowerCase() === dbSub.plan,
+						)!;
+						const { seatPriceId } = plan;
+
+						const stripeSub = await client.subscriptions.retrieve(
+							dbSub.stripeSubscriptionId,
+						);
+						if (!isActiveOrTrialing(stripeSub)) return;
+
+						const seatItem = stripeSub.items.data.find(
+							(item) => item.price.id === seatPriceId,
+						);
+
+						// Skip if no change needed
+						if (seatItem?.quantity === memberCount) return;
+
+						const items = seatItem
+							? [{ id: seatItem.id, quantity: memberCount }]
+							: [{ price: seatPriceId, quantity: memberCount }];
+
+						await client.subscriptions.update(stripeSub.id, {
+							items,
+							proration_behavior: plan.prorationBehavior ?? "create_prorations",
+						});
+						await ctx.adapter.update({
+							model: "subscription",
+							update: { seats: memberCount },
+							where: [{ field: "id", value: dbSub.id }],
+						});
+					} catch (e: any) {
+						ctx.logger.error(`Failed to sync seats to Stripe: ${e.message}`);
+					}
+				};
+
+				orgPlugin.options.organizationHooks = {
+					...existingHooks,
+					afterUpdateOrganization: existingHooks.afterUpdateOrganization
+						? async (data) => {
+								await existingHooks.afterUpdateOrganization!(data);
+								await afterUpdateStripeOrg(data);
+							}
+						: afterUpdateStripeOrg,
+					beforeDeleteOrganization: existingHooks.beforeDeleteOrganization
+						? async (data) => {
+								await existingHooks.beforeDeleteOrganization!(data);
+								await beforeDeleteStripeOrg(data);
+							}
+						: beforeDeleteStripeOrg,
+					afterAddMember: existingHooks.afterAddMember
+						? async (data) => {
+								await existingHooks.afterAddMember!(data);
+								await syncSeatsAfterMemberChange(data);
+							}
+						: syncSeatsAfterMemberChange,
+					afterRemoveMember: existingHooks.afterRemoveMember
+						? async (data) => {
+								await existingHooks.afterRemoveMember!(data);
+								await syncSeatsAfterMemberChange(data);
+							}
+						: syncSeatsAfterMemberChange,
+					afterAcceptInvitation: existingHooks.afterAcceptInvitation
+						? async (data) => {
+								await existingHooks.afterAcceptInvitation!(data);
+								await syncSeatsAfterMemberChange(data);
+							}
+						: syncSeatsAfterMemberChange,
+				};
+			}
+
 			return {
 				options: {
 					databaseHooks: {
 						user: {
 							create: {
-								async after(user, ctx) {
-									if (!ctx || !options.createCustomerOnSignUp) return;
+								async after(user: User & WithStripeCustomerId, ctx) {
+									if (
+										!ctx ||
+										!options.createCustomerOnSignUp ||
+										user.stripeCustomerId // Skip if user already has a Stripe customer ID
+									) {
+										return;
+									}
 
 									try {
-										const userWithStripe = user as typeof user & {
-											stripeCustomerId?: string;
-										};
+										// Check if user customer already exists in Stripe by email
+										let stripeCustomer: Stripe.Customer | undefined;
+										try {
+											const result = await client.customers.search({
+												query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
+												limit: 1,
+											});
+											stripeCustomer = result.data[0];
+										} catch {
+											// Search API unavailable in some regions, so fall back to paginated list
+											ctx.context.logger.warn(
+												"Stripe customers.search failed, falling back to customers.list",
+											);
+											for await (const customer of client.customers.list({
+												email: user.email,
+												limit: 100,
+											})) {
+												if (
+													customer.metadata?.[
+														customerMetadata.keys.customerType
+													] !== "organization"
+												) {
+													stripeCustomer = customer;
+													break;
+												}
+											}
+										}
 
-										// Skip if user already has a Stripe customer ID
-										if (userWithStripe.stripeCustomerId) return;
-
-										// Check if customer already exists in Stripe by email
-										const existingCustomers = await client.customers.list({
-											email: user.email,
-											limit: 1,
-										});
-
-										let stripeCustomer = existingCustomers.data[0];
-
-										// If customer exists, link it to prevent duplicate creation
+										// If user customer exists, link it to prevent duplicate creation
 										if (stripeCustomer) {
 											await ctx.context.internalAdapter.updateUser(user.id, {
 												stripeCustomerId: stripeCustomer.id,
@@ -114,13 +360,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											);
 										}
 
-										const params: Stripe.CustomerCreateParams = defu(
+										const params = defu(
 											{
 												email: user.email,
 												name: user.name,
-												metadata: {
-													userId: user.id,
-												},
+												metadata: customerMetadata.set(
+													{
+														userId: user.id,
+														customerType: "user",
+													},
+													extraCreateParams?.metadata,
+												),
 											},
 											extraCreateParams,
 										);
@@ -150,41 +400,34 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								},
 							},
 							update: {
-								async after(user, ctx) {
-									if (!ctx) return;
+								async after(user: User & WithStripeCustomerId, ctx) {
+									if (
+										!ctx ||
+										!user.stripeCustomerId // Only proceed if user has a Stripe customer ID
+									)
+										return;
 
 									try {
-										// Cast user to include stripeCustomerId (added by the stripe plugin schema)
-										const userWithStripe = user as typeof user & {
-											stripeCustomerId?: string;
-										};
-
-										// Only proceed if user has a Stripe customer ID
-										if (!userWithStripe.stripeCustomerId) return;
-
 										// Get the user from the database to check if email actually changed
 										// The 'user' parameter here is the freshly updated user
 										// We need to check if the Stripe customer's email matches
 										const stripeCustomer = await client.customers.retrieve(
-											userWithStripe.stripeCustomerId,
+											user.stripeCustomerId,
 										);
 
 										// Check if customer was deleted
 										if (stripeCustomer.deleted) {
 											ctx.context.logger.warn(
-												`Stripe customer ${userWithStripe.stripeCustomerId} was deleted, cannot update email`,
+												`Stripe customer ${user.stripeCustomerId} was deleted, cannot update email`,
 											);
 											return;
 										}
 
 										// If Stripe customer email doesn't match the user's current email, update it
 										if (stripeCustomer.email !== user.email) {
-											await client.customers.update(
-												userWithStripe.stripeCustomerId,
-												{
-													email: user.email,
-												},
-											);
+											await client.customers.update(user.stripeCustomerId, {
+												email: user.email,
+											});
 											ctx.context.logger.info(
 												`Updated Stripe customer email from ${stripeCustomer.email} to ${user.email}`,
 											);
@@ -214,4 +457,4 @@ export type StripePlugin<O extends StripeOptions> = ReturnType<
 	typeof stripe<O>
 >;
 
-export type { Subscription, SubscriptionOptions, StripePlan };
+export type * from "./types";

@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 
 export async function validatePassword(
 	ctx: GenericEndpointContext,
@@ -30,18 +30,34 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 	);
 	const currentPassword = credentialAccount?.password;
 	if (!credentialAccount || !currentPassword || !c.body.password) {
-		throw new APIError("BAD_REQUEST", {
-			message: "No password credential found",
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+		);
 	}
 	const compare = await c.context.password.verify({
 		hash: currentPassword,
 		password: c.body.password,
 	});
 	if (!compare) {
-		throw new APIError("BAD_REQUEST", {
-			message: "Invalid password",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 	}
 	return true;
+}
+
+export async function shouldRequirePassword(
+	ctx: GenericEndpointContext,
+	userId: string,
+	allowPasswordless?: boolean,
+): Promise<boolean> {
+	if (!allowPasswordless) {
+		return true;
+	}
+
+	const accounts = await ctx.context.internalAdapter.findAccounts(userId);
+	const credentialAccount = accounts?.find(
+		(account) => account.providerId === "credential" && account.password,
+	);
+
+	return Boolean(credentialAccount);
 }
