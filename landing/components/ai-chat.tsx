@@ -55,12 +55,21 @@ const chatTransport = new DefaultChatTransport({
 	api: "/api/docs/chat",
 });
 
+/** Dispatched to open the panel from outside the provider tree (e.g. mobile top nav). */
+export const OPEN_AI_CHAT_EVENT = "better-auth:open-ai-chat";
+
 export function AIChat({ children }: { children: ReactNode }) {
 	const [open, setOpen] = useState(false);
 	const chat = useChat({
 		id: "ai-chat",
 		transport: chatTransport,
 	});
+
+	useEffect(() => {
+		const onOpen = () => setOpen(true);
+		window.addEventListener(OPEN_AI_CHAT_EVENT, onOpen);
+		return () => window.removeEventListener(OPEN_AI_CHAT_EVENT, onOpen);
+	}, []);
 
 	// Support ?askai= URL param
 	const handleAskAiParam = useEffectEvent(() => {

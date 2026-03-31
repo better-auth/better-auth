@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useAIChat } from "@/components/ai-chat";
 import type { ListItem } from "@/components/sidebar-content";
 import { contents } from "@/components/sidebar-content";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -334,6 +335,14 @@ function SidebarSection({
 						</div>
 					);
 				}
+				if (item.openAIChat) {
+					return (
+						<SidebarAIChatRow key={`open-ai-${item.title}-${i}`} item={item} />
+					);
+				}
+				if (item.external && item.href) {
+					return <SidebarExternalNavRow key={item.href} item={item} />;
+				}
 				if (!item.href) return null;
 				const hasSubpages = !!(item.subpages && item.subpages.length > 0);
 				const subpageMatch =
@@ -383,7 +392,7 @@ function SidebarItemWithSubpages({
 				href={`${item.href}${branchQuery}`}
 				active={active}
 				icon={
-					<span className="min-w-5 [&>svg]:size-[14px]">
+					<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
 						<item.icon className="text-foreground/75" />
 					</span>
 				}
@@ -478,6 +487,58 @@ function SubpageLink({
 	);
 }
 
+function SidebarAIChatRow({ item }: { item: ListItem }) {
+	const { setOpen } = useAIChat();
+	const icon = (
+		<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
+			<item.icon className="text-foreground/75" />
+		</span>
+	);
+	return (
+		<button
+			type="button"
+			onClick={() => setOpen(true)}
+			className={`
+        relative flex w-full items-center gap-2.5 px-4 py-1 text-[14px] text-left transition-all duration-150
+        text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3
+      `}
+		>
+			<span className="text-foreground/65 transition-colors duration-150">
+				{icon}
+			</span>
+			<span className="min-w-0 grow truncate">{item.title}</span>
+			{item.isNew && <NewBadge />}
+		</button>
+	);
+}
+
+function SidebarExternalNavRow({
+	item,
+}: {
+	item: ListItem & { href: string };
+}) {
+	const icon = (
+		<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
+			<item.icon className="text-foreground/75" />
+		</span>
+	);
+	return (
+		<Link
+			href={item.href}
+			className={`
+        relative flex w-full items-center gap-2.5 px-4 py-1 text-[14px] transition-all duration-150
+        text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3
+      `}
+		>
+			<span className="text-foreground/65 transition-colors duration-150">
+				{icon}
+			</span>
+			<span className="min-w-0 grow truncate">{item.title}</span>
+			{item.isNew && <NewBadge />}
+		</Link>
+	);
+}
+
 // ─── Sidebar Link ─────────────────────────────────────────────────────────────
 
 function SidebarLink({
@@ -498,7 +559,7 @@ function SidebarLink({
 			href={href}
 			data-active={active || undefined}
 			className={`
-        relative flex items-center gap-2.5 px-4 py-1 text-[14px] transition-all duration-150
+        relative flex w-full items-center gap-2.5 px-4 py-1 text-[14px] transition-all duration-150
         ${
 					active
 						? "text-foreground bg-foreground/6"
@@ -515,7 +576,7 @@ function SidebarLink({
 					{icon}
 				</span>
 			)}
-			<span className="truncate grow">{children}</span>
+			<span className="min-w-0 grow truncate">{children}</span>
 			{isNew && <NewBadge isSelected={active} />}
 		</Link>
 	);

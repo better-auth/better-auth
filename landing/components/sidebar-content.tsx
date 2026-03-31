@@ -39,12 +39,17 @@ export interface SubpageItem {
 
 export interface ListItem {
 	title: string;
-	href: string;
+	/** Doc route; omit when `openAIChat` is true. */
+	href?: string;
 	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	group?: boolean;
 	separator?: boolean;
 	isNew?: boolean;
 	subpages?: SubpageItem[];
+	/** Opens the in-doc AI chat instead of navigating (desktop sidebar uses context; mobile uses a global event). */
+	openAIChat?: boolean;
+	/** Navigates to a non-docs URL (e.g. `/llms.txt`) without a docs MDX page. */
+	external?: boolean;
 }
 
 interface Content {
@@ -95,6 +100,7 @@ function contentToPageTree(content: Content): Folder {
 			: undefined,
 		children: content.list
 			.filter((item) => !item.group && (item.href || item.separator))
+			.filter((item) => !item.external)
 			.map((item) =>
 				item.separator
 					? ({
@@ -103,7 +109,7 @@ function contentToPageTree(content: Content): Folder {
 						} as const)
 					: ({
 							type: "page",
-							url: item.href,
+							url: item.href!,
 							name: item.title,
 							icon: <item.icon />,
 						} as const),
@@ -2834,7 +2840,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 	},
 	{
 		title: "AI Resources",
-		expandSectionForPathPrefix: "/docs/agent-tools",
+		expandSectionForPathPrefix: "/docs/ai-resources",
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -2852,7 +2858,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 		list: [
 			{
 				title: "MCP",
-				href: "/docs/agent-tools/mcp",
+				href: "/docs/ai-resources/mcp",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -2872,7 +2878,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 			{
 				title: "Skills",
-				href: "/docs/agent-tools/skills",
+				href: "/docs/ai-resources/skills",
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -2896,10 +2902,28 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					</svg>
 				),
 			},
-
+			{
+				title: "AI Chat",
+				openAIChat: true,
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+						aria-hidden
+					>
+						<path
+							fill="currentColor"
+							d="M4.84836 2.771C7.18302 2.42773 9.57113 2.25 12.0003 2.25C14.4292 2.25 16.8171 2.4277 19.1516 2.77091C21.1299 3.06177 22.5 4.79445 22.5 6.74056V12.7595C22.5 14.7056 21.1299 16.4382 19.1516 16.7291C17.2123 17.0142 15.2361 17.1851 13.2302 17.2348C13.1266 17.2374 13.0318 17.2788 12.9638 17.3468L8.78033 21.5303C8.56583 21.7448 8.24324 21.809 7.96299 21.6929C7.68273 21.5768 7.5 21.3033 7.5 21V17.045C6.60901 16.9634 5.72491 16.8579 4.84836 16.729C2.87004 16.4381 1.5 14.7054 1.5 12.7593V6.74064C1.5 4.79455 2.87004 3.06188 4.84836 2.771Z"
+						/>
+					</svg>
+				),
+			},
 			{
 				title: "LLMs.txt",
-				href: "/docs/agent-tools/llms-txt",
+				href: "/llms.txt",
+				external: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -2913,24 +2937,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 							fillRule="evenodd"
 							d="M12 2.25C6.61522 2.25 2.25 6.61522 2.25 12C2.25 17.3848 6.61522 21.75 12 21.75C17.3848 21.75 21.75 17.3848 21.75 12C21.75 6.61522 17.3848 2.25 12 2.25ZM6.26197 6.0723C4.71293 7.57208 3.75 9.67359 3.75 12C3.75 16.5563 7.44365 20.25 12 20.25C16.5563 20.25 20.25 16.5563 20.25 12C20.25 9.24461 18.8992 6.80472 16.8237 5.3064C16.4863 5.84545 16.0374 6.30831 15.5056 6.66289L14.2499 7.5L14.4145 7.82918C14.6835 8.3671 14.2923 9 13.6909 9C13.5653 9 13.4414 8.97076 13.3291 8.91459L12.7252 8.61262C12.2921 8.39607 11.769 8.48095 11.4266 8.82336L11.2954 8.9545C10.8561 9.39384 10.8561 10.1062 11.2954 10.5455L11.5905 10.8406C11.8474 11.0975 12.2126 11.2146 12.571 11.1548L13.7411 10.9598C14.0641 10.906 14.3946 10.9956 14.6462 11.2053L15.9755 12.313C16.2962 12.5802 16.4356 13.0073 16.3344 13.4122C15.9519 14.9419 15.1609 16.339 14.046 17.4539L13.3233 18.1766C12.9809 18.519 12.4578 18.6039 12.0247 18.3874L11.8718 18.3109C11.4907 18.1204 11.2499 17.7308 11.2499 17.3047V16.216C11.2499 15.9176 11.1314 15.6315 10.9204 15.4205L9.57328 14.0734C9.23087 13.731 9.14599 13.2079 9.36254 12.7747L9.74992 12L8.10954 10.3596C7.22527 9.47535 6.6394 8.33689 6.43381 7.10337L6.26197 6.0723Z"
 							clipRule="evenodd"
-						/>
-					</svg>
-				),
-			},
-			{
-				title: "Ask AI",
-				href: "/docs/agent-tools/ask-ai",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 24 24"
-						aria-hidden
-					>
-						<path
-							fill="currentColor"
-							d="M4.84836 2.771C7.18302 2.42773 9.57113 2.25 12.0003 2.25C14.4292 2.25 16.8171 2.4277 19.1516 2.77091C21.1299 3.06177 22.5 4.79445 22.5 6.74056V12.7595C22.5 14.7056 21.1299 16.4382 19.1516 16.7291C17.2123 17.0142 15.2361 17.1851 13.2302 17.2348C13.1266 17.2374 13.0318 17.2788 12.9638 17.3468L8.78033 21.5303C8.56583 21.7448 8.24324 21.809 7.96299 21.6929C7.68273 21.5768 7.5 21.3033 7.5 21V17.045C6.60901 16.9634 5.72491 16.8579 4.84836 16.729C2.87004 16.4381 1.5 14.7054 1.5 12.7593V6.74064C1.5 4.79455 2.87004 3.06188 4.84836 2.771Z"
 						/>
 					</svg>
 				),
