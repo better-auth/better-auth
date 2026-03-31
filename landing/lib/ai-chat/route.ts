@@ -166,8 +166,18 @@ async function githubSearchCode(query: string, path?: string) {
 
 	const res = await fetch(url.toString(), { headers: githubHeaders() });
 	if (!res.ok) {
-		const text = await res.text();
-		return { error: `GitHub API error (${res.status}): ${text}` };
+		let text: string | undefined;
+		try {
+			text = await res.text();
+		} catch {
+			// ignore
+		}
+		console.error("[ai-chat] GitHub search error", {
+			status: res.status,
+			statusText: res.statusText,
+			body: text,
+		});
+		return { error: "GitHub search is temporarily unavailable." };
 	}
 
 	const data = (await res.json()) as {
@@ -199,8 +209,14 @@ async function githubGetFileContent(path: string, ref = "canary") {
 	});
 
 	if (!res.ok) {
+		console.error("[ai-chat] GitHub file fetch error", {
+			path,
+			ref,
+			status: res.status,
+			statusText: res.statusText,
+		});
 		return {
-			error: `GitHub API error (${res.status}): file not found or inaccessible`,
+			error: "Unable to fetch that file right now.",
 		};
 	}
 
@@ -232,145 +248,172 @@ The following pages are available. Use the slug (in brackets) with the getDocume
 `;
 
 export async function POST(req: Request) {
-	const ip = getClientIP(req);
-	const rateLimitResult = await checkRateLimit(ip);
+	const errorId = crypto.randomUUID();
 
-	if (!rateLimitResult.success) {
-		const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
-		return new Response(
-			JSON.stringify({
-				error: "Rate limit exceeded. Please try again later.",
-			}),
-			{
-				status: 429,
-				headers: {
-					"Content-Type": "application/json",
-					"Retry-After": String(Math.max(retryAfter, 1)),
-					"X-RateLimit-Limit": String(rateLimitResult.limit),
-					"X-RateLimit-Remaining": String(rateLimitResult.remaining),
-					"X-RateLimit-Reset": String(rateLimitResult.reset),
-				},
-			},
-		);
-	}
+	try {
+		const ip = getClientIP(req);
+		const rateLimitResult = await checkRateLimit(ip);
 
-	const body = await req.json();
-	const messages = body?.messages;
-	if (!Array.isArray(messages) || messages.length === 0) {
-		return new Response(
-			JSON.stringify({
-				error: "Invalid request: messages must be a non-empty array.",
-			}),
-			{ status: 400, headers: { "Content-Type": "application/json" } },
-		);
-	}
-	if (messages.length > 100) {
-		return new Response(JSON.stringify({ error: "Too many messages." }), {
-			status: 400,
-			headers: { "Content-Type": "application/json" },
-		});
-	}
-	const docsIndex = getDocsIndex();
-
-	const system = SYSTEM_PROMPT + docsIndex;
-
-	const result = streamText({
-		model: chatModel,
-		maxOutputTokens: 2048,
-		system,
-		messages: await convertToModelMessages(messages, {
-			ignoreIncompleteToolCalls: true,
-		}),
-		tools: {
-			searchDocs: tool({
-				description:
-					"Search across all Better Auth documentation for specific terms, keywords, or concepts. Returns matching page slugs and snippets. Use this when you're not sure which page contains the answer.",
-				inputSchema: z.object({
-					query: z
-						.string()
-						.describe(
-							"Search query — keywords or terms to find, e.g. 'session token cookie' or 'organization invite'",
-						),
+		if (!rateLimitResult.success) {
+			const retryAfter = Math.ceil((rateLimitResult.reset - Date.now()) / 1000);
+			return new Response(
+				JSON.stringify({
+					error: "Rate limit exceeded. Please try again later.",
 				}),
-				execute: async ({ query }) => {
-					const index = await getSearchIndex();
-					const results = searchIndex(index, query);
-					if (results.length === 0) {
-						return { results: [], message: "No matching documentation found." };
-					}
-					return {
-						results: results.map((r) => ({
-							slug: r.entry.slug,
-							title: r.entry.title,
-							description: r.entry.description,
-							snippets: r.snippets,
-						})),
-					};
+				{
+					status: 429,
+					headers: {
+						"Content-Type": "application/json",
+						"Retry-After": String(Math.max(retryAfter, 1)),
+						"X-RateLimit-Limit": String(rateLimitResult.limit),
+						"X-RateLimit-Remaining": String(rateLimitResult.remaining),
+						"X-RateLimit-Reset": String(rateLimitResult.reset),
+					},
 				},
+			);
+		}
+
+		let body: unknown;
+		try {
+			body = await req.json();
+		} catch (err) {
+			console.error(`[ai-chat] invalid JSON body (${errorId})`, err);
+			return new Response(JSON.stringify({ error: "Invalid request." }), {
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		const messages = (body as { messages?: unknown } | null | undefined)
+			?.messages;
+		if (!Array.isArray(messages) || messages.length === 0) {
+			return new Response(JSON.stringify({ error: "Invalid request." }), {
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (messages.length > 100) {
+			return new Response(JSON.stringify({ error: "Invalid request." }), {
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
+		const docsIndex = getDocsIndex();
+
+		const system = SYSTEM_PROMPT + docsIndex;
+
+		const result = streamText({
+			model: chatModel,
+			maxOutputTokens: 2048,
+			system,
+			messages: await convertToModelMessages(messages, {
+				ignoreIncompleteToolCalls: true,
 			}),
-			getDocumentation: tool({
-				description:
-					"Retrieve the full content of a Better Auth documentation page by its slug. Use this to look up detailed information before answering user questions.",
-				inputSchema: z.object({
-					slug: z
-						.string()
-						.describe(
-							"The documentation page slug, e.g. 'plugins/passkey' or 'concepts/session-management'",
-						),
-				}),
-				execute: async ({ slug }) => {
-					const slugParts = slug.split("/");
-					const page = source.getPage(slugParts);
-					if (!page) {
-						return { error: `Documentation page not found for slug: ${slug}` };
-					}
-					try {
-						const content = await getLLMText(page);
-						return { content };
-					} catch {
+			tools: {
+				searchDocs: tool({
+					description:
+						"Search across all Better Auth documentation for specific terms, keywords, or concepts. Returns matching page slugs and snippets. Use this when you're not sure which page contains the answer.",
+					inputSchema: z.object({
+						query: z
+							.string()
+							.describe(
+								"Search query — keywords or terms to find, e.g. 'session token cookie' or 'organization invite'",
+							),
+					}),
+					execute: async ({ query }) => {
+						const index = await getSearchIndex();
+						const results = searchIndex(index, query);
+						if (results.length === 0) {
+							return {
+								results: [],
+								message: "No matching documentation found.",
+							};
+						}
 						return {
-							error: `Failed to load documentation for: ${slug}`,
+							results: results.map((r) => ({
+								slug: r.entry.slug,
+								title: r.entry.title,
+								description: r.entry.description,
+								snippets: r.snippets,
+							})),
 						};
-					}
-				},
-			}),
-			searchCode: tool({
-				description:
-					"Search the Better Auth source code on GitHub using semantic code search. Returns matching file paths and code fragments. Use this when users ask about implementation details, internal behavior, or want to see actual source code.",
-				inputSchema: z.object({
-					query: z
-						.string()
-						.describe(
-							"Code search query — function names, class names, keywords, or concepts to find in the source, e.g. 'createSession' or 'hashPassword' or 'organization plugin'",
-						),
-					path: z
-						.string()
-						.optional()
-						.describe(
-							"Optional path filter to narrow search to a directory or file pattern, e.g. 'packages/better-auth/src' or 'packages/cli'",
-						),
+					},
 				}),
-				execute: async ({ query, path }) => {
-					return githubSearchCode(query, path);
-				},
-			}),
-			getFileContent: tool({
-				description:
-					"Fetch the content of a specific file from the Better Auth GitHub repository. Use this after searchCode to read the full source of a matching file.",
-				inputSchema: z.object({
-					path: z
-						.string()
-						.describe(
-							"The file path in the repository, e.g. 'packages/better-auth/src/api/routes/session.ts'",
-						),
+				getDocumentation: tool({
+					description:
+						"Retrieve the full content of a Better Auth documentation page by its slug. Use this to look up detailed information before answering user questions.",
+					inputSchema: z.object({
+						slug: z
+							.string()
+							.describe(
+								"The documentation page slug, e.g. 'plugins/passkey' or 'concepts/session-management'",
+							),
+					}),
+					execute: async ({ slug }) => {
+						const slugParts = slug.split("/");
+						const page = source.getPage(slugParts);
+						if (!page) {
+							return {
+								error: `Documentation page not found for slug: ${slug}`,
+							};
+						}
+						try {
+							const content = await getLLMText(page);
+							return { content };
+						} catch {
+							return {
+								error: `Failed to load documentation for: ${slug}`,
+							};
+						}
+					},
 				}),
-				execute: async ({ path }) => {
-					return githubGetFileContent(path);
-				},
-			}),
-		},
-		stopWhen: stepCountIs(8),
-	});
+				searchCode: tool({
+					description:
+						"Search the Better Auth source code on GitHub using semantic code search. Returns matching file paths and code fragments. Use this when users ask about implementation details, internal behavior, or want to see actual source code.",
+					inputSchema: z.object({
+						query: z
+							.string()
+							.describe(
+								"Code search query — function names, class names, keywords, or concepts to find in the source, e.g. 'createSession' or 'hashPassword' or 'organization plugin'",
+							),
+						path: z
+							.string()
+							.optional()
+							.describe(
+								"Optional path filter to narrow search to a directory or file pattern, e.g. 'packages/better-auth/src' or 'packages/cli'",
+							),
+					}),
+					execute: async ({ query, path }) => {
+						return githubSearchCode(query, path);
+					},
+				}),
+				getFileContent: tool({
+					description:
+						"Fetch the content of a specific file from the Better Auth GitHub repository. Use this after searchCode to read the full source of a matching file.",
+					inputSchema: z.object({
+						path: z
+							.string()
+							.describe(
+								"The file path in the repository, e.g. 'packages/better-auth/src/api/routes/session.ts'",
+							),
+					}),
+					execute: async ({ path }) => {
+						return githubGetFileContent(path);
+					},
+				}),
+			},
+			stopWhen: stepCountIs(8),
+		});
 
-	return result.toUIMessageStreamResponse();
+		return result.toUIMessageStreamResponse();
+	} catch (err) {
+		console.error(`[ai-chat] unhandled error (${errorId})`, err);
+		return new Response(
+			JSON.stringify({
+				error: "Something went wrong. Please try again.",
+			}),
+			{ status: 500, headers: { "Content-Type": "application/json" } },
+		);
+	}
 }
