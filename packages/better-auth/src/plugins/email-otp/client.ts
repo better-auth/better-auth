@@ -12,7 +12,9 @@ export const emailOTPClient = () => {
 		atomListeners: [
 			{
 				matcher: (path) =>
-					path === "/email-otp/verify-email" || path === "/sign-in/email-otp",
+					path === "/email-otp/verify-email" ||
+					path === "/sign-in/email-otp" ||
+					path === "/email-otp/request-email-change",
 				signal: "$sessionSignal",
 			},
 		],

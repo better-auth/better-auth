@@ -580,10 +580,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				},
 				{
 					matcher(context) {
-						return (
-							context.path === "/sign-up/email" ||
-							context.path === "/update-user"
-						);
+						return context.path === "/sign-up/email";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						if (ctx.body.username && !ctx.body.displayUsername) {
