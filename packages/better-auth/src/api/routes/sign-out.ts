@@ -98,6 +98,14 @@ export const signOut = createAuthEndpoint(
 			}
 		}
 		deleteSessionCookie(ctx);
+		if (currentSession && ctx.context.options.onLogout) {
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.onLogout(
+					{ userId: currentSession.session.userId },
+					ctx.request,
+				),
+			);
+		}
 		const providerLogoutResult = await (async () => {
 			try {
 				if (!currentSession) {

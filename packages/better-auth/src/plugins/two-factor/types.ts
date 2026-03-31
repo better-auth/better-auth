@@ -86,6 +86,22 @@ export interface TwoFactorOptions {
 				durationSeconds?: number | undefined;
 		  }
 		| undefined;
+	/**
+	 * A callback function that is triggered when a user
+	 * enables two-factor authentication.
+	 */
+	onTotpEnabled?: (
+		data: { user: UserWithTwoFactor },
+		request?: Request,
+	) => Promise<void>;
+	/**
+	 * A callback function that is triggered when a user
+	 * disables two-factor authentication.
+	 */
+	onTotpDisabled?: (
+		data: { user: UserWithTwoFactor },
+		request?: Request,
+	) => Promise<void>;
 }
 
 export interface UserWithTwoFactor extends User {
