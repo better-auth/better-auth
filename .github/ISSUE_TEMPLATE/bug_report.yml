@@ -1,5 +1,6 @@
-name: Report an issue
-description: Create a report to help us improve
+name: 🚩 Bug report
+description: Report a bug or unexpected behavior
+type: Bug
 body:
   - type: checkboxes
     attributes:
@@ -10,20 +11,21 @@ body:
   - type: markdown
     attributes:
       value: |
-        This template is used for reporting a issue with better-auth.
+        Thank you for reporting a bug with better-auth!
 
-        Feature requests should be opened in [here](https://github.com/better-auth/better-auth/issues/new?assignees=&labels=&projects=&template=feature_request.md&title=).
-
-        Before opening a new issue, please do a [search](https://github.com/better-auth/better-auth/issues) of existing issues and :+1: upvote the existing issue instead. This will result in a quicker resolution.
+        - Feature requests should be opened [here](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml).
+        - Before opening a new issue, please [check](https://github.com/better-auth/better-auth/issues) for existing issues and :+1: upvote the existing issue instead. This will result in a quicker resolution.
   - type: textarea
     attributes:
-      label: To Reproduce
-      description: A step-by-step description of how to reproduce the issue, based on the linked reproduction. Screenshots can be provided in the issue body below. If using code blocks, make sure that [syntax highlighting is correct](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks#syntax-highlighting) and double check that the rendered preview is not broken.
+      label: Reproduction
+      description: Provide a step-by-step description or a minimal reproduction repository link. This helps us investigate and resolve the issue faster.
       placeholder: |
-        Ex:
-        1. Create a backend
-        2. Create a frontend and use client
-        3. X will happen
+        Steps to reproduce:
+        1. Configure auth with ...
+        2. Call `auth.api.signInEmail(...)` with ...
+        3. Observe ...
+
+        Or provide a link to a minimal reproduction repository.
     validations:
       required: true
   - type: textarea
