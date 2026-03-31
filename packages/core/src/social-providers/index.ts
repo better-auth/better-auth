@@ -110,7 +110,6 @@ export * from "./kick";
 export * from "./line";
 export * from "./linear";
 export * from "./linkedin";
-export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";
 export * from "./notion";
