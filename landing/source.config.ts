@@ -21,16 +21,6 @@ export const docs = defineDocs({
 	},
 });
 
-export const canaryDocs = defineDocs({
-	dir: "../docs/content/docs",
-	docs: {
-		postprocess: {
-			includeProcessedMarkdown: true,
-		},
-		async: true,
-	},
-});
-
 export const blogCollection = defineCollections({
 	type: "doc",
 	dir: "../docs/content/blogs",
