@@ -1,11 +1,11 @@
 ---
 title: account_not_linked
-description: The provider account is not linked to any user.
+description: The provider account is not linked to the current user and cannot be linked automatically.
 ---
 
 ## What is it?
 
-This error occurs during an OAuth flow when a provider account is not linked to any existing user and cannot be matched automatically.
+This error occurs during an OAuth flow when a provider account is not linked to the current or matched user and, under the current configuration, cannot be linked automatically (for example, because the provider is untrusted, account linking is disabled, or implicit linking is turned off), even if a matching user exists.
 
 ## Common Causes
 
