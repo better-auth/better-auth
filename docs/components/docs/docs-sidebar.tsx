@@ -22,16 +22,23 @@ export function DocsSidebar() {
 	const navRef = useRef<HTMLElement>(null);
 
 	const getDefaultOpen = (sections: Section[]) => {
-		const defaultValue = sections.findIndex((item) =>
-			item.list.some(
+		const defaultValue = sections.findIndex((item) => {
+			const prefix = item.expandSectionForPathPrefix;
+			if (
+				prefix &&
+				(pathname === prefix || pathname.startsWith(`${prefix}/`))
+			) {
+				return true;
+			}
+			return item.list.some(
 				(listItem) =>
 					listItem.href === pathname ||
 					(listItem.subpages &&
 						listItem.subpages.length > 0 &&
 						pathname.startsWith(`${listItem.href}/`)) ||
 					listItem.subpages?.some((sp) => sp.href && pathname === sp.href),
-			),
-		);
+			);
+		});
 		return defaultValue === -1 ? 0 : defaultValue;
 	};
 
@@ -207,6 +214,14 @@ function SidebarSection({
 						</div>
 					);
 				}
+				if (item.external && item.href) {
+					return (
+						<SidebarExternalNavRow
+							key={item.href}
+							item={{ ...item, href: item.href }}
+						/>
+					);
+				}
 				if (!item.href) return null;
 				const hasSubpages = !!(item.subpages && item.subpages.length > 0);
 				const subpageMatch =
@@ -250,10 +265,10 @@ function SidebarItemWithSubpages({
 	return (
 		<div>
 			<SidebarLink
-				href={item.href}
+				href={item.href || ""}
 				active={active}
 				icon={
-					<span className="min-w-5 [&>svg]:size-[14px]">
+					<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
 						<item.icon className="text-foreground/75" />
 					</span>
 				}
@@ -348,6 +363,33 @@ function SubpageLink({
 	);
 }
 
+function SidebarExternalNavRow({
+	item,
+}: {
+	item: ListItem & { href: string };
+}) {
+	const icon = (
+		<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
+			<item.icon className="text-foreground/75" />
+		</span>
+	);
+	return (
+		<Link
+			href={item.href}
+			className={`
+        relative flex w-full items-center gap-2.5 px-4 py-1 text-[14px] transition-all duration-150
+        text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3
+      `}
+		>
+			<span className="text-foreground/65 transition-colors duration-150">
+				{icon}
+			</span>
+			<span className="min-w-0 grow truncate">{item.title}</span>
+			{item.isNew && <NewBadge />}
+		</Link>
+	);
+}
+
 // ─── Sidebar Link ─────────────────────────────────────────────────────────────
 
 function SidebarLink({
@@ -368,7 +410,7 @@ function SidebarLink({
 			href={href}
 			data-active={active || undefined}
 			className={`
-        relative flex items-center gap-2.5 px-4 py-1 text-[14px] transition-all duration-150
+        relative flex w-full items-center gap-2.5 px-4 py-1 text-[14px] transition-all duration-150
         ${
 					active
 						? "text-foreground bg-foreground/6"
@@ -385,7 +427,7 @@ function SidebarLink({
 					{icon}
 				</span>
 			)}
-			<span className="truncate grow">{children}</span>
+			<span className="min-w-0 grow truncate">{children}</span>
 			{isNew && <NewBadge isSelected={active} />}
 		</Link>
 	);

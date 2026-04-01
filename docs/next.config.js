@@ -61,6 +61,21 @@ const nextConfig = {
 				destination: "/legal/privacy",
 				permanent: true,
 			},
+			{
+				source: "/docs/agent-tools/ask-ai",
+				destination: "/docs/ai-resources",
+				permanent: true,
+			},
+			{
+				source: "/docs/agent-tools/llms-txt",
+				destination: "/llms.txt",
+				permanent: true,
+			},
+			{
+				source: "/docs/agent-tools/:path*",
+				destination: "/docs/ai-resources/:path*",
+				permanent: true,
+			},
 		];
 	},
 };

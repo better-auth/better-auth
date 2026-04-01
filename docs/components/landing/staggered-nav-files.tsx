@@ -266,14 +266,22 @@ export function StaggeredNavFiles() {
 								if (opening) {
 									setMobileView(isDocs ? "docs" : "nav");
 									if (isDocs) {
-										const idx = contents.findIndex((s) =>
-											s.list.some(
+										const idx = contents.findIndex((s) => {
+											const prefix = s.expandSectionForPathPrefix;
+											if (
+												prefix &&
+												(pathname === prefix ||
+													pathname.startsWith(`${prefix}/`))
+											) {
+												return true;
+											}
+											return s.list.some(
 												(l) =>
 													l.href === pathname ||
 													(l.subpages?.length &&
 														pathname.startsWith(`${l.href}/`)),
-											),
-										);
+											);
+										});
 										setMobileDocSection(idx === -1 ? 0 : idx);
 									}
 								}
@@ -786,6 +794,36 @@ export function StaggeredNavFiles() {
 																			</div>
 																		);
 																	}
+																	if (item.external && item.href) {
+																		return (
+																			<Link
+																				key={item.href}
+																				href={item.href}
+																				onClick={() => setMobileMenuOpen(false)}
+																				className={cn(
+																					"relative flex w-full items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
+																					"text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
+																				)}
+																			>
+																				<span className="text-foreground/75 transition-colors duration-150 dark:text-foreground/60">
+																					<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
+																						<item.icon className="text-foreground/75" />
+																					</span>
+																				</span>
+																				<span className="min-w-0 grow truncate">
+																					{item.title}
+																				</span>
+																				{item.isNew && (
+																					<Badge
+																						className="pointer-events-none border-dashed rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border-foreground/25"
+																						variant="outline"
+																					>
+																						New
+																					</Badge>
+																				)}
+																			</Link>
+																		);
+																	}
 																	if (!item.href) return null;
 																	const active =
 																		pathname === item.href ||
@@ -798,7 +836,7 @@ export function StaggeredNavFiles() {
 																			onClick={() => setMobileMenuOpen(false)}
 																			data-active={active || undefined}
 																			className={cn(
-																				"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
+																				"relative flex w-full items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
 																				active
 																					? "text-foreground bg-foreground/6"
 																					: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
@@ -806,15 +844,17 @@ export function StaggeredNavFiles() {
 																		>
 																			<span
 																				className={cn(
-																					"min-w-5 [&>svg]:size-[14px] transition-colors duration-150",
+																					"transition-colors duration-150",
 																					active
 																						? "text-foreground"
 																						: "text-foreground/75 dark:text-foreground/60",
 																				)}
 																			>
-																				<item.icon className="text-foreground/75" />
+																				<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
+																					<item.icon className="text-foreground/75" />
+																				</span>
 																			</span>
-																			<span className="truncate grow">
+																			<span className="min-w-0 grow truncate">
 																				{item.title}
 																			</span>
 																			{item.isNew && (
