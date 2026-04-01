@@ -2,6 +2,10 @@
   "name": "@better-auth/docs-content",
   "type": "module",
   "private": true,
+  "scripts": {
+    "format:md": "remark . --output --quiet",
+    "format:check": "remark . --quiet --frail"
+  },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.28",
     "@ai-sdk/react": "^3.0.80",
@@ -103,6 +107,9 @@
     "@types/react-dom": "catalog:react19",
     "mini-svg-data-uri": "^1.4.4",
     "postcss": "^8.5.6",
+    "remark-cli": "^12.0.1",
+    "remark-preset-lint-consistent": "^6.0.1",
+    "remark-preset-lint-recommended": "^7.0.1",
     "tailwindcss": "catalog:tailwind",
     "typescript": "catalog:"
   }
