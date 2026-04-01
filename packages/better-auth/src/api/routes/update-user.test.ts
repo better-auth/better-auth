@@ -859,6 +859,7 @@ describe("changeEmail with sendOldEmailVerification", async () => {
 				password: "wrongpassword",
 			});
 			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("INVALID_PASSWORD");
 			expect(sendChangeEmail).not.toHaveBeenCalled();
 			expect(sendVerification).not.toHaveBeenCalled();
 		});
