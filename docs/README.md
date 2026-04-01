@@ -6,9 +6,9 @@
   <img alt="Better Auth" src="public/branding/better-auth-logo-wordmark-dark.svg" width="280" />
 </picture>
 
-### Landing & Docs
+### Website & Docs
 
-The marketing site and documentation for [better-auth.com](https://better-auth.com) — built with Next.js 15, Tailwind CSS 4, and Framer Motion.
+The main website and documentation for [better-auth.com](https://better-auth.com)
 
 [![Website](https://img.shields.io/badge/better--auth.com-000?style=flat\&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNDUiIHZpZXdCb3g9IjAgMCA2MCA0NSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTAgMEgxNVYxNUgzMFYzMEgxNVY0NUgwVjMwVjE1VjBaTTQ1IDMwVjE1SDMwVjBINDVINjBWMTVWMzBWNDVINDVIMzBWMzBINDVaIiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==\&logoColor=white)](https://better-auth.com)
 [![GitHub Stars](https://img.shields.io/github/stars/better-auth/better-auth?style=flat\&logo=github\&label=stars\&color=24292e)](https://github.com/better-auth/better-auth)
@@ -20,20 +20,20 @@ The marketing site and documentation for [better-auth.com](https://better-auth.c
 
 ```bash
 # install
-bun install
+pnpm install
 
 # develop
-bun dev
+pnpm dev
 ```
 
 Open **[localhost:3000](http://localhost:3000)** to preview.
 
 ## Stack
 
-- **Framework**: Next.js 15 (App Router, Turbopack)
+- **Framework**: Next.js 16 (App Router, Turbopack)
 - **Styling**: Tailwind CSS 4
 - **Animation**: Framer Motion
-- **Docs**: Fumadocs MDX
+- **Docs**: Fumadocs
 - **Icons**: Lucide React
 - **Fonts**: Geist Sans & Geist Mono
 
@@ -65,26 +65,8 @@ Open **[localhost:3000](http://localhost:3000)** to preview.
 ## Scripts
 
 ```bash
-bun dev          # Start dev server (Turbopack)
-bun build        # Production build
-bun start        # Serve production build
-bun lint:fix     # Lint & auto-fix with Biome
+pnpm dev          # Start dev server (Turbopack)
+pnpm build        # Production build
+pnpm start        # Serve production build
+pnpm lint:fix     # Lint & auto-fix with Biome
 ```
-
-***
-
-<p align="center">
-  <a href="https://better-auth.com">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="public/branding/better-auth-logo-dark.svg" />
-
-      <source media="(prefers-color-scheme: light)" srcset="public/branding/better-auth-logo-light.svg" />
-
-      <img alt="Better Auth" src="public/branding/better-auth-logo-dark.svg" width="36" />
-    </picture>
-  </a>
-</p>
-
-<p align="center">
-  <sub><a href="https://better-auth.com">Website</a> · <a href="https://better-auth.com/docs">Docs</a> · <a href="https://github.com/better-auth/better-auth">Core Repo</a></sub>
-</p>
