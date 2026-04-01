@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Github } from "lucide-react";
 import Link from "next/link";
 import {
 	useCallback,
@@ -1488,14 +1487,14 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 								aria-label="Twitter/X"
 								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
-								<Icons.XIcon className="h-3 w-3" />
+								<Icons.XIcon className="h-3.5 w-3.5" />
 							</Link>
 							<Link
 								href="https://github.com/better-auth"
 								aria-label="GitHub"
 								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
-								<Github className="h-4 w-4" />
+								<Icons.gitHub className="h-3.5 w-3.5" />
 							</Link>
 							<div className="h-4 w-4 flex text-foreground/15 items-center justify-center select-none">
 								|
