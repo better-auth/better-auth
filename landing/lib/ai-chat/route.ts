@@ -185,7 +185,7 @@ async function githubSearchCode(query: string, path?: string) {
 	};
 }
 
-async function githubGetFileContent(path: string, ref = "canary") {
+async function githubGetFileContent(path: string, ref = "main") {
 	const url = `${GITHUB_API}/repos/${GITHUB_REPO}/contents/${encodeURIComponent(path)}?ref=${ref}`;
 
 	const res = await fetch(url, {
