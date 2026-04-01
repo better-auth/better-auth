@@ -32,7 +32,6 @@ catalogs:
 
 ignoredBuiltDependencies:
   - electron
-  - lefthook
 
 linkWorkspacePackages: true
 
