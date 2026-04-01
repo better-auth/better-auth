@@ -27,7 +27,6 @@ import {
 	UserCircle,
 	UserSquare2,
 	Users2,
-	WandSparkles,
 	Zap,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
