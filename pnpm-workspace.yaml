@@ -21,7 +21,6 @@ catalogs:
     react-dom: ^19.2.4
   tailwind:
     '@tailwindcss/postcss': ^4.2.1
-    '@tailwindcss/vite': ^4.2.1
     tailwindcss: ^4.2.1
     tailwindcss-animate: ^1.0.7
   vitest:
