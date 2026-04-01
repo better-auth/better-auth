@@ -82,6 +82,36 @@ interface OrganizationClientOptions {
 		| undefined;
 }
 
+type ListUserTeamsQuery = {
+	userId?: string;
+};
+
+type ListUserTeamsOptions = {
+	query?: ListUserTeamsQuery;
+	fetchOptions?: Record<string, any>;
+};
+
+const resolveListUserTeamsArgs = (
+	optionsOrQuery?: ListUserTeamsOptions | ListUserTeamsQuery,
+	fetchOptions?: Record<string, any>,
+) => {
+	if (
+		optionsOrQuery &&
+		typeof optionsOrQuery === "object" &&
+		("query" in optionsOrQuery || "fetchOptions" in optionsOrQuery)
+	) {
+		return {
+			query: optionsOrQuery.query || {},
+			fetchOptions: optionsOrQuery.fetchOptions,
+		};
+	}
+
+	return {
+		query: optionsOrQuery || {},
+		fetchOptions,
+	};
+};
+
 export const organizationClient = <CO extends OrganizationClientOptions>(
 	options?: CO | undefined,
 ) => {
@@ -175,14 +205,19 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					});
 					return isAuthorized;
 				},
-				listUserTeams: async (options?: {
-					query?: { userId?: string };
-					fetchOptions?: Record<string, any>;
-				}) => {
+				listUserTeams: async (
+					optionsOrQuery?: ListUserTeamsOptions | ListUserTeamsQuery,
+					fetchOptions?: Record<string, any>,
+				) => {
+					const resolvedArgs = resolveListUserTeamsArgs(
+						optionsOrQuery,
+						fetchOptions,
+					);
+
 					return $fetch("/organization/list-user-teams", {
 						method: "GET",
-						query: options?.query || {},
-						...options?.fetchOptions,
+						query: resolvedArgs.query,
+						...resolvedArgs.fetchOptions,
 					});
 				},
 			},
