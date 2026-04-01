@@ -1,0 +1,36 @@
+name: Lock Threads
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: lock-threads
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    if: github.repository_owner == 'better-auth'
+    steps:
+      - uses: dessant/lock-threads@7266a7ce5c1df01b1c6db85bf8cd86c737dadbe7 # v6.0.0
+        with:
+          process-only: 'issues, prs'
+          issue-inactive-days: 7
+          pr-inactive-days: 7
+          add-issue-labels: 'locked'
+          add-pr-labels: 'locked'
+          issue-comment: >
+            This issue has been locked as it was closed more than 7 days ago.
+            If you're experiencing a similar problem or you have additional context,
+            please open a new issue and reference this one.
+          pr-comment: >
+            This pull request has been locked as it was closed more than 7 days ago.
+            If these changes are still relevant or you have additional context,
+            please open a new PR and reference this one.
+          log-output: true

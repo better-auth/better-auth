@@ -79,6 +79,7 @@ export interface BetterAuthClientOptions {
 
 export interface BetterAuthClientPlugin {
 	id: LiteralString;
+	version?: string | undefined;
 	/**
 	 * only used for type inference. don't pass the
 	 * actual plugin
