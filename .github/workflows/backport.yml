@@ -1,0 +1,58 @@
+name: Backport
+
+on:
+  pull_request_target:
+    types: [closed, labeled]
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: backport-${{ github.event.pull_request.number || github.event.issue.number }}
+
+jobs:
+  backport:
+    runs-on: ubuntu-latest
+    if: >
+      github.repository_owner == 'better-auth' && (
+        (
+          github.event_name == 'pull_request_target' &&
+          github.event.pull_request.merged
+        ) || (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request &&
+          github.event.comment.author_association != 'NONE' &&
+          github.event.comment.author_association != 'FIRST_TIMER' &&
+          startsWith(github.event.comment.body, '/backport')
+        )
+      )
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - name: Create backport PRs
+        uses: korthout/backport-action@3c06f323a58619da1e8522229ebc8d5de2633e46 # v4.3.0
+        with:
+          github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          label_pattern: '^backport ([^ ]+)$'
+          pull_title: '[backport ${target_branch}] ${pull_title}'
+          copy_assignees: true
+          add_author_as_reviewer: true
+          auto_merge_enabled: ${{ contains(github.event.pull_request.labels.*.name, 'backport-auto-merge') }}
+          auto_merge_method: squash
+          experimental: '{"conflict_resolution": "draft_commit_conflicts"}'

@@ -1,0 +1,128 @@
+name: Verify Changesets
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled]
+    branches:
+      - main
+      - next
+    paths:
+      - '.changeset/**'
+      - 'packages/**'
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    if: >
+      !startsWith(github.head_ref, 'changeset-release/') &&
+      github.actor != 'github-actions[bot]'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Get changed changeset files
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          CHANGESET_FILES=$(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md' || true)
+          COUNT=$(echo "$CHANGESET_FILES" | grep -c '.' || true)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "files=$CHANGESET_FILES" >> "$GITHUB_OUTPUT"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No changeset files in diff"
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found $COUNT changeset(s) in diff"
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check package changes require changeset
+        if: steps.changed.outputs.has_changesets == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "skip-changeset"; then
+            echo "Skipping changeset requirement (skip-changeset label found)"
+            exit 0
+          fi
+
+          PKG_CHANGES=$(git diff --name-only "origin/$BASE_REF"...HEAD -- 'packages/' | grep -c '.' || true)
+          if [ "$PKG_CHANGES" -eq 0 ]; then
+            echo "No package changes detected, changeset not required"
+            exit 0
+          fi
+
+          echo "::error::Missing changeset. Add one with 'pnpm changeset' or add the 'skip-changeset' label."
+          exit 1
+
+      - name: Validate changeset files
+        if: steps.changed.outputs.has_changesets == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          HAS_ERROR=0
+
+          for f in $(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md'); do
+            # Security: reject symlinks (CWE-59)
+            if [ -L "$f" ]; then
+              echo "::error::Changeset $f is a symlink, which is not allowed."
+              HAS_ERROR=1
+              continue
+            fi
+
+            # Validate filename format
+            BASENAME=$(basename "$f")
+            if ! echo "$BASENAME" | grep -qE '^[a-z][a-z0-9-]*\.md$'; then
+              echo "::error::Changeset $f has an invalid filename. Use only lowercase letters, digits, and hyphens."
+              HAS_ERROR=1
+              continue
+            fi
+
+            # Verify frontmatter exists
+            if ! head -1 "$f" | grep -q '^---$'; then
+              echo "::error::Changeset $f is missing YAML frontmatter."
+              HAS_ERROR=1
+              continue
+            fi
+          done
+
+          [ "$HAS_ERROR" -ne 0 ] && exit 1
+
+          # Pre-release mode: all bump types allowed
+          if [ -f ".changeset/pre.json" ]; then
+            echo "Pre-release mode active, all bump types allowed"
+            exit 0
+          fi
+
+          # Verify bump types against PR labels
+          LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          HAS_MINOR=$(echo "$LABELS" | grep -c "^minor$" || true)
+          HAS_MAJOR=$(echo "$LABELS" | grep -c "^major$" || true)
+
+          for f in $(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md'); do
+            BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
+            if echo "$BUMPS" | grep -q "major" && [ "$HAS_MAJOR" -eq 0 ]; then
+              echo "::error::Changeset $f contains a 'major' bump but the PR lacks a 'major' label."
+              exit 1
+            fi
+            if echo "$BUMPS" | grep -q "minor" && [ "$HAS_MINOR" -eq 0 ] && [ "$HAS_MAJOR" -eq 0 ]; then
+              echo "::error::Changeset $f contains a 'minor' bump but the PR lacks a 'minor' or 'major' label."
+              exit 1
+            fi
+          done
+
+          echo "All changeset files validated"
