@@ -136,4 +136,57 @@ describe("instrumentation", () => {
 		const span = spans[0];
 		expect(span?.instrumentationLibrary?.name).toBe("better-auth");
 	});
+
+	it("does not record error status for redirect APIErrors (sync)", () => {
+		const redirectError = Object.assign(new Error("Found"), {
+			name: "APIError",
+			statusCode: 302,
+		});
+
+		expect(() =>
+			withSpan("test.redirect.sync", {}, () => {
+				throw redirectError;
+			}),
+		).toThrow();
+
+		const spans = exporter.getFinishedSpans();
+		expect(spans).toHaveLength(1);
+		expect(spans[0]?.status.code).toBe(1); // SpanStatusCode.OK
+		expect(spans[0]?.attributes["http.response.status_code"]).toBe(302);
+	});
+
+	it("does not record error status for redirect APIErrors (async)", async () => {
+		const redirectError = Object.assign(new Error("Found"), {
+			name: "APIError",
+			statusCode: 302,
+		});
+
+		await expect(
+			withSpan("test.redirect.async", {}, async () => {
+				throw redirectError;
+			}),
+		).rejects.toThrow();
+
+		const spans = exporter.getFinishedSpans();
+		expect(spans).toHaveLength(1);
+		expect(spans[0]?.status.code).toBe(1); // SpanStatusCode.OK
+		expect(spans[0]?.attributes["http.response.status_code"]).toBe(302);
+	});
+
+	it("still records error status for non-redirect APIErrors", () => {
+		const apiError = Object.assign(new Error("Not Found"), {
+			name: "APIError",
+			statusCode: 404,
+		});
+
+		expect(() =>
+			withSpan("test.apierror.404", {}, () => {
+				throw apiError;
+			}),
+		).toThrow();
+
+		const spans = exporter.getFinishedSpans();
+		expect(spans).toHaveLength(1);
+		expect(spans[0]?.status.code).toBe(2); // SpanStatusCode.ERROR
+	});
 });
