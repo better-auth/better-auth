@@ -5,12 +5,12 @@ export default defineConfig([
 		dts: { build: true, incremental: true },
 		format: ["esm"],
 		entry: ["./src/index.ts"],
-		sourcemap: true,
+		treeshake: true,
 	},
 	{
 		dts: { build: true, incremental: true },
 		format: ["esm"],
 		entry: ["./src/node.ts"],
-		sourcemap: true,
+		treeshake: true,
 	},
 ]);

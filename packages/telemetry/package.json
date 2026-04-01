@@ -19,6 +19,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -47,16 +48,14 @@
       ]
     }
   },
-  "dependencies": {
-    "@better-auth/utils": "catalog:",
-    "@better-fetch/fetch": "catalog:"
-  },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "tsdown": "catalog:",
     "type-fest": "^5.4.4"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*"
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:"
   }
 }

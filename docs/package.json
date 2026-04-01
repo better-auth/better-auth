@@ -10,7 +10,7 @@
     "postbuild": "pnpm sync-typesense",
     "start": "next start",
     "lint": "next lint",
-    "lint:fix": "biome check . --fix --unsafe",
+    "lint:fix": "pnpm -w biome check docs/ --fix --unsafe",
     "sync-typesense": "node scripts/sync-typesense.ts",
     "format:md": "remark . --output --quiet",
     "format:check": "remark . --quiet --frail"
@@ -75,7 +75,7 @@
     "input-otp": "^1.4.2",
     "js-beautify": "^1.15.4",
     "lottie-react": "^2.4.1",
-    "lucide-react": "^0.575.0",
+    "lucide-react": "^1.7.0",
     "mermaid": "^11.12.3",
     "next": "16.2.2",
     "next-themes": "^0.4.6",

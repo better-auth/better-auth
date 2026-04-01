@@ -20,6 +20,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -58,8 +59,6 @@
     }
   },
   "dependencies": {
-    "@better-auth/utils": "catalog:",
-    "better-call": "catalog:",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -69,6 +68,8 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*"
+    "@better-auth/utils": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:"
   }
 }
