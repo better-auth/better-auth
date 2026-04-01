@@ -3,6 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../../version";
 
 declare global {
 	interface Window {
@@ -192,6 +193,7 @@ const noRetryReasons = {
 export const oneTapClient = (options: GoogleOneTapOptions) => {
 	return {
 		id: "one-tap",
+		version: PACKAGE_VERSION,
 		fetchPlugins: [
 			{
 				id: "fedcm-signout-handle",

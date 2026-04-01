@@ -323,7 +323,7 @@ export function StaggeredNavFiles() {
 					initial={{ y: -10, opacity: 0 }}
 					animate={{ y: 0, opacity: 1 }}
 					transition={{ duration: 0.28, delay: 0.04, ease: "easeOut" }}
-					className={`flex-1 hidden lg:flex h-(--landing-topbar-height) items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
+					className={`flex-1 hidden lg:flex h-[calc(var(--landing-topbar-height)+1px)] items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
 				>
 					{/* Inline logo when left pane is hidden */}
 					{!isKnownPage && (
