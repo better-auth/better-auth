@@ -1,3 +1,7 @@
+output:
+  - success
+  - failure
+
 pre-commit:
   commands:
     biome:
