@@ -49,9 +49,17 @@ function getContent(content: string) {
 export default async function ChangelogPage() {
 	const res = await fetch(
 		"https://api.github.com/repos/better-auth/better-auth/releases",
-		{ next: { revalidate: 3600 } },
+		{
+			next: { revalidate: 3600 },
+			headers: {
+				Accept: "application/vnd.github.v3+json",
+				...(process.env.GITHUB_TOKEN && {
+					Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+				}),
+			},
+		},
 	);
-	const releases: GitHubRelease[] = await res.json();
+	const releases: GitHubRelease[] = res.ok ? await res.json() : [];
 
 	const EXPANDABLE_LINE_THRESHOLD = 15;
 
