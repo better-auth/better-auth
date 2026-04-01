@@ -83,6 +83,91 @@ export const auth = betterAuth({
 })
 ```
 
+#### Skipping Current Email Verification
+
+If your users may no longer have access to their old email address, you can skip the confirmation step on the current email by setting `sendOldEmailVerification` to `false`. The verification email will be sent directly to the new email address instead.
+
+When this option is disabled, a password (or fresh session) is required to compensate for the reduced security.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sendEmail } from './email'; // your email sending function
+
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+        }
+    },
+    emailVerification: {
+        sendOldEmailVerification: false,
+        sendVerificationEmail: async ({ user, url, token }) => {
+            void sendEmail({
+                to: user.email,
+                subject: 'Verify your new email',
+                text: `Click the link to verify: ${url}`
+            })
+        }
+    },
+})
+```
+
+<Callout type="warn">
+    Disabling old email verification reduces security. An attacker with access to an active session could change the account email. The password or fresh session requirement mitigates this risk, but consider your threat model before disabling.
+</Callout>
+
+#### Email Change Notification
+
+When skipping old email verification, you can still notify the old email address about the change. Unlike `sendChangeEmailConfirmation`, this is non-blocking — no action is required from the user.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sendEmail } from './email';
+
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            sendChangeEmailNotification: async ({ user, oldEmail, newEmail }) => {
+                void sendEmail({
+                    to: oldEmail,
+                    subject: 'Your email address was changed',
+                    text: `Your email was changed to ${newEmail}. If this wasn't you, contact support.`
+                })
+            }
+        }
+    },
+    emailVerification: {
+        sendOldEmailVerification: false,
+        sendVerificationEmail: async ({ user, url }) => {
+            void sendEmail({
+                to: user.email,
+                subject: 'Verify your new email',
+                text: `Click the link to verify: ${url}`
+            })
+        }
+    },
+})
+```
+
+#### After Email Change Hook
+
+You can run custom logic after an email change is verified and applied using `afterEmailChange`. This is useful for syncing with external systems, audit logging, or sending confirmation notifications.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            afterEmailChange: async ({ user, oldEmail, newEmail }) => {
+                await updateExternalSystem(user.id, newEmail);
+                console.log(`Email changed from ${oldEmail} to ${newEmail}`);
+            }
+        }
+    },
+})
+```
+
 #### Updating Without Verification
 
 If you want to allow users to update their email immediately without verification (only if their current email is NOT verified), you can enable `updateEmailWithoutVerification`.

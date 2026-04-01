@@ -765,3 +765,350 @@ describe("change-email without sendVerificationEmail", async () => {
 		});
 	});
 });
+
+describe("changeEmail with sendOldEmailVerification", async () => {
+	it("should skip old email and send directly to new email when sendOldEmailVerification is false", async () => {
+		const sendChangeEmail = vi.fn();
+		let newEmailVerificationToken = "";
+
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				sendOldEmailVerification: false,
+				async sendVerificationEmail({ user, url, token }) {
+					newEmailVerificationToken = token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					sendChangeEmailConfirmation: async ({
+						user,
+						newEmail,
+						url,
+						token,
+					}) => {
+						sendChangeEmail(user, newEmail, url, token);
+					},
+				},
+			},
+		});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const newEmail = "new-direct-email@email.com";
+
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail,
+				password: testUser.password,
+			});
+			expect(res.data?.status).toBe(true);
+
+			expect(sendChangeEmail).not.toHaveBeenCalled();
+
+			expect(newEmailVerificationToken).toBeDefined();
+			expect(newEmailVerificationToken.length).toBeGreaterThan(0);
+
+			const verifyRes = await client.verifyEmail({
+				query: { token: newEmailVerificationToken },
+			});
+			expect(verifyRes.data?.status).toBe(true);
+
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.email).toBe(newEmail);
+		});
+	});
+
+	it("should reject with wrong password when sendOldEmailVerification is false", async () => {
+		const sendChangeEmail = vi.fn();
+		const sendVerification = vi.fn();
+
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				sendOldEmailVerification: false,
+				async sendVerificationEmail() {
+					sendVerification();
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					sendChangeEmailConfirmation: async () => {
+						sendChangeEmail();
+					},
+				},
+			},
+		});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "wrong-pass@email.com",
+				password: "wrongpassword",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(sendChangeEmail).not.toHaveBeenCalled();
+			expect(sendVerification).not.toHaveBeenCalled();
+		});
+	});
+
+	it("should allow without password if session is fresh when sendOldEmailVerification is false", async () => {
+		let newEmailVerificationToken = "";
+
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				sendOldEmailVerification: false,
+				async sendVerificationEmail({ token }) {
+					newEmailVerificationToken = token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+			session: {
+				freshAge: 60 * 60,
+			},
+		});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "fresh-session@email.com",
+			});
+			expect(res.data?.status).toBe(true);
+			expect(newEmailVerificationToken.length).toBeGreaterThan(0);
+		});
+	});
+
+	it("should reject stale session without password when sendOldEmailVerification is false", async () => {
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				sendOldEmailVerification: false,
+				async sendVerificationEmail() {},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+			session: {
+				freshAge: 1,
+			},
+		});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const currentSession = await client.getSession({
+			fetchOptions: { headers },
+		});
+		const sessionId = currentSession.data?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			update: {
+				createdAt: new Date(Date.now() - 5_000).toISOString(),
+			},
+			where: [{ field: "id", value: sessionId! }],
+		});
+
+		const res = await client.changeEmail(
+			{
+				newEmail: "stale-session@email.com",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("SESSION_EXPIRED");
+	});
+
+	it("should preserve default two-step flow when sendOldEmailVerification is not set", async () => {
+		const sendChangeEmail = vi.fn();
+		let newEmailVerificationToken = "";
+
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail({ token }) {
+					newEmailVerificationToken = token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					sendChangeEmailConfirmation: async ({
+						user,
+						newEmail,
+						url,
+						token,
+					}) => {
+						sendChangeEmail(user, newEmail, url, token);
+					},
+				},
+			},
+		});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "two-step@email.com",
+			});
+			expect(res.data?.status).toBe(true);
+
+			expect(sendChangeEmail).toHaveBeenCalled();
+
+			expect(newEmailVerificationToken).toBe("");
+
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.email).toBe(testUser.email);
+		});
+	});
+
+	it("should not leak email existence when sendOldEmailVerification is false", async () => {
+		const { client, signInWithUser } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOldEmailVerification: false,
+					async sendVerificationEmail() {},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const email1 = "existing-user@email.com";
+		const email2 = "non-existing@email.com";
+
+		await client.signUp.email({
+			email: email1,
+			password: "test123456",
+			name: "Existing User",
+		});
+
+		await client.signUp.email({
+			email: "changer@email.com",
+			password: "test123456",
+			name: "Changer",
+		});
+
+		const { headers } = await signInWithUser("changer@email.com", "test123456");
+
+		const resExisting = await client.changeEmail(
+			{ newEmail: email1 },
+			{ headers },
+		);
+		const resNonExisting = await client.changeEmail(
+			{ newEmail: email2 },
+			{ headers },
+		);
+
+		expect(resExisting.data?.status).toBe(true);
+		expect(resNonExisting.data?.status).toBe(true);
+	});
+
+	it("should call afterEmailChange and sendChangeEmailNotification after verification", async () => {
+		const afterEmailChange = vi.fn();
+		const sendNotification = vi.fn();
+		let verificationToken = "";
+
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				sendOldEmailVerification: false,
+				async sendVerificationEmail({ token }) {
+					verificationToken = token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					afterEmailChange: async (data) => {
+						afterEmailChange(data);
+					},
+					sendChangeEmailNotification: async (data) => {
+						sendNotification(data);
+					},
+				},
+			},
+		});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const newEmail = "hook-test@email.com";
+
+		await runWithUser(async () => {
+			await client.changeEmail({
+				newEmail,
+				password: testUser.password,
+			});
+
+			// Hooks should not fire until verification is complete
+			expect(afterEmailChange).not.toHaveBeenCalled();
+			expect(sendNotification).not.toHaveBeenCalled();
+
+			// Verify the new email
+			await client.verifyEmail({
+				query: { token: verificationToken },
+			});
+
+			// Now hooks should have fired
+			expect(afterEmailChange).toHaveBeenCalledWith(
+				expect.objectContaining({
+					oldEmail: testUser.email,
+					newEmail,
+				}),
+			);
+			expect(sendNotification).toHaveBeenCalledWith(
+				expect.objectContaining({
+					oldEmail: testUser.email,
+					newEmail,
+				}),
+			);
+		});
+	});
+});

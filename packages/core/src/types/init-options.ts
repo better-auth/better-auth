@@ -612,6 +612,18 @@ export type BetterAuthOptions = {
 					user: User,
 					request?: Request,
 				) => Promise<void>;
+				/**
+				 * Send a verification email to the old email address
+				 * when the user changes their email. When `false`,
+				 * verification is sent directly to the new email,
+				 * skipping old email confirmation.
+				 *
+				 * When disabled, a password (or fresh session) is
+				 * required to compensate for the reduced security.
+				 *
+				 * @default true
+				 */
+				sendOldEmailVerification?: boolean;
 		  }
 		| undefined;
 	/**
@@ -804,6 +816,39 @@ export type BetterAuthOptions = {
 					 * @default false
 					 */
 					updateEmailWithoutVerification?: boolean;
+					/**
+					 * A function called after the user's email has been
+					 * successfully changed and verified.
+					 * @param data the data object with user, old and new email
+					 * @param request the request object
+					 */
+					afterEmailChange?: (
+						data: {
+							user: User;
+							oldEmail: string;
+							newEmail: string;
+						},
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * Send a non-blocking notification to the old email
+					 * address when the email is changed. Unlike
+					 * `sendChangeEmailConfirmation`, this does not require
+					 * the user to click a link — it is informational only.
+					 *
+					 * Useful when `sendOldEmailVerification` is `false`
+					 * to still inform the user of the change.
+					 * @param data the data object
+					 * @param request the request object
+					 */
+					sendChangeEmailNotification?: (
+						data: {
+							user: User;
+							oldEmail: string;
+							newEmail: string;
+						},
+						request?: Request,
+					) => Promise<void>;
 				};
 				/**
 				 * User deletion configuration
