@@ -32,6 +32,7 @@ import {
 	getJwtPlugin,
 	verifyOAuthQueryParams,
 } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -164,6 +165,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 	return {
 		id: "oauth-provider",
+		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		init: (ctx) => {
 			// Require session id storage on database (secondary-storage only solution not yet supported)

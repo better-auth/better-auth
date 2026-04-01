@@ -58,6 +58,7 @@ type InferPluginOptions<
  *
  * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
  *   id: 'my-plugin',
+ *   version: '1.0.0',
  *   options,
  * } satisfies BetterAuthPlugin);
  *

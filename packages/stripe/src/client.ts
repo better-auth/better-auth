@@ -1,6 +1,8 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import type { StripePlan, stripe } from "./index";
+import { PACKAGE_VERSION } from "./version";
+
 export const stripeClient = <
 	O extends {
 		subscription: boolean;
@@ -10,6 +12,7 @@ export const stripeClient = <
 ) => {
 	return {
 		id: "stripe-client",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<
 			typeof stripe<
 				O["subscription"] extends true

@@ -23,6 +23,7 @@ import {
 	isDynamicBaseURLConfig,
 	resolveBaseURL,
 } from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -192,6 +193,7 @@ export const mcp = (options: MCPOptions) => {
 	const provider = oidcProvider(opts);
 	return {
 		id: "mcp",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{

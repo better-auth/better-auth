@@ -2,6 +2,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import type { RequestEvent } from "@sveltejs/kit";
 import { parseSetCookieHeader } from "../cookies";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import { PACKAGE_VERSION } from "../version";
 
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => Response | Promise<Response>;
@@ -58,6 +59,7 @@ export const sveltekitCookies = (
 ) => {
 	return {
 		id: "sveltekit-cookies",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
