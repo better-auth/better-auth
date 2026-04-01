@@ -1,6 +1,5 @@
 packages:
   - packages/**
-  - landing
   - docs
   - e2e/**
   - test
