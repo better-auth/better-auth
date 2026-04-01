@@ -206,7 +206,7 @@ pnpm lint:fix
 
 8. Push your branch to your fork
 
-9. Open a pull request against the **canary** branch. In your PR description:
+9. Open a pull request against the **main** branch. In your PR description:
    * Clearly describe what changes you made and why
    * Include any relevant context or background
    * List any breaking changes or deprecations
