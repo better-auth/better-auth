@@ -1,5 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
+  "include": ["./src", "./package.json"],
   "references": [
     {
       "path": "../better-auth/tsconfig.json"

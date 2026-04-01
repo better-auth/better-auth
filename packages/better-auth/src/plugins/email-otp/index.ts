@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { PACKAGE_VERSION } from "../../version";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
 import { storeOTP } from "./otp-token";
 import {
@@ -46,6 +47,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 
 	return {
 		id: "email-otp",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			if (!opts.overrideDefaultEmailVerification) {
 				return;
