@@ -98,18 +98,6 @@ importers:
       publint:
         specifier: ^0.3.17
         version: 0.3.17
-      remark-cli:
-        specifier: ^12.0.1
-        version: 12.0.1
-      remark-mdx:
-        specifier: ^3.1.1
-        version: 3.1.1
-      remark-preset-lint-consistent:
-        specifier: ^6.0.1
-        version: 6.0.1
-      remark-preset-lint-recommended:
-        specifier: ^7.0.1
-        version: 7.0.1
       tinyglobby:
         specifier: ^0.2.15
         version: 0.2.15
@@ -420,6 +408,15 @@ importers:
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
+      remark-cli:
+        specifier: ^12.0.1
+        version: 12.0.1
+      remark-preset-lint-consistent:
+        specifier: ^6.0.1
+        version: 6.0.1
+      remark-preset-lint-recommended:
+        specifier: ^7.0.1
+        version: 7.0.1
       tailwindcss:
         specifier: catalog:tailwind
         version: 4.2.1
@@ -21674,7 +21671,7 @@ snapshots:
 
   '@types/concat-stream@2.0.3':
     dependencies:
-      '@types/node': 25.3.2
+      '@types/node': 25.5.0
 
   '@types/connect@3.4.38':
     dependencies:
