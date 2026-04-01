@@ -12,7 +12,7 @@ import {
 import * as z from "zod";
 
 export const docs = defineDocs({
-	dir: "../docs/content/docs",
+	dir: "./content/docs",
 	docs: {
 		postprocess: {
 			includeProcessedMarkdown: true,
@@ -23,7 +23,7 @@ export const docs = defineDocs({
 
 export const blogCollection = defineCollections({
 	type: "doc",
-	dir: "../docs/content/blogs",
+	dir: "./content/blogs",
 	schema: z.object({
 		title: z.string(),
 		description: z.string(),
