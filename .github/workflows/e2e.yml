@@ -1,7 +1,7 @@
 name: E2E
 on:
   push:
-    branches: [ main, canary ]
+    branches: [ main ]
   merge_group:
   pull_request:
 
@@ -9,6 +9,8 @@ env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
   BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
+
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
@@ -19,10 +21,13 @@ jobs:
     name: Smoke test
     timeout-minutes: 30
     runs-on: starsling-ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Cache turbo build setup
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
@@ -49,7 +54,7 @@ jobs:
       - name: Start Docker Containers
         run: docker compose up -d --wait --wait-timeout 60
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
         with:
@@ -64,6 +69,8 @@ jobs:
     name: Integration test
     timeout-minutes: 60
     runs-on: starsling-ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
@@ -73,6 +80,7 @@ jobs:
         if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Cache turbo build setup
         if: github.event_name != 'merge_group'
@@ -115,6 +123,8 @@ jobs:
   adapter-integration:
     name: ${{ matrix.packages }} Integration Test
     runs-on: starsling-ubuntu-24.04
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -128,6 +138,7 @@ jobs:
         if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Cache turbo build setup
         if: github.event_name != 'merge_group'

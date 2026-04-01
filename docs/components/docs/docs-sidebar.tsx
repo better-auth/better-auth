@@ -2,9 +2,9 @@
 
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useSearchContext } from "fumadocs-ui/contexts/search";
-import { ChevronDownIcon, GitBranch, Search } from "lucide-react";
+import { ChevronDownIcon, Search } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { ListItem } from "@/components/sidebar-content";
@@ -17,13 +17,9 @@ type Section = (typeof contents)[number];
 
 export function DocsSidebar() {
 	const pathname = usePathname();
-	const searchParams = useSearchParams();
-	const branch = searchParams.get("branch");
 	const { setOpenSearch } = useSearchContext();
 	const [currentOpen, setCurrentOpen] = useState(0);
 	const navRef = useRef<HTMLElement>(null);
-
-	const branchQuery = branch === "canary" ? "?branch=canary" : "";
 
 	const getDefaultOpen = (sections: Section[]) => {
 		const defaultValue = sections.findIndex((item) =>
@@ -73,12 +69,9 @@ export function DocsSidebar() {
 			transition={{ duration: 0.28, ease: "easeOut" }}
 			className="fixed left-0 top-(--landing-topbar-height) bottom-0 w-[22vw] max-w-[300px] hidden lg:flex flex-col z-30 bg-background border-r border-foreground/5 transition-[width] duration-300 ease-out"
 		>
-			{/* Branch switcher */}
-			<BranchSwitcher />
-
 			<button
 				type="button"
-				className="flex w-full items-center gap-2 px-4 py-2.5 border-b border-foreground/5 text-sm text-foreground/55 hover:text-foreground/80 hover:bg-foreground/3 transition-colors"
+				className="flex w-full items-center gap-2 px-4 py-[9px] border-y border-foreground/5 text-sm text-foreground/55 hover:text-foreground/80 hover:bg-foreground/3 transition-colors"
 				onClick={() => setOpenSearch(true)}
 			>
 				<Search className="size-4 shrink-0" />
@@ -134,11 +127,7 @@ export function DocsSidebar() {
 											className="relative overflow-hidden"
 										>
 											<motion.div className="text-sm">
-												<SidebarSection
-													section={section}
-													pathname={pathname}
-													branchQuery={branchQuery}
-												/>
+												<SidebarSection section={section} pathname={pathname} />
 											</motion.div>
 										</motion.div>
 									)}
@@ -175,128 +164,19 @@ export function DocsSidebar() {
 	);
 }
 
-// ─── Branch Switcher ──────────────────────────────────────────────────────────
-
-function BranchSwitcher() {
-	const router = useRouter();
-	const pathname = usePathname();
-	const searchParams = useSearchParams();
-	const branch = searchParams.get("branch") === "canary" ? "canary" : "main";
-	const [open, setOpen] = useState(false);
-	const ref = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		function handleClickOutside(e: MouseEvent) {
-			if (ref.current && !ref.current.contains(e.target as Node)) {
-				setOpen(false);
-			}
-		}
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
-
-	const switchBranch = (target: "main" | "canary") => {
-		setOpen(false);
-		if (target === branch) return;
-		const params = new URLSearchParams(searchParams.toString());
-		if (target === "canary") {
-			params.set("branch", "canary");
-		} else {
-			params.delete("branch");
-		}
-		const qs = params.toString();
-		router.push(qs ? `${pathname}?${qs}` : pathname);
-	};
-
-	return (
-		<div ref={ref} className="relative border-b border-foreground/5">
-			<button
-				type="button"
-				className="flex h-10 w-full items-center gap-2 px-4 text-left hover:bg-foreground/2 transition-colors"
-				onClick={() => setOpen((v) => !v)}
-			>
-				<GitBranch className="size-3.5 text-foreground/60 shrink-0" />
-				<div className="grow text-left min-w-0">
-					<p className="block text-[12px] leading-none uppercase tracking-wider text-foreground/60">
-						{branch}{" "}
-						<span className="text-[9px] text-foreground/40 ">
-							{branch === "main" ? "" : "pre-release"}
-						</span>
-					</p>
-				</div>
-				<div className="flex flex-col items-center shrink-0 text-foreground/45">
-					<ChevronDownIcon className="size-3 rotate-180 -mb-[3px]" />
-					<ChevronDownIcon className="size-3 -mt-[3px]" />
-				</div>
-			</button>
-
-			<AnimatePresence>
-				{open && (
-					<motion.div
-						initial={{ opacity: 0, y: -4 }}
-						animate={{ opacity: 1, y: 0 }}
-						exit={{ opacity: 0, y: -4 }}
-						transition={{ duration: 0.15 }}
-						className="absolute left-2 right-2 lg:left-3 lg:right-3 top-full mt-1 z-50 rounded-md border border-foreground/10 bg-background shadow-md overflow-hidden"
-					>
-						<button
-							type="button"
-							className={cn(
-								"flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors",
-								branch === "main"
-									? "text-foreground bg-foreground/5"
-									: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
-							)}
-							onClick={() => switchBranch("main")}
-						>
-							<span className="grow text-left">main</span>
-							<span className="text-[10px] text-foreground/45 uppercase tracking-wider">
-								Stable
-							</span>
-						</button>
-						<button
-							type="button"
-							className={cn(
-								"flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors",
-								branch === "canary"
-									? "text-foreground bg-foreground/5"
-									: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
-							)}
-							onClick={() => switchBranch("canary")}
-						>
-							<span className="grow text-left">canary</span>
-							<Badge
-								className="pointer-events-none no-underline! border-dashed decoration-transparent! rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider text-foreground/55 border-foreground/25"
-								variant="outline"
-							>
-								Pre-release
-							</Badge>
-						</button>
-					</motion.div>
-				)}
-			</AnimatePresence>
-		</div>
-	);
-}
-
 // ─── Collapsible Section ──────────────────────────────────────────────────────
 
 function SidebarSection({
 	section,
 	pathname,
-	branchQuery,
 }: {
 	section: Section;
 	pathname: string;
-	branchQuery: string;
 }) {
 	return (
 		<div className="pt-0 pb-1">
 			{section.href && (
-				<SidebarLink
-					href={`${section.href}${branchQuery}`}
-					active={pathname === section.href}
-				>
+				<SidebarLink href={section.href} active={pathname === section.href}>
 					Overview
 				</SidebarLink>
 			)}
@@ -344,7 +224,6 @@ function SidebarSection({
 						item={item}
 						active={active}
 						pathname={pathname}
-						branchQuery={branchQuery}
 						hasSubpages={hasSubpages}
 					/>
 				);
@@ -359,13 +238,11 @@ function SidebarItemWithSubpages({
 	item,
 	active,
 	pathname,
-	branchQuery,
 	hasSubpages,
 }: {
 	item: ListItem;
 	active: boolean;
 	pathname: string;
-	branchQuery: string;
 	hasSubpages: boolean | undefined;
 }) {
 	const showSubpages = hasSubpages && active;
@@ -373,7 +250,7 @@ function SidebarItemWithSubpages({
 	return (
 		<div>
 			<SidebarLink
-				href={`${item.href}${branchQuery}`}
+				href={item.href}
 				active={active}
 				icon={
 					<span className="min-w-5 [&>svg]:size-[14px]">
@@ -412,7 +289,7 @@ function SidebarItemWithSubpages({
 								return (
 									<SubpageLink
 										key={subpage.href}
-										href={`${subpage.href}${branchQuery}`}
+										href={subpage.href}
 										active={pathname === subpage.href}
 										icon={
 											subpage.icon ? (

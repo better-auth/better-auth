@@ -1,14 +1,10 @@
 packages:
   - packages/**
-  - landing
   - docs
   - e2e/**
   - test
 
 blockExoticSubdeps: true
-
-overrides:
-  axios: <1.14.0
 
 catalog:
   '@better-auth/utils': 0.4.0
@@ -33,6 +29,9 @@ catalogs:
     '@vitest/ui': ^4.0.18
     vitest: ^4.0.18
 
+ignoredBuiltDependencies:
+  - electron
+
 linkWorkspacePackages: true
 
 minimumReleaseAge: 0
@@ -45,6 +44,7 @@ onlyBuiltDependencies:
   - '@tsparticles/engine'
   - better-sqlite3
   - esbuild
+  - lefthook
   - less
   - msw
   - prisma
@@ -52,8 +52,8 @@ onlyBuiltDependencies:
   - sharp
   - workerd
 
-ignoredBuiltDependencies:
-  - electron
+overrides:
+  axios: <1.14.0
 
 trustPolicy: no-downgrade
 
