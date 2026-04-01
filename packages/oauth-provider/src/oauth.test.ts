@@ -44,6 +44,14 @@ function isRedirectResult(
 }
 
 describe("oauth - init", () => {
+	const createSecondaryStorage = () => ({
+		set(key: string, value: string, ttl?: number) {},
+		get(key: string) {
+			return null;
+		},
+		delete(key: string) {},
+	});
+
 	it("should fail without the jwt plugin", async () => {
 		await expect(
 			getTestInstance({
@@ -84,6 +92,73 @@ describe("oauth - init", () => {
 	it("should pass with correct plugins", async () => {
 		await expect(
 			getTestInstance({
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			}),
+		).resolves.not.toThrowError();
+	});
+
+	it("should fail with secondaryStorage when session config is omitted", async () => {
+		await expect(
+			getTestInstance({
+				secondaryStorage: createSecondaryStorage(),
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			}),
+		).rejects.toThrowError(
+			"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
+		);
+	});
+
+	it("should fail with secondaryStorage when storeSessionInDatabase is false", async () => {
+		await expect(
+			getTestInstance({
+				secondaryStorage: createSecondaryStorage(),
+				session: {
+					storeSessionInDatabase: false,
+				},
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			}),
+		).rejects.toThrowError(
+			"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
+		);
+	});
+
+	it("should pass with secondaryStorage when storeSessionInDatabase is true", async () => {
+		await expect(
+			getTestInstance({
+				secondaryStorage: createSecondaryStorage(),
+				session: {
+					storeSessionInDatabase: true,
+				},
 				plugins: [
 					jwt(),
 					oauthProvider({
