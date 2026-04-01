@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../../version";
 import type { twoFactor as twoFa } from ".";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 
@@ -24,6 +25,7 @@ export const twoFactorClient = (
 ) => {
 	return {
 		id: "two-factor",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
 		atomListeners: [
 			{

@@ -67,6 +67,7 @@ export default async function Page({
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
 						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.path}`}
+						rawMdUrl={`/llms.txt${page.url}.md`}
 					/>
 				</div>
 			</div>
