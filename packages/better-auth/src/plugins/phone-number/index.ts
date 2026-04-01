@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { RequiredPhoneNumberOptions } from "./routes";
 import {
@@ -17,8 +18,7 @@ import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 export type { PhoneNumberOptions, UserWithPhoneNumber };
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"phone-number": {
 			creator: typeof phoneNumber;
 		};
@@ -38,6 +38,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 
 	return {
 		id: "phone-number",
+		version: PACKAGE_VERSION,
 		hooks: {
 			before: [
 				{
@@ -72,7 +73,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				pathMatcher(path) {
 					return path.startsWith("/phone-number");
 				},
-				window: 60 * 1000,
+				window: 60,
 				max: 10,
 			},
 		],

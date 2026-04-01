@@ -8,16 +8,19 @@ on:
   push:
     branches:
       - main
-      - canary
   merge_group:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+  BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: starsling-ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-lint-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -35,7 +38,7 @@ jobs:
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version: 22.x
+          node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
@@ -46,35 +49,30 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Lint
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm lint
 
       - name: Lint Dependencies
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm lint:dependencies
 
       - name: Lint Packages
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm lint:packages
 
       - name: Lint Spell
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm lint:spell
 
       - name: Lint Format
@@ -84,11 +82,13 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm lint:types
 
   typecheck:
-    runs-on: ubuntu-latest
+    runs-on: starsling-ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-typecheck-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -106,7 +106,7 @@ jobs:
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version: 22.x
+          node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
@@ -114,25 +114,24 @@ jobs:
         run: pnpm install
 
       - name: Build
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Typecheck
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm typecheck
 
+      - name: Typecheck dist declarations
+        run: pnpm typecheck:dist
+
   test:
-    runs-on: ubuntu-latest
+    runs-on: starsling-ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: ${{ github.workflow }}-test-${{ matrix.node-version }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22.x]
+        node-version: [22.x, 24.x]
     steps:
       - name: Skip tests in merge queue
         if: github.event_name == 'merge_group'
@@ -166,26 +165,12 @@ jobs:
         if: github.event_name != 'merge_group'
         run: pnpm install
 
-      - name: Build
-        if: github.event_name != 'merge_group'
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
-        run: pnpm build
-
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - name: Test
         if: github.event_name != 'merge_group'
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
         run: pnpm coverage
 
       - name: Stop Docker Containers

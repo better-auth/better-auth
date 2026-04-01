@@ -7,6 +7,7 @@ import type {
 import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
+import type { RawError } from "../utils/error-codes";
 import type { AuthContext } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
@@ -18,7 +19,20 @@ type DeepPartial<T> = T extends Function
 		: T;
 
 export type HookEndpointContext = Partial<
-	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
+	EndpointContext<
+		string,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		AuthContext & {
+			returned?: unknown | undefined;
+			responseHeaders?: Headers | undefined;
+		}
+	> &
+		Omit<InputContext<string, any, any, any, any, any>, "method">
 > & {
 	path?: string;
 	context: AuthContext & {
@@ -28,8 +42,16 @@ export type HookEndpointContext = Partial<
 	headers?: Headers | undefined;
 };
 
-export type BetterAuthPlugin = {
+export type BetterAuthPluginErrorCodePart = {
+	/**
+	 * The error codes returned by the plugin
+	 */
+	$ERROR_CODES?: Record<string, RawError>;
+};
+
+export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	id: LiteralString;
+	version?: string | undefined;
 	/**
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
@@ -37,7 +59,8 @@ export type BetterAuthPlugin = {
 	init?:
 		| ((ctx: AuthContext) =>
 				| Awaitable<{
-						context?: DeepPartial<Omit<AuthContext, "options">>;
+						context?: DeepPartial<Omit<AuthContext, "options">> &
+							Record<string, unknown>;
 						options?: Partial<BetterAuthOptions>;
 				  }>
 				| void
@@ -142,10 +165,6 @@ export type BetterAuthPlugin = {
 				pathMatcher: (path: string) => boolean;
 		  }[]
 		| undefined;
-	/**
-	 * The error codes returned by the plugin
-	 */
-	$ERROR_CODES?: Record<string, { code: string; message: string }> | undefined;
 	/**
 	 * All database operations that are performed by the plugin
 	 *

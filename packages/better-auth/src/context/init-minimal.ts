@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { getBaseAdapter } from "../db";
+import { getBaseAdapter } from "../db/adapter-base";
 import { createAuthContext } from "./create-context";
 
 export const initMinimal = async (options: BetterAuthOptions) => {

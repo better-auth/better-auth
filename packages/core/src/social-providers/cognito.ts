@@ -178,10 +178,7 @@ export const cognito = (options: CognitoOptions) => {
 						return null;
 					}
 					const name =
-						profile.name ||
-						profile.given_name ||
-						profile.username ||
-						profile.email;
+						profile.name || profile.given_name || profile.username || "";
 					const enrichedProfile = {
 						...profile,
 						name,
@@ -220,7 +217,11 @@ export const cognito = (options: CognitoOptions) => {
 						return {
 							user: {
 								id: userInfo.sub,
-								name: userInfo.name || userInfo.given_name || userInfo.username,
+								name:
+									userInfo.name ||
+									userInfo.given_name ||
+									userInfo.username ||
+									"",
 								email: userInfo.email,
 								image: userInfo.picture,
 								emailVerified: userInfo.email_verified,

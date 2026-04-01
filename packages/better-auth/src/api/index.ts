@@ -6,13 +6,20 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import {
+	ATTR_CONTEXT,
+	ATTR_HOOK_TYPE,
+	ATTR_HTTP_RESPONSE_STATUS_CODE,
+	ATTR_HTTP_ROUTE,
+	withSpan,
+} from "@better-auth/core/instrumentation";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
-import type { UnionToIntersection } from "../types/helper";
+import type { UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
-import { onRequestRateLimit } from "./rate-limiter";
+import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -41,6 +48,7 @@ import {
 	signOut,
 	signUpEmail,
 	unlinkAccount,
+	updateSession,
 	updateUser,
 	verifyEmail,
 	verifyPassword,
@@ -192,13 +200,22 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 				plugin.middlewares?.map((m) => {
 					const middleware = (async (context: any) => {
 						const authContext = await ctx;
-						return m.middleware({
-							...context,
-							context: {
-								...authContext,
-								...context.context,
+						return withSpan(
+							`middleware ${m.path} ${plugin.id}`,
+							{
+								[ATTR_HOOK_TYPE]: "middleware",
+								[ATTR_HTTP_ROUTE]: m.path,
+								[ATTR_CONTEXT]: `plugin:${plugin.id}`,
 							},
-						});
+							() =>
+								m.middleware({
+									...context,
+									context: {
+										...authContext,
+										...context.context,
+									},
+								}),
+						);
 					}) as Middleware;
 					middleware.options = m.middleware.options;
 					return {
@@ -224,6 +241,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		changeEmail,
 		changePassword,
 		setPassword,
+		updateSession: updateSession<Option>(),
 		updateUser: updateUser<Option>(),
 		deleteUser,
 		requestPasswordReset,
@@ -248,7 +266,8 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
-		api: api as typeof endpoints & PluginEndpoint,
+		api: api as unknown as Omit<typeof endpoints, keyof PluginEndpoint> &
+			PluginEndpoint,
 		middlewares,
 	};
 }
@@ -285,7 +304,15 @@ export const router = <Option extends BetterAuthOptions>(
 			let currentRequest = req;
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
-					const response = await plugin.onRequest(currentRequest, ctx);
+					const response = await withSpan(
+						`onRequest ${normalizedPath} ${plugin.id}`,
+						{
+							[ATTR_HOOK_TYPE]: "onRequest",
+							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
+							[ATTR_HTTP_ROUTE]: normalizedPath,
+						},
+						() => plugin.onRequest!(currentRequest, ctx),
+					);
 					if (response && "response" in response) {
 						return response.response;
 					}
@@ -302,10 +329,21 @@ export const router = <Option extends BetterAuthOptions>(
 
 			return currentRequest;
 		},
-		async onResponse(res) {
+		async onResponse(res, req) {
+			await onResponseRateLimit(req, ctx);
+			const normalizedPath = normalizePathname(req.url, basePath);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
-					const response = await plugin.onResponse(res, ctx);
+					const response = await withSpan(
+						`onResponse ${normalizedPath} ${plugin.id}`,
+						{
+							[ATTR_HOOK_TYPE]: "onResponse",
+							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
+							[ATTR_HTTP_ROUTE]: normalizedPath,
+							[ATTR_HTTP_RESPONSE_STATUS_CODE]: res.status,
+						},
+						() => plugin.onResponse!(res, ctx),
+					);
 					if (response) {
 						return response.response;
 					}
@@ -379,3 +417,8 @@ export { getIp } from "../utils/get-request-ip";
 export { isAPIError } from "../utils/is-api-error";
 export * from "./middlewares";
 export * from "./routes";
+export { getOAuthState } from "./state/oauth";
+export {
+	getShouldSkipSessionRefresh,
+	setShouldSkipSessionRefresh,
+} from "./state/should-session-refresh";

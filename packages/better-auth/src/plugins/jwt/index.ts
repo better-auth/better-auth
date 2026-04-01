@@ -8,6 +8,7 @@ import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
@@ -21,8 +22,7 @@ export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		jwt: {
 			creator: typeof jwt;
 		};
@@ -68,6 +68,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 
 	return {
 		id: "jwt",
+		version: PACKAGE_VERSION,
 		options: options as NoInfer<O>,
 		endpoints: {
 			getJwks: createAuthEndpoint(

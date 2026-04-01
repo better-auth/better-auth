@@ -1,5 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*.ts", "package.json"],
   "compilerOptions": {
     "lib": ["esnext", "dom", "dom.iterable"],
     "types": ["node", "bun"]
@@ -10,6 +11,21 @@
     },
     {
       "path": "../telemetry/tsconfig.json"
+    },
+    {
+      "path": "../drizzle-adapter/tsconfig.json"
+    },
+    {
+      "path": "../kysely-adapter/tsconfig.json"
+    },
+    {
+      "path": "../memory-adapter/tsconfig.json"
+    },
+    {
+      "path": "../mongo-adapter/tsconfig.json"
+    },
+    {
+      "path": "../prisma-adapter/tsconfig.json"
     }
   ]
 }

@@ -41,7 +41,7 @@ async function selected(
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }
 
@@ -57,11 +57,12 @@ async function created(
 		});
 	}
 	const query = new URLSearchParams(_query);
+	ctx.headers?.set("accept", "application/json");
 	ctx.query = deleteFromPrompt(query, "create");
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }
 
@@ -84,6 +85,6 @@ async function postLogin(
 	});
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }

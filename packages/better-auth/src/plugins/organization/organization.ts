@@ -5,7 +5,8 @@ import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
-import type { AccessControl } from "../access";
+import { PACKAGE_VERSION } from "../../version";
+import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { defaultRoles } from "./access";
 import { getOrgAdapter } from "./adapter";
@@ -69,24 +70,27 @@ import type {
 import type { OrganizationOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		organization: {
 			creator: OrganizationCreator;
 		};
 	}
 }
 
+export { hasPermission } from "./has-permission";
+export type { OrganizationOptions } from "./types";
+
 export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 	id: "organization";
+	version: string;
 	endpoints: OrganizationEndpoints<Options>;
 	schema: OrganizationSchema<Options>;
 	$Infer: {
 		Organization: InferOrganization<Options>;
 		Invitation: InferInvitation<Options>;
 		Member: InferMember<Options>;
-		Team: Options["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: Options["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: Options["teams"] extends { enabled: true }
 			? {
 					members: InferMember<Options, false>[];
@@ -165,10 +169,10 @@ const createHasPermissionBodySchema = z
 		z.union([
 			z.object({
 				permission: z.record(z.string(), z.array(z.string())),
-				permissions: z.undefined(),
+				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),
 			z.object({
-				permission: z.undefined(),
+				permission: z.record(z.string(), z.array(z.string())).optional(),
 				permissions: z.record(z.string(), z.array(z.string())),
 			}),
 		]),
@@ -181,22 +185,13 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
+				? ArrayElement<Statements[key]>
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	return createAuthEndpoint(
 		"/organization/has-permission",
@@ -283,7 +278,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				{
 					role: member.role,
 					options: options,
-					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+					permissions: ctx.body.permissions as any,
 					organizationId: activeOrganizationId,
 				},
 				ctx,
@@ -299,6 +294,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 
 export type OrganizationPlugin<O extends OrganizationOptions> = {
 	id: "organization";
+	version: string;
 	endpoints: OrganizationEndpoints<O> &
 		(O extends { teams: { enabled: true } } ? TeamEndpoints<O> : {}) &
 		(O extends { dynamicAccessControl: { enabled: true } }
@@ -309,8 +305,8 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -354,14 +350,15 @@ export function organization<
 	options?: O | undefined,
 ): {
 	id: "organization";
+	version: string;
 	endpoints: OrganizationEndpoints<O> & TeamEndpoints<O>;
 	schema: OrganizationSchema<O>;
 	$Infer: {
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : unknown;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : unknown;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -385,6 +382,7 @@ export function organization<
 	options?: O | undefined,
 ): {
 	id: "organization";
+	version: string;
 	endpoints: OrganizationEndpoints<O> &
 		TeamEndpoints<O> &
 		DynamicAccessControlEndpoints<O>;
@@ -393,8 +391,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -418,14 +416,15 @@ export function organization<
 	options?: O | undefined,
 ): {
 	id: "organization";
+	version: string;
 	endpoints: OrganizationEndpoints<O> & DynamicAccessControlEndpoints<O>;
 	schema: OrganizationSchema<O>;
 	$Infer: {
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -1211,6 +1210,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 
 	return {
 		id: "organization",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
 			hasPermission: createHasPermission(opts),
@@ -1258,8 +1258,8 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 			Organization: {} as InferOrganization<O>,
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
-			Team: teamSupport ? ({} as Team) : ({} as any),
-			TeamMember: teamSupport ? ({} as TeamMember) : ({} as any),
+			Team: teamSupport ? ({} as Team) : ({} as never),
+			TeamMember: teamSupport ? ({} as TeamMember) : ({} as never),
 			ActiveOrganization: {} as O["teams"] extends { enabled: true }
 				? {
 						members: InferMember<O, false>[];

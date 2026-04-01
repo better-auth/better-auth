@@ -6,10 +6,10 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { toBoolean } from "../../utils/boolean";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"one-tap": {
 			creator: typeof oneTap;
 		};
@@ -42,6 +42,7 @@ const oneTapCallbackBodySchema = z.object({
 export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			oneTapCallback: createAuthEndpoint(
 				"/one-tap/callback",
@@ -86,14 +87,16 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
+						const googleProvider =
+							typeof ctx.context.options.socialProviders?.google === "function"
+								? await ctx.context.options.socialProviders?.google()
+								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience:
-									options?.clientId ||
-									ctx.context.options.socialProviders?.google?.clientId,
+								audience: options?.clientId || googleProvider?.clientId,
 							},
 						);
 						payload = verifiedPayload;
@@ -151,7 +154,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const shouldLinkAccount =
 							accountLinking?.enabled !== false &&
-							(accountLinking?.trustedProviders?.includes("google") ||
+							(ctx.context.trustedProviders.includes("google") ||
 								email_verified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({

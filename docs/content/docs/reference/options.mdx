@@ -137,13 +137,39 @@ By default, Better Auth will look for the following environment variables:
 - `process.env.BETTER_AUTH_SECRET`
 - `process.env.AUTH_SECRET`
 
-If none of these environment variables are set, it will default to `"better-auth-secret-123456789"`. In production, if it's not set, it will throw an error.
+If none of these environment variables are set, it will default to `"better-auth-secret-12345678901234567890"`. In production, if it's not set, it will throw an error.
 
 You can generate a good secret using the following command:
 
 ```bash
 openssl rand -base64 32
 ```
+
+## `secrets`
+
+Versioned secrets for non-destructive secret rotation. When set, encrypted data uses an envelope format that embeds the key version, allowing you to rotate secrets without invalidating existing data.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	secrets: [
+		{ version: 2, value: "new-secret-key" },
+		{ version: 1, value: "old-secret-key" },
+	],
+})
+```
+
+- The first entry is the **current** key used for all new encryption.
+- Remaining entries are **decryption-only** (previous rotations).
+- Versions are integers. Gaps are allowed (e.g., `1, 3` after revoking version 2).
+
+You can also set this via the `BETTER_AUTH_SECRETS` environment variable:
+
+```txt title=".env"
+BETTER_AUTH_SECRETS=2:new-secret-base64,1:old-secret-base64
+```
+
+When `secrets` is set, `secret` (singular) is only used as a fallback for decrypting legacy data that predates the envelope format. Both can coexist during migration.
 
 ## `database`
 
@@ -166,7 +192,7 @@ Read more about databases [here](/docs/concepts/database).
 
 ## `secondaryStorage`
 
-Secondary storage configuration used to store session and rate limit data.
+Secondary storage configuration used to store session data, verification records, and rate limit data.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -200,7 +226,7 @@ export const auth = betterAuth({
 ```
 
 - `sendVerificationEmail`: Function to send verification email
-- `sendOnSignUp`: Send verification email automatically after sign up (default: `false`)
+- `sendOnSignUp`: Send verification email automatically after sign up. `true` always sends, `false` never sends, `undefined` follows `requireEmailVerification` behavior (default: `undefined`)
 - `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
 - `autoSignInAfterVerification`: Auto sign in the user after they verify their email
 - `expiresIn`: Number of seconds the verification token is valid for (default: `3600` seconds)
@@ -244,7 +270,11 @@ export const auth = betterAuth({
 - `maxPasswordLength`: Maximum password length (default: `128`)
 - `autoSignIn`: Automatically sign in the user after sign up
 - `sendResetPassword`: Function to send reset password email
+- `onPasswordReset`: Callback triggered when a user's password is changed successfully
+- `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
 - `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
+- `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
+- `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).
 - `password`: Custom password hashing and verification functions
 
 ## `socialProviders`
@@ -408,7 +438,7 @@ export const auth = betterAuth({
 		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
-			trustedProviders: ["google", "github", "email-password"],
+			trustedProviders: ["google", "github", "email-password"], // or async (request) => ["google", "github"]
 			allowDifferentEmails: false
 		}
 	},
@@ -434,12 +464,23 @@ Store account data after OAuth flow in a cookie. This is useful for database-les
 - Default: `false`
 - Automatically set to `true` if no database is provided
 
+When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
+
+```ts
+import { createAuthMiddleware } from "better-auth/api";
+import { getAccountCookie } from "better-auth/cookies";
+
+const hook = createAuthMiddleware(async (ctx) => {
+	const account = await getAccountCookie(ctx);
+});
+```
+
 ### `accountLinking`
 
 Configuration for account linking.
 
 - `enabled`: Enable account linking (default: `true`)
-- `trustedProviders`: List of trusted providers
+- `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
 - `allowDifferentEmails`: Allow users to link accounts with different email addresses
 - `allowUnlinkingAll`: Allow users to unlink all accounts
 
@@ -450,12 +491,13 @@ Verification configuration options.
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
+	secondaryStorage: {
+		// your Redis or KV implementation
+	},
 	verification: {
-		modelName: "verifications",
-		fields: {
-			userId: "user_id"
-		},
-		disableCleanup: false
+		disableCleanup: false,
+		storeIdentifier: "hashed",
+		storeInDatabase: false
 	},
 })
 ```
@@ -463,6 +505,10 @@ export const auth = betterAuth({
 - `modelName`: The model name for the verification table
 - `fields`: Map fields to different column names
 - `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
+- `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
+- `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
+
+If `secondaryStorage` is configured, verification records are stored there by default. That behavior applies to flows that use Better Auth's shared verification layer, including OTP and magic-link style flows.
 
 ## `rateLimit`
 
@@ -544,6 +590,9 @@ export const auth = betterAuth({
 			defaultFindManyLimit: 100,
 			experimentalJoins: false,
 		},
+		backgroundTasks: {
+			handler: (promise) => { /* e.g. waitUntil(promise) */ }
+		},
 		skipTrailingSlashes: true
 	},
 })
@@ -558,8 +607,54 @@ export const auth = betterAuth({
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
 - `database`: Database configuration options
+- `backgroundTasks`: Configure background task handling for deferred operations
 - `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 - OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+
+### `backgroundTasks`
+
+Configure background task handling for deferred operations. Background tasks allow non-critical operations (like cleanup, analytics, timing-attack mitigation, or rate limit counter updates) to run after the response is sent. This can significantly improve response times on serverless platforms.
+
+Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitUntil` on Cloudflare Workers. See the examples below for more details.
+
+<Callout type="warn">
+  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
+</Callout>
+
+<Tabs items={["Vercel", "Cloudflare Workers"]}>
+  <Tab value="Vercel">
+    ```ts
+    import { betterAuth } from "better-auth";
+    import { waitUntil } from "@vercel/functions";
+
+    export const auth = betterAuth({
+      advanced: {
+        backgroundTasks: {
+          handler: waitUntil,
+        },
+      },
+    });
+    ```
+  </Tab>
+  <Tab value="Cloudflare Workers">
+    ```ts
+    import { betterAuth } from "better-auth";
+    import { AsyncLocalStorage } from "node:async_hooks";
+
+    const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
+
+    export const auth = betterAuth({
+      advanced: {
+        backgroundTasks: {
+          handler: (p) => execCtxStorage.getStore()?.waitUntil(p),
+        },
+      },
+    });
+
+    // In your request handler, wrap with execCtxStorage.run(ctx, ...)
+    ```
+  </Tab>
+</Tabs>
 
 ## `logger`
 
@@ -571,7 +666,7 @@ export const auth = betterAuth({
 	logger: {
 		disabled: false,
 		disableColors: false,
-		level: "error",
+		level: "warn",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
 			console.log(`[${level}] ${message}`, ...args);
@@ -584,13 +679,13 @@ The logger configuration allows you to customize how Better Auth handles logging
 
 - `disabled`: Disable all logging when set to `true` (default: `false`)
 - `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
-- `level`: Set the minimum log level to display. Available levels are:
-  - `"info"`: Show all logs
+- `level`: Set the minimum log level to display (default: `"warn"`)
+  - `"debug"`: Show all logs including debug information
+  - `"info"`: Show all logs except debug information
   - `"warn"`: Show warnings and errors
   - `"error"`: Show only errors
-  - `"debug"`: Show all logs including debug information
 - `log`: Custom logging function that receives:
-  - `level`: The log level (`"info"`, `"warn"`, `"error"`, or `"debug"`)
+  - `level`: The log level
   - `message`: The log message
   - `...args`: Additional arguments passed to the logger
 

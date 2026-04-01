@@ -1,0 +1,67 @@
+{
+  "name": "@better-auth/kysely-adapter",
+  "version": "1.5.7-beta.1",
+  "description": "Kysely adapter for Better Auth",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/adapters/kysely",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/kysely-adapter"
+  },
+  "keywords": [
+    "auth",
+    "kysely",
+    "adapter",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./node-sqlite-dialect": {
+      "dev-source": "./src/node-sqlite-dialect.ts",
+      "types": "./dist/node-sqlite-dialect.d.mts",
+      "default": "./dist/node-sqlite-dialect.mjs"
+    }
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "kysely": "^0.27.0 || ^0.28.0"
+  },
+  "peerDependenciesMeta": {
+    "kysely": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250121.0",
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "kysely": "^0.28.14",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

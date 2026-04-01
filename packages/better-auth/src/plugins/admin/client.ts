@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { AccessControl, Role } from "../access";
+import { PACKAGE_VERSION } from "../../version";
+import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, userAc } from "./access";
 import type { admin } from "./admin";
@@ -26,22 +27,13 @@ export const adminClient = <O extends AdminClientOptions>(
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
+				? ArrayElement<Statements[key]>
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -51,6 +43,7 @@ export const adminClient = <O extends AdminClientOptions>(
 
 	return {
 		id: "admin-client",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<
 			typeof admin<{
 				ac: O["ac"] extends AccessControl
@@ -81,7 +74,7 @@ export const adminClient = <O extends AdminClientOptions>(
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data.permissions ?? data.permission) as any,
+						permissions: data.permissions as any,
 					});
 					return isAuthorized;
 				},

@@ -73,12 +73,13 @@ The `api` object exported from the auth instance contains all the actions that y
 "use server" // Waku currently only supports file-level "use server"
 
 import { auth } from "./auth"
-import { unstable_getContext as getContext } from "waku/server"
+import { unstable_getHeaders as getHeaders } from "waku/server"
 
 export const someAuthenticatedAction = async () => {
   "use server"
+  const headers = getHeaders()
   const session = await auth.api.getSession({
-    headers: new Headers(getContext().req.headers),
+      headers,
   })
 };
 ```
@@ -88,20 +89,21 @@ export const someAuthenticatedAction = async () => {
 
 ```tsx
 import { auth } from "../auth"
-import { unstable_getContext as getContext } from "waku/server"
+import { unstable_getHeaders as getHeaders } from "waku/server"
 
 export async function ServerComponent() {
-    const session = await auth.api.getSession({
-        headers: new Headers(getContext().req.headers),
-    })
-    if(!session) {
-        return <div>Not authenticated</div>
-    }
-    return (
-        <div>
-            <h1>Welcome {session.user.name}</h1>
-        </div>
-    )
+  const headers = getHeaders()
+  const session = await auth.api.getSession({
+      headers,
+  })
+  if(!session) {
+      return <div>Not authenticated</div>
+  }
+  return (
+      <div>
+          <h1>Welcome {session.user.name}</h1>
+      </div>
+  )
 }
 ```
 
@@ -115,6 +117,7 @@ We can create a plugin that works together with our middleware to set cookies.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { unstable_getContextData as getContextData } from "waku/server"
 
 export const auth = betterAuth({

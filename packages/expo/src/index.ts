@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { expoAuthorizationProxy } from "./routes";
+import { PACKAGE_VERSION } from "./version";
 
 export interface ExpoOptions {
 	/**
@@ -11,8 +12,7 @@ export interface ExpoOptions {
 }
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		expo: {
 			creator: typeof expo;
 		};
@@ -22,6 +22,7 @@ declare module "@better-auth/core" {
 export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
+		version: PACKAGE_VERSION,
 		init: (ctx) => {
 			const trustedOrigins =
 				process.env.NODE_ENV === "development" ? ["exp://"] : [];
@@ -44,11 +45,18 @@ export const expo = (options?: ExpoOptions | undefined) => {
 			if (!expoOrigin) {
 				return;
 			}
-			const req = request.clone();
-			req.headers.set("origin", expoOrigin);
-			return {
-				request: req,
-			};
+
+			try {
+				// Prefer in-place mutation (works on Bun, Node, Deno).
+				request.headers.set("origin", expoOrigin);
+				return { request };
+			} catch {
+				// Cloudflare Workers has immutable headers on incoming requests,
+				// so fall back to constructing a new Request.
+				const newHeaders = new Headers(request.headers);
+				newHeaders.set("origin", expoOrigin);
+				return { request: new Request(request, { headers: newHeaders }) };
+			}
 		},
 		hooks: {
 			after: [
@@ -71,12 +79,19 @@ export const expo = (options?: ExpoOptions | undefined) => {
 						if (isProxyURL) {
 							return;
 						}
-						const trustedOrigins = ctx.context.trustedOrigins.filter(
-							(origin: string) => !origin.startsWith("http"),
-						);
-						const isTrustedOrigin = trustedOrigins.some((origin: string) =>
-							location?.startsWith(origin),
-						);
+						let redirectURL: URL;
+						try {
+							redirectURL = new URL(location);
+						} catch {
+							return;
+						}
+						const isHttpRedirect =
+							redirectURL.protocol === "http:" ||
+							redirectURL.protocol === "https:";
+						if (isHttpRedirect) {
+							return;
+						}
+						const isTrustedOrigin = ctx.context.isTrustedOrigin(location);
 						if (!isTrustedOrigin) {
 							return;
 						}
@@ -84,9 +99,8 @@ export const expo = (options?: ExpoOptions | undefined) => {
 						if (!cookie) {
 							return;
 						}
-						const url = new URL(location);
-						url.searchParams.set("cookie", cookie);
-						ctx.setHeader("location", url.toString());
+						redirectURL.searchParams.set("cookie", cookie);
+						ctx.setHeader("location", redirectURL.toString());
 					}),
 				},
 			],

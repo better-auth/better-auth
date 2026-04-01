@@ -1,8 +1,51 @@
-import { describe, expect, expectTypeOf } from "vitest";
-import { createAuthEndpoint, organization, twoFactor } from "../plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { createAuthEndpoint } from "../api";
+import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
-describe("general types", async (it) => {
+type TestTypeOptions = {
+	test: boolean;
+};
+
+const pingEndpoint = createAuthEndpoint(
+	"/test-type-ping",
+	{
+		method: "GET",
+	},
+	async (ctx) => {
+		return ctx.json({
+			message: "pong",
+		});
+	},
+);
+
+const createTestTypePlugin = <O extends TestTypeOptions>(options?: O) =>
+	({
+		id: "test-type-plugin" as const,
+		endpoints: {
+			pingEndpoint,
+		} as O extends {
+			test: true;
+		}
+			? {
+					pingEndpoint: typeof pingEndpoint;
+				}
+			: {},
+		options: options as NoInfer<O>,
+	}) satisfies BetterAuthPlugin;
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"test-type-plugin": {
+			creator: Options extends TestTypeOptions
+				? typeof createTestTypePlugin<Options>
+				: never;
+		};
+	}
+}
+
+describe("general types", async () => {
 	it("should infer base session", async () => {
 		const { auth } = await getTestInstance();
 		type Session = typeof auth.$Infer.Session;
@@ -31,17 +74,29 @@ describe("general types", async (it) => {
 
 	it("should match plugin type", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [twoFactor()],
+			plugins: [
+				twoFactor(),
+				createTestTypePlugin({
+					test: true,
+				}),
+			],
 		});
 
 		const context = await auth.$context;
 		type TwoFactorPlugin = ReturnType<typeof twoFactor>;
 		const id = "two-factor";
 		const twoFactorPlugin = context.getPlugin(id)!;
+		const hasTwoFactorPlugin = context.hasPlugin(id);
+		const nonExistPlugin = context.hasPlugin("non-exist-plugin");
+		expectTypeOf(hasTwoFactorPlugin).toEqualTypeOf<true>();
+		expectTypeOf(nonExistPlugin).toEqualTypeOf<boolean>();
 		expect(twoFactorPlugin).toBeDefined();
 		expect(twoFactorPlugin.id).toBe(id);
 		type TwoFactorPluginFromContext = typeof twoFactorPlugin;
 		expectTypeOf<TwoFactorPluginFromContext>().toMatchObjectType<TwoFactorPlugin>();
+		const testTypePlugin = context.getPlugin("test-type-plugin")!;
+		type PingEndpointFromPlugin = typeof testTypePlugin.endpoints.pingEndpoint;
+		expectTypeOf<PingEndpointFromPlugin>().toEqualTypeOf(pingEndpoint);
 	});
 
 	it("should infer the types of server scoped endpoints", async () => {
@@ -122,6 +177,28 @@ describe("general types", async (it) => {
 			userAgent?: string | undefined | null;
 			activeOrganizationId?: string | undefined | null;
 		}>();
+	});
+
+	it("should infer plugin-contributed context from init", async () => {
+		const testUtilsPlugin = {
+			id: "test-utils" as const,
+			init() {
+				return {
+					context: {
+						testValue: 42 as number,
+						testHelper: () => "hello" as string,
+					},
+				};
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth } = await getTestInstance({
+			plugins: [testUtilsPlugin],
+		});
+
+		const context = await auth.$context;
+		expectTypeOf(context.testValue).toEqualTypeOf<number>();
+		expectTypeOf(context.testHelper).toEqualTypeOf<() => string>();
 	});
 
 	it("should infer the same types for empty plugins and no plugins", async () => {

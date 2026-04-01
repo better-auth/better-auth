@@ -4,7 +4,7 @@ import { isProxy } from "node:util/types";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import {
@@ -12,6 +12,7 @@ import {
 	deviceAuthorizationClient,
 	emailOTPClient,
 	genericOAuthClient,
+	magicLinkClient,
 	multiSessionClient,
 	oidcClient,
 	organizationClient,
@@ -20,11 +21,20 @@ import {
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
-import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
+import {
+	testClientPlugin,
+	testClientPlugin2,
+	testDeepMergePluginA,
+	testDeepMergePluginB,
+} from "./test-plugin";
 import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
 describe("run time proxy", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("atom in proxy should not be proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
@@ -259,6 +269,36 @@ describe("type", () => {
 		});
 		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
+	});
+
+	it("should infer magic link metadata in sign-in request", () => {
+		const client = createReactClient({
+			plugins: [magicLinkClient()],
+		});
+
+		type SignInMagicLinkInput = NonNullable<
+			Parameters<typeof client.signIn.magicLink>[0]
+		>;
+
+		expectTypeOf<SignInMagicLinkInput>().toMatchTypeOf<{
+			email: string;
+			name?: string | undefined;
+			callbackURL?: string | undefined;
+			newUserCallbackURL?: string | undefined;
+			errorCallbackURL?: string | undefined;
+			metadata?: Record<string, any> | undefined;
+		}>();
+
+		const request: SignInMagicLinkInput = {
+			email: "test@email.com",
+			metadata: {
+				inviteId: "123",
+			},
+		};
+
+		expectTypeOf(request.metadata).toEqualTypeOf<
+			Record<string, any> | undefined
+		>();
 	});
 
 	it("should infer session", () => {
@@ -579,42 +619,90 @@ describe("type", () => {
 
 		// Should have organization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
-		).toEqualTypeOf<"Organization not found">();
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
+		).toEqualTypeOf<"ORGANIZATION_NOT_FOUND">();
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED.message,
-		).toEqualTypeOf<"OTP has expired">();
+			client.$ERROR_CODES.OTP_HAS_EXPIRED.code,
+		).toEqualTypeOf<"OTP_HAS_EXPIRED">();
 
 		// Should have email-otp error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_EMAIL.message,
-		).toEqualTypeOf<"Invalid email">();
+			client.$ERROR_CODES.INVALID_EMAIL.code,
+		).toEqualTypeOf<"INVALID_EMAIL">();
 
 		// Should have admin error codes
 		expectTypeOf(
-			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.message,
-		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.code,
+		).toEqualTypeOf<"YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS">();
 
 		// Should have multi-session error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_SESSION_TOKEN.message,
-		).toEqualTypeOf<"Invalid session token">();
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN.code,
+		).toEqualTypeOf<"INVALID_SESSION_TOKEN">();
 
 		// Should have generic-oauth error codes
 		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND.message,
-		).toEqualTypeOf<"Provider not found">();
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND.code,
+		).toEqualTypeOf<"PROVIDER_NOT_FOUND">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_DEVICE_CODE.message,
-		).toEqualTypeOf<"Invalid device code">();
+			client.$ERROR_CODES.INVALID_DEVICE_CODE.code,
+		).toEqualTypeOf<"INVALID_DEVICE_CODE">();
 
 		// Should have base error codes
 		expectTypeOf(
-			client.$ERROR_CODES.USER_NOT_FOUND.message,
-		).toEqualTypeOf<"User not found">();
+			client.$ERROR_CODES.USER_NOT_FOUND.code,
+		).toEqualTypeOf<"USER_NOT_FOUND">();
+	});
+});
+
+describe("plugin actions deep merge", () => {
+	it("should merge actions from multiple plugins with same top-level key", async () => {
+		const client = createVanillaClient({
+			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Both methods should be accessible under signIn
+		expect(typeof client.signIn.methodA).toBe("function");
+		expect(typeof client.signIn.methodB).toBe("function");
+
+		// Both methods should work correctly
+		const resultA = await client.signIn.methodA();
+		const resultB = await client.signIn.methodB();
+		expect(resultA).toEqual({ success: true, method: "A" });
+		expect(resultB).toEqual({ success: true, method: "B" });
+	});
+
+	it("should preserve first plugin methods when second plugin adds to same key", async () => {
+		// Order matters: A first, then B
+		const clientAB = createVanillaClient({
+			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Order reversed: B first, then A
+		const clientBA = createVanillaClient({
+			plugins: [testDeepMergePluginB(), testDeepMergePluginA()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Both orders should have both methods
+		expect(typeof clientAB.signIn.methodA).toBe("function");
+		expect(typeof clientAB.signIn.methodB).toBe("function");
+		expect(typeof clientBA.signIn.methodA).toBe("function");
+		expect(typeof clientBA.signIn.methodB).toBe("function");
 	});
 });

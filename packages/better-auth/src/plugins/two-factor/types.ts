@@ -11,6 +11,13 @@ export interface TwoFactorOptions {
 	 */
 	issuer?: string | undefined;
 	/**
+	 * The name of the table that stores the two factor
+	 * authentication data.
+	 *
+	 * @default "twoFactor"
+	 */
+	twoFactorTable?: string | undefined;
+	/**
 	 * TOTP OPtions
 	 */
 	totpOptions?: Omit<TOTPOptions, "issuer"> | undefined;
@@ -28,9 +35,32 @@ export interface TwoFactorOptions {
 	 */
 	skipVerificationOnEnable?: boolean | undefined;
 	/**
+	 * Allow enabling and managing 2FA without a password when the user does not
+	 * have a credential account (e.g. passkey-only users).
+	 * When enabled, password is still required if a credential account exists.
+	 * @default false
+	 */
+	allowPasswordless?: boolean | undefined;
+	/**
 	 * Custom schema for the two factor plugin
 	 */
 	schema?: InferOptionSchema<typeof schema> | undefined;
+	/**
+	 * Maximum age (in seconds) for the two-factor verification cookie.
+	 * This controls how long users have to complete the 2FA flow
+	 * after signing in.
+	 *
+	 * @default 600 (10 minutes)
+	 */
+	twoFactorCookieMaxAge?: number | undefined;
+	/**
+	 * Maximum age (in seconds) for the trusted device cookie.
+	 * When a user opts to trust a device, this controls how long
+	 * the device stays trusted before requiring 2FA again.
+	 *
+	 * @default 2592000 (30 days)
+	 */
+	trustDeviceMaxAge?: number | undefined;
 }
 
 export interface UserWithTwoFactor extends User {
@@ -42,6 +72,7 @@ export interface UserWithTwoFactor extends User {
 
 export interface TwoFactorProvider {
 	id: LiteralString;
+	version?: string | undefined;
 	endpoints?: BetterAuthPlugin["endpoints"] | undefined;
 }
 

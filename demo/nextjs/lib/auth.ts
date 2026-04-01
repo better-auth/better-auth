@@ -1,4 +1,5 @@
-import { dash, sendEmail } from "@better-auth/dash";
+import { electron } from "@better-auth/electron";
+import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
@@ -26,9 +27,6 @@ import {
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
-
-const _from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
-const _to = process.env.TEST_EMAIL || "";
 
 const dialect = (() => {
 	if (process.env.USE_MYSQL) {
@@ -78,7 +76,18 @@ const authOptions = {
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github", "demo-app", "sso"],
+			trustedProviders: [
+				"email-password",
+				"facebook",
+				"github",
+				"google",
+				"discord",
+				"microsoft",
+				"twitch",
+				"twitter",
+				"paypal",
+				"vercel",
+			],
 		},
 	},
 	emailAndPassword: {
@@ -174,10 +183,7 @@ const authOptions = {
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin({
-			/* cspell:disable-next-line */
-			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
-		}),
+		admin(),
 		multiSession(),
 		oAuthProxy({
 			productionURL:
@@ -336,16 +342,7 @@ const authOptions = {
 				},
 			],
 		}),
-		scim({
-			defaultSCIM: [
-				{
-					providerId: "sso",
-					/* cspell:disable-next-line */
-					// encoded token = ZGVmYXVsdC1zY2ltLXRva2VuOnNzbw==
-					scimToken: "default-scim-token",
-				},
-			],
-		}),
+		scim(),
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",
@@ -439,11 +436,13 @@ const authOptions = {
 				oauthAuthServerConfig: true,
 			},
 		}),
+		electron(),
 	],
 	trustedOrigins: [
 		"https://*.better-auth.com",
 		"https://better-auth-demo-*-better-auth.vercel.app",
 		"exp://",
+		"com.better-auth.demo:/",
 		"https://appleid.apple.com",
 	],
 } satisfies BetterAuthOptions;
@@ -466,6 +465,7 @@ export const auth = betterAuth({
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
 		dash(),
+		sentinel(),
 	],
 });
 

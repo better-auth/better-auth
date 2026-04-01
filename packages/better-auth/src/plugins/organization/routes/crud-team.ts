@@ -774,7 +774,7 @@ const listUserTeamsQuerySchema = z
 	.object({
 		userId: z.string().optional().meta({
 			description:
-				"The user ID to list teams for. Defaults to the current session user. Viewing other users requires 'member:read' permission.",
+				"The user ID to list teams for. Defaults to the current session user. Viewing other users requires 'member:update' permission.",
 		}),
 	})
 	.optional();
@@ -788,7 +788,7 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 			metadata: {
 				openapi: {
 					description:
-						"List teams for a user. Defaults to current user. Requires 'member:read' permission to query other users.",
+						"List teams for a user. Defaults to current user. Requires 'member:update' permission to query other users.",
 					responses: {
 						"200": {
 							description: "Teams retrieved successfully",
@@ -822,7 +822,7 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 			const targetUserId = ctx.query?.userId || session.user.id;
 			const isSelf = targetUserId === session.user.id;
 
-			// If listing teams for another user, ensure requester has permission
+			// If listing teams for another user, ensure requester can manage that member.
 			if (!isSelf) {
 				const organizationId = session.session.activeOrganizationId;
 				if (!organizationId) {
@@ -844,17 +844,17 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 
-				const canReadMembers = await hasPermission(
+				const canManageMembers = await hasPermission(
 					{
 						role: requesterMember.role,
 						options: ctx.context.orgOptions,
-						permissions: { member: ["read"] },
+						permissions: { member: ["update"] },
 						organizationId,
 					},
 					ctx,
 				);
 
-				if (!canReadMembers) {
+				if (!canManageMembers) {
 					throw APIError.from(
 						"FORBIDDEN",
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
@@ -989,6 +989,14 @@ const addTeamMemberBodySchema = z.object({
 		description:
 			"The user Id which represents the user to be added as a member.",
 	}),
+
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				"The organization ID which the team falls under. If not provided, it will default to the user's active organization.",
+		})
+		.optional(),
 });
 
 export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
@@ -1044,7 +1052,10 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
-			if (!session.session.activeOrganizationId) {
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+
+			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
@@ -1053,7 +1064,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const currentMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!currentMember) {
@@ -1070,7 +1081,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					permissions: {
 						member: ["update"],
 					},
-					organizationId: session.session.activeOrganizationId,
+					organizationId: organizationId,
 				},
 				ctx,
 			);
@@ -1084,7 +1095,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const toBeAddedMember = await adapter.findMemberByOrgId({
 				userId: ctx.body.userId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!toBeAddedMember) {
@@ -1096,7 +1107,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const team = await adapter.findTeamById({
 				teamId: ctx.body.teamId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!team) {
@@ -1106,9 +1117,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const organization = await adapter.findOrganizationById(
-				session.session.activeOrganizationId,
-			);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1168,6 +1177,14 @@ const removeTeamMemberBodySchema = z.object({
 	userId: z.coerce.string().meta({
 		description: "The user which should be removed from the team.",
 	}),
+
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				"The organization ID which the team falls under. If not provided, it will default to the user's active organization.",
+		})
+		.optional(),
 });
 
 export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
@@ -1209,7 +1226,10 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
-			if (!session.session.activeOrganizationId) {
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+
+			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
@@ -1218,7 +1238,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const currentMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!currentMember) {
@@ -1235,7 +1255,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 					permissions: {
 						member: ["delete"],
 					},
-					organizationId: session.session.activeOrganizationId,
+					organizationId: organizationId,
 				},
 				ctx,
 			);
@@ -1249,7 +1269,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const toBeAddedMember = await adapter.findMemberByOrgId({
 				userId: ctx.body.userId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!toBeAddedMember) {
@@ -1261,7 +1281,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const team = await adapter.findTeamById({
 				teamId: ctx.body.teamId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!team) {
@@ -1271,9 +1291,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const organization = await adapter.findOrganizationById(
-				session.session.activeOrganizationId,
-			);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",

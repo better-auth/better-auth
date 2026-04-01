@@ -16,6 +16,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -25,8 +26,7 @@ import type {
 } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		anonymous: {
 			creator: typeof anonymous;
 		};
@@ -59,6 +59,7 @@ async function getAnonUserEmail(
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			signInAnonymous: createAuthEndpoint(
 				"/sign-in/anonymous",
@@ -125,12 +126,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						newUser.id,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(ctx, {
 						session,
@@ -333,3 +332,5 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

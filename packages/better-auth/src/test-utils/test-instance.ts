@@ -10,10 +10,11 @@ import { afterAll } from "vitest";
 import { betterAuth } from "../auth/full";
 import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import { getAdapter, getMigrations } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
+import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -60,17 +61,17 @@ export async function getTestInstance<
 	}
 
 	async function getSqlite() {
-		const { default: Database } = await import("better-sqlite3");
-		return new Database(":memory:");
+		const { DatabaseSync } = await import("node:sqlite");
+		return new DatabaseSync(":memory:");
 	}
 
 	async function getMysql() {
 		const { Kysely, MysqlDialect } = await import("kysely");
 		const { createPool } = await import("mysql2/promise");
 		return new Kysely({
-			dialect: new MysqlDialect(
-				createPool("mysql://user:password@localhost:3306/better_auth"),
-			),
+			dialect: new MysqlDialect({
+				pool: createPool("mysql://user:password@localhost:3306/better_auth"),
+			}),
 		});
 	}
 
@@ -220,12 +221,21 @@ export async function getTestInstance<
 		);
 	};
 
+	const clientBaseURL = isDynamicBaseURLConfig(options?.baseURL)
+		? getBaseURL(
+				"http://localhost:" + (config?.port || 3000),
+				options?.basePath || "/api/auth",
+			)
+		: getBaseURL(
+				typeof options?.baseURL === "string"
+					? options.baseURL
+					: "http://localhost:" + (config?.port || 3000),
+				options?.basePath || "/api/auth",
+			);
+
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL: getBaseURL(
-			options?.baseURL || "http://localhost:" + (config?.port || 3000),
-			options?.basePath || "/api/auth",
-		),
+		baseURL: clientBaseURL,
 		fetchOptions: {
 			customFetchImpl,
 		},

@@ -4,8 +4,9 @@ import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
+import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import type { User } from "../../types";
+import type { Account } from "../../types";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
@@ -279,55 +280,71 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendOTP(
-					{
-						phoneNumber: ctx.body.phoneNumber,
-						code,
-					},
-					ctx,
-				),
+			const sendOTPResult = opts.sendOTP(
+				{
+					phoneNumber: ctx.body.phoneNumber,
+					code,
+				},
+				ctx,
 			);
+			if (
+				ctx.context.options.advanced?.backgroundTasks?.handler &&
+				sendOTPResult instanceof Promise
+			) {
+				try {
+					ctx.context.runInBackground(
+						sendOTPResult.catch((e) => {
+							ctx.context.logger.error("Failed to run background task:", e);
+						}),
+					);
+				} catch (e) {
+					ctx.context.logger.error("Failed to run background task:", e);
+				}
+			} else {
+				await sendOTPResult;
+			}
 			return ctx.json({ message: "code sent" });
 		},
 	);
 
-const verifyPhoneNumberBodySchema = z.object({
-	/**
-	 * Phone number
-	 */
-	phoneNumber: z.string().meta({
-		description: 'Phone number to verify. Eg: "+1234567890"',
-	}),
-	/**
-	 * OTP code
-	 */
-	code: z.string().meta({
-		description: 'OTP code. Eg: "123456"',
-	}),
-	/**
-	 * Disable session creation after verification
-	 * @default false
-	 */
-	disableSession: z
-		.boolean()
-		.meta({
-			description: "Disable session creation after verification. Eg: false",
-		})
-		.optional(),
-	/**
-	 * This checks if there is a session already
-	 * and updates the phone number with the provided
-	 * phone number
-	 */
-	updatePhoneNumber: z
-		.boolean()
-		.meta({
-			description:
-				"Check if there is a session and update the phone number. Eg: true",
-		})
-		.optional(),
-});
+const verifyPhoneNumberBodySchema = z
+	.object({
+		/**
+		 * Phone number
+		 */
+		phoneNumber: z.string().meta({
+			description: 'Phone number to verify. Eg: "+1234567890"',
+		}),
+		/**
+		 * OTP code
+		 */
+		code: z.string().meta({
+			description: 'OTP code. Eg: "123456"',
+		}),
+		/**
+		 * Disable session creation after verification
+		 * @default false
+		 */
+		disableSession: z
+			.boolean()
+			.meta({
+				description: "Disable session creation after verification. Eg: false",
+			})
+			.optional(),
+		/**
+		 * This checks if there is a session already
+		 * and updates the phone number with the provided
+		 * phone number
+		 */
+		updatePhoneNumber: z
+			.boolean()
+			.meta({
+				description:
+					"Check if there is a session and update the phone number. Eg: true",
+			})
+			.optional(),
+	})
+	.and(z.record(z.string(), z.any()));
 
 /**
  * ### Endpoint
@@ -470,7 +487,9 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					ctx.body.phoneNumber,
 				);
 				if (otp) {
-					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						ctx.body.phoneNumber,
+					);
 				}
 			} else {
 				// Default internal verification logic
@@ -493,23 +512,30 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				const [otpValue, attempts] = otp.value.split(":");
 				const allowedAttempts = opts?.allowedAttempts || 3;
 				if (attempts && parseInt(attempts) >= allowedAttempts) {
-					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						ctx.body.phoneNumber,
+					);
 					throw APIError.from(
 						"FORBIDDEN",
 						PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 					);
 				}
 				if (otpValue !== ctx.body.code) {
-					await ctx.context.internalAdapter.updateVerificationValue(otp.id, {
-						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-					});
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						ctx.body.phoneNumber,
+						{
+							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+						},
+					);
 					throw APIError.from(
 						"BAD_REQUEST",
 						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 					);
 				}
 
-				await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					ctx.body.phoneNumber,
+				);
 			}
 
 			if (ctx.body.updatePhoneNumber) {
@@ -559,8 +585,21 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			});
 			if (!user) {
 				if (opts?.signUpOnVerification) {
+					const {
+						phoneNumber,
+						code,
+						disableSession,
+						updatePhoneNumber,
+						...rest
+					} = ctx.body;
+					const additionalFields = parseUserInput(
+						ctx.context.options,
+						rest,
+						"create",
+					);
 					user =
 						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>({
+							...additionalFields,
 							email: opts.signUpOnVerification.getTempEmail(
 								ctx.body.phoneNumber,
 							),
@@ -773,9 +812,10 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			const [otpValue, attempts] = verification.value.split(":");
 			const allowedAttempts = opts?.allowedAttempts || 3;
+			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
 			if (attempts && parseInt(attempts) >= allowedAttempts) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					verification.id,
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					phoneResetIdentifier,
 				);
 				throw APIError.from(
 					"FORBIDDEN",
@@ -783,8 +823,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			}
 			if (ctx.body.otp !== otpValue) {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					verification.id,
+				await ctx.context.internalAdapter.updateVerificationByIdentifier(
+					phoneResetIdentifier,
 					{
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					},
@@ -794,7 +834,9 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 				);
 			}
-			const user = await ctx.context.adapter.findOne<User>({
+			const userRes = await ctx.context.adapter.findOne<
+				UserWithPhoneNumber & { account: Account[] | undefined }
+			>({
 				model: "user",
 				where: [
 					{
@@ -802,13 +844,17 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						value: ctx.body.phoneNumber,
 					},
 				],
+				join: {
+					account: true,
+				},
 			});
-			if (!user) {
+			if (!userRes) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
+			const { account: accounts = [], ...user } = userRes;
 			const minLength = ctx.context.password.config.minPasswordLength;
 			const maxLength = ctx.context.password.config.maxPasswordLength;
 			if (ctx.body.newPassword.length < minLength) {
@@ -820,10 +866,32 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			await ctx.context.internalAdapter.updatePassword(user.id, hashedPassword);
-			await ctx.context.internalAdapter.deleteVerificationValue(
-				verification.id,
+			const account = accounts.find(
+				(account) => account.providerId === "credential",
 			);
+			if (!account) {
+				await ctx.context.internalAdapter.createAccount({
+					userId: user.id,
+					providerId: "credential",
+					accountId: user.id,
+					password: hashedPassword,
+				});
+			} else {
+				await ctx.context.internalAdapter.updatePassword(
+					user.id,
+					hashedPassword,
+				);
+			}
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				phoneResetIdentifier,
+			);
+
+			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
+				await ctx.context.options.emailAndPassword.onPasswordReset(
+					{ user },
+					ctx.request,
+				);
+			}
 
 			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 				await ctx.context.internalAdapter.deleteSessions(user.id);

@@ -3,6 +3,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../version";
 
 export * from "./broadcast-channel";
 export {
@@ -15,6 +16,7 @@ export {
 	type OnlineListener,
 	type OnlineManager,
 } from "./online-manager";
+export * from "./parser";
 export * from "./query";
 export * from "./session-refresh";
 export * from "./types";
@@ -23,6 +25,7 @@ export * from "./vanilla";
 export const InferPlugin = <T extends BetterAuthPlugin>() => {
 	return {
 		id: "infer-server-plugin",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as T,
 	} satisfies BetterAuthClientPlugin;
 };
@@ -35,10 +38,10 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 export type * from "@better-auth/core/db";
 export type { DBPrimitive } from "@better-auth/core/db";
 export type * from "@better-fetch/fetch";
-// @ts-expect-error
 export type * from "nanostores";
 export type * from "../plugins/access";
 export type * from "../plugins/organization";
 export type * from "../types/helper";
 export type { UnionToIntersection } from "../types/helper";
+export type * from "./path-to-object";
 //#endregion
