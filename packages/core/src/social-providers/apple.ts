@@ -77,6 +77,24 @@ export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	audience?: (string | string[]) | undefined;
 }
 
+async function sha256Hex(value: string) {
+	const data = new TextEncoder().encode(value);
+	const digest = await crypto.subtle.digest("SHA-256", data);
+	return Array.from(new Uint8Array(digest))
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("");
+}
+
+async function nonceMatches(jwtNonce: unknown, nonce: string) {
+	if (typeof jwtNonce !== "string") {
+		return false;
+	}
+	if (jwtNonce === nonce) {
+		return true;
+	}
+	return jwtNonce === (await sha256Hex(nonce));
+}
+
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
 	return {
@@ -141,7 +159,7 @@ export const apple = (options: AppleOptions) => {
 						jwtClaims[field] = Boolean(jwtClaims[field]);
 					}
 				});
-				if (nonce && jwtClaims.nonce !== nonce) {
+				if (nonce && !(await nonceMatches(jwtClaims.nonce, nonce))) {
 					return false;
 				}
 				return !!jwtClaims;
