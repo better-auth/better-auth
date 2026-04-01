@@ -8,8 +8,9 @@ on:
   push:
     branches:
       - main
-      - canary
   merge_group:
+
+permissions: {}
 
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -19,6 +20,8 @@ env:
 jobs:
   lint:
     runs-on: starsling-ubuntu-24.04
+    permissions:
+      contents: read
     concurrency:
       group: ${{ github.workflow }}-lint-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -26,6 +29,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Cache turbo build setup
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
@@ -87,6 +91,8 @@ jobs:
 
   typecheck:
     runs-on: starsling-ubuntu-24.04
+    permissions:
+      contents: read
     concurrency:
       group: ${{ github.workflow }}-typecheck-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -94,6 +100,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Cache turbo build setup
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
@@ -125,6 +132,8 @@ jobs:
 
   test:
     runs-on: starsling-ubuntu-24.04
+    permissions:
+      contents: read
     timeout-minutes: 30
     concurrency:
       group: ${{ github.workflow }}-test-${{ matrix.node-version }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
@@ -142,6 +151,7 @@ jobs:
         if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Cache turbo build setup
         if: github.event_name != 'merge_group'
