@@ -17,8 +17,7 @@ on:
         type: string
         default: 'latest'
 
-permissions:
-  id-token: write
+permissions: {}
 
 jobs:
   dist-tag:
@@ -30,6 +29,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Add dist-tag
-        run: npm dist-tag add "${{ inputs.package }}@${{ inputs.version }}" "${{ inputs.tag }}"
+        run: npm dist-tag add "${PACKAGE}@${VERSION}" "${TAG}"
         env:
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
