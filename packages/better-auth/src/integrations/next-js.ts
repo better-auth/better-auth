@@ -46,7 +46,6 @@ export const nextCookies = () => {
 						}
 
 						const isServerAction = headersStore.get("next-action");
-						console.log({ isServerAction, headersStore });
 						// If it's not a server action than it's a server component, so we should skip session refresh.
 						if (!isServerAction) {
 							await setShouldSkipSessionRefresh(true);
