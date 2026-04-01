@@ -2288,6 +2288,13 @@ describe("listInvitations filters by inviterId", async () => {
 
 		expect(result.data?.length).toBe(1);
 		expect(result.data?.[0]?.inviterId).toBe(inviterId);
+
+		const resultEmpty = await client.organization.listInvitations({
+			query: { inviterId: "non-existent-id" },
+			fetchOptions: { headers },
+		});
+
+		expect(resultEmpty.data?.length).toBe(0);
 	});
 });
 
@@ -2393,12 +2400,12 @@ describe("listInvitations filters with limit & offset", async () => {
 		);
 
 		const first = await client.organization.listInvitations({
-			query: { limit: 1, offset: 0 },
+			query: { limit: 1, offset: 0, sortBy: "createdAt", sortOrder: "asc" },
 			fetchOptions: { headers },
 		});
 
 		const second = await client.organization.listInvitations({
-			query: { limit: 1, offset: 1 },
+			query: { limit: 1, offset: 1, sortBy: "createdAt", sortOrder: "asc" },
 			fetchOptions: { headers },
 		});
 

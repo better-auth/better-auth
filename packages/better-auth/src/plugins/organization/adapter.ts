@@ -1046,7 +1046,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			if (data.email) {
 				filters.push({
 					field: "email",
-					value: data.email,
+					value: data.email.toLowerCase(),
 				});
 			}
 
@@ -1060,7 +1060,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			if (data.status !== undefined) {
 				filters.push({
-					operator: "in",
 					field: "status",
 					value: data.status,
 				});
