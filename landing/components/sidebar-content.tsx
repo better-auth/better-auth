@@ -2761,6 +2761,14 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						href: "/docs/reference/errors/invalid_callback_request",
 					},
 					{
+						title: "invalid_code",
+						href: "/docs/reference/errors/invalid_code",
+					},
+					{
+						title: "internal_server_error",
+						href: "/docs/reference/errors/internal_server_error",
+					},
+					{
 						title: "state_not_found",
 						href: "/docs/reference/errors/state_not_found",
 					},
@@ -2792,6 +2800,18 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						title: "unable_to_link_account",
 						href: "/docs/reference/errors/unable_to_link_account",
+					},
+					{
+						title: "unable_to_create_user",
+						href: "/docs/reference/errors/unable_to_create_user",
+					},
+					{
+						title: "unable_to_create_session",
+						href: "/docs/reference/errors/unable_to_create_session",
+					},
+					{
+						title: "account_not_linked",
+						href: "/docs/reference/errors/account_not_linked",
 					},
 					{
 						title: "account_already_linked_to_different_user",

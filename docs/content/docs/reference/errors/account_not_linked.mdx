@@ -1,0 +1,34 @@
+---
+title: account_not_linked
+description: The provider account is not linked to any user.
+---
+
+## What is it?
+
+This error occurs during an OAuth flow when a provider account is not linked to any existing user and cannot be matched automatically.
+
+## Common Causes
+
+* The user previously signed up using a different provider or method.
+* Account linking is not enabled or configured.
+* The provider email does not match any existing user.
+* Linking rules (e.g., trusted providers) prevent automatic linking.
+
+## How to resolve
+
+### Enable or configure account linking
+
+* Ensure account linking is enabled in your auth configuration.
+* Add providers to `account.accountLinking.trustedProviders` if required.
+
+### Verify user identity matching
+
+* Ensure the provider returns a verified email that matches an existing user.
+
+### Prompt user action
+
+* Ask users to sign in using the originally linked provider or method.
+
+### Review configuration consistency
+
+* Ensure environment configs are consistent across deployments.
