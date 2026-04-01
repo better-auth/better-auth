@@ -197,6 +197,11 @@ const pluginMeta: Record<
 		icon: "CommetIcon",
 		tagline: "Real-time comments and threads for your app",
 	},
+	chargebee: {
+		category: "Payments",
+		icon: "ChargebeeIcon",
+		tagline: "Chargebee subscription and billing management",
+	},
 };
 
 export const categories = [

@@ -2339,6 +2339,25 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Chargebee",
+				href: "/docs/plugins/chargebee",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 232 235"
+						fill="currentColor"
+					>
+						<path d="M77.18,117.82,231.85,80.94V.73h-80.2Z" />
+						<path d="M.54,116.41a115.52,115.52,0,0,0,3.38,27.83l73.27-26.42L3.31,91.16A117.15,117.15,0,0,0,.54,116.39Z" />
+						<path d="M27.78,41.84l49.38,76L99.93,1.88a115.43,115.43,0,0,0-72.15,40Z" />
+						<path d="M77.18,117.82l154.67,36.86v80.2h-80.2Z" />
+						<path d="M27.79,193.78l49.38-76L99.91,233.71a115.42,115.42,0,0,1-72.14-40Z" />
+					</svg>
+				),
+			},
+			{
 				title: "Others",
 				group: true,
 				icon: () => null,
@@ -2761,6 +2780,14 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						href: "/docs/reference/errors/invalid_callback_request",
 					},
 					{
+						title: "invalid_code",
+						href: "/docs/reference/errors/invalid_code",
+					},
+					{
+						title: "internal_server_error",
+						href: "/docs/reference/errors/internal_server_error",
+					},
+					{
 						title: "state_not_found",
 						href: "/docs/reference/errors/state_not_found",
 					},
@@ -2792,6 +2819,18 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						title: "unable_to_link_account",
 						href: "/docs/reference/errors/unable_to_link_account",
+					},
+					{
+						title: "unable_to_create_user",
+						href: "/docs/reference/errors/unable_to_create_user",
+					},
+					{
+						title: "unable_to_create_session",
+						href: "/docs/reference/errors/unable_to_create_session",
+					},
+					{
+						title: "account_not_linked",
+						href: "/docs/reference/errors/account_not_linked",
 					},
 					{
 						title: "account_already_linked_to_different_user",
