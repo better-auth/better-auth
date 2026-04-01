@@ -5,7 +5,6 @@ import { ChevronDownIcon, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { OPEN_AI_CHAT_EVENT } from "@/components/ai-chat";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import DarkPng from "../../public/branding/better-auth-logo-dark.png";
@@ -793,41 +792,6 @@ export function StaggeredNavFiles() {
 																				</p>
 																				<div className="grow h-px bg-border" />
 																			</div>
-																		);
-																	}
-																	if (item.openAIChat) {
-																		return (
-																			<button
-																				key={`open-ai-${item.title}-${i}`}
-																				type="button"
-																				onClick={() => {
-																					window.dispatchEvent(
-																						new CustomEvent(OPEN_AI_CHAT_EVENT),
-																					);
-																					setMobileMenuOpen(false);
-																				}}
-																				className={cn(
-																					"relative flex w-full items-center gap-2.5 px-5 py-1.5 text-[14px] text-left transition-all duration-150",
-																					"text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
-																				)}
-																			>
-																				<span className="text-foreground/75 transition-colors duration-150 dark:text-foreground/60">
-																					<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
-																						<item.icon className="text-foreground/75" />
-																					</span>
-																				</span>
-																				<span className="min-w-0 grow truncate">
-																					{item.title}
-																				</span>
-																				{item.isNew && (
-																					<Badge
-																						className="pointer-events-none border-dashed rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border-foreground/25"
-																						variant="outline"
-																					>
-																						New
-																					</Badge>
-																				)}
-																			</button>
 																		);
 																	}
 																	if (item.external && item.href) {

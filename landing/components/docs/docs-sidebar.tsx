@@ -7,7 +7,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useAIChat } from "@/components/ai-chat";
 import type { ListItem } from "@/components/sidebar-content";
 import { contents } from "@/components/sidebar-content";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -215,11 +214,6 @@ function SidebarSection({
 						</div>
 					);
 				}
-				if (item.openAIChat) {
-					return (
-						<SidebarAIChatRow key={`open-ai-${item.title}-${i}`} item={item} />
-					);
-				}
 				if (item.external && item.href) {
 					return (
 						<SidebarExternalNavRow
@@ -271,7 +265,7 @@ function SidebarItemWithSubpages({
 	return (
 		<div>
 			<SidebarLink
-				href={item.href}
+				href={item.href || ""}
 				active={active}
 				icon={
 					<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
@@ -366,31 +360,6 @@ function SubpageLink({
 			)}
 			<span className="truncate">{children}</span>
 		</Link>
-	);
-}
-
-function SidebarAIChatRow({ item }: { item: ListItem }) {
-	const { setOpen } = useAIChat();
-	const icon = (
-		<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
-			<item.icon className="text-foreground/75" />
-		</span>
-	);
-	return (
-		<button
-			type="button"
-			onClick={() => setOpen(true)}
-			className={`
-        relative flex w-full items-center gap-2.5 px-4 py-1 text-[14px] text-left transition-all duration-150
-        text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3
-      `}
-		>
-			<span className="text-foreground/65 transition-colors duration-150">
-				{icon}
-			</span>
-			<span className="min-w-0 grow truncate">{item.title}</span>
-			{item.isNew && <NewBadge />}
-		</button>
 	);
 }
 
