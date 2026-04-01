@@ -770,12 +770,14 @@ describe("changeEmail with sendOldEmailVerification", async () => {
 	it("should skip old email and send directly to new email when sendOldEmailVerification is false", async () => {
 		const sendChangeEmail = vi.fn();
 		let newEmailVerificationToken = "";
+		let verificationRecipient = "";
 
 		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
 			emailVerification: {
 				sendOldEmailVerification: false,
 				async sendVerificationEmail({ user, url, token }) {
 					newEmailVerificationToken = token;
+					verificationRecipient = user.email;
 				},
 			},
 			user: {
@@ -813,6 +815,7 @@ describe("changeEmail with sendOldEmailVerification", async () => {
 
 			expect(newEmailVerificationToken).toBeDefined();
 			expect(newEmailVerificationToken.length).toBeGreaterThan(0);
+			expect(verificationRecipient).toBe(newEmail);
 
 			const verifyRes = await client.verifyEmail({
 				query: { token: newEmailVerificationToken },
