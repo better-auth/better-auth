@@ -57,9 +57,9 @@ When users import `better-auth` in client code:
 3. **Runtime errors** - Even if builds succeed, code fails in browser
 4. **Increased bundle size** - Unnecessary server code shipped to client
 
-## Why PR #4360 Was Incorrectly Blamed
+## Why PR [#4360](https://github.com/better-auth/better-auth/issues/4360) Was Incorrectly Blamed
 
-PR #4360 added a `typeof window === "undefined"` check to prevent
+PR [#4360](https://github.com/better-auth/better-auth/issues/4360) added a `typeof window === "undefined"` check to prevent
 `node:sqlite` errors.
 This was a **workaround**, not the cause.
 The real issue is users importing server packages in client code.
