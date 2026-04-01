@@ -2400,12 +2400,12 @@ describe("listInvitations filters with limit & offset", async () => {
 		);
 
 		const first = await client.organization.listInvitations({
-			query: { limit: 1, offset: 0, sortBy: "createdAt", sortOrder: "asc" },
+			query: { limit: 1, offset: 0, sortBy: "createdAt", sortDirection: "asc" },
 			fetchOptions: { headers },
 		});
 
 		const second = await client.organization.listInvitations({
-			query: { limit: 1, offset: 1, sortBy: "createdAt", sortOrder: "asc" },
+			query: { limit: 1, offset: 1, sortBy: "createdAt", sortDirection: "asc" },
 			fetchOptions: { headers },
 		});
 

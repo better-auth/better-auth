@@ -1034,7 +1034,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 			email?: string;
 			role?: string[];
-			status?: InvitationStatus;
+			status?: InvitationStatus | InvitationStatus[];
 			inviterId?: string;
 			limit?: number;
 			offset?: number;
@@ -1060,6 +1060,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			if (data.status !== undefined) {
 				filters.push({
+					...(Array.isArray(data.status) ? { operator: "in" } : {}),
 					field: "status",
 					value: data.status,
 				});
