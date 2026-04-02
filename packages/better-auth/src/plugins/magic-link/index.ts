@@ -266,7 +266,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx,
 					);
 					if (options.onMagicLinkRequested) {
-						await options.onMagicLinkRequested({ email }, ctx);
+						await ctx.context.runInBackgroundOrAwait(
+							options.onMagicLinkRequested({ email }, ctx),
+						);
 					}
 					return ctx.json({
 						status: true,
