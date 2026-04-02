@@ -8,6 +8,7 @@
     "url": "git+https://github.com/better-auth/better-auth.git"
   },
   "scripts": {
+    "prepare": "lefthook install --reset-hooks-path",
     "build": "turbo build --filter=./packages/*",
     "dev": "turbo dev --filter=./packages/* --filter=!./packages/cli",
     "clean": "turbo clean --filter=./packages/* && rm -rf node_modules",
@@ -50,7 +51,7 @@
     "nyc": "^17.1.0",
     "publint": "^0.3.17",
     "tinyglobby": "^0.2.15",
-    "turbo": "^2.8.11",
+    "turbo": "^2.9.3",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
   }
