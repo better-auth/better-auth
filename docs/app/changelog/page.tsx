@@ -47,11 +47,28 @@ function getContent(content: string) {
 }
 
 export default async function ChangelogPage() {
-	const res = await fetch(
-		"https://api.github.com/repos/better-auth/better-auth/releases",
-		{ next: { revalidate: 3600 } },
-	);
-	const releases: GitHubRelease[] = await res.json();
+	let releases: GitHubRelease[] = [];
+	try {
+		const res = await fetch(
+			"https://api.github.com/repos/better-auth/better-auth/releases",
+			{
+				next: { revalidate: 3600 },
+				headers: {
+					Accept: "application/vnd.github.v3+json",
+					...(process.env.GITHUB_TOKEN && {
+						Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+					}),
+				},
+			},
+		);
+		if (res.ok) {
+			releases = await res.json();
+		} else {
+			console.error(`Changelog fetch failed: ${res.status}`);
+		}
+	} catch (e) {
+		console.error("Changelog fetch failed:", e);
+	}
 
 	const EXPANDABLE_LINE_THRESHOLD = 15;
 

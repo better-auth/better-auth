@@ -8,6 +8,7 @@ import {
 	BotIcon,
 	CircleHelp,
 	Database,
+	FileBoxIcon,
 	FlaskConical,
 	Gauge,
 	Key,
@@ -19,6 +20,7 @@ import {
 	Navigation,
 	Phone,
 	ScanFace,
+	ScrollTextIcon,
 	Server,
 	ShieldCheck,
 	TriangleAlertIcon,
@@ -39,17 +41,21 @@ export interface SubpageItem {
 
 export interface ListItem {
 	title: string;
-	href: string;
+	href?: string;
 	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	group?: boolean;
 	separator?: boolean;
 	isNew?: boolean;
 	subpages?: SubpageItem[];
+	/** Navigates to a non-docs URL (e.g. `/llms.txt`) without a docs MDX page. */
+	external?: boolean;
 }
 
 interface Content {
 	title: string;
 	href?: string;
+	/** Expand this sidebar section when pathname is this URL or a child path (no extra nav row). */
+	expandSectionForPathPrefix?: string;
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	isNew?: boolean;
 	list: ListItem[];
@@ -93,6 +99,7 @@ function contentToPageTree(content: Content): Folder {
 			: undefined,
 		children: content.list
 			.filter((item) => !item.group && (item.href || item.separator))
+			.filter((item) => !item.external)
 			.map((item) =>
 				item.separator
 					? ({
@@ -101,7 +108,7 @@ function contentToPageTree(content: Content): Folder {
 						} as const)
 					: ({
 							type: "page",
-							url: item.href,
+							url: item.href!,
 							name: item.title,
 							icon: <item.icon />,
 						} as const),
@@ -195,24 +202,6 @@ export const contents: Content[] = [
 							fill="currentColor"
 							d="M2 3.75C2 2.784 2.784 2 3.75 2h8.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25zM6 6.5a.5.5 0 0 0-1 0v4a.5.5 0 0 0 1 0zM8 8a.5.5 0 0 0-.5.5v2a.5.5 0 0 0 1 0v-2A.5.5 0 0 0 8 8m3-2.5a.5.5 0 0 0-1 0v5a.5.5 0 0 0 1 0z"
 						></path>
-					</svg>
-				),
-			},
-			{
-				title: "AI resources",
-				href: "/docs/ai-resources",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 24 24"
-						aria-hidden
-					>
-						<path
-							fill="currentColor"
-							d="M12 2.25c.41 0 .78.25.93.63l1.42 3.55l3.55 1.42a.99.99 0 0 1 0 1.84l-3.55 1.42l-1.42 3.55a.99.99 0 0 1-1.86 0l-1.42-3.55L6.1 9.69a.99.99 0 0 1 0-1.84l3.55-1.42l1.42-3.55c.15-.38.52-.63.93-.63m6.5 11.5c.28 0 .54.15.68.4l.87 1.56l1.56.87c.48.27.48.97 0 1.24l-1.56.87l-.87 1.56a.78.78 0 0 1-1.36 0l-.87-1.56l-1.56-.87a.78.78 0 0 1 0-1.36l1.56-.87l.87-1.56c.14-.25.4-.4.68-.4M4.75 13c.21 0 .4.11.52.28l.72 1.12l1.12.72c.35.22.35.74 0 .96l-1.12.72l-.72 1.12a.59.59 0 0 1-1 0l-.72-1.12l-1.12-.72a.59.59 0 0 1 0-1l1.12-.72l.72-1.12a.59.59 0 0 1 .48-.24"
-						/>
 					</svg>
 				),
 			},
@@ -2339,6 +2328,25 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Chargebee",
+				href: "/docs/plugins/chargebee",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 232 235"
+						fill="currentColor"
+					>
+						<path d="M77.18,117.82,231.85,80.94V.73h-80.2Z" />
+						<path d="M.54,116.41a115.52,115.52,0,0,0,3.38,27.83l73.27-26.42L3.31,91.16A117.15,117.15,0,0,0,.54,116.39Z" />
+						<path d="M27.78,41.84l49.38,76L99.93,1.88a115.43,115.43,0,0,0-72.15,40Z" />
+						<path d="M77.18,117.82l154.67,36.86v80.2h-80.2Z" />
+						<path d="M27.79,193.78l49.38-76L99.91,233.71a115.42,115.42,0,0,1-72.14-40Z" />
+					</svg>
+				),
+			},
+			{
 				title: "Others",
 				group: true,
 				icon: () => null,
@@ -2719,6 +2727,63 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 		],
 	},
 	{
+		title: "AI Resources",
+		expandSectionForPathPrefix: "/docs/ai-resources",
+		Icon: () => (
+			// <svg
+			// 	xmlns="http://www.w3.org/2000/svg"
+			// 	width="1.2em"
+			// 	height="1.2em"
+			// 	viewBox="0 0 24 24"
+			// >
+			// 	<path
+			// 		fill="currentColor"
+			// 		d="M13.343 2A6 6 0 0 0 21 9.657V21a1 1 0 0 1-1 1H6.5A3.5 3.5 0 0 1 3 18.5V5a3 3 0 0 1 3-3zM6.5 17a1.5 1.5 0 0 0 0 3H19v-3zM18.53.33a.507.507 0 0 1 .94 0l.254.61a4.37 4.37 0 0 0 2.25 2.327l.718.32a.53.53 0 0 1 0 .962l-.76.338a4.36 4.36 0 0 0-2.218 2.25l-.247.566a.506.506 0 0 1-.934 0l-.246-.565a4.36 4.36 0 0 0-2.22-2.251l-.76-.338a.53.53 0 0 1 0-.963l.718-.32A4.37 4.37 0 0 0 18.276.942z"
+			// 	/>
+			// </svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="1.2em"
+				height="1.2em"
+				viewBox="0 0 640 640"
+			>
+				<path
+					fill="currentColor"
+					d="m295.4 37l14.8 36.8L347 88.6c3 1.2 5 4.2 5 7.4s-2 6.2-5 7.4l-36.8 14.8l-14.8 36.8c-1.2 3-4.2 5-7.4 5s-6.2-2-7.4-5l-14.8-36.8l-36.8-14.8c-3-1.2-5-4.2-5-7.4s2-6.2 5-7.4l36.8-14.8L280.6 37c1.2-3 4.2-5 7.4-5s6.2 2 7.4 5m-152.7 68.7l21.5 50.1l50.1 21.5c5.9 2.5 9.7 8.3 9.7 14.7s-3.8 12.2-9.7 14.7l-50.1 21.5l-21.5 50.1c-2.5 5.9-8.3 9.7-14.7 9.7s-12.2-3.8-14.7-9.7l-21.5-50.1l-50.1-21.5c-5.9-2.5-9.7-8.3-9.7-14.7s3.8-12.2 9.7-14.7l50.1-21.5l21.5-50.1c2.5-5.9 8.3-9.7 14.7-9.7s12.2 3.8 14.7 9.7M496 368c6.4 0 12.2 3.8 14.7 9.7l21.5 50.1l50.1 21.5c5.9 2.5 9.7 8.3 9.7 14.7s-3.8 12.2-9.7 14.7l-50.1 21.5l-21.5 50.1c-2.5 5.9-8.3 9.7-14.7 9.7s-12.2-3.8-14.7-9.7l-21.5-50.1l-50.1-21.5c-5.9-2.5-9.7-8.3-9.7-14.7s3.8-12.2 9.7-14.7l50.1-21.5l21.5-50.1c2.5-5.9 8.3-9.7 14.7-9.7m-4-304c11 0 21.6 4.4 29.5 12.2l42.3 42.3c7.8 7.9 12.2 18.5 12.2 29.5s-4.4 21.6-12.2 29.5l-88.2 88.2l-101.3-101.3l88.2-88.2C470.4 68.4 481 64 492 64M76.2 462.5l264.2-264.2l101.3 101.3l-264.2 264.2C169.6 571.6 159 576 148 576s-21.6-4.4-29.5-12.2l-42.3-42.3C68.4 513.6 64 503 64 492s4.4-21.6 12.2-29.5"
+				/>
+			</svg>
+		),
+		list: [
+			{
+				title: "MCP",
+				href: "/docs/ai-resources/mcp",
+				icon: () => (
+					<svg
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+						fill="currentColor"
+						fillRule="evenodd"
+					>
+						<path d="M15.688 2.343a2.588 2.588 0 00-3.61 0l-9.626 9.44a.863.863 0 01-1.203 0 .823.823 0 010-1.18l9.626-9.44a4.313 4.313 0 016.016 0 4.116 4.116 0 011.204 3.54 4.3 4.3 0 013.609 1.18l.05.05a4.115 4.115 0 010 5.9l-8.706 8.537a.274.274 0 000 .393l1.788 1.754a.823.823 0 010 1.18.863.863 0 01-1.203 0l-1.788-1.753a1.92 1.92 0 010-2.754l8.706-8.538a2.47 2.47 0 000-3.54l-.05-.049a2.588 2.588 0 00-3.607-.003l-7.172 7.034-.002.002-.098.097a.863.863 0 01-1.204 0 .823.823 0 010-1.18l7.273-7.133a2.47 2.47 0 00-.003-3.537z" />
+						<path d="M14.485 4.703a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a4.115 4.115 0 000 5.9 4.314 4.314 0 006.016 0l7.12-6.982a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a2.588 2.588 0 01-3.61 0 2.47 2.47 0 010-3.54l7.12-6.982z" />
+					</svg>
+				),
+			},
+			{
+				title: "Skills",
+				href: "/docs/ai-resources/skills",
+				icon: () => <FileBoxIcon className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "LLMs.txt",
+				href: "/llms.txt",
+				external: true,
+				icon: () => <ScrollTextIcon className="w-4 h-4 text-current" />,
+			},
+		],
+	},
+	{
 		title: "Reference",
 		Icon: () => (
 			<svg
@@ -2761,6 +2826,14 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						href: "/docs/reference/errors/invalid_callback_request",
 					},
 					{
+						title: "invalid_code",
+						href: "/docs/reference/errors/invalid_code",
+					},
+					{
+						title: "internal_server_error",
+						href: "/docs/reference/errors/internal_server_error",
+					},
+					{
 						title: "state_not_found",
 						href: "/docs/reference/errors/state_not_found",
 					},
@@ -2792,6 +2865,18 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						title: "unable_to_link_account",
 						href: "/docs/reference/errors/unable_to_link_account",
+					},
+					{
+						title: "unable_to_create_user",
+						href: "/docs/reference/errors/unable_to_create_user",
+					},
+					{
+						title: "unable_to_create_session",
+						href: "/docs/reference/errors/unable_to_create_session",
+					},
+					{
+						title: "account_not_linked",
+						href: "/docs/reference/errors/account_not_linked",
 					},
 					{
 						title: "account_already_linked_to_different_user",

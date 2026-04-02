@@ -15,21 +15,21 @@ const allPages: PageEntry[] = source.getPages().map((page) => ({
 export default function Layout({ children }: { children: ReactNode }) {
 	return (
 		<DocsProvider pages={allPages}>
-			<Suspense>
-				<DocsSidebar />
-			</Suspense>
-			<DocsLayout
-				tree={source.pageTree}
-				nav={{ enabled: false }}
-				searchToggle={{ enabled: false }}
-				themeSwitch={{ enabled: false }}
-				sidebar={{ enabled: false }}
-				containerProps={{
-					className: "docs-layout",
-				}}
-			>
-				{children}
-				<AIChat>
+			<AIChat>
+				<Suspense>
+					<DocsSidebar />
+				</Suspense>
+				<DocsLayout
+					tree={source.pageTree}
+					nav={{ enabled: false }}
+					searchToggle={{ enabled: false }}
+					themeSwitch={{ enabled: false }}
+					sidebar={{ enabled: false }}
+					containerProps={{
+						className: "docs-layout",
+					}}
+				>
+					{children}
 					<AIChatPanel />
 					<AIChatTrigger>
 						<span className="text-sm text-muted-foreground">Ask AI</span>
@@ -38,8 +38,8 @@ export default function Layout({ children }: { children: ReactNode }) {
 							<span className="text-[11px]">&#8984;</span>I
 						</kbd>
 					</AIChatTrigger>
-				</AIChat>
-			</DocsLayout>
+				</DocsLayout>
+			</AIChat>
 		</DocsProvider>
 	);
 }
