@@ -332,6 +332,35 @@ export const auth = betterAuth({
 });
 ```
 
+### authorizationEndpoint, tokenEndpoint, userInfoEndpoint, jwksEndpoint
+
+Optional endpoint overrides for the provider's OAuth flow. These are useful when testing against local OAuth emulators, mock servers, or sandbox environments without changing the provider's default production endpoints.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Other configurations...
+  socialProviders: {
+    google: {
+      clientId: "YOUR_GOOGLE_CLIENT_ID",
+      clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+      authorizationEndpoint: "http://localhost:3000/o/oauth2/v2/auth",
+      tokenEndpoint: "http://localhost:3000/oauth2/token",
+      userInfoEndpoint: "http://localhost:3000/oauth2/v2/userinfo",
+      jwksEndpoint: "http://localhost:3000/oauth2/v3/certs",
+    },
+  },
+});
+```
+
+All four options are optional:
+
+- `authorizationEndpoint`: Override the authorization URL used to start sign-in
+- `tokenEndpoint`: Override the token exchange and refresh URL
+- `userInfoEndpoint`: Override the user info/profile URL
+- `jwksEndpoint`: Override the JWKS URL used for ID token verification
+
 ### disableSignUp
 
 Disables sign-up for new users.
