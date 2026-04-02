@@ -29,6 +29,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Block breaking changes (feat!, fix!, etc.) on PRs targeting main
+      - name: Block breaking changes on main
+        if: >
+          github.event.pull_request.base.ref == 'main' &&
+          steps.lint_pr_title.outputs.error_message == null
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if echo "$PR_TITLE" | grep -qE '^[a-z]+(\(.+\))?!:'; then
+            echo "::error::Breaking changes (indicated by '!' in the PR title) are not allowed on main."
+            echo "::error::Please target the 'next' branch for breaking changes."
+            exit 1
+          fi
+
       - name: Comment on invalid PR title
         uses: marocchino/sticky-pull-request-comment@70d2764d1a7d5d9560b100cbea0077fc8f633987 # v3
         # NOTE: null comparison is intentional per official README

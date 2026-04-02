@@ -27,6 +27,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Block pre.json on main
+        if: github.base_ref == 'main'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git diff --name-only "origin/$BASE_REF"...HEAD | grep -q '^\.changeset/pre\.json$'; then
+            echo "::error::.changeset/pre.json must not be committed to main. Pre-release mode belongs on the 'next' branch only."
+            exit 1
+          fi
+
       - name: Get changed changeset files
         id: changed
         env:
@@ -102,27 +112,21 @@ jobs:
 
           [ "$HAS_ERROR" -ne 0 ] && exit 1
 
-          # Pre-release mode: all bump types allowed
-          if [ -f ".changeset/pre.json" ]; then
-            echo "Pre-release mode active, all bump types allowed"
-            exit 0
+          # On main: only patch bumps allowed (no minor, no major)
+          # On next: all bump types allowed (pre-release mode)
+          if [ "${{ github.base_ref }}" = "main" ]; then
+            for f in $(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md'); do
+              BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
+              if echo "$BUMPS" | grep -q "major"; then
+                echo "::error::Changeset $f contains a 'major' bump. Breaking changes must target the 'next' branch, not 'main'."
+                exit 1
+              fi
+              if echo "$BUMPS" | grep -q "minor"; then
+                echo "::error::Changeset $f contains a 'minor' bump. Features must target the 'next' branch. Only 'patch' bumps are allowed on 'main'."
+                exit 1
+              fi
+            done
+            echo "All changesets are patch-only (main branch policy)"
+          else
+            echo "Target is ${{ github.base_ref }}, all bump types allowed"
           fi
-
-          # Verify bump types against PR labels
-          LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
-          HAS_MINOR=$(echo "$LABELS" | grep -c "^minor$" || true)
-          HAS_MAJOR=$(echo "$LABELS" | grep -c "^major$" || true)
-
-          for f in $(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md'); do
-            BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
-            if echo "$BUMPS" | grep -q "major" && [ "$HAS_MAJOR" -eq 0 ]; then
-              echo "::error::Changeset $f contains a 'major' bump but the PR lacks a 'major' label."
-              exit 1
-            fi
-            if echo "$BUMPS" | grep -q "minor" && [ "$HAS_MINOR" -eq 0 ] && [ "$HAS_MAJOR" -eq 0 ]; then
-              echo "::error::Changeset $f contains a 'minor' bump but the PR lacks a 'minor' or 'major' label."
-              exit 1
-            fi
-          done
-
-          echo "All changeset files validated"
