@@ -64,6 +64,10 @@
 
 				// implicit test dependencies
 				"vitest"
+			],
+			"ignoreUnresolved": [
+				// We intentionally import this to test if we are in a SvelteKit build
+				"$app/environment"
 			]
 		},
 		"packages/cli": {
