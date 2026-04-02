@@ -37,20 +37,28 @@ export const signOut = createAuthEndpoint(
 			ctx.context.secret,
 		);
 		let userId: string | undefined;
+		let sessionDeleted = false;
 		if (sessionCookieToken) {
-			try {
-				const session =
-					await ctx.context.internalAdapter.findSession(sessionCookieToken);
-				if (session) {
-					userId = session.session.userId;
+			if (ctx.context.options.onLogout) {
+				try {
+					const session =
+						await ctx.context.internalAdapter.findSession(sessionCookieToken);
+					if (session) {
+						userId = session.session.userId;
+					}
+				} catch (e) {
+					ctx.context.logger.error("Failed to find session before logout", e);
 				}
+			}
+			try {
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
+				sessionDeleted = true;
 			} catch (e) {
 				ctx.context.logger.error("Failed to delete session from database", e);
 			}
 		}
 		deleteSessionCookie(ctx);
-		if (userId && ctx.context.options.onLogout) {
+		if (userId && sessionDeleted && ctx.context.options.onLogout) {
 			await ctx.context.runInBackgroundOrAwait(
 				ctx.context.options.onLogout({ userId }, ctx.request),
 			);
