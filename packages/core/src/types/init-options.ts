@@ -786,24 +786,47 @@ export type BetterAuthOptions = {
 					 */
 					enabled: boolean;
 					/**
-					 * Send a confirmation email to the old email address when the user changes their email.
-					 * @param data the data object
-					 * @param request the request object
+					 * Send a verification email to the new email address
+					 * when a user requests an email change.
+					 *
+					 * @param user the user requesting the change
+					 * @param url the verification URL
+					 * @param token the verification token
 					 */
-					sendChangeEmailConfirmation?: (
+					sendVerificationEmail: (
 						data: {
 							user: User;
-							newEmail: string;
 							url: string;
 							token: string;
 						},
 						request?: Request,
 					) => Promise<void>;
 					/**
-					 * Update the email without verification if the user is not verified.
+					 * Revoke other sessions after email change is completed.
 					 * @default false
 					 */
-					updateEmailWithoutVerification?: boolean;
+					revokeOtherSessions?: boolean;
+					/**
+					 * A callback triggered when a user requests an email change.
+					 */
+					onChangeEmailRequested?: (
+						data: { user: User; newEmail: string },
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * A callback triggered when an email change is completed (verified).
+					 */
+					onChangeEmailCompleted?: (
+						data: { user: User; oldEmail: string; newEmail: string },
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * A callback triggered when an email change is cancelled.
+					 */
+					onChangeEmailCancelled?: (
+						data: { user: User },
+						request?: Request,
+					) => Promise<void>;
 				};
 				/**
 				 * User deletion configuration

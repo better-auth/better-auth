@@ -26,7 +26,7 @@ await authClient.updateUser({
 
 ### Change Email
 
-To allow users to change their email, first enable the `changeEmail` feature, which is disabled by default. Set `changeEmail.enabled` to `true`:
+To allow users to change their email, enable the `changeEmail` feature (disabled by default) and provide a `sendVerificationEmail` function to send the verification link to the new email address:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -36,14 +36,13 @@ export const auth = betterAuth({
     user: {
         changeEmail: {
             enabled: true,
-        }
-    },
-    emailVerification: {
-        // Required to send the verification email
-        sendVerificationEmail: async ({ user, url, token }) => {
-            void sendEmail({
-                to: user.email,
-            })
+            sendVerificationEmail: async ({ user, url, token }, request) => {
+                void sendEmail({
+                    to: user.email,
+                    subject: 'Verify your new email address',
+                    text: `Click the link to verify your email: ${url}`
+                })
+            }
         }
     }
 })
@@ -54,68 +53,105 @@ export const auth = betterAuth({
   timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
 </Callout>
 
-By default, when a user requests to change their email, a verification email is sent to the **new** email address.
-The email is only updated after the user verifies the new email.
+#### How it works
 
-#### Confirming with Current Email
+When a user requests an email change:
 
-For added security, you can require users to confirm the change via their **current** email before
-the verification email is sent to the new address. To do this, provide the `sendChangeEmailConfirmation` function.
+1. The new email is stored in a `pendingEmail` field on the user record
+2. A one-time verification token is created in the `Verification` table
+3. A verification email is sent to the **new** email address via `changeEmail.sendVerificationEmail`
+4. When the user clicks the verification link, the email is updated, `pendingEmail` is cleared, and `emailVerified` is set to `true`
+5. The verification token is deleted (one-time use) and a new session is created
+
+The user can cancel the pending change at any time before verification, which clears `pendingEmail` and deletes the verification token.
+
+<Callout>
+When `changeEmail.enabled` is `true`, a `pendingEmail` field is required on the `user` table. Run the [CLI](/docs/concepts/cli) to generate the migration, then apply it to your database.
+</Callout>
+
+#### Revoking Other Sessions
+
+To automatically revoke all other sessions when an email change is completed:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sendEmail } from './email'; // your email sending function
-
 export const auth = betterAuth({
     user: {
         changeEmail: {
             enabled: true,
-            sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => { 
-                void sendEmail({
-                    to: user.email, // Sent to the CURRENT email
-                    subject: 'Approve email change',
-                    text: `Click the link to approve the change to ${newEmail}: ${url}`
-                })
-            }
-        }
-    },
-    // ...
-})
-```
-
-#### Updating Without Verification
-
-If you want to allow users to update their email immediately without verification (only if their current email is NOT verified), you can enable `updateEmailWithoutVerification`.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-    user: {
-        changeEmail: {
-            enabled: true,
-            updateEmailWithoutVerification: true
+            revokeOtherSessions: true,
         }
     }
 })
 ```
 
-<Callout type="warn">
-  If `updateEmailWithoutVerification` is false (default), the email will not be updated until the new email is verified, even if the current email is unverified.
-</Callout>
+#### Lifecycle Callbacks
 
-#### Client Usage
+You can hook into the email change lifecycle for logging, notifications, or analytics:
 
-Use the `changeEmail` function on the client to initiate the process.
+```ts title="auth.ts"
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            onChangeEmailRequested: async ({ user, newEmail }, request) => {
+                // Notify the current email that a change was requested
+            },
+            onChangeEmailCompleted: async ({ user, oldEmail, newEmail }, request) => {
+                // Notify the old email that the change is complete
+            },
+            onChangeEmailCancelled: async ({ user }, request) => {
+                // Notify the current email that the change has been canceled
+            },
+        }
+    }
+})
+```
+
+#### Usage
+
+You can initiate and cancel email changes from both server-side and client-side code.
+
+##### Server-side
+
+Request an email change (requires an active session):
+
+```ts
+await auth.api.changeEmail({
+    body: {
+        newEmail: "new-email@email.com",
+        callbackURL: "/dashboard",
+    },
+    headers: await headers(),
+});
+```
+
+Cancel a pending email change:
+
+```ts
+await auth.api.cancelEmailChange({
+    headers: await headers(),
+});
+```
+
+##### Client-side
+
+Request an email change:
 
 ```ts
 import { authClient } from "@/lib/auth-client"
 
 await authClient.changeEmail({
     newEmail: "new-email@email.com",
-    callbackURL: "/dashboard", // to redirect after verification
+    callbackURL: "/dashboard",
 });
 ```
+
+Cancel a pending email change:
+
+```ts
+await authClient.cancelEmailChange();
+```
+
 
 ### Change Password
 

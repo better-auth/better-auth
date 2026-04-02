@@ -5,26 +5,21 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
 describe("updateUser", async () => {
-	const sendChangeEmail = vi.fn();
-	let emailVerificationToken = "";
+	let verificationUrl = "";
+	const onChangeEmailRequested = vi.fn();
+	const onChangeEmailCompleted = vi.fn();
+	const onChangeEmailCancelled = vi.fn();
 	const { client, testUser, sessionSetter, db, signInWithTestUser } =
 		await getTestInstance({
-			emailVerification: {
-				async sendVerificationEmail({ user, url, token }) {
-					emailVerificationToken = token;
-				},
-			},
 			user: {
 				changeEmail: {
 					enabled: true,
-					sendChangeEmailConfirmation: async ({
-						user,
-						newEmail,
-						url,
-						token,
-					}) => {
-						sendChangeEmail(user, newEmail, url, token);
+					async sendVerificationEmail({ url }) {
+						verificationUrl = url;
 					},
+					onChangeEmailRequested,
+					onChangeEmailCompleted,
+					onChangeEmailCancelled,
 				},
 			},
 		});
@@ -53,73 +48,52 @@ describe("updateUser", async () => {
 		});
 	});
 
-	it("should not update user email immediately (default secure flow)", async () => {
-		// Ensure user is verified to trigger the confirmation flow
-		await db.update({
-			model: "user",
-			update: {
-				emailVerified: true,
-			},
-			where: [
-				{
-					field: "email",
-					value: testUser.email,
-				},
-			],
-		});
-
+	it("should not update user email immediately (stores pendingEmail)", async () => {
 		const newEmail = "new-email@email.com";
 		await globalRunWithClient(async () => {
 			await client.changeEmail({
 				newEmail,
 			});
+
+			// Email should NOT change yet
 			const sessionRes = await client.getSession();
-			// Should NOT update email yet
 			expect(sessionRes.data?.user.email).not.toBe(newEmail);
 			expect(sessionRes.data?.user.email).toBe(testUser.email);
+
+			// onChangeEmailRequested should have been called
+			expect(onChangeEmailRequested).toHaveBeenCalled();
+
+			// sendVerificationEmail should have been called with the verify URL
+			expect(verificationUrl).toContain("/verify-email-change/");
 		});
 	});
 
-	it("should verify email change (flow with confirmation)", async () => {
-		// The previous test triggered changeEmail.
-		// Since testUser is verified, and sendChangeEmailVerification is provided,
-		// it should have sent a confirmation email to the OLD email.
-
-		expect(sendChangeEmail).toHaveBeenCalled();
-		const call = sendChangeEmail.mock.calls[0];
-		const token = call?.[3]; // token is 4th arg
-		if (!token) throw new Error("Token not found");
+	it("should verify email change via Verification table", async () => {
+		// Extract userId and token from verification URL
+		const tokenMatch = verificationUrl.match(
+			/\/verify-email-change\/([^/]+)\/([^?]+)/,
+		);
+		if (!tokenMatch) throw new Error("Token not found in URL");
+		const [, userId, token] = tokenMatch;
 
 		await globalRunWithClient(async () => {
-			// 1. Verify the confirmation token (sent to old email)
-			const res = await client.verifyEmail({
-				query: {
-					token: token,
-				},
-			});
-			expect(res.data?.status).toBe(true);
+			// Verify via the new endpoint (redirects, so we catch the redirect)
+			try {
+				await client.$fetch(`/verify-email-change/${userId}/${token}`, {
+					method: "GET",
+					query: { callbackURL: "/" },
+				});
+			} catch {
+				// Redirect throws — expected
+			}
 
-			// This should trigger sending verification to the NEW email.
-			// emailVerification.sendVerificationEmail should have been called.
-			// We captured this in emailVerificationToken variable in setup.
-			expect(emailVerificationToken).toBeDefined();
+			// onChangeEmailCompleted should have been called
+			expect(onChangeEmailCompleted).toHaveBeenCalled();
 
-			// User email should STILL be old email
+			// Email should now be updated
 			const sessionRes = await client.getSession();
-			expect(sessionRes.data?.user.email).toBe(testUser.email);
-
-			// 2. Verify the new email token
-			const res2 = await client.verifyEmail({
-				query: {
-					token: emailVerificationToken,
-				},
-			});
-			expect(res2.data?.status).toBe(true);
-
-			// NOW user email should be updated
-			const sessionRes2 = await client.getSession();
-			expect(sessionRes2.data?.user.email).toBe("new-email@email.com");
-			expect(sessionRes2.data?.user.emailVerified).toBe(true);
+			expect(sessionRes.data?.user.email).toBe("new-email@email.com");
+			expect(sessionRes.data?.user.emailVerified).toBe(true);
 		});
 	});
 
@@ -683,15 +657,83 @@ describe("delete user", async () => {
 	});
 });
 
+describe("change-email cancellation", async () => {
+	let cancelVerificationUrl = "";
+	const onCancelled = vi.fn();
+	const { client, signInWithTestUser, testUser } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+				async sendVerificationEmail({ url }) {
+					cancelVerificationUrl = url;
+				},
+				onChangeEmailCancelled: onCancelled,
+			},
+		},
+	});
+
+	it("should cancel a pending email change", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			// Request email change
+			await client.changeEmail({ newEmail: "cancel-test@email.com" });
+
+			// Cancel via $fetch (cancelEmailChange may not be auto-generated)
+			const res = await client.$fetch<{ status: boolean }>(
+				"/cancel-email-change",
+				{
+					method: "POST",
+				},
+			);
+			expect(res.data?.status).toBe(true);
+			expect(onCancelled).toHaveBeenCalled();
+
+			// Email should still be the original
+			const session = await client.getSession();
+			expect(session.data?.user.email).toBe(testUser.email);
+		});
+	});
+
+	it("should reject verification after cancellation", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			// Request email change
+			await client.changeEmail({ newEmail: "cancel-verify-test@email.com" });
+
+			// Extract userId and token
+			const tokenMatch = cancelVerificationUrl.match(
+				/\/verify-email-change\/([^/]+)\/([^?]+)/,
+			);
+			if (!tokenMatch) throw new Error("Token not found");
+			const [, userId, token] = tokenMatch;
+
+			// Cancel
+			await client.$fetch("/cancel-email-change", { method: "POST" });
+
+			// Try to verify — should fail (Verification entry deleted)
+			try {
+				await client.$fetch(`/verify-email-change/${userId}/${token}`, {
+					method: "GET",
+					query: { callbackURL: "/" },
+				});
+			} catch {
+				// Redirect throws — expected
+			}
+
+			// Email should still be the original
+			const session = await client.getSession();
+			expect(session.data?.user.email).toBe(testUser.email);
+		});
+	});
+});
+
 describe("change-email enumeration protection", async () => {
 	const { client, signInWithTestUser, testUser, sessionSetter } =
 		await getTestInstance({
-			emailVerification: {
-				async sendVerificationEmail() {},
-			},
 			user: {
 				changeEmail: {
 					enabled: true,
+					async sendVerificationEmail() {},
 				},
 			},
 		});
@@ -731,6 +773,7 @@ describe("change-email enumeration protection", async () => {
 describe("change-email without sendVerificationEmail", async () => {
 	const { client, signInWithTestUser, sessionSetter } = await getTestInstance({
 		user: {
+			// @ts-expect-error - intentionally omitting sendVerificationEmail to test error handling
 			changeEmail: {
 				enabled: true,
 			},
