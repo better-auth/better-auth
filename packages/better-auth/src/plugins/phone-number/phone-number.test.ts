@@ -305,7 +305,7 @@ describe("phone auth flow", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					updateEmailWithoutVerification: true,
+					async sendVerificationEmail() {},
 				},
 			},
 		},
@@ -780,6 +780,7 @@ describe("phone number verification requirement", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
+					async sendVerificationEmail() {},
 				},
 			},
 		},

@@ -194,6 +194,18 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.user?.fields?.updatedAt || "updatedAt",
 				},
+				...(options.user?.changeEmail?.enabled
+					? {
+							pendingEmail: {
+								type: "string" as const,
+								required: false,
+								fieldName:
+									(options.user?.fields as Record<string, string> | undefined)
+										?.pendingEmail || "pendingEmail",
+								input: false,
+							},
+						}
+					: {}),
 				...user?.fields,
 				...options.user?.additionalFields,
 			},

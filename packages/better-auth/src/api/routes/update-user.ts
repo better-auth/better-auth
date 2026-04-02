@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
@@ -737,23 +738,14 @@ export const changeEmail = createAuthEndpoint(
 		 * existing-email lookup would return 200 while a non-existing
 		 * email would later throw 400, leaking email existence.
 		 */
-		const canUpdateWithoutVerification =
-			ctx.context.session.user.emailVerified !== true &&
-			ctx.context.options.user.changeEmail.updateEmailWithoutVerification;
-		const canSendConfirmation =
-			ctx.context.session.user.emailVerified &&
-			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
-		const canSendVerification =
-			ctx.context.options.emailVerification?.sendVerificationEmail;
+		const sendChangeEmailVerification =
+			ctx.context.options.user?.changeEmail?.sendVerificationEmail;
 
-		if (
-			!canUpdateWithoutVerification &&
-			!canSendConfirmation &&
-			!canSendVerification
-		) {
-			ctx.context.logger.error("Verification email isn't enabled.");
+		if (!sendChangeEmailVerification) {
+			ctx.context.logger.error("Change email verification isn't configured.");
 			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
+				message:
+					"Change email verification isn't configured. Please set user.changeEmail.sendVerificationEmail.",
 			});
 		}
 
@@ -773,121 +765,257 @@ export const changeEmail = createAuthEndpoint(
 			return ctx.json({ status: true });
 		}
 
-		/**
-		 * If the email is not verified, we can update the email if the option is enabled
-		 */
-		if (canUpdateWithoutVerification) {
-			await ctx.context.internalAdapter.updateUserByEmail(
-				ctx.context.session.user.email,
-				{
-					email: newEmail,
-				},
-			);
-			await setSessionCookie(ctx, {
-				session: ctx.context.session.session,
-				user: {
-					...ctx.context.session.user,
-					email: newEmail,
-				},
-			});
-			if (canSendVerification) {
-				const token = await createEmailVerificationToken(
-					ctx.context.secret,
-					newEmail,
-					undefined,
-					ctx.context.options.emailVerification?.expiresIn,
-				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || "/"
-				}`;
-				await ctx.context.runInBackgroundOrAwait(
-					canSendVerification(
-						{
-							user: {
-								...ctx.context.session.user,
-								email: newEmail,
-							},
-							url,
-							token,
-						},
-						ctx.request,
-					),
-				);
-			}
+		// Store in Verification table (single entry, keyed by userId)
+		const userId = ctx.context.session.user.id;
+		const verificationToken = generateId(24);
+		const identifier = `change-email:${userId}`;
+		const expiresAt = new Date(
+			Date.now() +
+				(ctx.context.options.emailVerification?.expiresIn || 3600) * 1000,
+		);
 
-			return ctx.json({
-				status: true,
-			});
+		// Delete any existing change-email verification for this user
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			identifier,
+		);
+
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: JSON.stringify({
+				token: verificationToken,
+				oldEmail: ctx.context.session.user.email,
+				newEmail,
+			}),
+			identifier,
+			expiresAt,
+		});
+
+		// Store pendingEmail on user
+		await ctx.context.internalAdapter.updateUser(ctx.context.session.user.id, {
+			pendingEmail: newEmail,
+		});
+
+		// Fire onChangeEmailRequested event
+		if (ctx.context.options.user?.changeEmail?.onChangeEmailRequested) {
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.user.changeEmail.onChangeEmailRequested(
+					{ user: ctx.context.session.user, newEmail },
+					ctx.request,
+				),
+			);
 		}
 
-		/**
-		 * If the email is verified, we need to send a verification email
-		 */
-		if (canSendConfirmation) {
-			const token = await createEmailVerificationToken(
-				ctx.context.secret,
-				ctx.context.session.user.email,
-				newEmail,
-				ctx.context.options.emailVerification?.expiresIn,
-				{
-					requestType: "change-email-confirmation",
-				},
-			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+		// Send verification email
+		const callbackURL = ctx.body.callbackURL || "/";
+		const url = `${ctx.context.baseURL}/verify-email-change/${userId}/${verificationToken}?callbackURL=${encodeURIComponent(callbackURL)}`;
+
+		if (sendChangeEmailVerification) {
 			await ctx.context.runInBackgroundOrAwait(
-				canSendConfirmation(
+				sendChangeEmailVerification(
 					{
-						user: ctx.context.session.user,
-						newEmail: newEmail,
+						user: {
+							...ctx.context.session.user,
+							email: newEmail,
+						},
 						url,
-						token,
+						token: verificationToken,
 					},
 					ctx.request,
 				),
 			);
-			return ctx.json({
-				status: true,
-			});
 		}
 
-		if (!canSendVerification) {
-			ctx.context.logger.error("Verification email isn't enabled.");
+		return ctx.json({ status: true });
+	},
+);
+
+export const cancelEmailChange = createAuthEndpoint(
+	"/cancel-email-change",
+	{
+		method: "POST",
+		body: z.object({}).optional(),
+		use: [sessionMiddleware],
+		metadata: {
+			openapi: {
+				operationId: "cancelEmailChange",
+				summary: "Cancel a pending email change",
+				description:
+					"Cancel a pending email change and clear the pendingEmail field.",
+				responses: {
+					200: {
+						description: "Email change cancelled successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
+				message: "Change email is disabled",
 			});
 		}
 
-		const token = await createEmailVerificationToken(
-			ctx.context.secret,
-			ctx.context.session.user.email,
-			newEmail,
-			ctx.context.options.emailVerification?.expiresIn,
+		// Delete change-email verification entry for this user
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			`change-email:${ctx.context.session.user.id}`,
+		);
+
+		// Clear pendingEmail
+		await ctx.context.internalAdapter.updateUser(ctx.context.session.user.id, {
+			pendingEmail: null,
+		});
+
+		if (ctx.context.options.user?.changeEmail?.onChangeEmailCancelled) {
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.user.changeEmail.onChangeEmailCancelled(
+					{ user: ctx.context.session.user },
+					ctx.request,
+				),
+			);
+		}
+
+		return ctx.json({ status: true });
+	},
+);
+
+export const verifyEmailChange = createAuthEndpoint(
+	"/verify-email-change/:userId/:token",
+	{
+		method: "GET",
+		query: z.object({
+			callbackURL: z.string().optional(),
+		}),
+		use: [originCheck((ctx) => ctx.query?.callbackURL)],
+		metadata: {
+			openapi: {
+				operationId: "verifyEmailChange",
+				summary: "Verify a pending email change",
+				description: "Verify the email change token and apply the new email.",
+				parameters: [
+					{
+						name: "userId",
+						in: "path",
+						required: true,
+						schema: { type: "string" },
+					},
+					{
+						name: "token",
+						in: "path",
+						required: true,
+						schema: { type: "string" },
+					},
+					{
+						name: "callbackURL",
+						in: "query",
+						required: false,
+						schema: { type: "string" },
+					},
+				],
+				responses: {
+					200: {
+						description: "Email change applied successfully",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: { type: "boolean" },
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { userId, token } = ctx.params;
+		const callbackURL = ctx.query?.callbackURL || "/";
+		const errorUrl = `${callbackURL}${callbackURL.includes("?") ? "&" : "?"}error=INVALID_TOKEN`;
+
+		if (!userId || !token) {
+			throw ctx.redirect(errorUrl);
+		}
+
+		// Lookup in Verification table by userId
+		const identifier = `change-email:${userId}`;
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(identifier);
+
+		if (!verification || verification.expiresAt < new Date()) {
+			throw ctx.redirect(errorUrl);
+		}
+
+		// Parse stored data and verify token matches
+		let data: { token: string; oldEmail: string; newEmail: string };
+		try {
+			data = JSON.parse(verification.value);
+		} catch {
+			throw ctx.redirect(errorUrl);
+		}
+
+		if (data.token !== token) {
+			throw ctx.redirect(errorUrl);
+		}
+
+		// Apply email change
+		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+			data.oldEmail,
 			{
-				requestType: "change-email-verification",
+				email: data.newEmail,
+				emailVerified: true,
+				pendingEmail: null,
 			},
 		);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-		await ctx.context.runInBackgroundOrAwait(
-			canSendVerification(
-				{
-					user: {
-						...ctx.context.session.user,
-						email: newEmail,
-					},
-					url,
-					token,
-				},
-				ctx.request,
-			),
+
+		// Delete verification entry (one-time use)
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			identifier,
 		);
-		return ctx.json({
-			status: true,
-		});
+
+		// Fire onChangeEmailCompleted event
+		if (ctx.context.options.user?.changeEmail?.onChangeEmailCompleted) {
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.user.changeEmail.onChangeEmailCompleted(
+					{
+						user: updatedUser,
+						oldEmail: data.oldEmail,
+						newEmail: data.newEmail,
+					},
+					ctx.request,
+				),
+			);
+		}
+
+		// Revoke other sessions if configured
+		if (ctx.context.options.user?.changeEmail?.revokeOtherSessions) {
+			await ctx.context.internalAdapter.deleteSessions(updatedUser.id);
+		}
+
+		// Create new session
+		const session = await ctx.context.internalAdapter.createSession(
+			updatedUser.id,
+		);
+		if (session) {
+			await setSessionCookie(ctx, {
+				session,
+				user: updatedUser,
+			});
+		}
+
+		throw ctx.redirect(callbackURL);
 	},
 );
