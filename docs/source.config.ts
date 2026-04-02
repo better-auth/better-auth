@@ -17,17 +17,8 @@ export const docs = defineDocs({
 		postprocess: {
 			includeProcessedMarkdown: true,
 		},
+		async: true,
 	},
-});
-
-export const changelogCollection = defineCollections({
-	type: "doc",
-	dir: "./content/changelogs",
-	schema: z.object({
-		title: z.string(),
-		description: z.string(),
-		date: z.date(),
-	}),
 });
 
 export const blogCollection = defineCollections({
@@ -37,14 +28,20 @@ export const blogCollection = defineCollections({
 		title: z.string(),
 		description: z.string(),
 		date: z.date(),
-		author: z.object({
-			name: z.string(),
-			avatar: z.string(),
-			twitter: z.string().optional(),
-		}),
-		image: z.string(),
-		tags: z.array(z.string()),
+		draft: z.boolean().optional(),
+		author: z
+			.object({
+				name: z.string(),
+				avatar: z.string(),
+				twitter: z.string().optional(),
+			})
+			.optional(),
+		image: z.string().optional(),
+		tags: z.array(z.string()).optional(),
 	}),
+	postprocess: {
+		includeProcessedMarkdown: true,
+	},
 });
 
 const generator = createGenerator({

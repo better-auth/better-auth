@@ -1,0 +1,37 @@
+name: npm dist-tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package name (e.g., better-auth, @better-auth/cli)'
+        required: true
+        type: string
+      version:
+        description: 'Version to tag (e.g., 1.4.21)'
+        required: true
+        type: string
+      tag:
+        description: 'npm dist-tag to apply (e.g., latest)'
+        required: true
+        type: string
+        default: 'latest'
+
+permissions: {}
+
+jobs:
+  dist-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Add dist-tag
+        run: npm dist-tag add "${PACKAGE}@${VERSION}" "${TAG}"
+        env:
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

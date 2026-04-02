@@ -1,71 +1,86 @@
-import { join } from "node:path";
 import { createMDX } from "fumadocs-mdx/next";
 
-const withMDX = createMDX();
-
 /** @type {import('next').NextConfig} */
-const config = {
-	...(process.env.NODE_ENV === "development"
-		? {
-				turbopack: {
-					root: join(import.meta.dirname, ".."),
-				},
-			}
-		: {}),
-	async rewrites() {
-		return [
-			{
-				source: "/docs/:path*.mdx",
-				destination: "/llms.txt/:path*",
-			},
-		];
+const nextConfig = {
+	experimental: {
+		optimizePackageImports: [
+			"lucide-react",
+			"framer-motion",
+			"@radix-ui/react-tabs",
+			"@radix-ui/react-scroll-area",
+			"@radix-ui/react-popover",
+			"@radix-ui/react-select",
+			"@radix-ui/react-checkbox",
+		],
 	},
-	redirects: async () => {
-		return [
-			{
-				source: "/docs",
-				destination: "/docs/introduction",
-				permanent: true,
-			},
-			{
-				source: "/docs/examples",
-				destination: "/docs/examples/next-js",
-				permanent: true,
-			},
-		];
-	},
-	serverExternalPackages: [
-		"ts-morph",
-		"typescript",
-		"oxc-transform",
-		"@shikijs/twoslash",
-	],
 	images: {
 		remotePatterns: [
 			{
-				hostname: "images.unsplash.com",
+				protocol: "https",
+				hostname: "**",
 			},
 			{
-				hostname: "assets.aceternity.com",
-			},
-			{
-				hostname: "pbs.twimg.com",
-			},
-			{
-				hostname: "github.com",
-			},
-			{
-				hostname: "hebbkx1anhila5yf.public.blob.vercel-storage.com",
+				protocol: "http",
+				hostname: "**",
 			},
 		],
 	},
-	reactStrictMode: true,
-	typescript: {
-		ignoreBuildErrors: true,
-	},
-	experimental: {
-		turbopackFileSystemCacheForDev: true,
+	async redirects() {
+		return [
+			// Infrastructure backwards compatibility redirects
+			{
+				source: "/dashboard/:path*",
+				destination: "https://dash.better-auth.com",
+				permanent: true,
+			},
+			{
+				source: "/docs",
+				destination: "/docs/introduction",
+				permanent: false,
+			},
+			// Legacy query string based redirects
+			{
+				source: "/products",
+				has: [{ type: "query", key: "tab", value: "framework" }],
+				destination: "/products/framework",
+				permanent: true,
+			},
+			{
+				source: "/products",
+				has: [{ type: "query", key: "tab", value: "infrastructure" }],
+				destination: "/products/infrastructure",
+				permanent: true,
+			},
+			{
+				source: "/terms",
+				destination: "/legal/terms",
+				permanent: true,
+			},
+			{
+				source: "/privacy",
+				destination: "/legal/privacy",
+				permanent: true,
+			},
+			{
+				source: "/docs/agent-tools/ask-ai",
+				destination: "/docs/ai-resources",
+				permanent: true,
+			},
+			{
+				source: "/docs/agent-tools/llms-txt",
+				destination: "/llms.txt",
+				permanent: true,
+			},
+			{
+				source: "/docs/agent-tools/:path*",
+				destination: "/docs/ai-resources/:path*",
+				permanent: true,
+			},
+		];
 	},
 };
 
-export default withMDX(config);
+const withMDX = createMDX({
+	contentDirBasePath: "/content/docs",
+});
+export default withMDX(nextConfig);

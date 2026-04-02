@@ -10,6 +10,8 @@ on:
   pull_request_review:
     types: [submitted]
 
+permissions: {}
+
 jobs:
   claude:
     if: |
@@ -31,6 +33,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Run Claude Code
         id: claude

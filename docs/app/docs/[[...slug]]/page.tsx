@@ -1,110 +1,102 @@
-import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { File, Files, Folder } from "fumadocs-ui/components/files";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import {
+	DocsBody,
+	DocsDescription,
+	DocsPage,
+	DocsTitle,
+} from "fumadocs-ui/page";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
-import { BackLink } from "@/components/back-link";
-import { Features } from "@/components/blocks/features";
-import { DividerText } from "@/components/divider-text";
-import { DocsBody, DocsPage, DocsTitle } from "@/components/docs/page";
-import { Endpoint } from "@/components/endpoint";
-import { ForkButton } from "@/components/fork-button";
-import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-import { GenerateSecret } from "@/components/generate-secret";
-import { AddToCursor } from "@/components/mdx/add-to-cursor";
-import DatabaseTable from "@/components/mdx/database-tables";
+import { Features } from "@/components/docs/features";
+import {
+	AddToCursor,
+	DatabaseTable,
+	DividerText,
+	Endpoint,
+	ForkButton,
+	GenerateAppleJwt,
+	GenerateSecret,
+} from "@/components/docs/mdx-components";
 import { Callout } from "@/components/ui/callout";
-import { AnimatePresence } from "@/components/ui/fade-in";
+import { createMetadata } from "@/lib/metadata";
 import { source } from "@/lib/source";
-import { absoluteUrl, cn, isSubpageOf } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+
 export default async function Page({
 	params,
 }: {
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	let page = source.getPage(slug);
+	const page = source.getPage(slug);
 
 	if (!page) {
-		if (slug?.[0] === "errors") {
-			page = source.getPage(["errors", "unknown"])!;
-		} else {
-			return notFound();
-		}
+		return notFound();
 	}
 
-	const MDX = page.data.body;
-	const avoidLLMHeader = ["Introduction", "Comparison"];
-	const isErrorSubpage = isSubpageOf(slug, ["reference", "errors"]);
+	const { body: MDX, toc } = await page.data.load();
+
 	return (
 		<DocsPage
-			toc={page.data.toc}
-			full={page.data.full}
+			toc={toc}
+			full={false}
+			tableOfContent={{
+				style: "clerk",
+			}}
+			breadcrumb={{ enabled: false }}
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				branch: "canary",
-				path: `/docs/content/docs/${page.path}`,
-			}}
-			tableOfContent={{
-				header: <div className="w-10 h-4"></div>,
+				sha: "main",
+				path: `docs/content/docs/${page.path}`,
 			}}
 		>
-			{isErrorSubpage && (
-				<BackLink href="/docs/reference/errors">Back to Errors</BackLink>
-			)}
-			<DocsTitle>{page.data.title}</DocsTitle>
-			{!avoidLLMHeader.includes(page.data.title) && (
-				<div className="flex flex-row gap-2 items-center pb-3 border-b">
-					<LLMCopyButton />
+			<div className="flex items-center justify-between gap-4">
+				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
+				<div className="flex items-center gap-2 not-prose shrink-0">
+					<LLMCopyButton
+						rawUrl={`https://raw.githubusercontent.com/better-auth/better-auth/main/docs/content/docs/${page.path}`}
+					/>
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
 						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.path}`}
+						rawMdUrl={`/llms.txt${page.url}.md`}
 					/>
 				</div>
+			</div>
+			{page.data.description && (
+				<DocsDescription>{page.data.description}</DocsDescription>
 			)}
 			<DocsBody>
 				<MDX
 					components={{
 						...defaultMdxComponents,
-						Link: ({
-							className,
-							...props
-						}: React.ComponentProps<typeof Link>) => (
-							<Link
-								className={cn(
-									"font-medium underline underline-offset-4",
-									className,
-								)}
-								{...props}
-							/>
-						),
 						Step,
 						Steps,
-						File,
-						Folder,
-						Files,
 						Tab,
 						Tabs,
-						AutoTypeTable,
-						GenerateSecret,
-						GenerateAppleJwt,
-						AnimatePresence,
-						TypeTable,
-						Features,
-						ForkButton,
-						AddToCursor,
-						DatabaseTable,
 						Accordion,
 						Accordions,
-						Endpoint,
+						File,
+						Files,
+						Folder,
+						TypeTable,
 						APIMethod,
+						DatabaseTable,
+						ForkButton,
+						AddToCursor,
+						Features,
+						Endpoint,
+						GenerateAppleJwt,
+						GenerateSecret,
+						DividerText,
 						Callout: ({
 							children,
 							type,
@@ -118,9 +110,24 @@ export default async function Page({
 								{children}
 							</Callout>
 						),
-						DividerText,
-						iframe: (props) => (
-							<iframe {...props} className="w-full h-[500px]" />
+						iframe: (props: React.ComponentProps<"iframe">) => (
+							<iframe
+								title="Embedded content"
+								{...props}
+								className="w-full h-[500px]"
+							/>
+						),
+						Link: ({
+							className,
+							...props
+						}: React.ComponentProps<typeof Link>) => (
+							<Link
+								className={cn(
+									"font-medium underline underline-offset-4",
+									className,
+								)}
+								{...props}
+							/>
 						),
 					}}
 				/>
@@ -139,43 +146,37 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	let page = source.getPage(slug);
-	if (page == null) {
-		if (slug?.[0] === "errors") {
-			page = source.getPage(["errors", "unknown"])!;
-		} else {
-			return notFound();
-		}
-	}
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const url = new URL(`${baseUrl}/api/og`);
-	const { title, description } = page.data;
-	url.searchParams.set("type", "Documentation");
-	url.searchParams.set("mode", "dark");
-	url.searchParams.set("heading", `${title}`);
+	const page = source.getPage(slug);
+	if (!page) return notFound();
 
-	return {
-		title,
-		description,
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", page.data.title);
+	ogSearchParams.set("type", "documentation");
+	ogSearchParams.set("mode", "dark");
+
+	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
+
+	return createMetadata({
+		title: page.data.title,
+		description: page.data.description,
 		openGraph: {
-			title,
-			description,
-			type: "website",
-			url: absoluteUrl(page.url),
+			title: page.data.title,
+			description: page.data.description,
+			type: "article",
 			images: [
 				{
-					url: url.toString(),
+					url: ogUrl,
 					width: 1200,
 					height: 630,
-					alt: title,
+					alt: page.data.title,
 				},
 			],
 		},
 		twitter: {
 			card: "summary_large_image",
-			title,
-			description,
-			images: [url.toString()],
+			title: page.data.title,
+			description: page.data.description,
+			images: [ogUrl],
 		},
-	};
+	});
 }

@@ -1,6 +1,5 @@
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import defaultMdxComponents from "fumadocs-ui/mdx";
-import type { ElementContent, Root, RootContent } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { js_beautify } from "js-beautify";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
@@ -15,16 +14,29 @@ export interface Processor {
 	process: (content: string) => Promise<ReactNode>;
 }
 
+type RehypeTextNode = {
+	type: "text";
+	value: string;
+};
+
+type RehypeElementNode = {
+	type: "element";
+	tagName: string;
+	properties?: Record<string, unknown>;
+	children?: RehypeNode[];
+};
+
+type RehypeNode = RehypeTextNode | RehypeElementNode;
+
 export function rehypeWrapWords() {
-	return (tree: Root) => {
+	return (tree: RehypeNode) => {
 		visit(tree, ["text", "element"], (node, index, parent) => {
 			if (node.type === "element" && node.tagName === "pre") return "skip";
 			if (node.type !== "text" || !parent || index === undefined) return;
 
 			const words = node.value.split(/(?=\s)/);
 
-			// Create new span nodes for each word and whitespace
-			const newNodes: ElementContent[] = words.flatMap((word) => {
+			const newNodes: RehypeElementNode[] = words.flatMap((word) => {
 				if (word.length === 0) return [];
 
 				return {
@@ -42,7 +54,7 @@ export function rehypeWrapWords() {
 				tagName: "span",
 				properties: {},
 				children: newNodes,
-			} satisfies RootContent);
+			} satisfies RehypeElementNode);
 			return "skip";
 		});
 	};
@@ -67,16 +79,13 @@ function createProcessor(): Processor {
 				components: {
 					...defaultMdxComponents,
 					pre: Pre,
-					img: undefined, // use JSX
+					img: undefined,
 				},
 			});
 		},
 	};
 }
 
-/**
- * Fixes inconsistent indentation in the AI response.
- */
 function reindent(code: string): string {
 	const lines = code.split("\n");
 	let level = 0;

@@ -1,73 +1,83 @@
-import Link from "next/link";
-import Features from "@/components/features";
-import Hero from "@/components/landing/hero";
-import Section from "@/components/landing/section";
-
-async function getGitHubStars() {
-	try {
-		const response = await fetch(
-			"https://api.github.com/repos/better-auth/better-auth",
-			{
-				next: {
-					revalidate: 60,
-				},
-			},
-		);
-		if (!response?.ok) {
-			return null;
-		}
-		const json = await response.json();
-		const stars = parseInt(json.stargazers_count).toLocaleString();
-		return stars;
-	} catch {
-		return null;
-	}
-}
+import Image from "next/image";
+import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { HeroReadMe } from "@/components/landing/hero-readme";
+import { HeroTitle } from "@/components/landing/hero-title";
+import { getCommunityStats, getContributors } from "@/lib/community-stats";
 
 export default async function HomePage() {
-	const stars = await getGitHubStars();
+	const contributors = getContributors();
+	const communityStats = await getCommunityStats();
+
 	return (
-		<main className="h-min mx-auto overflow-x-hidden">
-			<div className="w-full bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-950 dark:via-black dark:to-zinc-950 border-b border-dashed border-zinc-200 dark:border-zinc-800">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="w-full h-full">
-						<div className="flex flex-col md:flex-row items-center justify-center h-12">
-							<span className="font-medium flex gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-								<span className="text-zinc-900 dark:text-white/90 hover:text-zinc-950 text-xs md:text-sm dark:hover:text-zinc-100 transition-colors">
-									Introducing{" "}
-									<span className="font-semibold">
-										Better Auth Infrastructure
-									</span>
-								</span>
-								<span className="text-zinc-400 hidden md:block">|</span>
-								<Link
-									href="https://better-auth.build"
-									className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hidden dark:hover:text-blue-300 transition-colors md:block"
-								>
-									Join the waitlist →
-								</Link>
-							</span>
-							<Link
-								href="https://better-auth.build"
-								className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 text-xs dark:hover:text-blue-300 transition-colors md:hidden"
-							>
-								Join the waitlist →
-							</Link>
+		<div id="hero" className="relative pt-[45px] lg:pt-0">
+			<div className="relative text-foreground" data-v="1">
+				<div className="flex flex-col lg:flex-row">
+					{/* Left side — Hero title */}
+					<div className="relative w-full lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] px-5 sm:px-6 lg:px-7 lg:sticky lg:top-0 z-10 bg-background lg:overflow-clip">
+						<HalftoneBackground />
+						{/* 3D Logo */}
+						<div className="hidden lg:flex justify-center h-full absolute items-center left-1/2 -translate-x-1/2 w-full pointer-events-auto select-none animate-logo-reveal z-[1]">
+							{/* Dark mode logos */}
+							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] hidden dark:flex justify-center opacity-60">
+								<Image
+									src="/left-3d-logo.svg"
+									alt=""
+									width={518}
+									height={667}
+									className="h-auto max-h-[200px] z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
+									priority
+									draggable={false}
+								/>
+								<Image
+									src="/right-3d-logo.svg"
+									alt=""
+									width={518}
+									height={667}
+									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
+									priority
+									draggable={false}
+								/>
+							</div>
+							{/* Light mode logos */}
+							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] flex dark:hidden justify-center opacity-60">
+								<Image
+									src="/left-3d-logo-light.svg"
+									alt=""
+									width={518}
+									height={667}
+									className="h-auto max-h-[200px] z-10 animate-logo-snap-left transition-transform duration-300 ease-out group-hover:-translate-x-3 group-hover:-rotate-5"
+									priority
+									draggable={false}
+								/>
+								<Image
+									src="/right-3d-logo-light.svg"
+									alt=""
+									width={518}
+									height={667}
+									className="h-auto -ml-28 -mt-3 max-h-[200px] animate-logo-snap-right transition-transform duration-300 ease-out group-hover:translate-x-3 group-hover:rotate-5"
+									priority
+									draggable={false}
+								/>
+							</div>
+						</div>
+						<HeroTitle />
+					</div>
+
+					{/* Right side — Sign in */}
+					<div className="relative z-0 w-full lg:w-[60%] overflow-x-hidden">
+						<div className="flex items-start lg:items-center justify-center">
+							<HeroReadMe
+								contributors={contributors}
+								stats={{
+									npmDownloads: communityStats.npmDownloads,
+									githubStars: communityStats.githubStars,
+									contributors: communityStats.contributors,
+								}}
+							/>
 						</div>
 					</div>
 				</div>
 			</div>
-			<Section
-				className="mb-1 overflow-y-clip"
-				crosses
-				crossesOffset="lg:translate-y-[5.25rem]"
-				customPaddings
-				id="hero"
-			>
-				<Hero />
-				<Features stars={stars} />
-				<hr className="h-px bg-border" />
-			</Section>
-		</main>
+		</div>
 	);
 }

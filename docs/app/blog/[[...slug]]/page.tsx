@@ -1,31 +1,105 @@
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
-import { Pre } from "fumadocs-ui/components/codeblock";
-import { File, Files, Folder } from "fumadocs-ui/components/files";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
-import { ArrowLeftIcon, ExternalLink } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Features } from "@/components/blocks/features";
-import { Contributors } from "@/components/contributors";
-import { ForkButton } from "@/components/fork-button";
-import { GenerateSecret } from "@/components/generate-secret";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
+import Footer from "@/components/landing/footer";
 import { Callout } from "@/components/ui/callout";
-import { AnimatePresence } from "@/components/ui/fade-in";
+import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
-import { absoluteUrl, cn, formatDate } from "@/lib/utils";
-import { BlogPage } from "../_components/blog-list";
-import { Glow } from "../_components/default-changelog";
-import { XIcon } from "../_components/icons";
-import { StarField } from "../_components/stat-field";
-import { Support } from "../_components/support";
+import { cn } from "@/lib/utils";
 
-const metaTitle = "Blogs";
-const metaDescription = "Latest changes , fixes and updates.";
+function formatDate(date: Date) {
+	return new Date(date).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	});
+}
+
+function BlogList() {
+	const posts = blogs
+		.getPages()
+		.filter((p) => !p.data.draft)
+		.sort((a, b) => {
+			return new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
+		});
+
+	return (
+		<div className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0">
+			<BlogLeftPanel postCount={posts.length} />
+
+			{/* Right panel — post list */}
+			<div className="w-full lg:w-[70%] flex flex-col">
+				<div className="px-5 pt-5 lg:p-8 lg:pt-20">
+					<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100">
+						BLOGS
+						<span className="flex-1 h-px bg-foreground/15" />
+					</h2>
+				</div>
+
+				<div className="flex flex-col">
+					{posts.map((post) => (
+						<Link
+							key={post.slugs.join("/")}
+							href={`/blog/${post.slugs.join("/")}`}
+							className="group block border-b border-dashed border-foreground/[0.06] px-5 sm:px-6 lg:px-8 py-5 transition-colors hover:bg-foreground/[0.02]"
+						>
+							<div className="flex gap-5 items-center">
+								{post.data?.image && (
+									<div className="shrink-0 w-56 aspect-[1200/630] overflow-hidden border border-foreground/[0.06] hidden sm:block">
+										<Image
+											src={post.data.image}
+											alt={post.data.title}
+											width={320}
+											height={192}
+											className="w-full h-full object-cover"
+										/>
+									</div>
+								)}
+								<div className="flex-1 min-w-0">
+									<h2 className="text-lg font-medium tracking-tight text-neutral-800 dark:text-neutral-200 group-hover:text-neutral-950 dark:group-hover:text-white transition-colors">
+										{post.data.title}
+									</h2>
+									{post.data.description && (
+										<p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-1 max-w-4xl">
+											{post.data.description}
+										</p>
+									)}
+									<div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-mono text-neutral-400 dark:text-neutral-500">
+										{post.data.author?.name && (
+											<>
+												<span className="text-neutral-500 dark:text-neutral-400">
+													{post.data.author.name}
+												</span>
+												<span>&middot;</span>
+											</>
+										)}
+										<span>{formatDate(post.data.date)}</span>
+									</div>
+									{post.data.tags && post.data.tags.length > 0 && (
+										<div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-mono text-neutral-400 dark:text-neutral-500">
+											{post.data.tags.slice(0, 3).map((tag: string) => (
+												<span key={tag}>#{tag}</span>
+											))}
+										</div>
+									)}
+								</div>
+								<span className="shrink-0 text-[11px] font-mono text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 transition-colors self-center">
+									&rarr;
+								</span>
+							</div>
+						</Link>
+					))}
+				</div>
+				<Footer />
+			</div>
+		</div>
+	);
+}
 
 export default async function Page({
 	params,
@@ -34,170 +108,109 @@ export default async function Page({
 }) {
 	const { slug } = await params;
 	if (!slug) {
-		return <BlogPage />;
+		return <BlogList />;
 	}
+
 	const page = blogs.getPage(slug);
-	if (!page) {
+	if (!page || page.data.draft) {
 		notFound();
 	}
+
 	const MDX = page.data?.body;
 	const { title, description, date } = page.data;
-	return (
-		<div className="relative min-h-screen">
-			<div className="pointer-events-none absolute inset-0 -z-10">
-				<StarField className="top-1/3 left-1/2 -translate-x-1/2" />
-				<Glow />
-			</div>
-			<div className="relative mx-auto max-w-3xl px-4 md:px-0 pb-24 pt-12">
-				<h1 className="text-center text-3xl md:text-5xl font-semibold tracking-tighter">
-					{title}
-				</h1>
-				{description && (
-					<p className="mt-3 text-center text-muted-foreground">
-						{description}
-					</p>
-				)}
-				<div className="my-2 flex items-center justify-center gap-3">
-					<div>
-						<Avatar>
-							<AvatarImage
-								src={page.data?.author?.avatar}
-								alt={page.data?.author?.name ?? "Author"}
-							/>
-							<AvatarFallback>
-								{page.data?.author?.name?.charAt(0)?.toUpperCase() ?? ""}
-							</AvatarFallback>
-						</Avatar>
-					</div>
-					<div className="flex items-center gap-2 text-sm text-muted-foreground">
-						{page.data?.author?.name && (
-							<span className="font-medium text-foreground">
-								{page.data.author.name}
-							</span>
-						)}
-						{page.data?.author?.twitter && (
-							<>
-								<span>·</span>
-								<a
-									href={`https://x.com/${page.data.author.twitter}`}
-									target="_blank"
-									rel="noreferrer noopener"
-									className="inline-flex items-center gap-1 underline decoration-dashed"
-								>
-									<XIcon className="size-3" />@{page.data.author.twitter}
-								</a>
-							</>
-						)}
-						{date && (
-							<>
-								<span>·</span>
-								<time dateTime={String(date)}>{formatDate(date)}</time>
-							</>
-						)}
-					</div>
-				</div>
-				<div className="w-full flex items-center gap-2 my-4 mb-8">
-					<div className="flex items-center gap-2 opacity-80">
-						<ArrowLeftIcon className="size-4" />
-						<Link href="/blog" className="">
-							Blogs
-						</Link>
-					</div>
-					<hr className="h-1 w-full opacity-80" />
-				</div>
+	const toc = page.data.toc ?? [];
 
-				<article className="prose prose-neutral dark:prose-invert mx-auto max-w-3xl px-4 md:px-0">
-					<MDX
-						components={{
-							...defaultMdxComponents,
-							a: ({ className, href, children, ...props }: any) => {
-								const isExternal =
-									typeof href === "string" && /^(https?:)?\/\//.test(href);
-								const classes = cn(
-									"inline-flex items-center gap-1 font-medium underline decoration-dashed",
-									className,
-								);
-								if (isExternal) {
-									return (
-										<a
-											className={classes}
-											href={href}
-											target="_blank"
-											rel="noreferrer noopener"
-											{...props}
-										>
-											{children}
-											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" />
-										</a>
-									);
-								}
-								return (
-									<Link className={classes} href={href} {...(props as any)}>
+	return (
+		<div className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0">
+			<BlogLeftPanel
+				post={{
+					title,
+					description,
+					date,
+					author: page.data.author,
+					toc,
+				}}
+			/>
+
+			{/* Right panel — blog content */}
+			<div className="w-full lg:w-[70%] flex flex-col">
+				<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-24">
+					{/* Article body */}
+					<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none">
+						<MDX
+							components={{
+								...defaultMdxComponents,
+								Step,
+								Steps,
+								Tab,
+								Tabs,
+								Accordion,
+								Accordions,
+								Callout: ({
+									children,
+									type,
+									...props
+								}: {
+									children: React.ReactNode;
+									type?:
+										| "info"
+										| "warn"
+										| "error"
+										| "success"
+										| "warning"
+										| "none";
+									[key: string]: any;
+								}) => (
+									<Callout type={type === "none" ? undefined : type} {...props}>
 										{children}
-									</Link>
-								);
-							},
-							Link: ({ className, href, children, ...props }: any) => {
-								const isExternal =
-									typeof href === "string" && /^(https?:)?\/\//.test(href);
-								const classes = cn(
-									"inline-flex items-center gap-1 font-medium underline decoration-dashed",
-									className,
-								);
-								if (isExternal) {
-									return (
-										<a
-											className={classes}
-											href={href}
-											target="_blank"
-											rel="noreferrer noopener"
-											{...props}
-										>
-											{children}
-											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" />
-										</a>
+									</Callout>
+								),
+								Contributors: ({ usernames }: { usernames: string[] }) => (
+									<div className="flex flex-wrap gap-1.5 not-prose">
+										{usernames.map((username) => (
+											<a
+												key={username}
+												href={`https://github.com/${username}`}
+												target="_blank"
+												rel="noreferrer noopener"
+												className="text-xs font-mono px-2 py-1 border border-foreground/10 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-foreground/20 transition-colors"
+											>
+												@{username}
+											</a>
+										))}
+									</div>
+								),
+								a: ({ className, href, children, ...props }: any) => {
+									const isExternal =
+										typeof href === "string" && /^(https?:)?\/\//.test(href);
+									const classes = cn(
+										"font-medium underline decoration-dashed underline-offset-4",
+										className,
 									);
-								}
-								return (
-									<Link className={classes} href={href} {...(props as any)}>
-										{children}
-									</Link>
-								);
-							},
-							Step,
-							Steps,
-							File,
-							Folder,
-							Files,
-							Tab,
-							Tabs,
-							Pre: Pre,
-							GenerateSecret,
-							AnimatePresence,
-							TypeTable,
-							Features,
-							ForkButton,
-							DatabaseTable,
-							Accordion,
-							Accordions,
-							Contributors,
-							Callout: ({
-								children,
-								type,
-								...props
-							}: {
-								children: React.ReactNode;
-								type?: "info" | "warn" | "error" | "success" | "warning";
-								[key: string]: any;
-							}) => (
-								<Callout type={type} {...props}>
-									{children}
-								</Callout>
-							),
-							Support,
-						}}
-					/>
-				</article>
+									if (isExternal) {
+										return (
+											<a
+												className={classes}
+												href={href}
+												target="_blank"
+												rel="noreferrer noopener"
+												{...props}
+											>
+												{children}
+											</a>
+										);
+									}
+									return (
+										<Link className={classes} href={href} {...(props as any)}>
+											{children}
+										</Link>
+									);
+								},
+							}}
+						/>
+					</article>
+				</div>
+				<Footer />
 			</div>
 		</div>
 	);
@@ -209,69 +222,54 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const ogImage = `${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/release-og/blogs.png`;
-
 	if (!slug) {
-		return {
-			metadataBase: new URL(
-				`${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/blogs`,
-			),
-			title: metaTitle,
-			description: metaDescription,
-			openGraph: {
-				title: metaTitle,
-				description: metaDescription,
-				images: [
-					{
-						url: ogImage,
-					},
-				],
-				url: `${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/blogs`,
-			},
-			twitter: {
-				card: "summary_large_image",
-				title: metaTitle,
-				description: metaDescription,
-				images: [ogImage],
-			},
-		};
+		return createMetadata({
+			title: "Blog - Better Auth",
+			description: "Latest updates, articles, and insights about Better Auth",
+		});
 	}
 	const page = blogs.getPage(slug);
-	if (page == null) notFound();
-	const url = new URL(
-		`${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}${
-			page.data?.image
-		}`,
-	);
-	const { title, description } = page.data;
+	if (!page || page.data.draft) return notFound();
+	const { title, description, image, date } = page.data;
 
-	return {
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", title);
+	if (description) ogSearchParams.set("description", description);
+	if (date) {
+		ogSearchParams.set(
+			"date",
+			new Date(date).toLocaleDateString("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+			}),
+		);
+	}
+	const ogUrl = `/api/og-release?${ogSearchParams.toString()}`;
+
+	const ogImage = image || ogUrl;
+
+	return createMetadata({
 		title,
 		description,
 		openGraph: {
 			title,
 			description,
-			type: "website",
-			url: absoluteUrl(`blog/${slug.join("/")}`),
-			images: [
-				{
-					url: url.toString(),
-					width: 1200,
-					height: 630,
-					alt: title,
-				},
-			],
+			type: "article",
+			images: [ogImage],
 		},
 		twitter: {
-			card: "summary_large_image",
+			card: "summary_large_image" as const,
 			title,
 			description,
-			images: [url.toString()],
+			images: [ogImage],
 		},
-	};
+	});
 }
 
 export function generateStaticParams() {
-	return blogs.generateParams();
+	return blogs
+		.getPages()
+		.filter((p) => !p.data.draft)
+		.map((p) => ({ slug: p.slugs }));
 }

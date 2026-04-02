@@ -110,6 +110,45 @@ export async function checkOAuthClient(
 		});
 	}
 
+	// Validate subject_type
+	if (client.subject_type !== undefined) {
+		if (
+			client.subject_type !== "public" &&
+			client.subject_type !== "pairwise"
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `subject_type must be "public" or "pairwise"`,
+			});
+		}
+		if (client.subject_type === "pairwise" && !opts.pairwiseSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
+		// a sector_identifier_uri is required (not yet supported). Reject registration
+		// until sector_identifier_uri support is added.
+		if (
+			client.subject_type === "pairwise" &&
+			client.redirect_uris &&
+			client.redirect_uris.length > 1
+		) {
+			const hosts = new Set(
+				client.redirect_uris.map((uri: string) => new URL(uri).host),
+			);
+			if (hosts.size > 1) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description:
+						"pairwise clients with redirect_uris on different hosts require a sector_identifier_uri, which is not yet supported. All redirect_uris must share the same host.",
+				});
+			}
+		}
+	}
+
 	// Check requested application scopes
 	const requestedScopes = (client?.scope as string | undefined)
 		?.split(" ")
@@ -263,6 +302,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
 		require_pkce: requirePKCE,
+		subject_type: subjectType,
 		reference_id: referenceId,
 		metadata: inputMetadata,
 		// All other metadata
@@ -317,6 +357,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		skipConsent,
 		enableEndSession,
 		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata,
 	};
@@ -364,6 +405,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skipConsent,
 		enableEndSession,
 		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
@@ -404,7 +446,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		software_version: softwareVersion ?? undefined,
 		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
-		redirect_uris: redirectUris ?? undefined,
+		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
@@ -417,6 +459,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
 		require_pkce: requirePKCE ?? undefined,
+		subject_type: subjectType ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }

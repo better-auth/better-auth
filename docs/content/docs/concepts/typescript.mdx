@@ -1,6 +1,6 @@
 ---
 title: TypeScript
-description: Better Auth TypeScript integration.
+description: Learn about TypeScript configuration for Better Auth, including strict mode, inferring types for sessions and users, defining additional fields, and inferring additional fields on the client.
 ---
 
 Better Auth is designed to be type-safe. Both the client and server are built with TypeScript, allowing you to easily infer types.
@@ -29,6 +29,8 @@ if you can't set `strict` to `true`, you can enable `strictNullChecks`:
   }
 }
 ```
+
+When `strict` is `true`, `strictNullChecks` is enabled as well. If you explicitly set `strictNullChecks` to `false`, type inference issues could occur.
 
 <Callout type="warn">
 If you're running into issues with TypeScript inference exceeding maximum length the compiler will serialize,

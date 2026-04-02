@@ -5,6 +5,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
  * Check if a string looks like encrypted data
  */
 function isLikelyEncrypted(token: string): boolean {
+	if (token.startsWith("$ba$")) return true;
 	return token.length % 2 === 0 && /^[0-9a-f]+$/i.test(token);
 }
 
@@ -15,7 +16,7 @@ export function decryptOAuthToken(token: string, ctx: AuthContext) {
 			return token;
 		}
 		return symmetricDecrypt({
-			key: ctx.secret,
+			key: ctx.secretConfig,
 			data: token,
 		});
 	}
@@ -28,7 +29,7 @@ export function setTokenUtil(
 ) {
 	if (ctx.options.account?.encryptOAuthTokens && token) {
 		return symmetricEncrypt({
-			key: ctx.secret,
+			key: ctx.secretConfig,
 			data: token,
 		});
 	}

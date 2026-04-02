@@ -183,6 +183,47 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return operator;
 				}
 			}
+			const hasRootUniqueWhereCondition = (
+				model: string,
+				where?: Where[] | undefined,
+			) => {
+				if (!where?.length) {
+					return false;
+				}
+
+				return where.some((condition) => {
+					if (condition.connector === "OR") {
+						return false;
+					}
+
+					if (condition.operator && condition.operator !== "eq") {
+						return false;
+					}
+
+					if (condition.mode === "insensitive") {
+						const providerSupportsMode =
+							config.provider === "postgresql" || config.provider === "mongodb";
+						const isStringValue =
+							typeof condition.value === "string" ||
+							(Array.isArray(condition.value) &&
+								condition.value.every((v) => typeof v === "string"));
+						if (providerSupportsMode && isStringValue) {
+							return false;
+						}
+					}
+
+					if (condition.field === "id") {
+						return true;
+					}
+
+					return (
+						getFieldAttributes({
+							model,
+							field: condition.field,
+						})?.unique === true
+					);
+				});
+			};
 			const convertWhereClause = ({
 				action,
 				model,
@@ -203,6 +244,18 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				if (!where || !where.length) return {};
 				const buildSingleCondition = (w: Where) => {
 					const fieldName = getFieldName({ model, field: w.field });
+					const mode = w.mode ?? "sensitive";
+					const isInsensitive =
+						mode === "insensitive" &&
+						(typeof w.value === "string" ||
+							(Array.isArray(w.value) &&
+								w.value.every((v) => typeof v === "string")));
+					const providerSupportsMode =
+						config.provider === "postgresql" || config.provider === "mongodb";
+					const prismaMode =
+						isInsensitive && providerSupportsMode ? "insensitive" : undefined;
+					const modeFilter = prismaMode ? { mode: prismaMode } : {};
+
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {
 						const fieldAttributes = getFieldAttributes({
@@ -230,21 +283,25 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							}
 						}
 						const prismaOp = operatorToPrismaOperator(w.operator);
-						return { [fieldName]: { [prismaOp]: filtered } };
+						return { [fieldName]: { [prismaOp]: filtered, ...modeFilter } };
 					}
 					if (w.operator === "eq" || !w.operator) {
-						return { [fieldName]: w.value };
+						return { [fieldName]: { equals: w.value, ...modeFilter } };
 					}
-					return {
-						[fieldName]: {
-							[operatorToPrismaOperator(w.operator)]: w.value,
-						},
-					};
+
+					if (w.operator === "ne") {
+						return {
+							[fieldName]: { not: { equals: w.value }, ...modeFilter },
+						};
+					}
+
+					const prismaOp = operatorToPrismaOperator(w.operator);
+					return { [fieldName]: { [prismaOp]: w.value, ...modeFilter } };
 				};
 
 				// Special handling for update actions: extract AND conditions with eq operator to root level
-				// Prisma requires unique fields to be at root level, not nested in AND arrays
-				// Only simple equality conditions can be at root level; complex operators must stay in AND array
+				// Prisma's update() uses WhereUniqueInput which requires flat values (e.g. { id: "..." })
+				// not filter objects (e.g. { id: { equals: "..." } })
 				if (action === "update") {
 					const and = where.filter(
 						(w) => w.connector === "AND" || !w.connector,
@@ -259,16 +316,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						(w) => w.operator !== "eq" && w.operator !== undefined,
 					);
 
-					const andSimpleClause = andSimple.map((w) => buildSingleCondition(w));
 					const andComplexClause = andComplex.map((w) =>
 						buildSingleCondition(w),
 					);
 					const orClause = or.map((w) => buildSingleCondition(w));
 
-					// Extract simple equality AND conditions to root level
+					// Extract simple equality AND conditions to root level as flat values
 					const result: Record<string, any> = {};
-					for (const clause of andSimpleClause) {
-						Object.assign(result, clause);
+					for (const w of andSimple) {
+						const fieldName = getFieldName({ model, field: w.field });
+						result[fieldName] = w.value;
 					}
 					// Keep complex AND conditions in AND array
 					if (andComplexClause.length > 0) {
@@ -280,16 +337,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return result;
 				}
 
-				// Special handling for delete actions: extract id to root level
+				// Special handling for delete actions: extract id to root level as flat value
+				// Prisma's delete() uses WhereUniqueInput which requires flat values (e.g. { id: "..." })
 				if (action === "delete") {
 					const idCondition = where.find((w) => w.field === "id");
 					if (idCondition) {
 						const idFieldName = getFieldName({ model, field: "id" });
-						const idClause = buildSingleCondition(idCondition);
 						const remainingWhere = where.filter((w) => w.field !== "id");
 
 						if (remainingWhere.length === 0) {
-							return idClause;
+							return { [idFieldName]: idCondition.value };
 						}
 
 						const and = remainingWhere.filter(
@@ -299,16 +356,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						const andClause = and.map((w) => buildSingleCondition(w));
 						const orClause = or.map((w) => buildSingleCondition(w));
 
-						// Extract id to root level, put other conditions in AND array
-						const result: Record<string, any> = {};
-						if (idFieldName in idClause) {
-							result[idFieldName] = (idClause as Record<string, any>)[
-								idFieldName
-							];
-						} else {
-							// Handle edge case where idClause might have special structure
-							Object.assign(result, idClause);
-						}
+						const result: Record<string, any> = {
+							[idFieldName]: idCondition.value,
+						};
 						if (andClause.length > 0) {
 							result.AND = andClause;
 						}
@@ -463,6 +513,28 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
+					const hasRootUniqueCondition = hasRootUniqueWhereCondition(
+						model,
+						where,
+					);
+					if (!hasRootUniqueCondition) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "updateMany",
+						});
+						const result = await db[model]!.updateMany({
+							where: whereClause,
+							data: update,
+						});
+						if (!result?.count) {
+							return null;
+						}
+
+						return await db[model]!.findFirst({
+							where: whereClause,
+						});
+					}
 					const whereClause = convertWhereClause({
 						model,
 						where,
@@ -496,6 +568,20 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
+					}
+					// Prisma's delete() requires a WhereUniqueInput (unique/primary key field).
+					// When deleting by non-unique fields (e.g. identifier), fall back to deleteMany.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (!hasIdField) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "deleteMany",
+						});
+						await db[model]!.deleteMany({
+							where: whereClause,
+						});
+						return;
 					}
 					const whereClause = convertWhereClause({
 						model,

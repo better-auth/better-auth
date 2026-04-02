@@ -1,26 +1,99 @@
 "use client";
 
-import { useDocsSearch } from "fumadocs-core/search/client";
-import type { SharedProps } from "fumadocs-ui/components/dialog/search";
+import type {
+	SearchItemType,
+	SharedProps,
+} from "fumadocs-ui/components/dialog/search";
 import {
 	SearchDialog,
 	SearchDialogClose,
 	SearchDialogContent,
 	SearchDialogFooter,
 	SearchDialogHeader,
-	SearchDialogIcon,
 	SearchDialogInput,
 	SearchDialogList,
+	SearchDialogListItem,
 	SearchDialogOverlay,
+	useSearch,
 } from "fumadocs-ui/components/dialog/search";
-import { useI18n } from "fumadocs-ui/contexts/i18n";
+import { ArrowRight, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMemo } from "react";
+import { Client } from "typesense";
+import { useTypesenseSearch } from "typesense-fumadocs-adapter/client";
+import { usePages } from "@/app/docs/provider";
 
-export function CustomSearchDialog(props: SharedProps) {
-	const { locale } = useI18n();
-	const { search, setSearch, query } = useDocsSearch({
-		type: "fetch",
-		locale,
+const typesenseClient = (() => {
+	const url = process.env.NEXT_PUBLIC_TYPESENSE_SERVER_URL;
+	const apiKey = process.env.NEXT_PUBLIC_TYPESENSE_SEARCH_API_KEY;
+	if (!url || !apiKey) {
+		// Return a dummy client so the app works without Typesense configured
+		return new Client({
+			nodes: [{ host: "localhost", port: 8108, protocol: "http" }],
+			apiKey: "dummy",
+		});
+	}
+	let serverUrl: URL;
+	try {
+		serverUrl = new URL(url);
+	} catch {
+		return new Client({
+			nodes: [{ host: "localhost", port: 8108, protocol: "http" }],
+			apiKey: "dummy",
+		});
+	}
+	return new Client({
+		nodes: [
+			{
+				host: serverUrl.hostname,
+				port:
+					Number(serverUrl.port) ||
+					(serverUrl.protocol === "https:" ? 443 : 80),
+				protocol: serverUrl.protocol.replace(":", ""),
+			},
+		],
+		apiKey,
 	});
+})();
+
+export default function CustomSearchDialog(props: SharedProps) {
+	const { search, setSearch, query } = useTypesenseSearch({
+		typesenseCollectionName: "better-auth-docs",
+		client: typesenseClient!,
+		/**
+		 * Non-legacy mode leaves raw <mark> tags in content at the moment,
+		 * which renders as plain text in fumadocs-ui
+		 */
+		legacy: true,
+	});
+	const pages = usePages();
+	const router = useRouter();
+
+	const pageTreeAction = useMemo<SearchItemType | undefined>(() => {
+		if (search.length === 0) return;
+
+		const normalized = search.toLowerCase();
+		for (const page of pages) {
+			if (!page.name.toLowerCase().includes(normalized)) continue;
+
+			return {
+				id: "quick-action",
+				type: "action",
+				node: (
+					<div className="inline-flex items-center gap-2 text-fd-muted-foreground">
+						<ArrowRight className="size-4" />
+						<p>
+							Jump to{" "}
+							<span className="font-medium text-fd-foreground">
+								{page.name}
+							</span>
+						</p>
+					</div>
+				),
+				onSelect: () => router.push(page.url),
+			};
+		}
+	}, [router, search, pages]);
 
 	return (
 		<SearchDialog
@@ -29,25 +102,62 @@ export function CustomSearchDialog(props: SharedProps) {
 			isLoading={query.isLoading}
 			{...props}
 		>
-			<SearchDialogOverlay />
-			<SearchDialogContent className="mt-12 md:mt-0">
+			<SearchDialogOverlay className="z-200" />
+			<SearchDialogContent className="z-200">
 				<SearchDialogHeader>
-					<SearchDialogIcon />
+					<LoadingSearchIcon />
 					<SearchDialogInput />
-
-					<SearchDialogClose className="hidden md:block" />
+					<SearchDialogClose />
 				</SearchDialogHeader>
-				<SearchDialogList items={query.data !== "empty" ? query.data : null} />
+				<SearchDialogList
+					items={
+						query.data !== "empty" || pageTreeAction
+							? [
+									...(pageTreeAction ? [pageTreeAction] : []),
+									...(Array.isArray(query.data) ? query.data : []),
+								]
+							: null
+					}
+					Item={({ item, onClick }) => (
+						<SearchDialogListItem
+							item={item}
+							onClick={onClick}
+							className={
+								item.type !== "action"
+									? "max-h-24 [&>div:last-child]:line-clamp-2"
+									: undefined
+							}
+						/>
+					)}
+				/>
 				<SearchDialogFooter>
-					<a
-						href="https://orama.com"
-						rel="noreferrer noopener"
-						className="ms-auto text-xs text-fd-muted-foreground"
-					>
-						Search powered by Orama
-					</a>
+					<span className="text-xs text-fd-muted-foreground">
+						Search powered by{" "}
+						<a
+							href="https://typesense.org"
+							target="_blank"
+							rel="noreferrer noopener"
+							className="underline hover:text-fd-foreground transition-colors"
+						>
+							Typesense
+						</a>
+					</span>
 				</SearchDialogFooter>
 			</SearchDialogContent>
 		</SearchDialog>
+	);
+}
+
+function LoadingSearchIcon() {
+	const { isLoading } = useSearch();
+
+	return (
+		<Search
+			className={
+				isLoading
+					? "size-5 animate-pulse text-foreground duration-400"
+					: "size-5 text-fd-muted-foreground"
+			}
+		/>
 	);
 }

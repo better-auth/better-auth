@@ -11,6 +11,7 @@ import { sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
+import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
@@ -116,6 +117,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 
 	return {
 		id: "one-time-token",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -183,8 +185,8 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 							message: "Invalid token",
 						});
 					}
-					await c.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await c.context.internalAdapter.deleteVerificationByIdentifier(
+						`one-time-token:${storedToken}`,
 					);
 					if (verificationValue.expiresAt < new Date()) {
 						throw c.error("BAD_REQUEST", {

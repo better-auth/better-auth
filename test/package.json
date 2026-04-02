@@ -12,9 +12,9 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "msw": "^2.12.9",
+    "msw": "^2.12.10",
     "openid-client": "^6.8.2",
-    "undici": "^7.21.0",
+    "undici": "^7.24.0",
     "vitest": "catalog:vitest"
   }
 }

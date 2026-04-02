@@ -10,6 +10,7 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { parseUserOutput } from "../../../db/schema";
+import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { defaultKeyHasher } from "../utils";
@@ -126,7 +127,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		}
 		if (opts.storeOTP === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: otp,
 			});
 		}
@@ -145,7 +146,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		if (opts.storeOTP === "encrypted") {
 			// For encrypted storage: decrypt stored value and compare with plain input
 			const decrypted = await symmetricDecrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: storedOtp,
 			});
 			return [decrypted, userInput];
@@ -312,8 +313,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						toCheckOtp.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						`2fa-otp-${key}`,
 					);
 				}
 				throw APIError.from(
@@ -323,8 +324,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter!) >= allowedAttempts) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					toCheckOtp.id,
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`2fa-otp-${key}`,
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -373,8 +374,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				}
 				return valid(ctx);
 			} else {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					toCheckOtp.id,
+				await ctx.context.internalAdapter.updateVerificationByIdentifier(
+					`2fa-otp-${key}`,
 					{
 						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
@@ -386,6 +387,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 
 	return {
 		id: "otp",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -395,7 +397,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.send2FaOTP`
+			 * `auth.api.sendTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.sendOtp`
@@ -411,7 +413,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.verifyOTP`
+			 * `auth.api.verifyTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.verifyOtp`

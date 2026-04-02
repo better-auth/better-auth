@@ -5,6 +5,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -66,6 +67,9 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
+	/**
+	 * Custom error message shown when a compromised password is detected.
+	 */
 	customPasswordCompromisedMessage?: string | undefined;
 	/**
 	 * Paths to check for password
@@ -73,6 +77,12 @@ export interface HaveIBeenPwnedOptions {
 	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
 	 */
 	paths?: string[];
+	/**
+	 * Enable or disable password checks against the HIBP database.
+	 *
+	 * @default true
+	 */
+	enabled?: boolean | undefined;
 }
 
 export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
@@ -84,6 +94,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 
 	return {
 		id: "have-i-been-pwned",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			const originalHash = ctx.password.hash;
 			return {
@@ -91,6 +102,8 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 					password: {
 						...ctx.password,
 						async hash(password) {
+							if (options?.enabled === false) return originalHash(password);
+
 							const c = await getCurrentAuthContext();
 							if (!c.path || !paths.includes(c.path)) {
 								return originalHash(password);

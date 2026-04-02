@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { getLLMText, LLM_TEXT_ERROR } from "@/lib/llm-text";
-import { source } from "@/lib/source";
+import { getLLMText, LLM_TEXT_ERROR } from "../../../lib/llm-text";
+import { source } from "../../../lib/source";
 
 export const revalidate = false;
 

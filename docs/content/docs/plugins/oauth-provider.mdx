@@ -195,6 +195,33 @@ type getOAuthClientPublic = {
 ```
 </APIMethod>
 
+#### Get Public Client Prelogin
+
+To obtain a public client prior to login, you must first enable the endpoint in your configuration:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowPublicClientPrelogin: true,
+})
+```
+
+Then, the following endpoint will obtain public client information.
+
+<APIMethod path="/oauth2/public-client-prelogin" method="POST">
+```ts
+type getOAuthClientPublicPrelogin = {
+  /**
+   * The OAuth client's client_id
+   */
+  client_id: string,
+  /**
+   * Valid oauth query parameters (Sent automatically when using the provided client)
+   */
+  oauth_query: string
+}
+```
+</APIMethod>
+
 #### List Clients
 
 To obtain a list of clients owned by a specific user or organization, use the following endpoint:
@@ -1368,6 +1395,56 @@ oauthProvider({
 ```
 
 
+### Pairwise Subject Identifiers
+
+By default, the `sub` (subject) claim in tokens uses the user's internal ID, which is the same across all clients. This is the **public** subject type per [OIDC Core Section 8](https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes).
+
+You can enable **pairwise** subject identifiers so each client receives a unique, unlinkable `sub` for the same user. This prevents relying parties from correlating users across services.
+
+```ts title="auth.ts"
+oauthProvider({
+  pairwiseSecret: "your-256-bit-secret", // [!code highlight]
+})
+```
+
+When `pairwiseSecret` is configured, the server advertises both `"public"` and `"pairwise"` in the discovery endpoint's `subject_types_supported`. Clients opt in by setting `subject_type: "pairwise"` at registration.
+
+#### Per-Client Configuration
+
+```ts title="register-client.ts"
+const response = await auth.api.createOAuthClient({
+  headers,
+  body: {
+    client_name: 'Privacy-Sensitive App',
+    redirect_uris: ['https://app.example.com/callback'],
+    token_endpoint_auth_method: 'client_secret_post',
+    subject_type: 'pairwise', // Enable pairwise sub for this client
+  }
+});
+```
+
+#### How It Works
+
+Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** (the host of the client's first redirect URI) and the user ID, keyed with `pairwiseSecret`. This means:
+
+- Two clients with different redirect URI hosts always receive different `sub` values for the same user
+- Two clients sharing the same redirect URI host receive the **same** pairwise `sub` (per OIDC Core Section 8.1)
+- The same client always receives the same `sub` for the same user (deterministic)
+
+Pairwise `sub` appears in:
+- `id_token`
+- `/oauth2/userinfo` response
+- Token introspection (`/oauth2/introspect`)
+
+JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly.
+
+<Callout type="warn">
+**Limitations:**
+- `sector_identifier_uri` is not yet supported. All `redirect_uris` for a pairwise client must share the same host. Clients with redirect URIs on different hosts will be rejected at registration.
+- `pairwiseSecret` must be at least 32 characters long.
+- Rotating `pairwiseSecret` will change all pairwise `sub` values, breaking existing RP sessions. Treat this secret as permanent once set.
+</Callout>
+
 ### MCP
 
 You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/specification/draft/basic/authorization) simply by adding a resource server which directs users to this OAuth 2.1 authorization server.
@@ -1551,7 +1628,7 @@ Table Name: `oauthClient`
       name: "clientId",
       type: "string",
       description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true,
+      isUnique: true,
     },
     {
       name: "clientSecret",
@@ -1578,6 +1655,12 @@ Table Name: `oauthClient`
       isOptional: true,
     },
     {
+      name: "subjectType",
+      type: "string",
+      description: "Subject identifier type for this client. Set to \"pairwise\" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.",
+      isOptional: true,
+    },
+    {
       name: "scopes",
       type: "string[]",
       description: "Scopes this client is allowed to use",
@@ -1596,17 +1679,18 @@ Table Name: `oauthClient`
       type: "string",
       description: "ID of the reference of the client owner if not a user. (optional)",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "createdAt",
       type: "Date",
       description: "Timestamp of when the OAuth client was created",
+      isOptional: true,
     },
     {
       name: "updatedAt",
       type: "Date",
       description: "Timestamp of when the OAuth client was last updated",
+      isOptional: true,
     },
     {
       name: "name",
@@ -1666,7 +1750,12 @@ Table Name: `oauthClient`
       name: "redirectUris",
       type: "string[]",
       description: "Array of of redirect uris",
-      isRequired: true,
+    },
+    {
+      name: "postLogoutRedirectUris",
+      type: "string[]",
+      description: "Array of post-logout redirect URIs",
+      isOptional: true,
     },
     {
       name: "tokenEndpointAuthMethod",
@@ -1699,6 +1788,12 @@ Table Name: `oauthClient`
       isOptional: true,
     },
     {
+      name: "requirePKCE",
+      type: "boolean",
+      description: "Whether PKCE is required for this client",
+      isOptional: true,
+    },
+    {
       name: "metadata",
       type: "json",
       description: "Additional metadata for the OAuth client",
@@ -1723,14 +1818,12 @@ Table Name: `oauthRefreshToken`
       name: "token",
       type: "string",
       description: "Hashed/encrypted refresh token",
-      isRequired: true,
     },
     {
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "oauthClient", field: "clientId" },
     },
     {
@@ -1738,7 +1831,7 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the session used at issuance of the token (and still active)",
       isForeignKey: true,
-      isRequired: false,
+      isOptional: true,
       references: { model: "session", field: "id" },
     },
     {
@@ -1746,7 +1839,6 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the user associated with the token",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "user", field: "id" },
     },
     {
@@ -1754,18 +1846,22 @@ Table Name: `oauthRefreshToken`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
-      isRequired: true,
     },
     {
       name: "revoked",
       type: "Date",
       description: "Timestamp when the token was revoked",
+      isOptional: true,
+    },
+    {
+      name: "authTime",
+      type: "Date",
+      description: "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
       isOptional: true,
     },
     {
@@ -1797,14 +1893,13 @@ Table Name: `oauthAccessToken`
       name: "token",
       type: "string",
       description: "Hashed/encrypted access token",
-      isRequired: true,
+      isUnique: true,
     },
     {
       name: "clientId",
       type: "string",
       description: "ID of the OAuth client",
       isForeignKey: true,
-      isRequired: true,
       references: { model: "oauthClient", field: "clientId" }
     },
     {
@@ -1836,18 +1931,16 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
-      isRequired: true,
     },
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp when the token was created" 
+      description: "Timestamp when the token was created",
     },
     {
       name: "expiresAt",
@@ -1888,23 +1981,21 @@ Table Name: `oauthConsent`
       type: "string",
       description: "ID of the consented reference",
       isOptional: true,
-      isForeignKey: true,
     },
     {
       name: "scopes",
-      type: "string",
-      description: "Comma-separated list of scopes consented to",
-      isRequired: true
+      type: "string[]",
+      description: "Array of scopes consented to",
     },
     {
       name: "createdAt",
       type: "Date",
-      description: "Timestamp of when the consent was given" 
+      description: "Timestamp of when the consent was given",
     },
     {
       name: "updatedAt",
       type: "Date",
-      description: "Timestamp of when the consent was last updated"
+      description: "Timestamp of when the consent was last updated",
     },
   ]}
 />

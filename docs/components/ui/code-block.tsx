@@ -75,13 +75,15 @@ export function Pre(props: ComponentProps<"pre">) {
 	);
 }
 
+const EMPTY_VIEWPORT_PROPS = {};
+
 export function CodeBlock({
 	ref,
 	title,
 	allowCopy,
 	keepBackground = false,
 	icon,
-	viewportProps = {},
+	viewportProps = EMPTY_VIEWPORT_PROPS,
 	children,
 	Actions = (props) => (
 		<div {...props} className={cn("empty:hidden", props.className)} />

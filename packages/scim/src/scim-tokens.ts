@@ -18,7 +18,7 @@ export async function storeSCIMToken(
 ) {
 	if (opts.storeSCIMToken === "encrypted") {
 		return await symmetricEncrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: scimToken,
 		});
 	}
@@ -50,7 +50,7 @@ export async function verifySCIMToken(
 	if (opts.storeSCIMToken === "encrypted") {
 		return (
 			(await symmetricDecrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: storedSCIMToken,
 			})) === scimToken
 		);

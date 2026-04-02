@@ -21,6 +21,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import { HIDE_METADATA } from "../../utils";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
@@ -316,7 +317,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	) {
 		if (opts.storeClientSecret === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: clientSecret,
 			});
 		}
@@ -350,7 +351,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		if (opts.storeClientSecret === "encrypted") {
 			return (
 				(await symmetricDecrypt({
-					key: ctx.context.secret,
+					key: ctx.context.secretConfig,
 					data: storedClientSecret,
 				})) === clientSecret
 			);
@@ -381,6 +382,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 	return {
 		id: "oidc-provider",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -594,8 +596,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					if (!ctx.body.accept) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							consentCode,
 						);
 						return ctx.json({
 							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
@@ -605,8 +607,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const codeExpiresInMs =
 						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
-					await ctx.context.internalAdapter.updateVerificationValue(
-						verification.id,
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						consentCode,
 						{
 							value: JSON.stringify({
 								...value,
@@ -812,8 +814,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -921,8 +923,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");

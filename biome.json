@@ -144,7 +144,9 @@
       "!**/dev/cloudflare/drizzle",
       "!**/playwright-report",
       "!**/.output",
-      "!**/.tmp"
+      "!**/.tmp",
+      "!**/tmp-docs-fetch",
+      "!**/.claude/worktrees/**"
     ]
   }
 }

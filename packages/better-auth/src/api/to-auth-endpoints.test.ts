@@ -111,7 +111,7 @@ describe("before hook", async () => {
 			const res = await authEndpoints.body();
 			expect(res?.name).toBe("body");
 			const res2 = await authEndpoints.body({
-				//@ts-expect-error
+				// @ts-expect-error body not typed on this endpoint
 				body: {
 					key: "value",
 				},
@@ -432,6 +432,19 @@ describe("after hook", async () => {
 			});
 			expect(result2.headers.get("set-cookie")).toContain("session=value");
 			expect(result2.headers.get("set-cookie")).toContain("data=2");
+		});
+
+		it("should return a Response when invoked with a request context", async () => {
+			const response = await authEndpoints.cookies({
+				request: new Request("http://localhost:3000/cookies", {
+					method: "POST",
+				}),
+			} as any);
+			expect(response).toBeInstanceOf(Response);
+			const body = await response.json();
+			expect(body).toMatchObject({ hello: "world" });
+			expect(response.headers.get("set-cookie")).toContain("session=value");
+			expect(response.headers.get("set-cookie")).toContain("data=2");
 		});
 	});
 });

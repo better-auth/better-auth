@@ -205,10 +205,10 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "better-auth-paystack",
+		name: "@alexasomba/better-auth-paystack",
 		url: "https://github.com/alexasomba/better-auth-paystack",
 		description:
-			"A comprehensive Paystack integration plugin for Better Auth featuring native/local subscriptions, trial support, and organization billing with seat limits, secure webhooks and more.",
+			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
@@ -269,17 +269,6 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@guilhermejansen/better-auth-waitlist",
-		url: "https://github.com/guilhermejansen/better-auth-waitlist",
-		description:
-			"Waitlist and early-access gating plugin. Intercepts all registration paths and gates sign-ups behind an invite-based approval workflow.",
-		author: {
-			name: "guilhermejansen",
-			github: "guilhermejansen",
-			avatar: "https://github.com/guilhermejansen.png",
-		},
-	},
-	{
 		name: "better-auth-razorpay",
 		url: "https://github.com/iamjasonkendrick/better-auth-razorpay",
 		description:
@@ -299,6 +288,39 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "iamjasonkendrick",
 			github: "iamjasonkendrick",
 			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "better-auth-invite-plugin",
+		url: "https://github.com/0-Sandy/better-auth-invite-plugin",
+		description:
+			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
+		author: {
+			name: "Sandy",
+			github: "0-Sandy",
+			avatar: "https://github.com/0-Sandy.png",
+		},
+	},
+	{
+		name: "better-auth-usos",
+		url: "https://github.com/qamarq/better-auth-usos",
+		description:
+			"USOS plugin for Better Auth - allows students to authenticate using their university credentials via the USOS API. Using oauth 1a.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
+		},
+	},
+	{
+		name: "better-auth-devtools",
+		url: "https://github.com/C-W-D-Harshit/better-auth-devtools",
+		description:
+			"A devtools panel for Better Auth that lets you create managed test users from templates, switch between sessions instantly, inspect live session data, and edit fields like roles on the fly. All from a floating React UI that only runs in development.",
+		author: {
+			name: "C-W-D-Harshit",
+			github: "C-W-D-Harshit",
+			avatar: "https://github.com/C-W-D-Harshit.png",
 		},
 	},
 ];
