@@ -48,7 +48,7 @@ export async function runPluginInit(context: AuthContext) {
 					 * Plugin-defined options take precedence over init-merged ones.
 					 */
 					if (Object.keys(restOpts).length > 0) {
-						plugin.options = { ...restOpts, ...(plugin.options ?? {}) };
+						plugin.options = defu(plugin.options ?? {}, restOpts);
 					}
 				}
 				if (result.context) {
