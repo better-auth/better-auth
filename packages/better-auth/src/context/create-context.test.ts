@@ -1730,6 +1730,55 @@ describe("base context creation", () => {
 
 			expect(ctx.internalAdapter).toBeDefined();
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8908
+		 */
+		it("should expose init-contributed options via getPlugin()", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "my-plugin",
+						init: () => ({
+							options: {
+								appName: "from-init",
+							},
+						}),
+					},
+				],
+			});
+
+			const plugin = ctx.getPlugin("my-plugin");
+			expect(plugin).not.toBeNull();
+			// Options contributed via init() should be accessible through getPlugin()
+			expect(plugin?.options?.appName).toBe("from-init");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8908
+		 */
+		it("should prefer plugin-defined options over init-contributed options in getPlugin()", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "my-plugin",
+						options: { custom: "original", appName: "plugin-defined" },
+						init: () => ({
+							options: {
+								appName: "from-init",
+							},
+						}),
+					} as any,
+				],
+			});
+
+			const plugin = ctx.getPlugin("my-plugin");
+			expect(plugin).not.toBeNull();
+			// Plugin-defined options take precedence over init-contributed ones
+			expect(plugin?.options?.appName).toBe("plugin-defined");
+			// Both plugin options and init options are accessible
+			expect(plugin?.options?.custom).toBe("original");
+		});
 	});
 
 	describe("additional edge cases", () => {

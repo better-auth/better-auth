@@ -42,6 +42,14 @@ export async function runPluginInit(context: AuthContext) {
 						pluginTrustedOrigins.push(trustedOrigins);
 					}
 					options = defu(options, restOpts);
+					/**
+					 * Merge init-contributed options back onto the plugin object so that
+					 * `getPlugin(id)?.options` reflects the effective configuration.
+					 * Plugin-defined options take precedence over init-merged ones.
+					 */
+					if (Object.keys(restOpts).length > 0) {
+						plugin.options = { ...restOpts, ...(plugin.options ?? {}) };
+					}
 				}
 				if (result.context) {
 					// Use Object.assign to keep the reference to the original context
