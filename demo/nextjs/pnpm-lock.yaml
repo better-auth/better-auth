@@ -16,7 +16,7 @@ importers:
         version: link:../../packages/electron
       '@better-auth/infra':
         specifier: ^0.1.8
-        version: 0.1.8(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(kysely@0.28.11)(nanostores@1.1.1)(zod@4.3.6)
+        version: 0.1.8(@better-auth/utils@0.3.1)(@opentelemetry/api@1.9.1)(better-auth@..+packages+better-auth)(kysely@0.28.11)(nanostores@1.1.1)(zod@4.3.6)
       '@better-auth/oauth-provider':
         specifier: link:../../packages/oauth-provider
         version: link:../../packages/oauth-provider
@@ -163,7 +163,7 @@ importers:
         version: 12.34.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       geist:
         specifier: ^1.7.0
-        version: 1.7.0(next@16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+        version: 1.7.0(next@16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -174,14 +174,14 @@ importers:
         specifier: ^0.575.0
         version: 0.575.0(react@19.2.4)
       mcp-handler:
-        specifier: ^1.0.7
-        version: 1.0.7(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(next@16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+        specifier: ^1.1.0
+        version: 1.1.0(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(next@16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       mysql2:
         specifier: ^3.18.2
         version: 3.18.2(@types/node@25.3.3)
       next:
         specifier: 16.2.0
-        version: 16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -263,13 +263,14 @@ packages:
     resolution: {integrity: sha512-cTlrKttbrRHEw3W+0/I609A2Matj5JQaRvfLtEIGZvlN0RaPi+3ANsMeqAyCAVlH/lUIW2tmtBlSMni74lcXeg==}
     engines: {node: '>=12'}
 
-  '@better-auth/core@1.5.1-beta.3':
-    resolution: {integrity: sha512-up7xBj99ki9UlTLEsZRfkheYHBLaYIt9JGI9lyAdQcbowTvXnWrk/fkgVcc2YNqRoPvBWCSooEdKL+b5OETQdQ==}
+  '@better-auth/core@1.5.7-beta.1':
+    resolution: {integrity: sha512-vaFkAClUUM+nyj4qQIvK6NAtoOc5wiQtnN5KS3eMnuoK7XOVaiCqCdSgFCV4D6u9z6SpEHx4AhUGCfOctR+wSA==}
     peerDependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
       '@cloudflare/workers-types': '>=4'
-      better-call: 1.3.2
+      '@opentelemetry/api': ^1.9.0
+      better-call: 2.0.2
       jose: ^6.1.0
       kysely: ^0.28.5
       nanostores: ^1.0.1
@@ -288,13 +289,13 @@ packages:
       better-auth: '>=1.4.15'
       zod: '>=4.1.12'
 
-  '@better-auth/sso@1.5.1-beta.3':
-    resolution: {integrity: sha512-J59NWigp0uOVmG+gMEJyLSs1lgRYU4hqblrmenk5YlO4jFBn+/iOZfQfBeLOYZLGHrAhy3RiF5TTvLE2oD7lfA==}
+  '@better-auth/sso@1.5.7-beta.1':
+    resolution: {integrity: sha512-4OAcgaXUL3MSPElNfrBNt/cNAOx7gp31Uz7mDTRCfMPJPKkORO7QR/geF2P6ytTYy2EiwX3CseSt3R5wuVVF+g==}
     peerDependencies:
-      '@better-auth/core': 1.5.1-beta.3
+      '@better-auth/core': 1.5.7-beta.1
       '@better-auth/utils': 0.3.1
-      better-auth: 1.5.1-beta.3
-      better-call: 1.3.2
+      better-auth: 1.5.7-beta.1
+      better-call: 2.0.2
 
   '@better-auth/utils@0.3.1':
     resolution: {integrity: sha512-+CGp4UmZSUrHHnpHhLPYu6cV+wSUSvVbZbNykxhUDocpVNTo9uFFxw/NqJlh1iC4wQ9HKKWGCKuZ5wUgS0v6Kg==}
@@ -635,6 +636,14 @@ packages:
     peerDependencies:
       react: ^18 || ^19
       react-dom: ^18 || ^19
+
+  '@opentelemetry/api@1.9.1':
+    resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
+    engines: {node: '>=8.0.0'}
+
+  '@opentelemetry/semantic-conventions@1.40.0':
+    resolution: {integrity: sha512-cifvXDhcqMwwTlTK04GBNeIe7yyo28Mfby85QXFe1Yk8nmi36Ab/5UQwptOx84SsoGNRg+EVSjwzfSZMy6pmlw==}
+    engines: {node: '>=14'}
 
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
@@ -1678,8 +1687,8 @@ packages:
     resolution: {integrity: sha512-CJDxIgE5I0FH+ttq/Fxy6nRpxP70+e2O048EPe85J2use3XKdatVM7dDVvFNjQudd9B49NPoZ+8PG49zj4Er8Q==}
     engines: {node: '>= 16'}
 
-  '@xmldom/xmldom@0.8.11':
-    resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
+  '@xmldom/xmldom@0.8.12':
+    resolution: {integrity: sha512-9k/gHF6n/pAi/9tqr3m3aqkuiNosYTurLLUtc7xQ9sxB/wm7WPygCv8GYa6mS0fLJEHhqMC1ATYhz++U/lRHqg==}
     engines: {node: '>=10.0.0'}
 
   accepts@2.0.0:
@@ -1744,10 +1753,6 @@ packages:
   call-bound@1.0.4:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
-
-  camelcase@9.0.0:
-    resolution: {integrity: sha512-TO9xmyXTZ9HUHI8M1OnvExxYB0eYVS/1e5s7IDMTAoIcwUd+aNcFODs6Xk83mobk0velyHFQgA1yIrvYc6wclw==}
-    engines: {node: '>=20'}
 
   caniuse-lite@1.0.30001775:
     resolution: {integrity: sha512-s3Qv7Lht9zbVKE9XoTyRG6wVDCKdtOFIjBGg3+Yhn6JaytuNKPIjBMTMIY1AnOH3seL5mvF+x33oGAyK3hVt3A==}
@@ -2002,11 +2007,11 @@ packages:
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
-  fast-xml-builder@1.1.0:
-    resolution: {integrity: sha512-7mtITW/we2/wTUZqMyBOR2F8xP4CRxMiSEcQxPIqdRWdO2L/HZSOlzoNyghmyDwNB8BDxePooV1ZTJpkOUhdRg==}
+  fast-xml-builder@1.1.4:
+    resolution: {integrity: sha512-f2jhpN4Eccy0/Uz9csxh3Nu6q4ErKxf0XIsasomfOihuSUa3/xw6w8dnOtCDgEItQFJG8KyXPzQXzcODDrrbOg==}
 
-  fast-xml-parser@5.5.1:
-    resolution: {integrity: sha512-JTpMz8P5mDoNYzXTmTT/xzWjFiCWi0U+UQTJtrFH9muXsr2RqtXZPbnCW5h2mKsOd4u3XcPWCvDSrnaBPlUcMQ==}
+  fast-xml-parser@5.5.9:
+    resolution: {integrity: sha512-jldvxr1MC6rtiZKgrFnDSvT8xuH+eJqxqOBThUVjYrxssYTo1avZLGql5l0a0BAERR01CadYzZ83kVEkbyDg+g==}
     hasBin: true
 
   fetch-blob@3.2.0:
@@ -2283,11 +2288,11 @@ packages:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
 
-  mcp-handler@1.0.7:
-    resolution: {integrity: sha512-w2wHb6IVmbiS+pnBNb5BXaSd+ynSgExNauB55gUwoHDw8Q8Ew9TVMsSX89yItmex61zQTl+/NuSYmlOgSpj8SQ==}
+  mcp-handler@1.1.0:
+    resolution: {integrity: sha512-MVCES7g18gcoZy+R/3v5nadkUMzMAWdos8jRl6DyljOKvd2/ZKDmwlCjL6zp4vo+7FeCXOYL1uWinHWlkKAAUg==}
     hasBin: true
     peerDependencies:
-      '@modelcontextprotocol/sdk': 1.25.2
+      '@modelcontextprotocol/sdk': 1.26.0
       next: '>=13.0.0'
     peerDependenciesMeta:
       next:
@@ -2405,8 +2410,8 @@ packages:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
     engines: {node: '>= 0.8'}
 
-  path-expression-matcher@1.1.2:
-    resolution: {integrity: sha512-LXWqJmcpp2BKOEmgt4CyuESFmBfPuhJlAHKJsFzuJU6CxErWk75BrO+Ni77M9OxHN6dCYKM4vj+21Z6cOL96YQ==}
+  path-expression-matcher@1.2.0:
+    resolution: {integrity: sha512-DwmPWeFn+tq7TiyJ2CxezCAirXjFxvaiD03npak3cRjlP9+OjTmSy1EpIrEbh+l6JgUundniloMLDQ/6VTdhLQ==}
     engines: {node: '>=14.0.0'}
 
   path-key@3.1.1:
@@ -2593,8 +2598,8 @@ packages:
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
 
-  samlify@2.11.0:
-    resolution: {integrity: sha512-1C9ukjlf0rRsuyqdzztqikdItqa33j9NCCDZgeBiWk0etU6vxNB+SWJKW4Flk07ZlhXeev/twALEKrPhIAyfDg==}
+  samlify@2.12.0:
+    resolution: {integrity: sha512-ewGsHyY4kInDH0BfprlAZ1rHpH1jBmbqYiXDbuI3t1Y8h71gqEt4Z7jdCFyPHFR8jItJkbdckTijUZGg14CDlg==}
 
   scheduler@0.27.0:
     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
@@ -2617,6 +2622,9 @@ packages:
 
   set-cookie-parser@3.0.1:
     resolution: {integrity: sha512-n7Z7dXZhJbwuAHhNzkTti6Aw9QDDjZtm3JTpTGATIdNzdQz5GuFs22w90BcvF4INfnrL5xrX3oGsuqO5Dx3A1Q==}
+
+  set-cookie-parser@3.1.0:
+    resolution: {integrity: sha512-kjnC1DXBHcxaOaOXBHBeRtltsDG2nUiUni+jP92M9gYdW12rsmx92UsfpH7o5tDRs7I1ZZPSQJQGv3UaRfCiuw==}
 
   setprototypeof@1.2.0:
     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
@@ -2679,8 +2687,8 @@ packages:
       '@types/node':
         optional: true
 
-  strnum@2.2.0:
-    resolution: {integrity: sha512-Y7Bj8XyJxnPAORMZj/xltsfo55uOiyHcU2tnAVzHUnSJR/KsEX+9RoDeXEnsXtl/CX4fAcrt64gZ13aGaWPeBg==}
+  strnum@2.2.2:
+    resolution: {integrity: sha512-DnR90I+jtXNSTXWdwrEy9FakW7UX+qUZg28gj5fk2vxxl7uS/3bpI4fjFYVmdK9etptYBPNkpahuQnEwhwECqA==}
 
   styled-jsx@5.1.6:
     resolution: {integrity: sha512-qSVyDTeMotdvQYoHWLNGwRFJHC+i+ZvdBRYosOFgC+Wg1vx4frN2/RG/NA7SYqqvKNLf39P2LSRA2pu6n0XYZA==}
@@ -2710,6 +2718,13 @@ packages:
 
   tiny-invariant@1.3.3:
     resolution: {integrity: sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==}
+
+  tldts-core@6.1.86:
+    resolution: {integrity: sha512-Je6p7pkk+KMzMv2XXKmAE3McmolOQFdxkKw0R8EYNr7sELW46JqnNeTX8ybPiQgvg1ymCoF8LXs5fzFaZvJPTA==}
+
+  tldts@6.1.86:
+    resolution: {integrity: sha512-WMi/OQ2axVTf/ykqCQgXiIct+mSQDFdH2fkwhPwgEwvJ1kSzZRiinb0zF2Xb8u4+OqPChmyI6MEu4EezNJz+FQ==}
+    hasBin: true
 
   toidentifier@1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
@@ -2844,14 +2859,16 @@ snapshots:
 
   '@authenio/xml-encryption@2.0.2':
     dependencies:
-      '@xmldom/xmldom': 0.8.11
+      '@xmldom/xmldom': 0.8.12
       escape-html: 1.0.3
       xpath: 0.0.32
 
-  '@better-auth/core@1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)':
+  '@better-auth/core@1.5.7-beta.1(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(@opentelemetry/api@1.9.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)':
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.19-beta.1
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/semantic-conventions': 1.40.0
       '@standard-schema/spec': 1.1.0
       better-call: 2.0.0-beta.4(zod@4.3.6)
       jose: 6.1.3
@@ -2871,10 +2888,10 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@better-auth/infra@0.1.8(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(kysely@0.28.11)(nanostores@1.1.1)(zod@4.3.6)':
+  '@better-auth/infra@0.1.8(@better-auth/utils@0.3.1)(@opentelemetry/api@1.9.1)(better-auth@..+packages+better-auth)(kysely@0.28.11)(nanostores@1.1.1)(zod@4.3.6)':
     dependencies:
-      '@better-auth/core': 1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
-      '@better-auth/sso': 1.5.1-beta.3(@better-auth/core@1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@2.0.0-beta.4(zod@4.3.6))
+      '@better-auth/core': 1.5.7-beta.1(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(@opentelemetry/api@1.9.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
+      '@better-auth/sso': 1.5.7-beta.1(@better-auth/core@1.5.7-beta.1(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(@opentelemetry/api@1.9.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@2.0.0-beta.4(zod@4.3.6))
       '@better-fetch/fetch': 1.1.19-beta.1
       better-auth: link:../../packages/better-auth
       better-call: 2.0.0-beta.4(zod@4.3.6)
@@ -2884,19 +2901,21 @@ snapshots:
     transitivePeerDependencies:
       - '@better-auth/utils'
       - '@cloudflare/workers-types'
+      - '@opentelemetry/api'
       - kysely
       - nanostores
 
-  '@better-auth/sso@1.5.1-beta.3(@better-auth/core@1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@2.0.0-beta.4(zod@4.3.6))':
+  '@better-auth/sso@1.5.7-beta.1(@better-auth/core@1.5.7-beta.1(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(@opentelemetry/api@1.9.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.1)(better-auth@..+packages+better-auth)(better-call@2.0.0-beta.4(zod@4.3.6))':
     dependencies:
-      '@better-auth/core': 1.5.1-beta.3(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
+      '@better-auth/core': 1.5.7-beta.1(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(@opentelemetry/api@1.9.1)(better-call@2.0.0-beta.4(zod@4.3.6))(jose@6.1.3)(kysely@0.28.11)(nanostores@1.1.1)
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
       better-auth: link:../../packages/better-auth
       better-call: 2.0.0-beta.4(zod@4.3.6)
-      fast-xml-parser: 5.5.1
+      fast-xml-parser: 5.5.9
       jose: 6.1.3
-      samlify: 2.11.0
+      samlify: 2.12.0
+      tldts: 6.1.86
       zod: 4.3.6
 
   '@better-auth/utils@0.3.1': {}
@@ -3174,6 +3193,10 @@ snapshots:
       number-flow: 0.6.0
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
+
+  '@opentelemetry/api@1.9.1': {}
+
+  '@opentelemetry/semantic-conventions@1.40.0': {}
 
   '@radix-ui/number@1.1.1': {}
 
@@ -4185,7 +4208,7 @@ snapshots:
 
   '@xmldom/is-dom-node@1.0.1': {}
 
-  '@xmldom/xmldom@0.8.11': {}
+  '@xmldom/xmldom@0.8.12': {}
 
   accepts@2.0.0:
     dependencies:
@@ -4229,7 +4252,7 @@ snapshots:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
       rou3: 0.7.12
-      set-cookie-parser: 3.0.1
+      set-cookie-parser: 3.1.0
     optionalDependencies:
       zod: 4.3.6
 
@@ -4258,8 +4281,6 @@ snapshots:
     dependencies:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
-
-  camelcase@9.0.0: {}
 
   caniuse-lite@1.0.30001775: {}
 
@@ -4491,15 +4512,15 @@ snapshots:
 
   fast-uri@3.1.0: {}
 
-  fast-xml-builder@1.1.0:
+  fast-xml-builder@1.1.4:
     dependencies:
-      path-expression-matcher: 1.1.2
+      path-expression-matcher: 1.2.0
 
-  fast-xml-parser@5.5.1:
+  fast-xml-parser@5.5.9:
     dependencies:
-      fast-xml-builder: 1.1.0
-      path-expression-matcher: 1.1.2
-      strnum: 2.2.0
+      fast-xml-builder: 1.1.4
+      path-expression-matcher: 1.2.0
+      strnum: 2.2.2
 
   fetch-blob@3.2.0:
     dependencies:
@@ -4536,9 +4557,9 @@ snapshots:
 
   function-bind@1.1.2: {}
 
-  geist@1.7.0(next@16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
+  geist@1.7.0(next@16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
     dependencies:
-      next: 16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
 
   generate-function@2.3.1:
     dependencies:
@@ -4732,14 +4753,14 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.0.7(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(next@16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
+  mcp-handler@1.1.0(@modelcontextprotocol/sdk@1.27.1(zod@4.3.6))(next@16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
     dependencies:
       '@modelcontextprotocol/sdk': 1.27.1(zod@4.3.6)
       chalk: 5.6.2
       commander: 11.1.0
       redis: 4.7.1
     optionalDependencies:
-      next: 16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
 
   media-typer@1.1.0: {}
 
@@ -4786,7 +4807,7 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  next@16.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next@16.2.0(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.2.0
       '@swc/helpers': 0.5.15
@@ -4805,6 +4826,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 16.2.0
       '@next/swc-win32-arm64-msvc': 16.2.0
       '@next/swc-win32-x64-msvc': 16.2.0
+      '@opentelemetry/api': 1.9.1
       sharp: 0.34.5
     transitivePeerDependencies:
       - '@babel/core'
@@ -4845,7 +4867,7 @@ snapshots:
 
   parseurl@1.3.3: {}
 
-  path-expression-matcher@1.1.2: {}
+  path-expression-matcher@1.2.0: {}
 
   path-key@3.1.1: {}
 
@@ -5031,11 +5053,10 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  samlify@2.11.0:
+  samlify@2.12.0:
     dependencies:
       '@authenio/xml-encryption': 2.0.2
-      '@xmldom/xmldom': 0.8.11
-      camelcase: 9.0.0
+      '@xmldom/xmldom': 0.8.12
       node-rsa: 1.1.1
       xml: 1.0.1
       xml-crypto: 6.1.2
@@ -5077,6 +5098,8 @@ snapshots:
       - supports-color
 
   set-cookie-parser@3.0.1: {}
+
+  set-cookie-parser@3.1.0: {}
 
   setprototypeof@1.2.0: {}
 
@@ -5166,7 +5189,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.3.3
 
-  strnum@2.2.0: {}
+  strnum@2.2.2: {}
 
   styled-jsx@5.1.6(react@19.2.4):
     dependencies:
@@ -5185,6 +5208,12 @@ snapshots:
   tapable@2.3.0: {}
 
   tiny-invariant@1.3.3: {}
+
+  tldts-core@6.1.86: {}
+
+  tldts@6.1.86:
+    dependencies:
+      tldts-core: 6.1.86
 
   toidentifier@1.0.1: {}
 
@@ -5272,7 +5301,7 @@ snapshots:
   xml-crypto@6.1.2:
     dependencies:
       '@xmldom/is-dom-node': 1.0.1
-      '@xmldom/xmldom': 0.8.11
+      '@xmldom/xmldom': 0.8.12
       xpath: 0.0.33
 
   xml-escape@1.1.0: {}
