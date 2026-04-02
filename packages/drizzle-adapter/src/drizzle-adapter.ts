@@ -851,6 +851,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
 					? true
 					: false,
+			supportsBooleans: config.provider !== "sqlite",
+			supportsDates: config.provider !== "sqlite",
 			supportsArrays: config.provider === "pg" ? true : false,
 			customTransformOutput: ({ data, fieldAttributes }) => {
 				// not all providers support dates
