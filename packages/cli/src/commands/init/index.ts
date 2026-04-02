@@ -1672,7 +1672,7 @@ for (const plugin of Object.values(
 
 export const init = initBuilder.action(initAction);
 
-export const initActionOptionsSchema = z.object({
+const initActionOptionsSchema = z.object({
 	cwd: z.string().transform((val) => path.resolve(val)),
 	config: z.string().optional(),
 	packageManager: z.enum(PACKAGE_MANAGER).optional(),

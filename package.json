@@ -16,7 +16,7 @@
     "format:md": "pnpm --filter docs format:md",
     "format:check": "pnpm --filter docs format:check",
     "lint": "biome check . --error-on-warnings",
-    "lint:dependencies": "knip --strict",
+    "lint:dependencies": "knip; c1=$?; knip --production; c2=$?; [ $c1 -eq 0 ] && [ $c2 -eq 0 ]",
     "lint:fix": "biome check . --fix --unsafe",
     "lint:spell": "cspell . --color",
     "lint:types": "turbo lint:types --filter=./packages/*",

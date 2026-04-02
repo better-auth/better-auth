@@ -17,3 +17,5 @@ pre-commit:
     lockfile:
       glob: "{package.json,pnpm-lock.yaml,pnpm-workspace.yaml,packages/*/package.json}"
       run: pnpm install --frozen-lockfile --ignore-scripts
+    dependencies:
+      run: pnpm lint:dependencies

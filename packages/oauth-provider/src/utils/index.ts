@@ -515,7 +515,7 @@ export function parsePrompt(prompt: string) {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
 	const uri = client.redirectUris?.[0];
 	if (!uri) {
 		throw new BetterAuthError(
@@ -531,7 +531,7 @@ export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export async function computePairwiseSub(
+async function computePairwiseSub(
 	userId: string,
 	client: SchemaClient<Scope[]>,
 	secret: string,
