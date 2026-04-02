@@ -48,7 +48,7 @@ jobs:
           cache: pnpm
 
       - name: Install
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         env:
@@ -119,7 +119,7 @@ jobs:
           cache: pnpm
 
       - name: Install
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
@@ -174,7 +174,7 @@ jobs:
 
       - name: Install
         if: github.event_name != 'merge_group'
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
