@@ -8,13 +8,10 @@ on:
     paths:
       - '.changeset/**'
       - '**/package.json'
-  schedule:
-    # Nightly snapshot from next at 4am UTC
-    - cron: '0 4 * * *'
   workflow_dispatch:
     inputs:
       snapshot:
-        description: 'Snapshot tag (e.g. "snapshot", "nightly"). Leave empty for normal release.'
+        description: 'Snapshot tag (e.g. "snapshot"). Leave empty for normal release.'
         required: false
         default: ''
         type: string
@@ -32,10 +29,7 @@ env:
 
 jobs:
   release:
-    if: >
-      github.event_name != 'schedule' &&
-      (inputs.snapshot || '') == '' &&
-      github.repository_owner == 'better-auth'
+    if: inputs.snapshot == '' && github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -140,11 +134,7 @@ jobs:
           fi
 
   snapshot:
-    if: >
-      github.repository_owner == 'better-auth' && (
-        (inputs.snapshot || '') != '' ||
-        github.event_name == 'schedule'
-      )
+    if: inputs.snapshot != '' && github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -154,7 +144,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: next
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
 
@@ -166,24 +155,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Workaround: snapshot releases are blocked in pre-release mode
-      # (changesets/changesets#1195). Temporarily exit pre mode in CI only.
-      - name: Exit pre-release mode for snapshot
-        if: hashFiles('.changeset/pre.json') != ''
-        run: pnpm changeset pre exit
-
-      - name: Determine snapshot tag
-        id: tag
-        env:
-          INPUT_TAG: ${{ inputs.snapshot }}
-        run: |
-          # Use input tag if provided, otherwise "nightly" for scheduled runs
-          TAG="${INPUT_TAG:-nightly}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
       - name: Version snapshot
         env:
-          SNAPSHOT_TAG: ${{ steps.tag.outputs.tag }}
+          SNAPSHOT_TAG: ${{ inputs.snapshot }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm changeset version --snapshot "$SNAPSHOT_TAG"
 
@@ -192,6 +166,6 @@ jobs:
 
       - name: Publish snapshot
         env:
-          SNAPSHOT_TAG: ${{ steps.tag.outputs.tag }}
+          SNAPSHOT_TAG: ${{ inputs.snapshot }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm changeset publish --no-git-tag --tag "$SNAPSHOT_TAG"
