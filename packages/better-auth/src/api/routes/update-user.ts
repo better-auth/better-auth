@@ -972,14 +972,11 @@ export const verifyEmailChange = createAuthEndpoint(
 		}
 
 		// Apply email change
-		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
-			data.oldEmail,
-			{
-				email: data.newEmail,
-				emailVerified: true,
-				pendingEmail: null,
-			},
-		);
+		const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
+			email: data.newEmail,
+			emailVerified: true,
+			pendingEmail: null,
+		});
 
 		// Delete verification entry (one-time use)
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
