@@ -659,6 +659,34 @@ describe("type", () => {
 	});
 });
 
+describe("client config", () => {
+	it("should use basePath as baseURL fallback when only basePath is set", async () => {
+		const originalWindow = globalThis.window;
+		// Simulate SSR environment where window.location is not available
+		// @ts-expect-error - intentionally removing window for test
+		globalThis.window = undefined;
+		try {
+			const client = createVueClient({
+				basePath: "/custom/auth",
+				fetchOptions: {
+					customFetchImpl: async () => new Response(),
+				},
+			});
+
+			let capturedUrl = "";
+			const mockUseFetch = async (url: string, _opts: any) => {
+				capturedUrl = url;
+				return { data: null, error: null };
+			};
+
+			await client.useSession(mockUseFetch);
+			expect(capturedUrl).toBe("/custom/auth/get-session");
+		} finally {
+			globalThis.window = originalWindow;
+		}
+	});
+});
+
 describe("plugin actions deep merge", () => {
 	it("should merge actions from multiple plugins with same top-level key", async () => {
 		const client = createVanillaClient({
