@@ -804,13 +804,13 @@ export const changeEmail = createAuthEndpoint(
 			);
 		}
 
-		// Send verification email
+		// Send verification email (rollback on failure)
 		const callbackURL = ctx.body.callbackURL || "/";
 		const url = `${ctx.context.baseURL}/verify-email-change/${userId}/${verificationToken}?callbackURL=${encodeURIComponent(callbackURL)}`;
 
 		if (sendChangeEmailVerification) {
-			await ctx.context.runInBackgroundOrAwait(
-				sendChangeEmailVerification(
+			try {
+				await sendChangeEmailVerification(
 					{
 						user: {
 							...ctx.context.session.user,
@@ -820,8 +820,18 @@ export const changeEmail = createAuthEndpoint(
 						token: verificationToken,
 					},
 					ctx.request,
-				),
-			);
+				);
+			} catch (e) {
+				// Rollback: clear pendingEmail and delete verification entry
+				await ctx.context.internalAdapter.updateUser(
+					ctx.context.session.user.id,
+					{ pendingEmail: null },
+				);
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					identifier,
+				);
+				throw e;
+			}
 		}
 
 		return ctx.json({ status: true });
