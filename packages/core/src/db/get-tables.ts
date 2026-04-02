@@ -192,6 +192,8 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.user?.fields?.updatedAt || "updatedAt",
 				},
+				...user?.fields,
+				...options.user?.additionalFields,
 				...(options.user?.changeEmail?.enabled
 					? {
 							pendingEmail: {
@@ -204,8 +206,6 @@ export const getAuthTables = (
 							},
 						}
 					: {}),
-				...user?.fields,
-				...options.user?.additionalFields,
 			},
 			order: 1,
 		},
