@@ -924,18 +924,9 @@ export const verifyEmailChange = createAuthEndpoint(
 					},
 				],
 				responses: {
-					200: {
-						description: "Email change applied successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: { type: "boolean" },
-									},
-								},
-							},
-						},
+					302: {
+						description:
+							"Email change applied successfully, redirects to callbackURL",
 					},
 				},
 			},
