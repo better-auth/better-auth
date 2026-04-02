@@ -278,14 +278,49 @@ export function EnterprisePageClient() {
 												<select
 													id="enterprise-size"
 													name="companySize"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm focus:outline-none focus:border-foreground/40 transition-colors appearance-none cursor-pointer font-mono"
+													className="w-full px-3 py-2 bg-background text-foreground border border-foreground/[0.15] text-sm focus:outline-none focus:border-foreground/40 transition-colors appearance-none cursor-pointer font-mono"
 												>
-													<option value="">Select</option>
-													<option value="1-10">1-10</option>
-													<option value="11-50">11-50</option>
-													<option value="51-200">51-200</option>
-													<option value="201-500">201-500</option>
-													<option value="501+">501+</option>
+													<option
+														value=""
+														className="bg-background text-foreground"
+													>
+														Select
+													</option>
+
+													<option
+														value="1-10"
+														className="bg-background text-foreground"
+													>
+														1-10
+													</option>
+
+													<option
+														value="11-50"
+														className="bg-background text-foreground"
+													>
+														11-50
+													</option>
+
+													<option
+														value="51-200"
+														className="bg-background text-foreground"
+													>
+														51-200
+													</option>
+
+													<option
+														value="201-500"
+														className="bg-background text-foreground"
+													>
+														201-500
+													</option>
+
+													<option
+														value="501+"
+														className="bg-background text-foreground"
+													>
+														501+
+													</option>
 												</select>
 											</div>
 
