@@ -393,20 +393,6 @@ export const verifyEmail = createAuthEndpoint(
 							),
 						);
 					}
-					const sendChangeEmailNotification =
-						ctx.context.options.user?.changeEmail?.sendChangeEmailNotification;
-					if (sendChangeEmailNotification) {
-						await ctx.context.runInBackgroundOrAwait(
-							sendChangeEmailNotification(
-								{
-									user: updatedUser,
-									oldEmail,
-									newEmail: parsed.updateTo,
-								},
-								ctx.request,
-							),
-						);
-					}
 					await setSessionCookie(ctx, {
 						session: activeSession.session,
 						user: {

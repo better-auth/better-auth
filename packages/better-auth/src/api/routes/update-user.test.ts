@@ -952,7 +952,7 @@ describe("changeEmail with sendOldEmailVerification", async () => {
 			},
 		);
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe("SESSION_EXPIRED");
+		expect(res.error?.code).toBe("PASSWORD_OR_FRESH_SESSION_REQUIRED");
 	});
 
 	it("should preserve default two-step flow when sendOldEmailVerification is not set", async () => {
@@ -1051,9 +1051,8 @@ describe("changeEmail with sendOldEmailVerification", async () => {
 		expect(resNonExisting.data?.status).toBe(true);
 	});
 
-	it("should call afterEmailChange and sendChangeEmailNotification after verification", async () => {
+	it("should call afterEmailChange after verification", async () => {
 		const afterEmailChange = vi.fn();
-		const sendNotification = vi.fn();
 		let verificationToken = "";
 
 		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
@@ -1068,9 +1067,6 @@ describe("changeEmail with sendOldEmailVerification", async () => {
 					enabled: true,
 					afterEmailChange: async (data) => {
 						afterEmailChange(data);
-					},
-					sendChangeEmailNotification: async (data) => {
-						sendNotification(data);
 					},
 				},
 			},
@@ -1091,23 +1087,13 @@ describe("changeEmail with sendOldEmailVerification", async () => {
 				password: testUser.password,
 			});
 
-			// Hooks should not fire until verification is complete
 			expect(afterEmailChange).not.toHaveBeenCalled();
-			expect(sendNotification).not.toHaveBeenCalled();
 
-			// Verify the new email
 			await client.verifyEmail({
 				query: { token: verificationToken },
 			});
 
-			// Now hooks should have fired
 			expect(afterEmailChange).toHaveBeenCalledWith(
-				expect.objectContaining({
-					oldEmail: testUser.email,
-					newEmail,
-				}),
-			);
-			expect(sendNotification).toHaveBeenCalledWith(
 				expect.objectContaining({
 					oldEmail: testUser.email,
 					newEmail,

@@ -116,52 +116,24 @@ export const auth = betterAuth({
     Disabling old email verification reduces security. An attacker with access to an active session could change the account email. The password or fresh session requirement mitigates this risk, but consider your threat model before disabling.
 </Callout>
 
-#### Email Change Notification
+#### After Email Change Hook
 
-When skipping old email verification, you can still notify the old email address about the change. Unlike `sendChangeEmailConfirmation`, this is non-blocking — no action is required from the user.
+You can run custom logic after an email change is verified and applied using `afterEmailChange`. This is useful for syncing with external systems, audit logging, or notifying the old email address about the change.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
 import { sendEmail } from './email';
 
 export const auth = betterAuth({
     user: {
         changeEmail: {
             enabled: true,
-            sendChangeEmailNotification: async ({ user, oldEmail, newEmail }) => {
+            afterEmailChange: async ({ user, oldEmail, newEmail }) => {
+                await updateExternalSystem(user.id, newEmail);
                 void sendEmail({
                     to: oldEmail,
                     subject: 'Your email address was changed',
                     text: `Your email was changed to ${newEmail}. If this wasn't you, contact support.`
                 })
-            }
-        }
-    },
-    emailVerification: {
-        sendOldEmailVerification: false,
-        sendVerificationEmail: async ({ user, url }) => {
-            void sendEmail({
-                to: user.email,
-                subject: 'Verify your new email',
-                text: `Click the link to verify: ${url}`
-            })
-        }
-    },
-})
-```
-
-#### After Email Change Hook
-
-You can run custom logic after an email change is verified and applied using `afterEmailChange`. This is useful for syncing with external systems, audit logging, or sending confirmation notifications.
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-    user: {
-        changeEmail: {
-            enabled: true,
-            afterEmailChange: async ({ user, oldEmail, newEmail }) => {
-                await updateExternalSystem(user.id, newEmail);
-                console.log(`Email changed from ${oldEmail} to ${newEmail}`);
             }
         }
     },
@@ -201,6 +173,17 @@ await authClient.changeEmail({
     callbackURL: "/dashboard", // to redirect after verification
 });
 ```
+
+When `sendOldEmailVerification` is `false`, you must provide the user's password (unless the session is fresh):
+
+```ts
+await authClient.changeEmail({
+    newEmail: "new-email@email.com",
+    password: "current-password",
+    callbackURL: "/dashboard",
+});
+```
+
 
 ### Change Password
 

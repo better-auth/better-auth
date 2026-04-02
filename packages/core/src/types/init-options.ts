@@ -830,25 +830,6 @@ export type BetterAuthOptions = {
 						},
 						request?: Request,
 					) => Promise<void>;
-					/**
-					 * Send a non-blocking notification to the old email
-					 * address when the email is changed. Unlike
-					 * `sendChangeEmailConfirmation`, this does not require
-					 * the user to click a link — it is informational only.
-					 *
-					 * Useful when `sendOldEmailVerification` is `false`
-					 * to still inform the user of the change.
-					 * @param data the data object
-					 * @param request the request object
-					 */
-					sendChangeEmailNotification?: (
-						data: {
-							user: User;
-							oldEmail: string;
-							newEmail: string;
-						},
-						request?: Request,
-					) => Promise<void>;
 				};
 				/**
 				 * User deletion configuration
