@@ -9,6 +9,12 @@ The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to
   This plugin is not meant as a replacement for the session. It's meant to be used for services that require JWT tokens. If you're looking to use JWT tokens for authentication, check out the [Bearer Plugin](/docs/plugins/bearer).
 </Callout>
 
+<Callout type="info">
+  The JWT plugin's `/token` endpoint and `set-auth-jwt` header produce JWKS-verifiable JWTs for external services. They are separate from Better Auth's primary `session_token` cookie.
+
+  If you enable `session.cookieCache.strategy = "jwt"`, the `session_data` cookie still uses HS256 with your Better Auth secret by default. To make that cookie-cache JWT verifiable with JWKS too, install `jwt()` and opt into `session.cookieCache.jwt.keySource = "jwks"`.
+</Callout>
+
 ## Installation
 
 <Steps>
