@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - next
       - release/**
   workflow_dispatch:
     inputs:
@@ -30,10 +31,11 @@ jobs:
     if: >
       inputs.snapshot == '' &&
       github.repository_owner == 'better-auth' &&
-      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Generate App Token
         id: app-token
@@ -59,21 +61,19 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Phase 1: Version (creates PR) or Publish (if no pending changesets)
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
         with:
           version: pnpm ci:version
           publish: pnpm ci:release
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
+          title: "chore: version packages${{ github.ref_name == 'next' && ' (beta)' || '' }}"
+          commit: "chore: version packages${{ github.ref_name == 'next' && ' (beta)' || '' }}"
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # Phase 2: Post-publish
       - name: Release Info
         if: steps.changesets.outputs.published == 'true'
         env:
@@ -82,12 +82,15 @@ jobs:
           echo "Published packages:"
           echo "$PUBLISHED"
 
-      # Phase 4: Forward merge main → next
-      - name: Forward merge to next
-        if: steps.changesets.outputs.published == 'true' && github.ref_name == 'main'
+      - name: Forward merge main to next
+        if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
+          git config user.name "better-auth-releases[bot]"
+          git config user.email "273320539+better-auth-releases[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
           git fetch origin next || { echo "next branch does not exist, skipping"; exit 0; }
 
           AHEAD=$(git rev-list --count origin/next..origin/main)
@@ -97,23 +100,72 @@ jobs:
           fi
           echo "Found $AHEAD commit(s) to sync"
 
-          EXISTING=$(gh pr list --head main --base next --state open --json number --jq '.[0].number // empty')
+          # Check for existing sync PR
+          EXISTING=$(gh pr list --head sync/main-to-next --base next --state open --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Forward-merge PR #$EXISTING already exists"
-            gh pr merge "$EXISTING" --auto --merge || true
             exit 0
           fi
 
+          # Create sync branch from next and merge main into it
+          git checkout -b sync/main-to-next origin/next
+
+          if git merge origin/main --no-edit; then
+            echo "Clean merge"
+          else
+            # Identify conflicting files
+            CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
+            VERSION_ONLY=true
+
+            while IFS= read -r f; do
+              case "$f" in
+                packages/*/package.json|.changeset/pre.json|package.json|pnpm-lock.yaml) ;;
+                *) VERSION_ONLY=false; break ;;
+              esac
+            done <<< "$CONFLICT_FILES"
+
+            if [ "$VERSION_ONLY" = true ]; then
+              echo "Resolving version conflicts (keeping next's versions)"
+              while IFS= read -r f; do
+                git checkout --ours "$f"
+                git add "$f"
+              done <<< "$CONFLICT_FILES"
+              pnpm install --no-frozen-lockfile
+              git add pnpm-lock.yaml
+              git commit --no-edit
+            else
+              echo "::warning::Code conflicts detected in forward merge — creating draft PR for manual resolution"
+              git merge --abort
+              gh pr create \
+                --base next \
+                --head main \
+                --title "chore: sync main to next (conflicts)" \
+                --body "Automated forward merge has code conflicts that need manual resolution." \
+                --draft \
+                || true
+              exit 0
+            fi
+          fi
+
+          # Re-enter pre-release mode if needed (after a promote cycle)
+          if [ ! -f .changeset/pre.json ]; then
+            pnpm changeset pre enter beta
+            git add .changeset/pre.json
+            git commit -m "chore: re-enter beta pre-release mode"
+          fi
+
+          git push origin sync/main-to-next --force-with-lease
+
           gh pr create \
             --base next \
-            --head main \
+            --head sync/main-to-next \
             --title "chore: sync main to next" \
             --body "Automated forward merge to keep next as a superset of main." \
             || true
 
-          PR=$(gh pr list --head main --base next --state open --json number --jq '.[0].number // empty')
+          PR=$(gh pr list --head sync/main-to-next --base next --state open --json number --jq '.[0].number // empty')
           if [ -n "$PR" ]; then
-            gh pr merge "$PR" --auto --merge || true
+            gh pr merge "$PR" --auto --merge --delete-branch || true
           fi
 
   snapshot:
