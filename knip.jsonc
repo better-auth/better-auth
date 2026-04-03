@@ -9,7 +9,7 @@
 		// test utilities only imported by test files — invisible to --production
 		"packages/better-auth/src/client/test-plugin.ts"
 	],
-	"ignoreBinaries": ["playwright", "open", "remark"],
+	"ignoreBinaries": ["playwright", "changeset", "open", "remark"],
 	// exports used only by tests — invisible to --production mode
 	"ignoreIssues": {
 		"packages/cli/src/commands/init/index.ts": ["exports"],
@@ -17,7 +17,7 @@
 		"packages/sso/src/saml/assertions.ts": ["exports"]
 	},
 	// loaded at runtime via --coverage.provider=istanbul CLI flag
-	"ignoreDependencies": ["@vitest/coverage-istanbul"],
+	"ignoreDependencies": ["@changesets/cli", "@vitest/coverage-istanbul"],
 	"rules": {
 		// @cloudflare/workers-types is a valid optional peer dep reference
 		"optionalPeerDependencies": "off",

@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - next
+      - 'release/**'
     paths:
       - '.changeset/**'
       - 'packages/**'
