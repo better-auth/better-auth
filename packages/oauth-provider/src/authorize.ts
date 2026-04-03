@@ -260,25 +260,42 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectUri = client.redirectUris?.find((url) => {
-		if (url === query.redirect_uri) return true;
+	const registeredUris = client.redirectUris ?? [];
+	let isValidRedirectUri = false;
+	if (query.redirect_uri) {
 		try {
-			const registered = new URL(url);
-			const requested = new URL(query.redirect_uri);
-			// RFC 8252 §7.3: loopback IPs match on scheme+host+path+query, ignoring port
-			if (
-				(registered.hostname === "127.0.0.1" ||
-					registered.hostname === "[::1]") &&
-				registered.hostname === requested.hostname &&
-				registered.pathname === requested.pathname &&
-				registered.protocol === requested.protocol &&
-				registered.search === requested.search
-			)
-				return true;
-		} catch {}
-		return false;
-	});
-	if (!redirectUri || !query.redirect_uri) {
+			if (opts.validateRedirectUri) {
+				// Use custom validation if provided
+				isValidRedirectUri = await opts.validateRedirectUri(
+					query.redirect_uri,
+					registeredUris,
+				);
+			} else {
+				// Default validation with RFC 8252 §7.3 loopback IP support
+				isValidRedirectUri = registeredUris.some((url) => {
+					if (url === query.redirect_uri) return true;
+					try {
+						const registered = new URL(url);
+						const requested = new URL(query.redirect_uri);
+						// RFC 8252 §7.3: loopback IPs match on scheme+host+path+query, ignoring port
+						if (
+							(registered.hostname === "127.0.0.1" ||
+								registered.hostname === "[::1]") &&
+							registered.hostname === requested.hostname &&
+							registered.pathname === requested.pathname &&
+							registered.protocol === requested.protocol &&
+							registered.search === requested.search
+						)
+							return true;
+					} catch {}
+					return false;
+				});
+			}
+		} catch {
+			isValidRedirectUri = false;
+		}
+	}
+	if (!isValidRedirectUri) {
 		return handleRedirect(
 			ctx,
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
