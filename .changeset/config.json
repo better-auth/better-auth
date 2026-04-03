@@ -5,7 +5,30 @@
     { "repo": "better-auth/better-auth" }
   ],
   "commit": false,
-  "fixed": [["better-auth", "@better-auth/core"]],
+  "fixed": [
+    [
+      "better-auth",
+      "@better-auth/core",
+      "auth",
+      "@better-auth/api-key",
+      "@better-auth/drizzle-adapter",
+      "@better-auth/electron",
+      "@better-auth/expo",
+      "@better-auth/i18n",
+      "@better-auth/kysely-adapter",
+      "@better-auth/memory-adapter",
+      "@better-auth/mongo-adapter",
+      "@better-auth/oauth-provider",
+      "@better-auth/passkey",
+      "@better-auth/prisma-adapter",
+      "@better-auth/redis-storage",
+      "@better-auth/scim",
+      "@better-auth/sso",
+      "@better-auth/stripe",
+      "@better-auth/telemetry",
+      "@better-auth/test-utils"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
