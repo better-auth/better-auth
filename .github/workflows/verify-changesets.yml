@@ -33,7 +33,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if git diff --name-only "origin/$BASE_REF"...HEAD | grep -q '^\.changeset/pre\.json$'; then
+          if git diff --diff-filter=d --name-only "origin/$BASE_REF"...HEAD | grep -q '^\.changeset/pre\.json$'; then
             echo "::error::.changeset/pre.json must not be committed to main. Pre-release mode belongs on the 'next' branch only."
             exit 1
           fi
