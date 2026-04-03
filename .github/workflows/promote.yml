@@ -37,18 +37,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Validate pre-release mode
-        run: |
-          if [ ! -f .changeset/pre.json ]; then
-            echo "::error::next branch is not in pre-release mode. Nothing to promote."
-            exit 1
-          fi
-
       - name: Exit pre-release and version
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
-          pnpm changeset pre exit
+          if [ -f .changeset/pre.json ]; then
+            pnpm changeset pre exit
+          else
+            echo "Already out of pre-release mode (retrying previous run?)"
+          fi
           pnpm ci:version
 
       - name: Read version
