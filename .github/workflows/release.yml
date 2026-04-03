@@ -75,16 +75,7 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # Phase 2: Auto-merge the Version Packages PR
-      - name: Auto-merge Version Packages PR
-        if: steps.changesets.outputs.pullRequestNumber
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
-        run: gh pr merge "$PR_NUMBER" --auto --squash --repo "$GITHUB_REPOSITORY"
-
-      # Phase 3: Post-publish
+      # Phase 2: Post-publish
       - name: Release Info
         if: steps.changesets.outputs.published == 'true'
         env:
