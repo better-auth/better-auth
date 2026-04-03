@@ -102,7 +102,7 @@ jobs:
               continue
             fi
 
-            # Verify frontmatter has opening and closing fences
+            # Verify frontmatter structure
             if ! head -1 "$f" | grep -q '^---$'; then
               echo "::error::Changeset $f is missing YAML frontmatter opening fence."
               HAS_ERROR=1
@@ -113,6 +113,15 @@ jobs:
               HAS_ERROR=1
               continue
             fi
+            # Validate each entry: package names must be quoted, bump type must be valid
+            BODY=$(sed -n '2,/^---$/p' "$f" | head -n -1)
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              if ! echo "$line" | grep -qE '^"[^"]+"\s*:\s*(major|minor|patch)\s*$'; then
+                echo "::error::Changeset $f has invalid entry: $line — expected '\"package-name\": patch|minor|major'"
+                HAS_ERROR=1
+              fi
+            done <<< "$BODY"
           done
 
           [ "$HAS_ERROR" -ne 0 ] && exit 1

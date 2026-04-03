@@ -64,8 +64,12 @@ jobs:
           git config user.email "273320539+better-auth-releases[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git add -A
-          git commit -m "chore: exit pre-release mode for v${VERSION}"
-          git push origin next
+          if git diff --cached --quiet; then
+            echo "No changes to commit (previous run already pushed)"
+          else
+            git commit -m "chore: exit pre-release mode for v${VERSION}"
+            git push origin next
+          fi
 
       - name: Create promote PR
         env:
