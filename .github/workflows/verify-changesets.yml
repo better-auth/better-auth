@@ -114,7 +114,7 @@ jobs:
 
           # On main: only patch bumps allowed (no minor, no major)
           # On next: all bump types allowed (pre-release mode)
-          if [ "${{ github.base_ref }}" = "main" ]; then
+          if [ "$BASE_REF" = "main" ]; then
             for f in $(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md'); do
               BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
               if echo "$BUMPS" | grep -q "major"; then
@@ -128,5 +128,5 @@ jobs:
             done
             echo "All changesets are patch-only (main branch policy)"
           else
-            echo "Target is ${{ github.base_ref }}, all bump types allowed"
+            echo "Target is $BASE_REF, all bump types allowed"
           fi
