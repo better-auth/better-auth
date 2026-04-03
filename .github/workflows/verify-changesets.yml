@@ -113,8 +113,8 @@ jobs:
             BODY=$(sed -n '2,/^---$/p' "$f" | head -n -1)
             while IFS= read -r line; do
               [ -z "$line" ] && continue
-              if ! echo "$line" | grep -qE '^"[^"]+"\s*:\s*(major|minor|patch)\s*$'; then
-                echo "::error::Changeset $f has invalid entry: $line — expected '\"package-name\": patch|minor|major'"
+              if ! echo "$line" | grep -qE '^"[^"]+"\s*:\s*(major|minor|patch|none)\s*$'; then
+                echo "::error::Changeset $f has invalid entry: $line — expected '\"package-name\": patch|minor|major|none'"
                 HAS_ERROR=1
               fi
             done <<< "$BODY"
