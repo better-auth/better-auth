@@ -102,9 +102,14 @@ jobs:
               continue
             fi
 
-            # Verify frontmatter exists
+            # Verify frontmatter has opening and closing fences
             if ! head -1 "$f" | grep -q '^---$'; then
-              echo "::error::Changeset $f is missing YAML frontmatter."
+              echo "::error::Changeset $f is missing YAML frontmatter opening fence."
+              HAS_ERROR=1
+              continue
+            fi
+            if ! sed -n '2,$ p' "$f" | grep -q '^---$'; then
+              echo "::error::Changeset $f is missing YAML frontmatter closing fence."
               HAS_ERROR=1
               continue
             fi

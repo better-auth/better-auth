@@ -62,15 +62,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Guard next branch pre-release state
+        id: guard
         if: github.ref_name == 'next'
         run: |
           if [ ! -f .changeset/pre.json ]; then
-            echo "::error::next branch is not in pre-release mode. Refusing to publish to avoid tagging as latest."
-            exit 1
+            echo "::warning::next branch is not in pre-release mode (promote in progress). Skipping release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create Release Pull Request or Publish
         id: changesets
+        if: steps.guard.outputs.skip != 'true'
         uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
         with:
           version: pnpm ci:version
