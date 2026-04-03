@@ -84,18 +84,6 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Release Info
-        if: steps.changesets.outputs.published == 'true'
-        env:
-          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
-        run: |
-          echo "Published packages:"
-          echo "$PUBLISHED"
-
-      # Rebase next onto main to keep linear history.
-      # next's commits (squashed PRs) sit on top of main's latest.
-      # Force-push is safe: next is a PR-target branch, not worked on directly.
-      # When promoting (next→main), rebase-merge gives a clean fast-forward.
       - name: Rebase next onto main
         if: github.ref_name == 'main'
         env:

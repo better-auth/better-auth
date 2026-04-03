@@ -44,16 +44,15 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          COUNT=$(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -cv 'README.md' || true)
-          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
-
-          if [ "$COUNT" -eq 0 ]; then
-            echo "No changeset files in diff"
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Found $COUNT changeset(s) in diff"
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-          fi
+          FILES=$(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md' || true)
+          COUNT=$(echo "$FILES" | grep -c '.' || true)
+          {
+            echo "files<<EOF"
+            echo "$FILES"
+            echo "EOF"
+            echo "count=$COUNT"
+            echo "has_changesets=$( [ "$COUNT" -gt 0 ] && echo true || echo false )"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Check package changes require changeset
         if: steps.changed.outputs.has_changesets == 'false'
@@ -83,18 +82,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
+          CHANGESET_FILES: ${{ steps.changed.outputs.files }}
         run: |
           HAS_ERROR=0
 
-          for f in $(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md'); do
-            # Security: reject symlinks (CWE-59)
+          for f in $CHANGESET_FILES; do
             if [ -L "$f" ]; then
               echo "::error::Changeset $f is a symlink, which is not allowed."
               HAS_ERROR=1
               continue
             fi
 
-            # Validate filename format
             BASENAME=$(basename "$f")
             if ! echo "$BASENAME" | grep -qE '^[a-z][a-z0-9-]*\.md$'; then
               echo "::error::Changeset $f has an invalid filename. Use only lowercase letters, digits, and hyphens."
@@ -102,7 +100,6 @@ jobs:
               continue
             fi
 
-            # Verify frontmatter structure
             if ! head -1 "$f" | grep -q '^---$'; then
               echo "::error::Changeset $f is missing YAML frontmatter opening fence."
               HAS_ERROR=1
@@ -113,7 +110,6 @@ jobs:
               HAS_ERROR=1
               continue
             fi
-            # Validate each entry: package names must be quoted, bump type must be valid
             BODY=$(sed -n '2,/^---$/p' "$f" | head -n -1)
             while IFS= read -r line; do
               [ -z "$line" ] && continue
@@ -126,10 +122,8 @@ jobs:
 
           [ "$HAS_ERROR" -ne 0 ] && exit 1
 
-          # On main: only patch bumps allowed (no minor, no major)
-          # On next: all bump types allowed (pre-release mode)
           if [ "$BASE_REF" = "main" ]; then
-            for f in $(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md'); do
+            for f in $CHANGESET_FILES; do
               BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
               if echo "$BUMPS" | grep -q "major"; then
                 echo "::error::Changeset $f contains a 'major' bump. Breaking changes must target the 'next' branch, not 'main'."

@@ -16,7 +16,6 @@
 		"packages/cli/src/commands/init/utility/imports.ts": ["exports"],
 		"packages/sso/src/saml/assertions.ts": ["exports"]
 	},
-	// loaded at runtime via --coverage.provider=istanbul CLI flag
 	"ignoreDependencies": ["@changesets/cli", "@vitest/coverage-istanbul"],
 	"rules": {
 		// @cloudflare/workers-types is a valid optional peer dep reference
