@@ -42,7 +42,7 @@
     }
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "ioredis": "^5.0.0"
   },
   "devDependencies": {

@@ -83,8 +83,8 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",
     "expo-network": ">=8.0.7",

@@ -43,7 +43,7 @@
     }
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
     "mongodb": "^6.0.0 || ^7.0.0"
   },
