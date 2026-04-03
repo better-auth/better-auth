@@ -33,6 +33,7 @@ jobs:
       github.repository_owner == 'better-auth' &&
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
+    environment: Release
     permissions:
       contents: write
       pull-requests: write
@@ -71,6 +72,23 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Determine npm dist-tag
+        id: npm-tag
+        run: |
+          REF="${GITHUB_REF_NAME}"
+          if [[ "$REF" == "main" ]]; then
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          elif [[ "$REF" =~ ^release/ ]]; then
+            # Maintenance branches publish with a version-specific tag (e.g., release-1.5)
+            TAG="release-${REF#release/}"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            # next and other branches: changesets handles the tag via pre.json
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
       - name: Create Release Pull Request or Publish
         id: changesets
         if: steps.guard.outputs.skip != 'true'
@@ -83,6 +101,7 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
 
       - name: Rebase next onto main
         if: github.ref_name == 'main'
@@ -139,6 +158,7 @@ jobs:
   snapshot:
     if: github.event_name == 'workflow_dispatch' && inputs.snapshot != '' && github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
+    environment: Release
     permissions:
       contents: read
       id-token: write
