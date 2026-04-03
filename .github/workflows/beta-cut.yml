@@ -39,7 +39,7 @@ jobs:
       - name: Determine beta branch name
         id: branch
         run: |
-          VERSION=$(node -e "console.log(require('./packages/better-auth/package.json').version.replace(/-.*/, ''))")
+          VERSION=$(node -e "console.log(require('./packages/better-auth/package.json').version.replace(/-.*/, '').replace(/[^0-9.]/g, ''))")
           BRANCH="release/${VERSION}-beta"
           echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
