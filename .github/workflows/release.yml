@@ -30,7 +30,10 @@ env:
 
 jobs:
   release:
-    if: inputs.snapshot == '' && github.repository_owner == 'better-auth'
+    if: >
+      inputs.snapshot == '' &&
+      github.repository_owner == 'better-auth' &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
