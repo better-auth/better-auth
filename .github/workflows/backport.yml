@@ -24,6 +24,7 @@ jobs:
           github.event.issue.pull_request &&
           github.event.comment.author_association != 'NONE' &&
           github.event.comment.author_association != 'FIRST_TIMER' &&
+          github.event.comment.author_association != 'FIRST_TIME_CONTRIBUTOR' &&
           startsWith(github.event.comment.body, '/backport')
         )
       )
