@@ -41,8 +41,8 @@
     "vitest": "catalog:vitest"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
     "vitest": "catalog:vitest"
   }
 }
