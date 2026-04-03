@@ -46,4 +46,4 @@ jobs:
       - name: Build
         run: pnpm build
           
-      - run: pnpm dlx pkg-pr-new publish --pnpm ./packages/*
+      - run: pnpm dlx pkg-pr-new publish --pnpm './packages/*'

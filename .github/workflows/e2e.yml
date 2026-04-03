@@ -169,7 +169,9 @@ jobs:
 
       - name: Adapter Integration
         if: github.event_name != 'merge_group'
-        run: pnpm e2e:integration --filter=${{ matrix.packages }}
+        env:
+          FILTER: ${{ matrix.packages }}
+        run: pnpm e2e:integration --filter="$FILTER"
 
       - name: Stop Docker Containers
         if: github.event_name != 'merge_group'
