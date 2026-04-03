@@ -84,14 +84,6 @@ jobs:
           PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
         run: gh pr merge "$PR_NUMBER" --auto --squash --repo "$GITHUB_REPOSITORY"
 
-      - name: Approve Version Packages PR
-        if: steps.changesets.outputs.pullRequestNumber && secrets.RELEASE_APPROVAL_TOKEN != ''
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_APPROVAL_TOKEN }}
-          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
-        run: gh pr review "$PR_NUMBER" --approve --repo "$GITHUB_REPOSITORY"
-
       # Phase 3: Post-publish
       - name: Release Info
         if: steps.changesets.outputs.published == 'true'
