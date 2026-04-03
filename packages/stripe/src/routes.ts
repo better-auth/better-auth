@@ -36,6 +36,42 @@ import {
 } from "./utils";
 
 /**
+ * Resolves a Stripe price object, either from a lookup key or by retrieving
+ * by ID. Used to inspect `recurring.usage_type` for metered billing.
+ * @internal
+ */
+async function resolveStripePrice(
+	stripeClient: Stripe,
+	priceId: string | undefined,
+	lookupKey: string | undefined,
+): Promise<Stripe.Price | undefined> {
+	try {
+		if (lookupKey) {
+			const prices = await stripeClient.prices.list({
+				lookup_keys: [lookupKey],
+				active: true,
+				limit: 1,
+			});
+			return prices.data[0];
+		}
+		if (priceId) {
+			return await stripeClient.prices.retrieve(priceId);
+		}
+	} catch {
+		// If price retrieval fails, default to licensed behavior (include quantity)
+	}
+	return undefined;
+}
+
+/**
+ * Checks if a Stripe price uses metered (usage-based) billing.
+ * @internal
+ */
+function isMeteredPrice(price: Stripe.Price | undefined): boolean {
+	return price?.recurring?.usage_type === "metered";
+}
+
+/**
  * Converts a relative URL to an absolute URL using baseURL.
  * @internal
  */
@@ -46,23 +82,6 @@ function getUrl(ctx: GenericEndpointContext, url: string) {
 	return `${ctx.context.options.baseURL}${
 		url.startsWith("/") ? url : `/${url}`
 	}`;
-}
-
-/**
- * Resolves a Stripe price ID from a lookup key.
- * @internal
- */
-async function resolvePriceIdFromLookupKey(
-	stripeClient: Stripe,
-	lookupKey: string,
-): Promise<string | undefined> {
-	if (!lookupKey) return undefined;
-	const prices = await stripeClient.prices.list({
-		lookup_keys: [lookupKey],
-		active: true,
-		limit: 1,
-	});
-	return prices.data[0]?.id;
 }
 
 /**
@@ -568,16 +587,20 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const lookupKey = ctx.body.annual
 				? plan.annualDiscountLookupKey
 				: plan.lookupKey;
-			const resolvedPriceId = lookupKey
-				? await resolvePriceIdFromLookupKey(client, lookupKey)
-				: undefined;
+			const resolvedPrice = await resolveStripePrice(
+				client,
+				priceId,
+				lookupKey,
+			);
 
-			const priceIdToUse = priceId || resolvedPriceId;
+			const priceIdToUse = resolvedPrice?.id ?? priceId;
 			if (!priceIdToUse) {
 				throw ctx.error("BAD_REQUEST", {
 					message: "Price ID not found for the selected plan",
 				});
 			}
+
+			const metered = isMeteredPrice(resolvedPrice);
 
 			// For org subscriptions with seat-based billing, seats are auto-managed.
 			// Quantity = memberCount; use Stripe graduated pricing for free tiers.
@@ -788,7 +811,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						if (itemPriceId === stripeSubscriptionPriceId) {
 							newPhaseItems.push({
 								price: priceIdToUse,
-								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+								...(metered
+									? {}
+									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
 							continue;
 						}
@@ -892,7 +917,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							itemUpdates.push({
 								id: si.id,
 								price: priceIdToUse,
-								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+								...(metered
+									? {}
+									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
 							continue;
 						}
@@ -952,7 +979,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 										{
 											id: planItem.id,
 											price: priceIdToUse,
-											...(isAutoManagedSeats
+											...(isAutoManagedSeats || metered
 												? {}
 												: { quantity: ctx.body.seats || 1 }),
 										},
@@ -1078,7 +1105,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								? [
 										{
 											price: priceIdToUse,
-											quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+											...(metered
+												? {}
+												: {
+														quantity: isAutoManagedSeats
+															? 1
+															: ctx.body.seats || 1,
+													}),
 										},
 									]
 								: []),
