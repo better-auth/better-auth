@@ -83,8 +83,6 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
 
       - name: Rebase next onto main
         if: github.ref_name == 'main'
@@ -143,6 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -180,5 +179,4 @@ jobs:
       - name: Publish snapshot
         env:
           SNAPSHOT_TAG: ${{ inputs.snapshot }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm changeset publish --no-git-tag --tag "$SNAPSHOT_TAG"
