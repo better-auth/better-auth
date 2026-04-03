@@ -1375,34 +1375,19 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 			/>
 
 			{/* CTA */}
-			<div className="relative">
-				<p className="text-center text-[15px] text-foreground/60 dark:text-foreground/50 tracking-tight">
+			<div className="relative space-y-6">
+				<p className="text-center text-lg text-balance text-foreground/60 dark:text-foreground/50 tracking-tight">
 					Roll your own auth with confidence in minutes.
 				</p>
 
-				<div className="flex items-center justify-center gap-4 mt-4">
-					<a
-						href="https://dash.better-auth.com/sign-in"
-						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
-					>
-						Get Started
-					</a>
-					<Link
-						href="/docs"
-						className="inline-flex items-center gap-1.5 px-4 py-2 border border-foreground/12 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 text-[11px] font-mono uppercase tracking-wider transition-all"
-					>
-						Read Docs
-					</Link>
-				</div>
-
-				<div className="flex items-center justify-center gap-3 mt-5">
+				<div className="flex items-center justify-center gap-2">
 					{stats.npmDownloads > 0 && (
 						<a
 							href="https://www.npmjs.com/package/better-auth"
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
+							<div className="flex items-center gap-1.5 px-2.5 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1415,14 +1400,11 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 										transform="scale(0.9) translate(1.3, 1.3)"
 									/>
 								</svg>
-								<span className="text-[9px] font-mono">
+								<span className="text-xs font-mono">
 									{formatCount(stats.npmDownloads)} / year
 								</span>
 							</div>
 						</a>
-					)}
-					{stats.npmDownloads > 0 && stats.githubStars > 0 && (
-						<span className="text-foreground/15">·</span>
 					)}
 					{stats.githubStars > 0 && (
 						<a
@@ -1430,7 +1412,7 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
+							<div className="flex items-center gap-1.5 px-2.5 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1444,17 +1426,51 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 								>
 									<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
 								</svg>
-								<span className="text-[9px] font-mono">
-									{formatCount(stats.githubStars)}
+								<span className="text-xs font-mono">
+									{formatCount(stats.githubStars)} stars
 								</span>
 							</div>
 						</a>
 					)}
 				</div>
+
+				<div className="flex flex-wrap items-center justify-center gap-4 pt-1">
+					<Link
+						href="/docs/installation"
+						className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 bg-neutral-900 text-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 text-xs sm:text-sm font-medium hover:opacity-90 transition-colors"
+					>
+						Get Started
+					</Link>
+					<Link
+						href="https://dash.better-auth.com/sign-in"
+						className="relative inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 text-neutral-600 dark:text-neutral-300 text-xs sm:text-sm font-medium transition-colors group"
+					>
+						<span
+							className="absolute inset-0 opacity-[0.04] group-hover:opacity-[0.08] transition-opacity"
+							style={{
+								backgroundImage: `repeating-linear-gradient(
+                  -45deg,
+                  transparent,
+                  transparent 4px,
+                  currentColor 4px,
+                  currentColor 5px
+                )`,
+							}}
+						/>
+						<span className="absolute top-0 -left-[6px] -right-[6px] h-px bg-foreground/20 group-hover:bg-foreground/30 transition-colors" />
+						<span className="absolute bottom-0 -left-[6px] -right-[6px] h-px bg-foreground/20 group-hover:bg-foreground/30 transition-colors" />
+						<span className="absolute left-0 -top-[6px] -bottom-[6px] w-px bg-foreground/20 group-hover:bg-foreground/30 transition-colors" />
+						<span className="absolute right-0 -top-[6px] -bottom-[6px] w-px bg-foreground/20 group-hover:bg-foreground/30 transition-colors" />
+						<span className="absolute -bottom-[6px] -right-[6px] font-mono text-[8px] text-foreground/40 dark:text-foreground/50 leading-none select-none translate-x-1/2 translate-y-1/2">
+							+
+						</span>
+						<span className="relative">Sign In </span>
+					</Link>
+				</div>
 			</div>
 
 			{/* Footer */}
-			<div className="relative mt-10 pt-6">
+			<div className="relative mt-10 pt-14">
 				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 					<div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
 						{footerLinks.map((link, i) => (
