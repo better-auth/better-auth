@@ -58,6 +58,11 @@ catalogs:
 overrides:
   axios: <1.14.0
 
+patchedDependencies:
+  '@changesets/assemble-release-plan':
+    hash: 0599486e3d3f68b6f30d0f55a524ccac93e7fe24b273f0f5691b59685498605f
+    path: patches/@changesets__assemble-release-plan.patch
+
 importers:
 
   .:
@@ -16045,7 +16050,7 @@ snapshots:
       resolve-from: 5.0.0
       semver: 7.7.4
 
-  '@changesets/assemble-release-plan@6.0.9':
+  '@changesets/assemble-release-plan@6.0.9(patch_hash=0599486e3d3f68b6f30d0f55a524ccac93e7fe24b273f0f5691b59685498605f)':
     dependencies:
       '@changesets/errors': 0.2.0
       '@changesets/get-dependents-graph': 2.1.3
@@ -16069,7 +16074,7 @@ snapshots:
   '@changesets/cli@2.30.0(@types/node@25.3.2)':
     dependencies:
       '@changesets/apply-release-plan': 7.1.0
-      '@changesets/assemble-release-plan': 6.0.9
+      '@changesets/assemble-release-plan': 6.0.9(patch_hash=0599486e3d3f68b6f30d0f55a524ccac93e7fe24b273f0f5691b59685498605f)
       '@changesets/changelog-git': 0.2.1
       '@changesets/config': 3.1.3
       '@changesets/errors': 0.2.0
@@ -16128,7 +16133,7 @@ snapshots:
 
   '@changesets/get-release-plan@4.0.15':
     dependencies:
-      '@changesets/assemble-release-plan': 6.0.9
+      '@changesets/assemble-release-plan': 6.0.9(patch_hash=0599486e3d3f68b6f30d0f55a524ccac93e7fe24b273f0f5691b59685498605f)
       '@changesets/config': 3.1.3
       '@changesets/pre': 2.0.2
       '@changesets/read': 0.6.7
