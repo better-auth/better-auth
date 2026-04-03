@@ -217,9 +217,8 @@ export type BetterAuthAdvancedOptions = {
 		| undefined;
 	/**
 	 * Force cookies to always use the `Secure` attribute. By default,
-	 * cookies are only secure when the server is running in production
-	 * mode. Set this to `true` to enforce secure cookies in all
-	 * environments.
+	 * cookies are secure in production environments. Set this to `true`
+	 * to enforce secure cookies in all environments.
 	 *
 	 * @default false
 	 */

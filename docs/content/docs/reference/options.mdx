@@ -9,7 +9,7 @@ List of all the available options for configuring Better Auth. See [Better Auth 
 
 The name of your application. Defaults to `"Better Auth"`.
 
-It's used as a display name in contexts where your app needs to be identified — for example, when users set up two-factor authentication with an authenticator app (like Google Authenticator or Authy), `appName` appears as the issuer name in the TOTP entry. This can be overridden per-plugin (e.g. the [2FA plugin's `issuer` option](/docs/plugins/2fa#issuer)).
+It's used as a display name in contexts where your app needs to be identified — for example, when users set up two-factor authentication with an authenticator app (like Google Authenticator), `appName` appears as the issuer name in the TOTP entry. This can be overridden per-plugin (e.g. the [2FA plugin's `issuer` option](/docs/plugins/2fa#issuer)).
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -601,7 +601,7 @@ export const auth = betterAuth({
 ```
 
 - `ipAddress`: IP address configuration for rate limiting and session tracking
-- `useSecureCookies`: By default, cookies are set as secure only when the server is running in production mode. Set this to `true` to force cookies to always use the `Secure` attribute, regardless of environment.
+- `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 - `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 - `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
