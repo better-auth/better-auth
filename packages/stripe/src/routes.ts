@@ -600,7 +600,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				});
 			}
 
-			const metered = isMeteredPrice(resolvedPrice);
+			const isMetered = isMeteredPrice(resolvedPrice);
 
 			// For org subscriptions with seat-based billing, seats are auto-managed.
 			// Quantity = memberCount; use Stripe graduated pricing for free tiers.
@@ -811,7 +811,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						if (itemPriceId === stripeSubscriptionPriceId) {
 							newPhaseItems.push({
 								price: priceIdToUse,
-								...(metered
+								...(isMetered
 									? {}
 									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
@@ -917,7 +917,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							itemUpdates.push({
 								id: si.id,
 								price: priceIdToUse,
-								...(metered
+								...(isMetered
 									? {}
 									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
@@ -979,7 +979,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 										{
 											id: planItem.id,
 											price: priceIdToUse,
-											...(isAutoManagedSeats || metered
+											...(isAutoManagedSeats || isMetered
 												? {}
 												: { quantity: ctx.body.seats || 1 }),
 										},
@@ -1105,7 +1105,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								? [
 										{
 											price: priceIdToUse,
-											...(metered
+											...(isMetered
 												? {}
 												: {
 														quantity: isAutoManagedSeats
