@@ -67,8 +67,8 @@ jobs:
         env:
           BRANCH: ${{ steps.branch.outputs.name }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "better-auth-releases[bot]"
+          git config user.email "273320539+better-auth-releases[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           [ -f .changeset/pre.json ] && pnpm changeset pre exit || true
           pnpm changeset pre enter beta
