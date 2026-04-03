@@ -7,7 +7,9 @@ List of all the available options for configuring Better Auth. See [Better Auth 
 
 ## `appName`
 
-The name of the application.
+The name of your application. Defaults to `"Better Auth"`.
+
+It's used as a display name in contexts where your app needs to be identified — for example, when users set up two-factor authentication with an authenticator app (like Google Authenticator), `appName` appears as the issuer name in the TOTP entry. This can be overridden per-plugin (e.g. the [2FA plugin's `issuer` option](/docs/plugins/2fa#issuer)).
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -48,7 +50,7 @@ Default: `/api/auth`
 
 ## `trustedOrigins`
 
-List of trusted origins. You can provide a static array of origins, a function that returns origins dynamically, or use wildcard patterns to match multiple domains.
+By default, Better Auth trusts the base URL of your app (i.e. [`baseURL`](#baseurl)). You can specify additional trusted origins via this option. Values can be a static array of origins, a function that returns origins dynamically, or wildcard patterns to match multiple domains.
 
 ### Static Origins
 
@@ -599,7 +601,7 @@ export const auth = betterAuth({
 ```
 
 - `ipAddress`: IP address configuration for rate limiting and session tracking
-- `useSecureCookies`: Use secure cookies (default: `false`)
+- `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 - `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 - `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
