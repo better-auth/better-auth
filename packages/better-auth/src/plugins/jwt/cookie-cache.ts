@@ -13,35 +13,9 @@ import { createJwk } from "./utils";
 type CookieCacheKeySource = "secret" | "jwks";
 
 export function getCookieCacheJwtKeySource(
-	options:
-		| Pick<BetterAuthOptions, "session">
-		| {
-				session?:
-					| {
-							cookieCache?:
-								| {
-										jwt?:
-											| {
-													keySource?: CookieCacheKeySource;
-											  }
-											| undefined;
-								  }
-								| undefined;
-					  }
-					| undefined;
-		  }
-		| undefined,
+	options: Pick<BetterAuthOptions, "session"> | undefined,
 ): CookieCacheKeySource {
-	const cookieCache = options?.session?.cookieCache as
-		| {
-				jwt?:
-					| {
-							keySource?: CookieCacheKeySource;
-					  }
-					| undefined;
-		  }
-		| undefined;
-	return cookieCache?.jwt?.keySource ?? "secret";
+	return options?.session?.cookieCache?.jwt?.keySource ?? "secret";
 }
 
 function getJwtPluginOptions(ctx: GenericEndpointContext): JwtOptions {
