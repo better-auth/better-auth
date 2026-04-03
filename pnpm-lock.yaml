@@ -101,9 +101,6 @@ importers:
       publint:
         specifier: ^0.3.17
         version: 0.3.17
-      tinyglobby:
-        specifier: ^0.2.15
-        version: 0.2.15
       turbo:
         specifier: ^2.9.3
         version: 2.9.3

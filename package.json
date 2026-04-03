@@ -50,7 +50,6 @@
     "lefthook": "^2.1.4",
     "nyc": "^17.1.0",
     "publint": "^0.3.17",
-    "tinyglobby": "^0.2.15",
     "turbo": "^2.9.3",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
