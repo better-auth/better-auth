@@ -75,11 +75,16 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh pr create \
-            --base main \
-            --head next \
-            --title "chore: promote v${VERSION} to stable" \
-            --body "Promotes beta to stable. **Use 'Rebase and merge'** to preserve individual commits. Merging publishes v${VERSION} to npm with the \`latest\` tag."
+          EXISTING=$(gh pr list --base main --head next --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Promote PR #$EXISTING already exists"
+          else
+            gh pr create \
+              --base main \
+              --head next \
+              --title "chore: promote v${VERSION} to stable" \
+              --body "Promotes beta to stable. **Use 'Rebase and merge'** to preserve individual commits. Merging publishes v${VERSION} to npm with the \`latest\` tag."
+          fi
 
       - name: Summary
         env:

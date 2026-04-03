@@ -163,7 +163,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -f .changeset/pre.json ]; then
-            echo "::error::Snapshots are not supported on branches in pre-release mode. Use a non-beta branch."
+            echo "::error::Snapshots are not supported on branches in pre-release mode."
+            exit 1
+          fi
+          if echo "$SNAPSHOT_TAG" | grep -qE '^(latest|next|beta|rc)$'; then
+            echo "::error::Snapshot tag '$SNAPSHOT_TAG' conflicts with a stable dist-tag. Use a descriptive name."
             exit 1
           fi
           pnpm changeset version --snapshot "$SNAPSHOT_TAG"

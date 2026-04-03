@@ -49,13 +49,19 @@ jobs:
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
-      - name: Check for auto-merge label
-        id: labels
+      - name: Check PR state and labels
+        id: pr
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
         run: |
-          HAS_LABEL=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | any(. == "backport-auto-merge")')
+          PR_DATA=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json state,labels)
+          STATE=$(echo "$PR_DATA" | jq -r '.state')
+          if [ "$STATE" != "MERGED" ]; then
+            echo "::error::PR #$PR_NUMBER is not merged (state: $STATE). Backport requires a merged PR."
+            exit 1
+          fi
+          HAS_LABEL=$(echo "$PR_DATA" | jq '[.labels[].name] | any(. == "backport-auto-merge")')
           echo "auto_merge=$HAS_LABEL" >> "$GITHUB_OUTPUT"
 
       - name: Create backport PRs
@@ -66,6 +72,6 @@ jobs:
           pull_title: '[backport ${target_branch}] ${pull_title}'
           copy_assignees: true
           add_author_as_reviewer: true
-          auto_merge_enabled: ${{ steps.labels.outputs.auto_merge }}
+          auto_merge_enabled: ${{ steps.pr.outputs.auto_merge }}
           auto_merge_method: squash
           experimental: '{"conflict_resolution": "draft_commit_conflicts"}'
