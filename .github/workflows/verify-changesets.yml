@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       !startsWith(github.head_ref, 'changeset-release/') &&
-      !(github.head_ref == 'next' && github.base_ref == 'main') &&
+      !(github.head_ref == 'next' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository) &&
       github.actor != 'github-actions[bot]' &&
       github.actor != 'better-auth-releases[bot]'
     permissions:
