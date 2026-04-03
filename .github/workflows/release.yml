@@ -29,7 +29,7 @@ env:
 jobs:
   release:
     if: >
-      inputs.snapshot == '' &&
+      (github.event_name != 'workflow_dispatch' || inputs.snapshot == '') &&
       github.repository_owner == 'better-auth' &&
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
@@ -137,7 +137,7 @@ jobs:
           git push origin HEAD:refs/heads/next --force-with-lease=refs/heads/next:"$NEXT_SHA"
 
   snapshot:
-    if: inputs.snapshot != '' && github.repository_owner == 'better-auth'
+    if: github.event_name == 'workflow_dispatch' && inputs.snapshot != '' && github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
     permissions:
       contents: read
