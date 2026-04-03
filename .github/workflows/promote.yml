@@ -79,7 +79,7 @@ jobs:
             --base main \
             --head next \
             --title "chore: promote v${VERSION} to stable" \
-            --body "Promotes beta to stable. Merging publishes v${VERSION} to npm with the \`latest\` tag."
+            --body "Promotes beta to stable. **Use 'Rebase and merge'** to preserve individual commits. Merging publishes v${VERSION} to npm with the \`latest\` tag."
 
       - name: Summary
         env:

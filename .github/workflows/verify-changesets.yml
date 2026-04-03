@@ -18,7 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       !startsWith(github.head_ref, 'changeset-release/') &&
-      github.actor != 'github-actions[bot]'
+      github.actor != 'github-actions[bot]' &&
+      github.actor != 'better-auth-releases[bot]'
     permissions:
       contents: read
       pull-requests: read

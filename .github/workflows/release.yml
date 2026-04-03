@@ -61,6 +61,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Guard next branch pre-release state
+        if: github.ref_name == 'next'
+        run: |
+          if [ ! -f .changeset/pre.json ]; then
+            echo "::error::next branch is not in pre-release mode. Refusing to publish to avoid tagging as latest."
+            exit 1
+          fi
+
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
@@ -82,7 +90,11 @@ jobs:
           echo "Published packages:"
           echo "$PUBLISHED"
 
-      - name: Forward merge main to next
+      # Rebase next onto main to keep linear history.
+      # next's commits (squashed PRs) sit on top of main's latest.
+      # Force-push is safe: next is a PR-target branch, not worked on directly.
+      # When promoting (next→main), rebase-merge gives a clean fast-forward.
+      - name: Rebase next onto main
         if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -98,75 +110,41 @@ jobs:
             echo "No new commits to sync"
             exit 0
           fi
-          echo "Found $AHEAD commit(s) to sync"
+          echo "Found $AHEAD commit(s) to sync from main to next"
 
-          # Check for existing sync PR
-          EXISTING=$(gh pr list --head sync/main-to-next --base next --state open --json number --jq '.[0].number // empty')
-          if [ -n "$EXISTING" ]; then
-            echo "Forward-merge PR #$EXISTING already exists"
+          # Capture next's SHA for force-with-lease (detached HEAD has no tracking ref)
+          NEXT_SHA=$(git rev-parse origin/next)
+
+          git checkout origin/next
+          if git rebase origin/main; then
+            echo "Clean rebase"
+          else
+            echo "::warning::Rebase conflicts — creating draft PR for manual resolution"
+            git rebase --abort
+            gh pr create \
+              --base next \
+              --head main \
+              --title "chore: sync main to next (conflicts)" \
+              --body "Automated rebase failed due to code conflicts. Resolve manually by rebasing next onto main." \
+              --draft \
+              || true
             exit 0
           fi
 
-          # Create sync branch from next and merge main into it
-          git checkout -b sync/main-to-next origin/next
-
-          if git merge origin/main --no-edit; then
-            echo "Clean merge"
-          else
-            # Identify conflicting files
-            CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
-            VERSION_ONLY=true
-
-            while IFS= read -r f; do
-              case "$f" in
-                packages/*/package.json|.changeset/pre.json|package.json|pnpm-lock.yaml) ;;
-                *) VERSION_ONLY=false; break ;;
-              esac
-            done <<< "$CONFLICT_FILES"
-
-            if [ "$VERSION_ONLY" = true ]; then
-              echo "Resolving version conflicts (keeping next's versions)"
-              while IFS= read -r f; do
-                git checkout --ours "$f"
-                git add "$f"
-              done <<< "$CONFLICT_FILES"
-              pnpm install --no-frozen-lockfile
-              git add pnpm-lock.yaml
-              git commit --no-edit
+          # Re-enter pre-release mode if needed (after a promote cycle),
+          # but only if there's no open promote PR (to avoid invalidating it)
+          if [ ! -f .changeset/pre.json ]; then
+            OPEN_PROMOTE=$(gh pr list --base main --head next --state open --json number --jq 'length')
+            if [ "$OPEN_PROMOTE" -eq 0 ]; then
+              pnpm changeset pre enter beta
+              git add .changeset/pre.json
+              git commit -m "chore: re-enter beta pre-release mode"
             else
-              echo "::warning::Code conflicts detected in forward merge — creating draft PR for manual resolution"
-              git merge --abort
-              gh pr create \
-                --base next \
-                --head main \
-                --title "chore: sync main to next (conflicts)" \
-                --body "Automated forward merge has code conflicts that need manual resolution." \
-                --draft \
-                || true
-              exit 0
+              echo "Promote PR is open, skipping pre-mode re-entry"
             fi
           fi
 
-          # Re-enter pre-release mode if needed (after a promote cycle)
-          if [ ! -f .changeset/pre.json ]; then
-            pnpm changeset pre enter beta
-            git add .changeset/pre.json
-            git commit -m "chore: re-enter beta pre-release mode"
-          fi
-
-          git push origin sync/main-to-next --force-with-lease
-
-          gh pr create \
-            --base next \
-            --head sync/main-to-next \
-            --title "chore: sync main to next" \
-            --body "Automated forward merge to keep next as a superset of main." \
-            || true
-
-          PR=$(gh pr list --head sync/main-to-next --base next --state open --json number --jq '.[0].number // empty')
-          if [ -n "$PR" ]; then
-            gh pr merge "$PR" --auto --merge --delete-branch || true
-          fi
+          git push origin HEAD:refs/heads/next --force-with-lease=refs/heads/next:"$NEXT_SHA"
 
   snapshot:
     if: inputs.snapshot != '' && github.repository_owner == 'better-auth'
