@@ -52,7 +52,8 @@ async function resolveStripePrice(
 				active: true,
 				limit: 1,
 			});
-			return prices.data[0];
+			const priceData = prices.data[0];
+			if (priceData) return priceData;
 		}
 		if (priceId) {
 			return await stripeClient.prices.retrieve(priceId);
