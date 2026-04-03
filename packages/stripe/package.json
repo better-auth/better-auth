@@ -71,8 +71,8 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
     "better-call": "catalog:",
     "stripe": "^18 || ^19 || ^20"
   }

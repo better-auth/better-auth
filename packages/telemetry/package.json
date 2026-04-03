@@ -54,7 +54,7 @@
     "type-fest": "^5.4.4"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:"
   }

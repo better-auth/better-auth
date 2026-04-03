@@ -1359,7 +1359,7 @@ importers:
         specifier: 'catalog:'
         version: 0.4.0
       better-auth:
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
