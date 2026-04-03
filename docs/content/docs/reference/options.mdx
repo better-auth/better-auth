@@ -7,7 +7,9 @@ List of all the available options for configuring Better Auth. See [Better Auth 
 
 ## `appName`
 
-The name of the application.
+The name of your application. Defaults to `"Better Auth"`.
+
+It's used as a display name in contexts where your app needs to be identified — for example, when users set up two-factor authentication with an authenticator app (like Google Authenticator or Authy), `appName` appears as the issuer name in the TOTP entry. This can be overridden per-plugin (e.g. the [2FA plugin's `issuer` option](/docs/plugins/2fa#issuer)).
 
 ```ts
 import { betterAuth } from "better-auth";
