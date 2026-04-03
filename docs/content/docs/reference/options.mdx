@@ -601,7 +601,7 @@ export const auth = betterAuth({
 ```
 
 - `ipAddress`: IP address configuration for rate limiting and session tracking
-- `useSecureCookies`: Use secure cookies (default: `false`)
+- `useSecureCookies`: By default, cookies are set as secure only when the server is running in production mode. Set this to `true` to force cookies to always use the `Secure` attribute, regardless of environment.
 - `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 - `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
