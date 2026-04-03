@@ -141,7 +141,12 @@ jobs:
         env:
           SNAPSHOT_TAG: ${{ inputs.snapshot }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm changeset version --snapshot "$SNAPSHOT_TAG"
+        run: |
+          if [ -f .changeset/pre.json ]; then
+            echo "::error::Snapshots are not supported on branches in pre-release mode. Use a non-beta branch."
+            exit 1
+          fi
+          pnpm changeset version --snapshot "$SNAPSHOT_TAG"
 
       - name: Build
         run: pnpm build

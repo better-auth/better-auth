@@ -48,6 +48,15 @@ jobs:
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
+      - name: Check for auto-merge label
+        id: labels
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          HAS_LABEL=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | any(. == "backport-auto-merge")')
+          echo "auto_merge=$HAS_LABEL" >> "$GITHUB_OUTPUT"
+
       - name: Create backport PRs
         uses: korthout/backport-action@3c06f323a58619da1e8522229ebc8d5de2633e46 # v4.3.0
         with:
@@ -56,6 +65,6 @@ jobs:
           pull_title: '[backport ${target_branch}] ${pull_title}'
           copy_assignees: true
           add_author_as_reviewer: true
-          auto_merge_enabled: ${{ contains(github.event.pull_request.labels.*.name, 'backport-auto-merge') }}
+          auto_merge_enabled: ${{ steps.labels.outputs.auto_merge }}
           auto_merge_method: squash
           experimental: '{"conflict_resolution": "draft_commit_conflicts"}'
