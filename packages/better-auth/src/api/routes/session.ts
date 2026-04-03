@@ -21,8 +21,12 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
-import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
+import { symmetricDecodeJWT, verifyJWT as verifySecretJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
+import {
+	getCookieCacheJwtKeySource,
+	verifyCookieCacheJWT,
+} from "../../plugins/jwt/cookie-cache";
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { isAPIError } from "../../utils/is-api-error";
@@ -110,6 +114,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (sessionDataCookie) {
 					const strategy =
 						ctx.context.options.session?.cookieCache?.strategy || "compact";
+					const jwtKeySource = getCookieCacheJwtKeySource(ctx.context.options);
 
 					if (strategy === "jwe") {
 						// Decode JWE (encrypted)
@@ -140,14 +145,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							return ctx.json(null);
 						}
 					} else if (strategy === "jwt") {
-						// Decode JWT (signed with HMAC, not encrypted)
-						const payload = await verifyJWT<{
-							session: Session;
-							user: User;
-							updatedAt: number;
-							version?: string;
-							exp?: number;
-						}>(sessionDataCookie, ctx.context.secret);
+						const payload =
+							jwtKeySource === "jwks"
+								? await verifyCookieCacheJWT<{
+										session: Session;
+										user: User;
+										updatedAt: number;
+										version?: string;
+										exp?: number;
+									}>(ctx, sessionDataCookie)
+								: await verifySecretJWT<{
+										session: Session;
+										user: User;
+										updatedAt: number;
+										version?: string;
+										exp?: number;
+									}>(sessionDataCookie, ctx.context.secret);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {

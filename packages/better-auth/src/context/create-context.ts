@@ -20,6 +20,8 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
+import { getCookieCacheJwtKeySource } from "../plugins/jwt/cookie-cache";
+import type { JwtOptions } from "../plugins/jwt/types";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -240,6 +242,37 @@ Most of the features of Better Auth will not work correctly.`,
 				? "adapter"
 				: getDatabaseType(options.database),
 	});
+
+	const cookieCacheJwtKeySource = getCookieCacheJwtKeySource(options);
+	if (cookieCacheJwtKeySource === "jwks") {
+		if (options.session?.cookieCache?.strategy !== "jwt") {
+			throw new BetterAuthError(
+				'`session.cookieCache.jwt.keySource = "jwks"` requires `session.cookieCache.strategy = "jwt"`.',
+			);
+		}
+
+		const jwtPlugin = options.plugins?.find((plugin) => plugin.id === "jwt");
+		if (!jwtPlugin) {
+			throw new BetterAuthError(
+				'`session.cookieCache.jwt.keySource = "jwks"` requires the `jwt()` plugin to be installed.',
+			);
+		}
+
+		const jwtPluginOptions = (jwtPlugin.options ?? {}) as JwtOptions;
+		if (jwtPluginOptions.jwt?.sign) {
+			throw new BetterAuthError(
+				"Cookie-cache JWT JWKS mode does not support `jwt({ jwt: { sign } })`. Use locally managed JWKS keys instead.",
+			);
+		}
+
+		const gracePeriod = jwtPluginOptions.jwks?.gracePeriod;
+		const cookieMaxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+		if (gracePeriod !== undefined && cookieMaxAge > gracePeriod) {
+			logger.warn(
+				`[better-auth] \`session.cookieCache.maxAge\` (${cookieMaxAge}s) exceeds the JWT plugin JWKS grace period (${gracePeriod}s). Rotated keys may stop verifying cookie-cache JWTs before the cookie expires.`,
+			);
+		}
+	}
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 

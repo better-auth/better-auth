@@ -12,13 +12,19 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import type { JSONWebKeySet } from "jose";
 import {
-	signJWT,
+	signJWT as signSecretJWT,
 	symmetricDecodeJWT,
 	symmetricEncodeJWT,
-	verifyJWT,
+	verifyJWT as verifySecretJWT,
 } from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
+import {
+	getCookieCacheJwtKeySource,
+	signCookieCacheJWT,
+	verifyCookieCacheJWTWithJWKS,
+} from "../plugins/jwt/cookie-cache";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
@@ -191,6 +197,7 @@ export async function setCookieCache(
 	const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
 	const strategy =
 		ctx.context.options.session?.cookieCache?.strategy || "compact";
+	const jwtKeySource = getCookieCacheJwtKeySource(ctx.context.options);
 
 	let data: string;
 
@@ -203,12 +210,14 @@ export async function setCookieCache(
 			options.maxAge || 60 * 5,
 		);
 	} else if (strategy === "jwt") {
-		// Use JWT strategy with HMAC-SHA256 signature (HS256), no encryption
-		data = await signJWT(
-			sessionData,
-			ctx.context.secret,
-			options.maxAge || 60 * 5,
-		);
+		data =
+			jwtKeySource === "jwks"
+				? await signCookieCacheJWT(ctx, sessionData, options.maxAge || 60 * 5)
+				: await signSecretJWT(
+						sessionData,
+						ctx.context.secret,
+						options.maxAge || 60 * 5,
+					);
 	} else {
 		// Use compact strategy (base64url + HMAC, no JWT spec overhead)
 		// Also handles legacy "base64-hmac" for backward compatibility
@@ -420,6 +429,12 @@ export const getCookieCache = async <
 				isSecure?: boolean;
 				secret?: string;
 				strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
+				jwt?:
+					| {
+							keySource?: "secret" | "jwks";
+							jwks?: JSONWebKeySet;
+					  }
+					| undefined;
 				version?:
 					| string
 					| ((
@@ -477,16 +492,16 @@ export const getCookieCache = async <
 	}
 
 	if (sessionData) {
-		const secret = config?.secret || env.BETTER_AUTH_SECRET;
-		if (!secret) {
-			throw new BetterAuthError(
-				"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
-			);
-		}
-
 		const strategy = config?.strategy || "compact";
+		const jwtKeySource = config?.jwt?.keySource ?? "secret";
 
 		if (strategy === "jwe") {
+			const secret = config?.secret || env.BETTER_AUTH_SECRET;
+			if (!secret) {
+				throw new BetterAuthError(
+					"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+				);
+			}
 			// Use JWE strategy (encrypted)
 			const payload = await symmetricDecodeJWT<S>(
 				sessionData,
@@ -513,8 +528,26 @@ export const getCookieCache = async <
 			}
 			return null;
 		} else if (strategy === "jwt") {
-			// Use JWT strategy with HMAC signature (HS256), no encryption
-			const payload = await verifyJWT<S>(sessionData, secret);
+			const payload =
+				jwtKeySource === "jwks"
+					? await (() => {
+							const jwks = config?.jwt?.jwks;
+							if (!jwks) {
+								throw new BetterAuthError(
+									"getCookieCache requires `jwt.jwks` when `jwt.keySource` is set to `jwks`.",
+								);
+							}
+							return verifyCookieCacheJWTWithJWKS<S>(sessionData, jwks);
+						})()
+					: await (() => {
+							const secret = config?.secret || env.BETTER_AUTH_SECRET;
+							if (!secret) {
+								throw new BetterAuthError(
+									"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+								);
+							}
+							return verifySecretJWT<S>(sessionData, secret);
+						})();
 
 			if (payload && payload.session && payload.user) {
 				// Validate version if provided
@@ -535,6 +568,12 @@ export const getCookieCache = async <
 			}
 			return null;
 		} else {
+			const secret = config?.secret || env.BETTER_AUTH_SECRET;
+			if (!secret) {
+				throw new BetterAuthError(
+					"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+				);
+			}
 			// Use compact strategy (or legacy base64-hmac)
 			const sessionDataPayload = safeJSONParse<{
 				session: S;
