@@ -84,7 +84,7 @@ jobs:
         run: gh pr merge "$PR_NUMBER" --auto --squash --repo "$GITHUB_REPOSITORY"
 
       - name: Approve Version Packages PR
-        if: steps.changesets.outputs.pullRequestNumber && vars.RELEASE_APPROVAL_TOKEN != ''
+        if: steps.changesets.outputs.pullRequestNumber && secrets.RELEASE_APPROVAL_TOKEN != ''
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.RELEASE_APPROVAL_TOKEN }}

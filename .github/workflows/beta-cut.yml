@@ -33,6 +33,9 @@ jobs:
         with:
           node-version-file: '.nvmrc'
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Determine beta branch name
         id: branch
         run: |
@@ -65,7 +68,7 @@ jobs:
           BRANCH: ${{ steps.branch.outputs.name }}
         run: |
           git checkout -b "$BRANCH"
-          pnpm changeset pre exit
+          [ -f .changeset/pre.json ] && pnpm changeset pre exit || true
           pnpm changeset pre enter beta
           git add .changeset/pre.json
           git commit -m "chore: enter beta pre-release mode"

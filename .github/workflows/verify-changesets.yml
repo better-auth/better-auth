@@ -42,10 +42,8 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          CHANGESET_FILES=$(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md' || true)
-          COUNT=$(echo "$CHANGESET_FILES" | grep -c '.' || true)
+          COUNT=$(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -cv 'README.md' || true)
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
-          echo "files=$CHANGESET_FILES" >> "$GITHUB_OUTPUT"
 
           if [ "$COUNT" -eq 0 ]; then
             echo "No changeset files in diff"
