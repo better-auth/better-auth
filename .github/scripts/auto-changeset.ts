@@ -198,8 +198,7 @@ function main() {
 	const resolvedBump = bump === "skip" ? "patch" : bump;
 
 	// main and release/* only accept patch
-	const patchOnly =
-		pr.baseRef === "main" || pr.baseRef.startsWith("release/");
+	const patchOnly = pr.baseRef === "main" || pr.baseRef.startsWith("release/");
 	if (patchOnly && resolvedBump !== "patch") {
 		return skip(
 			`${resolvedBump} bump on ${pr.baseRef} (patch only). Retarget this PR to next.`,
