@@ -163,9 +163,19 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}/reactions" \
             -f content='+1' --silent || true
 
-      # Always checkout base branch — never execute fork code with secrets
+      - name: Get PR base ref
+        id: pr-base
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          BASE_REF=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq '.baseRefName')
+          echo "ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+
+      # Checkout the PR's base branch (not default branch) — never fork code
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
+          ref: ${{ steps.pr-base.outputs.ref }}
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -262,7 +272,7 @@ jobs:
 
           # Delete previous auto-changeset comment
           MARKER="<!-- auto-changeset -->"
-          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
             --jq ".[] | select(.body | startswith(\"${MARKER}\")) | .id" \
             | xargs -r -I{} gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/comments/{}" 2>/dev/null || true
 
