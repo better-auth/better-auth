@@ -290,6 +290,27 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		version: PACKAGE_VERSION,
 		getActions(_, $store) {
 			store = $store;
+			if (!isWeb && !opts?.disableCache) {
+				const cached = storage.getItem(localCacheName);
+				if (cached && cached !== "{}") {
+					const parsed = safeJSONParse<{
+						session?: { id?: string; expiresAt?: string };
+						user?: { id?: string };
+					}>(cached);
+					if (parsed?.session?.id && parsed?.user?.id) {
+						const expiresAt = parsed.session.expiresAt;
+						const isExpired =
+							expiresAt && new Date(expiresAt).getTime() <= Date.now();
+						if (!isExpired) {
+							$store.atoms.session?.set({
+								...$store.atoms.session.get(),
+								data: parsed,
+								isPending: true, // still pending — network will confirm
+							});
+						}
+					}
+				}
+			}
 			return {
 				/**
 				 * Get the stored cookie.
