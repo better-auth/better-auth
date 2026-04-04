@@ -14,6 +14,11 @@ const stateDataSchema = z.looseObject({
 	errorURL: z.string().optional(),
 	newUserURL: z.string().optional(),
 	expiresAt: z.number(),
+	/**
+	 * CSRF nonce returned to the OAuth provider. When using cookie state storage,
+	 * this must match the callback `state` query parameter.
+	 */
+	oauthState: z.string().optional(),
 	link: z
 		.object({
 			email: z.string(),
@@ -61,9 +66,10 @@ export async function generateGenericState(
 	// State data is encrypted into the cookie
 	// no verification record created
 	if (storeStateStrategy === "cookie") {
+		const payload: StateData = { ...stateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
 			key: c.context.secretConfig,
-			data: JSON.stringify(stateData),
+			data: JSON.stringify(payload),
 		});
 
 		const stateCookie = c.context.createAuthCookie(
@@ -103,7 +109,7 @@ export async function generateGenericState(
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify(stateData),
+		value: JSON.stringify({ ...stateData, oauthState: state } satisfies StateData),
 		identifier: state,
 		expiresAt,
 	});
@@ -166,6 +172,16 @@ export async function parseGenericState(
 			);
 		}
 
+		if (!parsedData.oauthState || parsedData.oauthState !== state) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+				},
+			);
+		}
+
 		// Clear the cookie after successful parsing
 		expireCookie(c, stateCookie);
 	} else {
@@ -179,6 +195,19 @@ export async function parseGenericState(
 		}
 
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
+
+		if (
+			parsedData.oauthState !== undefined &&
+			parsedData.oauthState !== state
+		) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+				},
+			);
+		}
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "state",

@@ -989,6 +989,109 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 
+	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "oauth2-csrf@test.com",
+				name: "OAuth2 CSRF",
+				sub: "oauth2-csrf",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-csrf",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: false,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		const victimHeaders = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(victimHeaders),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "test-cookie-csrf",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(victimHeaders),
+			},
+		});
+		const authUrl = signInRes.data?.url;
+		expect(authUrl).toBeTruthy();
+
+		let providerLocation: string | null = null;
+		await betterFetch(authUrl!, {
+			method: "GET",
+			customFetchImpl,
+			redirect: "manual",
+			onError(context) {
+				providerLocation = context.response.headers.get("location");
+			},
+		});
+		expect(providerLocation).toBeTruthy();
+
+		let callbackLocation: string | null = null;
+		await betterFetch(providerLocation!, {
+			method: "GET",
+			customFetchImpl,
+			headers: victimHeaders,
+			redirect: "manual",
+			onError(context) {
+				callbackLocation = context.response.headers.get("location");
+			},
+		});
+		expect(callbackLocation).toBeTruthy();
+		expect(callbackLocation).toContain("code=");
+		expect(callbackLocation).toContain("state=");
+
+		const callbackUrl = new URL(callbackLocation!);
+		const code = callbackUrl.searchParams.get("code");
+		expect(code).toBeTruthy();
+		callbackUrl.searchParams.set("state", "attacker-controlled-state");
+
+		let finalRedirect: string | null = null;
+		await betterFetch(callbackUrl.toString(), {
+			method: "GET",
+			customFetchImpl,
+			headers: victimHeaders,
+			redirect: "manual",
+			onError(context) {
+				finalRedirect = context.response.headers.get("location");
+			},
+		});
+
+		expect(finalRedirect).toBeTruthy();
+		expect(finalRedirect).toContain("error=state_mismatch");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: victimHeaders,
+			},
+		});
+		expect(session.data).toBeNull();
+	});
+
 	it("should await async mapProfileToUser", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
