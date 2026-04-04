@@ -1,0 +1,168 @@
+# cSpell:words anthropics
+name: Auto Changeset
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions: {}
+
+jobs:
+  changeset:
+    if: >
+      github.event.review.state == 'approved' &&
+      github.repository_owner == 'better-auth'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      # ── Phase 1: Deterministic analysis ──────────────────────────────
+      - name: Analyze PR
+        id: analyze
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: npx tsx .github/scripts/auto-changeset.ts
+
+      # ── Phase 2: AI description via claude-code-action ───────────────
+      - name: Generate changeset description
+        id: describe
+        if: steps.analyze.outputs.skip != 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@1b8ee3b94104046d71fde52ec3557651ad8c0d71 # v1.0.29
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            You are generating a changeset description for an approved PR in better-auth,
+            an open-source authentication framework for TypeScript.
+
+            A changeset describes what changed FOR USERS. It appears in CHANGELOG.md.
+
+            PR title: ${{ steps.analyze.outputs.pr_title }}
+            Bump type: ${{ steps.analyze.outputs.bump }}
+            Domain: ${{ steps.analyze.outputs.domain }}
+            ${{ steps.analyze.outputs.cubic_summary != '' && format('PR summary bot wrote: {0}', steps.analyze.outputs.cubic_summary) || '' }}
+            ${{ steps.analyze.outputs.human_body != '' && format('Author description: {0}', steps.analyze.outputs.human_body) || '' }}
+
+            Changed files:
+            ${{ steps.analyze.outputs.changed_files }}
+
+            Read the key changed files to understand what actually changed.
+
+            Format rules:
+            - First line: a clear, concise summary sentence (this becomes the CHANGELOG bullet)
+            - If the change warrants more detail, add a blank line then 2-4 bullet points
+            - If there are migration steps or breaking behavior, include them
+            - Do NOT include conventional commit prefixes (fix:, feat:) in your output
+            - Do NOT include PR numbers or issue numbers
+            - Start with a capital letter
+            - Use present tense ("Add", "Fix", "Remove")
+            - Be specific ("Fix session cookie prefix casing" not "Fix cookies")
+            - Keep total output under 200 words
+
+            Return the description in the structured output.
+          claude_args: |
+            --json-schema '{"type":"object","properties":{"description":{"type":"string","description":"The changeset description for CHANGELOG.md"}},"required":["description"],"additionalProperties":false}'
+            --max-turns 3
+            --allowedTools Read,Grep,Glob
+
+      # ── Phase 3: Commit or comment ───────────────────────────────────
+      - name: Configure git
+        if: steps.analyze.outputs.skip != 'true' && steps.analyze.outputs.is_fork != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "better-auth-releases[bot]"
+          git config user.email "273320539+better-auth-releases[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: Commit changeset
+        if: steps.analyze.outputs.skip != 'true' && steps.analyze.outputs.is_fork != 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ steps.analyze.outputs.head_ref }}
+          FRONTMATTER: ${{ steps.analyze.outputs.frontmatter }}
+          AI_OUTPUT: ${{ steps.describe.outputs.structured_output }}
+          FALLBACK: ${{ steps.analyze.outputs.fallback_description }}
+        run: |
+          # Use AI description if available, otherwise fall back
+          DESCRIPTION="$FALLBACK"
+          if [ -n "$AI_OUTPUT" ]; then
+            AI_DESC=$(echo "$AI_OUTPUT" | jq -r '.description // empty')
+            if [ -n "$AI_DESC" ]; then
+              DESCRIPTION="$AI_DESC"
+            fi
+          fi
+
+          FILENAME=".changeset/pr-${PR_NUMBER}.md"
+
+          git fetch origin "$HEAD_REF"
+          git checkout "$HEAD_REF"
+
+          printf '%s\n' "---" "$FRONTMATTER" "---" "" "$DESCRIPTION" "" > "$FILENAME"
+
+          git add "$FILENAME"
+          git commit -m "chore: add changeset for PR #${PR_NUMBER}"
+          git push origin "$HEAD_REF"
+          echo "Committed $FILENAME to $HEAD_REF"
+
+      - name: Comment changeset for fork PR
+        if: steps.analyze.outputs.skip != 'true' && steps.analyze.outputs.is_fork == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          FRONTMATTER: ${{ steps.analyze.outputs.frontmatter }}
+          AI_OUTPUT: ${{ steps.describe.outputs.structured_output }}
+          FALLBACK: ${{ steps.analyze.outputs.fallback_description }}
+        run: |
+          DESCRIPTION="$FALLBACK"
+          if [ -n "$AI_OUTPUT" ]; then
+            AI_DESC=$(echo "$AI_OUTPUT" | jq -r '.description // empty')
+            if [ -n "$AI_DESC" ]; then
+              DESCRIPTION="$AI_DESC"
+            fi
+          fi
+
+          CHANGESET=$(printf '%s\n' "---" "$FRONTMATTER" "---" "" "$DESCRIPTION")
+
+          # Delete previous auto-changeset comment
+          MARKER="<!-- auto-changeset -->"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.body | startswith(\"${MARKER}\")) | .id" \
+            | xargs -I{} gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/comments/{}" 2>/dev/null || true
+
+          # Write comment body to a temp file to avoid quoting issues
+          TMPFILE=$(mktemp)
+          printf '%s\n' "${MARKER}" \
+            "### Auto-generated changeset" "" \
+            "This PR needs a changeset. Copy the content below into \`.changeset/pr-${PR_NUMBER}.md\`:" "" \
+            '```md' "$CHANGESET" '```' "" \
+            "<details>" "<summary>Why do I need this?</summary>" "" \
+            "Changesets track version bumps for the release pipeline. Since this PR comes from a fork, the changeset can't be committed automatically. A maintainer can also push this changeset to your branch." \
+            "</details>" > "$TMPFILE"
+
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$TMPFILE"
+          rm -f "$TMPFILE"
+          echo "Posted changeset comment on PR #${PR_NUMBER}"
