@@ -227,9 +227,7 @@ function main() {
 			return;
 		}
 		if (bump === "skip") {
-			console.log(
-				`Skipping: type "${commit.type}" does not need a changeset`,
-			);
+			console.log(`Skipping: type "${commit.type}" does not need a changeset`);
 			setOutput("skip", "true");
 			return;
 		}
@@ -257,9 +255,10 @@ function main() {
 
 	// ── Build changeset frontmatter ──
 
-	const frontmatter = packages.length > 0
-		? packages.map((pkg) => `"${pkg}": ${resolvedBump}`).join("\n")
-		: `"better-auth": ${resolvedBump}`;
+	const frontmatter =
+		packages.length > 0
+			? packages.map((pkg) => `"${pkg}": ${resolvedBump}`).join("\n")
+			: `"better-auth": ${resolvedBump}`;
 
 	// ── Output everything ──
 
