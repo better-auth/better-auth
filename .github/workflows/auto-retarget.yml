@@ -32,10 +32,11 @@ jobs:
             exit 0
           fi
 
-          for f in $FILES; do
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
             CONTENT=$(gh api "repos/$GITHUB_REPOSITORY/contents/$f?ref=${{ github.event.pull_request.head.sha }}" --jq '.content' | base64 -d 2>/dev/null || true)
             [ -z "$CONTENT" ] && continue
-            BUMPS=$(echo "$CONTENT" | sed -n '/^---$/,/^---$/p' | grep -oE '(major|minor|patch)' | sort -u)
+            BUMPS=$(echo "$CONTENT" | sed -n '/^---$/,/^---$/p' | grep -oE '"[^"]+"\s*:\s*(major|minor|patch)' | grep -oE '(major|minor|patch)$' | sort -u)
             if echo "$BUMPS" | grep -q "major"; then
               MAX="major"
               break
@@ -43,7 +44,7 @@ jobs:
             if echo "$BUMPS" | grep -q "minor"; then
               MAX="minor"
             fi
-          done
+          done <<< "$FILES"
           echo "max=$MAX" >> "$GITHUB_OUTPUT"
 
       - name: Check next branch exists

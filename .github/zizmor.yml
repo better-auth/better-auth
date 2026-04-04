@@ -5,8 +5,8 @@ rules:
       # never checks out fork code. The pull_request_target trigger is required
       # for the action to post/delete PR comments.
       - semantic-pull-request.yml
-      # Intentional: sparse-checks out only .changeset/*.md from PR head SHA.
-      # No code execution from fork PRs. Required for auto-retargeting PRs.
+      # Intentional: reads .changeset/*.md content via GitHub API only.
+      # No checkout of fork code. No code execution.
       - auto-retarget.yml
   cache-poisoning:
     ignore:

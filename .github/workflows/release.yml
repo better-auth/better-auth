@@ -117,7 +117,7 @@ jobs:
           fi
           echo "Found $AHEAD commit(s) to sync from main to next"
 
-          EXISTING=$(gh pr list --base next --head main --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
+          EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Sync PR #$EXISTING already exists ($AHEAD commits pending)"
           else
@@ -132,7 +132,7 @@ jobs:
               --title "chore: sync main to next" \
               --body "$(echo -e "$SYNC_BODY")" || true
 
-            EXISTING=$(gh pr list --base next --head main --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
+            EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
           fi
 
           # Check for merge conflicts (GitHub computes merge state asynchronously)
