@@ -298,9 +298,11 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						user?: { id?: string };
 					}>(cached);
 					if (parsed?.session?.id && parsed?.user?.id) {
-						const expiresAt = parsed.session.expiresAt;
+						const expiresAtMs = parsed.session.expiresAt
+							? Date.parse(parsed.session.expiresAt)
+							: Number.NaN;
 						const isExpired =
-							expiresAt && new Date(expiresAt).getTime() <= Date.now();
+							!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now();
 						if (!isExpired) {
 							$store.atoms.session?.set({
 								...$store.atoms.session.get(),

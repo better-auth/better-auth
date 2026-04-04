@@ -1240,6 +1240,45 @@ describe("expo session cache hydration on startup", async () => {
 		expect(session.data).toBeNull();
 	});
 
+	it("should not hydrate session atom when expiresAt is missing or invalid", async () => {
+		const storage = new Map<string, string>();
+		const corruptSession = {
+			session: {
+				id: "corrupt-session-id",
+				userId: "user-id",
+				token: "corrupt-token",
+			},
+			user: {
+				id: "user-id",
+				email: "corrupt@test.com",
+				name: "Corrupt User",
+			},
+		};
+		storage.set("better-auth_session_data", JSON.stringify(corruptSession));
+
+		const { client } = await getTestInstance(
+			{
+				plugins: [expo()],
+				trustedOrigins: ["better-auth://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		const session = client.$store.atoms.session!.get();
+		expect(session.data).toBeNull();
+	});
+
 	it("should not hydrate session atom when disableCache is true", async () => {
 		const storage = new Map<string, string>();
 		const cachedSession = {
