@@ -34,10 +34,10 @@ jobs:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
-      # Team PR: checkout PR head (trusted code)
+      # Checkout the PR's base branch — never execute PR branch code with secrets
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -55,6 +55,21 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: npx tsx .github/scripts/auto-changeset.ts
+
+      - name: Get PR diff for AI context
+        id: diff
+        if: steps.analyze.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -c 20000)
+          DELIM="DIFF_EOF_$(openssl rand -hex 8)"
+          {
+            echo "content<<${DELIM}"
+            echo "$DIFF"
+            echo "${DELIM}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate changeset description
         id: describe
@@ -78,7 +93,8 @@ jobs:
             Changed files:
             ${{ steps.analyze.outputs.changed_files }}
 
-            Read the key changed files to understand what actually changed.
+            PR diff (truncated):
+            ${{ steps.diff.outputs.content }}
 
             Format rules:
             - First line: a clear, concise summary sentence (this becomes the CHANGELOG bullet)
@@ -94,17 +110,19 @@ jobs:
             Return the description in the structured output.
           claude_args: |
             --json-schema '{"type":"object","properties":{"description":{"type":"string","description":"The changeset description for CHANGELOG.md"}},"required":["description"],"additionalProperties":false}'
-            --max-turns 3
-            --allowedTools Read,Grep,Glob
+            --max-turns 1
 
       - name: Configure git
         if: steps.analyze.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ steps.analyze.outputs.head_ref }}
         run: |
           git config user.name "better-auth-releases[bot]"
           git config user.email "273320539+better-auth-releases[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch origin "$HEAD_REF"
+          git checkout "$HEAD_REF"
 
       - name: Commit changeset
         if: steps.analyze.outputs.skip != 'true'
@@ -128,7 +146,7 @@ jobs:
 
           git add "$FILENAME"
           git commit -m "chore: add changeset for PR #${PR_NUMBER}"
-          git push origin "HEAD:refs/heads/$HEAD_REF"
+          git push origin "$HEAD_REF"
           echo "Committed $FILENAME to $HEAD_REF"
 
   # ── Manual: /changeset slash command (works for all PRs) ───────────

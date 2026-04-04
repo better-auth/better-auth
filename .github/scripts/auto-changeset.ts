@@ -249,6 +249,20 @@ function main() {
 	// In force mode with a skip-type commit, default to patch
 	const resolvedBump = bump === "skip" ? "patch" : bump;
 
+	// ── Branch policy enforcement ──
+	// main and release/* only accept patch. If the derived bump is higher,
+	// block rather than silently downgrade — the PR should target next.
+	const patchOnly =
+		pr.baseRef === "main" || pr.baseRef.startsWith("release/");
+	if (patchOnly && resolvedBump !== "patch") {
+		console.error(
+			`Branch policy violation: ${resolvedBump} bump on ${pr.baseRef} (patch only). Retarget this PR to next.`,
+		);
+		setOutput("skip", "true");
+		setOutput("policy_violation", resolvedBump);
+		return;
+	}
+
 	// ── Extract context ──
 
 	const cubicSummary = extractCubicSummary(pr.body);
