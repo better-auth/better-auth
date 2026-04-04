@@ -375,9 +375,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							stateData.oauthState !== undefined &&
 							stateData.oauthState !== statePackage.state
 						) {
-							ctx.context.logger.error(
-								"OAuth proxy state binding mismatch",
-							);
+							ctx.context.logger.error("OAuth proxy state binding mismatch");
 							return;
 						}
 

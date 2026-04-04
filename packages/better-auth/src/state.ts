@@ -109,7 +109,10 @@ export async function generateGenericState(
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify({ ...stateData, oauthState: state } satisfies StateData),
+		value: JSON.stringify({
+			...stateData,
+			oauthState: state,
+		} satisfies StateData),
 		identifier: state,
 		expiresAt,
 	});
