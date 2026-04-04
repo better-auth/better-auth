@@ -16,6 +16,7 @@ jobs:
       github.actor != 'better-auth-releases[bot]'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - name: Detect max bump type from changesets
