@@ -142,6 +142,18 @@ function main() {
 	console.log(`Analyzing PR #${prNumber}`);
 
 	const pr = fetchPR(prNumber);
+
+	// Promote PRs (next → main) already carry versioned changesets — skip entirely
+	if (pr.headRef === "next" && pr.baseRef === "main" && !pr.isFork) {
+		console.log("Skipping: promote PR (next → main) — already versioned");
+		setOutput("skip", "true");
+		setOutput(
+			"skip_reason",
+			"promote PR (next → main) already contains versioned changesets",
+		);
+		return;
+	}
+
 	const commit = parseConventionalCommit(pr.title);
 	const bump = mapTypeToBump(commit.type, commit.breaking);
 	const touchesPackages = hasPackageChanges(pr.changedFiles);
