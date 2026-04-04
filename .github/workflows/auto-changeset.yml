@@ -269,6 +269,17 @@ jobs:
             --json-schema '{"type":"object","properties":{"description":{"type":"string","description":"The changeset description for CHANGELOG.md"}},"required":["description"],"additionalProperties":false}'
             --max-turns 1
 
+      - name: Post skip explanation
+        if: steps.analyze.outputs.skip == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          SKIP_REASON: ${{ steps.analyze.outputs.skip_reason }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --body "<!-- auto-changeset -->
+          **No changeset generated:** ${SKIP_REASON}"
+
       - name: Post changeset comment
         if: steps.analyze.outputs.skip != 'true'
         env:

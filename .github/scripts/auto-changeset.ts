@@ -144,55 +144,66 @@ function main() {
 	const commit = parseConventionalCommit(pr.title);
 	const bump = mapTypeToBump(commit.type, commit.breaking);
 	const touchesPackages = hasPackageChanges(pr.changedFiles);
-	const existingChangeset = pr.changedFiles.some(
+
+	// Auto-generated changesets (pr-{N}.md) can be safely regenerated.
+	// Only manually-created changesets (different filename) block re-generation.
+	const hasManualChangeset = pr.changedFiles.some(
 		(f) =>
 			f.startsWith(".changeset/") &&
 			f.endsWith(".md") &&
-			!f.endsWith("README.md"),
+			!f.endsWith("README.md") &&
+			!f.endsWith(`pr-${prNumber}.md`),
+	);
+	const hasAutoChangeset = pr.changedFiles.some((f) =>
+		f.endsWith(`.changeset/pr-${prNumber}.md`),
 	);
 
-	// FORCE mode (set by /changeset command) bypasses skip gates
+	// FORCE mode (set by /changeset command) bypasses most skip gates
+	// but still respects hard constraints (no packages, policy violations)
 	const force = process.env.FORCE === "true";
 
+	function skip(reason: string): void {
+		console.log(`Skipping: ${reason}`);
+		setOutput("skip", "true");
+		setOutput("skip_reason", reason);
+	}
+
 	if (!force) {
-		if (existingChangeset) {
-			console.log("Skipping: changeset already exists");
-			setOutput("skip", "true");
-			return;
+		if (hasManualChangeset) {
+			return skip("manual changeset already exists");
 		}
 		if (pr.labels.includes("skip-changeset")) {
-			console.log("Skipping: skip-changeset label");
-			setOutput("skip", "true");
-			return;
+			return skip("skip-changeset label");
 		}
 		if (bump === "skip") {
-			console.log(`Skipping: type "${commit.type}" does not need a changeset`);
-			setOutput("skip", "true");
-			return;
+			return skip(`type "${commit.type}" does not need a changeset`);
 		}
 		if (!touchesPackages) {
-			console.log("Skipping: no package files changed");
-			setOutput("skip", "true");
-			return;
+			return skip("no package files changed");
 		}
 	} else {
 		console.log("FORCE mode: skip gates bypassed");
-		if (existingChangeset) {
+		if (hasManualChangeset) {
 			setOutput("has_existing", "true");
 		}
+		if (!touchesPackages) {
+			return skip("no package files changed — nothing to release");
+		}
+	}
+
+	if (hasAutoChangeset) {
+		setOutput("has_existing", "true");
 	}
 
 	const resolvedBump = bump === "skip" ? "patch" : bump;
 
-	// main and release/* only accept patch — block instead of silently downgrading
+	// main and release/* only accept patch
 	const patchOnly =
 		pr.baseRef === "main" || pr.baseRef.startsWith("release/");
 	if (patchOnly && resolvedBump !== "patch") {
-		console.error(
-			`Branch policy violation: ${resolvedBump} bump on ${pr.baseRef} (patch only). Retarget this PR to next.`,
+		return skip(
+			`${resolvedBump} bump on ${pr.baseRef} (patch only). Retarget this PR to next.`,
 		);
-		setOutput("skip", "true");
-		return;
 	}
 
 	const cubicSummary = extractCubicSummary(pr.body);
