@@ -37,29 +37,6 @@ const REPO = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
 const CUBIC_OPEN = "<!-- This is an auto-generated description by cubic. -->";
 const CUBIC_CLOSE = "<!-- End of auto-generated description by cubic. -->";
 
-const DIR_TO_PACKAGE: [string, string][] = [
-	["packages/api-key/", "@better-auth/api-key"],
-	["packages/better-auth/", "better-auth"],
-	["packages/cli/", "auth"],
-	["packages/core/", "@better-auth/core"],
-	["packages/drizzle-adapter/", "@better-auth/drizzle-adapter"],
-	["packages/electron/", "@better-auth/electron"],
-	["packages/expo/", "@better-auth/expo"],
-	["packages/i18n/", "@better-auth/i18n"],
-	["packages/kysely-adapter/", "@better-auth/kysely-adapter"],
-	["packages/memory-adapter/", "@better-auth/memory-adapter"],
-	["packages/mongo-adapter/", "@better-auth/mongo-adapter"],
-	["packages/oauth-provider/", "@better-auth/oauth-provider"],
-	["packages/passkey/", "@better-auth/passkey"],
-	["packages/prisma-adapter/", "@better-auth/prisma-adapter"],
-	["packages/redis-storage/", "@better-auth/redis-storage"],
-	["packages/scim/", "@better-auth/scim"],
-	["packages/sso/", "@better-auth/sso"],
-	["packages/stripe/", "@better-auth/stripe"],
-	["packages/telemetry/", "@better-auth/telemetry"],
-	["packages/test-utils/", "@better-auth/test-utils"],
-];
-
 // ── GitHub CLI helpers ─────────────────────────────────────────────────
 
 function gh(args: string[]): string {
@@ -148,19 +125,8 @@ function extractHumanBody(body: string): string {
 	return human.replace(/closes?\s+#\d+/gi, "").trim();
 }
 
-// ── Package detection ──────────────────────────────────────────────────
-
-function detectPackages(files: string[]): string[] {
-	const packages = new Set<string>();
-	for (const file of files) {
-		for (const [prefix, pkg] of DIR_TO_PACKAGE) {
-			if (file.startsWith(prefix)) {
-				packages.add(pkg);
-				break;
-			}
-		}
-	}
-	return [...packages].sort();
+function hasPackageChanges(files: string[]): boolean {
+	return files.some((f) => f.startsWith("packages/"));
 }
 
 // ── Main ───────────────────────────────────────────────────────────────
@@ -177,9 +143,7 @@ function main() {
 	const pr = fetchPR(prNumber);
 	const commit = parseConventionalCommit(pr.title);
 	const bump = mapTypeToBump(commit.type, commit.breaking);
-	const packages = detectPackages(pr.changedFiles);
-
-	// Derive from already-fetched file list — no extra API call
+	const touchesPackages = hasPackageChanges(pr.changedFiles);
 	const existingChangeset = pr.changedFiles.some(
 		(f) =>
 			f.startsWith(".changeset/") &&
@@ -206,7 +170,7 @@ function main() {
 			setOutput("skip", "true");
 			return;
 		}
-		if (packages.length === 0) {
+		if (!touchesPackages) {
 			console.log("Skipping: no package files changed");
 			setOutput("skip", "true");
 			return;
@@ -236,10 +200,9 @@ function main() {
 	const domain = resolveDomain(commit.scope, pr.changedFiles);
 	const fallback = cubicSummary || commit.subject || pr.title;
 
-	const frontmatter =
-		packages.length > 0
-			? packages.map((pkg) => `"${pkg}": ${resolvedBump}`).join("\n")
-			: `"better-auth": ${resolvedBump}`;
+	// All packages are in one changesets fixed group — listing any one
+	// bumps them all together. "better-auth" is the representative.
+	const frontmatter = `"better-auth": ${resolvedBump}`;
 
 	console.log("Analysis complete:");
 	setOutput("skip", "false");
