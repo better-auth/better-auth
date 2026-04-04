@@ -1,0 +1,36 @@
+name: Auto Label
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+permissions: {}
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'better-auth'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
+        with:
+          sync-labels: false
+          dot: true
+
+      - name: Refine cross-cutting labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          LABELS=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name | select(startswith("c-"))]')
+          COUNT=$(echo "$LABELS" | jq 'length')
+
+          if [ "$COUNT" -ge 3 ]; then
+            echo "Cross-cutting PR: $COUNT c-* labels detected. Keeping only c-core."
+            for label in $(echo "$LABELS" | jq -r '.[] | select(. != "c-core")'); do
+              gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "$label" || true
+            done
+            gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "c-core" || true
+          fi
