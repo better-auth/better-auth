@@ -7,6 +7,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: auto-changeset-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   changeset:
     if: >
@@ -27,6 +31,7 @@ jobs:
 
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -118,14 +123,11 @@ jobs:
 
           FILENAME=".changeset/pr-${PR_NUMBER}.md"
 
-          git fetch origin "$HEAD_REF"
-          git checkout "$HEAD_REF"
-
           printf '%s\n' "---" "$FRONTMATTER" "---" "" "$DESCRIPTION" "" > "$FILENAME"
 
           git add "$FILENAME"
           git commit -m "chore: add changeset for PR #${PR_NUMBER}"
-          git push origin "$HEAD_REF"
+          git push origin "HEAD:refs/heads/$HEAD_REF"
           echo "Committed $FILENAME to $HEAD_REF"
 
       - name: Comment changeset for fork PR

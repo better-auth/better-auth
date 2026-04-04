@@ -1,4 +1,3 @@
-// cSpell:words GHEOF
 /**
  * Auto-changeset analysis — deterministic phase of changeset generation.
  *
@@ -13,6 +12,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import {
 	mapTypeToBump,
@@ -79,8 +79,8 @@ function ghJSON<T>(args: string[]): T {
 function setOutput(key: string, value: string): void {
 	const outputFile = process.env.GITHUB_OUTPUT;
 	if (outputFile) {
-		// Use heredoc format for safe multi-line values
-		appendFileSync(outputFile, `${key}<<GHEOF\n${value}\nGHEOF\n`);
+		const delim = `GHEOF_${randomBytes(8).toString("hex")}`;
+		appendFileSync(outputFile, `${key}<<${delim}\n${value}\n${delim}\n`);
 	}
 	console.log(
 		`  ${key}: ${value.length > 100 ? `${value.slice(0, 100)}...` : value}`,
@@ -164,7 +164,7 @@ function detectPackages(files: string[]): string[] {
 			}
 		}
 	}
-	return [...packages];
+	return [...packages].sort();
 }
 
 // ── Existing changeset detection ───────────────────────────────────────
@@ -246,13 +246,6 @@ function main() {
 		return;
 	}
 
-	// ── Enforce branch policy ──
-
-	const effectiveBump =
-		pr.baseRef === "main" || pr.baseRef.startsWith("release/")
-			? ("patch" as const)
-			: bump;
-
 	// ── Extract context ──
 
 	const cubicSummary = extractCubicSummary(pr.body);
@@ -263,14 +256,14 @@ function main() {
 	// ── Build changeset frontmatter ──
 
 	const frontmatter = packages
-		.map((pkg) => `"${pkg}": ${effectiveBump}`)
+		.map((pkg) => `"${pkg}": ${bump}`)
 		.join("\n");
 
 	// ── Output everything ──
 
 	console.log("Analysis complete:");
 	setOutput("skip", "false");
-	setOutput("bump", effectiveBump);
+	setOutput("bump", bump);
 	setOutput("packages", JSON.stringify(packages));
 	setOutput("frontmatter", frontmatter);
 	setOutput("domain", domain);
