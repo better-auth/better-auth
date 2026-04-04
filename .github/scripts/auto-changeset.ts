@@ -1,12 +1,9 @@
 /**
  * Auto-changeset analysis — deterministic phase of changeset generation.
  *
- * Runs skip gates, parses the conventional commit, detects packages,
- * extracts PR context (cubic summary, human body), and outputs everything
- * via GITHUB_OUTPUT for subsequent workflow steps.
- *
- * Does NOT generate descriptions or commit — those happen in the workflow
- * via claude-code-action (AI) and shell steps (commit).
+ * Separated from the workflow so that secrets-dependent steps (AI, commit)
+ * never execute code from the PR branch. This script runs from the base
+ * branch checkout and fetches all PR data via the GitHub API.
  *
  * Usage: GITHUB_TOKEN=... PR_NUMBER=... npx tsx .github/scripts/auto-changeset.ts
  */
@@ -34,6 +31,8 @@ interface PRData {
 }
 
 // ── Constants ──────────────────────────────────────────────────────────
+
+const REPO = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
 
 const CUBIC_OPEN = "<!-- This is an auto-generated description by cubic. -->";
 const CUBIC_CLOSE = "<!-- End of auto-generated description by cubic. -->";
@@ -90,8 +89,6 @@ function setOutput(key: string, value: string): void {
 // ── PR data fetching ───────────────────────────────────────────────────
 
 function fetchPR(prNumber: number): PRData {
-	const repo = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
-
 	const pr = ghJSON<{
 		title: string;
 		body: string;
@@ -104,15 +101,14 @@ function fetchPR(prNumber: number): PRData {
 		"view",
 		String(prNumber),
 		"--repo",
-		repo,
+		REPO,
 		"--json",
 		"title,body,headRefName,baseRefName,labels,isCrossRepository",
 	]);
 
 	const filesRaw = gh([
 		"api",
-		`repos/${repo}/pulls/${prNumber}/files`,
-		"--paginate",
+		`repos/${REPO}/pulls/${prNumber}/files?per_page=100`,
 		"--jq",
 		".[].filename",
 	]);
@@ -167,35 +163,6 @@ function detectPackages(files: string[]): string[] {
 	return [...packages].sort();
 }
 
-// ── Existing changeset detection ───────────────────────────────────────
-
-function hasExistingChangeset(prNumber: number): boolean {
-	const repo = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
-	try {
-		const diffFiles = gh([
-			"pr",
-			"diff",
-			String(prNumber),
-			"--repo",
-			repo,
-			"--name-only",
-		]);
-		return diffFiles
-			.split("\n")
-			.some(
-				(f) =>
-					f.startsWith(".changeset/") &&
-					f.endsWith(".md") &&
-					!f.endsWith("README.md"),
-			);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		throw new Error(
-			`Failed to check existing changesets for PR #${prNumber}: ${message}`,
-		);
-	}
-}
-
 // ── Main ───────────────────────────────────────────────────────────────
 
 function main() {
@@ -211,11 +178,16 @@ function main() {
 	const commit = parseConventionalCommit(pr.title);
 	const bump = mapTypeToBump(commit.type, commit.breaking);
 	const packages = detectPackages(pr.changedFiles);
-	const existingChangeset = hasExistingChangeset(prNumber);
 
-	// ── Skip gates ──
-	// FORCE mode (set by /changeset command) bypasses all skip gates
-	// so maintainers can always generate a recommendation
+	// Derive from already-fetched file list — no extra API call
+	const existingChangeset = pr.changedFiles.some(
+		(f) =>
+			f.startsWith(".changeset/") &&
+			f.endsWith(".md") &&
+			!f.endsWith("README.md"),
+	);
+
+	// FORCE mode (set by /changeset command) bypasses skip gates
 	const force = process.env.FORCE === "true";
 
 	if (!force) {
@@ -246,12 +218,9 @@ function main() {
 		}
 	}
 
-	// In force mode with a skip-type commit, default to patch
 	const resolvedBump = bump === "skip" ? "patch" : bump;
 
-	// ── Branch policy enforcement ──
-	// main and release/* only accept patch. If the derived bump is higher,
-	// block rather than silently downgrade — the PR should target next.
+	// main and release/* only accept patch — block instead of silently downgrading
 	const patchOnly =
 		pr.baseRef === "main" || pr.baseRef.startsWith("release/");
 	if (patchOnly && resolvedBump !== "patch") {
@@ -259,30 +228,22 @@ function main() {
 			`Branch policy violation: ${resolvedBump} bump on ${pr.baseRef} (patch only). Retarget this PR to next.`,
 		);
 		setOutput("skip", "true");
-		setOutput("policy_violation", resolvedBump);
 		return;
 	}
-
-	// ── Extract context ──
 
 	const cubicSummary = extractCubicSummary(pr.body);
 	const humanBody = extractHumanBody(pr.body);
 	const domain = resolveDomain(commit.scope, pr.changedFiles);
 	const fallback = cubicSummary || commit.subject || pr.title;
 
-	// ── Build changeset frontmatter ──
-
 	const frontmatter =
 		packages.length > 0
 			? packages.map((pkg) => `"${pkg}": ${resolvedBump}`).join("\n")
 			: `"better-auth": ${resolvedBump}`;
 
-	// ── Output everything ──
-
 	console.log("Analysis complete:");
 	setOutput("skip", "false");
 	setOutput("bump", resolvedBump);
-	setOutput("packages", JSON.stringify(packages));
 	setOutput("frontmatter", frontmatter);
 	setOutput("domain", domain);
 	setOutput("is_fork", String(pr.isFork));

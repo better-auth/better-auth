@@ -63,7 +63,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -c 20000)
+          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -n 400)
           DELIM="DIFF_EOF_$(openssl rand -hex 8)"
           {
             echo "content<<${DELIM}"
@@ -215,11 +215,12 @@ jobs:
 
       - name: Get PR diff for AI context
         id: diff
+        if: steps.analyze.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -c 20000)
+          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -n 400)
           DELIM="DIFF_EOF_$(openssl rand -hex 8)"
           {
             echo "content<<${DELIM}"
