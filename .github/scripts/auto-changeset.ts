@@ -148,15 +148,16 @@ function main() {
 
 	// Auto-generated changesets (pr-{N}.md) can be safely regenerated.
 	// Only manually-created changesets (different filename) block re-generation.
-	const hasManualChangeset = pr.changedFiles.some(
+	const autoChangesetPath = `.changeset/pr-${prNumber}.md`;
+	const changesetFiles = pr.changedFiles.filter(
 		(f) =>
 			f.startsWith(".changeset/") &&
 			f.endsWith(".md") &&
-			!f.endsWith("README.md") &&
-			!f.endsWith(`pr-${prNumber}.md`),
+			!f.endsWith("README.md"),
 	);
-	const hasAutoChangeset = pr.changedFiles.some((f) =>
-		f.endsWith(`.changeset/pr-${prNumber}.md`),
+	const hasAutoChangeset = changesetFiles.includes(autoChangesetPath);
+	const hasManualChangeset = changesetFiles.some(
+		(f) => f !== autoChangesetPath,
 	);
 
 	// FORCE mode (set by /changeset command) bypasses most skip gates
