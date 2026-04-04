@@ -211,27 +211,42 @@ function main() {
 	const existingChangeset = hasExistingChangeset(prNumber);
 
 	// ── Skip gates ──
+	// FORCE mode (set by /changeset command) bypasses all skip gates
+	// so maintainers can always generate a recommendation
+	const force = process.env.FORCE === "true";
 
-	if (existingChangeset) {
-		console.log("Skipping: changeset already exists");
-		setOutput("skip", "true");
-		return;
+	if (!force) {
+		if (existingChangeset) {
+			console.log("Skipping: changeset already exists");
+			setOutput("skip", "true");
+			return;
+		}
+		if (pr.labels.includes("skip-changeset")) {
+			console.log("Skipping: skip-changeset label");
+			setOutput("skip", "true");
+			return;
+		}
+		if (bump === "skip") {
+			console.log(
+				`Skipping: type "${commit.type}" does not need a changeset`,
+			);
+			setOutput("skip", "true");
+			return;
+		}
+		if (packages.length === 0) {
+			console.log("Skipping: no package files changed");
+			setOutput("skip", "true");
+			return;
+		}
+	} else {
+		console.log("FORCE mode: skip gates bypassed");
+		if (existingChangeset) {
+			setOutput("has_existing", "true");
+		}
 	}
-	if (pr.labels.includes("skip-changeset")) {
-		console.log("Skipping: skip-changeset label");
-		setOutput("skip", "true");
-		return;
-	}
-	if (bump === "skip") {
-		console.log(`Skipping: type "${commit.type}" does not need a changeset`);
-		setOutput("skip", "true");
-		return;
-	}
-	if (packages.length === 0) {
-		console.log("Skipping: no package files changed");
-		setOutput("skip", "true");
-		return;
-	}
+
+	// In force mode with a skip-type commit, default to patch
+	const resolvedBump = bump === "skip" ? "patch" : bump;
 
 	// ── Extract context ──
 
@@ -242,15 +257,15 @@ function main() {
 
 	// ── Build changeset frontmatter ──
 
-	const frontmatter = packages
-		.map((pkg) => `"${pkg}": ${bump}`)
-		.join("\n");
+	const frontmatter = packages.length > 0
+		? packages.map((pkg) => `"${pkg}": ${resolvedBump}`).join("\n")
+		: `"better-auth": ${resolvedBump}`;
 
 	// ── Output everything ──
 
 	console.log("Analysis complete:");
 	setOutput("skip", "false");
-	setOutput("bump", bump);
+	setOutput("bump", resolvedBump);
 	setOutput("packages", JSON.stringify(packages));
 	setOutput("frontmatter", frontmatter);
 	setOutput("domain", domain);
