@@ -52,3 +52,5 @@ moonshotai
 kimi
 ilike
 nvmrc
+retarget
+retargeted
