@@ -24,12 +24,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          LABELS=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name | select(startswith("c-"))]')
-          COUNT=$(echo "$LABELS" | jq 'length')
+          # Count primary domain labels only (exclude supporting labels like c-docs, c-devops)
+          ALL_LABELS=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name | select(startswith("c-"))]')
+          PRIMARY=$(echo "$ALL_LABELS" | jq '[.[] | select(. != "c-docs" and . != "c-devops")]')
+          COUNT=$(echo "$PRIMARY" | jq 'length')
 
           if [ "$COUNT" -ge 3 ]; then
-            echo "Cross-cutting PR: $COUNT c-* labels detected. Keeping only c-core."
-            for label in $(echo "$LABELS" | jq -r '.[] | select(. != "c-core")'); do
+            echo "Cross-cutting PR: $COUNT primary domain labels. Keeping only c-core."
+            # Remove all c-* labels except c-core, c-docs, c-devops
+            for label in $(echo "$PRIMARY" | jq -r '.[] | select(. != "c-core")'); do
               gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "$label" || true
             done
             gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "c-core" || true
