@@ -1,5 +1,6 @@
 {
   "name": "@better-auth-test/integration",
+  "private": true,
   "scripts": {
     "e2e:integration": "playwright test"
   },

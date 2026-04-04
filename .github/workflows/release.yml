@@ -96,8 +96,8 @@ jobs:
         with:
           version: pnpm ci:version
           publish: pnpm ci:release
-          title: "chore: version packages${{ github.ref_name == 'next' && ' (beta)' || '' }}"
-          commit: "chore: version packages${{ github.ref_name == 'next' && ' (beta)' || '' }}"
+          title: "chore: version packages"
+          commit: "chore: version packages"
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
