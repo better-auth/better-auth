@@ -197,14 +197,22 @@ function main() {
 		setOutput("has_existing", "true");
 	}
 
-	const resolvedBump = bump === "skip" ? "patch" : bump;
+	let resolvedBump = bump === "skip" ? "patch" : bump;
 
 	// main and release/* only accept patch
 	const patchOnly = pr.baseRef === "main" || pr.baseRef.startsWith("release/");
 	if (patchOnly && resolvedBump !== "patch") {
-		return skip(
-			`${resolvedBump} bump on ${pr.baseRef} (patch only). Retarget this PR to next.`,
-		);
+		if (force) {
+			// In /changeset mode, cap to patch so the recommendation is always usable
+			console.log(
+				`Capping ${resolvedBump} to patch on ${pr.baseRef} (patch-only branch)`,
+			);
+			resolvedBump = "patch";
+		} else {
+			return skip(
+				`${resolvedBump} bump on ${pr.baseRef} (patch only). Retarget this PR to next.`,
+			);
+		}
 	}
 
 	const cubicSummary = extractCubicSummary(pr.body);
