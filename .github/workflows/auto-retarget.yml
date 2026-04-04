@@ -1,0 +1,72 @@
+name: Auto-retarget
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  retarget:
+    if: >
+      github.repository_owner == 'better-auth' &&
+      !startsWith(github.event.pull_request.head.ref, 'changeset-release/') &&
+      github.actor != 'github-actions[bot]' &&
+      github.actor != 'better-auth-releases[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Detect max bump type from changesets
+        id: bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          MAX="patch"
+          FILES=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --name-only | grep '^\.changeset/.*\.md$' | grep -v 'README.md' || true)
+          if [ -z "$FILES" ]; then
+            echo "No changeset files in PR"
+            echo "max=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          for f in $FILES; do
+            CONTENT=$(gh api "repos/$GITHUB_REPOSITORY/contents/$f?ref=${{ github.event.pull_request.head.sha }}" --jq '.content' | base64 -d 2>/dev/null || true)
+            [ -z "$CONTENT" ] && continue
+            BUMPS=$(echo "$CONTENT" | sed -n '/^---$/,/^---$/p' | grep -oE '(major|minor|patch)' | sort -u)
+            if echo "$BUMPS" | grep -q "major"; then
+              MAX="major"
+              break
+            fi
+            if echo "$BUMPS" | grep -q "minor"; then
+              MAX="minor"
+            fi
+          done
+          echo "max=$MAX" >> "$GITHUB_OUTPUT"
+
+      - name: Check next branch exists
+        if: steps.bump.outputs.max == 'minor' || steps.bump.outputs.max == 'major'
+        id: next-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/branches/next" --silent 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::next branch does not exist. Cannot retarget."
+          fi
+
+      - name: Retarget PR to next
+        if: (steps.bump.outputs.max == 'minor' || steps.bump.outputs.max == 'major') && steps.next-check.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MAX_BUMP: ${{ steps.bump.outputs.max }}
+        run: |
+          gh pr edit "$PR_NUMBER" --base next --repo "$GITHUB_REPOSITORY"
+          gh pr edit "$PR_NUMBER" --add-label "retargeted-to-next" --repo "$GITHUB_REPOSITORY" || true
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body \
+            "This PR was automatically retargeted from \`main\` to \`next\` because it contains a **${MAX_BUMP}** changeset. The \`main\` branch only accepts \`patch\` (bug fix) changes. Features and breaking changes go through \`next\` for beta testing before promotion to stable."
