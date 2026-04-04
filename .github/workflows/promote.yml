@@ -67,7 +67,7 @@ jobs:
             echo "No changes to commit (previous run already pushed)"
           else
             git commit -m "chore: exit pre-release mode for v${VERSION}"
-            git push origin next
+            git push origin next || { echo "::error::Push to next failed. Check branch protection rules."; exit 1; }
           fi
 
       - name: Create promote PR
@@ -83,14 +83,22 @@ jobs:
               --base main \
               --head next \
               --title "chore: promote v${VERSION} to stable" \
-              --body "Promotes beta to stable. **Use 'Rebase and merge'** to preserve individual commits. Merging publishes v${VERSION} to npm with the \`latest\` tag."
+              --body "Promotes v${VERSION} from beta to stable. Merging this PR publishes all packages to npm with the \`latest\` tag.\n\n**This PR must be merged by an admin using 'Create a merge commit'** (not squash, not rebase). The admin bypass is required because main enforces linear history for regular PRs, but the promotion needs a merge commit to preserve individual contributor commits and their verified signatures."
           fi
 
       - name: Summary
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          echo "### Beta promoted" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Version:** \`$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Action:** Review and merge the PR to publish as stable." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Beta promoted"
+            echo ""
+            echo "- **Version:** \`$VERSION\`"
+            echo "- **Action:** Review and merge the PR with **Create a merge commit** (admin bypass)."
+            echo ""
+            echo "### After promotion"
+            echo "Once the promote PR is merged and the sync PR (main to next) is merged:"
+            echo '```'
+            echo "pnpm changeset pre enter beta && git add .changeset/pre.json && git commit -m 'chore: re-enter beta pre-release mode' && git push origin next"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
