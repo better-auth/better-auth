@@ -54,6 +54,9 @@ onlyBuiltDependencies:
 overrides:
   axios: <1.14.0
 
+patchedDependencies:
+  '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch
+
 trustPolicy: no-downgrade
 
 trustPolicyIgnoreAfter: 43200
