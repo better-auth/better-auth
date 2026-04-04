@@ -805,6 +805,7 @@ describe("signin", async () => {
 			redirect: true,
 		});
 		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expect(state).toBeTruthy();
 
 		await client.$fetch("/callback/google", {
 			query: {
