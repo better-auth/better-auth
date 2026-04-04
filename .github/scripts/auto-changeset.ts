@@ -193,17 +193,6 @@ function hasExistingChangeset(prNumber: number): boolean {
 	}
 }
 
-// ── Skip gate helpers ──────────────────────────────────────────────────
-
-function addLabel(prNumber: number, label: string): void {
-	const repo = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
-	try {
-		gh(["pr", "edit", String(prNumber), "--repo", repo, "--add-label", label]);
-	} catch {
-		// Label might not exist yet
-	}
-}
-
 // ── Main ───────────────────────────────────────────────────────────────
 
 function main() {
@@ -236,13 +225,11 @@ function main() {
 	if (bump === "skip") {
 		console.log(`Skipping: type "${commit.type}" does not need a changeset`);
 		setOutput("skip", "true");
-		addLabel(prNumber, "skip-changeset");
 		return;
 	}
 	if (packages.length === 0) {
 		console.log("Skipping: no package files changed");
 		setOutput("skip", "true");
-		addLabel(prNumber, "skip-changeset");
 		return;
 	}
 

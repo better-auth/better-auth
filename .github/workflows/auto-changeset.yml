@@ -29,9 +29,23 @@ jobs:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
+      - name: Detect fork
+        id: fork
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+        run: |
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "is_fork=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Team PRs: checkout PR head (trusted code, full AI pipeline)
+      # Fork PRs: checkout base branch (never execute fork code with secrets)
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ steps.fork.outputs.is_fork == 'true' && github.event.pull_request.base.sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -44,6 +58,7 @@ jobs:
           cache: pnpm
 
       # ── Phase 1: Deterministic analysis ──────────────────────────────
+      # Uses gh CLI for all PR data — no dependency on checked-out code content
       - name: Analyze PR
         id: analyze
         env:
@@ -52,9 +67,11 @@ jobs:
         run: npx tsx .github/scripts/auto-changeset.ts
 
       # ── Phase 2: AI description via claude-code-action ───────────────
+      # Only for team PRs — fork PRs use the fallback description
+      # (fork code is never checked out, so AI cannot read changed files)
       - name: Generate changeset description
         id: describe
-        if: steps.analyze.outputs.skip != 'true'
+        if: steps.analyze.outputs.skip != 'true' && steps.fork.outputs.is_fork != 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@1b8ee3b94104046d71fde52ec3557651ad8c0d71 # v1.0.29
         with:
@@ -95,7 +112,7 @@ jobs:
 
       # ── Phase 3: Commit or comment ───────────────────────────────────
       - name: Configure git
-        if: steps.analyze.outputs.skip != 'true' && steps.analyze.outputs.is_fork != 'true'
+        if: steps.analyze.outputs.skip != 'true' && steps.fork.outputs.is_fork != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
@@ -104,7 +121,7 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
       - name: Commit changeset
-        if: steps.analyze.outputs.skip != 'true' && steps.analyze.outputs.is_fork != 'true'
+        if: steps.analyze.outputs.skip != 'true' && steps.fork.outputs.is_fork != 'true'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ steps.analyze.outputs.head_ref }}
@@ -131,23 +148,15 @@ jobs:
           echo "Committed $FILENAME to $HEAD_REF"
 
       - name: Comment changeset for fork PR
-        if: steps.analyze.outputs.skip != 'true' && steps.analyze.outputs.is_fork == 'true'
+        if: steps.analyze.outputs.skip != 'true' && steps.fork.outputs.is_fork == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           FRONTMATTER: ${{ steps.analyze.outputs.frontmatter }}
-          AI_OUTPUT: ${{ steps.describe.outputs.structured_output }}
           FALLBACK: ${{ steps.analyze.outputs.fallback_description }}
         run: |
-          DESCRIPTION="$FALLBACK"
-          if [ -n "$AI_OUTPUT" ]; then
-            AI_DESC=$(echo "$AI_OUTPUT" | jq -r '.description // empty')
-            if [ -n "$AI_DESC" ]; then
-              DESCRIPTION="$AI_DESC"
-            fi
-          fi
-
-          CHANGESET=$(printf '%s\n' "---" "$FRONTMATTER" "---" "" "$DESCRIPTION")
+          # Fork PRs always use fallback description (no AI — fork code is not checked out)
+          CHANGESET=$(printf '%s\n' "---" "$FRONTMATTER" "---" "" "$FALLBACK")
 
           # Delete previous auto-changeset comment
           MARKER="<!-- auto-changeset -->"
