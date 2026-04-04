@@ -85,9 +85,10 @@ function fetchPR(prNumber: number): PRData {
 
 	const filesRaw = gh([
 		"api",
-		`repos/${REPO}/pulls/${prNumber}/files?per_page=100`,
-		"--jq",
-		".[].filename",
+		`repos/${REPO}/pulls/${prNumber}/files`,
+		"--paginate",
+		"-q",
+		".[] | .filename",
 	]);
 	const files = filesRaw ? filesRaw.split("\n").filter(Boolean) : [];
 

@@ -63,7 +63,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -n 400)
+          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" || true)
+          DIFF=$(printf '%s' "$DIFF" | head -n 400)
           DELIM="DIFF_EOF_$(openssl rand -hex 8)"
           {
             echo "content<<${DELIM}"
@@ -145,9 +146,13 @@ jobs:
           printf '%s\n' "---" "$FRONTMATTER" "---" "" "$DESCRIPTION" "" > "$FILENAME"
 
           git add "$FILENAME"
-          git commit -m "chore: add changeset for PR #${PR_NUMBER}"
-          git push origin "$HEAD_REF"
-          echo "Committed $FILENAME to $HEAD_REF"
+          if git diff --cached --quiet; then
+            echo "Changeset unchanged, nothing to commit"
+          else
+            git commit -m "chore: add changeset for PR #${PR_NUMBER}"
+            git push origin "$HEAD_REF"
+            echo "Committed $FILENAME to $HEAD_REF"
+          fi
 
   # ── Manual: /changeset slash command (works for all PRs) ───────────
   # Maintainers only. Always generates a recommendation, even if a
@@ -220,7 +225,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -n 400)
+          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" || true)
+          DIFF=$(printf '%s' "$DIFF" | head -n 400)
           DELIM="DIFF_EOF_$(openssl rand -hex 8)"
           {
             echo "content<<${DELIM}"
