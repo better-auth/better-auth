@@ -264,7 +264,7 @@ jobs:
           MARKER="<!-- auto-changeset -->"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
             --jq ".[] | select(.body | startswith(\"${MARKER}\")) | .id" \
-            | xargs -I{} gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/comments/{}" 2>/dev/null || true
+            | xargs -r -I{} gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/comments/{}" 2>/dev/null || true
 
           EXISTING_NOTE=""
           if [ "$HAS_EXISTING" = "true" ]; then

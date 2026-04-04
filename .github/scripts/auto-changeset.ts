@@ -188,8 +188,11 @@ function hasExistingChangeset(prNumber: number): boolean {
 					f.endsWith(".md") &&
 					!f.endsWith("README.md"),
 			);
-	} catch {
-		return false;
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(
+			`Failed to check existing changesets for PR #${prNumber}: ${message}`,
+		);
 	}
 }
 
