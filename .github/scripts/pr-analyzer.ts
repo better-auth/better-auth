@@ -1,10 +1,8 @@
 /**
- * PR Analyzer — shared classification module
+ * PR Analyzer — classification module for mapping conventional commit
+ * scopes and file paths to c-* domain labels.
  *
- * Pure functions for mapping conventional commit scopes and file paths
- * to c-* domain labels. No side effects, no network calls.
- *
- * Used by: label-pr.ts, auto-changeset.ts, release-notes.ts
+ * Pure functions, no side effects, no network calls.
  */
 
 const SCOPE_TO_DOMAIN: Record<string, string> = {
