@@ -7,7 +7,9 @@
 	"tags": ["-lintignore"],
 	"ignore": [
 		// test utilities only imported by test files — invisible to --production
-		"packages/better-auth/src/client/test-plugin.ts"
+		"packages/better-auth/src/client/test-plugin.ts",
+		// CI scripts used by GitHub Actions workflows, not by packages
+		".github/scripts/**"
 	],
 	"ignoreBinaries": ["playwright", "changeset", "open", "remark"],
 	// exports used only by tests — invisible to --production mode

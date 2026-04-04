@@ -1,0 +1,116 @@
+# Auto-label config for actions/labeler
+# Maps changed file paths to c-* domain labels
+# All matching labels are applied; cross-cutting PRs refined in workflow
+
+c-core:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/better-auth/src/auth/**'
+      - 'packages/better-auth/src/context/**'
+      - 'packages/better-auth/src/types/**'
+      - 'packages/better-auth/src/utils/**'
+      - 'packages/better-auth/src/crypto/**'
+      - 'packages/better-auth/src/api/**'
+      - 'packages/better-auth/src/cookies/**'
+      - 'packages/better-auth/src/client/**'
+      - 'packages/better-auth/src/plugins/jwt/**'
+      - 'packages/better-auth/src/plugins/bearer/**'
+      - 'packages/better-auth/src/plugins/multi-session/**'
+      - 'packages/better-auth/src/plugins/custom-session/**'
+      - 'packages/core/**'
+      - 'packages/redis-storage/**'
+
+c-database:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/better-auth/src/db/**'
+      - 'packages/better-auth/src/adapters/**'
+      - 'packages/drizzle-adapter/**'
+      - 'packages/prisma-adapter/**'
+      - 'packages/mongo-adapter/**'
+      - 'packages/kysely-adapter/**'
+      - 'packages/memory-adapter/**'
+
+c-oauth:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/better-auth/src/plugins/generic-oauth/**'
+      - 'packages/better-auth/src/plugins/oauth-proxy/**'
+      - 'packages/better-auth/src/plugins/one-tap/**'
+      - 'packages/better-auth/src/oauth2/**'
+      - 'packages/core/src/social-providers/**'
+      - 'packages/core/src/oauth2/**'
+
+c-credentials:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/better-auth/src/plugins/magic-link/**'
+      - 'packages/better-auth/src/plugins/email-otp/**'
+      - 'packages/better-auth/src/plugins/phone-number/**'
+      - 'packages/better-auth/src/plugins/username/**'
+      - 'packages/better-auth/src/plugins/anonymous/**'
+      - 'packages/better-auth/src/plugins/siwe/**'
+      - 'packages/passkey/**'
+
+c-identity:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/oauth-provider/**'
+      - 'packages/better-auth/src/plugins/oidc-provider/**'
+      - 'packages/better-auth/src/plugins/mcp/**'
+      - 'packages/better-auth/src/plugins/device-authorization/**'
+
+c-organization:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/better-auth/src/plugins/organization/**'
+      - 'packages/better-auth/src/plugins/admin/**'
+      - 'packages/better-auth/src/plugins/access/**'
+
+c-security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/better-auth/src/plugins/two-factor/**'
+      - 'packages/better-auth/src/api/rate-limiter/**'
+      - 'packages/better-auth/src/plugins/captcha/**'
+      - 'packages/better-auth/src/plugins/haveibeenpwned/**'
+
+c-enterprise:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/sso/**'
+      - 'packages/scim/**'
+
+c-payments:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/stripe/**'
+      - 'packages/api-key/**'
+
+c-platform:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/expo/**'
+      - 'packages/electron/**'
+      - 'packages/better-auth/src/integrations/**'
+
+c-devtools:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'packages/cli/**'
+      - 'packages/better-auth/src/plugins/open-api/**'
+      - 'packages/telemetry/**'
+      - 'packages/i18n/**'
+      - 'packages/test-utils/**'
+
+c-docs:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**'
+      - 'demo/**'
+
+c-devops:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**'
+      - 'e2e/**'
