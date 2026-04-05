@@ -3430,6 +3430,30 @@ describe("organization additionalFields with returned: false", async () => {
 
 	const { headers } = await signInWithTestUser();
 
+	it("inferOrgAdditionalFields should filter out schema keys without additionalFields", async () => {
+		const { auth: authWithSession } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								logo: { type: "string", required: false },
+							},
+						},
+						session: {
+							fields: { activeOrganizationId: "orgId" },
+						},
+					},
+				}),
+			],
+		});
+		const inferred = inferOrgAdditionalFields<typeof authWithSession>();
+		type Schema = NonNullable<typeof inferred>;
+		// session has no additionalFields, should not be in inferred schema keys
+		type HasSession = "session" extends keyof Schema ? true : false;
+		expectTypeOf<HasSession>().toEqualTypeOf<false>();
+	});
+
 	const client = createAuthClient({
 		plugins: [
 			organizationClient({
