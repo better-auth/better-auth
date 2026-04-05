@@ -55,3 +55,6 @@ nvmrc
 retarget
 retargeted
 GHEOF
+denoland
+zizmor
+zizmorcore
