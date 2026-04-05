@@ -1,8 +1,8 @@
 # Auto-label config for actions/labeler
-# Maps changed file paths to c-* domain labels
-# All matching labels are applied; cross-cutting PRs refined in workflow
+# Maps changed file paths to domain labels
+# All matching labels are applied
 
-c-core:
+core:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/better-auth/src/auth/**'
@@ -20,7 +20,7 @@ c-core:
       - 'packages/core/**'
       - 'packages/redis-storage/**'
 
-c-database:
+database:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/better-auth/src/db/**'
@@ -31,7 +31,7 @@ c-database:
       - 'packages/kysely-adapter/**'
       - 'packages/memory-adapter/**'
 
-c-oauth:
+oauth:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/better-auth/src/plugins/generic-oauth/**'
@@ -41,7 +41,7 @@ c-oauth:
       - 'packages/core/src/social-providers/**'
       - 'packages/core/src/oauth2/**'
 
-c-credentials:
+credentials:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/better-auth/src/plugins/magic-link/**'
@@ -52,7 +52,7 @@ c-credentials:
       - 'packages/better-auth/src/plugins/siwe/**'
       - 'packages/passkey/**'
 
-c-identity:
+identity:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/oauth-provider/**'
@@ -60,14 +60,14 @@ c-identity:
       - 'packages/better-auth/src/plugins/mcp/**'
       - 'packages/better-auth/src/plugins/device-authorization/**'
 
-c-organization:
+organization:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/better-auth/src/plugins/organization/**'
       - 'packages/better-auth/src/plugins/admin/**'
       - 'packages/better-auth/src/plugins/access/**'
 
-c-security:
+security:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/better-auth/src/plugins/two-factor/**'
@@ -75,26 +75,26 @@ c-security:
       - 'packages/better-auth/src/plugins/captcha/**'
       - 'packages/better-auth/src/plugins/haveibeenpwned/**'
 
-c-enterprise:
+enterprise:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/sso/**'
       - 'packages/scim/**'
 
-c-payments:
+payments:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/stripe/**'
       - 'packages/api-key/**'
 
-c-platform:
+platform:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/expo/**'
       - 'packages/electron/**'
       - 'packages/better-auth/src/integrations/**'
 
-c-devtools:
+devtools:
   - changed-files:
     - any-glob-to-any-file:
       - 'packages/cli/**'
@@ -103,13 +103,13 @@ c-devtools:
       - 'packages/i18n/**'
       - 'packages/test-utils/**'
 
-c-docs:
+docs:
   - changed-files:
     - any-glob-to-any-file:
       - 'docs/**'
       - 'demo/**'
 
-c-devops:
+devops:
   - changed-files:
     - any-glob-to-any-file:
       - '.github/**'

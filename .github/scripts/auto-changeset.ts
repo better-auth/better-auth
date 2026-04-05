@@ -11,11 +11,6 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { appendFileSync } from "node:fs";
-import {
-	mapTypeToBump,
-	parseConventionalCommit,
-	resolveDomain,
-} from "./pr-analyzer.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -30,12 +25,55 @@ interface PRData {
 	changedFiles: string[];
 }
 
+interface ConventionalCommit {
+	type: string;
+	scope: string;
+	subject: string;
+	breaking: boolean;
+}
+
 // ── Constants ──────────────────────────────────────────────────────────
 
 const REPO = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
 
 const CUBIC_OPEN = "<!-- This is an auto-generated description by cubic. -->";
 const CUBIC_CLOSE = "<!-- End of auto-generated description by cubic. -->";
+
+// ── Conventional commit helpers ────────────────────────────────────────
+
+function parseConventionalCommit(title: string): ConventionalCommit {
+	const typeMatch = title.match(/^([a-z]+)/);
+	const type = typeMatch?.[1] ?? "";
+	const scopeMatch = title.match(/^[a-z]+\(([^)]+)\)/);
+	const scope = scopeMatch?.[1] ?? "";
+	const breaking = /^[a-z]+(\([^)]+\))?!:/.test(title);
+	const subject = title.replace(/^[a-z]+(\([^)]+\))?!?:\s*/, "");
+	return { type, scope, subject, breaking };
+}
+
+function mapTypeToBump(
+	type: string,
+	breaking: boolean,
+): "patch" | "minor" | "major" | "skip" {
+	if (breaking) return "major";
+	switch (type) {
+		case "fix":
+		case "perf":
+		case "refactor":
+			return "patch";
+		case "feat":
+			return "minor";
+		case "chore":
+		case "docs":
+		case "ci":
+		case "test":
+		case "style":
+		case "build":
+			return "skip";
+		default:
+			return "patch";
+	}
+}
 
 // ── GitHub CLI helpers ─────────────────────────────────────────────────
 
@@ -207,7 +245,6 @@ function main() {
 	const patchOnly = pr.baseRef === "main" || pr.baseRef.startsWith("release/");
 	if (patchOnly && resolvedBump !== "patch") {
 		if (force) {
-			// In /changeset mode, cap to patch so the recommendation is always usable
 			console.log(
 				`Capping ${resolvedBump} to patch on ${pr.baseRef} (patch-only branch)`,
 			);
@@ -220,7 +257,6 @@ function main() {
 	}
 
 	const cubicSummary = extractCubicSummary(pr.body);
-	const domain = resolveDomain(commit.scope, pr.changedFiles);
 	const fallback = cubicSummary || commit.subject || pr.title;
 
 	// All packages are in one changesets fixed group — listing any one
@@ -231,7 +267,6 @@ function main() {
 	setOutput("skip", "false");
 	setOutput("bump", resolvedBump);
 	setOutput("frontmatter", frontmatter);
-	setOutput("domain", domain);
 	setOutput("pr_title", pr.title);
 	setOutput("cubic_summary", cubicSummary);
 	setOutput("fallback_description", fallback);
