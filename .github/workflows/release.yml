@@ -96,22 +96,18 @@ jobs:
         with:
           version: pnpm ci:version
           publish: pnpm ci:release
-          title: "chore: version packages${{ github.ref_name == 'next' && ' (beta)' || '' }}"
-          commit: "chore: version packages${{ github.ref_name == 'next' && ' (beta)' || '' }}"
+          title: "chore: version packages"
+          commit: "chore: version packages"
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
 
-      - name: Rebase next onto main
+      - name: Sync main to next via PR
         if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "better-auth-releases[bot]"
-          git config user.email "273320539+better-auth-releases[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
           git fetch origin next || { echo "next branch does not exist, skipping"; exit 0; }
 
           AHEAD=$(git rev-list --count origin/next..origin/main)
@@ -121,39 +117,39 @@ jobs:
           fi
           echo "Found $AHEAD commit(s) to sync from main to next"
 
-          # Capture next's SHA for force-with-lease (detached HEAD has no tracking ref)
-          NEXT_SHA=$(git rev-parse origin/next)
-
-          git checkout origin/next
-          if git rebase origin/main; then
-            echo "Clean rebase"
+          EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Sync PR #$EXISTING already exists ($AHEAD commits pending)"
           else
-            echo "::warning::Rebase conflicts — creating draft PR for manual resolution"
-            git rebase --abort
+            SYNC_BODY="Brings stable fixes from main into the next branch."
+            SYNC_BODY="$SYNC_BODY\n\n**This PR must be merged by a maintainer using 'Create a merge commit'** (not squash, not rebase). This preserves individual fix commits and their verified signatures."
+            SYNC_BODY="$SYNC_BODY\n\nIf there are conflicts, resolve them by keeping next's versions for \`package.json\` files (next is always ahead of main in version numbers)."
+
             gh pr create \
               --base next \
               --head main \
-              --title "chore: sync main to next (conflicts)" \
-              --body "Automated rebase failed due to code conflicts. Resolve manually by rebasing next onto main." \
-              --draft \
-              || true
-            exit 0
+              --repo "$GITHUB_REPOSITORY" \
+              --title "chore: sync main to next" \
+              --body "$(echo -e "$SYNC_BODY")" || true
+
+            EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
           fi
 
-          # Re-enter pre-release mode if needed (after a promote cycle),
-          # but only if there's no open promote PR (to avoid invalidating it)
-          if [ ! -f .changeset/pre.json ]; then
-            OPEN_PROMOTE=$(gh pr list --base main --head next --state open --json number --jq 'length')
-            if [ "$OPEN_PROMOTE" -eq 0 ]; then
-              pnpm changeset pre enter beta
-              git add .changeset/pre.json
-              git commit -m "chore: re-enter beta pre-release mode"
-            else
-              echo "Promote PR is open, skipping pre-mode re-entry"
+          # Check for merge conflicts (GitHub computes merge state asynchronously)
+          if [ -n "$EXISTING" ]; then
+            sleep 10
+            for _ in 1 2 3 4 5; do
+              MERGEABLE=$(gh pr view "$EXISTING" --repo "$GITHUB_REPOSITORY" --json mergeable --jq '.mergeable')
+              [ "$MERGEABLE" != "UNKNOWN" ] && break
+              sleep 10
+            done
+            if [ "$MERGEABLE" = "CONFLICTING" ]; then
+              gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --add-label "has-conflicts" || true
+              echo "::warning::Sync PR #$EXISTING has merge conflicts. Resolve by keeping next's versions for package.json files."
+            elif [ "$MERGEABLE" = "MERGEABLE" ]; then
+              gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --remove-label "has-conflicts" 2>/dev/null || true
             fi
           fi
-
-          git push origin HEAD:refs/heads/next --force-with-lease=refs/heads/next:"$NEXT_SHA"
 
   snapshot:
     if: github.event_name == 'workflow_dispatch' && inputs.snapshot != '' && github.repository_owner == 'better-auth'
