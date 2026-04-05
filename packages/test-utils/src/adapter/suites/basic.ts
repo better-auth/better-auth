@@ -3156,6 +3156,29 @@ export const getNormalTestSuiteTests = (
 				console.log(findResult);
 			},
 		},
+		"create - should not get race-condition issues during concurrent row creations":
+			async () => {
+				// This test works by creating several concurrent row creations,
+				// then checking that all returned rows are in the correct order
+				const count = 20;
+				const promises = [];
+				for (let i = 0; i < count; i++) {
+					const { id: _, ...user } = await generate("user");
+					promises.push(
+						adapter.create<User>({
+							model: "user",
+							data: { ...user, email: `${i}@email.com` },
+						}),
+					);
+				}
+				const results = await Promise.all(promises);
+				expect(results.length).toBe(count);
+				for (let i = 0; i < count; i++) {
+					const result = results[i]!;
+					expect(result.email).toBe(`${i}@email.com`);
+					expect(result.id).toBeDefined();
+				}
+			},
 		"update - should support multiple where conditions under AND connector with unique field":
 			async () => {
 				// This test is specific to Prisma where unique fields must be at root level,
