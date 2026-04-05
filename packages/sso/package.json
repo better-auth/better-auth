@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/sso",
-  "version": "1.5.7-beta.1",
+  "version": "1.5.6",
   "description": "SSO plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -83,10 +83,10 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "better-auth": "workspace:*",
+    "better-auth": "workspace:^",
     "better-call": "catalog:"
   }
 }

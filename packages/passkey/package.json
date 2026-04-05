@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.5.7-beta.1",
+  "version": "1.5.6",
   "description": "Passkey plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -68,10 +68,10 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "better-auth": "workspace:*",
+    "better-auth": "workspace:^",
     "better-call": "catalog:",
     "nanostores": "^1.0.1"
   }
