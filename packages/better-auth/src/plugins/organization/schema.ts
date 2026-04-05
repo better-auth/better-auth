@@ -1,11 +1,11 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { generateId } from "@better-auth/core/utils/id";
+import type { Prettify } from "better-call";
 import * as z from "zod";
 import type {
 	FieldAttributeToObject,
 	RemoveFieldsWithReturnedFalse,
 } from "../../db";
-import type { Prettify } from "../../types/helper";
 import type { OrganizationOptions } from "./types";
 
 type InferSchema<
