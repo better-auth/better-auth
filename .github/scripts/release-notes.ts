@@ -331,13 +331,13 @@ function buildChangesetIndex(branch: string): {
 				["ls-tree", "--name-only", ref, ".changeset/"],
 				{ encoding: "utf-8" },
 			);
+			const SKIP_FILES = new Set(["README", "config"]);
 			let foundAny = false;
 			for (const file of listing.split("\n")) {
 				const name = file.replace(/^\.changeset\//, "").replace(/\.md$/, "");
-				if (name.startsWith("pr-") || name.startsWith("commit-")) {
-					ids.add(name);
-					foundAny = true;
-				}
+				if (!name || SKIP_FILES.has(name) || !file.endsWith(".md")) continue;
+				ids.add(name);
+				foundAny = true;
 			}
 			if (foundAny) {
 				effectiveBranch = ref;
