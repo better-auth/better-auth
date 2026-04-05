@@ -317,13 +317,14 @@ function buildChangesetIndex(branch: string): {
 	}
 
 	// Scan .changeset/ for pr-* and commit-* files. Try the target ref first;
-	// if empty, try HEAD~1 — on main/release/*, `changeset version` deletes
-	// the files before publish runs, but the parent commit still has them.
-	// Try the target ref first, then its parent — on main/release/*,
-	// `changeset version` deletes the files, but the parent still has them.
+	// Search backwards from the target ref to find a commit that still has
+	// changeset files. On main after promotion, `changeset version` ran on
+	// next before the merge, so both HEAD and HEAD~1 may have them deleted.
 	const baseRef = branch || "HEAD";
 	let effectiveBranch = branch;
-	for (const ref of [baseRef, `${baseRef}~1`]) {
+	const refsToTry = [baseRef];
+	for (let i = 1; i <= 5; i++) refsToTry.push(`${baseRef}~${i}`);
+	for (const ref of refsToTry) {
 		try {
 			const listing = execFileSync(
 				"git",
