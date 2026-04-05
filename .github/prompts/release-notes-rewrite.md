@@ -34,12 +34,20 @@ Code references:
 - Do NOT wrap general concepts in backticks (e.g., "password hashing" stays plain)
 
 User focus:
+- The changelog is for users who are at least slightly technical (they
+  use the library and want to know what changed for them)
 - Describe the impact on users, not the internal code change
 - "Fixed a bug where sessions expired immediately after creation" is better
   than "Aligned session fresh age calculation with creation time"
 - "Password hashing no longer blocks the server during sign-up" is better
   than "Used non-blocking scrypt for password hashing"
 - If a change is behavioral (affects what users experience), lead with the behavior
+- Be thorough in understanding flow-on effects that may not be immediately
+  apparent: a package upgrade that looks internal may patch a user-facing
+  bug; a refactor may stabilize a race condition that caused intermittent
+  failures; a dependency bump may change minimum supported versions
+- When inspecting a diff, look at the PR title and body for the author's
+  context (the outcome they intended, not just the technical detail)
 
 Breaking changes:
 - Entries with `**BREAKING:**` prefix must clearly explain what changed
