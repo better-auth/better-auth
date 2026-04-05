@@ -139,7 +139,7 @@ jobs:
         run: |
           MARKER="<!-- auto-changeset -->"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
-            --jq ".[] | select((.body | startswith(\"${MARKER}\")) and (.user.login == \"better-auth-releases[bot]\" or .user.login == \"github-actions[bot]\")) | .id" \
+            --jq ".[] | select((.body | startswith(\"${MARKER}\")) and (.user.login == \"better-release[bot]\" or .user.login == \"github-actions[bot]\")) | .id" \
             | xargs -r -I{} gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/comments/{}" 2>/dev/null || true
 
       - name: Post skip explanation
