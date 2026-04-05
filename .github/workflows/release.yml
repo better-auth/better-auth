@@ -306,6 +306,7 @@ jobs:
     environment: Release
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Generate App Token
         id: app-token
