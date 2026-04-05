@@ -109,8 +109,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const c = await builder.returning();
 					return c[0];
 				}
-				await builder.execute();
+
+				if ("$returningId" in builder) {
+					builder = builder.$returningId();
+				}
+
 				const schemaModel = getSchema(model);
+				const result = await builder.execute();
+
+				if (result && result.length > 0 && result[0].id) {
+					const res = await db
+						.select()
+						.from(schemaModel)
+						.where(eq(schemaModel.id, result[0].id))
+						.execute();
+					return res[0];
+				}
+
 				const builderVal = builder.config?.values;
 				if (where?.length) {
 					// If we're updating a field that's in the where clause, use the new value
