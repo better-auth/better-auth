@@ -320,13 +320,15 @@ function buildChangesetIndex(branch: string): {
 	// Scan .changeset/ for pr-* and commit-* files. Try the target ref first;
 	// if empty, try HEAD~1 — on main/release/*, `changeset version` deletes
 	// the files before publish runs, but the parent commit still has them.
+	// Try the target ref first, then its parent — on main/release/*,
+	// `changeset version` deletes the files, but the parent still has them.
+	const baseRef = branch || "HEAD";
 	let effectiveBranch = branch;
-	for (const ref of [branch, branch ? undefined : "HEAD~1"]) {
-		if (ref === undefined) continue;
+	for (const ref of [baseRef, `${baseRef}~1`]) {
 		try {
 			const listing = execFileSync(
 				"git",
-				["ls-tree", "--name-only", ref || "HEAD", ".changeset/"],
+				["ls-tree", "--name-only", ref, ".changeset/"],
 				{ encoding: "utf-8" },
 			);
 			let foundAny = false;
@@ -558,32 +560,6 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 			author,
 			domain,
 			breaking,
-		});
-	}
-
-	// Add PR-keyed changeset entries not found in git history
-	for (const [prNum, changeset] of changesetByPR) {
-		if (seenPRs.has(prNum)) continue;
-		seenPRs.add(prNum);
-
-		let author = "unknown";
-		let domain = "core";
-		try {
-			const prInfo = fetchPR(prNum);
-			author = prInfo.author;
-			const parsed = parseConventionalCommit(prInfo.title);
-			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
-		} catch {
-			// skip
-		}
-
-		entries.push({
-			id: `pr-${prNum}`,
-			description: changeset.description,
-			prNumber: prNum,
-			author,
-			domain,
-			breaking: changeset.breaking,
 		});
 	}
 
