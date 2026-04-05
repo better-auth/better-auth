@@ -1,7 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { organization, twoFactor } from "../plugins";
+import { betterAuth } from "../auth/full";
+import { admin, organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
 type TestTypeOptions = {
@@ -221,5 +222,90 @@ describe("general types", async () => {
 		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
 
 		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
+
+	it("should preserve plugin endpoint types in lazy singleton pattern", () => {
+		// Common pattern: betterAuth() inside a factory function,
+		// with `typeof auth` used downstream.
+		// Without readonly support + const generic, plugin endpoints
+		// are erased when the plugins tuple widens to BetterAuthPlugin[].
+		function createAuth() {
+			return betterAuth({
+				database: {} as any,
+				plugins: [admin()],
+			});
+		}
+
+		type LazyAuth = ReturnType<typeof createAuth>;
+
+		// Admin plugin endpoints must be present on auth.api
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("createUser");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("removeUser");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("listUsers");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("banUser");
+		expectTypeOf<LazyAuth["api"]>().toHaveProperty("setRole");
+	});
+
+	it("should preserve plugin endpoint types with mixed plugins", () => {
+		// When multiple plugins are combined (some with endpoints, some without),
+		// the array should not widen and lose endpoint types.
+		function createAuth() {
+			return betterAuth({
+				database: {} as any,
+				plugins: [admin(), twoFactor()],
+			});
+		}
+
+		type MixedAuth = ReturnType<typeof createAuth>;
+
+		// Admin endpoints
+		expectTypeOf<MixedAuth["api"]>().toHaveProperty("createUser");
+		expectTypeOf<MixedAuth["api"]>().toHaveProperty("removeUser");
+		expectTypeOf<MixedAuth["api"]>().toHaveProperty("listUsers");
+	});
+
+	it("should preserve plugin types with explicit readonly plugins", () => {
+		// When plugins are declared as a readonly tuple (e.g., via `as const`
+		// or `satisfies`), endpoint types must still be preserved.
+		function createAuth() {
+			const plugins = [admin(), twoFactor()] as const;
+			return betterAuth({
+				database: {} as any,
+				plugins,
+			});
+		}
+
+		type ReadonlyAuth = ReturnType<typeof createAuth>;
+
+		// Admin endpoints must be present
+		expectTypeOf<ReadonlyAuth["api"]>().toHaveProperty("createUser");
+		expectTypeOf<ReadonlyAuth["api"]>().toHaveProperty("removeUser");
+		expectTypeOf<ReadonlyAuth["api"]>().toHaveProperty("listUsers");
+	});
+
+	it("should preserve plugin context types (hasPlugin / getPlugin)", async () => {
+		// The $context.hasPlugin() and getPlugin() methods rely on
+		// InferPluginID which must also handle readonly plugin arrays.
+		function createAuth() {
+			return betterAuth({
+				database: {} as any,
+				plugins: [admin(), twoFactor()],
+			});
+		}
+
+		type ContextAuth = ReturnType<typeof createAuth>;
+		type Context = Awaited<ContextAuth["$context"]>;
+
+		// hasPlugin should narrow to `true` for known plugin IDs
+		const hasPlugin = {} as Context["hasPlugin"];
+		const hasAdmin = hasPlugin("admin");
+		expectTypeOf(hasAdmin).toEqualTypeOf<true>();
+
+		// hasPlugin should stay `boolean` for unknown plugin IDs
+		const hasUnknown = hasPlugin("not-installed");
+		expectTypeOf(hasUnknown).toEqualTypeOf<boolean>();
+
+		// getPlugin type should be callable (not never)
+		expectTypeOf<Context["getPlugin"]>().not.toEqualTypeOf<never>();
 	});
 });

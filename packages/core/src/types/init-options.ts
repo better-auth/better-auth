@@ -770,7 +770,7 @@ export type BetterAuthOptions = {
 	/**
 	 * List of Better Auth plugins
 	 */
-	plugins?: ([] | BetterAuthPlugin[]) | undefined;
+	plugins?: ([] | BetterAuthPlugin[] | readonly BetterAuthPlugin[]) | undefined;
 	/**
 	 * User configuration
 	 */

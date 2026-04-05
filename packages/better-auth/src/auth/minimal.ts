@@ -8,7 +8,7 @@ export type { BetterAuthOptions };
 /**
  * Better Auth initializer for minimal mode (without Kysely)
  */
-export const betterAuth = <Options extends BetterAuthOptions>(
+export const betterAuth = <const Options extends BetterAuthOptions>(
 	options: Options & {},
 ): Auth<Options> => {
 	return createBetterAuth(options, initMinimal);

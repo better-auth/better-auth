@@ -22,7 +22,7 @@ export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 		: never;
 
 export type InferPluginErrorCodes<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
+	O["plugins"] extends Array<infer P> | ReadonlyArray<infer P>
 		? UnionToIntersection<
 				P extends BetterAuthPlugin
 					? P["$ERROR_CODES"] extends Record<string, any>
@@ -32,10 +32,11 @@ export type InferPluginErrorCodes<O extends BetterAuthOptions> =
 			>
 		: {};
 
-export type InferPluginIDs<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
-		? UnionToIntersection<P extends BetterAuthPlugin ? P["id"] : never>
-		: never;
+export type InferPluginIDs<O extends BetterAuthOptions> = O["plugins"] extends
+	| Array<infer P>
+	| ReadonlyArray<infer P>
+	? UnionToIntersection<P extends BetterAuthPlugin ? P["id"] : never>
+	: never;
 
 type ExtractInitContext<P extends BetterAuthPlugin> = P["init"] extends (
 	...args: any[]
@@ -48,7 +49,7 @@ type ExtractInitContext<P extends BetterAuthPlugin> = P["init"] extends (
 	: {};
 
 export type InferPluginContext<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
+	O["plugins"] extends Array<infer P> | ReadonlyArray<infer P>
 		? UnionToIntersection<
 				P extends BetterAuthPlugin ? ExtractInitContext<P> : {}
 			>

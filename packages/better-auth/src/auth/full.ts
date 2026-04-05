@@ -24,7 +24,7 @@ import { createBetterAuth } from "./base";
  *	  database: drizzleAdapter(db, { provider: "pg" }),
  * });
  */
-export const betterAuth = <Options extends BetterAuthOptions>(
+export const betterAuth = <const Options extends BetterAuthOptions>(
 	options: Options & {},
 ): Auth<Options> => {
 	return createBetterAuth(options, init);
