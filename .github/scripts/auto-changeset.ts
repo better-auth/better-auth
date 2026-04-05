@@ -104,8 +104,6 @@ function fetchPR(prNumber: number): PRData {
 	};
 }
 
-// ── Cubic extraction ───────────────────────────────────────────────────
-
 function extractCubicSummary(body: string): string {
 	const start = body.indexOf(CUBIC_OPEN);
 	const end = body.indexOf(CUBIC_CLOSE);
@@ -118,12 +116,6 @@ function extractCubicSummary(body: string): string {
 
 	const summaryEnd = cleaned.search(/\n\s*- (\*\*|\w)|<sup>/);
 	return (summaryEnd === -1 ? cleaned : cleaned.slice(0, summaryEnd)).trim();
-}
-
-function extractHumanBody(body: string): string {
-	const cubicStart = body.indexOf(CUBIC_OPEN);
-	const human = cubicStart === -1 ? body : body.slice(0, cubicStart);
-	return human.replace(/closes?\s+#\d+/gi, "").trim();
 }
 
 function hasPackageChanges(files: string[]): boolean {
@@ -228,7 +220,6 @@ function main() {
 	}
 
 	const cubicSummary = extractCubicSummary(pr.body);
-	const humanBody = extractHumanBody(pr.body);
 	const domain = resolveDomain(commit.scope, pr.changedFiles);
 	const fallback = cubicSummary || commit.subject || pr.title;
 
@@ -241,11 +232,8 @@ function main() {
 	setOutput("bump", resolvedBump);
 	setOutput("frontmatter", frontmatter);
 	setOutput("domain", domain);
-	setOutput("is_fork", String(pr.isFork));
-	setOutput("head_ref", pr.headRef);
 	setOutput("pr_title", pr.title);
 	setOutput("cubic_summary", cubicSummary);
-	setOutput("human_body", humanBody);
 	setOutput("fallback_description", fallback);
 	setOutput("changed_files", pr.changedFiles.slice(0, 50).join("\n"));
 }
