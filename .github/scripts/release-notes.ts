@@ -328,7 +328,7 @@ function buildChangesetIndex(branch: string): {
 		try {
 			const listing = execFileSync(
 				"git",
-				["ls-tree", "--name-only", ref, ".changeset/"],
+				["ls-tree", "-r", "--name-only", ref, ".changeset/"],
 				{ encoding: "utf-8" },
 			);
 			const SKIP_FILES = new Set(["README", "config"]);
@@ -541,7 +541,8 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 		let domain = "core";
 		let breaking = parsed.breaking;
 
-		const description = changeset?.description ?? parsed.subject;
+		const description =
+			changeset?.description ?? parsed.subject.replace(/\s*\(#\d+\)$/, "");
 		if (changeset?.breaking) breaking = true;
 
 		try {

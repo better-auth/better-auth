@@ -13,7 +13,10 @@ export const REPO = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
 export function gh(args: string[]): string {
 	return execFileSync("gh", args, {
 		encoding: "utf-8",
-		env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
+		env: {
+			...process.env,
+			GH_TOKEN: process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN,
+		},
 	}).trim();
 }
 

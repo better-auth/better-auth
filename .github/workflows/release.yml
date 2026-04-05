@@ -151,7 +151,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.ai-prompt.outputs.prompt }}
-          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh:*)"
+          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
 
       - name: Create GitHub Release
         if: steps.changesets.outputs.published == 'true'
@@ -187,8 +187,14 @@ jobs:
             echo "Using minimal fallback (note generation failed)"
           fi
 
-          # Create tag via GitHub API (git push has no credentials with persist-credentials: false)
+          # Resolve the actual branch HEAD (changesets/action may have pushed a new commit)
           COMMIT_SHA="${GITHUB_SHA}"
+          RESOLVED=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${GITHUB_REF_NAME}" --jq '.object.sha' 2>/dev/null || true)
+          if [ -n "$RESOLVED" ]; then
+            COMMIT_SHA="$RESOLVED"
+          fi
+
+          # Create tag via GitHub API (git push has no credentials with persist-credentials: false)
           gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
             -f ref="refs/tags/${TAG}" -f sha="$COMMIT_SHA" 2>/dev/null \
             || echo "Tag $TAG already exists"
@@ -307,7 +313,7 @@ jobs:
     environment: Release
     permissions:
       contents: read
-      id-token: write
+      pull-requests: read
     steps:
       - name: Generate App Token
         id: app-token
@@ -389,7 +395,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.ai-prompt.outputs.prompt }}
-          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh:*)"
+          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
 
       - name: Post results to job summary
         env:
