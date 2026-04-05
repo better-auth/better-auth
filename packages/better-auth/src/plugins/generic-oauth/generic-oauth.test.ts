@@ -2212,4 +2212,44 @@ describe("oauth2", async () => {
 			expect(callbackURL).toBe("http://localhost:3000/new_user");
 		});
 	});
+
+	it("should use custom redirectURI when configured", async () => {
+		const customRedirectURI = "https://custom.example.com/auth/callback";
+		const { customFetchImpl: fetchImpl, cookieSetter: setter } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "custom-redirect",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								redirectURI: customRedirectURI,
+							},
+						],
+					}),
+				],
+			});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: fetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.oauth2({
+			providerId: "custom-redirect",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: setter(headers),
+			},
+		});
+
+		const authUrl = new URL(signInRes.data?.url || "");
+		expect(authUrl.searchParams.get("redirect_uri")).toBe(customRedirectURI);
+	});
 });
