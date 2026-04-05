@@ -20,7 +20,7 @@ jobs:
       !startsWith(github.head_ref, 'changeset-release/') &&
       !(github.head_ref == 'next' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository) &&
       github.actor != 'github-actions[bot]' &&
-      github.actor != 'better-auth-releases[bot]'
+      github.actor != 'better-release[bot]'
     permissions:
       contents: read
       pull-requests: read
@@ -127,11 +127,11 @@ jobs:
             for f in $CHANGESET_FILES; do
               BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
               if echo "$BUMPS" | grep -q "major"; then
-                echo "::error::Changeset $f contains a 'major' bump. Only 'patch' bumps are allowed on '$BASE_REF'."
+                echo "::error::Changeset $f contains a 'major' bump. Only 'patch' bumps are allowed on '$BASE_REF'. PRs with minor/major bumps should target 'next' (auto-retarget may not have run yet)."
                 exit 1
               fi
               if echo "$BUMPS" | grep -q "minor"; then
-                echo "::error::Changeset $f contains a 'minor' bump. Only 'patch' bumps are allowed on '$BASE_REF'."
+                echo "::error::Changeset $f contains a 'minor' bump. Only 'patch' bumps are allowed on '$BASE_REF'. PRs with minor/major bumps should target 'next' (auto-retarget may not have run yet)."
                 exit 1
               fi
             done
