@@ -117,11 +117,7 @@ export const kyselyAdapter = (
 						res = await db
 							.selectFrom(model)
 							.selectAll()
-							.where(
-								getFieldName({ model, field: "id" }),
-								"=",
-								Number(insertId),
-							)
+							.where(getFieldName({ model, field: "id" }), "=", insertId)
 							.executeTakeFirst();
 						return res;
 					}
