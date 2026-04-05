@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
+import type { HasRequiredKeys } from "./helper";
 
 type TestTypeOptions = {
 	test: boolean;
@@ -221,5 +222,19 @@ describe("general types", async () => {
 		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
 
 		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
+});
+
+describe("HasRequiredKeys", () => {
+	it("should return false for any", () => {
+		expectTypeOf<HasRequiredKeys<any>>().toEqualTypeOf<false>();
+	});
+
+	it("should return true for objects with required keys", () => {
+		expectTypeOf<HasRequiredKeys<{ name: string }>>().toEqualTypeOf<true>();
+	});
+
+	it("should return false for objects with only optional keys", () => {
+		expectTypeOf<HasRequiredKeys<{ name?: string }>>().toEqualTypeOf<false>();
 	});
 });
