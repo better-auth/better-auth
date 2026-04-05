@@ -16,7 +16,6 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ghJSON, REPO, setOutput } from "./lib/github.ts";
 import {
@@ -664,8 +663,9 @@ if (dryRun) {
 	console.log(body);
 } else {
 	// Write raw changelog to temp file for the AI stage
-	const outDir = process.env.RUNNER_TEMP ?? tmpdir();
-	const rawFile = join(outDir, `release-notes-raw-${version}.md`);
+	// Write inside the repo working directory so claude-code-action can read it
+	// (it restricts file access to the checkout directory)
+	const rawFile = join(process.cwd(), `.release-notes-raw-${version}.md`);
 	writeFileSync(rawFile, body);
 	console.log(`Wrote raw changelog to ${rawFile}`);
 
