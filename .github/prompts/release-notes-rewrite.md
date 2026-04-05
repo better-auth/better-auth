@@ -16,9 +16,10 @@ Your job is to rewrite ALL descriptions to be user-focused and
 consistent. The changelog is for users who are at least slightly
 technical (they use the library and want to know what changed).
 
-For entries that are unclear or too terse, inspect the actual PR
+For the 3-5 most unclear or terse entries, inspect the actual PR
 diff to understand what really changed:
   gh pr diff <PR_NUMBER> --repo __GITHUB_REPOSITORY__ | head -200
+Do NOT inspect every entry; most descriptions are already clear enough.
 
 Rules:
 - Rewrite descriptions to focus on what changed for users, not internals
