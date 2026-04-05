@@ -317,13 +317,12 @@ jobs:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
-      # TODO: restore ref: main before merging — pinned to current branch for testing
       # Always check out main for trusted scripts — the preview_branch
       # input controls which ref changeset files are read from (via --branch),
       # not which code is executed.
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          # ref: main
+          ref: main
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
