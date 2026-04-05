@@ -1,6 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import type { InputContext } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
+import type { InferCtx } from "../client/path-to-object";
 import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { HasRequiredKeys } from "./helper";
@@ -236,5 +238,13 @@ describe("HasRequiredKeys", () => {
 
 	it("should return false for objects with only optional keys", () => {
 		expectTypeOf<HasRequiredKeys<{ name?: string }>>().toEqualTypeOf<false>();
+	});
+});
+
+describe("InferCtx", () => {
+	it("should preserve fetchOptions when body is any", () => {
+		type Result = InferCtx<InputContext<any, any> & { body: any }, {}>;
+		type Keys = keyof Result;
+		expectTypeOf<Keys>().toEqualTypeOf<"fetchOptions">();
 	});
 });

@@ -111,8 +111,11 @@ export type InferUserUpdateCtx<
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
-> =
-	C["body"] extends Record<string, any>
+> = 0 extends 1 & C["body"]
+	? {
+			fetchOptions?: FetchOptions | undefined;
+		}
+	: C["body"] extends Record<string, any>
 		? C["body"] & {
 				fetchOptions?: FetchOptions | undefined;
 			}
