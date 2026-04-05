@@ -83,7 +83,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
         run: |
-          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" | head -c 20000)
+          DIFF=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" || true)
+          DIFF="${DIFF:0:20000}"
           DELIM="GHEOF_$(openssl rand -hex 8)"
           {
             echo "content<<${DELIM}"
