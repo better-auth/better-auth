@@ -330,10 +330,13 @@ function buildChangesetIndex(branch: string): {
 	let effectiveBranch = branch;
 	const refsToTry = [baseRef];
 	for (let i = 1; i <= 5; i++) refsToTry.push(`${baseRef}~${i}`);
-	// Also check the second parent of merge commits (promote flow: next → main)
+	// Also check the second parent of merge commits and its ancestors.
+	// In the promote flow, `changeset version` runs on next BEFORE the merge,
+	// so HEAD^2 itself has the files deleted. We need HEAD^2~1, HEAD^2~2, etc.
 	for (let i = 0; i <= 3; i++) {
 		const mergeRef = i === 0 ? baseRef : `${baseRef}~${i}`;
 		refsToTry.push(`${mergeRef}^2`);
+		for (let j = 1; j <= 3; j++) refsToTry.push(`${mergeRef}^2~${j}`);
 	}
 	for (const ref of refsToTry) {
 		try {
