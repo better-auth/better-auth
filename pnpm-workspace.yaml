@@ -6,6 +6,17 @@ packages:
 
 blockExoticSubdeps: true
 
+overrides:
+  axios: <1.14.0
+  node-forge: '>=1.4.0 <2'
+  h3@<2: '>=1.15.9'
+  brace-expansion@<2: 1.1.13
+  brace-expansion@>=2 <4: 2.0.3
+  brace-expansion@>=4: 5.0.5
+  path-to-regexp@>=8: 8.4.0
+  dompurify: '>=3.3.2 <4'
+  happy-dom: '>=20.8.9 <21'
+
 catalog:
   '@better-auth/utils': 0.4.0
   '@better-fetch/fetch': 1.1.21
@@ -50,9 +61,6 @@ onlyBuiltDependencies:
   - protobufjs
   - sharp
   - workerd
-
-overrides:
-  axios: <1.14.0
 
 patchedDependencies:
   '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch
