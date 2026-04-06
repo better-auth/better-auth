@@ -24,7 +24,7 @@ npx auth upgrade
 
 **What's in this release:**
 
-* [Breaking Changes](#breaking-changes) — 6 behavioral changes, no schema migrations
+* [Important Changes](#important-changes) — 6 behavioral and configuration changes, no schema migrations
 * [Highlights](#highlights) — Passkey-first registration, OAuth/SAML/SCIM hardening, passwordless 2FA, non-blocking hashing
 * [New Features](#new-features) — Case-insensitive queries, FedCM, email OTP resend, and more
 
@@ -32,9 +32,9 @@ For the full list of bug fixes, security improvements, and minor changes, see th
 
 ***
 
-## Breaking Changes
+## Important Changes
 
-All 6 are behavioral or configuration defaults. No database migration is needed.
+The following 6 changes may be breaking from a behavioral or configuration standpoint. No database migration is needed for any of them.
 
 ### SAML InResponseTo validation (Breaking)
 
