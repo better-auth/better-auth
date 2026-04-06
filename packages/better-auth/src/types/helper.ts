@@ -1,3 +1,5 @@
+export type IsAny<T> = 0 extends 1 & T ? true : false;
+
 export type Prettify<T> = Omit<T, never>;
 
 export type PrettifyDeep<T> = {
@@ -29,12 +31,13 @@ export type RequiredKeysOf<BaseType extends object> = Exclude<
 	undefined
 >;
 
-export type HasRequiredKeys<BaseType> = 0 extends 1 & BaseType
-	? false
-	: [BaseType] extends [object]
-		? RequiredKeysOf<BaseType & object> extends never
-			? false
-			: true
-		: false;
+export type HasRequiredKeys<BaseType> =
+	IsAny<BaseType> extends true
+		? false
+		: [BaseType] extends [object]
+			? RequiredKeysOf<BaseType & object> extends never
+				? false
+				: true
+			: false;
 
 export type StripEmptyObjects<T extends object> = { [K in keyof T]: T[K] };
