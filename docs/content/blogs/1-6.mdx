@@ -1,93 +1,46 @@
 ***
 
 title: "Better Auth 1.6"
-description: "Passkey-first registration, SAML hardening, OAuth and SCIM improvements, case-insensitive database queries, MCP server updates, and more!"
+description: "Passkey-first registration, SAML and OAuth hardening, case-insensitive database queries, non-blocking password hashing, passwordless 2FA, new release process, and more!"
 date: 2026-04-06
 author:
-name: "Alex Yang"
-avatar: "/avatars/alex.png"
-twitter: "himseIf\_65"
+name: "Gustavo Valverde"
+avatar: "/avatars/beka.png"
+twitter: "gustavovalverde"
 image: "[https://docs.better-auth.com/release-og/v1.6-release.png](https://docs.better-auth.com/release-og/v1.6-release.png)"
-tags: \["1.6", "passkeys", "SSO", "OAuth", "database", "MCP", "security"]
--------------------------------------------------------------------------
-
-import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
-import { Callout } from "@/components/ui/callout";
+tags: \["1.6", "passkeys", "SSO", "OAuth", "database", "security", "release-process"]
+-------------------------------------------------------------------------------------
 
 ## Better Auth 1.6 Release
 
-We’re excited to announce the release of Better Auth 1.6.
+We're excited to announce the release of Better Auth 1.6.
 
-This release is focused on making existing auth flows safer, more production-ready, and easier to operate. We shipped passkey-first registration, hardened OAuth and SAML flows, improved adapter behavior, and cleaned up a number of upgrade pain points across the stack.
+This release makes existing auth flows safer, more production-ready, and easier to operate. We hardened OAuth, SAML, and SCIM protocols, made adapter behavior more consistent, shipped passkey registration without requiring a session, and cleaned up edge cases across the stack. The common thread: aligning implementation with documented intent.
 
-To upgrade, run:
+Starting with 1.6, we also rolled out a new release process built on [Changesets](https://github.com/changesets/changesets). Bug fixes ship as patch releases from `main`; new features and breaking changes develop on `next`. More details [below](#a-new-release-process).
+
+### Upgrading
+
+No core schema changes were introduced in 1.6. If you are already running 1.5.x, your database tables remain compatible as-is.|
+
+For most users, the full upgrade is:
 
 ```bash
 npx auth upgrade
 ```
 
-***
+If you are adopting new features in this release that introduce their own tables (e.g., first-time passkey setup), regenerate your schema and apply the diff:
 
-## Upgrade Notes
+```bash
+npx auth upgrade
+npx auth generate        # regenerates your Drizzle/Prisma/Kysely schema file
+# then apply with your ORM's tooling:
+# Drizzle:  drizzle-kit push / drizzle-kit migrate
+# Prisma:   prisma migrate dev / prisma db push
+# Kysely:   npx auth migrate
+```
 
-<Callout type="info">
-  Most upgrades from `1.5.x` to `1.6.0` do not require a database migration.
-</Callout>
-
-If you are already running Better Auth in production, the main upgrade work in `1.6` is behavioral and configuration-related, not schema-related.
-
-<Accordions type="single">
-  <Accordion title="Do I need to migrate?">
-    1. **Most users:** No required database migration for the `1.5.x -> 1.6.0` upgrade path.
-
-    2. **If you use SAML SSO:** `enableInResponseToValidation` is now enabled by default for SP-initiated SAML flows. This is the biggest breaking change in `1.6`. If your provider or proxy setup is not ready yet, you can temporarily keep the previous behavior:
-
-    ```ts
-    import { sso } from "@better-auth/sso";
-
-    sso({
-      saml: {
-        enableInResponseToValidation: false,
-      },
-    });
-    ```
-
-    3. **If you rely on session freshness:** `session.freshAge` now behaves according to the docs and is calculated from `createdAt`, not `updatedAt`. If you previously depended on activity extending freshness windows, review your `freshAge` value or disable the check explicitly with `freshAge: 0`.
-
-    4. **If you use `@better-auth/oauth-provider` with `secondaryStorage`:** make sure sessions are stored in the database:
-
-    ```ts
-    import { betterAuth } from "better-auth";
-    import { oauthProvider } from "@better-auth/oauth-provider";
-
-    export const auth = betterAuth({
-      secondaryStorage: {
-        // ...
-      },
-      session: {
-        storeSessionInDatabase: true,
-      },
-      plugins: [oauthProvider()],
-    });
-    ```
-
-    5. **If you still use `oidc-provider`:** it still works in `1.6`, but it is now deprecated and emits a one-time warning. We recommend migrating to `@better-auth/oauth-provider` before the next major release.
-
-    ```diff title="auth.ts"
-    - import { oidcProvider } from "better-auth/plugins";
-    + import { oauthProvider } from "@better-auth/oauth-provider";
-    ```
-
-    6. **If you hardcoded the Better Auth docs MCP server URL:** update it to `https://mcp.better-auth.com/mcp`.
-
-    7. **If you adopt new features in this release:** features like passkeys or OAuth provider tables still require their normal schema setup. In that case, run:
-
-    ```bash
-    npx auth generate
-    npx auth migrate
-    ```
-  </Accordion>
-</Accordions>
+After upgrading, review the [breaking changes](#breaking-changes) below. All 6 are behavioral or configuration changes, not schema changes.
 
 ***
 
@@ -95,7 +48,7 @@ If you are already running Better Auth in production, the main upgrade work in `
 
 ### Passkey-first registration and WebAuthn extensions
 
-The passkey plugin now supports passkey-first onboarding. That means you can start registration before the user has a session, pass through your own signed context, and resolve the user during verification. We also added WebAuthn extension support for both registration and authentication flows.
+The passkey plugin now supports registration before the user has a session. This enables passkey-first onboarding: pass through your own signed context, and resolve the user during verification. WebAuthn extensions now work for both registration and authentication flows.
 
 [👉 Read more about passkeys](/docs/plugins/passkey)
 
@@ -109,7 +62,7 @@ export const auth = betterAuth({
       registration: {
         requireSession: false,
         resolveUser: async ({ context }) => {
-          // Validate context, then create or load the user.
+          // Validate context, then create or load the user
           return { id: "user-id", name: "user@example.com" };
         },
         extensions: { credProps: true },
@@ -122,19 +75,19 @@ export const auth = betterAuth({
 });
 ```
 
-This makes passkeys much easier to use for passwordless onboarding flows, invite flows, and progressive signup experiences.
+This makes passkeys viable for passwordless onboarding, invite flows, and progressive signup experiences where no session exists at credential creation time.
 
 ***
 
 ### Safer OAuth, SAML, and SCIM flows
 
-`1.6` hardens several auth flows that tend to break in real-world deployments.
+1.6 hardens several auth flows that tend to break in real-world deployments.
 
-For SAML, `InResponseTo` validation is now enabled by default for SP-initiated flows, and the SSO plugin now exposes `provisionUserOnEveryLogin` so you can deliberately resync profile data on every sign-in instead of only on registration.
+For SAML, `InResponseTo` validation is now enabled by default for SP-initiated flows, preventing assertion replay attacks. The SSO plugin also exposes `provisionUserOnEveryLogin` for deliberate profile resync on every sign-in.
 
-For OAuth and OIDC, this release improves PAR handling, loopback redirect matching for native apps, post-login continuation redirects, and state verification. We also shipped end-to-end `private_key_jwt` client authentication support across `@better-auth/oauth-provider`, SSO, and generic OAuth flows.
+For OAuth and OIDC, this release fixes PAR handling to prevent scope injection per RFC 9126, improves loopback redirect matching for native apps per RFC 8252, corrects post-login continuation redirects, and prevents double-hashing of state when `storeIdentifier` is set to `hashed`.
 
-SCIM management endpoints are now protected by authorization middleware as well, which closes an important gap for enterprise deployments.
+Role-based authorization middleware now protects SCIM management endpoints, closing an important gap for enterprise deployments.
 
 [👉 Read more about SSO](/docs/plugins/sso)
 
@@ -158,13 +111,11 @@ export const auth = betterAuth({
 
 ***
 
-### Better database behavior across adapters
+### Query consistency across adapters
 
-The database layer got better in several ways in `1.6`.
+Case-insensitive query support now works across all adapters, making it straightforward to build consistent lookups for email addresses and usernames without adapter-specific workarounds.
 
-The biggest improvement is case-insensitive query support across adapters, which makes it much easier to build consistent lookups for fields like email addresses and usernames without hand-rolling adapter-specific logic.
-
-We also fixed a set of adapter-level edge cases, including correct `IS NULL` and `IS NOT NULL` comparisons, D1 cleanup, safer Prisma fallbacks for non-unique updates and deletes, and native BSON UUID support in the Mongo adapter when using UUID IDs.
+[👉 Read more about database adapters](/docs/concepts/database)
 
 ```ts
 const user = await adapter.findOne({
@@ -174,67 +125,213 @@ const user = await adapter.findOne({
       field: "email",
       value: "testuser@example.com",
       operator: "eq",
-      mode: "insensitive",
+      mode: "insensitive", // [!code highlight]
     },
   ],
 });
 ```
 
-This is one of those changes that does not look flashy in a changelog, but it removes a lot of small adapter inconsistencies in practice.
+Beyond case-insensitivity, the adapter layer received a set of consistency fixes: correct `IS NULL`/`IS NOT NULL` comparisons, D1 dialect cleanup, safer Prisma fallbacks for non-unique fields, Drizzle date transformation corrections, and native BSON UUID storage in the Mongo adapter.
 
 ***
 
-### Quality-of-life improvements across the stack
+### Non-blocking password hashing
 
-We also shipped a broad set of smaller improvements that make Better Auth easier to run day to day:
+Password hashing now uses `node:crypto.scrypt` on Node.js, Bun, and Deno, running on the libuv thread pool instead of blocking the event loop. On runtimes that lack `node:crypto` (like Cloudflare Workers), it falls back to the pure-JS `@noble/hashes` implementation. Existing password hashes remain valid; no migration is needed.
 
-* `oidc-provider` is now explicitly deprecated in favor of `@better-auth/oauth-provider`
-* built-in plugins now expose their version
-* password hashing now uses non-blocking scrypt
-* passwordless users can now manage 2FA
-* `/magic-link/verify` now returns additional user and session fields
-* phone OTP send failures are no longer swallowed
-* the docs MCP server moved to `https://mcp.better-auth.com/mcp`
-* the CLI generators now treat omitted `required` fields correctly for Drizzle and Prisma
+***
 
-<Callout type="info">
-  If you are still on `oidc-provider`, now is the right time to plan the migration to `@better-auth/oauth-provider`. The migration guide is already available in the OAuth Provider docs.
-</Callout>
+### Passwordless 2FA management
 
-```bash
-npx auth@latest mcp
+Users who signed up via passwordless methods (magic link, passkey, OAuth) can now enable, disable, and manage two-factor authentication. Previously, 2FA management required a password-based account, which locked out users who never set a password.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    twoFactor({
+      allowPasswordless: true, // [!code highlight]
+    }),
+  ],
+});
 ```
 
 ***
 
-### A new release process for faster fixes
+## ✨ More Features
 
-Starting with `1.6`, we are also rolling out a new release process designed to help us ship fixes faster without slowing down feature development.
+### Authentication & Sessions
 
-The main reason for this change is straightforward: bug fixes, larger features, refactors, and breaking changes should not all have to compete for the same release window. When they do, small fixes take longer to reach users, and contributor work is more likely to get held up while a release is being prepared.
+* **FedCM opt-in for Google One Tap**: Suppresses GSI deprecation warnings.
+* **`form_post` callback support**: OAuth callbacks now read parameters from the request body.
+* **Session signal on email change**: Reactive UIs update immediately after requesting an email change.
+* **Custom session fields preserved on refresh**: Plugin-added session fields no longer drop on window focus.
+* **Stateless `cookieCache` maxAge**: Now matches `session.expiresIn` configuration.
+* **Two-factor `twoFactorPage` option**: Redirect URL for 2FA verification, useful for traditional form flows.
 
-We now work with two long-lived branches:
+### OAuth & Identity
 
-* `main`
-* `next`
+* **OAuth proxy dedicated `secret`**: Separate encryption key from the main `BETTER_AUTH_SECRET`, reducing blast radius if the proxy key is compromised.
+* **Custom `acr` and `auth_time` claims**: Override these in ID tokens via `customIdTokenClaims`.
+* **Dynamic `baseURL` config in init**: Object-format URLs handled correctly during initialization.
+* **`provisionUserOnEveryLogin`**: Opt in to resync SSO profile data on every sign-in, not just registration.
+* **SAML ACS cross-site POST**: Properly skips state cookie check for cross-origin IdP POST.
+* **SSO OIDC code validation logging**: Structured logging when OIDC code validation fails, making IdP misconfigurations easier to debug.
 
-`main` is the stable branch. Fixes and fully tested changes land there and ship as patch releases, which gives us a much faster path for getting production issues resolved.
+### Tooling & Integration
 
-`next` is where we prepare the next minor release. In Better Auth, minor releases can include larger changes and, in some cases, breaking changes, so `next` gives us a place to keep merging forward-looking work without making patch releases harder to cut.
-
-In practice, that means while `1.6` is stable, `next` can already be preparing `1.7`.
-
-This also lets us publish beta releases from `next` more frequently. Contributors and early adopters can test changes sooner, give feedback earlier, and help us validate new features before they become part of the stable release line.
-
-In short, this process gives us three concrete benefits:
-
-* faster patch releases for users on stable versions
-* a higher merge cadence for new features and refactors
-* quicker beta feedback loops for contributors and early adopters
-
-Our goal is to make Better Auth more predictable for users on stable releases while making it easier to keep moving quickly on what comes next.
+* **Plugin version exposure**: All built-in plugins now expose a `version` field.
+* **MCP server URL updated**: Now at `https://mcp.better-auth.com/mcp`.
+* **CLI generators**: Omitted `required` fields now correctly treated as `true` for Drizzle and Prisma.
+* **Email OTP `resendStrategy`**: Choose between `"rotate"` (new OTP) or `"reuse"` (resend the same OTP and extend its expiry).
+* **HaveIBeenPwned `enable` option**: Dynamically enable or disable breach checks at runtime.
+* **Magic link request metadata**: `sendMagicLink` callback now receives IP address and user agent for smarter email templates.
+* **Stripe `prorationBehavior`**: Per-plan proration configuration for subscription changes.
+* **Exported adapter test suites**: Community adapter authors can run the standard test battery via `@better-auth/test-utils/adapter`.
 
 ***
 
-A lot of refinements to make everything smoother, safer, and more reliable.
+## 🔒 Security Improvements
+
+* **SCIM management authorization**: Role-based access control for SCIM provider management endpoints.
+* **SAML InResponseTo validation**: Now enabled by default, preventing assertion replay attacks.
+* **OAuth state double-hashing prevention**: Fixes verification when `storeIdentifier` is set to `hashed`.
+* **PAR scope injection prevention**: Discards front-channel URL params per RFC 9126 section 4.
+* **Loopback redirect matching**: Port-agnostic matching for `127.0.0.1` and `[::1]` per RFC 8252.
+* **DCR `skip_consent` rejection**: Prevents privilege escalation during dynamic client registration.
+* **Revoked session restoration prevention**: Revoked sessions can no longer bypass revocation via the database fallback path.
+* **Passkey ownership verification**: Delete and update operations now use `requireResourceOwnership` middleware.
+* **Username uniqueness enforcement**: Properly validated during `updateUser`.
+* **Phone OTP failure propagation**: `sendOTP` failures surface as errors instead of being silently swallowed.
+* **Samlify security pin**: Pins `samlify` to `~2.10.2`, patching 4 transitive `node-forge` CVEs.
+* **Dependabot security patches**: Batch patches for known dependency vulnerabilities.
+
+***
+
+## ⚠️ Breaking Changes
+
+All 6 breaking changes are behavioral or configuration defaults, not schema changes. No database migration is needed for any of them.
+
+### SAML InResponseTo validation enabled by default
+
+`enableInResponseToValidation` is now `true` by default for SP-initiated SAML flows. To temporarily restore the previous behavior while your IdP catches up:
+
+```ts
+import { sso } from "@better-auth/sso";
+
+sso({
+  saml: {
+    enableInResponseToValidation: false,
+  },
+});
+```
+
+### Session freshAge aligned with creation time
+
+`session.freshAge` now calculates freshness from `createdAt` instead of `updatedAt`. Previously, any session activity extended the freshness window; now, freshness is strictly tied to session creation time. Review your `freshAge` value or set `freshAge: 0` to disable the check.
+
+### SSO provisionUser only runs on registration
+
+The `provisionUser` callback now fires only for new users, not on every SSO login. If you relied on it for profile syncing on every login, opt in explicitly:
+
+```ts
+sso({
+  provisionUserOnEveryLogin: true,
+  provisionUser: async ({ user, userInfo }) => {
+    // ...
+  },
+});
+```
+
+### SCIM management endpoints require authorization
+
+SCIM management endpoints now enforce organization role checks. By default, only `admin` and the provider creator can manage SCIM connections. Configure `requiredRole` if you need different role requirements:
+
+```ts
+import { scim } from "@better-auth/scim";
+
+scim({
+  requiredRole: ["admin", "owner"],
+});
+```
+
+### oidc-provider deprecated
+
+The `oidc-provider` plugin now emits a one-time runtime deprecation warning. It still works in 1.6, but will be removed in the next major release. Migrate to `@better-auth/oauth-provider`:
+
+```diff title="auth.ts"
+- import { oidcProvider } from "better-auth/plugins";
++ import { oauthProvider } from "@better-auth/oauth-provider";
+```
+
+[👉 Read the migration guide](/docs/plugins/oauth-provider#from-oidc-provider-plugin)
+
+### OAuth provider with secondary storage
+
+If you use `@better-auth/oauth-provider` with secondary storage, you must now set `storeSessionInDatabase: true`. The plugin fails fast at initialization if this is missing:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+export const auth = betterAuth({
+  secondaryStorage: {
+    // ...
+  },
+  session: {
+    storeSessionInDatabase: true, // [!code highlight]
+  },
+  plugins: [oauthProvider()],
+});
+```
+
+***
+
+## 🐛 Bug Fixes & Improvements
+
+This release includes over 40 bug fixes across all areas:
+
+* **OAuth**: Fixed double-hashing of state, PAR scope loss, loopback redirect matching, DCR `skip_consent`, post-login continuation redirects, and `auth_time` timestamp normalization.
+* **Database**: Fixed `IS NULL`/`IS NOT NULL` comparisons, Drizzle date transformation, D1 deprecated `numUpdatedOrDeletedRows`, Prisma fallback for non-unique fields, and session ID generation with secondary storage only.
+* **Sessions**: Fixed stateless cookie cache maxAge, custom field preservation on refresh, revoked session restoration, double-encoded cookies, and `Set-Cookie` header splitting.
+* **Username**: Fixed `updateUser` overwriting unrelated fields and enforced uniqueness.
+* **SSO**: Fixed SAML ACS state cookie handling, ESM compatibility for samlify, bare domain verification, `auth_time` normalization, and `provisionUser` consistency between OIDC and SAML.
+* **Credentials**: Fixed phone OTP send failure propagation, magic link additional fields, and email change session signal.
+* **Payments**: Fixed annual subscription `priceId`, organization customer type checks, and checkout session ID placeholder.
+* **Organization**: Fixed duplicate `operationId` in admin endpoints, null organizations in invitations, and multi-role users in invite/removal.
+* **Types**: Fixed `any` collapsing base type inference, combined plugin type inference, method type constraints, and future TypeScript compatibility.
+
 👉 [Check the full changelog](https://github.com/better-auth/better-auth/releases/tag/v1.6.0)
+
+***
+
+## 🔄 A New Release Process
+
+Starting with 1.6, we rolled out a new release process designed to ship fixes faster without slowing down feature development.
+
+Bug fixes, features, refactors, and breaking changes should not compete for the same release window. When they do, small fixes take longer to reach users, and contributor work stalls while a release is prepared.
+
+We replaced our previous [bumpp](https://github.com/antfu-collective/bumpp)-based manual release flow with [Changesets](https://github.com/changesets/changesets). Every PR now includes a changeset file describing the change and its bump type. PRs targeting `main` accept only `patch` bumps; `minor` and `major` changes are automatically retargeted to `next`.
+
+The model uses 2 long-lived branches:
+
+* **`main`**: the stable branch. Fixes land here and ship as patch releases, giving us a faster path for production issues.
+* **`next`**: the pre-release branch for the next minor. Larger features and breaking changes develop here, and beta releases publish for early testing.
+
+While 1.6 is stable, `next` is already preparing 1.7. Contributors and early adopters can test changes sooner, give feedback earlier, and help validate new features before they reach stable.
+
+3 concrete benefits:
+
+* **Faster patch releases** for users on stable versions
+* **Higher merge cadence** for new features and refactors
+* **Quicker beta feedback loops** for contributors and early adopters
+
+The goal is to make Better Auth more predictable for users on stable releases while keeping development velocity high for what comes next.
+
+***
+
+## ❤️ Contributors
+
+Thanks to all the contributors who made this release possible!
