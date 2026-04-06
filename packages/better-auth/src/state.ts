@@ -114,7 +114,7 @@ export async function generateGenericState(
 	}
 
 	return {
-		state: verification.identifier,
+		state,
 		codeVerifier: stateData.codeVerifier,
 	};
 }
