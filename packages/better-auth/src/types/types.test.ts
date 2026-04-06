@@ -250,8 +250,7 @@ describe("any-poisoning guards", () => {
 			{ body: any; query: { page: number }; method: "GET" },
 			{}
 		>;
-		type HasQuery = "query" extends keyof Result ? true : false;
-		expectTypeOf<HasQuery>().toEqualTypeOf<true>();
+		expectTypeOf<Result["query"]>().toEqualTypeOf<{ page: number }>();
 	});
 
 	/**
@@ -279,5 +278,6 @@ describe("any-poisoning guards", () => {
 		});
 		type Codes = (typeof auth)["$ERROR_CODES"];
 		expectTypeOf<Codes>().not.toBeAny();
+		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
 	});
 });
