@@ -128,6 +128,7 @@ jobs:
       - name: Build AI prompt from template
         id: ai-prompt
         if: steps.raw-notes.outcome == 'success'
+        continue-on-error: true
         env:
           RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
         run: |
@@ -373,6 +374,7 @@ jobs:
 
       - name: Build AI prompt from template
         id: ai-prompt
+        continue-on-error: true
         env:
           RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
         run: |
