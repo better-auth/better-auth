@@ -16,7 +16,7 @@ We're excited to announce the release of Better Auth 1.6.
 
 This release makes existing auth flows safer, more production-ready, and easier to operate. We hardened OAuth, SAML, and SCIM protocols, made adapter behavior more consistent, shipped passkey registration without requiring a session, and cleaned up edge cases across the stack. The common thread: aligning implementation with documented intent.
 
-Starting with 1.6, we also rolled out a new release process built on [Changesets](https://github.com/changesets/changesets). Bug fixes ship as patch releases from `main`; new features and breaking changes develop on `next`. More details [below](#a-new-release-process).
+Starting with 1.6, we also rolled out a new release process built on [Changesets](https://github.com/changesets/changesets). Bug fixes ship as patch releases from `main`; new features and breaking changes develop on `next`.
 
 ### Upgrading
 
@@ -39,7 +39,7 @@ npx auth generate        # regenerates your Drizzle/Prisma/Kysely schema file
 # Kysely:   npx auth migrate
 ```
 
-After upgrading, review the [breaking changes](#breaking-changes) below. All 6 are behavioral or configuration changes, not schema changes.
+After upgrading, review the breaking changes below. All 6 are behavioral or configuration changes, not schema changes.
 
 ***
 
