@@ -181,6 +181,122 @@ describe("oauth authorize - unauthenticated", async () => {
 	});
 });
 
+describe("oauth authorize - request_uri resolution", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const requestUri = "urn:better-auth:par:test";
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				requestUriResolver: async ({ requestUri: receivedRequestUri }) => {
+					if (receivedRequestUri !== requestUri) {
+						return null;
+					}
+
+					return {
+						response_type: "code",
+						redirect_uri: redirectUri,
+						scope: "openid",
+						state: "par-state",
+						code_challenge: "a".repeat(43),
+						code_challenge_method: "S256",
+					};
+				},
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const unauthenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		oauthClient = response;
+	});
+
+	it("should sign the resolved PAR parameters for the login redirect", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUri);
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(loginRedirectUrl).toContain("/login");
+		expect(loginRedirectUrl).toContain("response_type=code");
+		expect(loginRedirectUrl).toContain(`client_id=${oauthClient.client_id}`);
+		expect(loginRedirectUrl).toContain("scope=openid");
+		expect(loginRedirectUrl).toContain(
+			`redirect_uri=${encodeURIComponent(redirectUri)}`,
+		);
+		expect(loginRedirectUrl).toContain("state=par-state");
+		expect(loginRedirectUrl).not.toContain("request_uri=");
+	});
+
+	/**
+	 * RFC 9126 §4: params must come from the stored request, not the URL.
+	 * Extra URL params like prompt or scope must not leak into the signed redirect.
+	 */
+	it("should discard front-channel params not in the stored PAR request", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUri);
+		// These params are NOT in the PAR payload — must be discarded
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("scope", "openid profile admin");
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(loginRedirectUrl).toContain("/login");
+		// PAR-resolved scope must win, not the URL-injected one
+		expect(loginRedirectUrl).toContain("scope=openid");
+		expect(loginRedirectUrl).not.toContain("admin");
+		// prompt=none was not in the PAR payload — must not appear
+		expect(loginRedirectUrl).not.toContain("prompt=none");
+	});
+});
+
 describe("oauth authorize - authenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";

@@ -372,11 +372,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "GET",
 					query: z.object({
-						response_type: z.enum(["code"]),
+						response_type: z.enum(["code"]).optional(),
 						client_id: z.string(),
 						redirect_uri: SafeUrlSchema.optional(),
 						scope: z.string().optional(),
 						state: z.string().optional(),
+						request_uri: z.string().optional(),
 						code_challenge: z.string().optional(),
 						code_challenge_method: z.enum(["S256"]).optional(),
 						nonce: z.string().optional(),
@@ -399,7 +400,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								{
 									name: "response_type",
 									in: "query",
-									required: true,
+									required: false,
 									schema: { type: "string" },
 									description: "OAuth2 response type (e.g., 'code')",
 								},
@@ -430,6 +431,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string" },
 									description: "OAuth2 state parameter",
+								},
+								{
+									name: "request_uri",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"Pushed Authorization Request URI referencing stored parameters",
 								},
 								{
 									name: "code_challenge",
@@ -1168,6 +1177,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 						subject_type: z.enum(["public", "pairwise"]).optional(),
+						skip_consent: z.boolean().optional(),
 					}),
 					metadata: {
 						openapi: {
