@@ -96,7 +96,6 @@ const SCOPE_TO_DOMAIN: Record<string, string> = {
 };
 
 const PATH_TO_DOMAIN: [string, string][] = [
-	// Most specific paths first
 	["packages/oauth-provider/", "identity"],
 	["packages/better-auth/src/plugins/oidc-provider/", "identity"],
 	["packages/better-auth/src/plugins/mcp/", "identity"],
@@ -173,10 +172,6 @@ export function parseConventionalCommit(title: string): ConventionalCommit {
 	return { type, scope, subject, breaking };
 }
 
-function scopeToDomain(scope: string): string | undefined {
-	return SCOPE_TO_DOMAIN[scope];
-}
-
 function classifyDomain(filePath: string): string | undefined {
 	for (const [prefix, domain] of PATH_TO_DOMAIN) {
 		if (filePath.startsWith(prefix)) return domain;
@@ -189,7 +184,7 @@ export function resolveDomain(
 	changedFiles: string[],
 ): string {
 	if (scope) {
-		const domain = scopeToDomain(scope);
+		const domain = SCOPE_TO_DOMAIN[scope];
 		if (domain) return domain;
 	}
 

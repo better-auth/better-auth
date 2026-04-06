@@ -64,13 +64,6 @@ const DOMAIN_DISPLAY_NAMES: Record<string, string> = {
 	devtools: "Devtools",
 };
 
-// Package name → directory mapping for packages that don't follow
-// the @better-auth/<dir> convention.
-const PACKAGE_DIR_OVERRIDES: Record<string, string> = {
-	auth: "cli",
-	"better-auth": "better-auth",
-};
-
 // ── CLI argument parsing ───────────────────────────────────────────────
 
 function parseArgs(): {
@@ -152,7 +145,7 @@ function listTags(): string[] {
 
 /** Parse "1.2.3" into [1, 2, 3]. Returns null on invalid input. */
 function parseVersionTuple(ver: string): [number, number, number] | null {
-	const base = ver.replace(/-.*$/, ""); // strip pre-release suffix
+	const base = ver.replace(/-.*$/, "");
 	const m = base.match(/^(\d+)\.(\d+)\.(\d+)$/);
 	if (!m) return null;
 	return [Number(m[1]), Number(m[2]), Number(m[3])];
@@ -177,7 +170,7 @@ function findPreviousTag(currentVersion: string, isBeta: boolean): string {
 		const preMatch = currentVersion.match(/^(.+)-(beta|alpha|rc)\.(\d+)$/);
 		if (preMatch && Number(preMatch[3]) > 0) {
 			const prevN = Number(preMatch[3]) - 1;
-			const channel = preMatch[2]; // preserve the actual channel
+			const channel = preMatch[2];
 			const prevVersion = `${preMatch[1]}-${channel}.${prevN}`;
 			const prevTag = `v${prevVersion}`;
 			if (tags.includes(prevTag)) return prevTag;
@@ -185,29 +178,19 @@ function findPreviousTag(currentVersion: string, isBeta: boolean): string {
 	}
 
 	const currentTag = `v${currentVersion}`;
-
-	// Extract the major.minor prefix to scope to the current release line.
 	const majorMinorMatch = currentVersion.match(/^(\d+\.\d+)\./);
 	const majorMinor = majorMinorMatch?.[1];
 
+	// First prefer the same major.minor line, then fall back to any stable tag
+	let fallback: string | undefined;
 	for (const tag of tags) {
 		if (tag === currentTag) continue;
 		const ver = tag.replace(/^v/, "");
-		if (ver.includes("-")) continue;
-		if (majorMinor && !ver.startsWith(`${majorMinor}.`)) continue;
-		// Only return tags strictly older than the current version
-		if (!isOlderVersion(ver, currentVersion)) continue;
-		return tag;
+		if (ver.includes("-") || !isOlderVersion(ver, currentVersion)) continue;
+		if (majorMinor && ver.startsWith(`${majorMinor}.`)) return tag;
+		fallback ??= tag;
 	}
-
-	// Fallback: any stable tag older than the current version
-	for (const tag of tags) {
-		if (tag === currentTag) continue;
-		const ver = tag.replace(/^v/, "");
-		if (ver.includes("-")) continue;
-		if (!isOlderVersion(ver, currentVersion)) continue;
-		return tag;
-	}
+	if (fallback) return fallback;
 
 	throw new Error("No previous stable tag found");
 }
@@ -298,11 +281,7 @@ interface ChangesetEntry {
 	packageNames: string[];
 }
 
-/**
- * Build a map of PR number → changeset description by scanning .changeset/ for
- * pr-*.md and commit-*.md files directly. Does not rely on pre.json.changesets
- * which can be empty on freshly entered pre-release branches or absent on main.
- */
+/** Build a map of PR number to changeset description from .changeset/ files and pre.json. */
 function buildChangesetIndex(branch: string): {
 	byPR: Map<number, ChangesetEntry>;
 	orphans: ChangesetEntry[];
@@ -310,12 +289,8 @@ function buildChangesetIndex(branch: string): {
 } {
 	const byPR = new Map<number, ChangesetEntry>();
 	const orphans: ChangesetEntry[] = [];
-	// Index by first line of description for matching manual changesets to PRs
 	const byDescription = new Map<string, ChangesetEntry>();
 
-	// Collect changeset IDs from two sources:
-	// 1. pre.json.changesets (consumed changesets, always present in pre-release mode)
-	// 2. Directory listing (uncovered changesets not yet versioned)
 	const ids = new Set<string>();
 
 	try {
@@ -323,48 +298,48 @@ function buildChangesetIndex(branch: string): {
 		const preJSON = JSON.parse(raw) as { changesets: string[] };
 		for (const id of preJSON.changesets) ids.add(id);
 	} catch {
-		// No pre.json — that's fine, we'll scan the directory
+		// No pre.json — scan the directory instead
 	}
 
-	// Scan .changeset/ for pr-* and commit-* files. Try the target ref first;
-	// Search for a commit that still has changeset files.
-	// On main after promotion, `changeset version` deletes them. The files
-	// may be on: (1) an ancestor on the first-parent chain, or (2) the
-	// merged next branch side (HEAD^2) from the promote merge commit.
+	// Walk recent ancestors (including merge parents via rev-list's full graph
+	// traversal) to find a commit that still has changeset files. On main after
+	// promotion, `changeset version` deletes them, so we may need to look at
+	// the merged next branch side.
+	const skipFiles = new Set(["README", "config"]);
 	const baseRef = branch || "HEAD";
 	let effectiveBranch = branch;
-	const refsToTry = [baseRef];
-	for (let i = 1; i <= 5; i++) refsToTry.push(`${baseRef}~${i}`);
-	// Also check the second parent of merge commits and its ancestors.
-	// In the promote flow, `changeset version` runs on next BEFORE the merge,
-	// so HEAD^2 itself has the files deleted. We need HEAD^2~1, HEAD^2~2, etc.
-	for (let i = 0; i <= 3; i++) {
-		const mergeRef = i === 0 ? baseRef : `${baseRef}~${i}`;
-		refsToTry.push(`${mergeRef}^2`);
-		for (let j = 1; j <= 3; j++) refsToTry.push(`${mergeRef}^2~${j}`);
-	}
-	for (const ref of refsToTry) {
-		try {
-			const listing = execFileSync(
-				"git",
-				["ls-tree", "-r", "--name-only", ref, ".changeset/"],
-				{ encoding: "utf-8" },
-			);
-			const SKIP_FILES = new Set(["README", "config"]);
-			let foundAny = false;
-			for (const file of listing.split("\n")) {
-				const name = file.replace(/^\.changeset\//, "").replace(/\.md$/, "");
-				if (!name || SKIP_FILES.has(name) || !file.endsWith(".md")) continue;
-				ids.add(name);
-				foundAny = true;
+	try {
+		const revs = execFileSync("git", ["rev-list", "--max-count=15", baseRef], {
+			encoding: "utf-8",
+		})
+			.trim()
+			.split("\n")
+			.filter(Boolean);
+
+		for (const rev of revs) {
+			try {
+				const listing = execFileSync(
+					"git",
+					["ls-tree", "-r", "--name-only", rev, ".changeset/"],
+					{ encoding: "utf-8" },
+				);
+				let foundAny = false;
+				for (const file of listing.split("\n")) {
+					const name = file.replace(/^\.changeset\//, "").replace(/\.md$/, "");
+					if (!name || skipFiles.has(name) || !file.endsWith(".md")) continue;
+					ids.add(name);
+					foundAny = true;
+				}
+				if (foundAny) {
+					effectiveBranch = rev;
+					break;
+				}
+			} catch {
+				// listing failed — try next
 			}
-			if (foundAny) {
-				effectiveBranch = ref;
-				break;
-			}
-		} catch {
-			// ref doesn't exist or listing failed — try next
 		}
+	} catch {
+		// rev-list failed — proceed with whatever pre.json gave us
 	}
 
 	for (const id of ids) {
@@ -386,7 +361,6 @@ function buildChangesetIndex(branch: string): {
 				byPR.set(Number(prMatch[1]), entry);
 			} else {
 				orphans.push(entry);
-				// Index by first line for matching to PRs via commit subject
 				const firstLine = description.split("\n")[0]!.trim().toLowerCase();
 				if (firstLine) byDescription.set(firstLine, entry);
 			}
@@ -398,11 +372,24 @@ function buildChangesetIndex(branch: string): {
 	return { byPR, orphans, byDescription };
 }
 
-/** Map a changeset package name to its directory under packages/ */
 function packageNameToPath(name: string): string {
-	const stripped = name.replace(/^@better-auth\//, "");
-	const dir = PACKAGE_DIR_OVERRIDES[stripped] ?? stripped;
-	return `packages/${dir}/`;
+	return `packages/${name.replace(/^@better-auth\//, "")}/`;
+}
+
+/** Load changeset IDs from the previous beta's pre.json to exclude from orphans. */
+function loadPreviousBetaChangesets(version: string): Set<string> {
+	const betaMatch = version.match(/^(.+)-beta\.(\d+)$/);
+	if (!betaMatch || Number(betaMatch[2]) === 0) return new Set();
+
+	const prevTag = `v${betaMatch[1]}-beta.${Number(betaMatch[2]) - 1}`;
+	try {
+		const prevPre = JSON.parse(gitShow(prevTag, ".changeset/pre.json")) as {
+			changesets: string[];
+		};
+		return new Set(prevPre.changesets);
+	} catch {
+		return new Set();
+	}
 }
 
 // ── Entry collection ───────────────────────────────────────────────────
@@ -421,7 +408,6 @@ function collectEntries(
 ): { entries: ReleaseEntry[]; targetRef: string } {
 	const previousTag = findPreviousTag(version, version.includes("-"));
 
-	// Determine the target ref: tag > branch arg > HEAD
 	const currentTag = `v${version}`;
 	let targetRef: string;
 	try {
@@ -448,7 +434,7 @@ function collectEntries(
 		);
 		isDirectAncestor = true;
 	} catch {
-		// Not a direct ancestor — cherry-pick model
+		// Not a direct ancestor
 	}
 
 	let log: string;
@@ -469,8 +455,6 @@ function collectEntries(
 
 		console.log(`  Cherry-pick mode: common ancestor ${mergeBase.slice(0, 7)}`);
 
-		// Collect PR numbers between merge-base and the previous tag
-		// (scoped range avoids reading the entire tag history)
 		const tagLog = execFileSync(
 			"git",
 			["log", `${mergeBase}..${previousTag}`, "--oneline"],
@@ -489,7 +473,6 @@ function collectEntries(
 
 	let lines = log.trim().split("\n").filter(Boolean);
 
-	// In cherry-pick mode, filter out commits whose PR was already released
 	if (alreadyReleasedPRs.size > 0) {
 		const before = lines.length;
 		lines = lines.filter((line) => {
@@ -500,7 +483,7 @@ function collectEntries(
 		console.log(`  Filtered ${before - lines.length} already-released PRs`);
 	}
 
-	// Revert chain cancellation
+	// Cancel out revert/original pairs
 	const seen = new Map<string, { hash: string; msg: string }>();
 	for (const line of lines) {
 		const spaceIdx = line.indexOf(" ");
@@ -526,9 +509,8 @@ function collectEntries(
 		seen.set(msg, { hash, msg });
 	}
 
-	// Build changeset index from the same ref used for the commit range.
-	// On reruns where the tag already exists, this prevents reading newer
-	// changesets from a branch that has advanced past the tagged release.
+	// Use the tag ref when it exists to avoid reading newer changesets from
+	// a branch that has advanced past the tagged release.
 	const changesetRef = targetRef === currentTag ? targetRef : branch;
 	const {
 		byPR: changesetByPR,
@@ -548,18 +530,14 @@ function collectEntries(
 	for (const { msg } of seen.values()) {
 		const parsed = parseConventionalCommit(msg);
 
-		// Only include commits with a PR number — direct commits without PRs
-		// are infra changes, version bumps, or blog edits that aren't user-facing.
+		// Direct commits without PRs are infra/version bumps, not user-facing
 		const prMatch = msg.match(/\(#(\d+)\)$/);
 		if (!prMatch) continue;
 		const prNumber = Number(prMatch[1]);
 
 		if (seenPRs.has(prNumber)) continue;
 
-		// Check for a changeset BEFORE filtering by commit type — a PR with
-		// a manual changeset should appear in release notes even if its
-		// merge title starts with docs:/chore:/etc.
-		// Try PR-keyed index first, then match by commit subject for manual names.
+		// A PR with a changeset should appear even if its type is docs:/chore:/etc.
 		const descMatch = changesetByDesc.get(parsed.subject.toLowerCase().trim());
 		const changeset = changesetByPR.get(prNumber) ?? descMatch;
 		if (descMatch) consumedOrphans.add(descMatch);
@@ -600,38 +578,19 @@ function collectEntries(
 		});
 	}
 
-	// Add orphan changesets (commit-HASH or manually named, no PR).
-	// Filter against the git range: for commit-HASH, verify the commit is
-	// in range. For manually named, check it wasn't in a previous beta's pre.json.
-	let previousBetaChangesets = new Set<string>();
-	if (version.includes("-")) {
-		const betaMatch = version.match(/^(.+)-beta\.(\d+)$/);
-		if (betaMatch && Number(betaMatch[2]) > 0) {
-			const prevTag = `v${betaMatch[1]}-beta.${Number(betaMatch[2]) - 1}`;
-			try {
-				const prevPre = JSON.parse(gitShow(prevTag, ".changeset/pre.json")) as {
-					changesets: string[];
-				};
-				previousBetaChangesets = new Set(prevPre.changesets);
-			} catch {
-				// No previous beta — include all orphans
-			}
-		}
-	}
+	const previousBetaChangesets = loadPreviousBetaChangesets(version);
+	const commitHashes = new Set([...seen.values()].map(({ hash }) => hash));
 
 	for (const changeset of changesetOrphans) {
-		// Skip orphans already matched to a PR via description
 		if (consumedOrphans.has(changeset)) continue;
-		// Skip orphans that were already in a previous beta
 		if (previousBetaChangesets.has(changeset.id)) continue;
 
-		// For commit-HASH, verify the commit is in the git range
 		const commitMatch = changeset.id.match(/^commit-([a-f0-9]+)$/);
-		if (commitMatch) {
-			const inRange = [...seen.values()].some(({ hash }) =>
-				hash.startsWith(commitMatch[1]!),
-			);
-			if (!inRange) continue;
+		if (
+			commitMatch &&
+			![...commitHashes].some((h) => h.startsWith(commitMatch[1]!))
+		) {
+			continue;
 		}
 
 		const pkgPaths = changeset.packageNames.map(packageNameToPath);
@@ -653,18 +612,19 @@ function collectEntries(
 
 // ── Formatting ─────────────────────────────────────────────────────────
 
-function formatReleaseBody(
-	version: string,
-	isBeta: boolean,
-	entries: ReleaseEntry[],
-	previousTag: string,
-	distTag: string,
-	targetRef: string,
-): string {
+interface FormatOptions {
+	version: string;
+	entries: ReleaseEntry[];
+	previousTag: string;
+	distTag: string;
+	targetRef: string;
+}
+
+function formatReleaseBody(opts: FormatOptions): string {
+	const { version, entries, previousTag, distTag, targetRef } = opts;
 	const lines: string[] = [];
 
-	// Determine the install tag: explicit dist-tag > infer from version
-	const installTag = distTag || (isBeta ? "beta" : "latest");
+	const installTag = distTag || (version.includes("-") ? "beta" : "latest");
 	lines.push(`> Install: \`npm i better-auth@${installTag}\``);
 	lines.push("");
 
@@ -701,8 +661,6 @@ function formatReleaseBody(
 		lines.push("");
 	}
 
-	// Use the tag if it already exists (targetRef will be v<version>),
-	// otherwise use the branch ref so preview compare links don't 404.
 	const currentTag = `v${version}`;
 	const compareTarget =
 		targetRef === currentTag ? currentTag : targetRef.replace(/^origin\//, "");
@@ -731,27 +689,22 @@ const { entries, targetRef } = collectEntries(version, branch);
 console.log(`  Found ${entries.length} entries`);
 console.log("");
 
-const body = formatReleaseBody(
+const body = formatReleaseBody({
 	version,
-	isBeta,
 	entries,
 	previousTag,
 	distTag,
 	targetRef,
-);
+});
 
 if (dryRun) {
 	console.log("=== DRY RUN — Raw changelog ===\n");
 	console.log(body);
 } else {
-	// Write raw changelog to temp file for the AI stage
-	// Write inside the repo working directory so claude-code-action can read it
-	// (it restricts file access to the checkout directory)
+	// Write inside the repo directory so claude-code-action can read it
 	const rawFile = join(process.cwd(), `.release-notes-raw-${version}.md`);
 	writeFileSync(rawFile, body);
 	console.log(`Wrote raw changelog to ${rawFile}`);
-
-	// Set outputs for the workflow
 	setOutput("version", version);
 	setOutput("previous_tag", previousTag);
 	setOutput("is_beta", String(isBeta));
