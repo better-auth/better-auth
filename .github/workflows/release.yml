@@ -123,7 +123,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
           NPM_DIST_TAG: ${{ steps.npm-tag.outputs.tag }}
-        run: node .github/scripts/release-notes.ts
+        run: node .github/scripts/release-notes.ts --branch "$GITHUB_REF_NAME"
 
       - name: Build AI prompt from template
         id: ai-prompt

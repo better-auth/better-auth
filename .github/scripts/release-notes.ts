@@ -291,6 +291,7 @@ function classifyEntry(
 // ── Changeset description index ────────────────────────────────────────
 
 interface ChangesetEntry {
+	id: string;
 	description: string;
 	breaking: boolean;
 	packageNames: string[];
@@ -373,6 +374,7 @@ function buildChangesetIndex(branch: string): {
 
 			const breaking = Object.values(packages).some((b) => b === "major");
 			const entry: ChangesetEntry = {
+				id,
 				description,
 				breaking,
 				packageNames: Object.keys(packages),
@@ -593,14 +595,44 @@ function collectEntries(
 		});
 	}
 
-	// Add orphan changesets (commit-HASH pattern, no PR)
+	// Add orphan changesets (commit-HASH or manually named, no PR).
+	// Filter against the git range: for commit-HASH, verify the commit is
+	// in range. For manually named, check it wasn't in a previous beta's pre.json.
+	let previousBetaChangesets = new Set<string>();
+	if (version.includes("-")) {
+		const betaMatch = version.match(/^(.+)-beta\.(\d+)$/);
+		if (betaMatch && Number(betaMatch[2]) > 0) {
+			const prevTag = `v${betaMatch[1]}-beta.${Number(betaMatch[2]) - 1}`;
+			try {
+				const prevPre = JSON.parse(gitShow(prevTag, ".changeset/pre.json")) as {
+					changesets: string[];
+				};
+				previousBetaChangesets = new Set(prevPre.changesets);
+			} catch {
+				// No previous beta — include all orphans
+			}
+		}
+	}
+
 	for (const changeset of changesetOrphans) {
+		// Skip orphans that were already in a previous beta
+		if (previousBetaChangesets.has(changeset.id)) continue;
+
+		// For commit-HASH, verify the commit is in the git range
+		const commitMatch = changeset.id.match(/^commit-([a-f0-9]+)$/);
+		if (commitMatch) {
+			const inRange = [...seen.values()].some(({ hash }) =>
+				hash.startsWith(commitMatch[1]!),
+			);
+			if (!inRange) continue;
+		}
+
 		const pkgPaths = changeset.packageNames.map(packageNameToPath);
 		const domain = resolveDomain(undefined, pkgPaths);
 		if (FILTERED_DOMAINS.has(domain)) continue;
 
 		entries.push({
-			id: `changeset-orphan`,
+			id: changeset.id,
 			description: changeset.description,
 			prNumber: null,
 			author: "unknown",
