@@ -304,9 +304,12 @@ interface ChangesetEntry {
 function buildChangesetIndex(branch: string): {
 	byPR: Map<number, ChangesetEntry>;
 	orphans: ChangesetEntry[];
+	byDescription: Map<string, ChangesetEntry>;
 } {
 	const byPR = new Map<number, ChangesetEntry>();
 	const orphans: ChangesetEntry[] = [];
+	// Index by first line of description for matching manual changesets to PRs
+	const byDescription = new Map<string, ChangesetEntry>();
 
 	// Collect changeset IDs from two sources:
 	// 1. pre.json.changesets (consumed changesets, always present in pre-release mode)
@@ -380,13 +383,16 @@ function buildChangesetIndex(branch: string): {
 				byPR.set(Number(prMatch[1]), entry);
 			} else {
 				orphans.push(entry);
+				// Index by first line for matching to PRs via commit subject
+				const firstLine = description.split("\n")[0]!.trim().toLowerCase();
+				if (firstLine) byDescription.set(firstLine, entry);
 			}
 		} catch {
 			// File not found — skip
 		}
 	}
 
-	return { byPR, orphans };
+	return { byPR, orphans, byDescription };
 }
 
 /** Map a changeset package name to its directory under packages/ */
@@ -518,8 +524,11 @@ function collectEntries(
 	}
 
 	// Build changeset index for description enrichment
-	const { byPR: changesetByPR, orphans: changesetOrphans } =
-		buildChangesetIndex(branch);
+	const {
+		byPR: changesetByPR,
+		orphans: changesetOrphans,
+		byDescription: changesetByDesc,
+	} = buildChangesetIndex(branch);
 	if (changesetByPR.size > 0 || changesetOrphans.length > 0) {
 		console.log(
 			`  Loaded ${changesetByPR.size} changeset descriptions, ${changesetOrphans.length} orphans`,
@@ -543,7 +552,10 @@ function collectEntries(
 		// Check for a changeset BEFORE filtering by commit type — a PR with
 		// a manual changeset should appear in release notes even if its
 		// merge title starts with docs:/chore:/etc.
-		const changeset = changesetByPR.get(prNumber);
+		// Try PR-keyed index first, then match by commit subject for manual names.
+		const changeset =
+			changesetByPR.get(prNumber) ??
+			changesetByDesc.get(parsed.subject.toLowerCase().trim());
 
 		if (
 			!changeset &&
@@ -609,7 +621,6 @@ function formatReleaseBody(
 	previousTag: string,
 	distTag: string,
 	targetRef: string,
-	dryRun: boolean,
 ): string {
 	const lines: string[] = [];
 
@@ -651,14 +662,11 @@ function formatReleaseBody(
 		lines.push("");
 	}
 
-	// In CI (non-dry-run), the tag will be created after these notes are
-	// generated, so always use v<version> for a stable compare link.
-	// In preview/dry-run mode, use the branch ref since the tag doesn't exist.
+	// Use the tag if it already exists (targetRef will be v<version>),
+	// otherwise use the branch ref so preview compare links don't 404.
 	const currentTag = `v${version}`;
 	const compareTarget =
-		targetRef === currentTag || !dryRun
-			? currentTag
-			: targetRef.replace(/^origin\//, "");
+		targetRef === currentTag ? currentTag : targetRef.replace(/^origin\//, "");
 	lines.push(
 		`**Full changelog**: [\`${previousTag}...${compareTarget}\`](https://github.com/${REPO}/compare/${previousTag}...${compareTarget})`,
 	);
@@ -691,7 +699,6 @@ const body = formatReleaseBody(
 	previousTag,
 	distTag,
 	targetRef,
-	dryRun,
 );
 
 if (dryRun) {
