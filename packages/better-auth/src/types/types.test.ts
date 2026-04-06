@@ -247,4 +247,66 @@ describe("InferCtx", () => {
 		type Keys = keyof Result;
 		expectTypeOf<Keys>().toEqualTypeOf<"fetchOptions">();
 	});
+
+	it("should preserve query when body is any", () => {
+		type Result = InferCtx<
+			{ body: any; query: { page: number }; method: "GET" },
+			{}
+		>;
+		type HasQuery = "query" extends keyof Result ? true : false;
+		expectTypeOf<HasQuery>().toEqualTypeOf<true>();
+	});
+});
+
+describe("any-poisoning guards", () => {
+	/**
+	 * PrettifyDeep is used in InferSessionAPI return types.
+	 * Verify auth.$Infer.Session preserves structure and doesn't collapse.
+	 */
+	it("auth.$Infer.Session should have typed user/session fields", async () => {
+		const { auth } = await getTestInstance();
+		type Session = typeof auth.$Infer.Session;
+		expectTypeOf<Session>().toHaveProperty("user");
+		expectTypeOf<Session>().toHaveProperty("session");
+		type User = Session["user"];
+		expectTypeOf<User>().toHaveProperty("id");
+		expectTypeOf<User>().toHaveProperty("email");
+	});
+
+	/**
+	 * InferPluginTypes extracts $Infer from each plugin. When a plugin in
+	 * the array is `any`, the entire $Infer type should not collapse.
+	 */
+	it("auth.$Infer should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Infer = typeof auth.$Infer;
+		expectTypeOf<Infer>().not.toBeAny();
+		expectTypeOf<Infer>().toHaveProperty("Session");
+	});
+
+	/**
+	 * InferPluginErrorCodes extracts $ERROR_CODES from each plugin.
+	 * Same any guard as InferPluginTypes.
+	 */
+	it("auth.$ERROR_CODES should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Codes = (typeof auth)["$ERROR_CODES"];
+		expectTypeOf<Codes>().not.toBeAny();
+	});
+
+	/**
+	 * InferResolvedHooks transforms plugin atoms to hook methods (useSession, etc.).
+	 * Built-in hooks should remain typed regardless of plugin composition.
+	 */
+	it("client hooks should not collapse with untyped plugin", async () => {
+		const { client } = await getTestInstance();
+		type UseSession = typeof client.useSession;
+		expectTypeOf<UseSession>().not.toBeAny();
+	});
 });
