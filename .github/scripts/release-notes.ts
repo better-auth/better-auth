@@ -317,13 +317,19 @@ function buildChangesetIndex(branch: string): {
 	}
 
 	// Scan .changeset/ for pr-* and commit-* files. Try the target ref first;
-	// Search backwards from the target ref to find a commit that still has
-	// changeset files. On main after promotion, `changeset version` ran on
-	// next before the merge, so both HEAD and HEAD~1 may have them deleted.
+	// Search for a commit that still has changeset files.
+	// On main after promotion, `changeset version` deletes them. The files
+	// may be on: (1) an ancestor on the first-parent chain, or (2) the
+	// merged next branch side (HEAD^2) from the promote merge commit.
 	const baseRef = branch || "HEAD";
 	let effectiveBranch = branch;
 	const refsToTry = [baseRef];
 	for (let i = 1; i <= 5; i++) refsToTry.push(`${baseRef}~${i}`);
+	// Also check the second parent of merge commits (promote flow: next → main)
+	for (let i = 0; i <= 3; i++) {
+		const mergeRef = i === 0 ? baseRef : `${baseRef}~${i}`;
+		refsToTry.push(`${mergeRef}^2`);
+	}
 	for (const ref of refsToTry) {
 		try {
 			const listing = execFileSync(
@@ -595,6 +601,7 @@ function formatReleaseBody(
 	previousTag: string,
 	distTag: string,
 	targetRef: string,
+	dryRun: boolean,
 ): string {
 	const lines: string[] = [];
 
@@ -636,10 +643,14 @@ function formatReleaseBody(
 		lines.push("");
 	}
 
-	// Use the tag if it exists, otherwise the branch ref (for preview mode)
+	// In CI (non-dry-run), the tag will be created after these notes are
+	// generated, so always use v<version> for a stable compare link.
+	// In preview/dry-run mode, use the branch ref since the tag doesn't exist.
 	const currentTag = `v${version}`;
 	const compareTarget =
-		targetRef === currentTag ? currentTag : targetRef.replace(/^origin\//, "");
+		targetRef === currentTag || !dryRun
+			? currentTag
+			: targetRef.replace(/^origin\//, "");
 	lines.push(
 		`**Full changelog**: [\`${previousTag}...${compareTarget}\`](https://github.com/${REPO}/compare/${previousTag}...${compareTarget})`,
 	);
@@ -672,6 +683,7 @@ const body = formatReleaseBody(
 	previousTag,
 	distTag,
 	targetRef,
+	dryRun,
 );
 
 if (dryRun) {
