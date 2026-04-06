@@ -8,6 +8,7 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type {
 	ExtractPluginField,
 	InferPluginFieldFromTuple,
+	IsAny,
 	UnionToIntersection,
 } from "./helper";
 
@@ -34,7 +35,13 @@ export type InferPluginErrorCodes<O extends BetterAuthOptions> =
 
 export type InferPluginIDs<O extends BetterAuthOptions> =
 	O["plugins"] extends Array<infer P>
-		? UnionToIntersection<P extends BetterAuthPlugin ? P["id"] : never>
+		? UnionToIntersection<
+				IsAny<P> extends true
+					? never
+					: P extends BetterAuthPlugin
+						? P["id"]
+						: never
+			>
 		: never;
 
 type ExtractInitContext<P extends BetterAuthPlugin> = P["init"] extends (
@@ -50,6 +57,10 @@ type ExtractInitContext<P extends BetterAuthPlugin> = P["init"] extends (
 export type InferPluginContext<O extends BetterAuthOptions> =
 	O["plugins"] extends Array<infer P>
 		? UnionToIntersection<
-				P extends BetterAuthPlugin ? ExtractInitContext<P> : {}
+				IsAny<P> extends true
+					? {}
+					: P extends BetterAuthPlugin
+						? ExtractInitContext<P>
+						: {}
 			>
 		: {};

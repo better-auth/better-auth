@@ -256,6 +256,13 @@ describe("any-poisoning guards", () => {
 	/**
 	 * InferPluginTypes: an untyped plugin (`{} as any`) in the plugins array
 	 * should not collapse auth.$Infer to `any`.
+	 *
+	 * NOTE: Because `plugins` is typed as `BetterAuthPlugin[]`, `any | OrgPlugin`
+	 * collapses to `any` before the tuple walk can distinguish individual elements.
+	 * Typed plugin contributions (e.g. organization fields) are NOT preserved in
+	 * this scenario. A `const` generic parameter on `betterAuth()` would enable
+	 * per-element `any` isolation.
+	 * @see https://github.com/better-auth/better-auth/issues/8986
 	 */
 	it("auth.$Infer should not collapse with untyped plugin", async () => {
 		const untypedPlugin = {} as any;
@@ -270,6 +277,9 @@ describe("any-poisoning guards", () => {
 	/**
 	 * InferPluginErrorCodes: same guard as InferPluginTypes,
 	 * auth.$ERROR_CODES should not collapse to `any`.
+	 * Base error codes (e.g. SESSION_EXPIRED) must survive `any` poisoning.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8986
 	 */
 	it("auth.$ERROR_CODES should not collapse with untyped plugin", async () => {
 		const untypedPlugin = {} as any;
