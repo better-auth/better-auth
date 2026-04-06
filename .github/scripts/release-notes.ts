@@ -392,7 +392,10 @@ function packageNameToPath(name: string): string {
  * a direct ancestor) using PR-number deduplication, same as
  * release-previews.sh.
  */
-function collectEntries(version: string, branch: string): ReleaseEntry[] {
+function collectEntries(
+	version: string,
+	branch: string,
+): { entries: ReleaseEntry[]; targetRef: string } {
 	const previousTag = findPreviousTag(version, version.includes("-"));
 
 	// Determine the target ref: tag > branch arg > HEAD
@@ -580,7 +583,7 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 		});
 	}
 
-	return entries;
+	return { entries, targetRef };
 }
 
 // ── Formatting ─────────────────────────────────────────────────────────
@@ -591,6 +594,7 @@ function formatReleaseBody(
 	entries: ReleaseEntry[],
 	previousTag: string,
 	distTag: string,
+	targetRef: string,
 ): string {
 	const lines: string[] = [];
 
@@ -632,9 +636,12 @@ function formatReleaseBody(
 		lines.push("");
 	}
 
+	// Use the tag if it exists, otherwise the branch ref (for preview mode)
 	const currentTag = `v${version}`;
+	const compareTarget =
+		targetRef === currentTag ? currentTag : targetRef.replace(/^origin\//, "");
 	lines.push(
-		`**Full changelog**: [\`${previousTag}...${currentTag}\`](https://github.com/${REPO}/compare/${previousTag}...${currentTag})`,
+		`**Full changelog**: [\`${previousTag}...${compareTarget}\`](https://github.com/${REPO}/compare/${previousTag}...${compareTarget})`,
 	);
 
 	return lines.join("\n");
@@ -654,11 +661,18 @@ if (distTag) console.log(`  Dist tag: ${distTag}`);
 console.log("");
 
 console.log("Collecting entries...");
-const entries = collectEntries(version, branch);
+const { entries, targetRef } = collectEntries(version, branch);
 console.log(`  Found ${entries.length} entries`);
 console.log("");
 
-const body = formatReleaseBody(version, isBeta, entries, previousTag, distTag);
+const body = formatReleaseBody(
+	version,
+	isBeta,
+	entries,
+	previousTag,
+	distTag,
+	targetRef,
+);
 
 if (dryRun) {
 	console.log("=== DRY RUN — Raw changelog ===\n");

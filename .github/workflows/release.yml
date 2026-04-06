@@ -188,12 +188,8 @@ jobs:
             echo "Using minimal fallback (note generation failed)"
           fi
 
-          # Resolve the actual branch HEAD (changesets/action may have pushed a new commit)
+          # Tag the exact commit that triggered this workflow run
           COMMIT_SHA="${GITHUB_SHA}"
-          RESOLVED=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${GITHUB_REF_NAME}" --jq '.object.sha' 2>/dev/null || true)
-          if [ -n "$RESOLVED" ]; then
-            COMMIT_SHA="$RESOLVED"
-          fi
 
           # Create tag via GitHub API (git push has no credentials with persist-credentials: false)
           gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
