@@ -174,10 +174,11 @@ function findPreviousTag(currentVersion: string, isBeta: boolean): string {
 	const tags = listTags();
 
 	if (isBeta) {
-		const betaMatch = currentVersion.match(/^(.+)-(?:beta|alpha|rc)\.(\d+)$/);
-		if (betaMatch && Number(betaMatch[2]) > 0) {
-			const prevN = Number(betaMatch[2]) - 1;
-			const prevVersion = `${betaMatch[1]}-beta.${prevN}`;
+		const preMatch = currentVersion.match(/^(.+)-(beta|alpha|rc)\.(\d+)$/);
+		if (preMatch && Number(preMatch[3]) > 0) {
+			const prevN = Number(preMatch[3]) - 1;
+			const channel = preMatch[2]; // preserve the actual channel
+			const prevVersion = `${preMatch[1]}-${channel}.${prevN}`;
 			const prevTag = `v${prevVersion}`;
 			if (tags.includes(prevTag)) return prevTag;
 		}
@@ -525,12 +526,15 @@ function collectEntries(
 		seen.set(msg, { hash, msg });
 	}
 
-	// Build changeset index for description enrichment
+	// Build changeset index from the same ref used for the commit range.
+	// On reruns where the tag already exists, this prevents reading newer
+	// changesets from a branch that has advanced past the tagged release.
+	const changesetRef = targetRef === currentTag ? targetRef : branch;
 	const {
 		byPR: changesetByPR,
 		orphans: changesetOrphans,
 		byDescription: changesetByDesc,
-	} = buildChangesetIndex(branch);
+	} = buildChangesetIndex(changesetRef);
 	if (changesetByPR.size > 0 || changesetOrphans.length > 0) {
 		console.log(
 			`  Loaded ${changesetByPR.size} changeset descriptions, ${changesetOrphans.length} orphans`,
@@ -539,6 +543,7 @@ function collectEntries(
 
 	const entries: ReleaseEntry[] = [];
 	const seenPRs = new Set<number>();
+	const consumedOrphans = new Set<ChangesetEntry>();
 
 	for (const { msg } of seen.values()) {
 		const parsed = parseConventionalCommit(msg);
@@ -555,9 +560,9 @@ function collectEntries(
 		// a manual changeset should appear in release notes even if its
 		// merge title starts with docs:/chore:/etc.
 		// Try PR-keyed index first, then match by commit subject for manual names.
-		const changeset =
-			changesetByPR.get(prNumber) ??
-			changesetByDesc.get(parsed.subject.toLowerCase().trim());
+		const descMatch = changesetByDesc.get(parsed.subject.toLowerCase().trim());
+		const changeset = changesetByPR.get(prNumber) ?? descMatch;
+		if (descMatch) consumedOrphans.add(descMatch);
 
 		if (
 			!changeset &&
@@ -615,6 +620,8 @@ function collectEntries(
 	}
 
 	for (const changeset of changesetOrphans) {
+		// Skip orphans already matched to a PR via description
+		if (consumedOrphans.has(changeset)) continue;
 		// Skip orphans that were already in a previous beta
 		if (previousBetaChangesets.has(changeset.id)) continue;
 
