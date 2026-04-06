@@ -363,10 +363,15 @@ jobs:
             DIST_TAG="latest"
           fi
 
+          DIST_TAG_ARGS=""
+          if [ -n "$DIST_TAG" ]; then
+            DIST_TAG_ARGS="--dist-tag $DIST_TAG"
+          fi
+
           node .github/scripts/release-notes.ts \
             --version "$INPUT_VERSION" \
             --branch "origin/$INPUT_BRANCH" \
-            ${DIST_TAG:+--dist-tag "$DIST_TAG"}
+            $DIST_TAG_ARGS
 
       - name: Build AI prompt from template
         id: ai-prompt

@@ -377,11 +377,12 @@ function packageNameToPath(name: string): string {
 }
 
 /** Load changeset IDs from the previous beta's pre.json to exclude from orphans. */
-function loadPreviousBetaChangesets(version: string): Set<string> {
-	const betaMatch = version.match(/^(.+)-beta\.(\d+)$/);
-	if (!betaMatch || Number(betaMatch[2]) === 0) return new Set();
+function loadPreviousPrereleaseChangesets(version: string): Set<string> {
+	const preMatch = version.match(/^(.+)-(beta|alpha|rc)\.(\d+)$/);
+	if (!preMatch || Number(preMatch[3]) === 0) return new Set();
 
-	const prevTag = `v${betaMatch[1]}-beta.${Number(betaMatch[2]) - 1}`;
+	const channel = preMatch[2];
+	const prevTag = `v${preMatch[1]}-${channel}.${Number(preMatch[3]) - 1}`;
 	try {
 		const prevPre = JSON.parse(gitShow(prevTag, ".changeset/pre.json")) as {
 			changesets: string[];
@@ -578,7 +579,7 @@ function collectEntries(
 		});
 	}
 
-	const previousBetaChangesets = loadPreviousBetaChangesets(version);
+	const previousBetaChangesets = loadPreviousPrereleaseChangesets(version);
 	const commitHashes = new Set([...seen.values()].map(({ hash }) => hash));
 
 	for (const changeset of changesetOrphans) {
