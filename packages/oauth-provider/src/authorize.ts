@@ -172,7 +172,8 @@ export async function authorizeEndpoint(
 	let query: OAuthAuthorizationQuery = ctx.query;
 	if (query.request_uri) {
 		if (!opts.requestUriResolver) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				getErrorURL(ctx, "invalid_request_uri", "request_uri not supported"),
 			);
 		}
@@ -182,7 +183,8 @@ export async function authorizeEndpoint(
 			ctx,
 		});
 		if (!resolvedParams) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				getErrorURL(
 					ctx,
 					"invalid_request_uri",
@@ -190,10 +192,13 @@ export async function authorizeEndpoint(
 				),
 			);
 		}
-		// Merge resolved params into query (resolved params take precedence)
-		query = { ...query, ...resolvedParams } as OAuthAuthorizationQuery;
-		// Remove request_uri from merged query
-		query.request_uri = undefined;
+		// RFC 9126 §4: all params come from the stored request, not the URL.
+		// Only client_id is carried from the authorization URL.
+		const urlClientId = query.client_id;
+		query = resolvedParams as unknown as OAuthAuthorizationQuery;
+		if (urlClientId) {
+			query.client_id = urlClientId;
+		}
 	}
 	ctx.query = query;
 	await oAuthState.set({
@@ -260,13 +265,14 @@ export async function authorizeEndpoint(
 		try {
 			const registered = new URL(url);
 			const requested = new URL(query.redirect_uri);
-			// RFC 8252 §7.3: loopback IPs allow any port
+			// RFC 8252 §7.3: loopback IPs match on scheme+host+path+query, ignoring port
 			if (
 				(registered.hostname === "127.0.0.1" ||
 					registered.hostname === "[::1]") &&
 				registered.hostname === requested.hostname &&
 				registered.pathname === requested.pathname &&
-				registered.protocol === requested.protocol
+				registered.protocol === requested.protocol &&
+				registered.search === requested.search
 			)
 				return true;
 		} catch {}
@@ -526,8 +532,8 @@ export async function authorizeEndpoint(
 function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 	const params = new URLSearchParams();
 	for (const [key, value] of Object.entries(query)) {
-		if (typeof value === "string") {
-			params.set(key, value);
+		if (value != null) {
+			params.set(key, String(value));
 		}
 	}
 	return params;

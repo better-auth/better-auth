@@ -264,6 +264,37 @@ describe("oauth authorize - request_uri resolution", async () => {
 		expect(loginRedirectUrl).toContain("state=par-state");
 		expect(loginRedirectUrl).not.toContain("request_uri=");
 	});
+
+	/**
+	 * RFC 9126 §4: params must come from the stored request, not the URL.
+	 * Extra URL params like prompt or scope must not leak into the signed redirect.
+	 */
+	it("should discard front-channel params not in the stored PAR request", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUri);
+		// These params are NOT in the PAR payload — must be discarded
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("scope", "openid profile admin");
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(loginRedirectUrl).toContain("/login");
+		// PAR-resolved scope must win, not the URL-injected one
+		expect(loginRedirectUrl).toContain("scope=openid");
+		expect(loginRedirectUrl).not.toContain("admin");
+		// prompt=none was not in the PAR payload — must not appear
+		expect(loginRedirectUrl).not.toContain("prompt=none");
+	});
 });
 
 describe("oauth authorize - authenticated", async () => {
