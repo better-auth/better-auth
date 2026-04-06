@@ -1,5 +1,16 @@
 # @better-auth/memory-adapter
 
+## 1.6.0
+
+### Minor Changes
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`5dd9e44`](https://github.com/better-auth/better-auth/commit/5dd9e44c041839bf269056cb246fd617abe6cd33) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add case-insensitive query support for database adapters
+
+### Patch Changes
+
+- Updated dependencies [[`5dd9e44`](https://github.com/better-auth/better-auth/commit/5dd9e44c041839bf269056cb246fd617abe6cd33)]:
+  - @better-auth/core@1.6.0
+
 ## 1.6.0-beta.0
 
 ### Minor Changes
