@@ -41,3 +41,31 @@ export type HasRequiredKeys<BaseType> =
 			: false;
 
 export type StripEmptyObjects<T extends object> = { [K in keyof T]: T[K] };
+
+/**
+ * Extracts a Record-typed field from a plugin, guarding against `any`.
+ */
+export type ExtractPluginField<T, Field extends string> =
+	IsAny<T> extends true
+		? {}
+		: T extends { [K in Field]?: Record<string, any> }
+			? T[Field] extends Record<string, any>
+				? T[Field]
+				: {}
+			: {};
+
+/**
+ * Walks a plugin tuple with tail-recursive accumulator (TS 4.5+),
+ * extracting and intersecting the given field from each element.
+ */
+export type InferPluginFieldFromTuple<
+	T extends readonly unknown[],
+	Field extends string,
+	Acc = {},
+> = T extends readonly [infer Head, ...infer Tail]
+	? InferPluginFieldFromTuple<
+			Tail,
+			Field,
+			Acc & ExtractPluginField<Head, Field>
+		>
+	: Acc;
