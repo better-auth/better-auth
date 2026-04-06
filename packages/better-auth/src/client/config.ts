@@ -87,7 +87,9 @@ export const getClientConfig = (
 			lifeCyclePlugin,
 			...(restOfFetchOptions.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
-			...(options?.disableSkewProtection ? [] : [vercelSkewProtectionPlugin]),
+			...(options?.disableDefaultFetchPlugins || options?.disableSkewProtection
+				? []
+				: [vercelSkewProtectionPlugin]),
 			...pluginsFetchPlugins,
 		],
 	});

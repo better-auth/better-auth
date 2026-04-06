@@ -93,7 +93,7 @@ describe("vercelSkewProtectionPlugin", () => {
 			.NEXT_DEPLOYMENT_ID;
 		process.env.VERCEL_SKEW_PROTECTION_ENABLED = "1";
 		process.env.VERCEL_DEPLOYMENT_ID = "dpl_from_vercel_env";
-		process.env.NEXT_DEPLOYMENT_ID = undefined;
+		Reflect.deleteProperty(process.env, "NEXT_DEPLOYMENT_ID");
 		(globalThis as Record<string, unknown>).NEXT_DEPLOYMENT_ID = undefined;
 		document.documentElement.removeAttribute("data-dpl-id");
 		try {
