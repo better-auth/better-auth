@@ -20,46 +20,44 @@ export type SCIMEmail = { value?: string; primary?: boolean };
 export type SCIMOptions = {
 	/**
 	 * SCIM provider ownership configuration. When enabled, each provider
-	 * connection is linked to the user who generated its token
+	 * connection is linked to the user who generated its token.
 	 */
 	providerOwnership?: {
 		enabled: boolean;
 	};
 	/**
-	 * Default list of SCIM providers for testing
-	 * These will take precedence over the database when present
+	 * Minimum organization role(s) required for SCIM management operations
+	 * (generate-token, list/get/delete provider connections).
+	 *
+	 * Defaults to `["admin", organization.creatorRole ?? "owner"]`.
+	 */
+	requiredRole?: string[];
+	/**
+	 * Default list of SCIM providers for testing.
+	 * These will take precedence over the database when present.
 	 */
 	defaultSCIM?: Omit<SCIMProvider, "id">[];
 	/**
 	 * A callback that runs before a new SCIM token is generated.
-	 * @returns
+	 * Runs after the built-in role check, so it can add additional
+	 * restrictions but cannot bypass the role requirement.
 	 */
-	beforeSCIMTokenGenerated?: ({
-		user,
-		member,
-		scimToken,
-	}: {
+	beforeSCIMTokenGenerated?: (payload: {
 		user: User;
-		member?: Member | null;
+		member: Member | null;
 		scimToken: string;
 	}) => Promise<void>;
-
 	/**
-	 * A callback that runs before a new SCIM token is generated
-	 * @returns
+	 * A callback that runs after a new SCIM token is generated.
 	 */
-	afterSCIMTokenGenerated?: ({
-		user,
-		member,
-		scimProvider,
-	}: {
+	afterSCIMTokenGenerated?: (payload: {
 		user: User;
-		member?: Member | null;
+		member: Member | null;
 		scimToken: string;
 		scimProvider: SCIMProvider;
 	}) => Promise<void>;
 	/**
-	 * Store the SCIM token in your database in a secure way
+	 * How to store the SCIM token in the database.
 	 *
 	 * @default "plain"
 	 */
