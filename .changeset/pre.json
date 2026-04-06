@@ -26,6 +26,10 @@
   },
   "changesets": [
     "commit-cd835f6a5",
+    "deprecate-oidc-provider",
+    "fix-deps-security-overrides",
+    "fix-idor-authorization-scim-passkey",
+    "fix-oauth-provider-par-loopback-dcr",
     "pr-7154",
     "pr-7223",
     "pr-7243",
@@ -51,6 +55,8 @@
     "pr-8842",
     "pr-8850",
     "pr-8894",
-    "pr-8895"
+    "pr-8895",
+    "pr-8980",
+    "violet-papayas-see"
   ]
 }
