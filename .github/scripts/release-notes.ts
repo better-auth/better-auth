@@ -541,7 +541,7 @@ function collectEntries(
 		seenPRs.add(prNumber);
 
 		let author = "unknown";
-		let domain = "core";
+		let domain: string;
 		let breaking = parsed.breaking;
 
 		const description =
