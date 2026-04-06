@@ -8,9 +8,8 @@
  * Usage: GITHUB_TOKEN=... PR_NUMBER=... npx tsx .github/scripts/auto-changeset.ts
  */
 
-import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { appendFileSync } from "node:fs";
+import { gh, ghJSON, REPO, setOutput } from "./lib/github.ts";
+import { mapTypeToBump, parseConventionalCommit } from "./lib/pr-analyzer.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -25,81 +24,10 @@ interface PRData {
 	changedFiles: string[];
 }
 
-interface ConventionalCommit {
-	type: string;
-	scope: string;
-	subject: string;
-	breaking: boolean;
-}
-
 // ── Constants ──────────────────────────────────────────────────────────
-
-const REPO = process.env.GITHUB_REPOSITORY ?? "better-auth/better-auth";
 
 const CUBIC_OPEN = "<!-- This is an auto-generated description by cubic. -->";
 const CUBIC_CLOSE = "<!-- End of auto-generated description by cubic. -->";
-
-// ── Conventional commit helpers ────────────────────────────────────────
-
-function parseConventionalCommit(title: string): ConventionalCommit {
-	const typeMatch = title.match(/^([a-z]+)/);
-	const type = typeMatch?.[1] ?? "";
-	const scopeMatch = title.match(/^[a-z]+\(([^)]+)\)/);
-	const scope = scopeMatch?.[1] ?? "";
-	const breaking = /^[a-z]+(\([^)]+\))?!:/.test(title);
-	const subject = title.replace(/^[a-z]+(\([^)]+\))?!?:\s*/, "");
-	return { type, scope, subject, breaking };
-}
-
-function mapTypeToBump(
-	type: string,
-	breaking: boolean,
-): "patch" | "minor" | "major" | "skip" {
-	if (breaking) return "major";
-	switch (type) {
-		case "fix":
-		case "perf":
-		case "refactor":
-			return "patch";
-		case "feat":
-			return "minor";
-		case "chore":
-		case "docs":
-		case "ci":
-		case "test":
-		case "style":
-		case "build":
-			return "skip";
-		default:
-			return "patch";
-	}
-}
-
-// ── GitHub CLI helpers ─────────────────────────────────────────────────
-
-function gh(args: string[]): string {
-	return execFileSync("gh", args, {
-		encoding: "utf-8",
-		env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
-	}).trim();
-}
-
-function ghJSON<T>(args: string[]): T {
-	return JSON.parse(gh(args)) as T;
-}
-
-// ── GITHUB_OUTPUT helpers ──────────────────────────────────────────────
-
-function setOutput(key: string, value: string): void {
-	const outputFile = process.env.GITHUB_OUTPUT;
-	if (outputFile) {
-		const delim = `GHEOF_${randomBytes(8).toString("hex")}`;
-		appendFileSync(outputFile, `${key}<<${delim}\n${value}\n${delim}\n`);
-	}
-	console.log(
-		`  ${key}: ${value.length > 100 ? `${value.slice(0, 100)}...` : value}`,
-	);
-}
 
 // ── PR data fetching ───────────────────────────────────────────────────
 
