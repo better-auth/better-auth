@@ -1,0 +1,240 @@
+***
+
+title: "Better Auth 1.6"
+description: "Passkey-first registration, SAML hardening, OAuth and SCIM improvements, case-insensitive database queries, MCP server updates, and more!"
+date: 2026-04-06
+author:
+name: "Alex Yang"
+avatar: "/avatars/alex.png"
+twitter: "himseIf\_65"
+image: "[https://docs.better-auth.com/release-og/v1.6-release.png](https://docs.better-auth.com/release-og/v1.6-release.png)"
+tags: \["1.6", "passkeys", "SSO", "OAuth", "database", "MCP", "security"]
+-------------------------------------------------------------------------
+
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
+import { Callout } from "@/components/ui/callout";
+
+## Better Auth 1.6 Release
+
+We’re excited to announce the release of Better Auth 1.6.
+
+This release is focused on making existing auth flows safer, more production-ready, and easier to operate. We shipped passkey-first registration, hardened OAuth and SAML flows, improved adapter behavior, and cleaned up a number of upgrade pain points across the stack.
+
+To upgrade, run:
+
+```bash
+npx auth upgrade
+```
+
+***
+
+## Upgrade Notes
+
+<Callout type="info">
+  Most upgrades from `1.5.x` to `1.6.0` do not require a database migration.
+</Callout>
+
+If you are already running Better Auth in production, the main upgrade work in `1.6` is behavioral and configuration-related, not schema-related.
+
+<Accordions type="single">
+  <Accordion title="Do I need to migrate?">
+    1. **Most users:** No required database migration for the `1.5.x -> 1.6.0` upgrade path.
+
+    2. **If you use SAML SSO:** `enableInResponseToValidation` is now enabled by default for SP-initiated SAML flows. This is the biggest breaking change in `1.6`. If your provider or proxy setup is not ready yet, you can temporarily keep the previous behavior:
+
+    ```ts
+    import { sso } from "@better-auth/sso";
+
+    sso({
+      saml: {
+        enableInResponseToValidation: false,
+      },
+    });
+    ```
+
+    3. **If you rely on session freshness:** `session.freshAge` now behaves according to the docs and is calculated from `createdAt`, not `updatedAt`. If you previously depended on activity extending freshness windows, review your `freshAge` value or disable the check explicitly with `freshAge: 0`.
+
+    4. **If you use `@better-auth/oauth-provider` with `secondaryStorage`:** make sure sessions are stored in the database:
+
+    ```ts
+    import { betterAuth } from "better-auth";
+    import { oauthProvider } from "@better-auth/oauth-provider";
+
+    export const auth = betterAuth({
+      secondaryStorage: {
+        // ...
+      },
+      session: {
+        storeSessionInDatabase: true,
+      },
+      plugins: [oauthProvider()],
+    });
+    ```
+
+    5. **If you still use `oidc-provider`:** it still works in `1.6`, but it is now deprecated and emits a one-time warning. We recommend migrating to `@better-auth/oauth-provider` before the next major release.
+
+    ```diff title="auth.ts"
+    - import { oidcProvider } from "better-auth/plugins";
+    + import { oauthProvider } from "@better-auth/oauth-provider";
+    ```
+
+    6. **If you hardcoded the Better Auth docs MCP server URL:** update it to `https://mcp.better-auth.com/mcp`.
+
+    7. **If you adopt new features in this release:** features like passkeys or OAuth provider tables still require their normal schema setup. In that case, run:
+
+    ```bash
+    npx auth generate
+    npx auth migrate
+    ```
+  </Accordion>
+</Accordions>
+
+***
+
+## 🚀 Highlights
+
+### Passkey-first registration and WebAuthn extensions
+
+The passkey plugin now supports passkey-first onboarding. That means you can start registration before the user has a session, pass through your own signed context, and resolve the user during verification. We also added WebAuthn extension support for both registration and authentication flows.
+
+[👉 Read more about passkeys](/docs/plugins/passkey)
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+  plugins: [
+    passkey({
+      registration: {
+        requireSession: false,
+        resolveUser: async ({ context }) => {
+          // Validate context, then create or load the user.
+          return { id: "user-id", name: "user@example.com" };
+        },
+        extensions: { credProps: true },
+      },
+      authentication: {
+        extensions: { credProps: true },
+      },
+    }),
+  ],
+});
+```
+
+This makes passkeys much easier to use for passwordless onboarding flows, invite flows, and progressive signup experiences.
+
+***
+
+### Safer OAuth, SAML, and SCIM flows
+
+`1.6` hardens several auth flows that tend to break in real-world deployments.
+
+For SAML, `InResponseTo` validation is now enabled by default for SP-initiated flows, and the SSO plugin now exposes `provisionUserOnEveryLogin` so you can deliberately resync profile data on every sign-in instead of only on registration.
+
+For OAuth and OIDC, this release improves PAR handling, loopback redirect matching for native apps, post-login continuation redirects, and state verification. We also shipped end-to-end `private_key_jwt` client authentication support across `@better-auth/oauth-provider`, SSO, and generic OAuth flows.
+
+SCIM management endpoints are now protected by authorization middleware as well, which closes an important gap for enterprise deployments.
+
+[👉 Read more about SSO](/docs/plugins/sso)
+
+[👉 Read more about the OAuth Provider](/docs/plugins/oauth-provider)
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      provisionUserOnEveryLogin: true,
+      saml: {
+        enableInResponseToValidation: true,
+      },
+    }),
+  ],
+});
+```
+
+***
+
+### Better database behavior across adapters
+
+The database layer got better in several ways in `1.6`.
+
+The biggest improvement is case-insensitive query support across adapters, which makes it much easier to build consistent lookups for fields like email addresses and usernames without hand-rolling adapter-specific logic.
+
+We also fixed a set of adapter-level edge cases, including correct `IS NULL` and `IS NOT NULL` comparisons, D1 cleanup, safer Prisma fallbacks for non-unique updates and deletes, and native BSON UUID support in the Mongo adapter when using UUID IDs.
+
+```ts
+const user = await adapter.findOne({
+  model: "user",
+  where: [
+    {
+      field: "email",
+      value: "testuser@example.com",
+      operator: "eq",
+      mode: "insensitive",
+    },
+  ],
+});
+```
+
+This is one of those changes that does not look flashy in a changelog, but it removes a lot of small adapter inconsistencies in practice.
+
+***
+
+### Quality-of-life improvements across the stack
+
+We also shipped a broad set of smaller improvements that make Better Auth easier to run day to day:
+
+* `oidc-provider` is now explicitly deprecated in favor of `@better-auth/oauth-provider`
+* built-in plugins now expose their version
+* password hashing now uses non-blocking scrypt
+* passwordless users can now manage 2FA
+* `/magic-link/verify` now returns additional user and session fields
+* phone OTP send failures are no longer swallowed
+* the docs MCP server moved to `https://mcp.better-auth.com/mcp`
+* the CLI generators now treat omitted `required` fields correctly for Drizzle and Prisma
+
+<Callout type="info">
+  If you are still on `oidc-provider`, now is the right time to plan the migration to `@better-auth/oauth-provider`. The migration guide is already available in the OAuth Provider docs.
+</Callout>
+
+```bash
+npx auth@latest mcp
+```
+
+***
+
+### A new release process for faster fixes
+
+Starting with `1.6`, we are also rolling out a new release process designed to help us ship fixes faster without slowing down feature development.
+
+The main reason for this change is straightforward: bug fixes, larger features, refactors, and breaking changes should not all have to compete for the same release window. When they do, small fixes take longer to reach users, and contributor work is more likely to get held up while a release is being prepared.
+
+We now work with two long-lived branches:
+
+* `main`
+* `next`
+
+`main` is the stable branch. Fixes and fully tested changes land there and ship as patch releases, which gives us a much faster path for getting production issues resolved.
+
+`next` is where we prepare the next minor release. In Better Auth, minor releases can include larger changes and, in some cases, breaking changes, so `next` gives us a place to keep merging forward-looking work without making patch releases harder to cut.
+
+In practice, that means while `1.6` is stable, `next` can already be preparing `1.7`.
+
+This also lets us publish beta releases from `next` more frequently. Contributors and early adopters can test changes sooner, give feedback earlier, and help us validate new features before they become part of the stable release line.
+
+In short, this process gives us three concrete benefits:
+
+* faster patch releases for users on stable versions
+* a higher merge cadence for new features and refactors
+* quicker beta feedback loops for contributors and early adopters
+
+Our goal is to make Better Auth more predictable for users on stable releases while making it easier to keep moving quickly on what comes next.
+
+***
+
+A lot of refinements to make everything smoother, safer, and more reliable.
+👉 [Check the full changelog](https://github.com/better-auth/better-auth/releases/tag/v1.6.0)
