@@ -775,9 +775,18 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 		"/organization/list-user-teams",
 		{
 			method: "GET",
+			query: z
+				.object({
+					userId: z.string().optional().meta({
+						description:
+							"The user ID to list teams for. Defaults to the current session user.",
+					}),
+				})
+				.optional(),
 			metadata: {
 				openapi: {
-					description: "List all teams that the current user is a part of.",
+					description:
+						"List teams for a user. Defaults to the current user. Requires 'member:update' permission to query other users.",
 					responses: {
 						"200": {
 							description: "Teams retrieved successfully",
@@ -805,6 +814,68 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const targetUserId = ctx.query?.userId || session.user.id;
+			const isSelf = targetUserId === session.user.id;
+
+			if (!isSelf) {
+				const organizationId = session.session.activeOrganizationId;
+				if (!organizationId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					);
+				}
+
+				const requesterMember = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId,
+				});
+
+				if (!requesterMember) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					);
+				}
+
+				const canManageMembers = await hasPermission(
+					{
+						role: requesterMember.role,
+						options: ctx.context.orgOptions,
+						permissions: { member: ["update"] },
+						organizationId,
+					},
+					ctx,
+				);
+
+				if (!canManageMembers) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+					);
+				}
+
+				const targetMember = await adapter.findMemberByOrgId({
+					userId: targetUserId,
+					organizationId,
+				});
+
+				if (!targetMember) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					);
+				}
+
+				const teams = await adapter.listTeamsByUser({
+					userId: targetUserId,
+				});
+
+				return ctx.json(
+					teams.filter((t) => t.organizationId === organizationId),
+				);
+			}
+
 			const teams = await adapter.listTeamsByUser({
 				userId: session.user.id,
 			});

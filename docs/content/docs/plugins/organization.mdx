@@ -1950,11 +1950,15 @@ type setActiveTeam = {
 
 #### List User Teams
 
-List all teams that the current user is a part of.
+List all teams that a user is a part of. Defaults to the current user. Requires `member:update` permission to query other users' teams.
 
 <APIMethod path="/organization/list-user-teams" method="GET" requireSession>
   ```ts 
   type listUserTeams = {
+    /**
+     * The user ID to list teams for. Defaults to the current session user.
+     */
+    userId?: string
   }
   ```
 </APIMethod>

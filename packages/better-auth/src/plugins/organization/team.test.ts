@@ -1014,3 +1014,185 @@ describe("multi team support", async () => {
 		expect(stillTeam2Member).toBeUndefined();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7012
+ */
+describe("listUserTeams with userId parameter", async () => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: {
+					enabled: true,
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const ownerUser = {
+		email: "team-owner@test.com",
+		password: "password123",
+		name: "Owner User",
+	};
+
+	const memberUser = {
+		email: "team-member@test.com",
+		password: "password123",
+		name: "Member User",
+	};
+
+	const outsiderUser = {
+		email: "team-outsider@test.com",
+		password: "password123",
+		name: "Outsider User",
+	};
+
+	let ownerHeaders: Headers;
+	let memberHeaders: Headers;
+	let outsiderHeaders: Headers;
+	let organizationId: string;
+	let teamId: string;
+	let memberUserId: string;
+	let ownerUserId: string;
+
+	it("should setup organization with teams and members", async () => {
+		// Create owner
+		const ownerSignUp = await auth.api.signUpEmail({
+			body: ownerUser,
+		});
+		ownerUserId = ownerSignUp.user.id;
+		const ownerSignIn = await signInWithUser(
+			ownerUser.email,
+			ownerUser.password,
+		);
+		ownerHeaders = ownerSignIn.headers;
+
+		// Create org
+		const org = await auth.api.createOrganization({
+			headers: ownerHeaders,
+			body: {
+				name: "Teams Test Org",
+				slug: "teams-test-org",
+			},
+		});
+		organizationId = org.id;
+
+		await auth.api.setActiveOrganization({
+			headers: ownerHeaders,
+			body: { organizationId },
+		});
+
+		// Create team
+		const team = await auth.api.createTeam({
+			headers: ownerHeaders,
+			body: {
+				name: "Alpha Team",
+				organizationId,
+			},
+		});
+		teamId = team.id;
+
+		// Create member user
+		const memberSignUp = await auth.api.signUpEmail({
+			body: memberUser,
+		});
+		memberUserId = memberSignUp.user.id;
+		const memberSignIn = await signInWithUser(
+			memberUser.email,
+			memberUser.password,
+		);
+		memberHeaders = memberSignIn.headers;
+
+		// Add member to org
+		await auth.api.addMember({
+			headers: ownerHeaders,
+			body: {
+				organizationId,
+				userId: memberUserId,
+				role: "member",
+			},
+		});
+
+		// Add member to team
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId,
+				userId: memberUserId,
+			},
+		});
+
+		// Set member's active org
+		await auth.api.setActiveOrganization({
+			headers: memberHeaders,
+			body: { organizationId },
+		});
+
+		// Create outsider user (not in org)
+		await auth.api.signUpEmail({
+			body: outsiderUser,
+		});
+		const outsiderSignIn = await signInWithUser(
+			outsiderUser.email,
+			outsiderUser.password,
+		);
+		outsiderHeaders = outsiderSignIn.headers;
+	});
+
+	it("should list own teams without userId param (backwards compatible)", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: memberHeaders,
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamId);
+	});
+
+	it("should allow a user to list their own teams with userId param", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: memberHeaders,
+			query: { userId: memberUserId },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamId);
+	});
+
+	it("should allow an owner to list another user's teams", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: ownerHeaders,
+			query: { userId: memberUserId },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams[0]!.id).toBe(teamId);
+	});
+
+	it("should not allow a member to list another user's teams", async () => {
+		const res = await auth.api
+			.listUserTeams({
+				headers: memberHeaders,
+				query: { userId: ownerUserId },
+			})
+			.catch((e: any) => e);
+		expect(res).toBeInstanceOf(Error);
+	});
+
+	it("should not allow querying teams of a user not in the organization", async () => {
+		const res = await auth.api
+			.listUserTeams({
+				headers: ownerHeaders,
+				query: { userId: "non-existent-user-id" },
+			})
+			.catch((e: any) => e);
+		expect(res).toBeInstanceOf(Error);
+	});
+
+	it("should fail when querying another user without an active organization", async () => {
+		const res = await auth.api
+			.listUserTeams({
+				headers: outsiderHeaders,
+				query: { userId: memberUserId },
+			})
+			.catch((e: any) => e);
+		expect(res).toBeInstanceOf(Error);
+	});
+});
