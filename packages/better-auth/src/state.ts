@@ -118,8 +118,8 @@ export async function generateGenericState(
 	}
 
 	// Return the plain state, not verification.identifier.
-	// The adapter already hashed it for DB storage.
-	// Returning the hashed value would cause double-hashing on lookup.
+	// The adapter hashes it for DB storage when storeIdentifier is "hashed",
+	// so returning verification.identifier would cause double-hashing on lookup.
 	return {
 		state,
 		codeVerifier: stateData.codeVerifier,
