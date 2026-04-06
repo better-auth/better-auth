@@ -6,6 +6,7 @@ import type { BetterFetchResponse } from "@better-fetch/fetch";
 import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
 import type {
 	HasRequiredKeys,
+	IsAny,
 	Prettify,
 	UnionToIntersection,
 } from "../types/helper";
@@ -108,30 +109,35 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+type InferCtxQuery<
+	C extends InputContext<any, any>,
+	FetchOptions extends ClientFetchOption,
+> =
+	C["query"] extends Record<string, any>
+		? {
+				query: C["query"];
+				fetchOptions?: FetchOptions | undefined;
+			}
+		: C["query"] extends Record<string, any> | undefined
+			? {
+					query?: C["query"] | undefined;
+					fetchOptions?: FetchOptions | undefined;
+				}
+			: {
+					fetchOptions?: FetchOptions | undefined;
+				};
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
-> = 0 extends 1 & C["body"]
-	? {
-			fetchOptions?: FetchOptions | undefined;
-		}
-	: C["body"] extends Record<string, any>
-		? C["body"] & {
-				fetchOptions?: FetchOptions | undefined;
-			}
-		: C["query"] extends Record<string, any>
-			? {
-					query: C["query"];
+> =
+	IsAny<C["body"]> extends true
+		? InferCtxQuery<C, FetchOptions>
+		: C["body"] extends Record<string, any>
+			? C["body"] & {
 					fetchOptions?: FetchOptions | undefined;
 				}
-			: C["query"] extends Record<string, any> | undefined
-				? {
-						query?: C["query"] | undefined;
-						fetchOptions?: FetchOptions | undefined;
-					}
-				: {
-						fetchOptions?: FetchOptions | undefined;
-					};
+			: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 

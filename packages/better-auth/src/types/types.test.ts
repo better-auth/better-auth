@@ -1,5 +1,4 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { InputContext } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import type { InferCtx } from "../client/path-to-object";
@@ -241,10 +240,44 @@ describe("HasRequiredKeys", () => {
 	});
 });
 
-describe("InferCtx", () => {
-	it("should preserve fetchOptions when body is any", () => {
-		type Result = InferCtx<InputContext<any, any> & { body: any }, {}>;
-		type Keys = keyof Result;
-		expectTypeOf<Keys>().toEqualTypeOf<"fetchOptions">();
+describe("any-poisoning guards", () => {
+	/**
+	 * InferCtx: when body is `any`, query typing should be preserved
+	 * via InferCtxQuery delegation instead of collapsing to `any`.
+	 */
+	it("InferCtx should preserve query when body is any", () => {
+		type Result = InferCtx<
+			{ body: any; query: { page: number }; method: "GET" },
+			{}
+		>;
+		expectTypeOf<Result["query"]>().toEqualTypeOf<{ page: number }>();
+	});
+
+	/**
+	 * InferPluginTypes: an untyped plugin (`{} as any`) in the plugins array
+	 * should not collapse auth.$Infer to `any`.
+	 */
+	it("auth.$Infer should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Infer = typeof auth.$Infer;
+		expectTypeOf<Infer>().not.toBeAny();
+		expectTypeOf<Infer>().toHaveProperty("Session");
+	});
+
+	/**
+	 * InferPluginErrorCodes: same guard as InferPluginTypes,
+	 * auth.$ERROR_CODES should not collapse to `any`.
+	 */
+	it("auth.$ERROR_CODES should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Codes = (typeof auth)["$ERROR_CODES"];
+		expectTypeOf<Codes>().not.toBeAny();
+		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
 	});
 });
