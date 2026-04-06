@@ -56,9 +56,11 @@ export async function generateGenericState(
 	const state = generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
+	// Cookie strategy:
+	//
+	// State data is encrypted into the cookie
+	// no verification record created
 	if (storeStateStrategy === "cookie") {
-		// Store state data in an encrypted cookie
-
 		const encryptedData = await symmetricEncrypt({
 			key: c.context.secretConfig,
 			data: JSON.stringify(stateData),
@@ -79,8 +81,10 @@ export async function generateGenericState(
 		};
 	}
 
-	// Default: database strategy
-
+	// Database strategy:
+	//
+	// state is stored in a signed cookie and sent via OAuth URL
+	// the adapter hashes it at rest when storeIdentifier is set
 	const stateCookie = c.context.createAuthCookie(
 		settings?.cookieName ?? "state",
 		{
@@ -113,6 +117,9 @@ export async function generateGenericState(
 		);
 	}
 
+	// Return the plain state, not verification.identifier.
+	// The adapter already hashed it for DB storage.
+	// Returning the hashed value would cause double-hashing on lookup.
 	return {
 		state,
 		codeVerifier: stateData.codeVerifier,
