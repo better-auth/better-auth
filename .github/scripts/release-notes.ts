@@ -12,6 +12,11 @@
  * CI:    PUBLISHED_PACKAGES='[...]' node .github/scripts/release-notes.ts
  * Local: node --experimental-strip-types .github/scripts/release-notes.ts \
  *          --version 1.6.0-beta.0 --branch origin/next --dry-run
+ *
+ * Revert-cancellation algorithm and two-stage AI pipeline adapted from
+ * sst/opencode (MIT License, Copyright (c) 2025 opencode):
+ *   https://github.com/anomalyco/opencode
+ *   script/raw-changelog.ts, script/changelog.ts, script/version.ts
  */
 
 import { execFileSync } from "node:child_process";
