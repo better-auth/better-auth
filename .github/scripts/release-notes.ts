@@ -403,10 +403,7 @@ function loadPreviousPrereleaseChangesets(version: string): Set<string> {
  * a direct ancestor) using PR-number deduplication, same as
  * release-previews.sh.
  */
-function collectEntries(
-	version: string,
-	branch: string,
-): { entries: ReleaseEntry[]; targetRef: string } {
+function collectEntries(version: string, branch: string): ReleaseEntry[] {
 	const previousTag = findPreviousTag(version, version.includes("-"));
 
 	const currentTag = `v${version}`;
@@ -608,7 +605,7 @@ function collectEntries(
 		});
 	}
 
-	return { entries, targetRef };
+	return entries;
 }
 
 // ── Formatting ─────────────────────────────────────────────────────────
@@ -618,14 +615,14 @@ interface FormatOptions {
 	entries: ReleaseEntry[];
 	previousTag: string;
 	distTag: string;
-	targetRef: string;
 }
 
 function formatReleaseBody(opts: FormatOptions): string {
-	const { version, entries, previousTag, distTag, targetRef } = opts;
+	const { version, entries, previousTag, distTag } = opts;
 	const lines: string[] = [];
 
-	const installTag = distTag || (version.includes("-") ? "beta" : "latest");
+	const channelMatch = version.match(/-(beta|alpha|rc)\./);
+	const installTag = distTag || channelMatch?.[1] || "latest";
 	lines.push(`> Install: \`npm i better-auth@${installTag}\``);
 	lines.push("");
 
@@ -663,10 +660,8 @@ function formatReleaseBody(opts: FormatOptions): string {
 	}
 
 	const currentTag = `v${version}`;
-	const compareTarget =
-		targetRef === currentTag ? currentTag : targetRef.replace(/^origin\//, "");
 	lines.push(
-		`**Full changelog**: [\`${previousTag}...${compareTarget}\`](https://github.com/${REPO}/compare/${previousTag}...${compareTarget})`,
+		`**Full changelog**: [\`${previousTag}...${currentTag}\`](https://github.com/${REPO}/compare/${previousTag}...${currentTag})`,
 	);
 
 	return lines.join("\n");
@@ -686,7 +681,7 @@ if (distTag) console.log(`  Dist tag: ${distTag}`);
 console.log("");
 
 console.log("Collecting entries...");
-const { entries, targetRef } = collectEntries(version, branch);
+const entries = collectEntries(version, branch);
 console.log(`  Found ${entries.length} entries`);
 console.log("");
 
@@ -695,7 +690,6 @@ const body = formatReleaseBody({
 	entries,
 	previousTag,
 	distTag,
-	targetRef,
 });
 
 if (dryRun) {
