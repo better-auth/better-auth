@@ -190,7 +190,7 @@ export const mcp = (options: MCPOptions) => {
 		oauthAccessToken: "oauthAccessToken",
 		oauthConsent: "oauthConsent",
 	};
-	const provider = oidcProvider(opts);
+	const provider = oidcProvider({ ...opts, __skipDeprecationWarning: true });
 	return {
 		id: "mcp",
 		version: PACKAGE_VERSION,

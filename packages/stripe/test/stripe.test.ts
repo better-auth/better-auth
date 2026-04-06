@@ -2804,9 +2804,83 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should not update personal subscription when upgrading with an org referenceId", async () => {
-		/* cspell:disable-next-line */
-		const orgId = "org_b67GF32Cljh7u588AuEblmLVobclDRcP";
+	it("should create billing portal session for an existing custom referenceId", async () => {
+		// cspell:disable-next-line -- random test workspace ID
+		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: _stripe,
+			subscription: {
+				...stripeOptions.subscription,
+				authorizeReference: async () => true,
+			},
+		} as unknown as StripeOptions;
+
+		const {
+			auth: testAuth,
+			client: testClient,
+			sessionSetter: testSessionSetter,
+		} = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		const userRes = await testClient.signUp.email(
+			{ ...testUser, email: "custom-ref-billing-portal@email.com" },
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await testClient.signIn.email(
+			{ ...testUser, email: "custom-ref-billing-portal@email.com" },
+			{ throw: true, onSuccess: testSessionSetter(headers) },
+		);
+
+		await testCtx.adapter.update({
+			model: "user",
+			update: { stripeCustomerId: null },
+			where: [{ field: "id", value: userRes.user.id }],
+		});
+		await testCtx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: customReferenceId,
+				stripeCustomerId: "cus_custom_reference",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		mockStripe.billingPortal.sessions.create.mockClear();
+
+		const billingPortalRes = await testClient.subscription.billingPortal({
+			referenceId: customReferenceId,
+			returnUrl: "/dashboard",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(billingPortalRes.error).toBeNull();
+		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: "cus_custom_reference",
+			return_url: "http://localhost:3000/dashboard",
+		});
+	});
+
+	it("should not update personal subscription when upgrading with a custom referenceId", async () => {
+		// cspell:disable-next-line -- random test workspace ID
+		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
 
 		const testOptions = {
 			...stripeOptions,
@@ -2885,10 +2959,10 @@ describe("stripe", () => {
 			],
 		});
 
-		// Attempt to upgrade using an org referenceId
+		// Attempt to upgrade using a custom referenceId
 		const upgradeRes = await testClient.subscription.upgrade({
 			plan: "starter",
-			referenceId: orgId,
+			referenceId: customReferenceId,
 			fetchOptions: { headers },
 		});
 		// It should NOT go through billing portal (which would update the personal sub)
@@ -2897,10 +2971,10 @@ describe("stripe", () => {
 
 		const orgSub = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: [{ field: "referenceId", value: orgId }],
+			where: [{ field: "referenceId", value: customReferenceId }],
 		});
 		expect(orgSub).toMatchObject({
-			referenceId: orgId,
+			referenceId: customReferenceId,
 			status: "incomplete",
 			plan: "starter",
 		});
@@ -5934,6 +6008,10 @@ describe("stripe", () => {
 					{ ...testUser, email: "ref-test-3@example.com" },
 					{ throw: true },
 				);
+				const targetUser = await client.signUp.email(
+					{ ...testUser, email: "ref-target-3@example.com" },
+					{ throw: true },
+				);
 				const headers = new Headers();
 				await client.signIn.email(
 					{ ...testUser, email: "ref-test-3@example.com" },
@@ -5945,14 +6023,14 @@ describe("stripe", () => {
 
 				const res = await client.subscription.upgrade({
 					plan: "starter",
-					referenceId: "some-other-id",
+					referenceId: targetUser.user.id,
 					fetchOptions: { headers },
 				});
 
 				expect(res.error?.code).toBe("REFERENCE_ID_NOT_ALLOWED");
 			});
 
-			it("should reject when authorizeReference returns false", async () => {
+			it("should reject another user's referenceId when authorizeReference returns false", async () => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -5977,6 +6055,10 @@ describe("stripe", () => {
 					{ ...testUser, email: "ref-test-4@example.com" },
 					{ throw: true },
 				);
+				const targetUser = await client.signUp.email(
+					{ ...testUser, email: "ref-target-4@example.com" },
+					{ throw: true },
+				);
 				const headers = new Headers();
 				await client.signIn.email(
 					{ ...testUser, email: "ref-test-4@example.com" },
@@ -5988,14 +6070,14 @@ describe("stripe", () => {
 
 				const res = await client.subscription.upgrade({
 					plan: "starter",
-					referenceId: "some-other-id",
+					referenceId: targetUser.user.id,
 					fetchOptions: { headers },
 				});
 
 				expect(res.error?.code).toBe("UNAUTHORIZED");
 			});
 
-			it("should pass when authorizeReference returns true", async () => {
+			it("should allow another user's referenceId when authorizeReference returns true", async () => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -6004,7 +6086,7 @@ describe("stripe", () => {
 					},
 				};
 
-				const { client, sessionSetter } = await getTestInstance(
+				const { auth, client, sessionSetter } = await getTestInstance(
 					{
 						plugins: [stripe(stripeOptionsWithAuth)],
 					},
@@ -6016,27 +6098,66 @@ describe("stripe", () => {
 					},
 				);
 
-				await client.signUp.email(
+				const actorUser = await client.signUp.email(
 					{ ...testUser, email: "ref-test-5@example.com" },
+					{ throw: true },
+				);
+				const targetUser = await client.signUp.email(
+					{ ...testUser, email: "ref-target-5@example.com" },
 					{ throw: true },
 				);
 				const headers = new Headers();
 				await client.signIn.email(
-					{ ...testUser, email: "ref-test-5@example.com" },
+					{ ...testUser, email: actorUser.user.email },
 					{
 						throw: true,
 						onSuccess: sessionSetter(headers),
 					},
 				);
 
+				const ctx = await auth.$context;
+				await ctx.adapter.update({
+					model: "user",
+					update: {
+						stripeCustomerId: "cus_actor_reference",
+					},
+					where: [{ field: "id", value: actorUser.user.id }],
+				});
+				await ctx.adapter.update({
+					model: "user",
+					update: {
+						stripeCustomerId: "cus_target_reference",
+					},
+					where: [{ field: "id", value: targetUser.user.id }],
+				});
+				mockStripe.checkout.sessions.create.mockClear();
+
 				const res = await client.subscription.upgrade({
 					plan: "starter",
-					referenceId: "some-other-id",
+					referenceId: targetUser.user.id,
 					fetchOptions: { headers },
 				});
 
 				expect(res.error).toBeNull();
 				expect(res.data?.url).toBeDefined();
+				expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						customer: "cus_actor_reference",
+						metadata: expect.objectContaining({
+							userId: actorUser.user.id,
+							referenceId: targetUser.user.id,
+						}),
+					}),
+					undefined,
+				);
+				const subscription = await ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "referenceId", value: targetUser.user.id }],
+				});
+				expect(subscription).toMatchObject({
+					referenceId: targetUser.user.id,
+					status: "incomplete",
+				});
 			});
 		});
 

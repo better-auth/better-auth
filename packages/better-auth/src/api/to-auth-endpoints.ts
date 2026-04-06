@@ -17,7 +17,7 @@ import {
 import type {
 	Endpoint,
 	EndpointContext,
-	EndpointRuntimeOptions,
+	EndpointOptions,
 	InputContext,
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
@@ -25,20 +25,7 @@ import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
 
 type InternalContext = Partial<
-	InputContext<string, any, any, any, any, any> &
-		EndpointContext<
-			string,
-			any,
-			any,
-			any,
-			any,
-			any,
-			any,
-			AuthContext & {
-				returned?: unknown | undefined;
-				responseHeaders?: Headers | undefined;
-			}
-		>
+	InputContext<string, any> & EndpointContext<string, any>
 > & {
 	path: string;
 	asResponse?: boolean | undefined;
@@ -76,8 +63,7 @@ function getOperationId(endpoint: Endpoint | undefined, key: string): string {
 }
 
 type UserInputContext = Partial<
-	InputContext<string, any, any, any, any, any> &
-		EndpointContext<string, any, any, any, any, any, any, any>
+	InputContext<string, any> & EndpointContext<string, any>
 >;
 
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
@@ -87,11 +73,10 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	const api: Record<
 		string,
 		((
-			context: EndpointContext<string, any, any, any, any, any, any, any> &
-				InputContext<string, any, any, any, any, any>,
+			context: EndpointContext<string, any> & InputContext<string, any>,
 		) => Promise<any>) & {
 			path?: string | undefined;
-			options?: EndpointRuntimeOptions | undefined;
+			options?: EndpointOptions | undefined;
 		}
 	> = {};
 

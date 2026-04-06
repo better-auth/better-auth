@@ -6,7 +6,7 @@ import type {
 } from "@better-auth/core/db";
 import type {
 	Endpoint,
-	EndpointRuntimeOptions,
+	EndpointOptions,
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
@@ -123,7 +123,7 @@ function getFieldSchema(field: DBFieldAttribute) {
 	return schema;
 }
 
-function getParameters(options: EndpointRuntimeOptions) {
+function getParameters(options: EndpointOptions) {
 	const parameters: OpenAPIParameter[] = [];
 	if (options.metadata?.openapi?.parameters) {
 		parameters.push(...options.metadata.openapi.parameters);
@@ -150,7 +150,7 @@ function getParameters(options: EndpointRuntimeOptions) {
 	return parameters;
 }
 
-function getRequestBody(options: EndpointRuntimeOptions): any {
+function getRequestBody(options: EndpointOptions): any {
 	if (options.metadata?.openapi?.requestBody) {
 		return options.metadata.openapi.requestBody;
 	}
@@ -422,7 +422,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
 		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
-		const options = value.options as EndpointRuntimeOptions;
+		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
 		const methods = Array.isArray(options.method)
@@ -503,7 +503,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		Object.entries(api).forEach(([key, value]) => {
 			if (!value.path || ctx.options.disabledPaths?.includes(value.path))
 				return;
-			const options = value.options as EndpointRuntimeOptions;
+			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);
 			const methods = Array.isArray(options.method)
