@@ -879,6 +879,15 @@ figure.shiki > div:first-child,
 	border-radius: 0 !important;
 }
 
+/* Hide TOC scroll indicator dot */
+.docs-layout #nd-toc
+	div.absolute.size-1.bg-fd-primary.rounded-full.transition-transform,
+.docs-layout
+	[data-toc-popover]
+	div.absolute.size-1.bg-fd-primary.rounded-full.transition-transform {
+	display: none !important;
+}
+
 /* Respect prefers-reduced-motion for accessibility (WCAG 2.3.3) */
 @media (prefers-reduced-motion: reduce) {
 	*,
