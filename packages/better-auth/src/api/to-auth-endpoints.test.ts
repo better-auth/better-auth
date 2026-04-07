@@ -180,6 +180,28 @@ describe("before hook", async () => {
 			});
 		});
 
+		it("should use /:virtual fallback path for pathless endpoints when no request path is provided", async () => {
+			let hookPath = "";
+			const endpoint = {
+				pathless: createAuthEndpoint({ method: "GET" }, async (c) => ({
+					seenPath: c.path,
+				})),
+			};
+			const authContext = init({
+				hooks: {
+					before: createAuthMiddleware(async (c) => {
+						hookPath = c.path;
+					}),
+				},
+			});
+			const api = toAuthEndpoints(endpoint, authContext);
+
+			const res = await api.pathless();
+
+			expect(hookPath).toBe("/:virtual");
+			expect(res).toMatchObject({ seenPath: "/:virtual" });
+		});
+
 		it("should replace existing array when hook provides another array", async () => {
 			const endpoint = {
 				body: createAuthEndpoint(
