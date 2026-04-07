@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import {
 	ATTR_CONTEXT,
 	ATTR_HOOK_TYPE,
@@ -25,6 +26,16 @@ const PLUGIN_ID = "test-plugin";
 async function createTestInstance() {
 	const otelPlugin: BetterAuthPlugin = {
 		id: PLUGIN_ID,
+		endpoints: {
+			routeWithParams: createAuthEndpoint(
+				"/route-with-params/:slug",
+				{
+					method: "GET",
+					operationId: "routeWithParams",
+				},
+				async () => ({ ok: true as const }),
+			),
+		},
 		middlewares: [
 			{
 				path: "/**",
@@ -151,30 +162,41 @@ describe("endpoints instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const onRequestSpan = findSpan(
-			(s) => s.name === "onRequest /get-session test-plugin",
-		);
+		const onRequestSpan = findSpan((s) => s.name === "onRequest test-plugin");
 		expect(onRequestSpan).toBeDefined();
 		expect(onRequestSpan?.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "onRequest",
 			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
-			[ATTR_HTTP_ROUTE]: expect.any(String),
 		});
+		expect(onRequestSpan?.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
 	});
 
 	it("emits a span for onResponse hooks", async () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const onResponseSpan = findSpan(
-			(s) => s.name === "onResponse /get-session test-plugin",
-		);
+		const onResponseSpan = findSpan((s) => s.name === "onResponse test-plugin");
 		expect(onResponseSpan).toBeDefined();
 		expect(onResponseSpan?.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "onResponse",
 			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
-			[ATTR_HTTP_ROUTE]: expect.any(String),
 			[ATTR_HTTP_RESPONSE_STATUS_CODE]: expect.any(Number),
 		});
+		expect(onResponseSpan?.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
+	});
+
+	it("uses the route template for http.route on parameterized endpoints", async () => {
+		const instance = await createTestInstance();
+		await instance.client.$fetch("/route-with-params/acme-segment", {
+			method: "GET",
+		});
+
+		const span = findSpan(
+			(s) => s.name === "GET /route-with-params/:slug",
+		);
+		expect(span).toBeDefined();
+		expect(span?.attributes[ATTR_HTTP_ROUTE]).toBe(
+			"/route-with-params/:slug",
+		);
 	});
 });
