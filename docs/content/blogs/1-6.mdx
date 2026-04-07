@@ -45,7 +45,7 @@ Supported spans include:
 * **Database spans**: `db create user`, `db findOne session`, etc.
 * **Hook spans**: before/after hooks, middleware, onRequest/onResponse
 
-Each span carries attributes like `http.route`, `db.operation`, `db.collection.name`, and `better_auth.operation_id` for filtering and grouping in your observability tool.
+Each span carries attributes like `http.route`, `db.operation.name`, `db.collection.name`, and `better_auth.operation_id` for filtering and grouping in your observability tool.
 
 This feature is experimental and the span structure may change in future releases. For more information, see the [instrumentation documentation](https://www.better-auth.com/docs/reference/instrumentation).
 

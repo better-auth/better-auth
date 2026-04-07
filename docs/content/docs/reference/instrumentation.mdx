@@ -16,7 +16,7 @@ Better Auth uses the OpenTelemetry API to create spans. For traces to be collect
 
 For setup instructions, see the official OpenTelemetry documentation:
 
-- **[Node.js getting started](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** – Core setup for Node.js apps
+* **[Node.js getting started](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** – Core setup for Node.js apps
 
 ## Supported Spans
 
@@ -24,64 +24,65 @@ The following spans are supported by Better Auth:
 
 ### Endpoint Spans
 
-| Span Name             | Description                                     | When Emitted                                 |
-| --------------------- | ----------------------------------------------- | -------------------------------------------- |
-| `{METHOD} {path}`     | Parent span for an auth endpoint                | Every auth API call (e.g. `GET /get-session`)|
-| `handler {path}`      | Span around the endpoint handler execution      | Inside each endpoint, wrapping the handler   |
+| Span Name         | Description                                | When Emitted                                  |
+| ----------------- | ------------------------------------------ | --------------------------------------------- |
+| `{METHOD} {path}` | Parent span for an auth endpoint           | Every auth API call (e.g. `GET /get-session`) |
+| `handler {path}`  | Span around the endpoint handler execution | Inside each endpoint, wrapping the handler    |
 
 **Attributes:**
-- `http.route` - The normalized HTTP path of the endpoint
-- `better_auth.operation_id` - The operation identifier (e.g `getSession`)
+
+* `http.route` - The normalized HTTP path of the endpoint
+* `better_auth.operation_id` - The operation identifier (e.g `getSession`)
 
 The following global hooks are supported:
 
-| Span Name                   | Description                          | When Emitted                            |
-| --------------------------- | ------------------------------------ | --------------------------------------- |
-| `hook before {path} {source}` | Before-hook for an auth endpoint     | When a `before` hook runs for the route |
-| `hook after {path} {source}`  | After-hook for an auth endpoint      | When an `after` hook runs for the route |
+| Span Name                     | Description                      | When Emitted                            |
+| ----------------------------- | -------------------------------- | --------------------------------------- |
+| `hook before {path} {source}` | Before-hook for an auth endpoint | When a `before` hook runs for the route |
+| `hook after {path} {source}`  | After-hook for an auth endpoint  | When an `after` hook runs for the route |
 
-- **Attributes:**
-    - `better_auth.hook.type` - The hook type (e.g. `before` or `after`)
-    - `better_auth.context` - Execution context: `"user"` for global hooks, `"plugin:{pluginId}"` for plugin-registered hooks
-    - `http.route` - The **route template** (low cardinality)
-    - `better_auth.operation_id` - The operation identifier (e.g `getSession`)
+* **Attributes:**
+  * `better_auth.hook.type` - The hook type (e.g. `before` or `after`)
+  * `better_auth.context` - Execution context: `"user"` for global hooks, `"plugin:{pluginId}"` for plugin-registered hooks
+  * `http.route` - The **route template** (low cardinality)
+  * `better_auth.operation_id` - The operation identifier (e.g `getSession`)
 
 Middlewares are also supported:
 
-| Span Name                     | Description                     | When Emitted                     |
-| ----------------------------- | ------------------------------- | -------------------------------- |
-| `onRequest {path} {pluginId}`  | Plugin `onRequest` hook          | Before request handling          |
-| `onResponse {path} {pluginId}` | Plugin `onResponse` hook         | After response is produced       |
-| `middleware {path} {pluginId}` | Plugin middleware execution     | When middleware runs for a route |
+| Span Name                      | Description                 | When Emitted                     |
+| ------------------------------ | --------------------------- | -------------------------------- |
+| `onRequest {path} {pluginId}`  | Plugin `onRequest` hook     | Before request handling          |
+| `onResponse {path} {pluginId}` | Plugin `onResponse` hook    | After response is produced       |
+| `middleware {path} {pluginId}` | Plugin middleware execution | When middleware runs for a route |
 
 **Attributes:**
-- `better_auth.hook.type` - The hook type: `"onRequest"`, `"onResponse"`, or `"middleware"`
-- `better_auth.context` - Execution context: `"plugin:{pluginId}"` (e.g. `plugin:bearer`, `plugin:test-plugin`)
-- `http.route` - The **route template** (low cardinality), matched from the request path; falls back to `/**` when no route matches
-- `http.response.status_code` - The HTTP response status code (onResponse only)
+
+* `better_auth.hook.type` - The hook type: `"onRequest"`, `"onResponse"`, or `"middleware"`
+* `better_auth.context` - Execution context: `"plugin:{pluginId}"` (e.g. `plugin:bearer`, `plugin:test-plugin`)
+* `http.route` - The **route template** (low cardinality), matched from the request path; falls back to `/**` when no route matches
+* `http.response.status_code` - The HTTP response status code (onResponse only)
 
 ### Database Spans
 
-| Span Name              | Description                         | When Emitted                                  |
-| ---------------------- | ----------------------------------- | --------------------------------------------- |
-| `db {operation} {model}` | Span for a database operation       | All adapter operations (create, findOne, etc.)|
+| Span Name                | Description                   | When Emitted                                   |
+| ------------------------ | ----------------------------- | ---------------------------------------------- |
+| `db {operation} {model}` | Span for a database operation | All adapter operations (create, findOne, etc.) |
 
-- **Operations:** `create`, `findOne`, `findMany`, `update`, `updateMany`, `delete`, `deleteMany`, `count`
-- **Models:** Core models include `user`, `account`, `session`, `verification`, plus plugin-defined models (e.g. `organization`, `rateLimit`).
-- **Attributes:**
-    - `db.operation` - The database operation name (e.g. `create`)
-    - `db.collection.name` - The database collection/model name (e.g. `user`)
+* **Operations:** `create`, `findOne`, `findMany`, `update`, `updateMany`, `delete`, `deleteMany`, `count`
+* **Models:** Core models include `user`, `account`, `session`, `verification`, plus plugin-defined models (e.g. `organization`, `rateLimit`).
+* **Attributes:**
+  * `db.operation.name` - The database operation name (e.g. `create`)
+  * `db.collection.name` - The database collection/model name (e.g. `user`)
 
 Additionally, when defined, the following spans are also emitted for database hooks:
 
-| Span Name                 | Description                           | When Emitted                     |
-| ------------------------- | ------------------------------------- | -------------------------------- |
+| Span Name                       | Description                            | When Emitted                            |
+| ------------------------------- | -------------------------------------- | --------------------------------------- |
 | `db {operation}.before {model}` | Before-hook for a create/update/delete | When a `databaseHooks` before hook runs |
-| `db {operation}.after {model}`  | After-hook for a create/update/delete  | When a `databaseHooks` after hook runs   |
+| `db {operation}.after {model}`  | After-hook for a create/update/delete  | When a `databaseHooks` after hook runs  |
 
-- **Operations:** `create`, `update`, `updateMany`, `delete`, `deleteMany`
-- **Attributes:**
-  - `better_auth.hook.type` - The hook type (e.g. `create.before`, `create.after`, `update.before`)
-  - `better_auth.context` - Execution context: `"user"` or `"plugin:{pluginId}"`
-  - `db.collection.name` - The database collection/model name (e.g. `user`)
-
+* **Operations:** `create`, `update`, `updateMany`, `delete` (used for both single delete and `deleteMany` calls)
+* **Attributes:**
+  * `better_auth.hook.type` - The hook type (e.g. `create.before`, `create.after`, `update.before`)
+  * `better_auth.context` - Execution context: `"user"` or `"plugin:{pluginId}"`
+  * `db.collection.name` - The database collection/model name (e.g. `user`)
