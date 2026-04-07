@@ -50,7 +50,7 @@ Middlewares are also supported:
 
 | Span Name                     | Description                     | When Emitted                     |
 | ----------------------------- | ------------------------------- | -------------------------------- |
-| `onRequest {pluginId}`  | Plugin `onRequest` hook          | Before request handling (outside route dispatch; no `http.route`) |
+| `onRequest {pluginId}`  | Plugin `onRequest` hook          | Before request handling |
 | `onResponse {pluginId}` | Plugin `onResponse` hook         | After response is produced       |
 | `middleware {route} {pluginId}` | Plugin middleware execution     | When middleware runs for a route |
 
@@ -58,6 +58,7 @@ Middlewares are also supported:
 - `better_auth.hook.type` - The hook type: `"onRequest"`, `"onResponse"`, or `"middleware"`
 - `better_auth.context` - Execution context: `"plugin:{pluginId}"` (e.g. `plugin:bearer`, `plugin:test-plugin`)
 - `http.route` - The **route template** (low cardinality) on middleware spans only
+- `http.response.status_code` - The HTTP response status code (onResponse only)
 
 ### Database Spans
 
