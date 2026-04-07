@@ -1177,7 +1177,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
 						subject_type: z.enum(["public", "pairwise"]).optional(),
-						skip_consent: z.never().optional(),
+						skip_consent: z
+							.never({
+								error:
+									"skip_consent cannot be set during dynamic client registration",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
