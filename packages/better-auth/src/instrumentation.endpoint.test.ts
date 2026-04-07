@@ -191,12 +191,8 @@ describe("endpoints instrumentation", () => {
 			method: "GET",
 		});
 
-		const span = findSpan(
-			(s) => s.name === "GET /route-with-params/:slug",
-		);
+		const span = findSpan((s) => s.name === "GET /route-with-params/:slug");
 		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_HTTP_ROUTE]).toBe(
-			"/route-with-params/:slug",
-		);
+		expect(span?.attributes[ATTR_HTTP_ROUTE]).toBe("/route-with-params/:slug");
 	});
 });
