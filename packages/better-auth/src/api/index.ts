@@ -266,8 +266,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
-		api: api as unknown as Omit<typeof endpoints, keyof PluginEndpoint> &
-			PluginEndpoint,
+		api: api as unknown as typeof endpoints & PluginEndpoint,
 		middlewares,
 	};
 }
