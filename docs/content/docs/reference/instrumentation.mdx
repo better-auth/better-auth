@@ -26,19 +26,19 @@ The following spans are supported by Better Auth:
 
 | Span Name             | Description                                     | When Emitted                                 |
 | --------------------- | ----------------------------------------------- | -------------------------------------------- |
-| `{METHOD} {path}`     | Parent span for an auth endpoint                | Every auth API call (e.g. `GET /get-session`)|
-| `handler {path}`      | Span around the endpoint handler execution      | Inside each endpoint, wrapping the handler   |
+| `{METHOD} {route}`    | Parent span for an auth endpoint                | Every auth API call (e.g. `GET /get-session`)|
+| `handler {route}`     | Span around the endpoint handler execution      | Inside each endpoint, wrapping the handler   |
 
 **Attributes:**
-- `http.route` - The normalized HTTP path of the endpoint
+- `http.route` - The **route template** (low cardinality)
 - `better_auth.operation_id` - The operation identifier (e.g `getSession`)
 
 The following global hooks are supported:
 
 | Span Name                   | Description                          | When Emitted                            |
 | --------------------------- | ------------------------------------ | --------------------------------------- |
-| `hook before {path} {source}` | Before-hook for an auth endpoint     | When a `before` hook runs for the route |
-| `hook after {path} {source}`  | After-hook for an auth endpoint      | When an `after` hook runs for the route |
+| `hook before {route} {source}` | Before-hook for an auth endpoint     | When a `before` hook runs for the route |
+| `hook after {route} {source}`  | After-hook for an auth endpoint      | When an `after` hook runs for the route |
 
 - **Attributes:**
     - `better_auth.hook.type` - The hook type (e.g. `before` or `after`)
@@ -50,14 +50,14 @@ Middlewares are also supported:
 
 | Span Name                     | Description                     | When Emitted                     |
 | ----------------------------- | ------------------------------- | -------------------------------- |
-| `onRequest {path} {pluginId}`  | Plugin `onRequest` hook          | Before request handling          |
-| `onResponse {path} {pluginId}` | Plugin `onResponse` hook         | After response is produced       |
-| `middleware {path} {pluginId}` | Plugin middleware execution     | When middleware runs for a route |
+| `onRequest {pluginId}`  | Plugin `onRequest` hook          | Before request handling |
+| `onResponse {pluginId}` | Plugin `onResponse` hook         | After response is produced       |
+| `middleware {route} {pluginId}` | Plugin middleware execution     | When middleware runs for a route |
 
 **Attributes:**
 - `better_auth.hook.type` - The hook type: `"onRequest"`, `"onResponse"`, or `"middleware"`
 - `better_auth.context` - Execution context: `"plugin:{pluginId}"` (e.g. `plugin:bearer`, `plugin:test-plugin`)
-- `http.route` - The **route template** (low cardinality), matched from the request path; falls back to `/**` when no route matches
+- `http.route` - The **route template** (low cardinality) on middleware spans only
 - `http.response.status_code` - The HTTP response status code (onResponse only)
 
 ### Database Spans
