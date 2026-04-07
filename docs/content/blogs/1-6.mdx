@@ -1,0 +1,214 @@
+***
+
+title: "Better Auth 1.6"
+description: "OpenTelemetry instrumentation, non-blocking scrypt, passkey pre-auth registration, case insensitive queries, and more."
+date: 2026-04-07
+author:
+name: "Taesu Kim"
+avatar: "/avatars/taesu.png"
+image: "[https://better-auth.com/release-og/v1.6-release.png](https://better-auth.com/release-og/v1.6-release.png)"
+tags: \["1.6"]
+--------------
+
+# Better Auth 1.6
+
+We're excited to announce the release of Better Auth 1.6 🎉
+
+Better Auth 1.6 serves as a bridge version as we transition to our [improved workflow](/blog/road-to-a-more-predictable-better-auth).
+
+Rather than packing in new features, this release is focused on setting the foundation for a more solid project. That said, this release brings new features, improvements, and a number of meaningful fixes.
+
+***
+
+## Highlights
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### OpenTelemetry Instrumentation
+
+Better Auth now emits [OpenTelemetry](https://opentelemetry.io/) spans for distributed tracing. This gives you visibility into every auth API call, including endpoint execution, hook lifecycle, and database operations.
+
+```ts title="instrumentation.ts"
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { SimpleSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
+
+const provider = new NodeTracerProvider({
+  spanProcessors: [new SimpleSpanProcessor(new ConsoleSpanExporter())],
+});
+provider.register();
+```
+
+Once a TracerProvider is registered, Better Auth automatically emits spans via the `better-auth` tracer. No additional configuration is needed in your auth setup.
+
+Supported spans include:
+
+* **Endpoint spans**: `GET /get-session`, `POST /sign-in/email`, etc.
+* **Database spans**: `db create user`, `db findOne session`, etc.
+* **Hook spans**: before/after hooks, middleware, onRequest/onResponse
+
+Each span carries attributes like `http.route`, `db.operation`, `db.collection.name`, and `better_auth.operation_id` for filtering and grouping in your observability tool.
+
+This feature is experimental and the span structure may change in future releases. For more information, see the [instrumentation documentation](https://www.better-auth.com/docs/reference/instrumentation).
+
+***
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### Passkey Pre-Auth Registration
+
+The passkey plugin now supports registering passkeys *before* the user has a session. This enables passkey-first onboarding flows where the passkey itself is the initial authentication method.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+  plugins: [
+    passkey({
+      registration: {
+        requireSession: false, // [!code highlight]
+        resolveUser: async ({ ctx, context }) => {
+          // Validate context (e.g., a signed token), then create or load a user.
+          return { id: "user-id", name: "user@example.com" };
+        },
+      },
+    }),
+  ],
+});
+```
+
+The plugin also adds support for WebAuthn extensions on both registration and authentication, letting you pass server-defined extensions like `credProps`.
+
+[Read more about passkeys](https://www.better-auth.com/docs/plugins/passkey)
+
+***
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### Case Insensitive Queries
+
+Database queries now support case-insensitive string comparisons across all adapters (Drizzle, Prisma, Kysely, MongoDB, Memory).
+
+This is an internal API available to plugin authors and used by core where needed. Queries can specify `mode: "insensitive"` on individual where clauses:
+
+```ts
+adapter.findOne({
+  model: "user",
+  where: [{
+    field: "email",
+    value: "user@example.com",
+    mode: "insensitive", // [!code highlight]
+  }],
+});
+```
+
+Each adapter uses the most efficient strategy for its database: `ILIKE` for PostgreSQL, `LOWER()` for MySQL/SQLite, native `mode: "insensitive"` for Prisma, and lowercase transforms for MongoDB and the memory adapter.
+
+***
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Align Fresh Age with Session Creation Time
+
+The `freshAge` check now uses `createdAt` instead of `updatedAt`. Previously, any session refresh would reset the freshness window, meaning a session could stay "fresh" indefinitely through regular access. Now, freshness is tied to when the session was created, so sensitive operations like password changes or payment confirmations require recent sign-in.
+
+For more information, see the [session freshness documentation](https://www.better-auth.com/docs/concepts/session-management#session-freshness).
+
+***
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Enable InResponseTo Validation by Default for SAML Flows
+
+SAML `InResponseTo` validation is now enabled by default for SP-initiated flows, preventing replay attacks where a captured assertion is reused. IdP-initiated SSO is not affected. If you need to opt out, you can disable it explicitly:
+
+```ts
+sso({
+  saml: {
+    enableInResponseToValidation: false, // [!code highlight]
+  },
+});
+```
+
+For more information, see the [SSO documentation](https://www.better-auth.com/docs/plugins/sso).
+
+***
+
+<HeaderLabel variant="default">Performance</HeaderLabel>
+
+### Faster and Lighter
+
+Two changes that affect every Better Auth user:
+
+1. Non-blocking scrypt
+
+   Password hashing now uses the native `node:crypto` scrypt implementation, which runs on the libuv thread pool instead of blocking the main thread. On runtimes without `node:crypto` support, it falls back to a pure JavaScript implementation. Existing password hashes remain fully compatible.
+
+2. Reduced package sizes
+
+   Published packages are now significantly smaller, which means faster installs and less disk usage for every project using Better Auth.
+
+   | Package       | v1.5.6   | v1.6.0   | Reduction |
+   | ------------- | -------- | -------- | --------- |
+   | `better-auth` | 4,236 KB | 2,265 KB | 46%       |
+
+***
+
+## Important Changes
+
+### Breaking Changes
+
+| Change                                                   | Description                                                                                                                                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Align fresh age with session creation time               | `freshAge` now uses `createdAt` instead of `updatedAt`. Sessions may require re-authentication more frequently for sensitive operations. [Details](#align-fresh-age-with-session-creation-time) |
+| Enable InResponseTo validation by default for SAML flows | SAML `InResponseTo` validation is now on by default. Set `enableInResponseToValidation: false` to disable. [Details](#enable-inresponseto-validation-by-default-for-saml-flows)                 |
+
+### Behavior Changes
+
+| Change                                    | Description                                                                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| SCIM endpoint authorization enforcement   | SCIM management endpoints now require proper authentication. Passkey ownership normalized to prevent cross-user access. |
+| Stateless cookie cache lifetime alignment | Cookie cache `maxAge` now matches session `expiresIn` to prevent stale cached data.                                     |
+
+### Deprecations
+
+| Change               | Description                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OIDC Provider plugin | Deprecated in favor of [`@better-auth/oauth-provider`](https://www.better-auth.com/docs/plugins/oauth-provider). Will be removed in the next major version. |
+
+For the full list of changes, see the [changelog](https://github.com/better-auth/better-auth/compare/v1.5.6...v1.6.0).
+
+***
+
+## Migrating to v1.6
+
+For most users, upgrading is straightforward:
+
+```package-install
+npx auth upgrade
+```
+
+Review the [Important Changes](#important-changes) section to check if any of the breaking changes, behavior changes, or deprecations affect your setup.
+
+***
+
+## Contributors
+
+Thanks to all the contributors for making this release possible!
+
+<Contributors
+  usernames={[
+"aarmful", "abdirahmanmahamoud", "abris96", "AliiiBenn", "Bekacru",
+"Bekione", "bodadotsh", "bytaesu", "cb-alish", "DevDuki",
+"dipan2003", "dvanmali", "enguerrand", "Eric-Song-Nop", "FaryalRizwan",
+"florianamette", "formatlos", "frankeld", "GautamBytes", "gideonofori",
+"GoPro16", "gustavovalverde", "harshitsharmaa", "himself65", "isardmart",
+"IvanCernja", "jamalavedra", "JoBurgard", "jonathansamines", "jsolano",
+"kadumedim", "kgray1497", "lapstjup", "Mnigos", "mrgrauel",
+"MuzzaiyyaN", "NathanColosimo", "okisdev", "olliethedev", "OscarCornish",
+"pbacza", "periakteon", "ping-maxwell", "qamarq", "raihanbrillmark",
+"rosano", "ruban-s", "Rudraksh88", "rurruur", "SandyDev00076",
+"sicarius97", "Sigmabrogz", "TerryHenrard", "tobithedev", "wobedi",
+"YevheniiKotyrlo", "yzong", "zeke", "zfrankz"
+]}
+/>
