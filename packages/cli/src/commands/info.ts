@@ -310,6 +310,7 @@ function sanitizeBetterAuthConfig(config: any): any {
 async function getBetterAuthInfo(
 	projectRoot: string,
 	configPath?: string,
+	tsconfigName?: string,
 	suppressLogs = false,
 ) {
 	try {
@@ -328,6 +329,7 @@ async function getBetterAuthInfo(
 			const config = await getConfig({
 				cwd: projectRoot,
 				configPath,
+				tsconfig: tsconfigName,
 				shouldThrowOnError: true,
 			});
 			const packageInfo = await getPackageInfo();
@@ -411,6 +413,10 @@ export const info = new Command("info")
 	.description("Display system and Better Auth configuration information")
 	.option("--cwd <cwd>", "The working directory", process.cwd())
 	.option("--config <config>", "Path to the Better Auth configuration file")
+	.option(
+		"--tsconfig <tsconfig>",
+		"The tsconfig file to use for path aliases. Defaults to tsconfig.json or jsconfig.json.",
+	)
 	.option("-j, --json", "Output as JSON")
 	.option("-c, --copy", "Copy output to clipboard (requires pbcopy/xclip)")
 	.action(async (options) => {
@@ -425,6 +431,7 @@ export const info = new Command("info")
 		const betterAuthInfo = await getBetterAuthInfo(
 			projectRoot,
 			options.config,
+			options.tsconfig,
 			options.json,
 		);
 

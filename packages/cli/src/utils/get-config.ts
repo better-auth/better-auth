@@ -64,11 +64,40 @@ function extractAliases(tsconfig: TsConfigResult): Record<string, string> {
 
 	for (const [alias, aliasPaths = []] of Object.entries(paths)) {
 		for (const aliasedPath of aliasPaths) {
-			const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
-			const finalAliasedPath =
-				aliasedPath.slice(-1) === "*" ? aliasedPath.slice(0, -1) : aliasedPath;
+			const aliasStarIdx = alias.indexOf("*");
+			const pathStarIdx = aliasedPath.indexOf("*");
 
-			result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
+			if (aliasStarIdx === -1 && pathStarIdx === -1) {
+				// Exact alias, no wildcards
+				result[alias] = path.join(resolvedBaseUrl, aliasedPath);
+			} else if (pathStarIdx === aliasedPath.length - 1) {
+				// Trailing wildcard in path — prefix-based alias
+				const finalAlias =
+					aliasStarIdx !== -1 ? alias.slice(0, aliasStarIdx) : alias;
+				const finalAliasedPath = aliasedPath.slice(0, pathStarIdx);
+				result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
+			} else if (pathStarIdx !== -1 && aliasStarIdx !== -1) {
+				// Mid-path wildcard — expand by scanning the filesystem
+				const aliasPrefix = alias.slice(0, aliasStarIdx);
+				const aliasSuffix = alias.slice(aliasStarIdx + 1);
+				const pathPrefix = aliasedPath.slice(0, pathStarIdx);
+				const pathSuffix = aliasedPath.slice(pathStarIdx + 1);
+				const scanDir = path.join(resolvedBaseUrl, pathPrefix);
+
+				try {
+					const entries = fs.readdirSync(scanDir, { withFileTypes: true });
+					for (const entry of entries) {
+						if (!entry.isDirectory()) continue;
+						const candidate = path.join(scanDir, entry.name, pathSuffix);
+						if (fs.existsSync(candidate)) {
+							const concreteAlias = aliasPrefix + entry.name + aliasSuffix;
+							result[concreteAlias] = candidate;
+						}
+					}
+				} catch {
+					// Directory doesn't exist, skip
+				}
+			}
 		}
 	}
 	return result;
@@ -130,10 +159,15 @@ function collectReferencesAliases(
 	return result;
 }
 
-function getPathAliases(cwd: string): Record<string, string> | null {
-	const configName = fs.existsSync(path.join(cwd, "tsconfig.json"))
-		? "tsconfig.json"
-		: "jsconfig.json";
+function getPathAliases(
+	cwd: string,
+	tsconfigName?: string,
+): Record<string, string> | null {
+	const configName =
+		tsconfigName ??
+		(fs.existsSync(path.join(cwd, "tsconfig.json"))
+			? "tsconfig.json"
+			: "jsconfig.json");
 	const tsconfig = getTsconfig(cwd, configName);
 	if (!tsconfig) {
 		return null;
@@ -152,8 +186,8 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 /**
  * .tsx files are not supported by Jiti.
  */
-const jitiOptions = (cwd: string): JitiOptions => {
-	const alias = getPathAliases(cwd) || {};
+const jitiOptions = (cwd: string, tsconfigName?: string): JitiOptions => {
+	const alias = getPathAliases(cwd, tsconfigName) || {};
 	return {
 		transformOptions: {
 			babel: {
@@ -188,10 +222,12 @@ const isDefaultExport = (
 export async function getConfig({
 	cwd,
 	configPath,
+	tsconfig,
 	shouldThrowOnError = false,
 }: {
 	cwd: string;
 	configPath?: string;
+	tsconfig?: string;
 	shouldThrowOnError?: boolean;
 }) {
 	try {
@@ -213,7 +249,7 @@ export async function getConfig({
 				dotenv: {
 					fileName: [".env", ".env.local"],
 				},
-				jitiOptions: jitiOptions(cwd),
+				jitiOptions: jitiOptions(cwd, tsconfig),
 				cwd,
 			});
 			if (!("auth" in config) && !isDefaultExport(config)) {
@@ -245,7 +281,7 @@ export async function getConfig({
 						dotenv: {
 							fileName: [".env", ".env.local"],
 						},
-						jitiOptions: jitiOptions(cwd),
+						jitiOptions: jitiOptions(cwd, tsconfig),
 						cwd,
 					});
 					const hasConfig = Object.keys(config).length > 0;

@@ -1110,4 +1110,59 @@ describe("getConfig", async () => {
 			emailAndPassword: { enabled: true },
 		});
 	});
+
+	it("should resolve mid-path wildcard aliases", async () => {
+		const authPath = path.join(tmpDir, "src", "auth");
+		const dbPath = path.join(tmpDir, "libs", "db-sdk", "src");
+		await fs.mkdir(authPath, { recursive: true });
+		await fs.mkdir(dbPath, { recursive: true });
+
+		// Create tsconfig with mid-path wildcard: * is not trailing
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"compilerOptions": {
+					"paths": {
+						"@backstage/*": ["./libs/*/src/index.ts"]
+					}
+				}
+			}`,
+		);
+
+		// Create the module that the wildcard should resolve to
+		await fs.writeFile(
+			path.join(dbPath, "index.ts"),
+			`class PrismaClient {
+				constructor() {}
+			}
+			export const db = new PrismaClient()`,
+		);
+
+		// Create auth.ts importing via the wildcard alias
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import {betterAuth} from "better-auth";
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
+			 import {db} from "@backstage/db-sdk";
+
+			 export const auth = betterAuth({
+					database: prismaAdapter(db, {
+							provider: 'sqlite'
+					}),
+					emailAndPassword: {
+						enabled: true,
+					}
+			 })`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "src/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+		});
+	});
 });

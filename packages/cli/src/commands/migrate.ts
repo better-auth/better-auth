@@ -19,6 +19,7 @@ export async function migrateAction(opts: any) {
 		.object({
 			cwd: z.string(),
 			config: z.string().optional(),
+			tsconfig: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
 		})
@@ -33,6 +34,7 @@ export async function migrateAction(opts: any) {
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
+		tsconfig: options.tsconfig,
 	});
 	if (!config) {
 		console.error(
@@ -190,6 +192,10 @@ export const migrate = new Command("migrate")
 	.option(
 		"--config <config>",
 		"the path to the configuration file. defaults to the first configuration file found.",
+	)
+	.option(
+		"--tsconfig <tsconfig>",
+		"the tsconfig file to use for path aliases. defaults to tsconfig.json or jsconfig.json.",
 	)
 	.option(
 		"-y, --yes",

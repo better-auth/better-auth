@@ -78,6 +78,7 @@ async function generateAction(opts: any) {
 		.object({
 			cwd: z.string(),
 			config: z.string().optional(),
+			tsconfig: z.string().optional(),
 			output: z.string().optional(),
 			adapter: z.string().optional(),
 			dialect: z.string().optional(),
@@ -94,6 +95,7 @@ async function generateAction(opts: any) {
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
+		tsconfig: options.tsconfig,
 	});
 	if (!config) {
 		console.error(
@@ -273,6 +275,10 @@ export const generate = new Command("generate")
 	.option(
 		"--config <config>",
 		"the path to the configuration file. defaults to the first configuration file found.",
+	)
+	.option(
+		"--tsconfig <tsconfig>",
+		"the tsconfig file to use for path aliases. defaults to tsconfig.json or jsconfig.json.",
 	)
 	.option("--output <output>", "the file to output to the generated schema")
 	.option(
