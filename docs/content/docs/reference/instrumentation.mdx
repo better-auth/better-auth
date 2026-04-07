@@ -26,7 +26,7 @@ The following spans are supported by Better Auth:
 
 | Span Name             | Description                                     | When Emitted                                 |
 | --------------------- | ----------------------------------------------- | -------------------------------------------- |
-| `{METHOD} {route}`    | Parent span for an auth endpoint                | Every auth API call (e.g. `GET /get-session`); `{route}` is the **route template** |
+| `{METHOD} {route}`    | Parent span for an auth endpoint                | Every auth API call (e.g. `GET /get-session`)|
 | `handler {route}`     | Span around the endpoint handler execution      | Inside each endpoint, wrapping the handler   |
 
 **Attributes:**
@@ -52,13 +52,12 @@ Middlewares are also supported:
 | ----------------------------- | ------------------------------- | -------------------------------- |
 | `onRequest {pluginId}`  | Plugin `onRequest` hook          | Before request handling (outside route dispatch; no `http.route`) |
 | `onResponse {pluginId}` | Plugin `onResponse` hook         | After response is produced       |
-| `middleware {pattern} {pluginId}` | Plugin middleware execution     | When middleware runs for a route; `{pattern}` is the configured middleware path (e.g. `/**`) |
+| `middleware {route} {pluginId}` | Plugin middleware execution     | When middleware runs for a route |
 
 **Attributes:**
 - `better_auth.hook.type` - The hook type: `"onRequest"`, `"onResponse"`, or `"middleware"`
 - `better_auth.context` - Execution context: `"plugin:{pluginId}"` (e.g. `plugin:bearer`, `plugin:test-plugin`)
-- `http.route` - The **route template** (low cardinality) on middleware spans only (the configured middleware path pattern). Omitted on `onRequest` / `onResponse` spans because they run outside routing.
-- `http.response.status_code` - The HTTP response status code (onResponse only)
+- `http.route` - The **route template** (low cardinality) on middleware spans only
 
 ### Database Spans
 
