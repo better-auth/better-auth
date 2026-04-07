@@ -54,7 +54,6 @@ onlyBuiltDependencies:
   - '@tsparticles/engine'
   - better-sqlite3
   - esbuild
-  - lefthook
   - less
   - msw
   - prisma
