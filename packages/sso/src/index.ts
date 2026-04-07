@@ -1,8 +1,15 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import {
+	APIError,
+	createAuthMiddleware,
+	getSessionFromCtx,
+} from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
-import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
+import {
+	SAML_SESSION_BY_ID_PREFIX,
+	SSO_SESSION_PROVIDER_PREFIX,
+} from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
@@ -229,6 +236,66 @@ export function sso<O extends SSOOptions>(
 							await ctx.context.internalAdapter
 								.deleteVerificationByIdentifier(sessionLookupKey)
 								.catch(() => {});
+						}
+					}),
+				},
+				{
+					matcher(context) {
+						return context.path === "/organization/set-active";
+					},
+					/**
+					 * Prevent an SSO-authenticated session from switching to a
+					 * different org that also has SSO configured. The SSO provider
+					 * used during login is stored as a verification value (see
+					 * SSO_SESSION_PROVIDER_PREFIX) and looked up here.
+					 *
+					 * NOTE: Uses verification table, not a session field, to avoid
+					 * schema migrations. See constants.ts for trade-off notes.
+					 * TODO: Migrate to session field `ssoProviderId` in a future release.
+					 */
+					handler: createAuthMiddleware(async (ctx: any) => {
+						if (!ctx.context.hasPlugin("organization")) return;
+
+						const session = await getSessionFromCtx(ctx);
+						if (!session) return;
+
+						const verification =
+							await ctx.context.internalAdapter.findVerificationValue(
+								`${SSO_SESSION_PROVIDER_PREFIX}${session.session.id}`,
+							);
+						if (!verification?.value) return;
+
+						const ssoProviderId = verification.value;
+
+						let organizationId = ctx.body?.organizationId;
+						const organizationSlug = ctx.body?.organizationSlug;
+
+						if (organizationId === null || organizationId === undefined) {
+							if (!organizationSlug) return;
+							const org = (await ctx.context.adapter.findOne({
+								model: "organization",
+								where: [{ field: "slug", value: organizationSlug }],
+							})) as { id: string } | null;
+							if (!org) return;
+							organizationId = org.id;
+						}
+
+						const orgSSOProviders = (await ctx.context.adapter.findMany({
+							model: "ssoProvider",
+							where: [{ field: "organizationId", value: organizationId }],
+						})) as { providerId: string }[];
+
+						if (!orgSSOProviders.length) return;
+
+						const matchesProvider = orgSSOProviders.some(
+							(p: { providerId: string }) => p.providerId === ssoProviderId,
+						);
+
+						if (!matchesProvider) {
+							throw new APIError("FORBIDDEN", {
+								message:
+									"This organization requires authentication through its SSO provider",
+							});
 						}
 					}),
 				},

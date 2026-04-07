@@ -90,6 +90,70 @@ function getOIDCRedirectURI(
 	return `${baseURL}/sso/callback/${providerId}`;
 }
 
+/**
+ * After SSO authentication, set the active organization on the session (if the
+ * provider is org-linked) and record which SSO provider was used.
+ *
+ * The SSO provider ID is stored in the verification table (not a session field)
+ * to avoid requiring a schema migration. The `before` hook on
+ * `/organization/set-active` reads this value to prevent cross-org access.
+ *
+ * Trade-offs of verification-table approach vs. session field:
+ *  + No schema migration required
+ *  + Follows existing SAML SLO pattern in this plugin
+ *  - Extra DB read when checking setActiveOrganization
+ *  - Fails open if verification values are purged unexpectedly
+ *
+ * TODO: In a future release, migrate to a `ssoProviderId` session field for
+ * atomic writes and zero-cost lookups during enforcement.
+ */
+async function setSSOSessionContext(
+	ctx: {
+		context: {
+			internalAdapter: {
+				updateSession: (
+					token: string,
+					data: Record<string, any>,
+				) => Promise<any>;
+				createVerificationValue: (data: {
+					identifier: string;
+					value: string;
+					expiresAt: Date;
+				}) => Promise<any>;
+			};
+			hasPlugin: (name: string) => boolean;
+		};
+	},
+	session: { token: string; id: string; expiresAt: Date } & Record<string, any>,
+	provider: { providerId: string; organizationId?: string | null },
+) {
+	let updatedSession: any = session;
+
+	if (provider.organizationId && ctx.context.hasPlugin("organization")) {
+		try {
+			const result = await ctx.context.internalAdapter.updateSession(
+				session.token,
+				{ activeOrganizationId: provider.organizationId },
+			);
+			updatedSession = result || session;
+		} catch {
+			// best-effort
+		}
+	}
+
+	try {
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: `${constants.SSO_SESSION_PROVIDER_PREFIX}${session.id}`,
+			value: provider.providerId,
+			expiresAt: session.expiresAt,
+		});
+	} catch {
+		// best-effort
+	}
+
+	return updatedSession;
+}
+
 export interface TimestampValidationOptions {
 	clockSkew?: number;
 	requireTimestamps?: boolean;
@@ -1789,8 +1853,10 @@ async function handleOIDCCallback(
 		provisioningOptions: options?.organizationProvisioning,
 	});
 
+	const updatedSession = await setSSOSessionContext(ctx, session, provider);
+
 	await setSessionCookie(ctx, {
-		session,
+		session: updatedSession,
 		user,
 	});
 	let toRedirectTo: string;
@@ -2439,7 +2505,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				provisioningOptions: options?.organizationProvisioning,
 			});
 
-			await setSessionCookie(ctx, { session, user });
+			const updatedSession = await setSSOSessionContext(ctx, session, provider);
+
+			await setSessionCookie(ctx, { session: updatedSession, user });
 
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
 				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${provider.providerId}:${extract.nameID}`;
@@ -2958,7 +3026,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				provisioningOptions: options?.organizationProvisioning,
 			});
 
-			await setSessionCookie(ctx, { session, user });
+			const updatedSession = await setSSOSessionContext(ctx, session, provider);
+
+			await setSessionCookie(ctx, { session: updatedSession, user });
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
 				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
 				const samlSessionData: SAMLSessionRecord = {

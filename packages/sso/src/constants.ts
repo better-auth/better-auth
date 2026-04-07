@@ -20,6 +20,21 @@ export const SAML_SESSION_KEY_PREFIX = "saml-session:";
 /** Prefix for reverse lookup of SAML session by Better Auth session ID */
 export const SAML_SESSION_BY_ID_PREFIX = "saml-session-by-id:";
 
+/**
+ * Prefix for storing which SSO provider authenticated a given session.
+ * Used to enforce org-scoped sessions: a session created via one org's SSO
+ * cannot switch to a different SSO-protected org.
+ *
+ * Stored as verification value: `sso-session:{sessionId}` -> providerId
+ *
+ * NOTE: This uses the verification table to avoid requiring a schema migration.
+ * The trade-off is an extra DB lookup on setActiveOrganization and the
+ * possibility of silent enforcement loss if verification values are purged.
+ * TODO: In a future major/minor release, migrate to a `ssoProviderId` field
+ * on the session schema for atomic writes and zero-cost lookups.
+ */
+export const SSO_SESSION_PROVIDER_PREFIX = "sso-session:";
+
 /** Prefix for LogoutRequest IDs used in SP-initiated SLO validation */
 export const LOGOUT_REQUEST_KEY_PREFIX = "saml-logout-request:";
 
