@@ -237,4 +237,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/C-W-D-Harshit.png",
 		},
 	},
+	{
+		name: "@pinklemon8/better-auth-siws",
+		url: "https://github.com/ysrdevs/better-auth-siws",
+		description:
+			"Sign In With Solana (SIWS) — wallet authentication, linking, and ready-made React components.",
+		author: {
+			name: "ysrdevs",
+			github: "ysrdevs",
+			avatar: "https://github.com/ysrdevs.png",
+		},
+	},
 ];
