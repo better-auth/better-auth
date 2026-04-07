@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
@@ -19,6 +20,7 @@ import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
 import { getOrigin } from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import {
 	checkSkipProxy,
 	redirectOnError,
@@ -126,6 +128,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 	return {
 		id: "oauth-proxy",
+		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
@@ -311,7 +314,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						return context.path === "/callback/:id";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const state = ctx.query?.state || ctx.body?.state;
+						// Query takes precedence over body (matches callbackOAuth behavior)
+						const callbackParams = defu(ctx.query, ctx.body);
+
+						const state = callbackParams.state;
 						if (!state || typeof state !== "string") {
 							return;
 						}
@@ -339,7 +345,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						const query = oauthCallbackQuerySchema.safeParse(ctx.query);
+						const query = oauthCallbackQuerySchema.safeParse(callbackParams);
 						if (!query.success) {
 							ctx.context.logger.warn(
 								"Invalid OAuth callback query",

@@ -1,21 +1,34 @@
 {
-	"$schema": "./node_modules/knip/schema-jsonc.json",
+	"$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
 	"ignoreExportsUsedInFile": {
 		"interface": true,
 		"type": true
 	},
 	"tags": ["-lintignore"],
+	"ignore": [
+		// test utilities only imported by test files — invisible to --production
+		"packages/better-auth/src/client/test-plugin.ts",
+		// CI scripts used by GitHub Actions workflows, not by packages
+		".github/scripts/**"
+	],
+	"ignoreBinaries": ["playwright", "changeset", "open", "remark", "tsx"],
+	// exports used only by tests — invisible to --production mode
+	"ignoreIssues": {
+		"packages/cli/src/commands/init/index.ts": ["exports"],
+		"packages/cli/src/commands/init/utility/imports.ts": ["exports"],
+		"packages/sso/src/saml/assertions.ts": ["exports"]
+	},
+	"ignoreDependencies": ["@changesets/cli", "@vitest/coverage-istanbul"],
+	"rules": {
+		// @cloudflare/workers-types is a valid optional peer dep reference
+		"optionalPeerDependencies": "off",
+		// catalog entries used by docs/ which is in ignoreWorkspaces
+		"catalog": "off"
+	},
 	"workspaces": {
 		"packages/*": {
-			"entry": ["src/index.ts"],
-			"project": ["src/**/*.ts!"],
-			"ignoreDependencies": ["@better-auth/core"]
-		},
-		"packages/prisma-adapter": {
-			"ignoreDependencies": ["@prisma/client", "prisma"]
-		},
-		"packages/drizzle-adapter": {
-			"ignoreDependencies": ["drizzle-orm"]
+			"entry": ["src/index.ts!"],
+			"project": ["src/**/*.ts!"]
 		},
 		"packages/better-auth": {
 			"project": [
@@ -23,143 +36,23 @@
 				"!src/adapters/**/test/*.prisma",
 				"!src/adapters/**/test/.tmp",
 				"!src/adapters/**/test/auth.ts"
-			],
-			"ignoreDependencies": [
-				// adapter re-export packages (optional peer deps)
-				"@better-auth/drizzle-adapter",
-				"@better-auth/mongo-adapter",
-				"@better-auth/prisma-adapter",
-
-				// implicit adapter dependencies
-				"drizzle-kit",
-				"drizzle-orm",
-				"mongodb",
-				"@prisma/client",
-				"prisma",
-
-				// implicit test-instance dependencies
-				"vitest",
-				"pg",
-				"better-sqlite3",
-				"mysql2",
-
-				// implicit integrations dependencies
-				"@lynx-js/react",
-				"@sveltejs/kit",
-				"@tanstack/react-start",
-				"@tanstack/solid-start",
-				"next",
-				"react",
-				"react-dom",
-				"solid-js",
-				"svelte",
-				"vue"
 			]
 		},
 		"packages/core": {
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",
-				"nanostores!",
-
-				// implicit test dependencies
-				"vitest"
+				"nanostores!"
 			]
 		},
-		"packages/cli": {
-			"ignoreDependencies": [
-				// implicit adapter dependencies
-				"better-sqlite3",
-				"@prisma/client",
-				"@types/pg",
-				"drizzle-orm",
-				"pg",
-				"prisma",
-				// implicit dependencies
-				"semver",
-				"@babel/core",
-				"@babel/preset-react",
-				"@babel/preset-typescript",
-				"@better-auth/telemetry",
-				"@clack/prompts",
-				"@mrleebo/prisma-ast",
-				"better-auth",
-				"c12",
-				"chalk",
-				"get-tsconfig",
-				"open",
-				"prettier",
-				"prompts",
-				"yocto-spinner",
-				"zod"
-			],
-			"project": ["src/**/*.ts", "test/**/*.ts"]
-		},
+		"packages/test-utils": {},
 		"packages/expo": {
-			"ignoreDependencies": [
-				// loading of optional peers
-				"expo-constants",
-				"expo-network",
-				"expo-linking",
-				"expo-web-browser",
-
-				// implicit dependencies
-				"react-native"
-			]
-		},
-		"packages/electron": {
-			"ignoreDependencies": [
-				// loading of optional peers
-				"conf",
-
-				// implicit dependencies
-				"electron"
-			],
-			"project": ["src/**/*.ts", "test/**/*.ts"]
-		},
-		"packages/kysely-adapter": {
-			"ignoreDependencies": [
-				// optional peer dependency
-				"kysely"
-			]
-		},
-		"packages/mongo-adapter": {
-			"ignoreDependencies": [
-				// optional peer dependency
-				"mongodb"
-			]
-		},
-		"packages/stripe": {
-			"ignoreDependencies": [
-				// implicit dependencies
-				"stripe"
-			]
-		},
-		"packages/sso": {
-			"ignoreDependencies": [
-				// type-only dependencies
-				"@better-auth/core",
-				"better-call"
-			]
-		},
-		"packages/test-utils": {
-			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
-		},
-		"packages/redis-storage": {
-			"ignoreDependencies": [
-				// type-only dependencies
-				"ioredis"
-			]
+			// neverBundle externals: referenced in bundled output, not in source
+			"ignoreDependencies": ["@better-fetch/fetch", "better-call"]
 		}
 	},
 	"vitest": {
-		"project": [
-			"**/test/**/*.ts",
-			"**/tests/**/*.ts",
-			"**/*test*.ts",
-			"**/*.prisma"
-		],
 		"entry": ["**/*.test.ts", "**/*.spec.ts"]
 	},
-	"ignoreWorkspaces": ["demo/**", "landing/**", "docs/**", "e2e/**"]
+	"ignoreWorkspaces": ["demo/**", "docs/**", "e2e/**"]
 }

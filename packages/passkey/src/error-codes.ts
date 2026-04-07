@@ -13,4 +13,8 @@ export const PASSKEY_ERROR_CODES = defineErrorCodes({
 	REGISTRATION_CANCELLED: "Registration cancelled",
 	AUTH_CANCELLED: "Auth cancelled",
 	UNKNOWN_ERROR: "Unknown error",
+	SESSION_REQUIRED: "Passkey registration requires an authenticated session",
+	RESOLVE_USER_REQUIRED:
+		"Passkey registration requires either an authenticated session or a resolveUser callback when requireSession is false",
+	RESOLVED_USER_INVALID: "Resolved user is invalid",
 });

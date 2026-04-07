@@ -1,0 +1,21 @@
+output:
+  - success
+  - failure
+
+pre-commit:
+  commands:
+    biome:
+      run: pnpm biome check --write --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true --colors=off {staged_files}
+      stage_fixed: true
+    spell:
+      run: pnpm cspell --no-progress --no-summary {staged_files}
+    format:
+      glob: "docs/**/*.{md,mdx}"
+      root: "docs/"
+      run: node_modules/.bin/remark {staged_files} --output --quiet
+      stage_fixed: true
+    lockfile:
+      glob: "{package.json,pnpm-lock.yaml,pnpm-workspace.yaml,packages/*/package.json}"
+      run: pnpm install --frozen-lockfile --ignore-scripts
+    dependencies:
+      run: pnpm lint:dependencies

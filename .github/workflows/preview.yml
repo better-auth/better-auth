@@ -1,6 +1,8 @@
 name: Publish Any Commit
 on: [pull_request]
 
+permissions: {}
+
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
@@ -13,11 +15,14 @@ concurrency:
 jobs:
   build:
     runs-on: starsling-ubuntu-24.04
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Cache turbo build setup
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
@@ -41,4 +46,4 @@ jobs:
       - name: Build
         run: pnpm build
           
-      - run: pnpm dlx pkg-pr-new publish --pnpm ./packages/*
+      - run: pnpm dlx pkg-pr-new publish --pnpm './packages/*'

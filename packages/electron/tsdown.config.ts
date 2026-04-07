@@ -10,14 +10,6 @@ export default defineConfig([
 			"./src/proxy.ts",
 			"./src/storage.ts",
 		],
-		deps: {
-			neverBundle: [
-				"better-auth",
-				"better-call",
-				"@better-fetch/fetch",
-				"electron",
-			],
-		},
 		treeshake: true,
 	},
 	{
