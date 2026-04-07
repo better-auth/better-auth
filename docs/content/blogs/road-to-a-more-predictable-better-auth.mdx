@@ -1,12 +1,131 @@
 ---
 title: "The Road to a More Predictable Better Auth"
-description: "description"
+description: "How Better Auth now ships fixes faster, keeps betas moving, and makes stable releases easier to trust."
 date: 2026-04-07
 author:
-  name: "Taesu Kim"
-  avatar: "/avatars/taesu.png"
+  name: "Gustavo Valverde"
+  avatar: "/avatars/gustavo.png"
 image: "https://better-auth.com/release-og/v1.6-release.png"
 tags: ["open source", "roadmap"]
 ---
 
-placeholder
+Better Auth ships 20 npm packages from a single monorepo. That setup gives us a lot of leverage, but it also means release pressure compounds quickly. Before v1.6, bug fixes, additive improvements, large features, refactors, and breaking changes could all compete for the same release window. A fix ready today could still end up waiting behind unrelated work.
+
+That was the core problem we wanted to solve.
+
+The new release process is built around a simpler rule: stable fixes should not wait on migration-heavy or experimental work. We benchmarked how other open-source projects handle this, including Vue, Sentry, TypeScript, and Node.js, then adapted the parts that fit Better Auth's cadence and architecture.
+
+The result is a workflow that does 3 things at once:
+
+* gives stable users a faster path for fixes
+* gives early adopters a real beta channel
+* gives contributors and maintainers clearer feedback before a release ever starts
+
+## Stable and beta are now separate tracks
+
+The biggest change is that Better Auth now has 2 long-lived release tracks.
+
+**`main`** is the stable line. It is where we ship bug fixes, security work, and additive improvements that do not require existing users to change code, configuration, or database schema.
+
+**`next`** is the beta line. It is where we ship work that benefits from a beta cycle first: larger features, refactors, runtime or schema changes, and breaking changes.
+
+That distinction matters because it is not just "fixes on one branch, features on another." Some new capabilities can still land on `main` if they are well-tested, non-breaking, and safe to adopt immediately. The real dividing line is migration risk. If existing users would need to change something, it belongs on `next` first.
+
+For users, the practical outcome is straightforward:
+
+* `npm install better-auth` stays focused on stable releases
+* `npm install better-auth@beta` tracks the next minor release in progress
+* a fix that is reviewed and ready can ship without waiting for unrelated feature work
+
+## Keeping `next` aligned without rewriting history
+
+Separating release tracks only works if they stay connected.
+
+`next` is intended to stay ahead of `main`, not drift away from it. Every stable fix still needs to make its way into the beta line, otherwise the beta branch becomes less realistic over time.
+
+We originally explored rebase-heavy sync strategies, but at Better Auth's current cadence they created the wrong incentives. Rebasing `next` after every `main` update rewrote commit timestamps, broke verification badges, and forced history changes onto contributors over and over again. Manual cherry-picking had the opposite problem: too much ongoing labor, especially in a codebase that still goes through meaningful refactors.
+
+The workflow we shipped uses batched sync PRs from `main` to `next`. Maintainers merge those PRs when ready, usually before beta publishes. That preserves contributor history, avoids constant force-pushes, and keeps `next` meaningfully aligned with what is already stable.
+
+This is one of the places where the process is intentionally pragmatic. We are not optimizing for the cleanest possible Git graph in isolation. We are optimizing for faster fixes, safer promotion to stable, and a release history that remains understandable and reviewable.
+
+## Version decisions now happen in the pull request
+
+The old release flow depended much more on maintainers deciding version bumps late in the process. That does not scale well. The person merging and publishing should not be the first person deciding what kind of change a PR represents.
+
+The new process moves that decision to the pull request itself with [Changesets](https://github.com/changesets/changesets).
+
+When a PR changes published package code, it includes a changeset that declares the release intent alongside the code review. That means the version discussion happens where the context already exists: in the PR diff, with the reviewer, before the change lands.
+
+The policy around that is enforced automatically:
+
+* PRs that touch published packages need a changeset, unless they are explicitly marked with `skip-changeset`
+* PRs targeting `main` are limited to `patch` changesets
+* if a PR aimed at `main` carries a `minor` or `major` changeset, it is automatically retargeted to `next`
+* changeset files are validated for shape and bump type before merge
+
+Once changesets accumulate, automation opens a **Version Packages** PR that shows the exact versions and changelog entries that would ship. A maintainer still reviews and merges that PR before anything is published. Automation prepares the release; humans still control the cadence.
+
+All 20 packages also continue to version in lockstep, so users do not have to reason about mismatched package versions across the ecosystem. We also adjusted an upstream Changesets pre-release behavior so beta versioning would not incorrectly escalate peer dependency ranges.
+
+## The workflow should guide contributors, not punish them
+
+One of the goals behind this work was to make release policy feel clearer from the contributor side too.
+
+The best automation is not the kind that fails a check and leaves people guessing. It is the kind that explains the correct path and helps contributors recover quickly.
+
+That is why this release process includes a few self-correcting pieces:
+
+* **Auto-retarget** moves PRs from `main` to `next` when the declared bump says the change needs the beta track
+* **`/changeset`** lets maintainers generate a changeset recommendation for contributors, including fork-based PRs where local setup can be inconvenient
+* **Automatic domain labels** classify PRs by architectural area, which helps maintainers triage work and helps release notes stay organized later
+
+The combined effect is a contributor experience with more feedback and less ceremony. A safe fix can move through stable with clearer signals. A feature that belongs on beta gets redirected with an explanation instead of becoming a vague CI failure.
+
+## Release notes are now built in layers
+
+We also rebuilt how release notes are produced.
+
+Previously, the output was closer to a raw changelog: technically useful, but not always very readable if you were trying to understand which package changed or what the user-facing impact actually was.
+
+The new pipeline has 2 layers.
+
+The first layer is deterministic. A script finds the PRs included in the release, groups them by package and architectural area, and handles noisy cases like revert pairs and promotion deduplication.
+
+The second layer is AI-assisted. It takes that structured output and rewrites it into clearer user-facing language, especially for release notes that need more than a literal PR title. Breaking changes can be turned into migration-oriented notes instead of bare commit summaries.
+
+The important part is not that AI is involved. The important part is that the system degrades gracefully. If the rewrite step fails, the structured output still exists. A release is never blocked because prose generation had a bad day.
+
+This automation is part of the broader tooling we are building under the name **Better Release**, but the point is larger than a bot. We want every release to be easier to prepare, easier to read, and easier to trust.
+
+## Trust matters as much as speed
+
+Shipping faster only helps if the published package is still trustworthy.
+
+Every npm publish now uses OIDC trusted publishing through GitHub Actions. There is no long-lived publish token sitting in CI for attackers to steal. Each published package carries provenance that links it back to the source and workflow that produced it.
+
+That matters because the most serious npm ecosystem failures have usually been credential and supply-chain problems, not just Git history problems. Commit signing and contributor attribution still matter, but for users installing a package from npm, provenance on the artifact itself is the stronger guarantee.
+
+You can verify a Better Auth package with:
+
+```bash
+npm audit signatures
+```
+
+## What this means in practice
+
+If you use Better Auth today, the new workflow should feel simpler from the outside:
+
+* stable fixes can ship much faster than before
+* the beta channel is now a clearer place to test what is coming next
+* stable releases are less likely to mix urgent fixes with migration-heavy changes
+* release notes are easier to scan by package and area
+* published packages are easier to verify from source to registry
+
+If you contribute to Better Auth, the process should also be more predictable:
+
+* release intent is declared in the PR, not guessed at the end
+* the system helps correct branch targeting mistakes
+* labels and changesets feed directly into the release process instead of becoming separate manual chores
+
+v1.6 was the first release to go through this pipeline. It will keep evolving, and the tooling around it will keep improving, but the foundation is now in place: stable and beta move on separate tracks, fixes have a faster path to users, and releases are easier to understand and verify end to end.
