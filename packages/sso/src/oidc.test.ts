@@ -1607,16 +1607,28 @@ describe("SSO org-scoped session: user logged in via one org SSO should not acce
 		return { callbackURL, headers: newHeaders };
 	}
 
-	it("should scope session to the SSO-authenticated org and prevent access to another SSO-protected org", async () => {
-		const { headers: adminHeaders } = await signInWithTestUser();
+	let adminHeaders: Headers;
+	let orgA: any;
+	let orgB: any;
+	let orgC: any;
+	let ssoSessionHeaders: Headers;
+	let ssoUserId: string;
 
-		const orgA = await auth.api.createOrganization({
+	it("setup: create orgs, SSO providers, and perform SSO login", async () => {
+		({ headers: adminHeaders } = await signInWithTestUser());
+
+		orgA = await auth.api.createOrganization({
 			body: { name: "Org A", slug: "org-a" },
 			headers: adminHeaders,
 		});
 
-		const orgB = await auth.api.createOrganization({
+		orgB = await auth.api.createOrganization({
 			body: { name: "Org B", slug: "org-b" },
+			headers: adminHeaders,
+		});
+
+		orgC = await auth.api.createOrganization({
+			body: { name: "Org C (no SSO)", slug: "org-c" },
 			headers: adminHeaders,
 		});
 
@@ -1682,10 +1694,11 @@ describe("SSO org-scoped session: user logged in via one org SSO should not acce
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 
-		const { callbackURL, headers: ssoSessionHeaders } = await simulateOAuthFlow(
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
 			res.url,
 			signInHeaders,
 		);
+		ssoSessionHeaders = sessionHeaders;
 		expect(callbackURL).toContain("/dashboard");
 
 		// User is now provisioned as a member of Org A via SSO
@@ -1697,32 +1710,77 @@ describe("SSO org-scoped session: user logged in via one org SSO should not acce
 			(m: any) => m.user.email === "shared-user@org-scoped.com",
 		);
 		expect(memberInOrgA).toBeDefined();
+		ssoUserId = memberInOrgA!.userId;
 
-		// Manually add the same user to Org B (simulating pre-existing membership)
+		// Add the SSO user as a member of Org B and Org C
 		await auth.api.addMember({
 			body: {
 				organizationId: orgB!.id,
-				userId: memberInOrgA!.userId,
+				userId: ssoUserId,
 				role: "member",
 			},
 			headers: adminHeaders,
 		});
+		await auth.api.addMember({
+			body: {
+				organizationId: orgC!.id,
+				userId: ssoUserId,
+				role: "member",
+			},
+			headers: adminHeaders,
+		});
+	});
 
-		// After SSO via Org A, the session should have activeOrganizationId set to Org A
+	it("should set activeOrganizationId to the SSO-authenticated org after login", async () => {
 		const session = await authClient.getSession({
 			fetchOptions: { headers: ssoSessionHeaders },
 		});
 		expect(session.data?.session.activeOrganizationId).toBe(orgA!.id);
+	});
 
-		// User should NOT be able to switch to Org B (which has its own SSO provider)
-		// since they did not authenticate via Org B's SSO
-		const setActiveResult = await authClient.organization.setActive({
+	it("should allow re-setting active org to the SSO-authenticated org", async () => {
+		const result = await authClient.organization.setActive({
+			organizationId: orgA!.id,
+			fetchOptions: {
+				headers: ssoSessionHeaders,
+				throw: false,
+			},
+		});
+		expect(result.error).toBeNull();
+	});
+
+	it("should block switching to another SSO-protected org via organizationId", async () => {
+		const result = await authClient.organization.setActive({
 			organizationId: orgB!.id,
 			fetchOptions: {
 				headers: ssoSessionHeaders,
 				throw: false,
 			},
 		});
-		expect(setActiveResult.error).toBeDefined();
+		expect(result.error).toBeDefined();
+		expect(result.error!.status).toBe(403);
+	});
+
+	it("should block switching to another SSO-protected org via organizationSlug", async () => {
+		const result = await authClient.organization.setActive({
+			organizationSlug: "org-b",
+			fetchOptions: {
+				headers: ssoSessionHeaders,
+				throw: false,
+			},
+		});
+		expect(result.error).toBeDefined();
+		expect(result.error!.status).toBe(403);
+	});
+
+	it("should allow switching to an org that has no SSO configured", async () => {
+		const result = await authClient.organization.setActive({
+			organizationId: orgC!.id,
+			fetchOptions: {
+				headers: ssoSessionHeaders,
+				throw: false,
+			},
+		});
+		expect(result.error).toBeNull();
 	});
 });
