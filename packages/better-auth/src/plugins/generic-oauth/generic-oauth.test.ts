@@ -2212,4 +2212,65 @@ describe("oauth2", async () => {
 			expect(callbackURL).toBe("http://localhost:3000/new_user");
 		});
 	});
+
+	describe("storeIdentifier: hashed", () => {
+		it("should complete oauth flow when verification identifiers are hashed", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "hashed-oauth@test.com",
+					name: "Hashed OAuth Test",
+					sub: "hashed-oauth",
+					picture: "https://test.com/picture.png",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				verification: {
+					storeIdentifier: "hashed" as const,
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-hashed",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: clientId,
+								clientSecret: clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const authClient = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+				},
+			});
+
+			const headers = new Headers();
+			const res = await authClient.signIn.oauth2({
+				providerId: "test-hashed",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+		});
+	});
 });
