@@ -1245,7 +1245,7 @@ describe("SAML SSO", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
-					providersLimit: async (user) => {
+					providersLimit: async ({ user }) => {
 						return user.email === "pro@example.com" ? 2 : 1;
 					},
 				}),
@@ -1298,6 +1298,73 @@ describe("SAML SSO", async () => {
 			body: {
 				message: "You have reached the maximum number of SSO providers",
 			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7750
+	 */
+	it("should pass organizationId to providersLimit function", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					providersLimit: async ({ user, organizationId }) => {
+						return organizationId === "enterprise-org" ? 10 : 0;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-no-org",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: sharedMockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { message: "SSO provider registration is disabled" },
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-wrong-org",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					organizationId: "free-org",
+					samlConfig: {
+						entryPoint: sharedMockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { message: "SSO provider registration is disabled" },
 		});
 	});
 

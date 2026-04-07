@@ -700,7 +700,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 			const limit =
 				typeof options?.providersLimit === "function"
-					? await options.providersLimit(user)
+					? await options.providersLimit({
+							user,
+							organizationId: ctx.body.organizationId,
+						})
 					: (options?.providersLimit ?? 10);
 
 			if (!limit) {
