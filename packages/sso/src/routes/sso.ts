@@ -122,6 +122,9 @@ async function setSSOSessionContext(
 				}) => Promise<any>;
 			};
 			hasPlugin: (name: string) => boolean;
+			logger: {
+				warn: (message: string, data?: Record<string, unknown>) => void;
+			};
 		};
 	},
 	session: { token: string; id: string; expiresAt: Date } & Record<string, any>,
@@ -137,19 +140,22 @@ async function setSSOSessionContext(
 			);
 			updatedSession = result || session;
 		} catch {
-			// best-effort
+			// best-effort: activeOrganizationId is a UX convenience, not a security boundary
 		}
 	}
 
-	try {
-		await ctx.context.internalAdapter.createVerificationValue({
+	await ctx.context.internalAdapter
+		.createVerificationValue({
 			identifier: `${constants.SSO_SESSION_PROVIDER_PREFIX}${session.id}`,
 			value: provider.providerId,
 			expiresAt: session.expiresAt,
-		});
-	} catch {
-		// best-effort
-	}
+		})
+		.catch((e: unknown) =>
+			ctx.context.logger.warn(
+				"Failed to create SSO session provider record. Cross-org session enforcement will not apply to this session.",
+				{ error: e },
+			),
+		);
 
 	return updatedSession;
 }
