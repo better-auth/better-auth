@@ -1305,10 +1305,18 @@ describe("SAML SSO", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/7750
 	 */
 	it("should pass organizationId to providersLimit function", async () => {
+		const receivedArgs: Array<{
+			userId: string;
+			organizationId?: string;
+		}> = [];
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
 					providersLimit: async ({ user, organizationId }) => {
+						receivedArgs.push({
+							userId: user.id,
+							organizationId,
+						});
 						return organizationId === "enterprise-org" ? 10 : 0;
 					},
 				}),
@@ -1340,6 +1348,8 @@ describe("SAML SSO", async () => {
 			status: "FORBIDDEN",
 			body: { message: "SSO provider registration is disabled" },
 		});
+		expect(receivedArgs).toHaveLength(1);
+		expect(receivedArgs[0]!.organizationId).toBeUndefined();
 
 		await expect(
 			auth.api.registerSSOProvider({
@@ -1366,6 +1376,8 @@ describe("SAML SSO", async () => {
 			status: "FORBIDDEN",
 			body: { message: "SSO provider registration is disabled" },
 		});
+		expect(receivedArgs).toHaveLength(2);
+		expect(receivedArgs[1]!.organizationId).toBe("free-org");
 	});
 
 	it("should not allow creating a provider with duplicate providerId", async () => {
