@@ -879,8 +879,12 @@ figure.shiki > div:first-child,
 	border-radius: 0 !important;
 }
 
-/* Fumadocs clerk TOC: hide the scroll indicator dot */
-div.absolute.size-1.bg-fd-primary.rounded-full.transition-transform {
+/* Hide TOC scroll indicator dot */
+.docs-layout #nd-toc
+	div.absolute.size-1.bg-fd-primary.rounded-full.transition-transform,
+.docs-layout
+	[data-toc-popover]
+	div.absolute.size-1.bg-fd-primary.rounded-full.transition-transform {
 	display: none !important;
 }
 
