@@ -58,6 +58,7 @@ type InferPluginOptions<
  *
  * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
  *   id: 'my-plugin',
+ *   version: '1.0.0',
  *   options,
  * } satisfies BetterAuthPlugin);
  *
@@ -79,7 +80,9 @@ export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
-> = EndpointContext<string, any, any, any, any, any, any, AuthContext<Options>>;
+> = EndpointContext<string, any> & {
+	context: AuthContext<Options>;
+};
 
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,

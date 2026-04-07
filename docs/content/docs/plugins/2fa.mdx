@@ -80,7 +80,7 @@ This plugin offers two main methods to do a second factor verification:
 
 ### Enabling 2FA
 
-To enable two-factor authentication, call `twoFactor.enable` with the user's password and issuer (optional):
+To enable two-factor authentication, call `twoFactor.enable` with the user's password (required for credential accounts) and issuer (optional). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
 
 <APIMethod
   path="/two-factor/enable"
@@ -90,9 +90,9 @@ To enable two-factor authentication, call `twoFactor.enable` with the user's pas
 ```ts
 type enableTwoFactor = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string = "secure-password"
+    password?: string = "secure-password"
     /**
      * An optional custom issuer for the TOTP URI. Defaults to app-name defined in your auth config.
      */
@@ -108,7 +108,7 @@ When 2FA is enabled:
 Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about verifying TOTP [here](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 
 <Callout type="warn">
-Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
+By default, Two Factor requires a credential (password) account. To allow passwordless users (passkeys, magic links, email OTP, OAuth/social, or anonymous), set `allowPasswordless: true`.
 </Callout>
 
 ### Sign In with 2FA
@@ -151,6 +151,24 @@ const authClient = createAuthClient({
 });
 ```
 
+Using the `twoFactorPage` config:
+
+```ts title="sign-in.ts"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
+
+const authClient = createAuthClient({
+    plugins: [
+        twoFactorClient({
+            twoFactorPage: "/two-factor", // the page to redirect if a user needs to verify their 2nd factor
+        }),
+    ],
+});
+```
+
+<Callout type="warn">
+Using the `twoFactorPage` option will cause a full page reload when redirecting users to the two-factor authentication page. If you want to avoid page reloads, consider using the `onTwoFactorRedirect` callback instead to handle the redirect programmatically within your application.
+</Callout>
 
 
 
@@ -159,10 +177,15 @@ const authClient = createAuthClient({
 
 When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will return an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. You can check using `in` instead to check if `twoFactorRedirect` is set to `true`.
 
+`authClient.twoFactor.*` handles cookies automatically in the browser. If you continue the 2FA flow with `auth.api.*` on the server, you must pass the relevant headers so Better Auth can read the current 2FA state and set the resulting 2FA/session cookies. The generated examples below use `await headers()` for this, but in other frameworks you should pass the equivalent incoming request headers.
+
+If you chain multiple `auth.api.*` calls in the same server flow, make sure you forward the cookies from the previous auth response into the next call.
+
 ```ts title="sign-in.ts"
 import { auth } from "@/lib/auth"
 
-const response = await auth.api.signInEmail({
+const { headers: responseHeaders, response } = await auth.api.signInEmail({
+	returnHeaders: true,
 	body: {
 		email: "test@test.com",
 		password: "test",
@@ -170,6 +193,7 @@ const response = await auth.api.signInEmail({
 });
 
 if ("twoFactorRedirect" in response) {
+	// Forward the cookies from responseHeaders into the next auth.api 2FA call.
 	// Handle the 2FA verification in place
 }
 ```
@@ -177,7 +201,7 @@ if ("twoFactorRedirect" in response) {
 
 ### Disabling 2FA
 
-To disable two-factor authentication, call `twoFactor.disable` with the user's password:
+To disable two-factor authentication, call `twoFactor.disable` with the user's password (required for credential accounts). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
 
 <APIMethod
   path="/two-factor/disable"
@@ -187,9 +211,9 @@ To disable two-factor authentication, call `twoFactor.disable` with the user's p
 ```ts
 type disableTwoFactor = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string
+    password?: string
 }
 ```
 </APIMethod>
@@ -212,9 +236,9 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
 ```ts
 type getTOTPURI = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string
+    password?: string
 }
 ```
 </APIMethod>
@@ -252,7 +276,12 @@ By default the issuer for TOTP is set to the app name provided in the auth confi
 
 After the user has entered their 2FA code, you can verify it using `twoFactor.verifyTotp` method. `Better Auth` follows standard practice by accepting TOTP codes from one period before and one after the current code, ensuring users can authenticate even with minor time delays on their end.
 
-<APIMethod path="/two-factor/verify-totp" method="POST">
+<APIMethod
+  path="/two-factor/verify-totp"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
 type verifyTOTP = {
     /**
@@ -292,11 +321,16 @@ export const auth = betterAuth({
 
 #### Sending OTP
 
-Sending an OTP is done by calling the `twoFactor.sendOtp` function. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
+Sending an OTP is done by calling the `authClient.twoFactor.sendOtp` function on the client or `auth.api.sendTwoFactorOTP` on the server. This function will trigger your sendOTP implementation that you provided in the Better Auth configuration.
 
-<APIMethod path="/two-factor/send-otp" method="POST">
+<APIMethod
+  path="/two-factor/send-otp"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
-type send2FaOTP = {
+type sendTwoFactorOTP = {
     /**
      * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
      */
@@ -311,11 +345,16 @@ if (data) {
 
 #### Verifying OTP
 
-After the user has entered their OTP code, you can verify it
+After the user has entered their OTP code, you can verify it using `authClient.twoFactor.verifyOtp` on the client or `auth.api.verifyTwoFactorOTP` on the server.
 
-<APIMethod path="/two-factor/verify-otp" method="POST">
+<APIMethod
+  path="/two-factor/verify-otp"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
-type verifyOTP = {
+type verifyTwoFactorOTP = {
     /**
      * The otp code to verify. 
      */
@@ -343,9 +382,9 @@ Generate backup codes for account recovery:
 ```ts
 type generateBackupCodes = {
     /**
-     * The users password. 
+     * The users password (required for credential accounts). 
      */
-    password: string
+    password?: string
 }
 
 if (data) {
@@ -364,7 +403,12 @@ When you generate backup codes, the old backup codes will be deleted and new one
 You can now allow users to provide a backup code as an account recovery method.
 
 
-<APIMethod path="/two-factor/verify-backup-code" method="POST">
+<APIMethod
+  path="/two-factor/verify-backup-code"
+  method="POST"
+  requireHeaders
+  headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies."
+>
 ```ts
 type verifyBackupCode = {
     /**
@@ -456,8 +500,8 @@ Table: `twoFactor`
     fields={[
         { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
         { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
-        { name: "secret", type: "string", description: "The secret used to generate the TOTP code.", isOptional: true },
-        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email.", isOptional: true },
+        { name: "secret", type: "string", description: "The secret used to generate the TOTP code." },
+        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
     ]}
 />
 
@@ -468,6 +512,8 @@ Table: `twoFactor`
 **twoFactorTable**: The name of the table that stores the two factor authentication data. Default: `twoFactor`.
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
+
+**allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists.
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
@@ -506,7 +552,7 @@ these are options for OTP.
         default: 3,
     },
     storeOTP: {
-        description: "How to store the otp in the database. Whether to store it as plain text, encrypted or hashed. You can also provide a custom encryptor or hasher.",
+        description: "How to transform the stored OTP value, whether plain text, encrypted, or hashed. You can also provide a custom encryptor or hasher. The storage backend is controlled by the global verification config, so secondary storage can be used instead of the database.",
         type: "string",
         default: "plain",
     },

@@ -442,7 +442,7 @@ describe("updateUser", async () => {
 		const { headers } = await signInWithTestUser();
 		const res = await client.updateUser(
 			{
-				// @ts-expect-error newField has input: false
+				//@ts-expect-error - newField is not available in the user input
 				newField: "new",
 			},
 			{

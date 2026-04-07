@@ -1,6 +1,6 @@
 ---
 title: Hooks
-description: Better Auth Hooks let you customize BetterAuth's behavior
+description: Learn how to use before and after hooks to customize endpoint behavior, modify requests and responses, handle cookies, throw errors, access auth context, and run background tasks.
 ---
 
 Hooks in Better Auth let you "hook into" the lifecycle and execute custom logic. They provide a way to customize Better Auth's behavior without writing a full plugin. 
@@ -137,8 +137,8 @@ const hook = createAuthMiddleware(async (ctx) => {
 
 #### Cookies
 
-- Set cookies: `ctx.setCookies` or `ctx.setSignedCookie`.
-- Get cookies: `ctx.getCookies` or `ctx.getSignedCookie`.
+- Set cookies: `ctx.setCookie` or `ctx.setSignedCookie`.
+- Get cookies: `ctx.getCookie` or `ctx.getSignedCookie`.
 
 Example:
 
@@ -146,13 +146,13 @@ Example:
 import { createAuthMiddleware } from "better-auth/api";
 
 const hook = createAuthMiddleware(async (ctx) => {
-    ctx.setCookies("my-cookie", "value");
+    ctx.setCookie("my-cookie", "value");
     await ctx.setSignedCookie("my-signed-cookie", "value", ctx.context.secret, {
         maxAge: 1000,
     });
 
-    const cookie = ctx.getCookies("my-cookie");
-    const signedCookie = await ctx.getSignedCookie("my-signed-cookie");
+    const cookie = ctx.getCookie("my-cookie");
+    const signedCookie = await ctx.getSignedCookie("my-signed-cookie", ctx.context.secret);
 });
 ```
 
@@ -249,6 +249,52 @@ This may be useful to use instead of using your db directly to get access to `da
 #### generateId
 
 You can use `ctx.context.generateId` to generate Id for various reasons.
+
+#### runInBackground
+
+Schedules a task to run after the response is sent. Use for fire-and-forget operations (cleanup, analytics, rate limit counter updates). Configure the handler in [advanced.backgroundTasks](/docs/reference/options#backgroundtasks).
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const auth = betterAuth({
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path.startsWith("/sign-up")) {
+        const newSession = ctx.context.newSession;
+        if (newSession) {
+          ctx.context.runInBackground(sendAnalyticsEvent(newSession.user.id));
+        }
+      }
+    }),
+  },
+});
+```
+
+#### runInBackgroundOrAwait
+
+Defers the task when a handler is configured, otherwise awaits it. Use for operations that must complete (e.g. sending emails) but benefit from not blocking when a handler exists. Configure the handler in [advanced.backgroundTasks](/docs/reference/options#backgroundtasks).
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const auth = betterAuth({
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path.startsWith("/sign-up")) {
+        const newSession = ctx.context.newSession;
+        if (newSession) {
+          await ctx.context.runInBackgroundOrAwait(
+            sendWelcomeEmail(newSession.user)
+          );
+        }
+      }
+    }),
+  },
+});
+```
 
 ## Reusable Hooks
 

@@ -10,15 +10,35 @@ import type { AuthQueryAtom } from "./query";
 const now = () => Math.floor(Date.now() / 1000);
 
 /**
+ * Normalize $fetch response: `throw: true` returns data directly, otherwise `{ data, error }`.
+ */
+function normalizeSessionResponse(res: unknown): {
+	data: SessionResponse | null;
+	error: unknown;
+} {
+	if (
+		typeof res === "object" &&
+		res !== null &&
+		"data" in res &&
+		"error" in res
+	) {
+		return res as { data: SessionResponse | null; error: unknown };
+	}
+	return { data: res as SessionResponse, error: null };
+}
+
+/**
  * Rate limit: don't refetch on focus if a session request was made within this many seconds
  */
 const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
-	sessionAtom: AuthQueryAtom<{
-		user: User;
-		session: Session;
-	}>;
+	sessionAtom: AuthQueryAtom<
+		{
+			user: User;
+			session: Session;
+		} & Record<string, any>
+	>;
 	sessionSignal: WritableAtom<boolean>;
 	$fetch: BetterFetch;
 	options?: BetterAuthClientOptions | undefined;
@@ -34,11 +54,19 @@ interface SessionRefreshState {
 	unsubscribeOnline?: (() => void) | undefined;
 }
 
-interface SessionResponse {
-	session: Session | null;
-	user: User | null;
-	needsRefresh?: boolean;
-}
+export type SessionResponse = (
+	| {
+			session: null;
+			user: null;
+			needsRefresh?: boolean;
+	  }
+	| {
+			session: Session;
+			user: User;
+			needsRefresh?: boolean;
+	  }
+) &
+	Record<string, any>;
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const { sessionAtom, sessionSignal, $fetch, options = {} } = opts;
@@ -80,23 +108,18 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.lastSessionRequest = now();
 			$fetch<SessionResponse>("/get-session")
 				.then(async (res) => {
-					let data = res.data;
-					let error = res.error || null;
+					let { data, error } = normalizeSessionResponse(res);
 
 					if (data?.needsRefresh) {
 						try {
 							const refreshRes = await $fetch<SessionResponse>("/get-session", {
 								method: "POST",
 							});
-							data = refreshRes.data;
-							error = refreshRes.error || null;
+							({ data, error } = normalizeSessionResponse(refreshRes));
 						} catch {}
 					}
 
-					const sessionData =
-						data?.session && data?.user
-							? { session: data.session, user: data.user }
-							: null;
+					const sessionData = data?.session && data?.user ? data : null;
 
 					sessionAtom.set({
 						...currentSession,

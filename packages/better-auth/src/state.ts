@@ -56,9 +56,11 @@ export async function generateGenericState(
 	const state = generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
+	// Cookie strategy:
+	//
+	// State data is encrypted into the cookie
+	// no verification record created
 	if (storeStateStrategy === "cookie") {
-		// Store state data in an encrypted cookie
-
 		const encryptedData = await symmetricEncrypt({
 			key: c.context.secretConfig,
 			data: JSON.stringify(stateData),
@@ -79,8 +81,10 @@ export async function generateGenericState(
 		};
 	}
 
-	// Default: database strategy
-
+	// Database strategy:
+	//
+	// state is stored in a signed cookie and sent via OAuth URL
+	// the adapter hashes it at rest when storeIdentifier is set
 	const stateCookie = c.context.createAuthCookie(
 		settings?.cookieName ?? "state",
 		{
@@ -113,8 +117,11 @@ export async function generateGenericState(
 		);
 	}
 
+	// Return the plain state, not verification.identifier.
+	// The adapter hashes it for DB storage when storeIdentifier is "hashed",
+	// so returning verification.identifier would cause double-hashing on lookup.
 	return {
-		state: verification.identifier,
+		state,
 		codeVerifier: stateData.codeVerifier,
 	};
 }
@@ -122,7 +129,7 @@ export async function generateGenericState(
 export async function parseGenericState(
 	c: GenericEndpointContext,
 	state: string,
-	settings?: { cookieName: string },
+	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
 ) {
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
@@ -186,8 +193,14 @@ export async function parseGenericState(
 		 * This is generally cause security issue and should only be used in
 		 * dev or staging environments. It's currently used by the oauth-proxy
 		 * plugin
+		 *
+		 * Also used by SAML relay state parsing via settings.skipStateCookieCheck,
+		 * where the IdP POST is typically cross-origin and SameSite=Lax cookies
+		 * are not sent.
 		 */
-		const skipStateCookieCheck = c.context.oauthConfig.skipStateCookieCheck;
+		const skipStateCookieCheck =
+			settings?.skipStateCookieCheck ??
+			c.context.oauthConfig.skipStateCookieCheck;
 		if (
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)

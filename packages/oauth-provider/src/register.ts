@@ -174,6 +174,14 @@ export async function checkOAuthClient(
 			error_description: `pkce is required for registered clients.`,
 		});
 	}
+
+	if (settings?.isRegister && client.skip_consent) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"skip_consent cannot be set during dynamic client registration",
+		});
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -446,7 +454,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		software_version: softwareVersion ?? undefined,
 		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
-		redirect_uris: redirectUris ?? undefined,
+		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,

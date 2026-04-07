@@ -3,7 +3,7 @@
   "compilerOptions": {
     "lib": ["esnext", "dom", "dom.iterable"]
   },
-  "include": ["./src"],
+  "include": ["./src", "./package.json"],
   "references": [
     {
       "path": "../better-auth/tsconfig.json"

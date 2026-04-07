@@ -583,6 +583,121 @@ describe("stripe", () => {
 		expect(listAfterRes.data?.length).toBeGreaterThan(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7721
+	 */
+	it("should return annualDiscountPriceId when subscription billingInterval is year", async () => {
+		const annualPriceId = "price_annual_starter";
+		const monthlyPriceId = "price_monthly_starter";
+		const optionsWithAnnual = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: monthlyPriceId,
+						annualDiscountPriceId: annualPriceId,
+						name: "starter",
+					},
+					{
+						priceId: process.env.STRIPE_PRICE_ID_2!,
+						name: "premium",
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(optionsWithAnnual)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "annual-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+		const userId = userRes.user.id;
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "annual-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Simulate an active annual subscription
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				billingInterval: "year",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userId,
+				},
+			],
+		});
+
+		const listRes = await client.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(listRes.data?.length).toBeGreaterThan(0);
+		expect(listRes.data?.[0]?.priceId).toBe(annualPriceId);
+
+		// Verify monthly subscription returns monthly priceId
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				billingInterval: "month",
+			},
+			where: [
+				{
+					field: "referenceId",
+					value: userId,
+				},
+			],
+		});
+
+		const monthlyListRes = await client.subscription.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(monthlyListRes.data?.[0]?.priceId).toBe(monthlyPriceId);
+	});
+
 	it("should handle subscription webhook events", async () => {
 		const { auth: testAuth } = await getTestInstance(
 			{
@@ -2689,9 +2804,83 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should not update personal subscription when upgrading with an org referenceId", async () => {
-		/* cspell:disable-next-line */
-		const orgId = "org_b67GF32Cljh7u588AuEblmLVobclDRcP";
+	it("should create billing portal session for an existing custom referenceId", async () => {
+		// cspell:disable-next-line -- random test workspace ID
+		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: _stripe,
+			subscription: {
+				...stripeOptions.subscription,
+				authorizeReference: async () => true,
+			},
+		} as unknown as StripeOptions;
+
+		const {
+			auth: testAuth,
+			client: testClient,
+			sessionSetter: testSessionSetter,
+		} = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		const userRes = await testClient.signUp.email(
+			{ ...testUser, email: "custom-ref-billing-portal@email.com" },
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await testClient.signIn.email(
+			{ ...testUser, email: "custom-ref-billing-portal@email.com" },
+			{ throw: true, onSuccess: testSessionSetter(headers) },
+		);
+
+		await testCtx.adapter.update({
+			model: "user",
+			update: { stripeCustomerId: null },
+			where: [{ field: "id", value: userRes.user.id }],
+		});
+		await testCtx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: customReferenceId,
+				stripeCustomerId: "cus_custom_reference",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		mockStripe.billingPortal.sessions.create.mockClear();
+
+		const billingPortalRes = await testClient.subscription.billingPortal({
+			referenceId: customReferenceId,
+			returnUrl: "/dashboard",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(billingPortalRes.error).toBeNull();
+		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: "cus_custom_reference",
+			return_url: "http://localhost:3000/dashboard",
+		});
+	});
+
+	it("should not update personal subscription when upgrading with a custom referenceId", async () => {
+		// cspell:disable-next-line -- random test workspace ID
+		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
 
 		const testOptions = {
 			...stripeOptions,
@@ -2770,10 +2959,10 @@ describe("stripe", () => {
 			],
 		});
 
-		// Attempt to upgrade using an org referenceId
+		// Attempt to upgrade using a custom referenceId
 		const upgradeRes = await testClient.subscription.upgrade({
 			plan: "starter",
-			referenceId: orgId,
+			referenceId: customReferenceId,
 			fetchOptions: { headers },
 		});
 		// It should NOT go through billing portal (which would update the personal sub)
@@ -2782,10 +2971,10 @@ describe("stripe", () => {
 
 		const orgSub = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: [{ field: "referenceId", value: orgId }],
+			where: [{ field: "referenceId", value: customReferenceId }],
 		});
 		expect(orgSub).toMatchObject({
-			referenceId: orgId,
+			referenceId: customReferenceId,
 			status: "incomplete",
 			plan: "starter",
 		});
@@ -5819,6 +6008,10 @@ describe("stripe", () => {
 					{ ...testUser, email: "ref-test-3@example.com" },
 					{ throw: true },
 				);
+				const targetUser = await client.signUp.email(
+					{ ...testUser, email: "ref-target-3@example.com" },
+					{ throw: true },
+				);
 				const headers = new Headers();
 				await client.signIn.email(
 					{ ...testUser, email: "ref-test-3@example.com" },
@@ -5830,14 +6023,14 @@ describe("stripe", () => {
 
 				const res = await client.subscription.upgrade({
 					plan: "starter",
-					referenceId: "some-other-id",
+					referenceId: targetUser.user.id,
 					fetchOptions: { headers },
 				});
 
 				expect(res.error?.code).toBe("REFERENCE_ID_NOT_ALLOWED");
 			});
 
-			it("should reject when authorizeReference returns false", async () => {
+			it("should reject another user's referenceId when authorizeReference returns false", async () => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -5862,6 +6055,10 @@ describe("stripe", () => {
 					{ ...testUser, email: "ref-test-4@example.com" },
 					{ throw: true },
 				);
+				const targetUser = await client.signUp.email(
+					{ ...testUser, email: "ref-target-4@example.com" },
+					{ throw: true },
+				);
 				const headers = new Headers();
 				await client.signIn.email(
 					{ ...testUser, email: "ref-test-4@example.com" },
@@ -5873,14 +6070,14 @@ describe("stripe", () => {
 
 				const res = await client.subscription.upgrade({
 					plan: "starter",
-					referenceId: "some-other-id",
+					referenceId: targetUser.user.id,
 					fetchOptions: { headers },
 				});
 
 				expect(res.error?.code).toBe("UNAUTHORIZED");
 			});
 
-			it("should pass when authorizeReference returns true", async () => {
+			it("should allow another user's referenceId when authorizeReference returns true", async () => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -5889,7 +6086,7 @@ describe("stripe", () => {
 					},
 				};
 
-				const { client, sessionSetter } = await getTestInstance(
+				const { auth, client, sessionSetter } = await getTestInstance(
 					{
 						plugins: [stripe(stripeOptionsWithAuth)],
 					},
@@ -5901,27 +6098,66 @@ describe("stripe", () => {
 					},
 				);
 
-				await client.signUp.email(
+				const actorUser = await client.signUp.email(
 					{ ...testUser, email: "ref-test-5@example.com" },
+					{ throw: true },
+				);
+				const targetUser = await client.signUp.email(
+					{ ...testUser, email: "ref-target-5@example.com" },
 					{ throw: true },
 				);
 				const headers = new Headers();
 				await client.signIn.email(
-					{ ...testUser, email: "ref-test-5@example.com" },
+					{ ...testUser, email: actorUser.user.email },
 					{
 						throw: true,
 						onSuccess: sessionSetter(headers),
 					},
 				);
 
+				const ctx = await auth.$context;
+				await ctx.adapter.update({
+					model: "user",
+					update: {
+						stripeCustomerId: "cus_actor_reference",
+					},
+					where: [{ field: "id", value: actorUser.user.id }],
+				});
+				await ctx.adapter.update({
+					model: "user",
+					update: {
+						stripeCustomerId: "cus_target_reference",
+					},
+					where: [{ field: "id", value: targetUser.user.id }],
+				});
+				mockStripe.checkout.sessions.create.mockClear();
+
 				const res = await client.subscription.upgrade({
 					plan: "starter",
-					referenceId: "some-other-id",
+					referenceId: targetUser.user.id,
 					fetchOptions: { headers },
 				});
 
 				expect(res.error).toBeNull();
 				expect(res.data?.url).toBeDefined();
+				expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						customer: "cus_actor_reference",
+						metadata: expect.objectContaining({
+							userId: actorUser.user.id,
+							referenceId: targetUser.user.id,
+						}),
+					}),
+					undefined,
+				);
+				const subscription = await ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "referenceId", value: targetUser.user.id }],
+				});
+				expect(subscription).toMatchObject({
+					referenceId: targetUser.user.id,
+					status: "incomplete",
+				});
 			});
 		});
 
@@ -7479,6 +7715,134 @@ describe("stripe", () => {
 			// Should redirect without any Stripe calls
 			expect(response.status).toBe(302);
 			expect(response.headers.get("location")).toContain(callbackURL);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8255
+		 */
+		it("should replace {CHECKOUT_SESSION_ID} placeholder in callbackURL with actual session ID", async () => {
+			const testSubscriptionId = "sub_placeholder_test";
+			const testCheckoutSessionId = "cs_placeholder_456";
+			const testCustomerId = "cus_placeholder_test";
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				checkout: {
+					sessions: {
+						...stripeOptions.stripeClient.checkout.sessions,
+						retrieve: vi.fn(),
+					},
+				},
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: testSubscriptionId,
+								status: "active",
+								cancel_at_period_end: false,
+								cancel_at: null,
+								canceled_at: null,
+								trial_start: null,
+								trial_end: null,
+								items: {
+									data: [
+										{
+											price: {
+												id: process.env.STRIPE_PRICE_ID_1,
+												recurring: { interval: "month" },
+											},
+											quantity: 1,
+											current_period_start: Math.floor(Date.now() / 1000),
+											current_period_end:
+												Math.floor(Date.now() / 1000) + 30 * 86400,
+										},
+									],
+								},
+							},
+						],
+					}),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+			};
+
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const testCtx = await testAuth.$context;
+
+			const headers = new Headers();
+			const userRes = await client.signUp.email(
+				{
+					email: "placeholder-test@test.com",
+					password: "password",
+					name: "Placeholder Test",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "placeholder-test@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const sub = await testCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: testCustomerId,
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
+				id: testCheckoutSessionId,
+				metadata: {
+					userId: userRes.user.id,
+					subscriptionId: sub.id,
+					referenceId: userRes.user.id,
+				},
+			});
+
+			// User passes {CHECKOUT_SESSION_ID} in their successUrl, which gets
+			// URL-encoded inside callbackURL. Stripe can only replace the literal
+			// (unencoded) placeholder, so the encoded version stays as-is.
+			// Better Auth should replace it with the actual session ID before redirecting.
+			const callbackURL =
+				"http://localhost:5173/billing/success?session_id={CHECKOUT_SESSION_ID}";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=${testCheckoutSessionId}`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			expect(response.status).toBe(302);
+			const location = response.headers.get("location")!;
+			// The placeholder must be replaced with the actual checkout session ID
+			expect(location).toContain(`session_id=${testCheckoutSessionId}`);
+			// The literal placeholder must NOT remain in the redirect URL
+			expect(location).not.toContain("{CHECKOUT_SESSION_ID}");
+			expect(location).not.toContain("%7BCHECKOUT_SESSION_ID%7D");
 		});
 
 		it("should redirect when checkout session retrieval fails", async () => {

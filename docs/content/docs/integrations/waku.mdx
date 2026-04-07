@@ -117,6 +117,7 @@ We can create a plugin that works together with our middleware to set cookies.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { unstable_getContextData as getContextData } from "waku/server"
 
 export const auth = betterAuth({

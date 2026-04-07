@@ -57,6 +57,7 @@ async function created(
 		});
 	}
 	const query = new URLSearchParams(_query);
+	ctx.headers?.set("accept", "application/json");
 	ctx.query = deleteFromPrompt(query, "create");
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {

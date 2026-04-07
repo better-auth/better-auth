@@ -82,6 +82,20 @@ export type StripePlan = {
 	 */
 	seatPriceId?: string | undefined;
 	/**
+	 * Proration behavior when updating this plan's subscription.
+	 *
+	 * Controls how Stripe handles mid-cycle price changes.
+	 * - `create_prorations`: Add proration line items to the next invoice (default)
+	 * - `always_invoice`: Create prorations and immediately invoice
+	 * - `none`: No proration; new price applies at next billing cycle
+	 *
+	 * @default "create_prorations"
+	 * @see https://docs.stripe.com/billing/subscriptions/prorations
+	 */
+	prorationBehavior?:
+		| Stripe.SubscriptionUpdateParams.ProrationBehavior
+		| undefined;
+	/**
 	 * Additional line items to include in the checkout session.
 	 *
 	 * All line items must use the same billing interval as the base price (e.g. all monthly or all yearly).

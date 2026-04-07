@@ -306,9 +306,18 @@ export const createInternalAdapter = (
 				...rest
 			} = override || {};
 
+			// When secondary storage is the only store, the database adapter
+			// won't run, so we need to generate an id ourselves.
+			let sessionId: string | undefined;
+			if (secondaryStorage && !storeInDb) {
+				const generatedId = ctx.generateId({ model: "session" });
+				sessionId = generatedId !== false ? generatedId : generateId();
+			}
+
 			// we're parsing default values for session additional fields
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
+				...(sessionId ? { id: sessionId } : {}),
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -410,7 +419,14 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+				// When preserveSessionInDatabase is enabled, revoked sessions
+				// remain in the database for audit purposes. Skip the database
+				// fallback to prevent those revoked sessions from being restored.
+				if (
+					!sessionStringified &&
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase)
+				) {
 					return null;
 				}
 				if (sessionStringified) {

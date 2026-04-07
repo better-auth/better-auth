@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/kysely-adapter",
-  "version": "1.5.1-beta.3",
+  "version": "1.6.0",
   "description": "Kysely adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -20,10 +20,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
@@ -47,15 +48,20 @@
     }
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0",
+    "@better-auth/core": "workspace:^",
+    "@better-auth/utils": "catalog:",
     "kysely": "^0.27.0 || ^0.28.0"
+  },
+  "peerDependenciesMeta": {
+    "kysely": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250121.0",
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.1",
-    "kysely": "^0.28.11",
+    "@better-auth/utils": "catalog:",
+    "kysely": "^0.28.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

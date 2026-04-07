@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.5.1-beta.3",
+  "version": "1.6.0",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -23,12 +23,13 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
     "typecheck": "tsc --project tsconfig.json"
@@ -489,8 +490,11 @@
   },
   "dependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/drizzle-adapter": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
     "@better-auth/memory-adapter": "workspace:*",
+    "@better-auth/mongo-adapter": "workspace:*",
+    "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
@@ -499,19 +503,15 @@
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^6.1.3",
-    "kysely": "^0.28.11",
+    "kysely": "^0.28.14",
     "nanostores": "^1.1.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@better-auth/drizzle-adapter": "workspace:*",
-    "@better-auth/mongo-adapter": "workspace:*",
-    "@better-auth/prisma-adapter": "workspace:*",
     "@lynx-js/react": "^0.116.3",
     "@sveltejs/kit": "^2.53.3",
     "@tanstack/react-start": "^1.163.2",
     "@tanstack/solid-start": "^1.163.2",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.9",
     "@types/google.accounts": "^0.0.18",
     "@types/pg": "^8.16.0",
@@ -519,18 +519,14 @@
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-trace-base": "^1.30.0",
     "@opentelemetry/sdk-trace-node": "^1.30.0",
-    "better-sqlite3": "^12.6.2",
-    "deepmerge": "^4.3.1",
-    "happy-dom": "^20.7.0",
+    "happy-dom": "^20.8.9",
     "listhen": "^1.9.0",
     "msw": "^2.12.10",
-    "next": "^16.1.6",
+    "next": "^16.2.0",
     "oauth2-mock-server": "^8.2.2",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "solid-js": "^1.9.11",
-    "tarn": "^3.0.2",
-    "tedious": "^18.6.2",
     "tsdown": "catalog:",
     "type-fest": "^5.4.4",
     "typescript": "catalog:",
@@ -538,9 +534,6 @@
     "vue": "^3.5.29"
   },
   "peerDependencies": {
-    "@better-auth/drizzle-adapter": "workspace:*",
-    "@better-auth/mongo-adapter": "workspace:*",
-    "@better-auth/prisma-adapter": "workspace:*",
     "@lynx-js/react": "*",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "@sveltejs/kit": "^2.0.0",
@@ -562,15 +555,6 @@
     "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
-    "@better-auth/drizzle-adapter": {
-      "optional": true
-    },
-    "@better-auth/mongo-adapter": {
-      "optional": true
-    },
-    "@better-auth/prisma-adapter": {
-      "optional": true
-    },
     "@lynx-js/react": {
       "optional": true
     },

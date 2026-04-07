@@ -1807,3 +1807,431 @@ describe("oauth token - client secret validation", async () => {
 		expect(responseStatus).toBe(500);
 	});
 });
+
+describe("id token claim override security", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				customIdTokenClaims: () => ({
+					acr: "silver",
+					auth_time: 0,
+					sub: "evil",
+					iss: "https://evil.com",
+					aud: "evil-client",
+					nonce: "evil-nonce",
+					iat: 0,
+					exp: 0,
+					sid: "evil-sid",
+				}),
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toBeDefined();
+		oauthClient = response;
+	});
+
+	async function getIdTokenClaims() {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).not.toBe("");
+		expect(callbackRedirectUrl).toContain(redirectUri);
+
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code");
+		const returnedState = callbackUrl.searchParams.get("state");
+
+		expect(code).toBeTruthy();
+		expect(returnedState).toBe(state);
+
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(tokens.data?.id_token).toBeDefined();
+		return decodeJwt(tokens.data!.id_token!);
+	}
+
+	it("customIdTokenClaims can override acr and auth_time", async ({
+		expect,
+	}) => {
+		const claims = await getIdTokenClaims();
+		expect(claims.acr).toBe("silver");
+		expect(claims.auth_time).toBe(0);
+	});
+
+	it("customIdTokenClaims cannot override pinned security claims", async ({
+		expect,
+	}) => {
+		const claims = await getIdTokenClaims();
+		expect(claims.sub).not.toBe("evil");
+		expect(claims.iss).not.toBe("https://evil.com");
+		expect(claims.aud).not.toBe("evil-client");
+		expect(claims.nonce).not.toBe("evil-nonce");
+		expect(claims.iat).not.toBe(0);
+		expect(claims.exp).not.toBe(0);
+		expect(claims.sid).not.toBe("evil-sid");
+	});
+});
+
+describe("loopback redirect URI matching", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const state = "123";
+
+	it("127.0.0.1 with different ports should succeed", async ({ expect }) => {
+		const registeredUri = "http://127.0.0.1:8080/callback";
+		const requestedUri = "http://127.0.0.1:9090/callback";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: requestedUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+	});
+
+	it("[::1] with different ports should succeed", async ({ expect }) => {
+		const registeredUri = "http://[::1]:8080/callback";
+		const requestedUri = "http://[::1]:3000/callback";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: requestedUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+	});
+
+	it("non-loopback with different ports should be rejected", async ({
+		expect,
+	}) => {
+		const registeredUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+		const requestedUri = "http://localhost:9999/api/auth/oauth2/callback/test";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("invalid_redirect");
+		expect(callbackRedirectUrl).not.toContain("code=");
+	});
+
+	it("loopback with different path should be rejected", async ({ expect }) => {
+		const registeredUri = "http://127.0.0.1:8080/callback";
+		const requestedUri = "http://127.0.0.1:8080/other-path";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("invalid_redirect");
+		expect(callbackRedirectUrl).not.toContain("code=");
+	});
+});
+
+describe("scope preservation through authorization code flow", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	it("scopes from authorization request should survive into token response", async ({
+		expect,
+	}) => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+
+		const requestedScopes = ["openid", "profile", "email"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: requestedScopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ scope?: string }>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+		expect(tokens.data?.scope).toBe(requestedScopes.join(" "));
+	});
+});

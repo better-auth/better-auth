@@ -1,6 +1,6 @@
 ---
 title: Plugins
-description: Learn how to use plugins with Better Auth.
+description: Learn how to use and create Better Auth plugins, including defining endpoints, schemas, hooks, middleware, rate limits, trusted origins, and building client plugins with custom actions and atoms.
 ---
 
 Plugins are a key part of Better Auth, they let you extend the base functionalities. You can use them to add new authentication methods, features, or customize behaviors.
@@ -129,7 +129,7 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 - `trustedOrigins`: This is the list of trusted origins that you specified via `options.trustedOrigins`.
 - `isTrustedOrigin`: This is a helper function that allows you to quickly check whether a given url or path is trusted based on the trusted origins configuration.
 
-For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation and the <Link href="https://github.com/better-auth/better-auth/blob/canary/packages/better-auth/src/context/create-context.ts">source code </Link>.
+For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation and the <Link href="https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/context/create-context.ts">source code </Link>.
 
 
 **Rules for Endpoints**
@@ -238,7 +238,7 @@ Don't store sensitive information in the `user` or `session` table. Create a new
 Hooks are used to run code before or after an action is performed, either from a client or directly on the server. You can add hooks to the server by passing a `hooks` object, which should contain `before` and `after` properties.
 
 ```ts title="plugin.ts"
-import { createAuthMiddleware } from "better-auth/plugins";
+import { createAuthMiddleware } from "better-auth/api";
 
 const myPlugin = () => {
     return {
@@ -421,8 +421,7 @@ Allows you to get the client's session data by passing the auth middleware's `co
 
 ```ts title="plugin.ts"
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/plugins";
-import { getSessionFromCtx } from "better-auth/api";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 
 const myPlugin = {
     id: "my-plugin",
@@ -469,6 +468,86 @@ const myPlugin = () => {
     } satisfies BetterAuthPlugin
 }
 ```
+
+#### `requireResourceOwnership`
+
+A middleware that loads a resource by ID and verifies that it belongs to the authenticated user. Use it after `sessionMiddleware` for endpoints that operate on user-owned models.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import * as z from "zod";
+import {
+    createAuthEndpoint,
+    requireResourceOwnership,
+    sessionMiddleware,
+} from "better-auth/api";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        endpoints: {
+            deleteApiKey: createAuthEndpoint("/my-plugin/delete-api-key", {
+                method: "POST",
+                body: z.object({
+                    id: z.string(),
+                }),
+                use: [
+                    sessionMiddleware,
+                    requireResourceOwnership({
+                        model: "apiKey",
+                        idParam: "id",
+                        idSource: "body",
+                    }),
+                ],
+            }, async (ctx) => {
+                return ctx.json({ success: true });
+            })
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+Use `ownerField` if your model stores the owner under a different field name, and `notFoundError` or `forbiddenError` if you want to return plugin-specific error codes.
+
+#### `requireOrgRole`
+
+A middleware that verifies the authenticated user is a member of a specific organization and, optionally, has one of a set of allowed roles. Use it after `sessionMiddleware` for organization-scoped endpoints.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import * as z from "zod";
+import {
+    createAuthEndpoint,
+    requireOrgRole,
+    sessionMiddleware,
+} from "better-auth/api";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        endpoints: {
+            syncDirectory: createAuthEndpoint("/my-plugin/sync-directory", {
+                method: "POST",
+                body: z.object({
+                    organizationId: z.string(),
+                }),
+                use: [
+                    sessionMiddleware,
+                    requireOrgRole({
+                        orgIdParam: "organizationId",
+                        orgIdSource: "body",
+                        allowedRoles: ["admin", "owner"],
+                    }),
+                ],
+            }, async (ctx) => {
+                return ctx.json({ success: true });
+            })
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+If `allowedRoles` is omitted, any organization member is accepted. Members with multiple roles are authorized when any one of their roles matches.
 
 
 ## Creating a client plugin
