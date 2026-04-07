@@ -168,10 +168,41 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	// Check request
-	const query: OAuthAuthorizationQuery = ctx.query;
+	// Resolve request_uri (PAR) before processing
+	let query: OAuthAuthorizationQuery = ctx.query;
+	if (query.request_uri) {
+		if (!opts.requestUriResolver) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(ctx, "invalid_request_uri", "request_uri not supported"),
+			);
+		}
+		const resolvedParams = await opts.requestUriResolver({
+			requestUri: query.request_uri,
+			clientId: query.client_id ?? "",
+			ctx,
+		});
+		if (!resolvedParams) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(
+					ctx,
+					"invalid_request_uri",
+					"request_uri is invalid or expired",
+				),
+			);
+		}
+		// RFC 9126 §4: all params come from the stored request, not the URL.
+		// Only client_id is carried from the authorization URL.
+		const urlClientId = query.client_id;
+		query = resolvedParams as unknown as OAuthAuthorizationQuery;
+		if (urlClientId) {
+			query.client_id = urlClientId;
+		}
+	}
+	ctx.query = query;
 	await oAuthState.set({
-		query: query.toString(),
+		query: serializeAuthorizationQuery(query).toString(),
 	});
 
 	if (!query.client_id) {
@@ -229,9 +260,24 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectUri = client.redirectUris?.find(
-		(url) => url === query.redirect_uri,
-	);
+	const redirectUri = client.redirectUris?.find((url) => {
+		if (url === query.redirect_uri) return true;
+		try {
+			const registered = new URL(url);
+			const requested = new URL(query.redirect_uri);
+			// RFC 8252 §7.3: loopback IPs match on scheme+host+path+query, ignoring port
+			if (
+				(registered.hostname === "127.0.0.1" ||
+					registered.hostname === "[::1]") &&
+				registered.hostname === requested.hostname &&
+				registered.pathname === requested.pathname &&
+				registered.protocol === requested.protocol &&
+				registered.search === requested.search
+			)
+				return true;
+		} catch {}
+		return false;
+	});
 	if (!redirectUri || !query.redirect_uri) {
 		return handleRedirect(
 			ctx,
@@ -483,6 +529,16 @@ export async function authorizeEndpoint(
 	});
 }
 
+function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
+	const params = new URLSearchParams();
+	for (const [key, value] of Object.entries(query)) {
+		if (value != null) {
+			params.set(key, String(value));
+		}
+	}
+	return params;
+}
+
 async function redirectWithAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -505,7 +561,7 @@ async function redirectWithAuthorizationCode(
 		expiresAt: new Date(exp * 1000),
 		value: JSON.stringify({
 			type: "authorization_code",
-			query: ctx.query,
+			query: verificationValue.query,
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
@@ -561,7 +617,9 @@ async function signParams(
 	// Add expiration to query parameters
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
-	const params = new URLSearchParams(ctx.query);
+	const params = serializeAuthorizationQuery(
+		ctx.query as OAuthAuthorizationQuery,
+	);
 	params.set("exp", String(exp));
 
 	const signature = await makeSignature(params.toString(), ctx.context.secret);
