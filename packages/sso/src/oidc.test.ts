@@ -1,5 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
+import { organizationClient } from "better-auth/client/plugins";
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -1526,5 +1527,202 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("userinfo-only@test.com");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9013
+ */
+describe("SSO org-scoped session: user logged in via one org SSO should not access another org", async () => {
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [sso(), organization()],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient(), organizationClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const userinfoHandler = (userInfoResponse: any) => {
+		userInfoResponse.body = {
+			email: "shared-user@org-scoped.com",
+			name: "Shared User",
+			sub: "shared-user-sub",
+			picture: "https://test.com/shared.png",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	};
+
+	const tokenHandler = (token: any) => {
+		token.payload.email = "shared-user@org-scoped.com";
+		token.payload.email_verified = true;
+		token.payload.name = "Shared User";
+		token.payload.sub = "shared-user-sub";
+	};
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", userinfoHandler);
+		server.service.on("beforeTokenSigning", tokenHandler);
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		server.service.removeListener("beforeUserinfo", userinfoHandler);
+		server.service.removeListener("beforeTokenSigning", tokenHandler);
+		await server.stop().catch(() => {});
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should scope session to the SSO-authenticated org and prevent access to another SSO-protected org", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+
+		const orgA = await auth.api.createOrganization({
+			body: { name: "Org A", slug: "org-a" },
+			headers: adminHeaders,
+		});
+
+		const orgB = await auth.api.createOrganization({
+			body: { name: "Org B", slug: "org-b" },
+			headers: adminHeaders,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "org-scoped.com",
+				providerId: "org-a-sso",
+				organizationId: orgA!.id,
+				oidcConfig: {
+					clientId: "org-a-client",
+					clientSecret: "org-a-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers: adminHeaders,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "org-scoped-b.com",
+				providerId: "org-b-sso",
+				organizationId: orgB!.id,
+				oidcConfig: {
+					clientId: "org-b-client",
+					clientSecret: "org-b-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers: adminHeaders,
+		});
+
+		// SSO sign-in via Org A's provider
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "org-a-sso",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+
+		const { callbackURL, headers: ssoSessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			signInHeaders,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		// User is now provisioned as a member of Org A via SSO
+		const orgAData = await auth.api.getFullOrganization({
+			query: { organizationId: orgA!.id },
+			headers: ssoSessionHeaders,
+		});
+		const memberInOrgA = orgAData?.members.find(
+			(m: any) => m.user.email === "shared-user@org-scoped.com",
+		);
+		expect(memberInOrgA).toBeDefined();
+
+		// Manually add the same user to Org B (simulating pre-existing membership)
+		await auth.api.addMember({
+			body: {
+				organizationId: orgB!.id,
+				userId: memberInOrgA!.userId,
+				role: "member",
+			},
+			headers: adminHeaders,
+		});
+
+		// After SSO via Org A, the session should have activeOrganizationId set to Org A
+		const session = await authClient.getSession({
+			fetchOptions: { headers: ssoSessionHeaders },
+		});
+		expect(session.data?.session.activeOrganizationId).toBe(orgA!.id);
+
+		// User should NOT be able to switch to Org B (which has its own SSO provider)
+		// since they did not authenticate via Org B's SSO
+		const setActiveResult = await authClient.organization.setActive({
+			organizationId: orgB!.id,
+			fetchOptions: {
+				headers: ssoSessionHeaders,
+				throw: false,
+			},
+		});
+		expect(setActiveResult.error).toBeDefined();
 	});
 });
