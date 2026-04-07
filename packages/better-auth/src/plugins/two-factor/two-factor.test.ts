@@ -1,3 +1,4 @@
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
@@ -1768,5 +1769,76 @@ describe("two factor password still required for credential accounts", async () 
 			asResponse: true,
 		});
 		expect(res.status).toBe(400);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8900
+ */
+describe("checkPassword must not leak credential presence via error codes", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP() {},
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+	let { headers, user } = await signInWithTestUser();
+
+	const enableRes = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers,
+		asResponse: true,
+	});
+	expect(enableRes.status).toBe(200);
+	headers = convertSetCookieToCookie(enableRes.headers);
+
+	it("uses INVALID_PASSWORD for wrong password and when credential row is missing", async () => {
+		try {
+			await auth.api.getTOTPURI({
+				headers,
+				body: { password: "not-the-real-password" },
+			});
+			expect.fail("expected rejection");
+		} catch (e) {
+			expect(e).toBeInstanceOf(APIError);
+			if (e instanceof APIError) {
+				expect(e.body?.code).toBe(BASE_ERROR_CODES.INVALID_PASSWORD.code);
+			}
+		}
+
+		const accounts = await db.findMany<{
+			id: string;
+			providerId: string;
+		}>({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const credential = accounts.find((a) => a.providerId === "credential");
+		expect(credential).toBeDefined();
+		await db.delete({
+			model: "account",
+			where: [{ field: "id", value: credential!.id }],
+		});
+
+		try {
+			await auth.api.getTOTPURI({
+				headers,
+				body: { password: testUser.password },
+			});
+			expect.fail("expected rejection");
+		} catch (e) {
+			expect(e).toBeInstanceOf(APIError);
+			if (e instanceof APIError) {
+				expect(e.body?.code).toBe(BASE_ERROR_CODES.INVALID_PASSWORD.code);
+				expect(e.body?.code).not.toBe(
+					BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND.code,
+				);
+			}
+		}
 	});
 });
