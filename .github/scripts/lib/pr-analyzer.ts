@@ -244,3 +244,103 @@ export const DOMAIN_ORDER = [
 
 /** Domains excluded from release notes */
 export const FILTERED_DOMAINS = new Set(["docs", "devops"]);
+
+// ── Package resolution (for release notes output) ─────────────────────
+
+/**
+ * Maps commit scopes to npm package names.
+ * Used by release-notes.ts to group entries by the package users install.
+ */
+const SCOPE_TO_PACKAGE: Record<string, string> = {
+	sso: "@better-auth/sso",
+	scim: "@better-auth/scim",
+	passkey: "@better-auth/passkey",
+	"oauth-provider": "@better-auth/oauth-provider",
+	stripe: "@better-auth/stripe",
+	"api-key": "@better-auth/api-key",
+	expo: "@better-auth/expo",
+	electron: "@better-auth/electron",
+	i18n: "@better-auth/i18n",
+	"test-utils": "@better-auth/test-utils",
+	"drizzle-adapter": "@better-auth/drizzle-adapter",
+	"prisma-adapter": "@better-auth/prisma-adapter",
+	"kysely-adapter": "@better-auth/kysely-adapter",
+	"mongo-adapter": "@better-auth/mongo-adapter",
+	"memory-adapter": "@better-auth/memory-adapter",
+	"redis-storage": "@better-auth/redis-storage",
+};
+
+/**
+ * Maps file path prefixes to npm package names.
+ * Order matters: more specific paths must come before catch-alls.
+ */
+const PATH_TO_PACKAGE: [string, string][] = [
+	["packages/sso/", "@better-auth/sso"],
+	["packages/scim/", "@better-auth/scim"],
+	["packages/passkey/", "@better-auth/passkey"],
+	["packages/oauth-provider/", "@better-auth/oauth-provider"],
+	["packages/stripe/", "@better-auth/stripe"],
+	["packages/api-key/", "@better-auth/api-key"],
+	["packages/expo/", "@better-auth/expo"],
+	["packages/electron/", "@better-auth/electron"],
+	["packages/i18n/", "@better-auth/i18n"],
+	["packages/redis-storage/", "@better-auth/redis-storage"],
+	["packages/test-utils/", "@better-auth/test-utils"],
+	["packages/telemetry/", "@better-auth/telemetry"],
+	["packages/drizzle-adapter/", "@better-auth/drizzle-adapter"],
+	["packages/prisma-adapter/", "@better-auth/prisma-adapter"],
+	["packages/kysely-adapter/", "@better-auth/kysely-adapter"],
+	["packages/mongo-adapter/", "@better-auth/mongo-adapter"],
+	["packages/memory-adapter/", "@better-auth/memory-adapter"],
+	// Catch-all: everything in better-auth or core maps to the main package
+	["packages/better-auth/", "better-auth"],
+	["packages/core/", "better-auth"],
+	["packages/cli/", "better-auth"],
+];
+
+/**
+ * Resolves the npm package name for release notes grouping.
+ * Priority: scope match > file path match > "better-auth" fallback.
+ */
+export function resolvePackage(
+	scope: string | undefined,
+	changedFiles: string[],
+): string {
+	if (scope) {
+		const pkg = SCOPE_TO_PACKAGE[scope];
+		if (pkg) return pkg;
+	}
+
+	const counts: Record<string, number> = {};
+	for (const file of changedFiles) {
+		for (const [prefix, pkg] of PATH_TO_PACKAGE) {
+			if (file.startsWith(prefix)) {
+				counts[pkg] = (counts[pkg] ?? 0) + 1;
+				break;
+			}
+		}
+	}
+
+	const packages = Object.keys(counts);
+	if (packages.length === 0) return "better-auth";
+
+	// If files span multiple external packages, return the one with the most hits.
+	// If all files are in better-auth, return better-auth.
+	return packages.sort((a, b) => {
+		// Prefer non-better-auth packages (they're more specific)
+		const aIsCore = a === "better-auth" ? 1 : 0;
+		const bIsCore = b === "better-auth" ? 1 : 0;
+		if (aIsCore !== bIsCore) return aIsCore - bIsCore;
+		return (counts[b] ?? 0) - (counts[a] ?? 0);
+	})[0]!;
+}
+
+/** Classifies a conventional commit type into a release notes category. */
+export function classifyChangeType(
+	type: string,
+	breaking: boolean,
+): "breaking" | "feat" | "fix" {
+	if (breaking) return "breaking";
+	if (type === "feat") return "feat";
+	return "fix";
+}
