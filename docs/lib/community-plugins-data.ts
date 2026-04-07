@@ -237,4 +237,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/C-W-D-Harshit.png",
 		},
 	},
+	{
+		name: "@pinklemon8/better-auth-webhooks",
+		url: "https://github.com/ysrdevs/better-auth-webhooks",
+		description:
+			"Webhook plugin — fire HTTP webhooks on auth events (user/session/account CRUD) with HMAC-SHA256 signing and automatic retries.",
+		author: {
+			name: "ysrdevs",
+			github: "ysrdevs",
+			avatar: "https://github.com/ysrdevs.png",
+		},
+	},
 ];
