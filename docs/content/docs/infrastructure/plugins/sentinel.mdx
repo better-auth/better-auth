@@ -24,12 +24,12 @@ export const auth = betterAuth({
 
 ### SentinelOptions
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `apiUrl` | `string` | Better Auth Infrastructure API URL |
-| `kvUrl` | `string` | KV store URL for rate limiting data |
-| `apiKey` | `string` | Your API key for authentication |
-| `security` | `SecurityOptions` | Security feature configuration |
+| Option     | Type              | Description                         |
+| ---------- | ----------------- | ----------------------------------- |
+| `apiUrl`   | `string`          | Better Auth Infrastructure API URL  |
+| `kvUrl`    | `string`          | KV store URL for rate limiting data |
+| `apiKey`   | `string`          | Your API key for authentication     |
+| `security` | `SecurityOptions` | Security feature configuration      |
 
 ### SecurityOptions
 
@@ -76,6 +76,7 @@ sentinel({
 ```
 
 **How it works:**
+
 1. Tracks failed login attempts per visitor ID
 2. After reaching the challenge threshold, issues a Proof-of-Work challenge
 3. After reaching the block threshold, blocks the visitor entirely
@@ -122,6 +123,7 @@ sentinel({
 ```
 
 **How it works:**
+
 1. Tracks account creations per visitor fingerprint
 2. When threshold is exceeded, blocks new account creation
 3. Useful for preventing free tier abuse
@@ -166,9 +168,10 @@ sentinel({
 ```
 
 **Notifications include:**
-- Login time and location
-- Days since last activity
-- Device information
+
+* Login time and location
+* Days since last activity
+* Device information
 
 ### Geo-Blocking
 
@@ -266,9 +269,10 @@ sentinel({
 ```
 
 **Strictness levels:**
-- `low` - Block only known disposable domains
-- `medium` - Also check for valid MX records
-- `high` - Additional heuristic checks
+
+* `low` - Block only known disposable domains
+* `medium` - Also check for valid MX records
+* `high` - Additional heuristic checks
 
 ## Proof-of-Work Challenges
 
@@ -315,39 +319,113 @@ export const authClient = createAuthClient({
 
 ### Configuration
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `autoSolveChallenge` | `boolean` | `true` | Automatically solve PoW challenges |
+| Option               | Type      | Default | Description                        |
+| -------------------- | --------- | ------- | ---------------------------------- |
+| `autoSolveChallenge` | `boolean` | `true`  | Automatically solve PoW challenges |
 
 ### Browser Fingerprinting
 
-The client automatically includes a visitor ID in requests via the `X-Visitor-ID` header. This fingerprint is used for:
+The client automatically includes a visitor ID in requests via the `X-Visitor-Id` header. This fingerprint is used for:
 
-- Credential stuffing detection
-- Free trial abuse prevention
-- Device tracking
+* Credential stuffing detection
+* Free trial abuse prevention
+* Device tracking
 
 ### PoW Solution Header
 
 When auto-solving is enabled, solved challenges are sent via the `X-PoW-Solution` header.
 
+### Expo and React Native
+
+For **Expo** and **React Native** apps, use `sentinelNativeClient` from `@better-auth/infra/native` instead of using `@better-auth/infra/client`.
+
+For **React Native** apps, install the following peer dependencies:
+
+```package-install
+@react-native-async-storage/async-storage react-native-get-random-values
+```
+
+`@react-native-async-storage/async-storage` is optional. If it is not installed, the client uses a session-only in-memory visitor ID. For production, install it or pass a custom `storage` (for example a secure store).
+
+#### Example
+
+```ts
+import { createAuthClient } from "better-auth/client";
+import { dashClient, sentinelNativeClient } from "@better-auth/infra/native";
+
+export const authClient = createAuthClient({
+  baseURL: "https://your-api.example.com",
+  plugins: [
+    dashClient(),
+    sentinelNativeClient({
+      autoSolveChallenge: true,
+    }),
+  ],
+});
+```
+
+For **Expo** apps, install for richer native identify payloads.
+
+<Callout type="info">
+  **Expo:** Follow the [Expo integration](/docs/integrations/expo) before adding infrastructure plugins.
+</Callout>
+
+```package-install
+expo-constants expo-device expo-crypto
+```
+
+#### Example
+
+```ts
+import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
+import { dashClient, sentinelNativeClient } from "@better-auth/infra/native";
+import * as SecureStore from "expo-secure-store";
+
+export const authClient = createAuthClient({
+  baseURL: "https://your-api.example.com",
+  plugins: [
+    expoClient({
+      scheme: "myapp",
+      storagePrefix: "myapp",
+      storage: SecureStore,
+    }),
+    dashClient(),
+    sentinelNativeClient({
+      autoSolveChallenge: true,
+    }),
+  ],
+});
+```
+
+#### `sentinelNativeClient` options
+
+| Option                | Type                            | Default                                                 | Description                                                                 |
+| --------------------- | ------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com` | KV identify endpoint base URL                                               |
+| `autoSolveChallenge`  | `boolean`                       | `true`                                                  | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution` |
+| `onChallengeReceived` | `(reason: string) => void`      | —                                                       | Called when a PoW challenge is received                                     |
+| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                       | Called after a successful solve                                             |
+| `onChallengeFailed`   | `(error: Error) => void`        | —                                                       | Called if solving fails                                                     |
+| `storage`             | `{ getItem, setItem }`          | Async Storage when installed                            | Persistent async storage for a stable per-install visitor ID                |
+
 ## Security Events
 
 Sentinel tracks the following security event types:
 
-| Event Type | Description |
-|------------|-------------|
-| `security_blocked` | Request was blocked |
-| `security_allowed` | Request was allowed after challenge |
-| `security_credential_stuffing` | Credential stuffing detected |
-| `security_impossible_travel` | Impossible travel detected |
-| `security_geo_blocked` | Geo-blocking triggered |
-| `security_bot_blocked` | Bot detected and blocked |
-| `security_suspicious_ip` | Suspicious IP detected |
-| `security_velocity_exceeded` | Rate limit exceeded |
-| `security_free_trial_abuse` | Free trial abuse detected |
-| `security_compromised_password` | Compromised password detected |
-| `security_stale_account` | Stale account reactivation |
+| Event Type                      | Description                         |
+| ------------------------------- | ----------------------------------- |
+| `security_blocked`              | Request was blocked                 |
+| `security_allowed`              | Request was allowed after challenge |
+| `security_credential_stuffing`  | Credential stuffing detected        |
+| `security_impossible_travel`    | Impossible travel detected          |
+| `security_geo_blocked`          | Geo-blocking triggered              |
+| `security_bot_blocked`          | Bot detected and blocked            |
+| `security_suspicious_ip`        | Suspicious IP detected              |
+| `security_velocity_exceeded`    | Rate limit exceeded                 |
+| `security_free_trial_abuse`     | Free trial abuse detected           |
+| `security_compromised_password` | Compromised password detected       |
+| `security_stale_account`        | Stale account reactivation          |
 
 These events are visible in the Security dashboard and included in audit logs.
 
@@ -425,7 +503,7 @@ export const auth = betterAuth({
 
 3. **Use challenges before blocks** - Challenges allow legitimate users through while stopping automated attacks.
 
-4. **Enable client-side auto-solve** - Make sure `sentinelClient({ autoSolveChallenge: true })` is configured for smooth user experience.
+4. **Enable client-side auto-solve** - Use `sentinelClient({ autoSolveChallenge: true })` in the browser, or `sentinelNativeClient({ autoSolveChallenge: true })` in Expo / React Native.
 
 5. **Monitor security events** - Regularly review the Security dashboard to identify attack patterns.
 
@@ -444,13 +522,15 @@ Make sure your API key environment variable is set correctly.
 ### Challenges Not Working
 
 If PoW challenges aren't being solved:
-1. Verify `sentinelClient()` is installed on the client
+
+1. Verify the correct client plugin: `sentinelClient()` for web (`@better-auth/infra/client`), or `sentinelNativeClient()` for Expo / React Native (`@better-auth/infra/native`)
 2. Check that `autoSolveChallenge` is `true`
 3. Ensure the client can reach the server
 
 ### High False Positive Rate
 
 If legitimate users are being blocked:
+
 1. Increase thresholds
 2. Change action from "block" to "challenge"
 3. Review security events to identify patterns
