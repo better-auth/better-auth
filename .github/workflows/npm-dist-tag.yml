@@ -21,6 +21,7 @@ permissions: {}
 
 jobs:
   dist-tag:
+    if: github.repository_owner == 'better-auth'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
@@ -29,7 +30,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Add dist-tag
-        run: npm dist-tag add "${PACKAGE}@${VERSION}" "${TAG}"
+        run: |
+          if [[ "$TAG" == "latest" && "$VERSION" == *"-"* ]]; then
+            echo "::error::Cannot tag a pre-release version ($VERSION) as latest."
+            exit 1
+          fi
+          npm dist-tag add "${PACKAGE}@${VERSION}" "${TAG}"
         env:
           PACKAGE: ${{ inputs.package }}
           VERSION: ${{ inputs.version }}
