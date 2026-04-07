@@ -291,8 +291,8 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "better-auth-invite-plugin",
-		url: "https://github.com/0-Sandy/better-auth-invite-plugin",
+		name: "better-invite",
+		url: "https://github.com/better-invite/better-invite",
 		description:
 			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
 		author: {
@@ -321,6 +321,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "C-W-D-Harshit",
 			github: "C-W-D-Harshit",
 			avatar: "https://github.com/C-W-D-Harshit.png",
+		},
+	},
+	{
+		name: "@delmaredigital/payload-better-auth",
+		url: "https://github.com/delmaredigital/payload-better-auth",
+		description:
+			"Payload CMS adapter and plugin for Better Auth. Use Payload collections as the database backend with auto-generated collections, session utilities, and admin UI components.",
+		author: {
+			name: "Delmare Digital",
+			github: "delmaredigital",
+			avatar: "https://github.com/delmaredigital.png",
 		},
 	},
 ];
