@@ -149,12 +149,11 @@ const magicLinkVerifyQuerySchema = z.object({
 		})
 		.optional(),
 });
-export type SignInMagicLinkBody = z.infer<typeof signInMagicLinkBodySchema>;
-export type GenerateMagicLinkBody = z.infer<typeof generateMagicLinkBodySchema>;
-export type SignInMagicLinkResponse = {
+type GenerateMagicLinkBody = z.infer<typeof generateMagicLinkBodySchema>;
+type SignInMagicLinkResponse = {
 	status: true;
 };
-export type GenerateMagicLinkResponse = SignInMagicLinkResponse & {
+type GenerateMagicLinkResponse = SignInMagicLinkResponse & {
 	url: string;
 	token: string;
 };
