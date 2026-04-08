@@ -838,6 +838,10 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 
+				// Listing another user's teams exposes membership data, so we
+				// gate it behind the `member:update` permission — i.e. only
+				// roles that can manage members are allowed to view another
+				// member's team affiliations.
 				const canManageMembers = await hasPermission(
 					{
 						role: requesterMember.role,
