@@ -109,6 +109,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 							);
 						}
+						const additionalParams =
+							typeof c.authorizationUrlParams === "function"
+								? c.authorizationUrlParams({} as any)
+								: c.authorizationUrlParams;
+
 						return createAuthorizationURL({
 							id: c.providerId,
 							options: {
@@ -121,6 +126,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							scopes: c.scopes || [],
 							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+							additionalParams,
 						});
 					},
 					async validateAuthorizationCode(data: {
@@ -155,6 +161,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						const additionalParams =
+							typeof c.tokenUrlParams === "function"
+								? c.tokenUrlParams({} as any)
+								: c.tokenUrlParams;
+
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
@@ -167,6 +178,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
+							additionalParams,
 						});
 					},
 					async refreshAccessToken(
@@ -190,6 +202,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						const extraParams =
+							typeof c.refreshTokenParams === "function"
+								? c.refreshTokenParams({} as any)
+								: c.refreshTokenParams;
+
 						return refreshAccessToken({
 							refreshToken,
 							options: {
@@ -198,6 +215,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
+							extraParams,
 						});
 					},
 					async getUserInfo(tokens: OAuth2Tokens) {

@@ -2273,4 +2273,64 @@ describe("oauth2", async () => {
 			expect(callbackURL).toBe("http://localhost:3000/dashboard");
 		});
 	});
+	describe("custom parameters", () => {
+		it("should forward authorizationUrlParams, tokenUrlParams, and refreshTokenParams", async () => {
+			let passedTokenParams: Record<string, string> = {};
+
+			server.service.once("beforeTokenSigning", (token, req) => {
+				if (req.body?.grant_type === "authorization_code") {
+					passedTokenParams = Object.fromEntries(
+						new URLSearchParams(req.body as any),
+					);
+				}
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-params",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: clientId,
+								clientSecret: clientSecret,
+								pkce: true,
+								authorizationUrlParams: { custom_auth: "auth_val" },
+								tokenUrlParams: { custom_token: "token_val" },
+								refreshTokenParams: { custom_refresh: "refresh_val" },
+							},
+						],
+					}),
+				],
+			});
+
+			const authClient = createAuthClient({
+				plugins: [genericOAuthClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+				},
+			});
+
+			const headers = new Headers();
+			const res = await authClient.signIn.oauth2({
+				providerId: "test-params",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			expect(res.data?.url).toContain("custom_auth=auth_val");
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+			expect(passedTokenParams).toHaveProperty("custom_token", "token_val");
+		});
+	});
 });

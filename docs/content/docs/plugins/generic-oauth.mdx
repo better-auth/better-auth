@@ -64,61 +64,57 @@ The Generic OAuth plugin provides endpoints for initiating the OAuth flow and ha
 To start the OAuth sign-in process:
 
 <APIMethod path="/sign-in/oauth2" method="POST">
-```ts
-type signInWithOAuth2 = {
-    /**
-     * The provider ID for the OAuth provider. 
-     */
-    providerId: string = "provider-id"
-    /**
-     * The URL to redirect to after sign in. 
-     */
-    callbackURL?: string = "/dashboard"
-    /**
-     * The URL to redirect to if an error occurs. 
-     */
-    errorCallbackURL?: string = "/error-page"
-    /**
-     * The URL to redirect to after login if the user is new. 
-     */
-    newUserCallbackURL?: string = "/welcome"
-    /**
-     * Disable redirect. 
-     */
-    disableRedirect?: boolean = false
-    /**
-     * Scopes to be passed to the provider authorization request. 
-     */
-    scopes?: string[] = ["my-scope"]
-    /**
-     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
-     */
-    requestSignUp?: boolean = false
-}
-```
+  ```ts
+  type signInWithOAuth2 = {
+      /**
+       * The provider ID for the OAuth provider. 
+       */
+      providerId: string = "provider-id"
+      /**
+       * The URL to redirect to after sign in. 
+       */
+      callbackURL?: string = "/dashboard"
+      /**
+       * The URL to redirect to if an error occurs. 
+       */
+      errorCallbackURL?: string = "/error-page"
+      /**
+       * The URL to redirect to after login if the user is new. 
+       */
+      newUserCallbackURL?: string = "/welcome"
+      /**
+       * Disable redirect. 
+       */
+      disableRedirect?: boolean = false
+      /**
+       * Scopes to be passed to the provider authorization request. 
+       */
+      scopes?: string[] = ["my-scope"]
+      /**
+       * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
+       */
+      requestSignUp?: boolean = false
+  }
+  ```
 </APIMethod>
 
 ### Linking OAuth Accounts
 
 To link an OAuth account to an existing user:
 
-<APIMethod
-  path="/oauth2/link"
-  method="POST"
-  requireSession
->
-```ts
-type oAuth2LinkAccount = {
-    /**
-     * The OAuth provider ID. 
-     */
-    providerId: string = "my-provider-id"
-    /**
-     * The URL to redirect to once the account linking was complete. 
-     */
-    callbackURL: string = "/successful-link"
-}
-```
+<APIMethod path="/oauth2/link" method="POST" requireSession>
+  ```ts
+  type oAuth2LinkAccount = {
+      /**
+       * The OAuth provider ID. 
+       */
+      providerId: string = "my-provider-id"
+      /**
+       * The URL to redirect to once the account linking was complete. 
+       */
+      callbackURL: string = "/successful-link"
+  }
+  ```
 </APIMethod>
 
 ### Handle OAuth Callback
@@ -131,14 +127,14 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 
 ### Supported Providers
 
-- **Auth0** - `auth0(options)`
-- **HubSpot** - `hubspot(options)`
-- **Keycloak** - `keycloak(options)`
-- **LINE** - `line(options)`
-- **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
-- **Okta** - `okta(options)`
-- **Slack** - `slack(options)`
-- **Patreon** - `patreon(options)`
+* **Auth0** - `auth0(options)`
+* **HubSpot** - `hubspot(options)`
+* **Keycloak** - `keycloak(options)`
+* **LINE** - `line(options)`
+* **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
+* **Okta** - `okta(options)`
+* **Slack** - `slack(options)`
+* **Patreon** - `patreon(options)`
 
 ### Example: Using Pre-configured Providers
 
@@ -219,22 +215,23 @@ export const auth = betterAuth({
 
 Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
 
-- **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
-- **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
-- **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
-- **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
-- **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
-- **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
-- **Slack**: No additional required fields
-- **Patreon**: No additional required fields
+* **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+* **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
+* **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
+* **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
+* **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
+* **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
+* **Slack**: No additional required fields
+* **Patreon**: No additional required fields
 
 All providers support the same optional fields:
-- `scopes?: string[]` - Array of OAuth scopes to request
-- `redirectURI?: string` - Custom redirect URI
-- `pkce?: boolean` - Enable PKCE (defaults to `false`)
-- `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
-- `disableSignUp?: boolean` - Disable sign-up entirely
-- `overrideUserInfo?: boolean` - Override user info on sign in
+
+* `scopes?: string[]` - Array of OAuth scopes to request
+* `redirectURI?: string` - Custom redirect URI
+* `pkce?: boolean` - Enable PKCE (defaults to `false`)
+* `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
+* `disableSignUp?: boolean` - Disable sign-up entirely
+* `overrideUserInfo?: boolean` - Override user info on sign in
 
 ## Configuration
 
@@ -297,7 +294,6 @@ interface GenericOAuthConfig {
 
 **pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
 
-
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
 
 **getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
@@ -333,6 +329,7 @@ When an OAuth provider supports RFC 9207, it includes an `iss` (issuer) paramete
 ### Configuration Examples
 
 **Auto-discovery (recommended for OIDC providers):**
+
 ```ts
 genericOAuth({
   config: [{
@@ -346,6 +343,7 @@ genericOAuth({
 ```
 
 **Manual issuer configuration:**
+
 ```ts
 genericOAuth({
   config: [{
@@ -360,6 +358,7 @@ genericOAuth({
 ```
 
 **Strict mode (recommended for modern providers):**
+
 ```ts
 genericOAuth({
   config: [{
@@ -374,18 +373,69 @@ genericOAuth({
 
 ### Validation Behavior
 
-| Scenario | `requireIssuerValidation` | Result |
-|----------|---------------------------|--------|
-| `iss` matches expected | - | Success |
-| `iss` doesn't match | - | `issuer_mismatch` error |
-| `iss` missing | `false` (default) | Success (backward compatible) |
-| `iss` missing | `true` | `issuer_missing` error |
+| Scenario               | `requireIssuerValidation` | Result                        |
+| ---------------------- | ------------------------- | ----------------------------- |
+| `iss` matches expected | -                         | Success                       |
+| `iss` doesn't match    | -                         | `issuer_mismatch` error       |
+| `iss` missing          | `false` (default)         | Success (backward compatible) |
+| `iss` missing          | `true`                    | `issuer_missing` error        |
 
 <Callout>
-For maximum security with modern OAuth/OIDC providers (Google, Auth0, Okta, etc.), we recommend enabling `requireIssuerValidation: true`.
+  For maximum security with modern OAuth/OIDC providers (Google, Auth0, Okta, etc.), we recommend enabling `requireIssuerValidation: true`.
 </Callout>
 
-## Advanced Usage
+### OAuth 2.1 Provider Integration (Two-App Pattern)
+
+If you are using Better Auth as an OAuth 2.1 Provider in one app, and the Generic OAuth client in another, you must ensure the client supplies the OAuth 2.1 `resource` indicator. This is required by the OAuth 2.1 provider to know which resource server an access token is valid for.
+
+You can configure the `resource` field to be passed during the authorization, token exchange, and refresh token requests using the `*UrlParams` options:
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "scheduler-backend",
+      clientId: process.env.SCHEDULER_CLIENT_ID,
+      clientSecret: process.env.SCHEDULER_CLIENT_SECRET,
+      authorizationUrl: `${process.env.SCHEDULER_URL}/api/auth/oauth2/authorize`,
+      tokenUrl: `${process.env.SCHEDULER_URL}/api/auth/oauth2/token`,
+      userInfoUrl: `${process.env.SCHEDULER_URL}/api/auth/oauth2/userinfo`,
+      // Add 'resource' indicator required by Better Auth's OAuth 2.1 Provider
+      authorizationUrlParams: { resource: process.env.SCHEDULER_URL },
+      tokenUrlParams: { resource: process.env.SCHEDULER_URL },
+      refreshTokenParams: { resource: process.env.SCHEDULER_URL },
+      // Better Auth OAuth 2.1 Providers issue JWTs 
+      // which can be verified manually if required on backend
+      getUserInfo: async (tokens) => {
+        if (tokens.idToken) {
+          const [, payload] = tokens.idToken.split('.');
+          const claims = JSON.parse(Buffer.from(payload, 'base64url').toString());
+          return {
+            id: claims.sub,
+            email: claims.email,
+            name: claims.name,
+            emailVerified: claims.email_verified ?? false,
+            image: claims.picture ?? null,
+          };
+        }
+        
+        // Fallback to standard provider UserInfo Endpoint
+        const res = await fetch(`${process.env.SCHEDULER_URL}/api/auth/oauth2/userinfo`, {
+          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        });
+        const profile = await res.json();
+        return {
+          id: profile.sub,
+          email: profile.email,
+          name: profile.name,
+          emailVerified: profile.email_verified ?? false,
+          image: profile.picture ?? null,
+        };
+      }
+    }
+  ]
+})
+```
 
 ### Custom Token Exchange
 

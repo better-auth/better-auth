@@ -151,6 +151,16 @@ export interface GenericOAuthConfig {
 		  )
 		| undefined;
 	/**
+	 * Additional search-params to add to the refresh token request.
+	 * Warning: Search-params added here overwrite any default params.
+	 */
+	refreshTokenParams?:
+		| (
+				| Record<string, string>
+				| ((ctx?: GenericEndpointContext) => Record<string, string>)
+		  )
+		| undefined;
+	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
