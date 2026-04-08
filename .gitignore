@@ -14,6 +14,11 @@ lerna-debug.log*
 
 .cache
 
+# Generated docs source
+
+docs/.source/
+landing/.source/
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
