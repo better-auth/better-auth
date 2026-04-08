@@ -1,7 +1,7 @@
 ---
-"@better-auth/drizzle-adapter": minor
-"@better-auth/kysely-adapter": minor
-"@better-auth/test-utils": minor
+"@better-auth/drizzle-adapter": patch
+"@better-auth/kysely-adapter": patch
+"@better-auth/test-utils": patch
 ---
 
 fix(mysql): handle race conditions for concurrent inserts
