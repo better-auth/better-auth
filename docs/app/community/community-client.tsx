@@ -236,7 +236,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
 							{formatNumber(stats.npmDownloads)}
 							<span className="text-[9px] text-foreground/50 font-mono">
-								/year
+								/week
 							</span>
 						</p>
 					</div>
@@ -444,7 +444,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 										icon={DownloadIcon}
 										label="NPM Downloads"
 										value={stats.npmDownloads}
-										subtext="/ year"
+										subtext="/ week"
 										index={0}
 									/>
 									<StatCard
