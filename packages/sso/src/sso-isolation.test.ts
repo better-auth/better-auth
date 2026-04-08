@@ -160,6 +160,8 @@ describe("SSO Organization Isolation E2E", async () => {
 				JSON.stringify(listResServer),
 			);
 		}
+		expect(listResServer?.length).toBe(1);
+		expect(listResServer?.[0].id).toBe(orgIdA);
 
 		const listRes = await (authClient as any).organization.list({
 			fetchOptions: { headers: ssoHeaders },

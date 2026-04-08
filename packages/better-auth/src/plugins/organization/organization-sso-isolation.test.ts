@@ -203,7 +203,7 @@ describe("organization sso isolation", async () => {
 		ssoHeaders.set("Authorization", `Bearer ${ssoSessionToken}`);
 
 		// Try to update team in Org B
-		const _updateRes = await client.organization.updateTeam({
+		const updateResImplicit = await client.organization.updateTeam({
 			teamId: teamInOrgB.id,
 			data: { name: "Hacked Team" },
 			fetchOptions: {
@@ -213,6 +213,9 @@ describe("organization sso isolation", async () => {
 				// We need to pass the organizationId of Org B to trigger the check against session.ssoOrganizationId
 			},
 		});
+		
+		// Assert that without explicit organizationId, the context implicitly uses Org A scoped id or throws 403
+		expect(updateResImplicit.error).toBeDefined();
 
 		// Wait, if organizationId is not passed in the body, it uses session.activeOrganizationId.
 		// If the session is SSO-restricted to Org A, activeOrganizationId will be Org A (after setActive).
