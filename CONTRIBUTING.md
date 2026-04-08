@@ -180,7 +180,7 @@ the generated file with your PR.
 Pick the bump type based on user impact:
 
 - **`patch`** for bug fixes and additive changes existing users don't need to know about.
-- **`minor`** or **`major`** for anything existing users need to be aware of (see [Branch Targeting](#branch-targeting) below).
+- **`minor`** or **`major`** for anything existing users need to be aware of (see [Branch Targeting](#branch-targeting)).
 
 If you're not sure whether your change needs one, a maintainer will handle
 it before merge.
