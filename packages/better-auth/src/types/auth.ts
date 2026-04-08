@@ -7,6 +7,25 @@ import type { InferPluginContext, InferPluginErrorCodes } from "./plugins";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
+	/**
+	 * UI handler for serving plugin HTML pages.
+	 * Mount this separately from the API handler at your preferred path.
+	 *
+	 * @example
+	 * ```ts
+	 * // Next.js - app/admin/[[...path]]/route.ts
+	 * export const GET = auth.ui.handler;
+	 *
+	 * // Express
+	 * app.all("/admin/*", (req, res) => auth.ui.handler(toWebRequest(req)));
+	 *
+	 * // Hono
+	 * app.all("/admin/*", (c) => auth.ui.handler(c.req.raw));
+	 * ```
+	 */
+	ui: {
+		handler: (request: Request) => Promise<Response>;
+	};
 	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;

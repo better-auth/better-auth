@@ -84,6 +84,17 @@ export interface AdminOptions {
 	 * @default false
 	 */
 	allowImpersonatingAdmins?: boolean | undefined;
+	/**
+	 * Enable or disable the admin UI dashboard.
+	 *
+	 * When enabled (default), the admin plugin provides an HTML
+	 * dashboard at `/admin` via `auth.ui.handler`.
+	 *
+	 * Set to `false` to disable the built-in UI.
+	 *
+	 * @default true
+	 */
+	ui?: boolean | undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

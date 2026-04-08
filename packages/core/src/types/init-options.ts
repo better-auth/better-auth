@@ -1607,4 +1607,26 @@ export type BetterAuthOptions = {
 		 */
 		joins?: boolean;
 	};
+	/**
+	 * Plugin UI configuration.
+	 *
+	 * When plugins provide UI (e.g. admin dashboards), this controls
+	 * where the UI handler is expected to be mounted.
+	 */
+	ui?: {
+		/**
+		 * The base path where `auth.ui.handler` is mounted.
+		 * This is stripped from the URL before routing to plugins.
+		 *
+		 * @default "/auth"
+		 *
+		 * @example
+		 * ```ts
+		 * // Default: mount at /auth/*
+		 * // Admin UI will be at /auth/admin/*
+		 * app.all("/auth/*", auth.ui.handler);
+		 * ```
+		 */
+		basePath?: string;
+	};
 };

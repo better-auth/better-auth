@@ -160,4 +160,40 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	adapter?: {
 		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
+	/**
+	 * Plugin UI configuration.
+	 *
+	 * When set, the plugin can serve HTML pages at the given path.
+	 * Pages are served via a separate `auth.ui` handler that users
+	 * mount independently from the API handler.
+	 *
+	 * @example
+	 * ```ts
+	 * ui: {
+	 *   path: "/admin",
+	 *   handler: async ({ request, path, context, fragment }) => {
+	 *     // path is the sub-path after "/admin"
+	 *     // fragment is true for client-side navigation
+	 *     return new Response(html, {
+	 *       headers: { "Content-Type": "text/html" }
+	 *     });
+	 *   }
+	 * }
+	 * ```
+	 */
+	ui?:
+		| {
+				path: string;
+				handler: (ctx: {
+					request: Request;
+					path: string;
+					context: AuthContext;
+					partial: boolean;
+					session: {
+						user: Record<string, unknown>;
+						session: Record<string, unknown>;
+					} | null;
+				}) => Promise<Response>;
+		  }
+		| undefined;
 };

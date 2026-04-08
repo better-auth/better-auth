@@ -29,6 +29,7 @@ import type {
 	SessionWithImpersonatedBy,
 	UserWithRole,
 } from "./types";
+import { createAdminUI } from "./ui";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -180,5 +181,6 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
 		options: options as NoInfer<O>,
+		ui: opts.ui !== false ? createAdminUI() : undefined,
 	} satisfies BetterAuthPlugin;
 };

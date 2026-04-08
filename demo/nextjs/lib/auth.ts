@@ -183,7 +183,9 @@ const authOptions = {
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin(),
+		admin({
+			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
+		}),
 		multiSession(),
 		oAuthProxy({
 			productionURL:
@@ -467,6 +469,9 @@ export const auth = betterAuth({
 		dash(),
 		sentinel(),
 	],
+	ui: {
+		basePath: "/test",
+	},
 });
 
 export type Session = typeof auth.$Infer.Session;

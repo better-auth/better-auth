@@ -66,6 +66,6 @@ export default defineConfig({
 		"./src/test-utils/index.ts",
 	],
 	treeshake: true,
-	clean: true,
+	clean: !process.argv.includes("--watch"),
 	unbundle: true,
 });
