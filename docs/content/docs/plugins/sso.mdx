@@ -534,6 +534,21 @@ const res = await authClient.signIn.sso({
 });
 ```
 
+You can also attach arbitrary key/value data to a sign-in request with `additionalData`. The data is carried through the auth flow and delivered to the [`provisionUser`](#user-provisioning) callback on the server. This is useful for things like referral codes, source attribution, or tenant context that originate on the client:
+
+```ts title="sign-in-with-additional-data.ts"
+import { authClient } from "@/lib/auth-client"
+
+const res = await authClient.signIn.sso({
+    email: "user@example.com",
+    callbackURL: "/dashboard",
+    additionalData: {
+        referralCode: "ABC123",
+        source: "landing-page",
+    },
+});
+```
+
 To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
@@ -592,6 +607,13 @@ type signInSSO = {
      * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
      */
     requestSignUp?: boolean = true
+     /**
+     * Arbitrary key/value data to carry through the auth flow and deliver to the `provisionUser` callback.
+     */
+    additionalData?: Record<string, unknown> = {
+        referralCode: "ABC123",
+        source: "landing-page",
+    }
 }
 ```
 </APIMethod>
@@ -636,6 +658,7 @@ User provisioning allows you to run custom logic when a user signs in through an
 - Creating user-specific resources
 - Logging SSO sign-ins
 - Updating user information from the SSO provider
+- Updating user information from additional state data sent from client
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -644,13 +667,14 @@ import { sso } from "@better-auth/sso";
 const auth = betterAuth({
     plugins: [
         sso({
-            provisionUser: async ({ user, userInfo, token, provider }) => {
+            provisionUser: async ({ user, userInfo, token, provider, additionalData }) => {
                 // Update user profile with SSO data
                 await updateUserProfile(user.id, {
                     department: userInfo.attributes?.department,
                     jobTitle: userInfo.attributes?.jobTitle,
                     manager: userInfo.attributes?.manager,
                     lastSSOLogin: new Date(),
+                    referralCode: additionalData?.referralCode
                 });
 
                 // Create user-specific resources
@@ -680,6 +704,30 @@ The `provisionUser` function receives:
 - **userInfo**: User information from the SSO provider (includes attributes, email, name, etc.)
 - **token**: OAuth2 tokens (for OIDC providers) - may be undefined for SAML
 - **provider**: The SSO provider configuration
+- **additionalData**: The `additionalData` object passed by the client at sign-in time (see [Sign In with SSO](#sign-in-with-sso))
+
+### Accessing additionalData in Hooks
+
+You can also access `additionalData` and other SSO state from server-side hooks using `getSSOState`. This works for both OIDC and SAML flows:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso, getSSOState } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [sso()],
+    hooks: {
+        after: createAuthMiddleware(async (ctx) => {
+            const ssoState = await getSSOState();
+            if (ssoState?.additionalData?.referralCode) {
+                // handle referral
+            }
+        }),
+    },
+});
+```
+
+`getSSOState` is a request-scoped accessor — it returns `null` outside of an SSO callback request.
 
 ### Organization Provisioning
 
