@@ -101,7 +101,7 @@ adapter.findOne({
 });
 ```
 
-Each adapter uses the most efficient strategy for its database: `ILIKE` for PostgreSQL, `LOWER()` for MySQL/SQLite, native `mode: "insensitive"` for Prisma, and lowercase transforms for MongoDB and the memory adapter.
+Under the hood, each adapter picks the most efficient case-insensitive strategy its database supports.
 
 ***
 
