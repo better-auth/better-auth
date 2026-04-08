@@ -1,5 +1,4 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { Where } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
@@ -262,19 +261,21 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			const { session, valid, invalid } = await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
 			const isSignIn = !session.session;
-			const whereClause: Where[] = [{ field: "userId", value: user.id }];
-			// During sign-in, only consider verified TOTP secrets.
-			// Unverified rows (from abandoned enrollment) must be ignored
-			// so the sign-in flow falls through to OTP instead.
-			if (isSignIn) {
-				whereClause.push({ field: "verified", value: true });
-			}
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
-				where: whereClause,
+				where: [{ field: "userId", value: user.id }],
 			});
 
 			if (!twoFactor) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
+				);
+			}
+			// During sign-in, reject explicitly unverified rows (abandoned enrollments).
+			// Using === false instead of !twoFactor.verified so that pre-migration rows
+			// where the field is absent/null are treated as verified (legacy-safe).
+			if (isSignIn && twoFactor.verified === false) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
@@ -295,12 +296,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			// Enrollment mode: TOTP row exists but hasn't been verified yet.
 			// This covers both fresh TOTP setup (twoFactorEnabled=false) and
 			// adding TOTP to an OTP-only account (twoFactorEnabled=true).
-			if (!twoFactor.verified) {
-				await ctx.context.adapter.update({
-					model: twoFactorTable,
-					update: { verified: true },
-					where: [{ field: "id", value: twoFactor.id }],
-				});
+			if (twoFactor.verified === false) {
 				if (!user.twoFactorEnabled) {
 					if (!session.session) {
 						throw APIError.from(
@@ -328,6 +324,14 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						user: updatedUser,
 					});
 				}
+				// Mark verified only after all session operations succeed.
+				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
+				// a partial failure cannot leave verified=true with twoFactorEnabled=false.
+				await ctx.context.adapter.update({
+					model: twoFactorTable,
+					update: { verified: true },
+					where: [{ field: "id", value: twoFactor.id }],
+				});
 			}
 			return valid(ctx);
 		},
