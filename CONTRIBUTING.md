@@ -160,6 +160,23 @@ The code must follow our coding standards and include appropriate tests and
 documentation. You should also review and understand your changes well enough
 to discuss them with reviewers. PRs that do not meet these guidelines will be closed.
 
+### Branch Targeting
+
+Important changes are those that existing users need to be aware of. For
+example, breaking API changes, behavior changes, or schema migrations. These
+changes are released through beta first, giving users time to adapt.
+
+- **`main` is the stable track.** It ships bug fixes, security work, additive
+  improvements, and behavior changes that do not require user action. New
+  capabilities can land here too as long as they are well-tested, non-breaking,
+  and safe to adopt immediately.
+- **`next` is the beta track.** It ships new features, refactors, and breaking
+  changes, after a beta cycle that gives users a window to adapt.
+
+Release decisions happen in the pull request itself. Open your PR against
+`main`, include a changeset that declares its release intent, and the automated
+workflow routes the PR to the right branch.
+
 ### Submitting a PR
 
 1. Open a pull request against the **`main`** branch.
