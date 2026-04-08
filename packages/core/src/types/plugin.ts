@@ -19,20 +19,7 @@ type DeepPartial<T> = T extends Function
 		: T;
 
 export type HookEndpointContext = Partial<
-	EndpointContext<
-		string,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		AuthContext & {
-			returned?: unknown | undefined;
-			responseHeaders?: Headers | undefined;
-		}
-	> &
-		Omit<InputContext<string, any, any, any, any, any>, "method">
+	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
 > & {
 	path?: string;
 	context: AuthContext & {
@@ -51,6 +38,7 @@ export type BetterAuthPluginErrorCodePart = {
 
 export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	id: LiteralString;
+	version?: string | undefined;
 	/**
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.

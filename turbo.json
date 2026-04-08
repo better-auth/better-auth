@@ -1,11 +1,12 @@
 {
   "$schema": "./node_modules/turbo/schema.json",
-  "globalDependencies": [
-    "package.json",
-    "tsconfig.json",
-    "pnpm-lock.yaml",
-    "pnpm-workspace.yaml"
-  ],
+  "futureFlags": {
+    "globalConfiguration": true,
+    "affectedUsingTaskInputs": true
+  },
+  "global": {
+    "inputs": ["tsconfig.json", "tsconfig.base.json", "pnpm-workspace.yaml"]
+  },
   "tasks": {
     "dev": {
       "cache": false,
@@ -13,8 +14,8 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "inputs": ["$TURBO_DEFAULT$", "tsconfig.json", "tsdown.config.*"],
+      "outputs": ["dist/**", "node_modules/.cache/ts/**"]
     },
     "docs#build": {
       "dependsOn": ["^build"],
@@ -28,17 +29,28 @@
         "UPSTASH_REDIS_REST_TOKEN"
       ]
     },
-    "clean": {},
-    "format": {
-      "dependsOn": ["//#format"]
+    "clean": {
+      "cache": false
     },
-    "//#format": {},
-    "lint": {},
+    "format": {
+      "dependsOn": ["//#format"],
+      "cache": false
+    },
+    "//#format": {
+      "cache": false
+    },
+    "lint": {
+      "outputs": []
+    },
     "lint:types": {
-      "dependsOn": ["^build", "build"]
+      "dependsOn": ["^build", "build"],
+      "inputs": ["dist/**", "package.json"],
+      "outputs": []
     },
     "lint:package": {
-      "dependsOn": ["^build", "build"]
+      "dependsOn": ["^build", "build"],
+      "inputs": ["dist/**", "package.json"],
+      "outputs": []
     },
     "test": {
       "dependsOn": ["^build", "build"],
@@ -83,7 +95,7 @@
         "package.json"
       ],
       "outputs": ["test-results/**", "playwright-report/**"],
-      "cache": true
+      "cache": false
     },
     "e2e:integration": {
       "dependsOn": ["^build"],
@@ -105,7 +117,7 @@
         "test-results/**",
         "playwright-report/**"
       ],
-      "cache": true
+      "cache": false
     },
     "deploy": {
       "cache": false

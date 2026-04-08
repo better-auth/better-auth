@@ -1,4 +1,5 @@
 import type { Awaitable, BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../version";
 
 export interface LastLoginMethodClientConfig {
 	storage: {
@@ -47,6 +48,7 @@ export const lastLoginMethodClient = (config: LastLoginMethodClientConfig) => {
 
 	return {
 		id: "last-login-method-expo",
+		version: PACKAGE_VERSION,
 		fetchPlugins: [
 			{
 				id: "last-login-method-expo",

@@ -1982,9 +1982,15 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).not.toContain("error=unsolicited_response");
 	});
 
-	it("should skip InResponseTo validation when not explicitly enabled (backward compatibility)", async () => {
+	it("should skip InResponseTo validation when explicitly disabled", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [
+				sso({
+					saml: {
+						enableInResponseToValidation: false,
+					},
+				}),
+			],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2039,6 +2045,76 @@ describe("SAML SSO", async () => {
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).not.toContain("error=");
+	});
+
+	it("should enable InResponseTo validation by default", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			// No saml config — default behavior
+			plugins: [
+				sso({
+					saml: {
+						allowIdpInitiated: false,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl:
+						"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+					audience: "http://localhost:3000",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+					},
+				},
+			},
+			headers,
+		});
+
+		// Unsolicited response (no prior AuthnRequest) should be rejected
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=unsolicited_response");
 	});
 
 	it("should use verification table for InResponseTo validation", async () => {
@@ -5293,5 +5369,234 @@ describe("SAML Single Logout (SLO)", () => {
 			const location = sloRes.headers.get("location");
 			expect(location).toBe("http://localhost:3000");
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8630
+ */
+describe("SAML provisionUser should only be called for new users", async () => {
+	const provisionUserFn = vi.fn();
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			sso({
+				provisionUser: provisionUserFn,
+			}),
+		],
+	});
+
+	it("should call provisionUser only on first sign-in (new user), not on subsequent sign-ins", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provision-test",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		provisionUserFn.mockClear();
+
+		// First sign-in: new user -> provisionUser should be called
+		const response1 = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provision-test",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		let samlResponse: any;
+		await betterFetch(response1.response?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const samlRedirectUrl1 = new URL(response1.response?.url);
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: samlRedirectUrl1.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: response1.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provision-test",
+			},
+			asResponse: true,
+		});
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+
+		provisionUserFn.mockClear();
+
+		// Second sign-in: existing user -> provisionUser should NOT be called
+		const response2 = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provision-test",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		let samlResponse2: any;
+		await betterFetch(response2.response?.url, {
+			onSuccess: async (context) => {
+				samlResponse2 = await context.data;
+			},
+		});
+
+		const samlRedirectUrl2 = new URL(response2.response?.url);
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse2.samlResponse,
+				RelayState: samlRedirectUrl2.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: response2.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provision-test",
+			},
+			asResponse: true,
+		});
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8630
+ */
+describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign-in", async () => {
+	const provisionUserFn = vi.fn();
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			sso({
+				provisionUser: provisionUserFn,
+				provisionUserOnEveryLogin: true,
+			}),
+		],
+	});
+
+	it("should call provisionUser on both first and subsequent sign-ins", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provision-every-login",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		provisionUserFn.mockClear();
+
+		// First sign-in: new user -> provisionUser should be called
+		const response1 = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provision-every-login",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		let samlResponse: any;
+		await betterFetch(response1.response?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const samlRedirectUrl1 = new URL(response1.response?.url);
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: samlRedirectUrl1.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: response1.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provision-every-login",
+			},
+			asResponse: true,
+		});
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+
+		provisionUserFn.mockClear();
+
+		// Second sign-in: existing user -> provisionUser should still be called
+		const response2 = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provision-every-login",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		let samlResponse2: any;
+		await betterFetch(response2.response?.url, {
+			onSuccess: async (context) => {
+				samlResponse2 = await context.data;
+			},
+		});
+
+		const samlRedirectUrl2 = new URL(response2.response?.url);
+		await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse2.samlResponse,
+				RelayState: samlRedirectUrl2.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: response2.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provision-every-login",
+			},
+			asResponse: true,
+		});
+
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
 	});
 });

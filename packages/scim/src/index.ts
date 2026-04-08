@@ -18,6 +18,7 @@ import {
 	updateSCIMUser,
 } from "./routes";
 import type { SCIMOptions } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -30,19 +31,20 @@ declare module "@better-auth/core" {
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
-		providerOwnership: { enabled: false },
 		...options,
 	} satisfies SCIMOptions;
+	const providerOwnershipEnabled = options?.providerOwnership?.enabled ?? false;
 
 	const authMiddleware = authMiddlewareFactory(opts);
 
 	return {
 		id: "scim",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
-			listSCIMProviderConnections: listSCIMProviderConnections(),
-			getSCIMProviderConnection: getSCIMProviderConnection(),
-			deleteSCIMProviderConnection: deleteSCIMProviderConnection(),
+			listSCIMProviderConnections: listSCIMProviderConnections(opts),
+			getSCIMProviderConnection: getSCIMProviderConnection(opts),
+			deleteSCIMProviderConnection: deleteSCIMProviderConnection(opts),
 			getSCIMUser: getSCIMUser(authMiddleware),
 			createSCIMUser: createSCIMUser(authMiddleware),
 			patchSCIMUser: patchSCIMUser(authMiddleware),
@@ -72,7 +74,7 @@ export const scim = (options?: SCIMOptions) => {
 						type: "string",
 						required: false,
 					},
-					...(opts.providerOwnership?.enabled
+					...(providerOwnershipEnabled
 						? {
 								userId: {
 									type: "string",

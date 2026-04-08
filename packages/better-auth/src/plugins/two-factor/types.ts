@@ -35,6 +35,13 @@ export interface TwoFactorOptions {
 	 */
 	skipVerificationOnEnable?: boolean | undefined;
 	/**
+	 * Allow enabling and managing 2FA without a password when the user does not
+	 * have a credential account (e.g. passkey-only users).
+	 * When enabled, password is still required if a credential account exists.
+	 * @default false
+	 */
+	allowPasswordless?: boolean | undefined;
+	/**
 	 * Custom schema for the two factor plugin
 	 */
 	schema?: InferOptionSchema<typeof schema> | undefined;
@@ -65,6 +72,7 @@ export interface UserWithTwoFactor extends User {
 
 export interface TwoFactorProvider {
 	id: LiteralString;
+	version?: string | undefined;
 	endpoints?: BetterAuthPlugin["endpoints"] | undefined;
 }
 
