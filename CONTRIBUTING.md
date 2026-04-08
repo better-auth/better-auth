@@ -133,9 +133,7 @@ reproduction.
 
 ### Feature Requests
 
-Use the [feature request template](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml).
-Provide a description of your suggested enhancement, the problem it solves,
-and how it would benefit the project.
+New features start with discussion. Open a [feature request](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml) describing the problem, your proposed solution, and how it would benefit the project. This gives us room to align on scope and API shape before anyone writes code.
 
 ### Security Reports
 
@@ -152,6 +150,8 @@ See [SECURITY.md](/SECURITY.md) for details.
 
 A pre-commit hook automatically checks and fixes staged files when you commit
 using [Biome](https://biomejs.dev/).
+
+Run `pnpm typecheck` and make sure it passes before opening your PR.
 
 ### AI Policy
 
@@ -195,14 +195,17 @@ for you.
 2. PR titles must follow the [Conventional Commits](https://www.conventionalcommits.org/)
    format, with an optional scope for the affected package or feature:
 
-   - `feat(scope): description` or
-   - `fix(scope): description` or
-   - `perf: description` or
-   - `docs: description` or
-   - `chore: description` etc.
+   ```
+   `feat(scope): description` or
+   `fix(scope): description` or
+   `perf: description` or
+   `docs: description` or
+   `chore: description` etc.
+   ```
 
-   Use `docs` for documentation-only changes.
-   Append `!` for breaking changes (e.g. `feat(scope)!: description`).
+   - The subject must start with a lowercase letter.
+   - Use `docs` when changes are confined to `docs/`.
+   - Append `!` for breaking changes (e.g. `feat(scope)!: description`). These go through `next`, not `main`.
 
 3. In your PR description:
    - Clearly describe what you changed and why
