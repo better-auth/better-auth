@@ -1039,6 +1039,85 @@ describe("getConfig", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8933
+	 */
+	it("should resolve extended tsconfig paths relative to the extended file's directory", async () => {
+		// Simulates SvelteKit structure: root tsconfig.json extends
+		// .svelte-kit/tsconfig.json whose paths use "../src/lib" (relative
+		// to the .svelte-kit directory, not the project root).
+		//
+		// With the bug, `$lib` is resolved relative to the root tsconfig's
+		// directory (projectRoot), producing `<parent>/src/lib`. To catch the
+		// regression reliably, place a poisoned module at that wrong path
+		// that throws on import — the test only passes if the CORRECT path
+		// (`projectRoot/src/lib`) is used.
+		const projectRoot = path.join(tmpDir, "app");
+		const authPath = path.join(projectRoot, "src");
+		const correctLibServer = path.join(projectRoot, "src", "lib", "server");
+		const wrongLibServer = path.join(tmpDir, "src", "lib", "server");
+		const svelteKitDir = path.join(projectRoot, ".svelte-kit");
+		await fs.mkdir(authPath, { recursive: true });
+		await fs.mkdir(correctLibServer, { recursive: true });
+		await fs.mkdir(wrongLibServer, { recursive: true });
+		await fs.mkdir(svelteKitDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(svelteKitDir, "tsconfig.json"),
+			`{
+				"compilerOptions": {
+					"paths": {
+						"$lib": ["../src/lib"],
+						"$lib/*": ["../src/lib/*"]
+					}
+				}
+			}`,
+		);
+
+		await fs.writeFile(
+			path.join(projectRoot, "tsconfig.json"),
+			`{
+				"extends": "./.svelte-kit/tsconfig.json"
+			}`,
+		);
+
+		await fs.writeFile(
+			path.join(correctLibServer, "database.ts"),
+			`export const db = "correct-db";`,
+		);
+
+		// Poisoned module at the wrong location: throws on import.
+		await fs.writeFile(
+			path.join(wrongLibServer, "database.ts"),
+			`throw new Error("wrong path resolved: $lib should not point here");`,
+		);
+
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+			 import { db } from "$lib/server/database";
+
+			 export const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					},
+					appName: db,
+			 })`,
+		);
+
+		const config = await getConfig({
+			cwd: projectRoot,
+			configPath: "src/auth.ts",
+			shouldThrowOnError: true,
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+			appName: "correct-db",
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/6373
 	 */
 	it("should let child paths override parent paths from extends", async () => {

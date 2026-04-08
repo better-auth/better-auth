@@ -54,13 +54,39 @@ function mergeAliases(
 	}
 }
 
+/**
+ * When `paths` are declared without `baseUrl`, `get-tsconfig` records the
+ * directory of the tsconfig that actually declared them under an internal
+ * symbol named `implicitBaseUrl`. For configs extending another file (e.g.
+ * a SvelteKit root tsconfig extending `.svelte-kit/tsconfig.json`), this is
+ * essential: the paths are relative to the extended file, not the extending
+ * one. The symbol is not exported, so look it up by description.
+ */
+function getImplicitBaseUrl(
+	compilerOptions: Record<string | symbol, unknown> | undefined,
+): string | undefined {
+	if (!compilerOptions) return undefined;
+	for (const sym of Object.getOwnPropertySymbols(compilerOptions)) {
+		if (sym.description === "implicitBaseUrl") {
+			const value = compilerOptions[sym];
+			if (typeof value === "string") return value;
+		}
+	}
+	return undefined;
+}
+
 function extractAliases(tsconfig: TsConfigResult): Record<string, string> {
 	const { paths = {}, baseUrl } = tsconfig.config.compilerOptions ?? {};
 	const result: Record<string, string> = {};
 	const configDir = path.dirname(tsconfig.path);
+	const implicitBaseUrl = getImplicitBaseUrl(
+		tsconfig.config.compilerOptions as
+			| Record<string | symbol, unknown>
+			| undefined,
+	);
 	const resolvedBaseUrl = baseUrl
 		? path.resolve(configDir, baseUrl)
-		: configDir;
+		: (implicitBaseUrl ?? configDir);
 
 	for (const [alias, aliasPaths = []] of Object.entries(paths)) {
 		for (const aliasedPath of aliasPaths) {
