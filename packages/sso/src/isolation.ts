@@ -19,11 +19,7 @@ export const checkSSOIsolation = (
 		return;
 	}
 	const ssoOrgId = session.ssoOrganizationId || session.sso_organization_id;
-	if (
-		ssoOrgId &&
-		organizationId &&
-		String(ssoOrgId) !== String(organizationId)
-	) {
+	if (ssoOrgId && ssoOrgId !== organizationId) {
 		throw new APIError("FORBIDDEN", {
 			message: "You cannot access this organization with this session.",
 		});
