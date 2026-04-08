@@ -72,6 +72,17 @@ const adapters: CommunityAdapter[] = [
 		},
 	},
 	{
+		name: "@delmaredigital/payload-better-auth",
+		url: "https://github.com/delmaredigital/payload-better-auth",
+		database: "Payload CMS",
+		databaseUrl: "https://payloadcms.com/",
+		author: {
+			name: "Delmare Digital",
+			url: "https://github.com/delmaredigital",
+			avatar: "https://github.com/delmaredigital.png",
+		},
+	},
+	{
 		name: "better-auth-instantdb",
 		url: "https://github.com/daveyplate/better-auth-instantdb",
 		database: "InstantDB",
