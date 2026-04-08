@@ -29,15 +29,17 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 		(account) => account.providerId === "credential",
 	);
 	const currentPassword = credentialAccount?.password;
-	if (!credentialAccount || !currentPassword || !c.body.password) {
-		throw APIError.from(
-			"BAD_REQUEST",
-			BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
-		);
+	const password = c.body.password;
+	if (!credentialAccount || !currentPassword || !password) {
+		// Same error as a failed verify to avoid credential / account enumeration.
+		if (password) {
+			await c.context.password.hash(password);
+		}
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 	}
 	const compare = await c.context.password.verify({
 		hash: currentPassword,
-		password: c.body.password,
+		password,
 	});
 	if (!compare) {
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
