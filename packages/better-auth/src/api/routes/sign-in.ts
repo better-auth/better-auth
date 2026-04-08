@@ -555,7 +555,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request,
+							ctx.request?.clone(),
 						),
 					);
 				}

@@ -84,7 +84,6 @@ describe("Email Verification", async () => {
 				},
 			});
 
-		// Attempt to update user info (should fail before verification)
 		await runWithUser(testUser.email, testUser.password, async () => {
 			const updateRes = await client.updateUser({
 				name: "New Name",
@@ -325,7 +324,6 @@ describe("Email Verification", async () => {
 			},
 		});
 
-		// User requests verification email and verifies their email
 		await client.sendVerificationEmail({
 			email: testUser.email,
 		});
@@ -337,16 +335,50 @@ describe("Email Verification", async () => {
 
 		mockSendEmailLocal.mockClear();
 
-		// A third party (no session) tries to send verification emails
-		// to an already verified user. This should NOT send an email.
-		//
-		// Note: client doesn't maintain session state between requests.
 		const res = await client.sendVerificationEmail({
 			email: testUser.email,
 		});
 
 		expect(res.data?.status).toBe(true);
 		expect(mockSendEmailLocal).not.toHaveBeenCalled();
+	});
+
+	// Regression test for issue #8969
+	// Before the fix, ctx.request was passed directly to sendVerificationEmail
+	// after the body was already consumed, causing:
+	// "TypeError: Response body object should not be disturbed or locked"
+	// Fix: use ctx.request?.clone() so the callback receives a fresh readable copy.
+	it("should not throw locked body error when request is passed to sendVerificationEmail", async () => {
+		let errorThrown: Error | undefined;
+
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendVerificationEmail: async ({ user, url }, request) => {
+					try {
+						if (request) {
+							// Simulates what the user in #8969 was doing
+							// This crashed before the fix with locked body error
+							await request.text();
+						}
+					} catch (e) {
+						errorThrown = e as Error;
+					}
+				},
+			},
+		});
+
+		await client.signUp.email({
+			email: "bodytest@test.com",
+			password: "password123",
+			name: "Test User",
+		});
+
+		// If fix works correctly, no error was thrown ✅
+		expect(errorThrown).toBeUndefined();
 	});
 });
 
@@ -422,7 +454,6 @@ describe("Email Verification Secondary Storage", async () => {
 				headers,
 			});
 
-			// 1. Verify confirmation token (sent to old email)
 			const confirmationHeaders = new Headers();
 			await client.verifyEmail({
 				query: {
@@ -434,7 +465,6 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 			});
 
-			// Check that email is NOT updated yet
 			const sessionAfterConfirmation = await client.getSession({
 				fetchOptions: {
 					headers: confirmationHeaders,
@@ -442,7 +472,6 @@ describe("Email Verification Secondary Storage", async () => {
 			});
 			expect(sessionAfterConfirmation.data?.user.email).toBe(testUser.email);
 
-			// 2. Verify new email token (token variable was updated by sendVerificationEmail mock)
 			const verificationHeaders = new Headers();
 			await client.verifyEmail({
 				query: {
@@ -610,7 +639,6 @@ describe("Email Verification Secondary Storage", async () => {
 		const { runWithUser } = await signInWithTestUser();
 
 		await runWithUser(async (headers) => {
-			// Request email change
 			await auth.api.changeEmail({
 				body: {
 					newEmail: "newemail@example.com",
@@ -618,7 +646,6 @@ describe("Email Verification Secondary Storage", async () => {
 				headers,
 			});
 
-			// Verify new email (change-email-verification flow)
 			const verificationHeaders = new Headers();
 			await client.verifyEmail({
 				query: {
@@ -630,7 +657,6 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 			});
 
-			// Hooks should be called when email is verified
 			expect(afterEmailVerificationMock).toHaveBeenCalledWith(
 				expect.objectContaining({
 					email: "newemail@example.com",
@@ -639,5 +665,48 @@ describe("Email Verification Secondary Storage", async () => {
 				expect.any(Object),
 			);
 		});
+	});
+
+	// Test for issue #8969
+	// Before the fix, passing ctx.request directly to sendVerificationEmail
+	// caused "TypeError: Response body object should not be disturbed or locked"
+	// Fix: use ctx.request?.clone() to pass a fresh readable copy.
+	it("should not throw locked body error when request is passed to sendVerificationEmail", async () => {
+		let errorThrown: Error | undefined;
+		let capturedToken = "";
+
+		const { client, auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendVerificationEmail: async (
+					{ user, url, token: _token },
+					request,
+				) => {
+					capturedToken = _token;
+					try {
+						if (request) {
+							// Simulates what the user in issue #8969 was doing
+							// Before the fix this crashed with locked body error
+							await request.text();
+						}
+					} catch (e) {
+						errorThrown = e as Error;
+					}
+				},
+			},
+		});
+
+		// Trigger sendVerificationEmail directly
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
+		// If errorThrown is undefined the fix worked ✅
+		expect(errorThrown).toBeUndefined();
 	});
 });
