@@ -131,6 +131,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 
 			roleName = normalizeRoleName(roleName);
 
@@ -334,6 +335,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
@@ -563,6 +565,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
@@ -702,6 +705,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",

@@ -93,4 +93,5 @@ export const updateSSOProviderBodySchema = z.object({
 	domain: z.string().optional(),
 	oidcConfig: oidcConfigSchema.optional(),
 	samlConfig: samlConfigSchema.optional(),
+	organizationId: z.string().optional(),
 });

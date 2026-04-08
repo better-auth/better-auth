@@ -12,6 +12,7 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { teamSchema } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { checkSSOIsolation } from "../utils";
 
 const teamBaseSchema = z.object({
 	name: z.string().meta({
@@ -108,6 +109,8 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+
+			checkSSOIsolation(ctx, organizationId);
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 			if (session) {
 				const member = await adapter.findMemberByOrgId({
@@ -271,6 +274,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			if (!session && (ctx.request || ctx.headers)) {
 				throw APIError.fromStatus("UNAUTHORIZED");
 			}
+			checkSSOIsolation(ctx, organizationId);
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			if (session) {
 				const member = await adapter.findMemberByOrgId({
@@ -451,6 +455,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -642,6 +647,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -743,6 +749,8 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			checkSSOIsolation(ctx, team.organizationId);
+
 			const member = await adapter.findTeamMember({
 				teamId,
 				userId: session.user.id,
@@ -808,6 +816,13 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 			const teams = await adapter.listTeamsByUser({
 				userId: session.user.id,
 			});
+
+			const ssoOrgId =
+				(session.session as any).ssoOrganizationId ||
+				(session.session as any).sso_organization_id;
+			if (ssoOrgId) {
+				return ctx.json(teams.filter((t) => t.organizationId === ssoOrgId));
+			}
 
 			return ctx.json(teams);
 		},
@@ -885,6 +900,14 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
 				);
 			}
+			const team = await adapter.findTeamById({ teamId });
+			if (!team) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				);
+			}
+			checkSSOIsolation(ctx, team.organizationId);
 			const member = await adapter.findTeamMember({
 				userId: session.user.id,
 				teamId,

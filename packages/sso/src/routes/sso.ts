@@ -24,6 +24,7 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod";
+import { checkSSOIsolation } from "../isolation";
 import { getVerificationIdentifier } from "./domain-verification";
 
 interface AuthnRequestRecord {
@@ -743,6 +744,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (ctx.body.organizationId) {
+				checkSSOIsolation(ctx, ctx.body.organizationId);
 				const organization = await ctx.context.adapter.findOne({
 					model: "member",
 					where: [
@@ -1109,6 +1111,7 @@ export const signInSSO = (options?: SSOOptions) => {
 		},
 		async (ctx) => {
 			const body = ctx.body;
+
 			let { email, organizationSlug, providerId, domain } = body;
 			if (
 				!options?.defaultSSO?.length &&
@@ -1789,8 +1792,17 @@ async function handleOIDCCallback(
 		provisioningOptions: options?.organizationProvisioning,
 	});
 
+	const sessionWithProvider = await ctx.context.adapter.update({
+		model: "session",
+		where: [{ field: "id", value: session.id }],
+		update: {
+			ssoProviderId: provider.providerId,
+			ssoOrganizationId: provider.organizationId,
+		},
+	});
+
 	await setSessionCookie(ctx, {
-		session,
+		session: (sessionWithProvider as typeof session) || session,
 		user,
 	});
 	let toRedirectTo: string;
@@ -2439,7 +2451,19 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				provisioningOptions: options?.organizationProvisioning,
 			});
 
-			await setSessionCookie(ctx, { session, user });
+			const sessionWithProvider = await ctx.context.adapter.update({
+				model: "session",
+				where: [{ field: "id", value: session.id }],
+				update: {
+					ssoProviderId: provider.providerId,
+					ssoOrganizationId: provider.organizationId,
+				},
+			});
+
+			await setSessionCookie(ctx, {
+				session: (sessionWithProvider as typeof session) || session,
+				user,
+			});
 
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
 				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${provider.providerId}:${extract.nameID}`;

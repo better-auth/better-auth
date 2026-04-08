@@ -17,6 +17,7 @@ import type {
 	Member,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { checkSSOIsolation } from "../utils";
 
 const baseMemberSchema = z.object({
 	userId: z.coerce.string().meta({
@@ -90,6 +91,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, orgId);
 
 			const teamId =
 				"teamId" in ctx.body ? (ctx.body.teamId as string) : undefined;
@@ -289,6 +291,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -523,6 +526,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const roleToSet: string[] = Array.isArray(ctx.body.role)
@@ -761,6 +765,7 @@ export const getActiveMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
+			checkSSOIsolation(ctx, organizationId);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organizationId,
@@ -794,6 +799,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
+			checkSSOIsolation(ctx, ctx.body.organizationId);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: ctx.body.organizationId,
@@ -936,6 +942,7 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 
 			const isMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -1028,6 +1035,7 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 			const isMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId,

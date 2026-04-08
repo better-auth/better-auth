@@ -6,6 +6,7 @@ import {
 } from "better-auth/api";
 import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
+import { checkSSOIsolation } from "../isolation";
 import { validateConfigAlgorithms } from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
@@ -235,6 +236,7 @@ export const listSSOProviders = () => {
 
 const getSSOProviderQuerySchema = z.object({
 	providerId: z.string(),
+	organizationId: z.string().optional(),
 });
 
 async function checkProviderAccess(
@@ -268,6 +270,8 @@ async function checkProviderAccess(
 	} else {
 		hasAccess = provider.userId === userId;
 	}
+
+	checkSSOIsolation(ctx, provider.organizationId);
 
 	if (!hasAccess) {
 		throw new APIError("FORBIDDEN", {
@@ -306,7 +310,6 @@ export const getSSOProvider = () => {
 		},
 		async (ctx) => {
 			const { providerId } = ctx.query;
-
 			const provider = await checkProviderAccess(ctx, providerId);
 
 			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
@@ -497,6 +500,10 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				);
 
 				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
+			}
+
+			if (ctx.body.organizationId) {
+				checkSSOIsolation(ctx, ctx.body.organizationId);
 			}
 
 			await ctx.context.adapter.update({
