@@ -429,6 +429,38 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
     - `discouraged`: No verification required (fastest experience)
     - Default: `preferred`
 
+**getAuthenticatorName**: Optional callback to control the label saved in the `passkey.name` database field after registration verification.
+
+Known AAGUID identifiers are sourced from:
+
+- https://github.com/passkeydeveloper/passkey-authenticator-aaguids
+
+- Called with: `aaguid` (always present during registration verification).
+- Return a string to set the stored label, or `undefined` to use Better Auth's default best-effort AAGUID provider suggestion.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+    plugins: [
+        passkey({
+            getAuthenticatorName: ({ aaguid }) => {
+                if (aaguid === "b78a0a55-6ef8-d246-a042-ba0f6d55050c") {
+                    return "LastPass";
+                }
+
+                if (aaguid === "11111111-1111-1111-1111-111111111111") {
+                    return "My custom provider";
+                }
+
+                return undefined;
+            },
+        }),
+    ],
+});
+```
+
 **advanced**: Advanced options
 
 - `webAuthnChallengeCookie`: Cookie name for storing WebAuthn challenge ID during authentication flow (Default: `better-auth-passkey`)

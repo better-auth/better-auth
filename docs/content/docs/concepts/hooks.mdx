@@ -152,7 +152,7 @@ const hook = createAuthMiddleware(async (ctx) => {
     });
 
     const cookie = ctx.getCookie("my-cookie");
-    const signedCookie = await ctx.getSignedCookie("my-signed-cookie");
+    const signedCookie = await ctx.getSignedCookie("my-signed-cookie", ctx.context.secret);
 });
 ```
 
