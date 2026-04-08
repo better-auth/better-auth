@@ -291,8 +291,8 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "better-auth-invite-plugin",
-		url: "https://github.com/0-Sandy/better-auth-invite-plugin",
+		name: "better-invite",
+		url: "https://github.com/better-invite/better-invite",
 		description:
 			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
 		author: {
