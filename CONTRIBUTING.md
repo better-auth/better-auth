@@ -55,18 +55,6 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
    pnpm build
    ```
 
-## Documentation
-
-The documentation site lives in `docs/` and content is organized under `docs/content/docs/` by topic.
-
-To run the docs locally:
-
-```bash
-pnpm -F docs dev
-```
-
-When making changes to public APIs, please update the relevant documentation.
-
 ## Testing
 
 Bug fixes and new features must include tests.
@@ -124,6 +112,18 @@ it("should handle the previously broken behavior", async () => {
 });
 ```
 
+## Documentation
+
+The documentation site lives in `docs/` and content is organized under `docs/content/docs/` by topic.
+
+To run the docs locally:
+
+```bash
+pnpm -F docs dev
+```
+
+When making changes to public APIs, please update the relevant documentation.
+
 ## Issue Guidelines
 
 Before opening an issue, search existing issues to avoid duplicates.
@@ -157,12 +157,17 @@ using [Biome](https://biomejs.dev/).
 
 Run `pnpm typecheck` and make sure it passes before opening your PR.
 
-### AI Policy
+### Branch Targeting
 
-We welcome AI-assisted contributions as long as they solve a real problem.
-The code must follow our coding standards and include appropriate tests and
-documentation. You should also review and understand your changes well enough
-to discuss them with reviewers. PRs that do not meet these guidelines will be closed.
+- **`main` is the stable track.** It ships bug fixes, security work, additive
+  improvements, and behavior changes that do not require user action. New
+  capabilities can land here too as long as they are well-tested, non-breaking,
+  and safe to adopt immediately.
+- **`next` is the beta track.** It ships new features, refactors, and breaking
+  changes, after a beta cycle that gives users a window to adapt.
+
+Automation moves PRs with `minor` or `major` changesets from `main` to `next`
+for you.
 
 ### Changesets
 
@@ -179,18 +184,6 @@ Pick the bump type based on user impact:
 
 If you're not sure whether your change needs one, a maintainer will handle
 it before merge.
-
-### Branch Targeting
-
-- **`main` is the stable track.** It ships bug fixes, security work, additive
-  improvements, and behavior changes that do not require user action. New
-  capabilities can land here too as long as they are well-tested, non-breaking,
-  and safe to adopt immediately.
-- **`next` is the beta track.** It ships new features, refactors, and breaking
-  changes, after a beta cycle that gives users a window to adapt.
-
-Automation moves PRs with `minor` or `major` changesets from `main` to `next`
-for you.
 
 ### Submitting a PR
 
@@ -216,3 +209,11 @@ for you.
    - Reference related issues (e.g. "Closes #1234")
    - List any potential breaking changes
    - Add screenshots for UI changes
+
+## AI Policy
+
+We welcome AI-assisted contributions, whether code or issue reports, as long
+as they solve a real problem. Code must follow our coding standards and
+include appropriate tests and documentation. You should also review and
+understand what you're submitting well enough to discuss it. PRs and issues
+that do not meet these guidelines will be closed.
