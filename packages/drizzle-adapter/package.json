@@ -55,7 +55,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
