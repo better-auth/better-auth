@@ -160,11 +160,23 @@ The code must follow our coding standards and include appropriate tests and
 documentation. You should also review and understand your changes well enough
 to discuss them with reviewers. PRs that do not meet these guidelines will be closed.
 
-### Branch Targeting
+### Changesets
 
-Important changes are those that existing users need to be aware of. For
-example, breaking API changes, behavior changes, or schema migrations. These
-changes are released through beta first, giving users time to adapt.
+PRs that touch `packages/**` need a changeset before they can be merged. Run
+`pnpm changeset` when you're ready to submit, or update it during review if
+your changes evolve. The CLI walks you through picking the affected packages,
+a bump type, and a short user-facing description for the changelog. Commit
+the generated file with your PR.
+
+Pick the bump type based on user impact:
+
+- **`patch`** for bug fixes and additive changes existing users don't need to know about.
+- **`minor`** or **`major`** for anything existing users need to be aware of (see [Branch Targeting](#branch-targeting) below).
+
+If you're not sure whether your change needs one, a maintainer will handle
+it before merge.
+
+### Branch Targeting
 
 - **`main` is the stable track.** It ships bug fixes, security work, additive
   improvements, and behavior changes that do not require user action. New
@@ -173,9 +185,8 @@ changes are released through beta first, giving users time to adapt.
 - **`next` is the beta track.** It ships new features, refactors, and breaking
   changes, after a beta cycle that gives users a window to adapt.
 
-Release decisions happen in the pull request itself. Open your PR against
-`main`, include a changeset that declares its release intent, and the automated
-workflow routes the PR to the right branch.
+Automation moves PRs with `minor` or `major` changesets from `main` to `next`
+for you.
 
 ### Submitting a PR
 
