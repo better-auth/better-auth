@@ -1,5 +1,24 @@
 # better-auth
 
+## 1.6.1
+
+### Patch Changes
+
+- [#9023](https://github.com/better-auth/better-auth/pull/9023) [`2e537df`](https://github.com/better-auth/better-auth/commit/2e537df5f7f2a4263f52cce74d7a64a0a947792b) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Update endpoint instrumentation to always use endpoint routes
+
+- [#8902](https://github.com/better-auth/better-auth/pull/8902) [`f61ad1c`](https://github.com/better-auth/better-auth/commit/f61ad1cab7360e4460e6450904e97498298a79d5) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - use `INVALID_PASSWORD` for all `checkPassword` failures
+
+- [#9017](https://github.com/better-auth/better-auth/pull/9017) [`7495830`](https://github.com/better-auth/better-auth/commit/749583065958e8a310badaa5ea3acc8382dc0ca2) Thanks [@bytaesu](https://github.com/bytaesu)! - restore getSession accessibility in generic Auth<O> context
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.1
+  - @better-auth/drizzle-adapter@1.6.1
+  - @better-auth/kysely-adapter@1.6.1
+  - @better-auth/memory-adapter@1.6.1
+  - @better-auth/mongo-adapter@1.6.1
+  - @better-auth/prisma-adapter@1.6.1
+  - @better-auth/telemetry@1.6.1
+
 ## 1.6.0
 
 ### Minor Changes

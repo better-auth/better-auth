@@ -1,5 +1,12 @@
 # @better-auth/telemetry
 
+## 1.6.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.1
+
 ## 1.6.0
 
 ### Patch Changes
