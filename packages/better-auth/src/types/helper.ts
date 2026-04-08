@@ -43,6 +43,22 @@ export type HasRequiredKeys<BaseType> =
 export type StripEmptyObjects<T extends object> = { [K in keyof T]: T[K] };
 
 /**
+ * Object merge replacing `Base`'s keys with `Override`'s.
+ * The naive `Omit<Base, keyof Override> & Override` form breaks under generics.
+ *
+ * @see https://github.com/microsoft/TypeScript/issues/57466#issuecomment-1957988380
+ */
+export type OverrideMerge<Base, Override> = Base extends unknown
+	? Override extends unknown
+		? Prettify<
+				{
+					[K in keyof Base as K extends keyof Override ? never : K]: Base[K];
+				} & Override
+			>
+		: never
+	: never;
+
+/**
  * Extracts a Record-typed field from a plugin, guarding against `any`.
  */
 export type ExtractPluginField<T, Field extends string> =

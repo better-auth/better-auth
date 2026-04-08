@@ -168,6 +168,35 @@ describe("general types", async () => {
 		void probe;
 	});
 
+	/**
+	 * A plugin overriding a base endpoint must expose the plugin's type,
+	 * not an intersection that leaks base metadata like `options.body`.
+	 */
+	it("plugin override of base endpoint key should drive auth.api type", async () => {
+		const overridePlugin = {
+			id: "override-base" as const,
+			endpoints: {
+				signInEmail: createAuthEndpoint(
+					"/sign-in/email",
+					{
+						method: "POST",
+					},
+					async (ctx) => {
+						return ctx.json({ overriddenMarker: true as const });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth } = await getTestInstance({ plugins: [overridePlugin] });
+		type ApiSignInEmail = (typeof auth.api)["signInEmail"];
+		type Ret = Awaited<ReturnType<ApiSignInEmail>>;
+		expectTypeOf<Ret>().toEqualTypeOf<{ overriddenMarker: true }>();
+		type Body = ApiSignInEmail extends { options: { body: infer B } }
+			? B
+			: "no-body";
+		expectTypeOf<Body>().toEqualTypeOf<"no-body">();
+	});
+
 	it("should infer additional fields from plugins", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [twoFactor(), organization()],

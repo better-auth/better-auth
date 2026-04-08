@@ -16,7 +16,7 @@ import {
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
-import type { UnionToIntersection } from "../types";
+import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
@@ -266,7 +266,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
-		api: api as unknown as typeof endpoints & PluginEndpoint,
+		api: api as unknown as OverrideMerge<typeof endpoints, PluginEndpoint>,
 		middlewares,
 	};
 }
