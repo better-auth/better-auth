@@ -152,8 +152,24 @@ See [SECURITY.md](/SECURITY.md) for details.
 
 ### Code Formatting and Linting
 
-A pre-commit hook automatically checks and fixes staged files when you commit
-using [Biome](https://biomejs.dev/).
+[Lefthook](https://lefthook.dev/) runs the following checks in parallel on every
+commit:
+
+| Hook | What it does | Runs on |
+| --- | --- | --- |
+| **biome** | Linting, formatting, and import sorting (auto-fixes and re-stages) | All staged files |
+| **spell** | Spell checking with cspell | All staged files |
+| **format** | Markdown formatting with remark | Staged `docs/**/*.{md,mdx}` only |
+| **lockfile** | Verifies `pnpm-lock.yaml` is in sync | Only when `package.json` or lockfile changes |
+
+Additional checks like dependency linting (knip), type checking, and tests run
+in CI on every pull request.
+
+To skip a specific hook by command name, use `LEFTHOOK_EXCLUDE`:
+
+```bash
+LEFTHOOK_EXCLUDE=spell git commit -m "your message"
+```
 
 Run `pnpm typecheck` and make sure it passes before opening your PR.
 

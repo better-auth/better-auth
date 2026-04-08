@@ -3,12 +3,13 @@ output:
   - failure
 
 pre-commit:
+  parallel: true
   commands:
     biome:
       run: pnpm biome check --write --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true --colors=off {staged_files}
       stage_fixed: true
     spell:
-      run: pnpm cspell --no-progress --no-summary --no-must-find-files {staged_files}
+      run: pnpm cspell --cache --no-progress --no-summary --no-must-find-files {staged_files}
     format:
       glob: "docs/**/*.{md,mdx}"
       root: "docs/"
@@ -17,5 +18,3 @@ pre-commit:
     lockfile:
       glob: "{package.json,pnpm-lock.yaml,pnpm-workspace.yaml,packages/*/package.json}"
       run: pnpm install --frozen-lockfile --ignore-scripts
-    dependencies:
-      run: pnpm lint:dependencies
