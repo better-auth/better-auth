@@ -2,6 +2,8 @@
 
 Hi, we really appreciate your interest in contributing to Better Auth. This guide will help you get started. Your contributions make Better Auth even better for everyone. Before you begin, please take a moment to review the following guidelines.
 
+By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Repository Setup
 
 1. Fork the repository and clone it locally:
@@ -66,6 +68,8 @@ pnpm -F docs dev
 When making changes to public APIs, please update the relevant documentation.
 
 ## Testing
+
+Bug fixes and new features must include tests.
 
 Run the full test suite:
 
