@@ -12,6 +12,7 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { checkSSOIsolation } from "../utils";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}

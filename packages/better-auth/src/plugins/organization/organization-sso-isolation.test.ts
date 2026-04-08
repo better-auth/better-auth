@@ -30,7 +30,7 @@ describe("organization sso isolation", async () => {
 	const { headers, user } = await signInWithTestUser();
 
 	const client = createAuthClient({
-		plugins: [organizationClient()],
+		plugins: [organizationClient({ teams: { enabled: true } })],
 		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
@@ -158,7 +158,7 @@ describe("organization sso isolation", async () => {
 		});
 
 		expect(listRes.data?.length).toBe(1);
-		expect(listRes.data?.[0].id).toBe(orgA.id);
+		expect(listRes.data?.[0]?.id).toBe(orgA.id);
 	});
 
 	it("should prevent managing teams of a different organization if session is SSO-scoped", async () => {
@@ -224,7 +224,6 @@ describe("organization sso isolation", async () => {
 			teamId: teamInOrgB.id,
 			data: {
 				name: "Hacked Team",
-				// @ts-expect-error
 				organizationId: orgB.id,
 			},
 			fetchOptions: { headers: ssoHeaders },
