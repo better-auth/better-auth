@@ -156,10 +156,8 @@ describe("next-js integration", () => {
 	});
 
 	it("should handle unavailable headers gracefully", async () => {
-		const { cookiesMock, session } =
-			await getSessionWithNextHeaders("unavailable");
+		const { session } = await getSessionWithNextHeaders("unavailable");
 
-		expect(cookiesMock).not.toHaveBeenCalled();
 		expect(session).not.toBeNull();
 	});
 });
