@@ -534,6 +534,138 @@ describe("two factor", async () => {
 	});
 });
 
+describe("OTP-only enablement", async () => {
+	const { auth, signInWithTestUser, testUser, db, customFetchImpl } =
+		await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		});
+	let { headers } = await signInWithTestUser();
+
+	it("should enable 2FA with OTP method and return backup codes", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "otp" },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(res.headers);
+
+		const json = (await res.json()) as { backupCodes: string[] };
+		expect(json.backupCodes.length).toBe(10);
+		expect((json as any).totpURI).toBeUndefined();
+
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.twoFactorEnabled).toBe(true);
+
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		expect(twoFactor).toBeDefined();
+		expect(twoFactor?.secret).toBeNull();
+		expect(twoFactor?.backupCodes).toBeDefined();
+		expect(twoFactor?.verified).toBe(false);
+	});
+
+	it("should only report OTP in twoFactorMethods at sign-in", async () => {
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const json = await signInRes.json();
+		expect(json.twoFactorRedirect).toBe(true);
+		expect(json.twoFactorMethods).toEqual(["otp"]);
+	});
+
+	it("should reject OTP enable when sendOTP is not configured", async () => {
+		const { auth: noOtpAuth, signInWithTestUser: signIn } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+		const { headers: h } = await signIn();
+		const res = await noOtpAuth.api.enableTwoFactor({
+			body: { password: "password1234!", method: "otp" },
+			headers: h,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("should allow backup code recovery for OTP-only user", async () => {
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId: (await auth.api.getSession({ headers }))?.user.id! },
+		});
+		const backupCode = viewResult.backupCodes[0]!;
+
+		const signInHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					signInHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
+		const verifyRes = await client.twoFactor.verifyBackupCode({
+			code: backupCode,
+			fetchOptions: {
+				headers: signInHeaders,
+			},
+		});
+		expect(verifyRes.data?.user).toBeDefined();
+	});
+
+	it("should allow upgrading from OTP to TOTP", async () => {
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "totp" },
+			headers,
+		});
+		expect(enableRes.totpURI).toBeDefined();
+		expect(enableRes.backupCodes.length).toBe(10);
+
+		const session = await auth.api.getSession({ headers });
+		// twoFactorEnabled should still be true (was already enabled via OTP)
+		expect(session?.user.twoFactorEnabled).toBe(true);
+
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		expect(twoFactor?.secret).toBeDefined();
+		expect(twoFactor?.secret).not.toBeNull();
+		// unverified until user calls verifyTOTP
+		expect(twoFactor?.verified).toBe(false);
+	});
+});
+
 describe("two factor auth API", async () => {
 	let OTP = "";
 	const sendOTP = vi.fn();
@@ -547,16 +679,16 @@ describe("two factor auth API", async () => {
 						sendOTP(otp);
 					},
 				},
-				skipVerificationOnEnable: true,
 			}),
 		],
 	});
 	let { headers } = await signInWithTestUser();
 
-	it("enable two factor", async () => {
+	it("should enable two factor with OTP method", async () => {
 		const res = await auth.api.enableTwoFactor({
 			body: {
 				password: testUser.password,
+				method: "otp",
 			},
 			headers,
 			asResponse: true,
@@ -564,26 +696,14 @@ describe("two factor auth API", async () => {
 		headers = convertSetCookieToCookie(res.headers);
 
 		const json = (await res.json()) as {
-			status: boolean;
 			backupCodes: string[];
-			totpURI: string;
 		};
 		expect(json.backupCodes.length).toBe(10);
-		expect(json.totpURI).toBeDefined();
+		expect((json as any).totpURI).toBeUndefined();
 		const session = await auth.api.getSession({
 			headers,
 		});
 		expect(session?.user.twoFactorEnabled).toBe(true);
-	});
-
-	it("should get totp uri", async () => {
-		const res = await auth.api.getTOTPURI({
-			headers,
-			body: {
-				password: testUser.password,
-			},
-		});
-		expect(res.totpURI).toBeDefined();
 	});
 
 	it("should request second factor", async () => {
@@ -661,7 +781,6 @@ describe("view backup codes", async () => {
 							sendOTP(otp);
 						},
 					},
-					skipVerificationOnEnable: true,
 				}),
 			],
 		});
@@ -680,7 +799,7 @@ describe("view backup codes", async () => {
 
 	it("should return parsed array of backup codes, not JSON string", async () => {
 		const enableRes = await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
+			body: { password: testUser.password, method: "otp" },
 			headers,
 			asResponse: true,
 		});
@@ -860,7 +979,6 @@ describe("trust device server-side validation", async () => {
 						OTP = otp;
 					},
 				},
-				skipVerificationOnEnable: true,
 			}),
 		],
 	});
@@ -868,9 +986,9 @@ describe("trust device server-side validation", async () => {
 	let { headers } = await signInWithTestUser();
 
 	it("should force 2FA when server-side trust record is expired", async () => {
-		// Enable 2FA
+		// Enable 2FA via OTP method (immediate activation)
 		const enableRes = await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
+			body: { password: testUser.password, method: "otp" },
 			headers,
 			asResponse: true,
 		});
@@ -1171,7 +1289,6 @@ describe("trustDeviceMaxAge", async () => {
 						OTP = otp;
 					},
 				},
-				skipVerificationOnEnable: true,
 				trustDeviceMaxAge: customMaxAge,
 			}),
 		],
@@ -1180,9 +1297,9 @@ describe("trustDeviceMaxAge", async () => {
 	let { headers } = await signInWithTestUser();
 
 	it("should use custom trustDeviceMaxAge for the trust device cookie", async () => {
-		// Enable 2FA
+		// Enable 2FA via OTP method (immediate activation)
 		const enableRes = await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
+			body: { password: testUser.password, method: "otp" },
 			headers,
 			asResponse: true,
 		});
@@ -1260,7 +1377,6 @@ describe("trustDeviceMaxAge", async () => {
 								defaultOTP = otp;
 							},
 						},
-						skipVerificationOnEnable: true,
 					}),
 				],
 			});
@@ -1269,7 +1385,7 @@ describe("trustDeviceMaxAge", async () => {
 
 		// Enable 2FA
 		await authDefault.api.enableTwoFactor({
-			body: { password: testUser.password },
+			body: { password: testUser.password, method: "otp" },
 			headers: defaultHeaders,
 			asResponse: true,
 		});
@@ -1318,7 +1434,7 @@ describe("twoFactorCookieMaxAge", async () => {
 		plugins: [
 			twoFactor({
 				twoFactorCookieMaxAge: customMaxAge,
-				skipVerificationOnEnable: true,
+				otpOptions: { sendOTP() {} },
 			}),
 		],
 	});
@@ -1326,9 +1442,9 @@ describe("twoFactorCookieMaxAge", async () => {
 	let { headers } = await signInWithTestUser();
 
 	it("should use custom twoFactorCookieMaxAge for the two-factor cookie", async () => {
-		// Enable 2FA
+		// Enable 2FA via OTP method (immediate activation)
 		const enableRes = await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
+			body: { password: testUser.password, method: "otp" },
 			headers,
 			asResponse: true,
 		});
@@ -1358,16 +1474,16 @@ describe("twoFactorCookieMaxAge", async () => {
 				secret: DEFAULT_SECRET,
 				plugins: [
 					twoFactor({
-						skipVerificationOnEnable: true,
+						otpOptions: { sendOTP() {} },
 					}),
 				],
 			});
 
 		const { headers: defaultHeaders } = await signInDefault();
 
-		// Enable 2FA
+		// Enable 2FA via OTP method (immediate activation)
 		const enableRes = await authDefault.api.enableTwoFactor({
-			body: { password: testUser.password },
+			body: { password: testUser.password, method: "otp" },
 			headers: defaultHeaders,
 			asResponse: true,
 		});
@@ -1401,7 +1517,7 @@ describe("twoFactorTable option", async () => {
 		plugins: [
 			twoFactor({
 				twoFactorTable: "custom_two_factor",
-				skipVerificationOnEnable: true,
+				otpOptions: { sendOTP() {} },
 			}),
 		],
 	});
@@ -1410,7 +1526,7 @@ describe("twoFactorTable option", async () => {
 
 	it("should use custom table name for two factor data", async () => {
 		const enableRes = await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
+			body: { password: testUser.password, method: "otp" },
 			headers,
 			asResponse: true,
 		});
@@ -1427,7 +1543,7 @@ describe("twoFactorTable option", async () => {
 			],
 		});
 		expect(twoFactorRecord).toBeDefined();
-		expect(twoFactorRecord?.secret).toBeDefined();
+		expect(twoFactorRecord?.backupCodes).toBeDefined();
 	});
 });
 
@@ -1444,7 +1560,6 @@ describe("OTP storage modes", async () => {
 						},
 						storeOTP: "hashed",
 					},
-					skipVerificationOnEnable: true,
 				}),
 			],
 		});
@@ -1452,9 +1567,9 @@ describe("OTP storage modes", async () => {
 		let { headers } = await signInWithTestUser();
 
 		it("should verify OTP when stored as hashed", async () => {
-			// Enable 2FA
+			// Enable 2FA via OTP method (immediate activation)
 			const enableRes = await auth.api.enableTwoFactor({
-				body: { password: testUser.password },
+				body: { password: testUser.password, method: "otp" },
 				headers,
 				asResponse: true,
 			});
@@ -1531,7 +1646,6 @@ describe("OTP storage modes", async () => {
 						},
 						storeOTP: "encrypted",
 					},
-					skipVerificationOnEnable: true,
 				}),
 			],
 		});
@@ -1539,9 +1653,9 @@ describe("OTP storage modes", async () => {
 		let { headers } = await signInWithTestUser();
 
 		it("should verify OTP when stored as encrypted", async () => {
-			// Enable 2FA
+			// Enable 2FA via OTP method (immediate activation)
 			const enableRes = await auth.api.enableTwoFactor({
-				body: { password: testUser.password },
+				body: { password: testUser.password, method: "otp" },
 				headers,
 				asResponse: true,
 			});
@@ -1593,7 +1707,6 @@ describe("OTP storage modes", async () => {
 						},
 						storeOTP: { hash: customHashFn },
 					},
-					skipVerificationOnEnable: true,
 				}),
 			],
 		});
@@ -1601,9 +1714,9 @@ describe("OTP storage modes", async () => {
 		let { headers } = await signInWithTestUser();
 
 		it("should verify OTP with custom hash function", async () => {
-			// Enable 2FA
+			// Enable 2FA via OTP method (immediate activation)
 			const enableRes = await auth.api.enableTwoFactor({
-				body: { password: testUser.password },
+				body: { password: testUser.password, method: "otp" },
 				headers,
 				asResponse: true,
 			});
@@ -2053,19 +2166,16 @@ describe("checkPassword must not leak credential presence via error codes", asyn
 				otpOptions: {
 					sendOTP() {},
 				},
-				skipVerificationOnEnable: true,
 			}),
 		],
 	});
-	let { headers, user } = await signInWithTestUser();
+	const { headers, user } = await signInWithTestUser();
 
 	const enableRes = await auth.api.enableTwoFactor({
 		body: { password: testUser.password },
 		headers,
-		asResponse: true,
 	});
-	expect(enableRes.status).toBe(200);
-	headers = convertSetCookieToCookie(enableRes.headers);
+	expect(enableRes.totpURI).toBeDefined();
 
 	it("uses INVALID_PASSWORD for wrong password and when credential row is missing", async () => {
 		try {
@@ -2310,13 +2420,12 @@ describe("twoFactorMethods in sign-in response", () => {
 					otpOptions: {
 						sendOTP() {},
 					},
-					skipVerificationOnEnable: true,
 				}),
 			],
 		});
 		await signInWithTestUser();
 
-		it("should return twoFactorMethods: ['otp'] even when user has a totp row", async () => {
+		it("should return twoFactorMethods: ['otp'] when totp is disabled in config", async () => {
 			const { headers } = await auth.api
 				.signInEmail({
 					body: {
@@ -2330,7 +2439,7 @@ describe("twoFactorMethods in sign-in response", () => {
 				}));
 
 			await auth.api.enableTwoFactor({
-				body: { password: testUser.password },
+				body: { password: testUser.password, method: "otp" },
 				headers,
 				asResponse: true,
 			});

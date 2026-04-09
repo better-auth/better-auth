@@ -188,7 +188,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					},
 				],
 			});
-			if (!twoFactor) {
+			if (!twoFactor || !twoFactor.secret) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
@@ -266,7 +266,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				where: [{ field: "userId", value: user.id }],
 			});
 
-			if (!twoFactor) {
+			if (!twoFactor || !twoFactor.secret) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,

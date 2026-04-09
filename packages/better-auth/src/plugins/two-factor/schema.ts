@@ -15,7 +15,7 @@ export const schema = {
 		fields: {
 			secret: {
 				type: "string",
-				required: true,
+				required: false,
 				returned: false,
 				index: true,
 			},
