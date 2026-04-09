@@ -228,6 +228,7 @@ jobs:
           EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Sync PR #$EXISTING already exists ($AHEAD commits pending)"
+            gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --add-label devops || true
           else
             SYNC_BODY="Brings stable fixes from main into the next branch."
             SYNC_BODY="$SYNC_BODY\n\n**This PR must be merged by a maintainer using 'Create a merge commit'** (not squash, not rebase). This preserves individual fix commits and their verified signatures."
@@ -238,6 +239,7 @@ jobs:
               --head main \
               --repo "$GITHUB_REPOSITORY" \
               --title "chore: sync main to next" \
+              --label devops \
               --body "$(echo -e "$SYNC_BODY")" || true
 
             EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
