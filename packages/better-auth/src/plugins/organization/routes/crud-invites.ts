@@ -955,7 +955,6 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			use: [orgMiddleware],
-			requireHeaders: true,
 			query: getInvitationQuerySchema,
 			metadata: {
 				openapi: {
