@@ -375,7 +375,7 @@ export async function getStoredToken(
  *
  * @internal
  */
-export function basicToClientCredentials(authorization: string) {
+function basicToClientCredentials(authorization: string) {
 	if (authorization.startsWith("Basic ")) {
 		const encoded = authorization.replace("Basic ", "");
 		const decoded = new TextDecoder().decode(base64.decode(encoded));
