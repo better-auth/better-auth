@@ -647,19 +647,22 @@ describe("OTP-only enablement", async () => {
 	});
 
 	it("should reject TOTP enable when totpOptions.disable is set", async () => {
-		const { auth: noTotpAuth, signInWithTestUser: signIn } =
-			await getTestInstance({
-				secret: DEFAULT_SECRET,
-				plugins: [
-					twoFactor({
-						otpOptions: { sendOTP() {} },
-						totpOptions: { disable: true },
-					}),
-				],
-			});
+		const {
+			auth: noTotpAuth,
+			signInWithTestUser: signIn,
+			testUser: tu,
+		} = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					totpOptions: { disable: true },
+				}),
+			],
+		});
 		const { headers: h } = await signIn();
 		const res = await noTotpAuth.api.enableTwoFactor({
-			body: { password: "password1234!", method: "totp" },
+			body: { password: tu.password, method: "totp" },
 			headers: h,
 			asResponse: true,
 		});

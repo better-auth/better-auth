@@ -87,7 +87,7 @@ This plugin offers two main methods to do a second factor verification:
 To enable two-factor authentication, call `twoFactor.enable`. The user must provide their password if they have an email/password account. You can choose between two methods:
 
 * **`totp`** (default) — sets up an authenticator app. The user must verify a TOTP code before 2FA becomes active. Returns `{ totpURI, backupCodes }`.
-* **`otp`** — enables email/SMS-based codes immediately, with no extra verification step. Returns `{ backupCodes }`. Requires `otpOptions.sendOTP` to be configured on the server.
+* **`otp`** — enables email/SMS-based codes immediately, with no extra verification step. Returns `{ totpURI: null, backupCodes }`. Requires `otpOptions.sendOTP` to be configured on the server.
 
 <Callout type="warn">
   By default, enabling 2FA requires a password. Users who signed up via OAuth, passkeys, magic links, or anonymous auth cannot enable 2FA unless you set `allowPasswordless: true` in the plugin config.
@@ -119,7 +119,7 @@ When `method` is `"totp"` (default):
 
 When `method` is `"otp"`:
 
-* Returns `{ backupCodes }`. `twoFactorEnabled` is set to `true` immediately.
+* Returns `{ totpURI: null, backupCodes }`. `twoFactorEnabled` is set to `true` immediately.
 * Requires `otpOptions.sendOTP` to be configured on the server.
 
 ### Sign In with 2FA
@@ -464,7 +464,7 @@ Table: `user`
 
 <DatabaseTable
   fields={[
-  { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
+{ name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
 ]}
 />
 
@@ -472,11 +472,11 @@ Table: `twoFactor`
 
 <DatabaseTable
   fields={[
-  { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
-  { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
-  { name: "secret", type: "string", description: "The encrypted TOTP secret. Null for OTP-only users.", isOptional: true },
-  { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
-  { name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment. Null for OTP-only users.", isOptional: true },
+{ name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
+{ name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
+{ name: "secret", type: "string", description: "The encrypted TOTP secret. Null for OTP-only users.", isOptional: true },
+{ name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
+{ name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment. Null for OTP-only users.", isOptional: true },
 ]}
 />
 
@@ -499,14 +499,14 @@ these are options for TOTP.
 <TypeTable
   type={{
 digits:{
-  description: "The number of digits the otp to be",
-  type: "number",
-  default: 6,
+description: "The number of digits the otp to be",
+type: "number",
+default: 6,
 },
 period: {
-  description: "The period for totp in seconds.",
-  type: "number",
-  default: 30,
+description: "The period for totp in seconds.",
+type: "number",
+default: 30,
 },
 }}
 />
@@ -518,18 +518,18 @@ these are options for OTP.
 <TypeTable
   type={{
 sendOTP: {
-  description: "a function that sends the otp to the user's email or phone number. It takes two parameters: user and otp",
-  type: "function",
+description: "a function that sends the otp to the user's email or phone number. It takes two parameters: user and otp",
+type: "function",
 },
 period: {
-  description: "The period for otp in minutes.", 
-  type: "number",
-  default: 3,
+description: "The period for otp in minutes.", 
+type: "number",
+default: 3,
 },
 storeOTP: {
-  description: "How to transform the stored OTP value, whether plain text, encrypted, or hashed. You can also provide a custom encryptor or hasher. The storage backend is controlled by the global verification config, so secondary storage can be used instead of the database.",
-  type: "string",
-  default: "plain",
+description: "How to transform the stored OTP value, whether plain text, encrypted, or hashed. You can also provide a custom encryptor or hasher. The storage backend is controlled by the global verification config, so secondary storage can be used instead of the database.",
+type: "string",
+default: "plain",
 },
 }}
 />
@@ -540,25 +540,25 @@ backup codes are generated and stored in the database when the user enabled two 
 
 <TypeTable
   type={{
-  amount: {
-      description: "The amount of backup codes to generate",
-      type: "number",
-      default: 10,
-  },
-  length: {
-      description: "The length of the backup codes",
-      type: "number",
-      default: 10,
-  },
-  customBackupCodesGenerate: {
-      description: "A function that generates custom backup codes. It takes no parameters and returns an array of strings.",
-      type: "function",
-  },
-  storeBackupCodes: {
-      description: "How to store the backup codes in the database. Whether to store it as plain text or encrypted. You can also provide a custom encryptor.",
-      type: "string",
-      default: "plain",
-  },
+amount: {
+    description: "The amount of backup codes to generate",
+    type: "number",
+    default: 10,
+},
+length: {
+    description: "The length of the backup codes",
+    type: "number",
+    default: 10,
+},
+customBackupCodesGenerate: {
+    description: "A function that generates custom backup codes. It takes no parameters and returns an array of strings.",
+    type: "function",
+},
+storeBackupCodes: {
+    description: "How to store the backup codes in the database. Whether to store it as plain text or encrypted. You can also provide a custom encryptor.",
+    type: "string",
+    default: "plain",
+},
 }}
 />
 

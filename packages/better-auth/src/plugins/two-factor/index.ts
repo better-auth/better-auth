@@ -153,7 +153,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 														description: "Recovery backup codes",
 													},
 												},
-												required: ["backupCodes"],
+												required: ["totpURI", "backupCodes"],
 											},
 										},
 									},
@@ -547,7 +547,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							if (
 								userTotpSecret &&
 								userTotpSecret.secret &&
-								userTotpSecret.verified === true
+								userTotpSecret.verified !== false
 							) {
 								twoFactorMethods.push("totp");
 							}

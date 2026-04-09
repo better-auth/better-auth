@@ -10,7 +10,7 @@ feat(two-factor)!: add OTP-only enablement and remove `skipVerificationOnEnable`
 
 - Sets `twoFactorEnabled: true` immediately (no verification step needed).
 - Creates a `twoFactor` row with backup codes but no TOTP secret.
-- Returns `{ backupCodes }`.
+- Returns `{ totpURI: null, backupCodes }`.
 - Requires `otpOptions.sendOTP` to be configured on the server; rejects with `OTP_NOT_CONFIGURED` otherwise.
 
 ### Default: `method: "totp"`
