@@ -655,11 +655,17 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 			const prInfo = fetchPR(prNumber);
 			author = prInfo.author;
 			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
-			packageName = resolvePackage(parsed.scope || undefined, prInfo.files);
+			packageName =
+				changeset?.packageNames.length === 1
+					? changeset.packageNames[0]!
+					: resolvePackage(parsed.scope || undefined, prInfo.files);
 			if (prInfo.labels.includes("breaking")) breaking = true;
 		} catch {
 			domain = resolveDomain(parsed.scope || undefined, []);
-			packageName = resolvePackage(parsed.scope || undefined, []);
+			packageName =
+				changeset?.packageNames.length === 1
+					? changeset.packageNames[0]!
+					: resolvePackage(parsed.scope || undefined, []);
 		}
 
 		entries.push({
