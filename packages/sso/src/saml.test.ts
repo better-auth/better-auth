@@ -811,6 +811,7 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 								cert: certificate,
 								callbackUrl: "http://localhost:8082/dashboard",
 								authnRequestsSigned: true,
+								spMetadata: {},
 								idpMetadata: {
 									metadata: idpMetadataWithSignedRequests,
 								},
