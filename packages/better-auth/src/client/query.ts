@@ -134,8 +134,9 @@ export const useAuthQuery = <T>(
 				onMount(value, () => {
 					const timeoutId = setTimeout(async () => {
 						if (!isMounted) {
-							await fn();
+							// Must set to `true` immediately; see https://github.com/better-auth/better-auth/issues/9077
 							isMounted = true;
+							await fn();
 						}
 					}, 0);
 					return () => {
