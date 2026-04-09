@@ -1326,11 +1326,17 @@ export const signInSSO = (options?: SSOOptions) => {
 					!parsedSamlConfig.spMetadata?.privateKey &&
 					!parsedSamlConfig.privateKey
 				) {
-					ctx.context.logger.warn(
-						"authnRequestsSigned is enabled but no privateKey provided - AuthnRequests will not be signed",
-						{ providerId: provider.providerId },
-					);
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"authnRequestsSigned is enabled but no privateKey provided in spMetadata or samlConfig",
+					});
 				}
+
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					false,
+				);
 
 				let metadata = parsedSamlConfig.spMetadata.metadata;
 
@@ -1367,6 +1373,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						parsedSamlConfig.spMetadata?.privateKey ||
 						parsedSamlConfig.privateKey,
 					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
+					relayState,
 				});
 
 				const idpData = parsedSamlConfig.idpMetadata;
@@ -1411,12 +1418,6 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(
-					ctx,
-					undefined,
-					false,
-				);
-
 				const shouldSaveRequest =
 					loginRequest.id &&
 					options?.saml?.enableInResponseToValidation !== false;
@@ -1437,7 +1438,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(relayState)}`,
+					url: loginRequest.context,
 					redirect: true,
 				});
 			}
@@ -2009,16 +2010,18 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 			}
 
-			const { SAMLResponse } = ctx.body;
-
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ??
 				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+			if (
+				new TextEncoder().encode(ctx.body.SAMLResponse).length > maxResponseSize
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
 			}
+
+			const SAMLResponse = ctx.body.SAMLResponse.replace(/\s+/g, "");
 
 			let relayState: RelayState | null = null;
 			if (ctx.body.RelayState) {
@@ -2517,7 +2520,6 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { SAMLResponse } = ctx.body;
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
@@ -2525,11 +2527,15 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ??
 				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+			if (
+				new TextEncoder().encode(ctx.body.SAMLResponse).length > maxResponseSize
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
 			}
+
+			const SAMLResponse = ctx.body.SAMLResponse.replace(/\s+/g, "");
 			let relayState: RelayState | null = null;
 			if (ctx.body.RelayState) {
 				try {
