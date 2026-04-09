@@ -783,14 +783,14 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 					}),
 					organizationId: z.string().optional().meta({
 						description:
-							"The organization ID to scope the team list to. If not provided, it will default to the user's active organization. Required when there is no active organization on the session.",
+							"The organization ID to scope the team list to. When omitted on a self-query, teams are returned across every organization the user belongs to. When querying another user, falls back to the session's active organization and is required if there is no active organization.",
 					}),
 				})
 				.optional(),
 			metadata: {
 				openapi: {
 					description:
-						"List teams for a user. Defaults to the current user and their active organization. Requires 'member:update' permission to query other users. When an explicit `organizationId` is provided, the result is scoped to that organization.",
+						"List teams for a user. Without parameters, returns teams for the current user across every organization they belong to. Pass `organizationId` to scope the result to a specific organization. Pass `userId` to list teams for another member; this requires `member:update` permission in the target organization (the explicit `organizationId` if provided, otherwise the session's active organization).",
 					responses: {
 						"200": {
 							description: "Teams retrieved successfully",

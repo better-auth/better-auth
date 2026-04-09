@@ -896,12 +896,9 @@ To invite users to an organization, you can use the `invite` function provided b
 </APIMethod>
 
 <Callout>
-  * If the user is already a member of the organization, the invitation will be
-    canceled. - If the user is already invited to the organization, unless
-    `resend` is set to `true`, the invitation will not be sent again. - If
-    `cancelPendingInvitationsOnReInvite` is set to `true`, the invitation will be
-    canceled if the user is already invited to the organization and a new
-    invitation is sent.
+  * If the user is already a member of the organization, the invitation will be canceled.
+  * If the user is already invited to the organization, unless `resend` is set to `true`, the invitation will not be sent again.
+  * If `cancelPendingInvitationsOnReInvite` is set to `true`, the invitation will be canceled if the user is already invited to the organization and a new invitation is sent.
 </Callout>
 
 ### Accept Invitation
@@ -1888,7 +1885,7 @@ List all teams that a user is a part of. Defaults to the current user and return
      */
     userId?: string
     /**
-     * The organization ID to scope the team list to. Defaults to the session's active organization.
+     * The organization ID to scope the team list to. When omitted on a self-query, teams are returned across every organization the user belongs to. When querying another user, falls back to the session's active organization.
      */
     organizationId?: string
   }
@@ -2017,34 +2014,34 @@ Table Name: `team`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each team",
-    isPrimaryKey: true,
-  },
-  {
-    name: "name",
-    type: "string",
-    description: "The name of the team",
-  },
-  {
-    name: "organizationId",
-    type: "string",
-    description: "The ID of the organization",
-    isForeignKey: true,
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the team was created",
-  },
-  {
-    name: "updatedAt",
-    type: "Date",
-    isOptional: true,
-    description: "Timestamp of when the team was created",
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each team",
+  isPrimaryKey: true,
+},
+{
+  name: "name",
+  type: "string",
+  description: "The name of the team",
+},
+{
+  name: "organizationId",
+  type: "string",
+  description: "The ID of the organization",
+  isForeignKey: true,
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the team was created",
+},
+{
+  name: "updatedAt",
+  type: "Date",
+  isOptional: true,
+  description: "Timestamp of when the team was created",
+},
 ]}
 />
 
@@ -2052,30 +2049,30 @@ Table Name: `teamMember`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each team member",
-    isPrimaryKey: true,
-  },
-  {
-    name: "teamId",
-    type: "string",
-    description: "Unique identifier for each team",
-    isForeignKey: true,
-  },
-  {
-    name: "userId",
-    type: "string",
-    description: "The ID of the user",
-    isForeignKey: true,
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the team member was created",
-    isOptional: true,
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each team member",
+  isPrimaryKey: true,
+},
+{
+  name: "teamId",
+  type: "string",
+  description: "Unique identifier for each team",
+  isForeignKey: true,
+},
+{
+  name: "userId",
+  type: "string",
+  description: "The ID of the user",
+  isForeignKey: true,
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the team member was created",
+  isOptional: true,
+},
 ]}
 />
 
@@ -2089,40 +2086,40 @@ Table Name: `organization`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each organization",
-    isPrimaryKey: true,
-  },
-  {
-    name: "name",
-    type: "string",
-    description: "The name of the organization",
-  },
-  {
-    name: "slug",
-    type: "string",
-    description: "The slug of the organization",
-    isUnique: true,
-  },
-  {
-    name: "logo",
-    type: "string",
-    description: "The logo of the organization",
-    isOptional: true,
-  },
-  {
-    name: "metadata",
-    type: "string",
-    description: "Additional metadata for the organization",
-    isOptional: true,
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the organization was created",
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each organization",
+  isPrimaryKey: true,
+},
+{
+  name: "name",
+  type: "string",
+  description: "The name of the organization",
+},
+{
+  name: "slug",
+  type: "string",
+  description: "The slug of the organization",
+  isUnique: true,
+},
+{
+  name: "logo",
+  type: "string",
+  description: "The logo of the organization",
+  isOptional: true,
+},
+{
+  name: "metadata",
+  type: "string",
+  description: "Additional metadata for the organization",
+  isOptional: true,
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the organization was created",
+},
 ]}
 />
 
@@ -2132,34 +2129,34 @@ Table Name: `member`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each member",
-    isPrimaryKey: true,
-  },
-  {
-    name: "userId",
-    type: "string",
-    description: "The ID of the user",
-    isForeignKey: true,
-  },
-  {
-    name: "organizationId",
-    type: "string",
-    description: "The ID of the organization",
-    isForeignKey: true,
-  },
-  {
-    name: "role",
-    type: "string",
-    description: "The role of the user in the organization",
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the member was added to the organization",
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each member",
+  isPrimaryKey: true,
+},
+{
+  name: "userId",
+  type: "string",
+  description: "The ID of the user",
+  isForeignKey: true,
+},
+{
+  name: "organizationId",
+  type: "string",
+  description: "The ID of the organization",
+  isForeignKey: true,
+},
+{
+  name: "role",
+  type: "string",
+  description: "The role of the user in the organization",
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the member was added to the organization",
+},
 ]}
 />
 
@@ -2169,50 +2166,50 @@ Table Name: `invitation`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each invitation",
-    isPrimaryKey: true,
-  },
-  {
-    name: "email",
-    type: "string",
-    description: "The email address of the user",
-  },
-  {
-    name: "inviterId",
-    type: "string",
-    description: "The ID of the inviter",
-    isForeignKey: true,
-  },
-  {
-    name: "organizationId",
-    type: "string",
-    description: "The ID of the organization",
-    isForeignKey: true,
-  },
-  {
-    name: "role",
-    type: "string",
-    description: "The role of the user in the organization",
-    isOptional: true,
-  },
-  {
-    name: "status",
-    type: "string",
-    description: "The status of the invitation",
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the invitation was created"
-  },
-  {
-    name: "expiresAt",
-    type: "Date",
-    description: "Timestamp of when the invitation expires",
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each invitation",
+  isPrimaryKey: true,
+},
+{
+  name: "email",
+  type: "string",
+  description: "The email address of the user",
+},
+{
+  name: "inviterId",
+  type: "string",
+  description: "The ID of the inviter",
+  isForeignKey: true,
+},
+{
+  name: "organizationId",
+  type: "string",
+  description: "The ID of the organization",
+  isForeignKey: true,
+},
+{
+  name: "role",
+  type: "string",
+  description: "The role of the user in the organization",
+  isOptional: true,
+},
+{
+  name: "status",
+  type: "string",
+  description: "The status of the invitation",
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the invitation was created"
+},
+{
+  name: "expiresAt",
+  type: "Date",
+  description: "Timestamp of when the invitation expires",
+},
 ]}
 />
 
@@ -2220,12 +2217,12 @@ If teams are enabled, you need to add the following fields to the invitation tab
 
 <DatabaseTable
   fields={[
-  {
-    name: "teamId",
-    type: "string",
-    description: "The ID of the team",
-    isOptional: true,
-  },
+{
+  name: "teamId",
+  type: "string",
+  description: "The ID of the team",
+  isOptional: true,
+},
 ]}
 />
 
@@ -2237,18 +2234,18 @@ You need to add two more fields to the session table to store the active organiz
 
 <DatabaseTable
   fields={[
-  {
-    name: "activeOrganizationId",
-    type: "string",
-    description: "The ID of the active organization",
-    isOptional: true,
-  },
-  {
-    name: "activeTeamId",
-    type: "string",
-    description: "The ID of the active team",
-    isOptional: true,
-  },
+{
+  name: "activeOrganizationId",
+  type: "string",
+  description: "The ID of the active organization",
+  isOptional: true,
+},
+{
+  name: "activeTeamId",
+  type: "string",
+  description: "The ID of the active team",
+  isOptional: true,
+},
 ]}
 />
 
@@ -2258,38 +2255,38 @@ Table Name: `organizationRole`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each organization role",
-  },
-  {
-    name: "organizationId",
-    type: "string",
-    description: "The ID of the organization",
-    isForeignKey: true,
-  },
-  {
-    name: "role",
-    type: "string",
-    description: "The name of the role",
-  },
-  {
-    name: "permission",
-    type: "string",
-    description: "The permission of the role",
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the organization role was created",
-  },
-  {
-    name: "updatedAt",
-    type: "Date",
-    description: "Timestamp of when the organization role was updated",
-    isOptional: true,
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each organization role",
+},
+{
+  name: "organizationId",
+  type: "string",
+  description: "The ID of the organization",
+  isForeignKey: true,
+},
+{
+  name: "role",
+  type: "string",
+  description: "The name of the role",
+},
+{
+  name: "permission",
+  type: "string",
+  description: "The permission of the role",
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the organization role was created",
+},
+{
+  name: "updatedAt",
+  type: "Date",
+  description: "Timestamp of when the organization role was updated",
+  isOptional: true,
+},
 ]}
 />
 
@@ -2299,34 +2296,34 @@ Table Name: `team`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each team",
-    isPrimaryKey: true,
-  },
-  {
-    name: "name",
-    type: "string",
-    description: "The name of the team",
-  },
-  {
-    name: "organizationId",
-    type: "string",
-    description: "The ID of the organization",
-    isForeignKey: true,
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the team was created",
-  },
-  {
-    name: "updatedAt",
-    type: "Date",
-    isOptional: true,
-    description: "Timestamp of when the team was created",
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each team",
+  isPrimaryKey: true,
+},
+{
+  name: "name",
+  type: "string",
+  description: "The name of the team",
+},
+{
+  name: "organizationId",
+  type: "string",
+  description: "The ID of the organization",
+  isForeignKey: true,
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the team was created",
+},
+{
+  name: "updatedAt",
+  type: "Date",
+  isOptional: true,
+  description: "Timestamp of when the team was created",
+},
 ]}
 />
 
@@ -2334,30 +2331,30 @@ Table Name: `teamMember`
 
 <DatabaseTable
   fields={[
-  {
-    name: "id",
-    type: "string",
-    description: "Unique identifier for each team member",
-    isPrimaryKey: true,
-  },
-  {
-    name: "teamId",
-    type: "string",
-    description: "Unique identifier for each team",
-    isForeignKey: true,
-  },
-  {
-    name: "userId",
-    type: "string",
-    description: "The ID of the user",
-    isForeignKey: true,
-  },
-  {
-    name: "createdAt",
-    type: "Date",
-    description: "Timestamp of when the team member was created",
-    isOptional: true,
-  },
+{
+  name: "id",
+  type: "string",
+  description: "Unique identifier for each team member",
+  isPrimaryKey: true,
+},
+{
+  name: "teamId",
+  type: "string",
+  description: "Unique identifier for each team",
+  isForeignKey: true,
+},
+{
+  name: "userId",
+  type: "string",
+  description: "The ID of the user",
+  isForeignKey: true,
+},
+{
+  name: "createdAt",
+  type: "Date",
+  description: "Timestamp of when the team member was created",
+  isOptional: true,
+},
 ]}
 />
 
@@ -2365,12 +2362,12 @@ Table Name: `invitation`
 
 <DatabaseTable
   fields={[
-  {
-    name: "teamId",
-    type: "string",
-    description: "The ID of the team",
-    isOptional: true,
-  },
+{
+  name: "teamId",
+  type: "string",
+  description: "The ID of the team",
+  isOptional: true,
+},
 ]}
 />
 
