@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/scim",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.6",
   "description": "SCIM plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -20,10 +20,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
@@ -58,8 +59,6 @@
     }
   },
   "dependencies": {
-    "@better-auth/utils": "catalog:",
-    "better-call": "catalog:",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -68,7 +67,9 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*"
+    "@better-auth/core": "workspace:^",
+    "@better-auth/utils": "catalog:",
+    "better-auth": "workspace:^",
+    "better-call": "catalog:"
   }
 }

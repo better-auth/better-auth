@@ -347,7 +347,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							let stripeCustomer: Stripe.Customer | undefined;
 							try {
 								const result = await client.customers.search({
-									query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
+									query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}" AND metadata["${customerMetadata.keys.customerType}"]:"organization"`,
 									limit: 1,
 								});
 								stripeCustomer = result.data[0];
@@ -362,7 +362,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									if (
 										customer.metadata?.[
 											customerMetadata.keys.organizationId
-										] === org.id
+										] === org.id &&
+										customer.metadata?.[customerMetadata.keys.customerType] ===
+											"organization"
 									) {
 										stripeCustomer = customer;
 										break;
@@ -1611,10 +1613,14 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 					const plan = plans.find(
 						(p) => p.name.toLowerCase() === sub.plan.toLowerCase(),
 					);
+					const priceId =
+						sub.billingInterval === "year"
+							? (plan?.annualDiscountPriceId ?? plan?.priceId)
+							: plan?.priceId;
 					return {
 						...sub,
 						limits: plan?.limits,
-						priceId: plan?.priceId,
+						priceId,
 					};
 				})
 				.filter((sub) => isActiveOrTrialing(sub));

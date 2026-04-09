@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.6",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -19,10 +19,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
@@ -30,7 +31,8 @@
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "!src/**/*.test.ts"
   ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
@@ -160,7 +162,7 @@
     "better-call": "catalog:",
     "@cloudflare/workers-types": "^4.20250121.0",
     "jose": "^6.1.3",
-    "kysely": "^0.28.11",
+    "kysely": "^0.28.14",
     "nanostores": "^1.1.1",
     "tsdown": "catalog:"
   },

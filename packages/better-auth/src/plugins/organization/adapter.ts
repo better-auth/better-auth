@@ -948,9 +948,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					organization: true,
 				},
 			});
-			return invitations.map(({ organization, ...inv }) => ({
+			return invitations.filter(Boolean).map(({ organization, ...inv }) => ({
 				...inv,
-				organizationName: organization.name,
+				organizationName: organization?.name,
 			}));
 		},
 		createInvitation: async ({

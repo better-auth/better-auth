@@ -278,7 +278,7 @@ export const redisSecondaryStorage: SecondaryStorage = {
 
       if (ttl) {
         // Set with TTL in seconds
-        await redis.setex(key, ttl, stringValue);
+        await redis.set(key, stringValue, { ex: ttl });
       } else {
         // Set without TTL
         await redis.set(key, stringValue);
@@ -337,6 +337,7 @@ Table Name: `user`
       name: "email",
       type: "string",
       description: "User's email address for communication and login",
+      isUnique: true,
     },
     {
       name: "emailVerified",

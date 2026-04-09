@@ -4,6 +4,7 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import { PACKAGE_VERSION } from "../../version";
 
 export const inferAdditionalFields = <
 	T,
@@ -45,6 +46,7 @@ export const inferAdditionalFields = <
 			}
 			? {
 					id: "additional-fields-client";
+					version: string;
 					schema: {
 						user: {
 							fields: S["user"] extends object ? S["user"] : {};
@@ -58,6 +60,7 @@ export const inferAdditionalFields = <
 		: Opts extends BetterAuthOptions
 			? {
 					id: "additional-fields";
+					version: string;
 					schema: {
 						user: {
 							fields: Opts["user"] extends {
@@ -79,6 +82,7 @@ export const inferAdditionalFields = <
 
 	return {
 		id: "additional-fields-client",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as Plugin extends BetterAuthPlugin
 			? Plugin
 			: undefined,
