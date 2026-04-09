@@ -1389,13 +1389,20 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 				}
 			}
 
-			// Run beforeAcceptInvitation hook if configured.
-			if (options?.organizationHooks?.beforeAcceptInvitation) {
-				await options.organizationHooks.beforeAcceptInvitation({
-					invitation: invitation as unknown as Invitation,
-					user: newUser,
-					organization,
-				});
+			// Everything from here until the invitation is committed must clean up
+			// the newly created user on failure, since from the caller's perspective
+			// the entire signup failed.
+			try {
+				if (options?.organizationHooks?.beforeAcceptInvitation) {
+					await options.organizationHooks.beforeAcceptInvitation({
+						invitation: invitation as unknown as Invitation,
+						user: newUser,
+						organization,
+					});
+				}
+			} catch (e) {
+				await ctx.context.internalAdapter.deleteUser(newUser.id);
+				throw e;
 			}
 
 			const acceptedInvitation = await adapter.updateInvitation({
@@ -1403,6 +1410,7 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 				status: "accepted",
 			});
 			if (!acceptedInvitation) {
+				await ctx.context.internalAdapter.deleteUser(newUser.id);
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
