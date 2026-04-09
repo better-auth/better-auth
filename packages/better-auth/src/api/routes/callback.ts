@@ -265,11 +265,12 @@ export const callbackOAuth = createAuthEndpoint(
 				provider.options?.disableSignUp,
 			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 		});
-		if (result.error) {
-			c.context.logger.error(result.error.split(" ").join("_"));
-			return redirectOnError(result.error.split(" ").join("_"));
+		if (result.error || !result.data) {
+			const errorMsg = result.error || "unable_to_create_user";
+			c.context.logger.error(errorMsg.split(" ").join("_"));
+			return redirectOnError(errorMsg.split(" ").join("_"));
 		}
-		const { session, user } = result.data!;
+		const { session, user } = result.data;
 		await setSessionCookie(c, {
 			session,
 			user,
