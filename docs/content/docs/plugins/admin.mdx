@@ -754,6 +754,7 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
 This plugin adds the following fields to the `user` table:
 
 <DatabaseTable
+  name="user"
   fields={[
     {
       name: "role",
@@ -786,6 +787,7 @@ This plugin adds the following fields to the `user` table:
 And adds one field in the `session` table:
 
 <DatabaseTable
+  name="session"
   fields={[
     {
       name: "impersonatedBy",
@@ -901,4 +903,3 @@ admin({
   bannedUserMessage: "Custom banned user message",
 });
 ```
-
