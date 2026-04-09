@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/i18n",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "i18n plugin for Better Auth - translate error messages",
   "type": "module",
   "license": "MIT",
