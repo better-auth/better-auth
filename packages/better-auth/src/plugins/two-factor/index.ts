@@ -223,7 +223,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							await ctx.context.adapter.update({
 								model: opts.twoFactorTable,
 								update: otpData,
-								where: [{ field: "userId", value: user.id }],
+								where: [{ field: "id", value: existingTwoFactor.id }],
 							});
 						} else {
 							await ctx.context.adapter.create({
@@ -270,7 +270,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						await ctx.context.adapter.update({
 							model: opts.twoFactorTable,
 							update: totpData,
-							where: [{ field: "userId", value: user.id }],
+							where: [{ field: "id", value: existingTwoFactor.id }],
 						});
 					} else {
 						await ctx.context.adapter.create({
