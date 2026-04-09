@@ -7,7 +7,7 @@ import type { Prompt } from "../types";
 export function searchParamsToQuery(
 	params: URLSearchParams,
 ): Record<string, string | string[]> {
-	const result: Record<string, string | string[]> = {};
+	const result: Record<string, string | string[]> = Object.create(null);
 	for (const key of new Set(params.keys())) {
 		const values = params.getAll(key);
 		result[key] = values.length === 1 ? values[0]! : values;
