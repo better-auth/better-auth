@@ -100,7 +100,7 @@ This is useful when you have the ID Token from Facebook on the client-side and w
   If ID token is provided no redirection will happen, and the user will be signed in directly.
 </Callout>
 
-For limited login, you need to pass `idToken.token`, for only `accessToken` you need to pass `idToken.accessToken` and `idToken.token` together because of (#1183)\[[https://github.com/better-auth/better-auth/issues/1183](https://github.com/better-auth/better-auth/issues/1183)].
+For limited login, you need to pass `idToken.token`, for only `accessToken` you need to pass `idToken.accessToken` and `idToken.token` together because of [#1183](https://github.com/better-auth/better-auth/issues/1183).
 
 ```ts title="auth-client.ts"
 const data = await authClient.signIn.social({
