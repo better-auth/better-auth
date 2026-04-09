@@ -15,7 +15,9 @@ function errorRedirectUrl(
 	} catch {
 		// Relative URL — fall back to manual construction.
 		// Split off any fragment so query params stay before the hash.
-		const [path, hash] = base.split("#", 2);
+		const hashIdx = base.indexOf("#");
+		const path = hashIdx >= 0 ? base.slice(0, hashIdx) : base;
+		const hash = hashIdx >= 0 ? base.slice(hashIdx + 1) : undefined;
 		const separator = path.includes("?") ? "&" : "?";
 		const query = `error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(description)}`;
 		return `${path}${separator}${query}${hash ? `#${hash}` : ""}`;
