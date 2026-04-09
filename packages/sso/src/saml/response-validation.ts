@@ -7,10 +7,16 @@ function errorRedirectUrl(
 	error: string,
 	description: string,
 ): string {
-	const url = new URL(base);
-	url.searchParams.set("error", error);
-	url.searchParams.set("error_description", description);
-	return url.toString();
+	try {
+		const url = new URL(base);
+		url.searchParams.set("error", error);
+		url.searchParams.set("error_description", description);
+		return url.toString();
+	} catch {
+		// Relative URL — fall back to manual construction
+		const separator = base.includes("?") ? "&" : "?";
+		return `${base}${separator}error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(description)}`;
+	}
 }
 
 interface AuthnRequestRecord {
