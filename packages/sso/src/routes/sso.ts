@@ -2009,16 +2009,18 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 			}
 
-			const { SAMLResponse } = ctx.body;
-
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ??
 				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+			if (
+				new TextEncoder().encode(ctx.body.SAMLResponse).length > maxResponseSize
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
 			}
+
+			const SAMLResponse = ctx.body.SAMLResponse.replace(/\s+/g, "");
 
 			let relayState: RelayState | null = null;
 			if (ctx.body.RelayState) {
@@ -2517,7 +2519,6 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { SAMLResponse } = ctx.body;
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
@@ -2525,11 +2526,15 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ??
 				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+			if (
+				new TextEncoder().encode(ctx.body.SAMLResponse).length > maxResponseSize
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
 			}
+
+			const SAMLResponse = ctx.body.SAMLResponse.replace(/\s+/g, "");
 			let relayState: RelayState | null = null;
 			if (ctx.body.RelayState) {
 				try {
