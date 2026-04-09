@@ -17,7 +17,7 @@ import {
 import type {
 	Endpoint,
 	EndpointContext,
-	EndpointRuntimeOptions,
+	EndpointOptions,
 	InputContext,
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
@@ -25,20 +25,7 @@ import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
 
 type InternalContext = Partial<
-	InputContext<string, any, any, any, any, any> &
-		EndpointContext<
-			string,
-			any,
-			any,
-			any,
-			any,
-			any,
-			any,
-			AuthContext & {
-				returned?: unknown | undefined;
-				responseHeaders?: Headers | undefined;
-			}
-		>
+	InputContext<string, any> & EndpointContext<string, any>
 > & {
 	path: string;
 	asResponse?: boolean | undefined;
@@ -76,8 +63,7 @@ function getOperationId(endpoint: Endpoint | undefined, key: string): string {
 }
 
 type UserInputContext = Partial<
-	InputContext<string, any, any, any, any, any> &
-		EndpointContext<string, any, any, any, any, any, any, any>
+	InputContext<string, any> & EndpointContext<string, any>
 >;
 
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
@@ -87,11 +73,10 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	const api: Record<
 		string,
 		((
-			context: EndpointContext<string, any, any, any, any, any, any, any> &
-				InputContext<string, any, any, any, any, any>,
+			context: EndpointContext<string, any> & InputContext<string, any>,
 		) => Promise<any>) & {
 			path?: string | undefined;
-			options?: EndpointRuntimeOptions | undefined;
+			options?: EndpointOptions | undefined;
 		}
 	> = {};
 
@@ -107,7 +92,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				const authContext = await ctx;
 				const methodName =
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
-				const pathName = context?.path ?? endpoint.path ?? "/:virtual";
+				const route = endpoint.path ?? "/:virtual";
 
 				let internalContext: InternalContext = {
 					...context,
@@ -123,9 +108,9 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				const hasRequest = context?.request instanceof Request;
 				const shouldReturnResponse = context?.asResponse ?? hasRequest;
 				return withSpan(
-					`${methodName} ${pathName}`,
+					`${methodName} ${route}`,
 					{
-						[ATTR_HTTP_ROUTE]: pathName,
+						[ATTR_HTTP_ROUTE]: route,
 						[ATTR_OPERATION_ID]: operationId,
 					},
 					async () =>
@@ -181,9 +166,9 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								internalContext,
 								() =>
 									withSpan(
-										`handler ${pathName}`,
+										`handler ${route}`,
 										{
-											[ATTR_HTTP_ROUTE]: pathName,
+											[ATTR_HTTP_ROUTE]: route,
 											[ATTR_OPERATION_ID]: operationId,
 										},
 										() => (endpoint as any)(internalContext as any),
@@ -300,12 +285,12 @@ async function runBeforeHooks(
 		}
 		if (matched) {
 			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
-			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const route = endpoint.path ?? "/:virtual";
 			const result = await withSpan(
-				`hook before ${path} ${hookSource}`,
+				`hook before ${route} ${hookSource}`,
 				{
 					[ATTR_HOOK_TYPE]: "before",
-					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_HTTP_ROUTE]: route,
 					[ATTR_CONTEXT]: hookSource,
 					[ATTR_OPERATION_ID]: operationId,
 				},
@@ -357,12 +342,12 @@ async function runAfterHooks(
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
 			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
-			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const route = endpoint.path ?? "/:virtual";
 			const result = (await withSpan(
-				`hook after ${path} ${hookSource}`,
+				`hook after ${route} ${hookSource}`,
 				{
 					[ATTR_HOOK_TYPE]: "after",
-					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_HTTP_ROUTE]: route,
 					[ATTR_CONTEXT]: hookSource,
 					[ATTR_OPERATION_ID]: operationId,
 				},
