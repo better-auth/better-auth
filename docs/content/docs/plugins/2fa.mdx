@@ -113,7 +113,7 @@ By default, Two Factor requires a credential (password) account. To allow passwo
 
 ### Sign In with 2FA
 
-When a user with 2FA enabled tries to sign in via email, the response object will contain `twoFactorRedirect` set to `true`. This indicates that the user needs to verify their 2FA code.
+When a user with 2FA enabled tries to sign in via email, the response object will contain `twoFactorRedirect` set to `true` and `twoFactorMethods` — an array of the 2FA methods available for the user (e.g. `["totp"]`, `["totp", "otp"]`). Use `twoFactorMethods` to decide which verification UI to show.
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
@@ -127,7 +127,8 @@ await authClient.signIn.email({
     {
         async onSuccess(context) {
             if (context.data.twoFactorRedirect) {
-                // Handle the 2FA verification in place
+                const methods = context.data.twoFactorMethods // e.g. ["totp", "otp"]
+                // Show the appropriate 2FA verification UI based on available methods
             }
         },
     }
@@ -143,7 +144,8 @@ import { twoFactorClient } from "better-auth/client/plugins";
 const authClient = createAuthClient({
     plugins: [
         twoFactorClient({
-            onTwoFactorRedirect(){
+            onTwoFactorRedirect({ twoFactorMethods }){
+                // twoFactorMethods is e.g. ["totp", "otp"]
                 // Handle the 2FA verification globally
             },
         }),
@@ -193,6 +195,7 @@ const { headers: responseHeaders, response } = await auth.api.signInEmail({
 });
 
 if ("twoFactorRedirect" in response) {
+	// response.twoFactorMethods is e.g. ["totp", "otp"]
 	// Forward the cookies from responseHeaders into the next auth.api 2FA call.
 	// Handle the 2FA verification in place
 }
@@ -489,6 +492,7 @@ The plugin requires 1 additional field in the `user` table and 1 additional tabl
 Table: `user`
 
 <DatabaseTable
+    name="user"
     fields={[
         { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
     ]}
@@ -497,11 +501,13 @@ Table: `user`
 Table: `twoFactor`
 
 <DatabaseTable
+    name="twoFactor"
     fields={[
         { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
         { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
         { name: "secret", type: "string", description: "The secret used to generate the TOTP code." },
         { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
+        { name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment" },
     ]}
 />
 
@@ -598,7 +604,8 @@ import { twoFactorClient } from "better-auth/client/plugins"
 const authClient =  createAuthClient({
     plugins: [
         twoFactorClient({ // [!code highlight]
-            onTwoFactorRedirect(){ // [!code highlight]
+            onTwoFactorRedirect({ twoFactorMethods }){ // [!code highlight]
+                // twoFactorMethods is e.g. ["totp", "otp"] // [!code highlight]
                 window.location.href = "/2fa" // Handle the 2FA verification redirect // [!code highlight]
             } // [!code highlight]
         }) // [!code highlight]
@@ -609,4 +616,4 @@ const authClient =  createAuthClient({
 
 **Options**
 
-`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. This can be used to redirect the user to the 2FA page.
+`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. Receives a context object with `twoFactorMethods` — an array of enabled 2FA methods (e.g. `["totp", "otp"]`). This can be used to redirect the user to the appropriate 2FA page.

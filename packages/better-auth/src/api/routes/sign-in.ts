@@ -181,7 +181,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			body: socialSignInBodySchema,
 			metadata: {
 				$Infer: {
-					body: socialSignInBodySchema,
+					body: {} as z.infer<typeof socialSignInBodySchema>,
 					returned: {} as {
 						redirect: boolean;
 						token?: string | undefined;
