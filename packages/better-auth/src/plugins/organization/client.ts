@@ -232,6 +232,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
 			"/organization/list-user-teams": "GET",
+			"/organization/get-invitation": "GET",
+			"/organization/signup-with-invitation": "POST",
 		},
 		atomListeners: [
 			{

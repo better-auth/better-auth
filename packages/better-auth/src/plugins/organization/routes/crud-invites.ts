@@ -5,6 +5,7 @@ import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import { parseUserOutput } from "../../../db/schema";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
@@ -1019,12 +1020,6 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
-			if (!session) {
-				throw APIError.fromStatus("UNAUTHORIZED", {
-					message: "Not authenticated",
-				});
-			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const invitation = await adapter.findInvitationById(ctx.query.id);
 			if (
@@ -1036,12 +1031,6 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
-				);
-			}
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,
 			);
@@ -1051,11 +1040,11 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				);
 			}
-			const member = await adapter.findMemberByOrgId({
+			const inviterMember = await adapter.findMemberByOrgId({
 				userId: invitation.inviterId,
 				organizationId: invitation.organizationId,
 			});
-			if (!member) {
+			if (!inviterMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
@@ -1066,7 +1055,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				...invitation,
 				organizationName: organization.name,
 				organizationSlug: organization.slug,
-				inviterEmail: member.user.email,
+				inviterEmail: inviterMember.user.email,
 			});
 		},
 	);
@@ -1235,5 +1224,177 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 				(inv) => inv.status === "pending",
 			);
 			return ctx.json(pendingInvitations);
+		},
+	);
+
+/**
+ * ### Endpoint
+ *
+ * POST `/organization/signup-with-invitation`
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.signupWithInvitation`
+ *
+ * **client:**
+ * `authClient.organization.signupWithInvitation`
+ *
+ * Allows a user without an existing account to sign up and accept an
+ * organization invitation in a single step. The email is considered
+ * verified because the invitation was sent to that address.
+ *
+ * For users who already have an account, they should sign in and then
+ * call `acceptInvitation` instead. If a user with the invited email
+ * already exists, this endpoint returns `USER_ALREADY_EXISTS_PLEASE_SIGN_IN`.
+ */
+export const signupWithInvitation = <O extends OrganizationOptions>(
+	options: O,
+) =>
+	createAuthEndpoint(
+		"/organization/signup-with-invitation",
+		{
+			method: "POST",
+			body: z.object({
+				invitationId: z.string().meta({
+					description: "The ID of the invitation",
+				}),
+				name: z.string().meta({
+					description: "The name of the new user",
+				}),
+				password: z.string().meta({
+					description: "The password for the new account",
+				}),
+			}),
+			use: [orgMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "signupWithInvitation",
+					summary: "Sign up and accept an invitation",
+					description:
+						"Create a new account and accept an organization invitation in one step",
+					responses: {
+						200: {
+							description: "Account created and invitation accepted",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											token: { type: "string" },
+											user: { type: "object" },
+											member: { type: "object" },
+											invitation: { type: "object" },
+										},
+										required: ["token", "user", "member", "invitation"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const invitation = await adapter.findInvitationById(
+				ctx.body.invitationId,
+			);
+
+			if (
+				!invitation ||
+				invitation.expiresAt < new Date() ||
+				invitation.status !== "pending"
+			) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
+
+			const existingUser = await ctx.context.internalAdapter.findUserByEmail(
+				invitation.email,
+			);
+			if (existingUser) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_ALREADY_EXISTS_PLEASE_SIGN_IN,
+				);
+			}
+
+			const { password, name } = ctx.body;
+			const minPasswordLength = ctx.context.password.config.minPasswordLength;
+			if (password.length < minPasswordLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+			}
+			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+			if (password.length > maxPasswordLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			}
+
+			const hash = await ctx.context.password.hash(password);
+
+			const newUser = await ctx.context.internalAdapter.createUser({
+				email: invitation.email,
+				name,
+				emailVerified: true,
+			});
+			if (!newUser) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+				);
+			}
+
+			await ctx.context.internalAdapter.linkAccount({
+				userId: newUser.id,
+				providerId: "credential",
+				accountId: newUser.id,
+				password: hash,
+			});
+
+			const acceptedInvitation = await adapter.updateInvitation({
+				invitationId: ctx.body.invitationId,
+				status: "accepted",
+			});
+			if (!acceptedInvitation) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
+				);
+			}
+
+			const member = await adapter.createMember({
+				organizationId: invitation.organizationId,
+				userId: newUser.id,
+				role: invitation.role,
+				createdAt: new Date(),
+			});
+
+			const session = await ctx.context.internalAdapter.createSession(
+				newUser.id,
+				false,
+			);
+			if (!session) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+				);
+			}
+
+			await adapter.setActiveOrganization(
+				session.token,
+				invitation.organizationId,
+				ctx,
+			);
+
+			await setSessionCookie(ctx, { session, user: newUser });
+
+			return ctx.json({
+				token: session.token,
+				user: parseUserOutput(ctx.context.options, newUser),
+				member,
+				invitation: acceptedInvitation,
+			});
 		},
 	);
