@@ -2,7 +2,7 @@ import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { ClientAssertionConfig } from "./client-assertion";
-import { signClientAssertion } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
 export async function clientCredentialsTokenRequest({
@@ -30,32 +30,14 @@ export async function clientCredentialsTokenRequest({
 				"private_key_jwt authentication requires a clientAssertion configuration",
 			);
 		}
-		let assertion = clientAssertion.assertion;
-		if (!assertion) {
-			const primaryClientId = Array.isArray(options.clientId)
-				? options.clientId[0]
-				: options.clientId;
-			const audEndpoint = tokenEndpoint ?? clientAssertion.tokenEndpoint;
-			if (!audEndpoint) {
-				throw new Error(
-					"private_key_jwt requires a tokenEndpoint for the JWT audience claim",
-				);
-			}
-			assertion = await signClientAssertion({
-				clientId: primaryClientId,
-				tokenEndpoint: audEndpoint,
-				privateKeyJwk: clientAssertion.privateKeyJwk,
-				privateKeyPem: clientAssertion.privateKeyPem,
-				kid: clientAssertion.kid,
-				algorithm: clientAssertion.algorithm,
-				expiresIn: clientAssertion.expiresIn,
-			});
-		}
-		extraParams = {
-			client_assertion: assertion,
-			client_assertion_type:
-				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-		};
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		extraParams = await resolveAssertionParams({
+			clientAssertion,
+			clientId: primaryClientId,
+			tokenEndpoint,
+		});
 	}
 
 	return createClientCredentialsTokenRequest({
@@ -100,25 +82,17 @@ export function createClientCredentialsTokenRequest({
 			}
 		}
 	}
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
 	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		const encodedCredentials = base64.encode(
 			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
-	} else if (authentication === "private_key_jwt") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		body.set("client_id", primaryClientId);
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
+		if (authentication !== "private_key_jwt" && options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
 	}

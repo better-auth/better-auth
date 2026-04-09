@@ -18,6 +18,9 @@ export const ASSERTION_SIGNING_ALGORITHMS = [
 export type AssertionSigningAlgorithm =
 	(typeof ASSERTION_SIGNING_ALGORITHMS)[number];
 
+export const CLIENT_ASSERTION_TYPE =
+	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+
 export interface ClientAssertionConfig {
 	/** Pre-signed JWT assertion string. If provided, signing is skipped. */
 	assertion?: string;
@@ -93,4 +96,41 @@ export async function signClientAssertion({
 		.setExpirationTime(now + expiresIn)
 		.setJti(jti)
 		.sign(key);
+}
+
+/**
+ * Resolves a ClientAssertionConfig into `client_assertion` + `client_assertion_type`
+ * params for injection into a token request body.
+ */
+export async function resolveAssertionParams({
+	clientAssertion,
+	clientId,
+	tokenEndpoint,
+}: {
+	clientAssertion: ClientAssertionConfig;
+	clientId: string;
+	tokenEndpoint?: string;
+}): Promise<Record<string, string>> {
+	let assertion = clientAssertion.assertion;
+	if (!assertion) {
+		const audEndpoint = tokenEndpoint ?? clientAssertion.tokenEndpoint;
+		if (!audEndpoint) {
+			throw new Error(
+				"private_key_jwt requires a tokenEndpoint for the JWT audience claim",
+			);
+		}
+		assertion = await signClientAssertion({
+			clientId,
+			tokenEndpoint: audEndpoint,
+			privateKeyJwk: clientAssertion.privateKeyJwk,
+			privateKeyPem: clientAssertion.privateKeyPem,
+			kid: clientAssertion.kid,
+			algorithm: clientAssertion.algorithm,
+			expiresIn: clientAssertion.expiresIn,
+		});
+	}
+	return {
+		client_assertion: assertion,
+		client_assertion_type: CLIENT_ASSERTION_TYPE,
+	};
 }

@@ -17,6 +17,7 @@ import type { GrantType } from "./types/oauth";
 import { userNormalClaims } from "./userinfo";
 import {
 	decryptStoredClientSecret,
+	destructureCredentials,
 	extractClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
@@ -588,14 +589,11 @@ async function handleAuthorizationCodeGrant(
 		opts,
 		`${ctx.context.baseURL}/oauth2/token`,
 	);
-	const client_id = credentials?.clientId;
-	const client_secret =
-		credentials?.method === "client_secret_basic" ||
-		credentials?.method === "client_secret_post"
-			? credentials.clientSecret
-			: undefined;
-	const preVerifiedClient =
-		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
 
 	const {
 		code,
@@ -796,14 +794,11 @@ async function handleClientCredentialsGrant(
 		opts,
 		`${ctx.context.baseURL}/oauth2/token`,
 	);
-	const client_id = credentials?.clientId;
-	const client_secret =
-		credentials?.method === "client_secret_basic" ||
-		credentials?.method === "client_secret_post"
-			? credentials.clientSecret
-			: undefined;
-	const preVerifiedClient =
-		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
 
 	const { scope }: { scope?: string } = ctx.body;
 
@@ -946,14 +941,11 @@ async function handleRefreshTokenGrant(
 		opts,
 		`${ctx.context.baseURL}/oauth2/token`,
 	);
-	const client_id = credentials?.clientId;
-	const client_secret =
-		credentials?.method === "client_secret_basic" ||
-		credentials?.method === "client_secret_post"
-			? credentials.clientSecret
-			: undefined;
-	const preVerifiedClient =
-		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
 
 	const {
 		refresh_token,

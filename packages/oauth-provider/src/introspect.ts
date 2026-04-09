@@ -13,6 +13,7 @@ import type {
 	Scope,
 } from "./types";
 import {
+	destructureCredentials,
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
@@ -407,14 +408,11 @@ export async function introspectEndpoint(
 		opts,
 		`${ctx.context.baseURL}/oauth2/introspect`,
 	);
-	const client_id = credentials?.clientId;
-	const client_secret =
-		credentials?.method === "client_secret_basic" ||
-		credentials?.method === "client_secret_post"
-			? credentials.clientSecret
-			: undefined;
-	const preVerifiedClient =
-		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
 
 	if (!client_id || (!client_secret && !preVerifiedClient)) {
 		throw new APIError("UNAUTHORIZED", {

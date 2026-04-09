@@ -11,6 +11,7 @@ import type {
 	Scope,
 } from "./types";
 import {
+	destructureCredentials,
 	extractClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
@@ -256,14 +257,11 @@ export async function revokeEndpoint(
 		opts,
 		`${ctx.context.baseURL}/oauth2/revoke`,
 	);
-	const client_id = credentials?.clientId;
-	const client_secret =
-		credentials?.method === "client_secret_basic" ||
-		credentials?.method === "client_secret_post"
-			? credentials.clientSecret
-			: undefined;
-	const preVerifiedClient =
-		credentials?.method === "private_key_jwt" ? credentials.client : undefined;
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
 
 	if (!client_id) {
 		throw new APIError("UNAUTHORIZED", {

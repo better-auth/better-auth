@@ -1,6 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { AssertionSigningAlgorithm } from "@better-auth/core/oauth2";
-import { ASSERTION_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
+import {
+	ASSERTION_SIGNING_ALGORITHMS,
+	CLIENT_ASSERTION_TYPE,
+} from "@better-auth/core/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
 import {
@@ -12,12 +15,11 @@ import {
 import type { OAuthOptions, SchemaClient, Scope } from "../types";
 import { getClient } from "./index";
 
-const ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
-
 // JWKS URI cache with 5-minute TTL
 const jwksCache = new Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>();
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+const ALGORITHMS_LIST = [...ASSERTION_SIGNING_ALGORITHMS] as string[];
 const pendingAssertionIds = new Set<string>();
 
 /**
@@ -201,7 +203,7 @@ export async function verifyClientAssertion(
 	clientIdHint?: string,
 	expectedAudience?: string,
 ): Promise<{ clientId: string; client: SchemaClient<Scope[]> }> {
-	if (clientAssertionType !== ASSERTION_TYPE) {
+	if (clientAssertionType !== CLIENT_ASSERTION_TYPE) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "unsupported client_assertion_type",
 			error: "invalid_client",
@@ -287,7 +289,7 @@ export async function verifyClientAssertion(
 		issuer: clientId,
 		subject: clientId,
 		audience,
-		algorithms: [...ASSERTION_SIGNING_ALGORITHMS] as string[],
+		algorithms: ALGORITHMS_LIST,
 	};
 
 	// NOTE: We do NOT use jose's maxTokenAge option because it bounds (now - iat),

@@ -520,6 +520,24 @@ export type ExtractedCredentials =
 			clientId: string;
 	  };
 
+/** Destructures ExtractedCredentials into the fields each grant handler needs. */
+export function destructureCredentials(
+	credentials: ExtractedCredentials | null,
+) {
+	return {
+		clientId: credentials?.clientId,
+		clientSecret:
+			credentials?.method === "client_secret_basic" ||
+			credentials?.method === "client_secret_post"
+				? credentials.clientSecret
+				: undefined,
+		preVerifiedClient:
+			credentials?.method === "private_key_jwt"
+				? credentials.client
+				: undefined,
+	};
+}
+
 /**
  * Extracts and resolves client credentials from the request.
  * Supports: client_secret_basic, client_secret_post, private_key_jwt, and none (public).

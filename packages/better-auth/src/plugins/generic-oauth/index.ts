@@ -17,6 +17,16 @@ import {
 } from "./routes";
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
+function buildClientAssertion(
+	config: GenericOAuthConfig,
+	tokenEndpoint: string,
+) {
+	if (config.authentication !== "private_key_jwt" || !config.clientAssertion) {
+		return undefined;
+	}
+	return { ...config.clientAssertion, tokenEndpoint };
+}
+
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
@@ -167,13 +177,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
-							clientAssertion:
-								c.authentication === "private_key_jwt" && c.clientAssertion
-									? {
-											...c.clientAssertion,
-											tokenEndpoint: finalTokenUrl,
-										}
-									: undefined,
+							clientAssertion: buildClientAssertion(c, finalTokenUrl),
 						});
 					},
 					async refreshAccessToken(
@@ -204,13 +208,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
-							clientAssertion:
-								c.authentication === "private_key_jwt" && c.clientAssertion
-									? {
-											...c.clientAssertion,
-											tokenEndpoint: finalTokenUrl,
-										}
-									: undefined,
+							clientAssertion: buildClientAssertion(c, finalTokenUrl),
 							tokenEndpoint: finalTokenUrl,
 						});
 					},

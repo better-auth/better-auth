@@ -3,7 +3,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
 import type { ClientAssertionConfig } from "./client-assertion";
-import { signClientAssertion } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
@@ -41,33 +41,15 @@ export async function authorizationCodeRequest({
 				"private_key_jwt authentication requires a clientAssertion configuration",
 			);
 		}
-		let assertion = clientAssertion.assertion;
-		if (!assertion) {
-			const primaryClientId = Array.isArray(options.clientId)
-				? options.clientId[0]
-				: options.clientId;
-			const audEndpoint = tokenEndpoint ?? clientAssertion.tokenEndpoint;
-			if (!audEndpoint) {
-				throw new Error(
-					"private_key_jwt requires a tokenEndpoint for the JWT audience claim",
-				);
-			}
-			assertion = await signClientAssertion({
-				clientId: primaryClientId,
-				tokenEndpoint: audEndpoint,
-				privateKeyJwk: clientAssertion.privateKeyJwk,
-				privateKeyPem: clientAssertion.privateKeyPem,
-				kid: clientAssertion.kid,
-				algorithm: clientAssertion.algorithm,
-				expiresIn: clientAssertion.expiresIn,
-			});
-		}
-		additionalParams = {
-			...additionalParams,
-			client_assertion: assertion,
-			client_assertion_type:
-				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-		};
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		const assertionParams = await resolveAssertionParams({
+			clientAssertion,
+			clientId: primaryClientId,
+			tokenEndpoint,
+		});
+		additionalParams = { ...additionalParams, ...assertionParams };
 	}
 
 	return createAuthorizationCodeRequest({
@@ -129,28 +111,17 @@ export function createAuthorizationCodeRequest({
 			}
 		}
 	}
-	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
-	// Fixes compatibility with providers like Notion, Twitter, etc.
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
 	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		const encodedCredentials = base64.encode(
 			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
-	} else if (authentication === "private_key_jwt") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		body.set("client_id", primaryClientId);
-		// client_assertion + client_assertion_type flow through additionalParams
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
+		if (authentication !== "private_key_jwt" && options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
 	}

@@ -4,6 +4,8 @@ export type {
 } from "./client-assertion";
 export {
 	ASSERTION_SIGNING_ALGORITHMS,
+	CLIENT_ASSERTION_TYPE,
+	resolveAssertionParams,
 	signClientAssertion,
 } from "./client-assertion";
 export {
