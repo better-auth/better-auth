@@ -55,10 +55,84 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
-		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
 };
+
+/**
+ * Normalizes timestamp-like values returned by adapters.
+ *
+ * Accepts Date instances, epoch milliseconds as numbers, and strings that are
+ * either ISO dates or numeric millisecond values such as "1774295570569.0".
+ */
+export function normalizeTimestampValue(value: unknown): Date | undefined {
+	if (value == null) {
+		return undefined;
+	}
+
+	if (value instanceof Date) {
+		return Number.isFinite(value.getTime()) ? value : undefined;
+	}
+
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+
+		const parsed = new Date(value);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+
+		const numeric = Number(trimmed);
+		if (Number.isFinite(numeric)) {
+			const parsed = new Date(numeric);
+			return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+		}
+
+		const parsed = new Date(trimmed);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	return undefined;
+}
+
+/**
+ * Resolves a session auth time from common adapter return shapes.
+ */
+export function resolveSessionAuthTime(value: unknown): Date | undefined {
+	if (value instanceof Date) {
+		return normalizeTimestampValue(value);
+	}
+
+	if (!value || typeof value !== "object") {
+		return normalizeTimestampValue(value);
+	}
+
+	const direct =
+		normalizeTimestampValue((value as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((value as Record<string, unknown>).created_at);
+
+	if (direct) {
+		return direct;
+	}
+
+	const nested = (value as Record<string, unknown>).session;
+	if (!nested || typeof nested !== "object") {
+		return undefined;
+	}
+
+	return (
+		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
+	);
+}
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
 
@@ -441,7 +515,7 @@ export function parsePrompt(prompt: string) {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
 	const uri = client.redirectUris?.[0];
 	if (!uri) {
 		throw new BetterAuthError(
@@ -457,7 +531,7 @@ export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export async function computePairwiseSub(
+async function computePairwiseSub(
 	userId: string,
 	client: SchemaClient<Scope[]>,
 	secret: string,

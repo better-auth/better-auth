@@ -11,6 +11,7 @@ import type {
 } from "../../plugins/organization/schema";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { Prettify } from "../../types/helper";
+import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
@@ -124,6 +125,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	type Schema = CO["schema"];
 	return {
 		id: "organization",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as OrganizationPlugin<{
 			ac: CO["ac"] extends AccessControl
 				? CO["ac"]

@@ -15,57 +15,6 @@ Better Auth aims to be the most comprehensive auth library. It provides a wide r
 
 ---
 
-## AI tooling
+## AI resources
 
-### LLMs.txt
-
-Better Auth exposes an `LLMs.txt` that helps AI models understand how to integrate and interact with your authentication system. See it at [https://better-auth.com/llms.txt](https://better-auth.com/llms.txt).
-
-### Skills
-
-Better Auth provides skills that can be added to your AI coding assistant to help it understand Better Auth best practices and implementation patterns.
-
-```bash title="terminal"
-npx skills add better-auth/skills
-```
-
-### MCP
-
-Better Auth provides an MCP server so you can use it with any AI model that supports the Model Context Protocol (MCP).
-
-<AddToCursor />
-
-#### Manual Configuration
-
-Alternatively, you can manually configure the MCP server for each client:
-
-<Tabs items={["Claude Code", "Open Code", "Manual"]}>
-    <Tab value="Claude Code">
-      ```bash title="terminal"
-      claude mcp add --transport http better-auth https://context7.com/better-auth/better-auth
-      ```
-    </Tab>
-    <Tab value="Open Code">
-      ```json title="opencode.json"
-        {
-            "$schema": "https://opencode.ai/config.json",
-            "mcp": {
-                "better-auth": {
-                    "type": "remote",
-                    "url": "https://context7.com/better-auth/better-auth",
-                    "enabled": true,
-                }
-            }
-        }
-      ```
-    </Tab>
-    <Tab value="Manual">
-     ```json title="mcp.json"
-    {
-        "better-auth": {
-            "url": "https://context7.com/better-auth/better-auth"
-        }
-    }
-    ```
-    </Tab>
-</Tabs>
+Your auth lives in your codebase. Better Auth fits well into agentic workflows. See [AI Resources](/docs/ai-resources) for **Ask AI** in the docs, **[LLMs.txt](https://www.better-auth.com/llms.txt)**, the **[documentation MCP server](/docs/ai-resources/mcp)** (`https://mcp.better-auth.com/mcp`), and **[Skills](/docs/ai-resources/skills)** for coding assistants.

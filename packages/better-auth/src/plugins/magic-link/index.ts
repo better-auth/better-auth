@@ -8,7 +8,8 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseUserOutput } from "../../db/schema";
+import { parseSessionOutput, parseUserOutput } from "../../db";
+import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
@@ -168,6 +169,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 	return {
 		id: "magic-link",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -437,6 +439,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						return ctx.json({
 							token: session.token,
 							user: parseUserOutput(ctx.context.options, user),
+							session: parseSessionOutput(ctx.context.options, session),
 						});
 					}
 					if (isNewUser) {

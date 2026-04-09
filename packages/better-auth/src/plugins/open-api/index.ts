@@ -2,6 +2,7 @@ import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "../../api";
 import { HIDE_METADATA } from "../../utils";
+import { PACKAGE_VERSION } from "../../version";
 import { generator } from "./generator";
 import { logo } from "./logo";
 
@@ -102,6 +103,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 	const path = options?.path ?? "/reference";
 	return {
 		id: "open-api",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			generateOpenAPISchema: createAuthEndpoint(
 				"/open-api/generate-schema",

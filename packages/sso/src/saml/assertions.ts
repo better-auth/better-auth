@@ -8,7 +8,6 @@ export interface AssertionCounts {
 	total: number;
 }
 
-/** @lintignore used in tests */
 export function countAssertions(xml: string): AssertionCounts {
 	let parsed: unknown;
 	try {

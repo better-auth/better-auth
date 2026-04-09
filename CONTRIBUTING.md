@@ -18,7 +18,7 @@ The Better Auth monorepo is organized as follows:
 * `/packages/expo` - Expo integration
 * `/packages/stripe` - Stripe payment integration
 * `/packages/sso` - SSO plugin with SAML and OIDC support
-* `/landing` - Documentation website
+* `/docs` - Documentation website
 * `/examples` - Example applications
 * `/demo` - Demo applications
 
@@ -206,7 +206,7 @@ pnpm lint:fix
 
 8. Push your branch to your fork
 
-9. Open a pull request against the **canary** branch. In your PR description:
+9. Open a pull request against the **main** branch. In your PR description:
    * Clearly describe what changes you made and why
    * Include any relevant context or background
    * List any breaking changes or deprecations

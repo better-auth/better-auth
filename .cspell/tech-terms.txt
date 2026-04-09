@@ -50,3 +50,11 @@ reactivations
 whsec
 moonshotai
 kimi
+ilike
+nvmrc
+retarget
+retargeted
+GHEOF
+denoland
+zizmor
+zizmorcore
