@@ -802,11 +802,21 @@ function formatReleaseBody(opts: FormatOptions): string {
 					? ` ([#${entry.prNumber}](https://github.com/${REPO}/pull/${entry.prNumber}))`
 					: "";
 
+				const descLines = entry.description.split("\n");
+				const firstLine = descLines[0]!;
+				// Indent continuation lines so markdown keeps them inside the list item
+				const rest = descLines
+					.slice(1)
+					.map((l) => (l ? `  ${l}` : l))
+					.join("\n");
+
 				if (changeType === "breaking") {
 					// Breaking changes get bold description for the AI to expand
-					lines.push(`**BREAKING:** ${entry.description}${prLink}`);
+					const body = rest ? `\n${rest}` : "";
+					lines.push(`**BREAKING:** ${firstLine}${prLink}${body}`);
 				} else {
-					lines.push(`- ${entry.description}${prLink}`);
+					const body = rest ? `\n${rest}` : "";
+					lines.push(`- ${firstLine}${prLink}${body}`);
 				}
 			}
 			lines.push("");
