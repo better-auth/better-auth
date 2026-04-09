@@ -10,6 +10,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
+import { sanitizeErrorCode } from "../../api/routes/callback";
 import { setSessionCookie } from "../../cookies";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -536,10 +537,12 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw e;
 			}
 
-			if (result.error) {
-				return redirectOnError(result.error.split(" ").join("_"));
+			if (result.error || !result.data) {
+				return redirectOnError(
+					sanitizeErrorCode(result.error || "unable_to_create_user"),
+				);
 			}
-			const { session, user } = result.data!;
+			const { session, user } = result.data;
 			await setSessionCookie(ctx, {
 				session,
 				user,
