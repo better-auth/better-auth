@@ -338,14 +338,6 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						);
 					}
-					// Reject backup codes from an abandoned (unverified) TOTP enrollment.
-					// Using === false so pre-migration rows (absent/null) remain valid.
-					if (twoFactor.verified === false) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
-						);
-					}
 					const validate = await verifyBackupCode(
 						{
 							backupCodes: twoFactor.backupCodes,

@@ -294,31 +294,27 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			}
 
 			// Enrollment mode: TOTP row exists but hasn't been verified yet.
-			// This covers both fresh TOTP setup (twoFactorEnabled=false) and
-			// adding TOTP to an OTP-only account (twoFactorEnabled=true).
-			if (twoFactor.verified === false) {
+			// This covers fresh TOTP setup (twoFactorEnabled=false),
+			// adding TOTP to an OTP-only account (twoFactorEnabled=true),
+			// and pre-migration rows where verified is null/undefined.
+			if (twoFactor.verified !== true) {
 				if (!user.twoFactorEnabled) {
-					if (!session.session) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-						);
-					}
+					// session.session is guaranteed non-null here: the sign-in guard
+					// above already rejected isSignIn && verified === false.
+					const activeSession = session.session!;
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,
 						{
 							twoFactorEnabled: true,
 						},
 					);
-					const newSession = await ctx.context.internalAdapter
-						.createSession(user.id, false, session.session)
-						.catch((e) => {
-							throw e;
-						});
-
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
+					const newSession = await ctx.context.internalAdapter.createSession(
+						user.id,
+						false,
+						activeSession,
 					);
+
+					await ctx.context.internalAdapter.deleteSession(activeSession.token);
 					await setSessionCookie(ctx, {
 						session: newSession,
 						user: updatedUser,

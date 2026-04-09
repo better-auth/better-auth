@@ -81,6 +81,5 @@ export interface TwoFactorTable {
 	userId: string;
 	secret: string;
 	backupCodes: string;
-	enabled: boolean;
 	verified: boolean;
 }
