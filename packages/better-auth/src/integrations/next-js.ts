@@ -33,25 +33,32 @@ export const nextCookies = () => {
 					matcher(ctx) {
 						return ctx.path === "/get-session";
 					},
-					handler: createAuthMiddleware(async () => {
-						// Detect Server Component by testing if cookies can be modified.
-						// In Server Components, `cookies().set()` throws an error.
-						// In Server Actions or Route Handlers, it succeeds.
-						let cookieStore: Awaited<
-							ReturnType<typeof import("next/headers.js").cookies>
-						>;
-						try {
-							const { cookies } = await import("next/headers.js");
-							cookieStore = await cookies();
-						} catch {
-							// import failed or not in request context
+					handler: createAuthMiddleware(async (ctx) => {
+						// Real HTTP requests (via router) set cookies through
+						// response headers -- no need to skip refresh.
+						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
+						let headersStore: Awaited<
+							ReturnType<typeof import("next/headers.js").headers>
+						>;
 						try {
-							cookieStore.set("__better-auth-cookie-store", "1", { maxAge: 0 });
-							// If cookie was set successfully, we should clean up.
-							cookieStore.delete("__better-auth-cookie-store");
+							const { headers } = await import("next/headers.js");
+							headersStore = await headers();
 						} catch {
+							return;
+						}
+						// Detect RSC via headers, NOT by probing cookies().set().
+						// In Next.js, cookies().set() unconditionally triggers router
+						// cache invalidation -- even if the value is unchanged.
+						// See: next.js/packages/next/src/server/web/spec-extension/adapters/request-cookies.ts
+						//
+						// RSC sends `RSC: 1` without `next-action`. Only in that
+						// context cookies cannot be written -- skip session refresh
+						// to avoid DB/cookie mismatch.
+						const isRSC = headersStore.get("RSC") === "1";
+						const isServerAction = !!headersStore.get("next-action");
+						if (isRSC && !isServerAction) {
 							await setShouldSkipSessionRefresh(true);
 						}
 					}),
@@ -71,24 +78,22 @@ export const nextCookies = () => {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
-							const { cookies } = await import("next/headers.js");
-							let cookieHelper: Awaited<ReturnType<typeof cookies>>;
+							let cookieHelper: Awaited<
+								ReturnType<typeof import("next/headers.js").cookies>
+							>;
 							try {
+								const { cookies } = await import("next/headers.js");
 								cookieHelper = await cookies();
 							} catch (error) {
 								if (
 									error instanceof Error &&
-									error.message.startsWith(
+									(error.message.startsWith(
 										"`cookies` was called outside a request scope.",
-									)
+									) ||
+										error.message.includes("Cannot find module"))
 								) {
-									// If error it means the `cookies` was called outside request scope.
-									// NextJS docs on this: https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
-									// This often gets called in a monorepo workspace (outside of NextJS),
-									// so we will try to catch this suppress it, and ignore using next-cookies.
 									return;
 								}
-								// If it's an unexpected error, throw it.
 								throw error;
 							}
 							parsed.forEach((value, key) => {

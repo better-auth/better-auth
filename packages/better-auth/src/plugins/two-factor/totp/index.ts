@@ -314,11 +314,11 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						activeSession,
 					);
 
-					await ctx.context.internalAdapter.deleteSession(activeSession.token);
 					await setSessionCookie(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});
+					await ctx.context.internalAdapter.deleteSession(activeSession.token);
 				}
 				// Mark verified only after all session operations succeed.
 				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
