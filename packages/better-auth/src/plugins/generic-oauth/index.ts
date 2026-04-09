@@ -118,7 +118,7 @@ async function fetchUserInfo(
 	const data = userInfo.data;
 	return {
 		...data,
-		id: data.sub ?? (data as Record<string, unknown>).id ?? "",
+		id: data.sub ?? ((data as Record<string, any>).id as string) ?? "",
 		emailVerified: data.email_verified ?? false,
 		email: data.email,
 		image: data.picture,
