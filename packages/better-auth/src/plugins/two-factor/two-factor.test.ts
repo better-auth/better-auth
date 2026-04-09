@@ -556,7 +556,10 @@ describe("OTP-only enablement", async () => {
 		});
 		headers = convertSetCookieToCookie(res.headers);
 
-		const json = (await res.json()) as { backupCodes: string[] };
+		const json = (await res.json()) as {
+			totpURI: string | null;
+			backupCodes: string[];
+		};
 		expect(json.backupCodes.length).toBe(10);
 		expect(json.totpURI).toBeNull();
 
@@ -696,6 +699,7 @@ describe("two factor auth API", async () => {
 		headers = convertSetCookieToCookie(res.headers);
 
 		const json = (await res.json()) as {
+			totpURI: string | null;
 			backupCodes: string[];
 		};
 		expect(json.backupCodes.length).toBe(10);
