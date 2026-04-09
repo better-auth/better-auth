@@ -1836,7 +1836,7 @@ describe("edge cases: userId validation", async () => {
 describe("user enrollment flow", async () => {
 	let enrollmentToken: string | undefined;
 
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+	const { auth, signInWithTestUser, customFetchImpl, db } = await getTestInstance(
 		{
 			plugins: [
 				admin({
@@ -1926,7 +1926,7 @@ describe("user enrollment flow", async () => {
 		).rejects.toThrow();
 	});
 
-	it("should reject re-enrollment if user already has password", async () => {
+	it("should reject completeEnrollment with ENROLLMENT_TOKEN_NOT_FOUND_OR_EXPIRED when token is already consumed", async () => {
 		// Token was already used above; create a fresh token by calling createUser again
 		enrollmentToken = undefined;
 		await client.admin.createUser(
@@ -1939,16 +1939,64 @@ describe("user enrollment flow", async () => {
 		);
 		expect(enrollmentToken).toBeDefined();
 
-		// First enrollment
+		// First enrollment — consumes and deletes the token
 		await auth.api.completeEnrollment({
 			body: { token: enrollmentToken!, password: "firstpass123" },
 		});
 
-		// Try to re-enroll — token is deleted after first use, so it fails
-		await expect(
-			auth.api.completeEnrollment({
+		// Try to re-enroll — token is deleted after first use, so it fails with token-not-found
+		const err: any = await auth.api
+			.completeEnrollment({
 				body: { token: enrollmentToken!, password: "secondpass123" },
-			}),
-		).rejects.toThrow();
+			})
+			.catch((e) => e);
+		expect(err.body?.code).toBe("ENROLLMENT_TOKEN_NOT_FOUND_OR_EXPIRED");
+	});
+
+	/**
+	 * Ensures USER_ALREADY_HAS_PASSWORD is returned when a valid token exists
+	 * but the user already has a credential account (e.g. another enrollment
+	 * token was issued after the first one was used to set the password).
+	 */
+	it("should reject completeEnrollment with USER_ALREADY_HAS_PASSWORD when a credential already exists", async () => {
+		enrollmentToken = undefined;
+		const createRes = await client.admin.createUser(
+			{
+				name: "Already Has Pass",
+				email: "alreadyhaspass@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		const userId = createRes.data?.user?.id!;
+		const firstToken = enrollmentToken!;
+		expect(firstToken).toBeDefined();
+
+		// Complete enrollment using the first token — user now has a credential account
+		await auth.api.completeEnrollment({
+			body: { token: firstToken, password: "firstpassword123" },
+		});
+
+		// Simulate a second enrollment token being issued for the same user
+		// (e.g. admin created another invite link before the user used the first)
+		const secondToken = "secondenrolltoken";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: `user-enrollment:${secondToken}`,
+				value: userId,
+				expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		// Token is still valid but user already has a credential — should return USER_ALREADY_HAS_PASSWORD
+		const err: any = await auth.api
+			.completeEnrollment({
+				body: { token: secondToken, password: "secondpassword123" },
+			})
+			.catch((e) => e);
+		expect(err.body?.code).toBe("USER_ALREADY_HAS_PASSWORD");
 	});
 });
