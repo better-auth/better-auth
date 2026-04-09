@@ -260,7 +260,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 						path === "/organization/delete" ||
 						path === "/organization/remove-member" ||
 						path === "/organization/leave" ||
-						path === "/organization/accept-invitation"
+						path === "/organization/accept-invitation" ||
+						path === "/organization/signup-with-invitation"
 					);
 				},
 				signal: "$sessionSignal",

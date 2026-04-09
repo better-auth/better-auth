@@ -1332,6 +1332,30 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+			const membersCount = await adapter.countMembers({
+				organizationId: invitation.organizationId,
+			});
+
+			// For numeric limits we can reject early. Function-based limits need the
+			// user object and are checked after creation (with cleanup on failure).
+			if (typeof membershipLimit === "number" && membersCount >= membershipLimit) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+				);
+			}
+
 			const hash = await ctx.context.password.hash(password);
 
 			const newUser = await ctx.context.internalAdapter.createUser({
@@ -1353,6 +1377,27 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 				password: hash,
 			});
 
+			// For function-based limits, check now that we have the actual user.
+			if (typeof membershipLimit === "function") {
+				const limit = await membershipLimit(newUser, organization);
+				if (membersCount >= limit) {
+					await ctx.context.internalAdapter.deleteUser(newUser.id);
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+					);
+				}
+			}
+
+			// Run beforeAcceptInvitation hook if configured.
+			if (options?.organizationHooks?.beforeAcceptInvitation) {
+				await options.organizationHooks.beforeAcceptInvitation({
+					invitation: invitation as unknown as Invitation,
+					user: newUser,
+					organization,
+				});
+			}
+
 			const acceptedInvitation = await adapter.updateInvitation({
 				invitationId: ctx.body.invitationId,
 				status: "accepted",
@@ -1362,6 +1407,44 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 				);
+			}
+
+			// Handle team membership if teams are enabled on the invitation.
+			if (
+				ctx.context.orgOptions.teams &&
+				ctx.context.orgOptions.teams.enabled &&
+				"teamId" in acceptedInvitation &&
+				acceptedInvitation.teamId
+			) {
+				const teamIds = (acceptedInvitation.teamId as string).split(",");
+				for (const teamId of teamIds) {
+					await adapter.findOrCreateTeamMember({
+						teamId,
+						userId: newUser.id,
+					});
+
+					if (
+						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+						"undefined"
+					) {
+						const teamMembersCount = await adapter.countTeamMembers({ teamId });
+						const maximumMembersPerTeam =
+							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+							"function"
+								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+										teamId,
+										session: null as never,
+										organizationId: invitation.organizationId,
+									})
+								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+						if (teamMembersCount >= maximumMembersPerTeam) {
+							throw APIError.from(
+								"FORBIDDEN",
+								ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+							);
+						}
+					}
+				}
 			}
 
 			const member = await adapter.createMember({
@@ -1387,6 +1470,16 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 				invitation.organizationId,
 				ctx,
 			);
+
+			// Run afterAcceptInvitation hook if configured.
+			if (options?.organizationHooks?.afterAcceptInvitation) {
+				await options.organizationHooks.afterAcceptInvitation({
+					invitation: acceptedInvitation as unknown as Invitation,
+					member,
+					user: newUser,
+					organization,
+				});
+			}
 
 			await setSessionCookie(ctx, { session, user: newUser });
 

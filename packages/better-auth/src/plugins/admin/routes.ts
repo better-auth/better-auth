@@ -361,6 +361,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
+			const willEnroll = !ctx.body.password && !!opts.sendEnrollmentEmail;
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
 				email: email,
 				name: ctx.body.name,
@@ -369,6 +370,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					opts?.defaultRole ??
 					"user",
 				...ctx.body.data,
+				// Enrollment users must be unverified; override any value from data.
+				...(willEnroll ? { emailVerified: false } : {}),
 			});
 
 			if (!user) {
