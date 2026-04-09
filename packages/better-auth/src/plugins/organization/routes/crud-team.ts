@@ -781,12 +781,16 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 						description:
 							"The user ID to list teams for. Defaults to the current session user.",
 					}),
+					organizationId: z.string().optional().meta({
+						description:
+							"The organization ID to scope the team list to. If not provided, it will default to the user's active organization. Required when there is no active organization on the session.",
+					}),
 				})
 				.optional(),
 			metadata: {
 				openapi: {
 					description:
-						"List teams for a user. Defaults to the current user. Requires 'member:update' permission to query other users.",
+						"List teams for a user. Defaults to the current user and their active organization. Requires 'member:update' permission to query other users. When an explicit `organizationId` is provided, the result is scoped to that organization.",
 					responses: {
 						"200": {
 							description: "Teams retrieved successfully",
@@ -816,9 +820,11 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const targetUserId = ctx.query?.userId || session.user.id;
 			const isSelf = targetUserId === session.user.id;
+			const organizationId =
+				ctx.query?.organizationId || session.session.activeOrganizationId;
+			const isExplicitOrg = Boolean(ctx.query?.organizationId);
 
 			if (!isSelf) {
-				const organizationId = session.session.activeOrganizationId;
 				if (!organizationId) {
 					throw APIError.from(
 						"BAD_REQUEST",
@@ -873,6 +879,32 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 
 				const teams = await adapter.listTeamsByUser({
 					userId: targetUserId,
+				});
+
+				return ctx.json(
+					teams.filter((t) => t.organizationId === organizationId),
+				);
+			}
+
+			// Self-query: when an explicit `organizationId` is provided, verify
+			// the caller is a member of that org and scope the result to it.
+			// Without an explicit org, return all of the caller's teams across
+			// every organization (preserves original behavior).
+			if (isExplicitOrg && organizationId) {
+				const requesterMember = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId,
+				});
+
+				if (!requesterMember) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					);
+				}
+
+				const teams = await adapter.listTeamsByUser({
+					userId: session.user.id,
 				});
 
 				return ctx.json(
