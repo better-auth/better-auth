@@ -460,75 +460,75 @@ This hook is a good place to write audit logs or feed analytics pipelines.
 
 The Agent Auth plugin supports many options. These are the ones you will usually start with:
 
-<TypeTable
-  type={{
-providerName: {
-description: "Human-readable provider name returned in discovery metadata.",
-type: "string",
-required: false,
-},
-providerDescription: {
-description: "Description returned in the discovery document.",
-type: "string",
-required: false,
-},
-modes: {
-description: 'Supported agent modes. Defaults to `["delegated", "autonomous"]`.',
-type: '("delegated" | "autonomous")[]',
-required: false,
-},
-capabilities: {
-description:
-"Capability definitions (`name`, `description`, optional `input`, optional absolute `location` — if set, agents call this URL instead of `default_location` and you use session helpers in your handler).",
-type: "Capability[]",
-required: false,
-},
-onExecute: {
-description:
-"Handler for capabilities invoked via the default execute URL (`default_location`). Not called when the agent uses a custom per-capability `location`.",
-type: "function",
-required: false,
-},
-requireAuthForCapabilities: {
-description: "Require a host or agent JWT to list and describe capabilities.",
-type: "boolean",
-required: false,
-},
-approvalMethods: {
-description: 'Supported approval methods. Defaults to `["ciba", "device_authorization"]`.',
-type: "string[]",
-required: false,
-},
-resolveApprovalMethod: {
-description: "Choose the approval method for a request.",
-type: "function",
-required: false,
-},
-deviceAuthorizationPage: {
-description: "Path or absolute URL for the user-facing device approval page.",
-type: "string",
-required: false,
-},
-defaultHostCapabilities: {
-description: "Default capabilities applied to newly created hosts.",
-type: "string[] | function",
-required: false,
-},
-allowDynamicHostRegistration: {
-description: "Allow unknown hosts to register dynamically.",
-type: "boolean | function",
-required: false,
-},
-onEvent: {
-description: "Callback for audit and lifecycle events.",
-type: "function",
-required: false,
-},
-trustProxy: {
-description:
-"Trust `X-Forwarded-Proto` when validating JWT `aud` against request host (use behind a reverse proxy). Defaults to `false`.",
-type: "boolean",
-required: false,
-},
-}}
-/>
+export const agentAuthOptionsType = {
+  providerName: {
+    description: "Human-readable provider name returned in discovery metadata.",
+    type: "string",
+    required: false,
+  },
+  providerDescription: {
+    description: "Description returned in the discovery document.",
+    type: "string",
+    required: false,
+  },
+  modes: {
+    description: 'Supported agent modes. Defaults to `["delegated", "autonomous"]`.',
+    type: '("delegated" | "autonomous")[]',
+    required: false,
+  },
+  capabilities: {
+    description:
+      "Capability definitions (`name`, `description`, optional `input`, optional absolute `location` — if set, agents call this URL instead of `default_location` and you use session helpers in your handler).",
+    type: "Capability[]",
+    required: false,
+  },
+  onExecute: {
+    description:
+      "Handler for capabilities invoked via the default execute URL (`default_location`). Not called when the agent uses a custom per-capability `location`.",
+    type: "function",
+    required: false,
+  },
+  requireAuthForCapabilities: {
+    description: "Require a host or agent JWT to list and describe capabilities.",
+    type: "boolean",
+    required: false,
+  },
+  approvalMethods: {
+    description: 'Supported approval methods. Defaults to `["ciba", "device_authorization"]`.',
+    type: "string[]",
+    required: false,
+  },
+  resolveApprovalMethod: {
+    description: "Choose the approval method for a request.",
+    type: "function",
+    required: false,
+  },
+  deviceAuthorizationPage: {
+    description: "Path or absolute URL for the user-facing device approval page.",
+    type: "string",
+    required: false,
+  },
+  defaultHostCapabilities: {
+    description: "Default capabilities applied to newly created hosts.",
+    type: "string[] | function",
+    required: false,
+  },
+  allowDynamicHostRegistration: {
+    description: "Allow unknown hosts to register dynamically.",
+    type: "boolean | function",
+    required: false,
+  },
+  onEvent: {
+    description: "Callback for audit and lifecycle events.",
+    type: "function",
+    required: false,
+  },
+  trustProxy: {
+    description:
+      "Trust `X-Forwarded-Proto` when validating JWT `aud` against request host (use behind a reverse proxy). Defaults to `false`.",
+    type: "boolean",
+    required: false,
+  },
+}
+
+<TypeTable type={agentAuthOptionsType} />

@@ -275,25 +275,25 @@ const authClient = createAuthClient({
 })
 ```
 
-<TypeTable
-  type={{
-refetchInterval: {
-description: "Polling interval in seconds. Set to 0 to disable",
-type: "number",
-default: "0",
-},
-refetchOnWindowFocus: {
-description: "Automatically refetch session when the user switches back to the window/tab",
-type: "boolean",
-default: "true",
-},
-refetchWhenOffline: {
-description: "Whether to refetch when the device has no internet access",
-type: "boolean",
-default: "false",
-},
-}}
-/>
+export const clientSessionOptionsType = {
+  refetchInterval: {
+    description: "Polling interval in seconds. Set to 0 to disable",
+    type: "number",
+    default: "0",
+  },
+  refetchOnWindowFocus: {
+    description: "Automatically refetch session when the user switches back to the window/tab",
+    type: "boolean",
+    default: "true",
+  },
+  refetchWhenOffline: {
+    description: "Whether to refetch when the device has no internet access",
+    type: "boolean",
+    default: "false",
+  },
+}
+
+<TypeTable type={clientSessionOptionsType} />
 
 ### Disable Default Fetch Plugins
 

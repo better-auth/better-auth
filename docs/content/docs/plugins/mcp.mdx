@@ -190,59 +190,59 @@ export { handler as GET, handler as POST, handler as DELETE };
 
 The MCP plugin accepts the following configuration options:
 
-<TypeTable
-  type={{
-loginPage: {
-description: "Path to the login page where users will be redirected for authentication",
-type: "string",
-required: true
-},
-resource: {
-description: "The resource that should be returned by the protected resource metadata endpoint",
-type: "string",
-required: false
-},
-oidcConfig: {
-description: "Optional OIDC configuration options",
-type: "object",
-required: false
+export const mcpPluginOptionsType = {
+  loginPage: {
+    description: "Path to the login page where users will be redirected for authentication",
+    type: "string",
+    required: true,
+  },
+  resource: {
+    description: "The resource that should be returned by the protected resource metadata endpoint",
+    type: "string",
+    required: false,
+  },
+  oidcConfig: {
+    description: "Optional OIDC configuration options",
+    type: "object",
+    required: false,
+  },
 }
-}}
-/>
+
+<TypeTable type={mcpPluginOptionsType} />
 
 ### OIDC Configuration
 
 The plugin supports additional OIDC configuration options through the `oidcConfig` parameter:
 
-<TypeTable
-  type={{
-codeExpiresIn: {
-description: "Expiration time for authorization codes in seconds",
-type: "number",
-default: 600
-},
-accessTokenExpiresIn: {
-description: "Expiration time for access tokens in seconds",
-type: "number",
-default: 3600
-},
-refreshTokenExpiresIn: {
-description: "Expiration time for refresh tokens in seconds",
-type: "number",
-default: 604800
-},
-defaultScope: {
-description: "Default scope for OAuth requests",
-type: "string",
-default: "openid"
-},
-scopes: {
-description: "Additional scopes to support",
-type: "string[]",
-default: '["openid", "profile", "email", "offline_access"]'
+export const mcpOidcConfigOptionsType = {
+  codeExpiresIn: {
+    description: "Expiration time for authorization codes in seconds",
+    type: "number",
+    default: 600,
+  },
+  accessTokenExpiresIn: {
+    description: "Expiration time for access tokens in seconds",
+    type: "number",
+    default: 3600,
+  },
+  refreshTokenExpiresIn: {
+    description: "Expiration time for refresh tokens in seconds",
+    type: "number",
+    default: 604800,
+  },
+  defaultScope: {
+    description: "Default scope for OAuth requests",
+    type: "string",
+    default: "openid",
+  },
+  scopes: {
+    description: "Additional scopes to support",
+    type: "string[]",
+    default: '["openid", "profile", "email", "offline_access"]',
+  },
 }
-}}
-/>
+
+<TypeTable type={mcpOidcConfigOptionsType} />
 
 ## Remote MCP Client
 
@@ -393,67 +393,67 @@ The examples above use `withMcpAuth` which requires the Better Auth instance to 
 
 ### Options
 
-<TypeTable
-  type={{
-authURL: {
-description: "Full URL to Better Auth endpoints (baseURL + basePath)",
-type: "string",
-required: true
-},
-resource: {
-description: "Resource identifier for the protected resource metadata. Defaults to the origin of the server URL.",
-type: "string",
-required: false
-},
-allowedOrigin: {
-description: "Allowed CORS origin. Defaults to the authURL origin. Set to '*' to allow all origins (not recommended for production).",
-type: "string",
-required: false
-},
-fetch: {
-description: "Custom fetch implementation. Defaults to global fetch.",
-type: "typeof fetch",
-required: false
+export const mcpClientOptionsType = {
+  authURL: {
+    description: "Full URL to Better Auth endpoints (baseURL + basePath)",
+    type: "string",
+    required: true,
+  },
+  resource: {
+    description: "Resource identifier for the protected resource metadata. Defaults to the origin of the server URL.",
+    type: "string",
+    required: false,
+  },
+  allowedOrigin: {
+    description: "Allowed CORS origin. Defaults to the authURL origin. Set to '*' to allow all origins (not recommended for production).",
+    type: "string",
+    required: false,
+  },
+  fetch: {
+    description: "Custom fetch implementation. Defaults to global fetch.",
+    type: "typeof fetch",
+    required: false,
+  },
 }
-}}
-/>
+
+<TypeTable type={mcpClientOptionsType} />
 
 ### Session Object
 
 The session object returned by `verifyToken` and passed to handlers contains:
 
-<TypeTable
-  type={{
-accessToken: {
-description: "The opaque access token",
-type: "string"
-},
-refreshToken: {
-description: "The refresh token",
-type: "string"
-},
-accessTokenExpiresAt: {
-description: "When the access token expires",
-type: "string"
-},
-refreshTokenExpiresAt: {
-description: "When the refresh token expires",
-type: "string"
-},
-clientId: {
-description: "The OAuth client ID that requested the token",
-type: "string"
-},
-userId: {
-description: "The authenticated user's ID",
-type: "string"
-},
-scopes: {
-description: "Space-separated list of granted scopes",
-type: "string"
+export const mcpSessionObjectType = {
+  accessToken: {
+    description: "The opaque access token",
+    type: "string",
+  },
+  refreshToken: {
+    description: "The refresh token",
+    type: "string",
+  },
+  accessTokenExpiresAt: {
+    description: "When the access token expires",
+    type: "string",
+  },
+  refreshTokenExpiresAt: {
+    description: "When the refresh token expires",
+    type: "string",
+  },
+  clientId: {
+    description: "The OAuth client ID that requested the token",
+    type: "string",
+  },
+  userId: {
+    description: "The authenticated user's ID",
+    type: "string",
+  },
+  scopes: {
+    description: "Space-separated list of granted scopes",
+    type: "string",
+  },
 }
-}}
-/>
+
+<TypeTable type={mcpSessionObjectType} />
 
 ## Schema
 
