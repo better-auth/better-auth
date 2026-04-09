@@ -238,6 +238,7 @@ jobs:
               --head main \
               --repo "$GITHUB_REPOSITORY" \
               --title "chore: sync main to next" \
+              --label devops \
               --body "$(echo -e "$SYNC_BODY")" || true
 
             EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
