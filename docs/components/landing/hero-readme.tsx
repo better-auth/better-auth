@@ -1401,7 +1401,7 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 									/>
 								</svg>
 								<span className="text-xs font-mono">
-									{formatCount(stats.npmDownloads)} / year
+									{formatCount(stats.npmDownloads)} / week
 								</span>
 							</div>
 						</a>
