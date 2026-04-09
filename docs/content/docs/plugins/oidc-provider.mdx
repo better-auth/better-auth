@@ -446,6 +446,7 @@ The OIDC Provider plugin adds the following tables to the database:
 Table Name: `oauthApplication`
 
 <DatabaseTable
+  name="oauthApplication"
   fields={[
    {
       name: "id",
@@ -453,11 +454,11 @@ Table Name: `oauthApplication`
       description: "Database ID of the OAuth client",
       isPrimaryKey: true
    },
-    { 
-      name: "clientId", 
-      type: "string", 
+    {
+      name: "clientId",
+      type: "string",
       description: "Unique identifier for each OAuth client",
-      isPrimaryKey: true
+      isUnique: true
     },
     { 
       name: "clientSecret", 
@@ -465,17 +466,21 @@ Table Name: `oauthApplication`
       description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
       isOptional: true
     },
-    { 
-      name: "name", 
-      type: "string", 
-      description: "Name of the OAuth client",
-      isRequired: true
+    {
+      name: "icon",
+      type: "string",
+      description: "Icon of the OAuth client",
+      isOptional: true
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "Name of the OAuth client"
     },
     { 
       name: "redirectUrls",
       type: "string", 
-      description: "Comma-separated list of redirect URLs",
-      isRequired: true
+      description: "Comma-separated list of redirect URLs"
     },
     { 
       name: "metadata", 
@@ -486,26 +491,26 @@ Table Name: `oauthApplication`
     { 
       name: "type", 
       type: "string",
-      description: "Type of OAuth client (e.g., web, mobile)",
-      isRequired: true
+      description: "Type of OAuth client (e.g., web, mobile)"
     },
-    { 
-      name: "disabled", 
-      type: "boolean", 
+    {
+      name: "disabled",
+      type: "boolean",
       description: "Indicates if the client is disabled",
-      isRequired: true
+      isOptional: true
     },
     { 
-      name: "userId", 
-      type: "string", 
+      name: "userId",
+      type: "string",
       description: "ID of the user who owns the client. (optional)",
       isOptional: true,
+      isForeignKey: true,
       references: { model: "user", field: "id" }
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the OAuth client was created" 
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the OAuth client was created"
     },
    {
       name: "updatedAt",
@@ -520,6 +525,7 @@ Table Name: `oauthApplication`
 Table Name: `oauthAccessToken`
 
 <DatabaseTable
+  name="oauthAccessToken"
   fields={[
     {
       name: "id",
@@ -528,27 +534,26 @@ Table Name: `oauthAccessToken`
       isPrimaryKey: true
    },
     { 
-      name: "accessToken", 
-      type: "string", 
+      name: "accessToken",
+      type: "string",
       description: "Access token issued to the client",
+      isUnique: true
     },
     { 
-      name: "refreshToken", 
-      type: "string", 
+      name: "refreshToken",
+      type: "string",
       description: "Refresh token issued to the client",
-      isRequired: true
+      isUnique: true
     },
     { 
       name: "accessTokenExpiresAt", 
       type: "Date", 
-      description: "Expiration date of the access token",
-      isRequired: true
+      description: "Expiration date of the access token"
     },
     { 
       name: "refreshTokenExpiresAt", 
       type: "Date", 
-      description: "Expiration date of the refresh token",
-      isRequired: true
+      description: "Expiration date of the refresh token"
     },
     { 
       name: "clientId", 
@@ -558,22 +563,22 @@ Table Name: `oauthAccessToken`
       references: { model: "oauthApplication", field: "clientId" }
     },
     { 
-      name: "userId", 
-      type: "string", 
+      name: "userId",
+      type: "string",
       description: "ID of the user associated with the token",
+      isOptional: true,
       isForeignKey: true,
       references: { model: "user", field: "id" }
     },
     { 
       name: "scopes", 
       type: "string", 
-      description: "Comma-separated list of scopes granted",
-      isRequired: true
+      description: "Comma-separated list of scopes granted"
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the access token was created" 
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the access token was created"
     },
     {
       name: "updatedAt",
@@ -588,6 +593,7 @@ Table Name: `oauthAccessToken`
 Table Name: `oauthConsent`
 
 <DatabaseTable
+  name="oauthConsent"
   fields={[
     { 
       name: "id", 
@@ -612,19 +618,17 @@ Table Name: `oauthConsent`
     { 
       name: "scopes", 
       type: "string", 
-      description: "Comma-separated list of scopes consented to",
-      isRequired: true
+      description: "Comma-separated list of scopes consented to"
     },
     { 
       name: "consentGiven", 
       type: "boolean", 
-      description: "Indicates if consent was given",
-      isRequired: true
+      description: "Indicates if consent was given"
     },
-    { 
-      name: "createdAt", 
-      type: "Date", 
-      description: "Timestamp of when the consent was given" 
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the consent was given"
     },
     {
       name: "updatedAt",

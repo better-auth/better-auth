@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { PACKAGE_VERSION } from "../../version";
 import { defaultRoles } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
@@ -70,6 +71,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 
 	return {
 		id: "admin",
+		version: PACKAGE_VERSION,
 		init() {
 			return {
 				options: {

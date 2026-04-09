@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/prisma-adapter",
-  "version": "1.5.1-beta.3",
+  "version": "1.6.2",
   "description": "Prisma adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -20,10 +20,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
@@ -42,8 +43,8 @@
     }
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0",
+    "@better-auth/core": "workspace:^",
+    "@better-auth/utils": "catalog:",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
@@ -57,8 +58,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.1",
-    "prisma": "^7.4.1",
+    "@better-auth/utils": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

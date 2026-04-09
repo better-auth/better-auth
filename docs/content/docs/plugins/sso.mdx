@@ -598,7 +598,7 @@ type signInSSO = {
 
 Note: If email is provided and loginHint is not specified, email will be sent as the login_hint to OIDC providers automatically. SAML flows do not support login_hint.
 
-When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
+When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. By default, `provisionUser` only runs when a new user is registered. If you want to run it on every login (e.g. to sync upstream identity provider profile changes), set `provisionUserOnEveryLogin` to `true`. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -610,6 +610,7 @@ const auth = betterAuth({
             provisionUser: async (user) => {
                 // provision user
             },
+            provisionUserOnEveryLogin: true, // optional, default: false
             organizationProvisioning: {
                 disabled: false,
                 defaultRole: "member",
@@ -628,7 +629,7 @@ The SSO plugin provides powerful provisioning capabilities to automatically set 
 
 ### User Provisioning
 
-User provisioning allows you to run custom logic whenever a user signs in through an SSO provider. This is useful for:
+User provisioning allows you to run custom logic when a user signs in through an SSO provider. By default, `provisionUser` only runs for new users (on registration). To run it on every login, set `provisionUserOnEveryLogin` to `true`. This is useful for:
 
 - Setting up user profiles with additional data from the SSO provider
 - Synchronizing user attributes with external systems
@@ -829,7 +830,7 @@ await auth.api.registerSSOProvider({
 ### Provisioning Best Practices
 
 #### 1. Idempotent Operations
-Make sure your provisioning functions can be safely run multiple times:
+If you enable `provisionUserOnEveryLogin`, make sure your provisioning functions can be safely run multiple times:
 
 ```ts
 provisionUser: async ({ user, userInfo }) => {
@@ -1000,7 +1001,7 @@ const auth = betterAuth({
     plugins: [
         sso({
             saml: {
-                // Enable InResponseTo validation
+                // InResponseTo validation is enabled by default
                 enableInResponseToValidation: true,
                 // Optionally reject IdP-initiated SSO (stricter security)
                 allowIdpInitiated: false,
@@ -1016,7 +1017,7 @@ const auth = betterAuth({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enableInResponseToValidation` | `boolean` | `false` | Enable InResponseTo validation for SP-initiated flows. |
+| `enableInResponseToValidation` | `boolean` | `true` | Enable InResponseTo validation for SP-initiated flows. |
 | `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
 | `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
 
@@ -1404,17 +1405,18 @@ The callback route supports both GET and POST methods automatically, so you don'
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
 
 <DatabaseTable
+  name="ssoProvider"
     fields={[
         {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
+            name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
         },
-        { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
-        { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
-        { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isRequired: false },
-        { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
-        { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false }
+        { name: "issuer", type: "string", description: "The issuer identifier" },
+        { name: "domain", type: "string", description: "The domain of the provider" },
+        { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isOptional: true },
+        { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isOptional: true },
+        { name: "userId", type: "string", description: "The user ID", isForeignKey: true },
+        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isUnique: true },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isOptional: true }
     ]}
 />
 
@@ -1423,8 +1425,9 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 The `ssoProvider` schema is extended as follows:
 
 <DatabaseTable
+  name="ssoProvider"
     fields={[
-        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isRequired: false },
+        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isOptional: true },
     ]}
 />
 
@@ -1457,6 +1460,8 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 **provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
 
+**provisionUserOnEveryLogin**: If `true`, the `provisionUser` callback runs on every login, not just on registration. Defaults to `false`.
+
 **organizationProvisioning**: Options for provisioning users to an organization.
 
 **defaultOverrideUserInfo**: Override user info with the provider info by default.
@@ -1470,6 +1475,11 @@ If you want to allow account linking for specific trusted providers, enable the 
     provisionUser: {
         description: "A custom function to provision a user when they sign in with an SSO provider.",
         type: "function",
+    },
+    provisionUserOnEveryLogin: {
+        description: "If true, the provisionUser callback will be called on every login, not just when a new user is registered.",
+        type: "boolean",
+        default: false,
     },
     organizationProvisioning: {
         description: "Options for provisioning users to an organization.",
@@ -1563,9 +1573,9 @@ If you want to allow account linking for specific trusted providers, enable the 
         type: "object",
         properties: {
             enableInResponseToValidation: {
-                description: "Enable InResponseTo validation for SP-initiated SAML flows. Opt-in for backward compatibility.",
+                description: "Enable InResponseTo validation for SP-initiated SAML flows.",
                 type: "boolean",
-                default: false,
+                default: true,
             },
             allowIdpInitiated: {
                 description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",

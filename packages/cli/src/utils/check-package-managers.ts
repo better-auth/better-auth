@@ -6,7 +6,7 @@ import { env } from "@better-auth/core/env";
 import type { PackageJson } from "type-fest";
 import { findMonorepoRoot } from "./get-package-info";
 
-export async function checkPackageManagers() {
+async function checkPackageManagers() {
 	const hasPnpm = await getVersion("pnpm");
 	const hasBun = await getVersion("bun");
 	const hasYarn = await getVersion("yarn");
@@ -174,9 +174,7 @@ export function getPkgManagerStr({
 	return `${packageManager}@${version}`;
 }
 
-export async function getVersion(
-	pkgManager: PackageManager,
-): Promise<string | null> {
+async function getVersion(pkgManager: PackageManager): Promise<string | null> {
 	const version = await new Promise<string | null>((resolve) => {
 		exec(`${pkgManager} -v`, (err, stdout) => {
 			if (err) {

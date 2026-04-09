@@ -80,7 +80,7 @@ This plugin offers two main methods to do a second factor verification:
 
 ### Enabling 2FA
 
-To enable two-factor authentication, call `twoFactor.enable` with the user's password and issuer (optional):
+To enable two-factor authentication, call `twoFactor.enable` with the user's password (required for credential accounts) and issuer (optional). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
 
 <APIMethod
   path="/two-factor/enable"
@@ -90,9 +90,9 @@ To enable two-factor authentication, call `twoFactor.enable` with the user's pas
 ```ts
 type enableTwoFactor = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string = "secure-password"
+    password?: string = "secure-password"
     /**
      * An optional custom issuer for the TOTP URI. Defaults to app-name defined in your auth config.
      */
@@ -108,12 +108,12 @@ When 2FA is enabled:
 Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about verifying TOTP [here](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 
 <Callout type="warn">
-Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
+By default, Two Factor requires a credential (password) account. To allow passwordless users (passkeys, magic links, email OTP, OAuth/social, or anonymous), set `allowPasswordless: true`.
 </Callout>
 
 ### Sign In with 2FA
 
-When a user with 2FA enabled tries to sign in via email, the response object will contain `twoFactorRedirect` set to `true`. This indicates that the user needs to verify their 2FA code.
+When a user with 2FA enabled tries to sign in via email, the response object will contain `twoFactorRedirect` set to `true` and `twoFactorMethods` — an array of the 2FA methods available for the user (e.g. `["totp"]`, `["totp", "otp"]`). Use `twoFactorMethods` to decide which verification UI to show.
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
@@ -127,7 +127,8 @@ await authClient.signIn.email({
     {
         async onSuccess(context) {
             if (context.data.twoFactorRedirect) {
-                // Handle the 2FA verification in place
+                const methods = context.data.twoFactorMethods // e.g. ["totp", "otp"]
+                // Show the appropriate 2FA verification UI based on available methods
             }
         },
     }
@@ -143,7 +144,8 @@ import { twoFactorClient } from "better-auth/client/plugins";
 const authClient = createAuthClient({
     plugins: [
         twoFactorClient({
-            onTwoFactorRedirect(){
+            onTwoFactorRedirect({ twoFactorMethods }){
+                // twoFactorMethods is e.g. ["totp", "otp"]
                 // Handle the 2FA verification globally
             },
         }),
@@ -151,6 +153,24 @@ const authClient = createAuthClient({
 });
 ```
 
+Using the `twoFactorPage` config:
+
+```ts title="sign-in.ts"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
+
+const authClient = createAuthClient({
+    plugins: [
+        twoFactorClient({
+            twoFactorPage: "/two-factor", // the page to redirect if a user needs to verify their 2nd factor
+        }),
+    ],
+});
+```
+
+<Callout type="warn">
+Using the `twoFactorPage` option will cause a full page reload when redirecting users to the two-factor authentication page. If you want to avoid page reloads, consider using the `onTwoFactorRedirect` callback instead to handle the redirect programmatically within your application.
+</Callout>
 
 
 
@@ -175,6 +195,7 @@ const { headers: responseHeaders, response } = await auth.api.signInEmail({
 });
 
 if ("twoFactorRedirect" in response) {
+	// response.twoFactorMethods is e.g. ["totp", "otp"]
 	// Forward the cookies from responseHeaders into the next auth.api 2FA call.
 	// Handle the 2FA verification in place
 }
@@ -183,7 +204,7 @@ if ("twoFactorRedirect" in response) {
 
 ### Disabling 2FA
 
-To disable two-factor authentication, call `twoFactor.disable` with the user's password:
+To disable two-factor authentication, call `twoFactor.disable` with the user's password (required for credential accounts). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
 
 <APIMethod
   path="/two-factor/disable"
@@ -193,9 +214,9 @@ To disable two-factor authentication, call `twoFactor.disable` with the user's p
 ```ts
 type disableTwoFactor = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string
+    password?: string
 }
 ```
 </APIMethod>
@@ -218,9 +239,9 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
 ```ts
 type getTOTPURI = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string
+    password?: string
 }
 ```
 </APIMethod>
@@ -364,9 +385,9 @@ Generate backup codes for account recovery:
 ```ts
 type generateBackupCodes = {
     /**
-     * The users password. 
+     * The users password (required for credential accounts). 
      */
-    password: string
+    password?: string
 }
 
 if (data) {
@@ -471,6 +492,7 @@ The plugin requires 1 additional field in the `user` table and 1 additional tabl
 Table: `user`
 
 <DatabaseTable
+    name="user"
     fields={[
         { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
     ]}
@@ -479,11 +501,13 @@ Table: `user`
 Table: `twoFactor`
 
 <DatabaseTable
+    name="twoFactor"
     fields={[
         { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
         { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
-        { name: "secret", type: "string", description: "The secret used to generate the TOTP code.", isOptional: true },
-        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email.", isOptional: true },
+        { name: "secret", type: "string", description: "The secret used to generate the TOTP code." },
+        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
+        { name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment" },
     ]}
 />
 
@@ -494,6 +518,8 @@ Table: `twoFactor`
 **twoFactorTable**: The name of the table that stores the two factor authentication data. Default: `twoFactor`.
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
+
+**allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists.
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
@@ -578,7 +604,8 @@ import { twoFactorClient } from "better-auth/client/plugins"
 const authClient =  createAuthClient({
     plugins: [
         twoFactorClient({ // [!code highlight]
-            onTwoFactorRedirect(){ // [!code highlight]
+            onTwoFactorRedirect({ twoFactorMethods }){ // [!code highlight]
+                // twoFactorMethods is e.g. ["totp", "otp"] // [!code highlight]
                 window.location.href = "/2fa" // Handle the 2FA verification redirect // [!code highlight]
             } // [!code highlight]
         }) // [!code highlight]
@@ -589,4 +616,4 @@ const authClient =  createAuthClient({
 
 **Options**
 
-`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. This can be used to redirect the user to the 2FA page.
+`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. Receives a context object with `twoFactorMethods` — an array of enabled 2FA methods (e.g. `["totp", "otp"]`). This can be used to redirect the user to the appropriate 2FA page.

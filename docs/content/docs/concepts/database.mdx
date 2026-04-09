@@ -278,7 +278,7 @@ export const redisSecondaryStorage: SecondaryStorage = {
 
       if (ttl) {
         // Set with TTL in seconds
-        await redis.setex(key, ttl, stringValue);
+        await redis.set(key, stringValue, { ex: ttl });
       } else {
         // Set without TTL
         await redis.set(key, stringValue);
@@ -321,6 +321,7 @@ Better Auth requires the following tables to be present in the database. The typ
 Table Name: `user`
 
 <DatabaseTable
+  name="user"
   fields={[
     {
       name: "id",
@@ -337,6 +338,7 @@ Table Name: `user`
       name: "email",
       type: "string",
       description: "User's email address for communication and login",
+      isUnique: true,
     },
     {
       name: "emailVerified",
@@ -367,6 +369,7 @@ Table Name: `user`
 Table Name: `session`
 
 <DatabaseTable
+  name="session"
   fields={[
     {
       name: "id",
@@ -421,6 +424,7 @@ Table Name: `session`
 Table Name: `account`
 
 <DatabaseTable
+  name="account"
   fields={[
     {
       name: "id",
@@ -506,6 +510,7 @@ Table Name: `account`
 Table Name: `verification`
 
 <DatabaseTable
+  name="verification"
   fields={[
     {
       name: "id",

@@ -679,6 +679,7 @@ The Stripe plugin adds the following tables to your database:
 Table Name: `user`
 
 <DatabaseTable
+  name="user"
   fields={[
     { 
       name: "stripeCustomerId", 
@@ -694,6 +695,7 @@ Table Name: `user`
 Table Name: `organization` <small className='text-xs'>(only when `organization.enabled` is `true`)</small>
 
 <DatabaseTable
+  name="organization"
   fields={[
     {
       name: "stripeCustomerId",
@@ -709,6 +711,7 @@ Table Name: `organization` <small className='text-xs'>(only when `organization.e
 Table Name: `subscription`
 
 <DatabaseTable
+  name="subscription"
   fields={[
     { 
       name: "id", 
@@ -739,9 +742,9 @@ Table Name: `subscription`
       description: "The Stripe subscription ID",
       isOptional: true
     },
-    { 
-      name: "status", 
-      type: "string", 
+    {
+      name: "status",
+      type: "string",
       description: "The status of the subscription (active, canceled, etc.)",
       defaultValue: "incomplete"
     },

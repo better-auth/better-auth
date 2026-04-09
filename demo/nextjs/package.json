@@ -1,7 +1,6 @@
 {
   "name": "@better-auth/nextjs-demo",
   "version": "0.1.0",
-  "type": "module",
   "private": true,
   "packageManager": "pnpm@10.30.2",
   "scripts": {
@@ -68,9 +67,9 @@
     "input-otp": "^1.4.2",
     "kysely": "^0.28.11",
     "lucide-react": "^0.575.0",
-    "mcp-handler": "^1.0.7",
+    "mcp-handler": "^1.1.0",
     "mysql2": "^3.18.2",
-    "next": "16.1.6",
+    "next": "16.2.0",
     "next-themes": "^0.4.6",
     "react": "^19.2.4",
     "react-day-picker": "9.14.0",

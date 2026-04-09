@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/stripe",
-  "version": "1.5.1-beta.3",
+  "version": "1.6.2",
   "description": "Stripe plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -21,10 +21,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
@@ -70,8 +71,8 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
     "better-call": "catalog:",
     "stripe": "^18 || ^19 || ^20"
   }

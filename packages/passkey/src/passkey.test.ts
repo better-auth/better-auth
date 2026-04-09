@@ -15,17 +15,49 @@ import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
 
-vi.mock("@simplewebauthn/server", async (importOriginal) => {
-	const mod = await importOriginal<typeof import("@simplewebauthn/server")>();
+const serverMocks = vi.hoisted(() => ({
+	verifyRegistrationResponse: vi.fn(),
+}));
+
+vi.mock("@simplewebauthn/server", async () => {
+	const actual = await vi.importActual<typeof import("@simplewebauthn/server")>(
+		"@simplewebauthn/server",
+	);
 	return {
-		...mod,
-		verifyAuthenticationResponse: vi.fn(mod.verifyAuthenticationResponse),
+		...actual,
+		verifyRegistrationResponse: serverMocks.verifyRegistrationResponse,
 	};
 });
 
+const mockRegistrationResponse = {
+	id: "credential-id",
+	response: {
+		transports: ["internal"],
+	},
+};
+
+const mockRegistrationVerification = {
+	verified: true,
+	registrationInfo: {
+		aaguid: "test-aaguid",
+		credentialDeviceType: "singleDevice",
+		credentialBackedUp: false,
+		credential: {
+			id: "credential-id",
+			publicKey: new Uint8Array([1, 2, 3]),
+			counter: 0,
+		},
+	},
+};
+
 describe("passkey", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [passkey()],
+	const { auth, client, signInWithTestUser, sessionSetter, customFetchImpl } =
+		await getTestInstance({
+			plugins: [passkey()],
+		});
+
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
 	});
 
 	it("should generate register options", async () => {
@@ -52,12 +84,215 @@ describe("passkey", async () => {
 		await client.$fetch("/passkey/generate-register-options", {
 			headers: headers,
 			method: "GET",
-			onResponse(context) {
+			onResponse(context: { response: Response }) {
 				const setCookie = context.response.headers.get("Set-Cookie");
 				expect(setCookie).toBeDefined();
 				expect(setCookie).toContain("better-auth-passkey");
 			},
 		});
+	});
+
+	it("should generate register options without session when resolveUser is provided", async () => {
+		const { auth: preAuth } = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pre-auth-user",
+							name: "pre-auth@example.com",
+						}),
+					},
+				}),
+			],
+		});
+
+		const options = await preAuth.api.generatePasskeyRegistrationOptions({});
+
+		expect(options).toBeDefined();
+		expect(options).toHaveProperty("challenge");
+		expect(options).toHaveProperty("rp");
+		expect(options).toHaveProperty("user");
+		expect(options).toHaveProperty("pubKeyCredParams");
+	});
+
+	it("should require resolveUser when session is not available", async () => {
+		const { auth: preAuth } = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+					},
+				}),
+			],
+		});
+
+		await expect(
+			preAuth.api.generatePasskeyRegistrationOptions({}),
+		).rejects.toThrowError(APIError);
+	});
+
+	it("should call afterVerification and allow userId override", async () => {
+		let linkedUserId = "";
+		const afterVerification = vi.fn(async () => ({
+			userId: linkedUserId,
+		}));
+		const {
+			auth: preAuth,
+			client,
+			cookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pre-auth-user-id",
+							name: "pre-auth@example.com",
+							displayName: "Pre-auth user",
+						}),
+						afterVerification,
+					},
+				}),
+			],
+		});
+		const signUp = await preAuth.api.signUpEmail({
+			body: {
+				email: "linked-user@example.com",
+				password: "test123456",
+				name: "Linked User",
+			},
+		});
+		linkedUserId = signUp.user.id;
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			query: {
+				context: "link-token",
+			},
+			onResponse: setCookie,
+		});
+
+		const passkeyRecord = await preAuth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+			},
+		});
+
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalled();
+		expect(afterVerification).toHaveBeenCalledWith(
+			expect.objectContaining({
+				context: "link-token",
+			}),
+		);
+		expect(passkeyRecord).not.toBeNull();
+		expect(passkeyRecord!.userId).toBe(linkedUserId);
+	});
+
+	it("should reject invalid userId returned from afterVerification", async () => {
+		let resolvedUserId = "";
+		const afterVerification = vi.fn(async () => ({
+			userId: 123 as unknown as string,
+		}));
+		const {
+			auth: preAuth,
+			client,
+			cookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: resolvedUserId,
+							name: "pre-auth@example.com",
+						}),
+						afterVerification,
+					},
+				}),
+			],
+		});
+		const signUp = await preAuth.api.signUpEmail({
+			body: {
+				email: "invalid-user-id@example.com",
+				password: "test123456",
+				name: "Invalid User Id Test",
+			},
+		});
+		resolvedUserId = signUp.user.id;
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			query: {
+				context: "link-token",
+			},
+			onResponse: setCookie,
+		});
+
+		await expect(
+			preAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: {
+					response: mockRegistrationResponse,
+				},
+			}),
+		).rejects.toThrowError(APIError);
+		expect(afterVerification).toHaveBeenCalled();
+	});
+
+	it("should reject afterVerification override that mismatches session user", async () => {
+		const afterVerification = vi.fn(async () => ({
+			userId: "different-user-id",
+		}));
+		const {
+			auth: sessionAuth,
+			client,
+			cookieSetter,
+			signInWithTestUser,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						afterVerification,
+					},
+				}),
+			],
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+
+		await expect(
+			sessionAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: {
+					response: mockRegistrationResponse,
+				},
+			}),
+		).rejects.toThrowError(APIError);
+		expect(afterVerification).toHaveBeenCalled();
 	});
 
 	it("should generate authenticate options", async () => {
@@ -167,6 +402,108 @@ describe("passkey", async () => {
 			},
 		});
 		expect(deleteResult.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-4vcf-q4xf-f48m
+	 */
+	it("should not allow deleting another user's passkey", async () => {
+		const { user: userA } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: userA.id,
+				publicKey: "mockPublicKey",
+				name: "userA-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "cross-user-delete-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		await client.signUp.email(
+			{
+				email: "attacker-delete@test.com",
+				password: "password123",
+				name: "Attacker",
+			},
+			{ throw: true },
+		);
+		const headersB = new Headers();
+		await client.signIn.email(
+			{ email: "attacker-delete@test.com", password: "password123" },
+			{ throw: true, onSuccess: sessionSetter(headersB) },
+		);
+
+		await expect(
+			auth.api.deletePasskey({
+				headers: headersB,
+				body: { id: passkey.id },
+			}),
+		).rejects.toThrowError(APIError);
+
+		const stillExists = await context.adapter.findOne({
+			model: "passkey",
+			where: [{ field: "id", value: passkey.id }],
+		});
+		expect(stillExists).not.toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-4vcf-q4xf-f48m
+	 */
+	it("should not allow updating another user's passkey", async () => {
+		const { user: userA } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: userA.id,
+				publicKey: "mockPublicKey",
+				name: "original-name",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "cross-user-update-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		await client.signUp.email(
+			{
+				email: "attacker-update@test.com",
+				password: "password123",
+				name: "Attacker",
+			},
+			{ throw: true },
+		);
+		const headersB = new Headers();
+		await client.signIn.email(
+			{ email: "attacker-update@test.com", password: "password123" },
+			{ throw: true, onSuccess: sessionSetter(headersB) },
+		);
+
+		await expect(
+			auth.api.updatePasskey({
+				headers: headersB,
+				body: { id: passkey.id, name: "hacked" },
+			}),
+		).rejects.toThrowError(APIError);
+
+		const unchanged = await context.adapter.findOne<Passkey>({
+			model: "passkey",
+			where: [{ field: "id", value: passkey.id }],
+		});
+		expect(unchanged?.name).toBe("original-name");
 	});
 });
 
