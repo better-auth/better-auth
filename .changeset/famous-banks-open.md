@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-fix: on cookie-backed state the OAuth callback’s state parameter should match the nonce stored
+security: verify OAuth state parameter against cookie-stored nonce to prevent CSRF on cookie-backed flows
