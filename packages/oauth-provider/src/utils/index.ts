@@ -573,8 +573,10 @@ export function searchParamsToQuery(
 }
 
 /**
- * Removes a prompt value from the query and returns
- * the remaining params as a plain object.
+ * Deletes a prompt value
+ *
+ * @param ctx
+ * @param prompt - the prompt value to delete
  */
 export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 	const prompts = query.get("prompt")?.split(" ");
