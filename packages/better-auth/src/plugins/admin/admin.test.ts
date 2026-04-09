@@ -1832,3 +1832,123 @@ describe("edge cases: userId validation", async () => {
 		).rejects.toThrow("user not found");
 	});
 });
+
+describe("user enrollment flow", async () => {
+	let enrollmentToken: string | undefined;
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					sendEnrollmentEmail: async (data) => {
+						enrollmentToken = data.token;
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "EnrollAdmin") {
+								return { data: { ...user, role: "admin" } };
+							}
+						},
+					},
+				},
+			},
+		},
+		{ testUser: { name: "EnrollAdmin" } },
+	);
+
+	const client = createAuthClient({
+		fetchOptions: { customFetchImpl },
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("should send enrollment email when createUser is called without password", async () => {
+		enrollmentToken = undefined;
+		const res = await client.admin.createUser(
+			{
+				name: "Enroll Me",
+				email: "enroll@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("enroll@test.com");
+		expect(res.data?.user?.emailVerified).toBe(false);
+		expect(enrollmentToken).toBeDefined();
+	});
+
+	it("should not send enrollment email when password is provided", async () => {
+		const prevToken = enrollmentToken;
+		enrollmentToken = undefined;
+		const res = await client.admin.createUser(
+			{
+				name: "Has Password",
+				email: "haspassword@test.com",
+				password: "securepass",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("haspassword@test.com");
+		expect(enrollmentToken).toBeUndefined();
+		// Restore the enroll@test.com token for subsequent tests
+		enrollmentToken = prevToken;
+	});
+
+	it("should complete enrollment with valid token", async () => {
+		expect(enrollmentToken).toBeDefined();
+		const res = await auth.api.completeEnrollment({
+			body: { token: enrollmentToken!, password: "newpassword123" },
+		});
+		expect(res.user?.email).toBe("enroll@test.com");
+		expect(res.user?.emailVerified).toBe(true);
+	});
+
+	it("should allow sign-in after enrollment", async () => {
+		const signInRes = await client.signIn.email({
+			email: "enroll@test.com",
+			password: "newpassword123",
+		});
+		expect(signInRes.data?.user?.email).toBe("enroll@test.com");
+	});
+
+	it("should reject invalid enrollment token", async () => {
+		await expect(
+			auth.api.completeEnrollment({
+				body: { token: "invalid-token", password: "newpassword123" },
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject re-enrollment if user already has password", async () => {
+		// Token was already used above; create a fresh token by calling createUser again
+		enrollmentToken = undefined;
+		await client.admin.createUser(
+			{
+				name: "Double Enroll",
+				email: "doubleenroll@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(enrollmentToken).toBeDefined();
+
+		// First enrollment
+		await auth.api.completeEnrollment({
+			body: { token: enrollmentToken!, password: "firstpass123" },
+		});
+
+		// Try to re-enroll — token is deleted after first use, so it fails
+		await expect(
+			auth.api.completeEnrollment({
+				body: { token: enrollmentToken!, password: "secondpass123" },
+			}),
+		).rejects.toThrow();
+	});
+});

@@ -3603,3 +3603,150 @@ describe("organization additionalFields with returned: false", async () => {
 		expect(dbOrg?.secretField).toBe("updated-secret");
 	});
 });
+
+describe("getInvitation without auth", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [organization({ async sendInvitationEmail() {} })],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	const { headers: ownerHeaders } = await signInWithTestUser();
+
+	it("should return invitation details without requiring a session", async () => {
+		const org = await client.organization.create({
+			name: "Open Org",
+			slug: "open-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invite = await client.organization.inviteMember({
+			email: "newmember@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(invite.data).toBeDefined();
+
+		// Fetch without any auth headers
+		const res = await client.organization.getInvitation({
+			query: { id: invite.data!.id },
+		});
+		expect(res.data?.id).toBe(invite.data!.id);
+		expect(res.data?.organizationName).toBe("Open Org");
+	});
+
+	it("should return error for non-existent invitation", async () => {
+		const res = await client.organization.getInvitation({
+			query: { id: "nonexistent-id" },
+		});
+		expect(res.error?.status).toBe(400);
+	});
+});
+
+describe("signupWithInvitation", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [organization({ async sendInvitationEmail() {} })],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	const { headers: ownerHeaders } = await signInWithTestUser();
+
+	it("should create account and accept invitation in one step", async () => {
+		const org = await client.organization.create({
+			name: "Signup Org",
+			slug: "signup-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invite = await client.organization.inviteMember({
+			email: "brandnew@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(invite.data).toBeDefined();
+
+		const res = await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Brand New",
+			password: "securepass123",
+		});
+		expect(res.data?.user).toBeDefined();
+		expect(res.data?.member).toBeDefined();
+		expect(res.data?.invitation.status).toBe("accepted");
+		expect(res.data?.token).toBeDefined();
+	});
+
+	it("should set emailVerified to true for new user", async () => {
+		const org = await client.organization.create({
+			name: "Verified Org",
+			slug: "verified-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invite = await client.organization.inviteMember({
+			email: "verified@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Verified User",
+			password: "securepass123",
+		});
+
+		// Sign in to verify emailVerified is true
+		const signInRes = await client.signIn.email({
+			email: "verified@test.com",
+			password: "securepass123",
+		});
+		expect(signInRes.data?.user?.emailVerified).toBe(true);
+	});
+
+	it("should reject signup if user already exists with that email", async () => {
+		// Sign up normally first
+		await client.signUp.email({
+			email: "existing@test.com",
+			password: "existingpass",
+			name: "Existing User",
+		});
+
+		const org = await client.organization.create({
+			name: "Existing Org",
+			slug: "existing-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invite = await client.organization.inviteMember({
+			email: "existing@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		const res = await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Existing User",
+			password: "newpass123",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("USER_ALREADY_EXISTS_PLEASE_SIGN_IN");
+	});
+
+	it("should reject signup for expired or invalid invitation", async () => {
+		const res = await client.organization.signupWithInvitation({
+			invitationId: "invalid-invitation-id",
+			name: "Nobody",
+			password: "securepass123",
+		});
+		expect(res.error?.status).toBe(400);
+	});
+});
