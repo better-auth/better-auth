@@ -193,9 +193,11 @@ export const callbackOAuth = createAuthEndpoint(
 				return redirectOnError("email_doesn't_match");
 			}
 
-			const existingAccount = await c.context.internalAdapter.findAccount(
-				String(userInfo.id),
-			);
+			const existingAccount =
+				await c.context.internalAdapter.findAccountByProviderId(
+					String(userInfo.id),
+					provider.id,
+				);
 
 			if (existingAccount) {
 				if (existingAccount.userId.toString() !== link.userId.toString()) {

@@ -1,10 +1,10 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { InputContext } from "better-call";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import type { InferCtx } from "../client/path-to-object";
 import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
+import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
 
 type TestTypeOptions = {
@@ -154,6 +154,49 @@ describe("general types", async () => {
 		expectTypeOf<typeof auth.api>().not.toHaveProperty("testNonAction");
 	});
 
+	/**
+	 * `Auth<O>["api"].getSession` must remain callable from a generic context.
+	 * Changing this contract is a breaking change for downstream consumers.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/8466
+	 * @see https://github.com/next-safe-action/next-safe-action/pull/439
+	 */
+	it("should keep getSession on auth.api when O is a generic parameter", () => {
+		async function probe<O extends BetterAuthOptions>(auth: Auth<O>) {
+			await auth.api.getSession({ headers: new Headers() });
+		}
+		void probe;
+	});
+
+	/**
+	 * A plugin overriding a base endpoint must expose the plugin's type,
+	 * not an intersection that leaks base metadata like `options.body`.
+	 */
+	it("plugin override of base endpoint key should drive auth.api type", async () => {
+		const overridePlugin = {
+			id: "override-base" as const,
+			endpoints: {
+				signInEmail: createAuthEndpoint(
+					"/sign-in/email",
+					{
+						method: "POST",
+					},
+					async (ctx) => {
+						return ctx.json({ overriddenMarker: true as const });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth } = await getTestInstance({ plugins: [overridePlugin] });
+		type ApiSignInEmail = (typeof auth.api)["signInEmail"];
+		type Ret = Awaited<ReturnType<ApiSignInEmail>>;
+		expectTypeOf<Ret>().toEqualTypeOf<{ overriddenMarker: true }>();
+		type Body = ApiSignInEmail extends { options: { body: infer B } }
+			? B
+			: "no-body";
+		expectTypeOf<Body>().toEqualTypeOf<"no-body">();
+	});
+
 	it("should infer additional fields from plugins", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [twoFactor(), organization()],
@@ -241,10 +284,44 @@ describe("HasRequiredKeys", () => {
 	});
 });
 
-describe("InferCtx", () => {
-	it("should preserve fetchOptions when body is any", () => {
-		type Result = InferCtx<InputContext<any, any> & { body: any }, {}>;
-		type Keys = keyof Result;
-		expectTypeOf<Keys>().toEqualTypeOf<"fetchOptions">();
+describe("any-poisoning guards", () => {
+	/**
+	 * InferCtx: when body is `any`, query typing should be preserved
+	 * via InferCtxQuery delegation instead of collapsing to `any`.
+	 */
+	it("InferCtx should preserve query when body is any", () => {
+		type Result = InferCtx<
+			{ body: any; query: { page: number }; method: "GET" },
+			{}
+		>;
+		expectTypeOf<Result["query"]>().toEqualTypeOf<{ page: number }>();
+	});
+
+	/**
+	 * InferPluginTypes: an untyped plugin (`{} as any`) in the plugins array
+	 * should not collapse auth.$Infer to `any`.
+	 */
+	it("auth.$Infer should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Infer = typeof auth.$Infer;
+		expectTypeOf<Infer>().not.toBeAny();
+		expectTypeOf<Infer>().toHaveProperty("Session");
+	});
+
+	/**
+	 * InferPluginErrorCodes: same guard as InferPluginTypes,
+	 * auth.$ERROR_CODES should not collapse to `any`.
+	 */
+	it("auth.$ERROR_CODES should not collapse with untyped plugin", async () => {
+		const untypedPlugin = {} as any;
+		const { auth } = await getTestInstance({
+			plugins: [organization(), untypedPlugin],
+		});
+		type Codes = (typeof auth)["$ERROR_CODES"];
+		expectTypeOf<Codes>().not.toBeAny();
+		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
 	});
 });
