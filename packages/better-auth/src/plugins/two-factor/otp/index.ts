@@ -360,13 +360,13 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						false,
 						session.session,
 					);
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
-					);
 					await setSessionCookie(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});
+					await ctx.context.internalAdapter.deleteSession(
+						session.session.token,
+					);
 					return ctx.json({
 						token: newSession.token,
 						user: parseUserOutput(ctx.context.options, updatedUser),
