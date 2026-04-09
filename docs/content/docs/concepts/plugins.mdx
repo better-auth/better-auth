@@ -469,6 +469,86 @@ const myPlugin = () => {
 }
 ```
 
+#### `requireResourceOwnership`
+
+A middleware that loads a resource by ID and verifies that it belongs to the authenticated user. Use it after `sessionMiddleware` for endpoints that operate on user-owned models.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import * as z from "zod";
+import {
+    createAuthEndpoint,
+    requireResourceOwnership,
+    sessionMiddleware,
+} from "better-auth/api";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        endpoints: {
+            deleteApiKey: createAuthEndpoint("/my-plugin/delete-api-key", {
+                method: "POST",
+                body: z.object({
+                    id: z.string(),
+                }),
+                use: [
+                    sessionMiddleware,
+                    requireResourceOwnership({
+                        model: "apiKey",
+                        idParam: "id",
+                        idSource: "body",
+                    }),
+                ],
+            }, async (ctx) => {
+                return ctx.json({ success: true });
+            })
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+Use `ownerField` if your model stores the owner under a different field name, and `notFoundError` or `forbiddenError` if you want to return plugin-specific error codes.
+
+#### `requireOrgRole`
+
+A middleware that verifies the authenticated user is a member of a specific organization and, optionally, has one of a set of allowed roles. Use it after `sessionMiddleware` for organization-scoped endpoints.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import * as z from "zod";
+import {
+    createAuthEndpoint,
+    requireOrgRole,
+    sessionMiddleware,
+} from "better-auth/api";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        endpoints: {
+            syncDirectory: createAuthEndpoint("/my-plugin/sync-directory", {
+                method: "POST",
+                body: z.object({
+                    organizationId: z.string(),
+                }),
+                use: [
+                    sessionMiddleware,
+                    requireOrgRole({
+                        orgIdParam: "organizationId",
+                        orgIdSource: "body",
+                        allowedRoles: ["admin", "owner"],
+                    }),
+                ],
+            }, async (ctx) => {
+                return ctx.json({ success: true });
+            })
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+If `allowedRoles` is omitted, any organization member is accepted. Members with multiple roles are authorized when any one of their roles matches.
+
 
 ## Creating a client plugin
 

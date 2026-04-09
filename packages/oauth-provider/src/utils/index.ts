@@ -558,6 +558,21 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
+ * Converts URLSearchParams to a plain object, preserving
+ * multi-valued keys as arrays instead of discarding duplicates.
+ */
+export function searchParamsToQuery(
+	params: URLSearchParams,
+): Record<string, string | string[]> {
+	const result: Record<string, string | string[]> = Object.create(null);
+	for (const key of new Set(params.keys())) {
+		const values = params.getAll(key);
+		result[key] = values.length === 1 ? values[0]! : values;
+	}
+	return result;
+}
+
+/**
  * Deletes a prompt value
  *
  * @param ctx
@@ -572,7 +587,7 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 			? query.set("prompt", prompts.join(" "))
 			: query.delete("prompt");
 	}
-	return Object.fromEntries(query);
+	return searchParamsToQuery(query);
 }
 
 enum PKCERequirementErrors {
