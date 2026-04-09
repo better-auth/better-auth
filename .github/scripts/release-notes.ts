@@ -24,10 +24,12 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ghJSON, REPO, setOutput } from "./lib/github.ts";
 import {
+	classifyChangeType,
 	DOMAIN_ORDER,
 	FILTERED_DOMAINS,
 	parseConventionalCommit,
 	resolveDomain,
+	resolvePackage,
 } from "./lib/pr-analyzer.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -38,6 +40,8 @@ interface ReleaseEntry {
 	prNumber: number | null;
 	author: string;
 	domain: string;
+	packageName: string;
+	changeType: "breaking" | "feat" | "fix";
 	breaking: boolean;
 }
 
@@ -48,21 +52,12 @@ interface PRInfo {
 	files: string[];
 }
 
-// ── Constants ──────────────────────────────────────────────────────────
+interface ChangesetSnapshot {
+	ids: string[];
+	ref: string;
+}
 
-const DOMAIN_DISPLAY_NAMES: Record<string, string> = {
-	core: "Core",
-	database: "Database",
-	oauth: "OAuth",
-	credentials: "Credentials",
-	identity: "Identity",
-	organization: "Organization",
-	security: "Security",
-	enterprise: "Enterprise",
-	payments: "Payments",
-	platform: "Platform",
-	devtools: "Devtools",
-};
+// ── Constants ──────────────────────────────────────────────────────────
 
 // ── CLI argument parsing ───────────────────────────────────────────────
 
@@ -223,6 +218,7 @@ function parseChangesetFile(content: string): {
 // ── PR metadata resolution ─────────────────────────────────────────────
 
 const prCache = new Map<number, PRInfo>();
+const releaseBodyCache = new Map<string, string | null>();
 
 function fetchPR(prNumber: number): PRInfo {
 	const cached = prCache.get(prNumber);
@@ -254,6 +250,41 @@ function fetchPR(prNumber: number): PRInfo {
 	return info;
 }
 
+function fetchReleaseBody(tag: string): string | null {
+	const cached = releaseBodyCache.get(tag);
+	if (cached !== undefined) return cached;
+
+	try {
+		const data = ghJSON<{ body: string | null }>([
+			"release",
+			"view",
+			tag,
+			"--repo",
+			REPO,
+			"--json",
+			"body",
+		]);
+		if (data.body === null) {
+			releaseBodyCache.set(tag, null);
+			return null;
+		}
+
+		releaseBodyCache.set(tag, data.body);
+		return data.body;
+	} catch {
+		releaseBodyCache.set(tag, null);
+		return null;
+	}
+}
+
+function extractReleasePRNumbers(body: string): Set<string> {
+	const prNumbers = new Set<string>();
+	for (const match of body.matchAll(/\[#(\d+)\]\([^)]*\/pull\/\d+\)/g)) {
+		prNumbers.add(match[1]!);
+	}
+	return prNumbers;
+}
+
 // ── Domain classification ──────────────────────────────────────────────
 
 function classifyEntry(
@@ -281,6 +312,29 @@ interface ChangesetEntry {
 	packageNames: string[];
 }
 
+function findChangesetSourcePR(id: string, ref: string): number | null {
+	try {
+		const subject = execFileSync(
+			"git",
+			[
+				"log",
+				"--diff-filter=A",
+				"--format=%s",
+				"-n",
+				"1",
+				ref,
+				"--",
+				`.changeset/${id}.md`,
+			],
+			{ encoding: "utf-8" },
+		).trim();
+		const prMatch = subject.match(/\(#(\d+)\)$/);
+		return prMatch ? Number(prMatch[1]) : null;
+	} catch {
+		return null;
+	}
+}
+
 /** Build a map of PR number to changeset description from .changeset/ files and pre.json. */
 function buildChangesetIndex(branch: string): {
 	byPR: Map<number, ChangesetEntry>;
@@ -292,10 +346,12 @@ function buildChangesetIndex(branch: string): {
 	const byDescription = new Map<string, ChangesetEntry>();
 
 	const ids = new Set<string>();
+	let hasPreJSON = false;
 
 	try {
 		const raw = readFileFromRef(".changeset/pre.json", branch);
 		const preJSON = JSON.parse(raw) as { changesets: string[] };
+		hasPreJSON = true;
 		for (const id of preJSON.changesets) ids.add(id);
 	} catch {
 		// No pre.json — scan the directory instead
@@ -308,38 +364,56 @@ function buildChangesetIndex(branch: string): {
 	const skipFiles = new Set(["README", "config"]);
 	const baseRef = branch || "HEAD";
 	let effectiveBranch = branch;
-	try {
-		const revs = execFileSync("git", ["rev-list", "--max-count=15", baseRef], {
-			encoding: "utf-8",
-		})
-			.trim()
-			.split("\n")
-			.filter(Boolean);
+	if (!hasPreJSON) {
+		try {
+			const revs = execFileSync(
+				"git",
+				["rev-list", "--max-count=15", baseRef],
+				{
+					encoding: "utf-8",
+				},
+			)
+				.trim()
+				.split("\n")
+				.filter(Boolean);
 
-		for (const rev of revs) {
-			try {
-				const listing = execFileSync(
-					"git",
-					["ls-tree", "-r", "--name-only", rev, ".changeset/"],
-					{ encoding: "utf-8" },
-				);
-				let foundAny = false;
-				for (const file of listing.split("\n")) {
-					const name = file.replace(/^\.changeset\//, "").replace(/\.md$/, "");
-					if (!name || skipFiles.has(name) || !file.endsWith(".md")) continue;
-					ids.add(name);
-					foundAny = true;
+			let bestSnapshot: ChangesetSnapshot | null = null;
+
+			for (const rev of revs) {
+				try {
+					const listing = execFileSync(
+						"git",
+						["ls-tree", "-r", "--name-only", rev, ".changeset/"],
+						{ encoding: "utf-8" },
+					);
+					const snapshotIds = listing
+						.split("\n")
+						.map((file) =>
+							file.replace(/^\.changeset\//, "").replace(/\.md$/, ""),
+						)
+						.filter(
+							(name) =>
+								name && !skipFiles.has(name) && /^[a-z0-9-]+$/.test(name),
+						);
+
+					if (
+						snapshotIds.length > 0 &&
+						(!bestSnapshot || snapshotIds.length > bestSnapshot.ids.length)
+					) {
+						bestSnapshot = { ids: snapshotIds, ref: rev };
+					}
+				} catch {
+					// listing failed — try next
 				}
-				if (foundAny) {
-					effectiveBranch = rev;
-					break;
-				}
-			} catch {
-				// listing failed — try next
 			}
+
+			if (bestSnapshot) {
+				effectiveBranch = bestSnapshot.ref;
+				for (const id of bestSnapshot.ids) ids.add(id);
+			}
+		} catch {
+			// rev-list failed — proceed with whatever pre.json gave us
 		}
-	} catch {
-		// rev-list failed — proceed with whatever pre.json gave us
 	}
 
 	for (const id of ids) {
@@ -360,9 +434,14 @@ function buildChangesetIndex(branch: string): {
 			if (prMatch) {
 				byPR.set(Number(prMatch[1]), entry);
 			} else {
-				orphans.push(entry);
-				const firstLine = description.split("\n")[0]!.trim().toLowerCase();
-				if (firstLine) byDescription.set(firstLine, entry);
+				const sourcePrNumber = findChangesetSourcePR(id, effectiveBranch);
+				if (sourcePrNumber && !byPR.has(sourcePrNumber)) {
+					byPR.set(sourcePrNumber, entry);
+				} else {
+					orphans.push(entry);
+					const firstLine = description.split("\n")[0]!.trim().toLowerCase();
+					if (firstLine) byDescription.set(firstLine, entry);
+				}
 			}
 		} catch {
 			// File not found — skip
@@ -437,6 +516,7 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 
 	let log: string;
 	const alreadyReleasedPRs = new Set<string>();
+	let alreadyPublishedPRs: Set<string> | null = null;
 
 	if (isDirectAncestor) {
 		log = execFileSync(
@@ -461,6 +541,13 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 		for (const match of tagLog.matchAll(/\(#(\d+)\)/g)) {
 			alreadyReleasedPRs.add(match[1]!);
 		}
+		const previousReleaseBody = fetchReleaseBody(previousTag);
+		if (previousReleaseBody !== null) {
+			alreadyPublishedPRs = extractReleasePRNumbers(previousReleaseBody);
+			console.log(
+				`  Previous release body references ${alreadyPublishedPRs.size} PRs`,
+			);
+		}
 
 		log = execFileSync(
 			"git",
@@ -476,9 +563,15 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 		lines = lines.filter((line) => {
 			const prMatch = line.match(/\(#(\d+)\)/);
 			if (!prMatch) return true;
-			return !alreadyReleasedPRs.has(prMatch[1]!);
+			const prNumber = prMatch[1]!;
+			if (!alreadyReleasedPRs.has(prNumber)) return true;
+			if (alreadyPublishedPRs) return !alreadyPublishedPRs.has(prNumber);
+			return false;
 		});
-		console.log(`  Filtered ${before - lines.length} already-released PRs`);
+		const filterLabel = alreadyPublishedPRs
+			? "already-published"
+			: "already-released";
+		console.log(`  Filtered ${before - lines.length} ${filterLabel} PRs`);
 	}
 
 	// Cancel out revert/original pairs
@@ -551,6 +644,7 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 
 		let author = "unknown";
 		let domain: string;
+		let packageName: string;
 		let breaking = parsed.breaking;
 
 		const description =
@@ -561,9 +655,11 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 			const prInfo = fetchPR(prNumber);
 			author = prInfo.author;
 			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
+			packageName = resolvePackage(parsed.scope || undefined, prInfo.files);
 			if (prInfo.labels.includes("breaking")) breaking = true;
 		} catch {
 			domain = resolveDomain(parsed.scope || undefined, []);
+			packageName = resolvePackage(parsed.scope || undefined, []);
 		}
 
 		entries.push({
@@ -572,6 +668,8 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 			prNumber,
 			author,
 			domain,
+			packageName,
+			changeType: classifyChangeType(parsed.type, breaking),
 			breaking,
 		});
 	}
@@ -601,6 +699,8 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 			prNumber: null,
 			author: "unknown",
 			domain,
+			packageName: resolvePackage(undefined, pkgPaths),
+			changeType: classifyChangeType("fix", changeset.breaking),
 			breaking: changeset.breaking,
 		});
 	}
@@ -614,54 +714,118 @@ interface FormatOptions {
 	version: string;
 	entries: ReleaseEntry[];
 	previousTag: string;
-	distTag: string;
 }
 
+const CHANGE_TYPE_HEADINGS: Record<string, string> = {
+	breaking: "### ⚠️ Breaking Changes",
+	feat: "### Features",
+	fix: "### Bug Fixes",
+};
+
+const CHANGE_TYPE_ORDER: ("breaking" | "feat" | "fix")[] = [
+	"breaking",
+	"feat",
+	"fix",
+];
+
 function formatReleaseBody(opts: FormatOptions): string {
-	const { version, entries, previousTag, distTag } = opts;
+	const { version, entries, previousTag } = opts;
 	const lines: string[] = [];
+	const isBeta = version.includes("-");
 
-	const channelMatch = version.match(/-(beta|alpha|rc)\./);
-	const installTag = distTag || channelMatch?.[1] || "latest";
-	lines.push(`> Install: \`npm i better-auth@${installTag}\``);
-	lines.push("");
-
-	const grouped = new Map<string, ReleaseEntry[]>();
-	for (const entry of entries) {
-		if (FILTERED_DOMAINS.has(entry.domain)) continue;
-		const list = grouped.get(entry.domain) ?? [];
-		list.push(entry);
-		grouped.set(entry.domain, list);
+	// Blog post link for stable releases
+	if (!isBeta) {
+		const majorMinor = version.match(/^(\d+)\.(\d+)/);
+		if (majorMinor) {
+			const blogSlug = `${majorMinor[1]}-${majorMinor[2]}`;
+			lines.push(
+				`**Blog post:** [Better Auth ${majorMinor[1]}.${majorMinor[2]}](https://better-auth.com/blog/${blogSlug})`,
+			);
+			lines.push("");
+		}
 	}
 
-	for (const domain of DOMAIN_ORDER) {
-		const domainEntries = grouped.get(domain);
-		if (!domainEntries?.length) continue;
+	// Group entries by package
+	const grouped = new Map<string, ReleaseEntry[]>();
+	const contributors = new Set<string>();
 
-		const displayName = DOMAIN_DISPLAY_NAMES[domain] ?? domain;
-		lines.push(`## ${displayName}`);
+	for (const entry of entries) {
+		if (FILTERED_DOMAINS.has(entry.domain)) continue;
+		const list = grouped.get(entry.packageName) ?? [];
+		list.push(entry);
+		grouped.set(entry.packageName, list);
+		if (entry.author !== "unknown") contributors.add(entry.author);
+	}
+
+	// Sort packages: better-auth first, then by breaking count desc,
+	// then by total entry count desc, then alphabetically
+	const packageOrder = [...grouped.keys()].sort((a, b) => {
+		if (a === "better-auth") return -1;
+		if (b === "better-auth") return 1;
+		const aBreaking = grouped
+			.get(a)!
+			.filter((e) => e.changeType === "breaking").length;
+		const bBreaking = grouped
+			.get(b)!
+			.filter((e) => e.changeType === "breaking").length;
+		if (aBreaking !== bBreaking) return bBreaking - aBreaking;
+		const aTotal = grouped.get(a)!.length;
+		const bTotal = grouped.get(b)!.length;
+		if (aTotal !== bTotal) return bTotal - aTotal;
+		return a.localeCompare(b);
+	});
+
+	for (const pkg of packageOrder) {
+		const pkgEntries = grouped.get(pkg)!;
+
+		lines.push(`## \`${pkg}\``);
 		lines.push("");
 
-		domainEntries.sort((a, b) => {
-			if (a.breaking !== b.breaking) return a.breaking ? -1 : 1;
-			return a.description.localeCompare(b.description);
-		});
+		// Group by change type within this package
+		for (const changeType of CHANGE_TYPE_ORDER) {
+			const typeEntries = pkgEntries.filter((e) => e.changeType === changeType);
+			if (typeEntries.length === 0) continue;
 
-		for (const entry of domainEntries) {
-			const prefix = entry.breaking ? "**BREAKING:** " : "";
-			const prLink = entry.prNumber
-				? ` ([#${entry.prNumber}](https://github.com/${REPO}/pull/${entry.prNumber}))`
-				: "";
-			const authorAttr =
-				entry.author !== "unknown" ? ` by @${entry.author}` : "";
-			lines.push(`- ${prefix}${entry.description}${prLink}${authorAttr}`);
+			typeEntries.sort((a, b) => a.description.localeCompare(b.description));
+
+			lines.push(CHANGE_TYPE_HEADINGS[changeType]!);
+			lines.push("");
+
+			for (const entry of typeEntries) {
+				const prLink = entry.prNumber
+					? ` ([#${entry.prNumber}](https://github.com/${REPO}/pull/${entry.prNumber}))`
+					: "";
+
+				if (changeType === "breaking") {
+					// Breaking changes get bold description for the AI to expand
+					lines.push(`**BREAKING:** ${entry.description}${prLink}`);
+				} else {
+					lines.push(`- ${entry.description}${prLink}`);
+				}
+			}
+			lines.push("");
 		}
+
+		lines.push("---");
+		lines.push("");
+	}
+
+	// Contributors
+	if (contributors.size > 0) {
+		lines.push("## Contributors");
+		lines.push("");
+		lines.push("Thanks to everyone who contributed to this release:");
+		lines.push("");
+		const sorted = [...contributors].sort((a, b) =>
+			a.toLowerCase().localeCompare(b.toLowerCase()),
+		);
+		lines.push(sorted.map((c) => `@${c}`).join(", "));
 		lines.push("");
 	}
 
 	const currentTag = `v${version}`;
 	lines.push(
-		`**Full changelog**: [\`${previousTag}...${currentTag}\`](https://github.com/${REPO}/compare/${previousTag}...${currentTag})`,
+		`**Full changelog:** [\`${previousTag}...${currentTag}\`](https://github.com/${REPO}/compare/${previousTag}...${currentTag})`,
 	);
 
 	return lines.join("\n");
@@ -689,7 +853,6 @@ const body = formatReleaseBody({
 	version,
 	entries,
 	previousTag,
-	distTag,
 });
 
 if (dryRun) {
