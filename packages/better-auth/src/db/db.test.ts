@@ -75,6 +75,7 @@ describe("db", async () => {
 
 	it("db hooks should preserve a forced UUID on postgres when generateId is uuid", async () => {
 		const existingId = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+		const email = `forced-id-${crypto.randomUUID()}@test.com`;
 		const { auth, db } = await getTestInstance(
 			{
 				advanced: {
@@ -105,7 +106,7 @@ describe("db", async () => {
 
 		const result = await auth.api.signUpEmail({
 			body: {
-				email: "forced-id@test.com",
+				email,
 				name: "forced-id-user",
 				password: "password",
 			},
@@ -119,7 +120,7 @@ describe("db", async () => {
 		});
 
 		expect(createdUser?.id).toBe(existingId);
-		expect(createdUser?.email).toBe("forced-id@test.com");
+		expect(createdUser?.email).toBe(email);
 	});
 
 	it("should work with custom field names", async () => {
