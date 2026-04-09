@@ -19,6 +19,7 @@ jobs:
     if: >
       !startsWith(github.head_ref, 'changeset-release/') &&
       !(github.head_ref == 'next' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository) &&
+      !(github.head_ref == 'main' && github.base_ref == 'next' && github.event.pull_request.head.repo.full_name == github.repository) &&
       github.actor != 'github-actions[bot]' &&
       github.actor != 'better-release[bot]'
     permissions:
