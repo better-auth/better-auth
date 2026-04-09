@@ -20,24 +20,24 @@ export function getContributors(): ContributorInfo[] {
 
 const staticContributorsCount = staticContributors.length;
 
-// Fetch NPM download stats for the last year
+// Fetch NPM download stats for the last week
 async function fetchNpmDownloads(): Promise<number> {
 	try {
 		const response = await fetch(
-			"https://api.npmjs.org/downloads/point/last-year/better-auth",
+			"https://api.npmjs.org/downloads/point/last-week/better-auth",
 			{ next: { revalidate: 3600 } }, // Cache for 1 hour
 		);
 
 		if (!response.ok) {
 			console.error("Failed to fetch NPM downloads:", response.status);
-			return 500000; // Fallback value
+			return 2_000_000; // Fallback value
 		}
 
 		const data = await response.json();
-		return data.downloads || 500000;
+		return data.downloads || 2_000_000;
 	} catch (error) {
 		console.error("Error fetching NPM downloads:", error);
-		return 500000; // Fallback value
+		return 2_000_000; // Fallback value
 	}
 }
 

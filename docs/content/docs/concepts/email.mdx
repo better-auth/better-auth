@@ -155,6 +155,23 @@ const auth = betterAuth({
 })
 ```
 
+### Callback before email verification
+
+You can run custom code just before a user's email is marked as verified using the `beforeEmailVerification` callback. This is useful for validation, pre-checks, or preparing data before the verification is finalized.
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+
+export const auth = betterAuth({
+    emailVerification: {
+        async beforeEmailVerification(user, request) {
+            // Run pre-verification logic
+            console.log(`About to verify ${user.email}`);
+        }
+    }
+})
+```
+
 ### Callback after successful email verification
 
 You can run custom code immediately after a user verifies their email using the `afterEmailVerification` callback. This is useful for any side-effects you want to trigger, like granting access to special features or logging the event.
@@ -171,6 +188,28 @@ export const auth = betterAuth({
         async afterEmailVerification(user, request) {
             // Your custom logic here, e.g., grant access to premium features
             console.log(`${user.email} has been successfully verified!`);
+        }
+    }
+})
+```
+
+### Callback on duplicate sign-up attempt
+
+The `onExistingUserSignUp` callback is triggered when someone tries to sign up with an email that already exists. This is useful for notifying the existing user that someone attempted to register with their email address.
+
+<Callout>
+This callback is only called when `emailAndPassword.requireEmailVerification` is set to `true`, which enables the generic duplicate response (synthetic user) instead of throwing a duplicate-email error.
+</Callout>
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+
+export const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+        onExistingUserSignUp: async ({ user }, request) => {
+            // Notify the existing user about the sign-up attempt
+            console.log(`Someone tried to sign up with ${user.email}`);
         }
     }
 })
