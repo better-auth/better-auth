@@ -80,6 +80,10 @@ web_modules/
 
 .eslintcache
 
+# CSpell cache
+
+.cspellcache
+
 # Optional stylelint cache
 
 .stylelintcache
