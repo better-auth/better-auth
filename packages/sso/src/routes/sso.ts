@@ -1326,11 +1326,17 @@ export const signInSSO = (options?: SSOOptions) => {
 					!parsedSamlConfig.spMetadata?.privateKey &&
 					!parsedSamlConfig.privateKey
 				) {
-					ctx.context.logger.warn(
-						"authnRequestsSigned is enabled but no privateKey provided - AuthnRequests will not be signed",
-						{ providerId: provider.providerId },
-					);
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"authnRequestsSigned is enabled but no privateKey provided in spMetadata or samlConfig",
+					});
 				}
+
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					false,
+				);
 
 				let metadata = parsedSamlConfig.spMetadata.metadata;
 
@@ -1367,6 +1373,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						parsedSamlConfig.spMetadata?.privateKey ||
 						parsedSamlConfig.privateKey,
 					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
+					relayState,
 				});
 
 				const idpData = parsedSamlConfig.idpMetadata;
@@ -1411,12 +1418,6 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(
-					ctx,
-					undefined,
-					false,
-				);
-
 				const shouldSaveRequest =
 					loginRequest.id &&
 					options?.saml?.enableInResponseToValidation !== false;
@@ -1437,7 +1438,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(relayState)}`,
+					url: loginRequest.context,
 					redirect: true,
 				});
 			}
