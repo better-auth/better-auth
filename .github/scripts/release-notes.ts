@@ -36,7 +36,10 @@ import {
 
 interface ReleaseEntry {
 	id: string;
-	description: string;
+	/** PR title (preferred for display) or changeset first-line fallback */
+	title: string;
+	/** Full changeset description (kept for AI context, not displayed directly) */
+	changesetDescription: string | null;
 	prNumber: number | null;
 	author: string;
 	domain: string;
@@ -64,13 +67,11 @@ interface ChangesetSnapshot {
 function parseArgs(): {
 	version: string;
 	branch: string;
-	distTag: string;
 	dryRun: boolean;
 } {
 	const args = process.argv.slice(2);
 	let version = "";
 	let branch = "";
-	let distTag = "";
 	let dryRun = false;
 
 	for (let i = 0; i < args.length; i++) {
@@ -80,9 +81,6 @@ function parseArgs(): {
 				break;
 			case "--branch":
 				branch = args[++i] ?? "";
-				break;
-			case "--dist-tag":
-				distTag = args[++i] ?? "";
 				break;
 			case "--dry-run":
 				dryRun = true;
@@ -98,18 +96,14 @@ function parseArgs(): {
 		}
 	}
 
-	if (!distTag) {
-		distTag = process.env.NPM_DIST_TAG ?? "";
-	}
-
 	if (!version) {
 		console.error(
-			"Usage: release-notes.ts --version <ver> [--branch <ref>] [--dist-tag <tag>] [--dry-run]",
+			"Usage: release-notes.ts --version <ver> [--branch <ref>] [--dry-run]",
 		);
 		process.exit(1);
 	}
 
-	return { version, branch, distTag, dryRun };
+	return { version, branch, dryRun };
 }
 
 // ── Git helpers ────────────────────────────────────────────────────────
@@ -451,8 +445,14 @@ function buildChangesetIndex(branch: string): {
 	return { byPR, orphans, byDescription };
 }
 
-function packageNameToPath(name: string): string {
-	return `packages/${name.replace(/^@better-auth\//, "")}/`;
+function packageToDir(name: string): string {
+	if (name === "auth") return "packages/cli";
+	if (name === "better-auth") return "packages/better-auth";
+	return `packages/${name.replace(/^@better-auth\//, "")}`;
+}
+
+function packageToChangelogUrl(name: string, ref: string): string {
+	return `https://github.com/${REPO}/blob/${ref}/${packageToDir(name)}/CHANGELOG.md`;
 }
 
 /** Load changeset IDs from the previous beta's pre.json to exclude from orphans. */
@@ -643,28 +643,37 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 		seenPRs.add(prNumber);
 
 		let author = "unknown";
+		let title: string;
 		let domain: string;
 		let packageName: string;
 		let breaking = parsed.breaking;
 
-		const description =
-			changeset?.description ?? parsed.subject.replace(/\s*\(#\d+\)$/, "");
+		const changesetDescription = changeset?.description ?? null;
 		if (changeset?.breaking) breaking = true;
 
 		try {
 			const prInfo = fetchPR(prNumber);
 			author = prInfo.author;
+			title = prInfo.title;
 			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
-			packageName = resolvePackage(parsed.scope || undefined, prInfo.files);
+			packageName =
+				changeset?.packageNames.length === 1
+					? changeset.packageNames[0]!
+					: resolvePackage(parsed.scope || undefined, prInfo.files);
 			if (prInfo.labels.includes("breaking")) breaking = true;
 		} catch {
+			title = parsed.subject.replace(/\s*\(#\d+\)$/, "");
 			domain = resolveDomain(parsed.scope || undefined, []);
-			packageName = resolvePackage(parsed.scope || undefined, []);
+			packageName =
+				changeset?.packageNames.length === 1
+					? changeset.packageNames[0]!
+					: resolvePackage(parsed.scope || undefined, []);
 		}
 
 		entries.push({
 			id: changeset ? `pr-${prNumber}` : `git-${prNumber}`,
-			description,
+			title,
+			changesetDescription,
 			prNumber,
 			author,
 			domain,
@@ -689,13 +698,14 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 			continue;
 		}
 
-		const pkgPaths = changeset.packageNames.map(packageNameToPath);
+		const pkgPaths = changeset.packageNames.map((n) => `${packageToDir(n)}/`);
 		const domain = resolveDomain(undefined, pkgPaths);
 		if (FILTERED_DOMAINS.has(domain)) continue;
 
 		entries.push({
 			id: changeset.id,
-			description: changeset.description,
+			title: changeset.description.split("\n")[0]!,
+			changesetDescription: changeset.description,
 			prNumber: null,
 			author: "unknown",
 			domain,
@@ -712,12 +722,13 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 
 interface FormatOptions {
 	version: string;
+	commitRef: string;
 	entries: ReleaseEntry[];
 	previousTag: string;
 }
 
 const CHANGE_TYPE_HEADINGS: Record<string, string> = {
-	breaking: "### ⚠️ Breaking Changes",
+	breaking: "### ❗ Breaking Changes",
 	feat: "### Features",
 	fix: "### Bug Fixes",
 };
@@ -729,20 +740,17 @@ const CHANGE_TYPE_ORDER: ("breaking" | "feat" | "fix")[] = [
 ];
 
 function formatReleaseBody(opts: FormatOptions): string {
-	const { version, entries, previousTag } = opts;
+	const { version, commitRef, entries, previousTag } = opts;
 	const lines: string[] = [];
-	const isBeta = version.includes("-");
 
-	// Blog post link for stable releases
-	if (!isBeta) {
-		const majorMinor = version.match(/^(\d+)\.(\d+)/);
-		if (majorMinor) {
-			const blogSlug = `${majorMinor[1]}-${majorMinor[2]}`;
-			lines.push(
-				`**Blog post:** [Better Auth ${majorMinor[1]}.${majorMinor[2]}](https://better-auth.com/blog/${blogSlug})`,
-			);
-			lines.push("");
-		}
+	// Blog post link for minor releases (x.y.0) only
+	const minorMatch = version.match(/^(\d+)\.(\d+)\.0$/);
+	if (minorMatch) {
+		const blogSlug = `${minorMatch[1]}-${minorMatch[2]}`;
+		lines.push(
+			`**Blog post:** [Better Auth ${minorMatch[1]}.${minorMatch[2]}](https://better-auth.com/blog/${blogSlug})`,
+		);
+		lines.push("");
 	}
 
 	// Group entries by package
@@ -781,12 +789,11 @@ function formatReleaseBody(opts: FormatOptions): string {
 		lines.push(`## \`${pkg}\``);
 		lines.push("");
 
-		// Group by change type within this package
 		for (const changeType of CHANGE_TYPE_ORDER) {
 			const typeEntries = pkgEntries.filter((e) => e.changeType === changeType);
 			if (typeEntries.length === 0) continue;
 
-			typeEntries.sort((a, b) => a.description.localeCompare(b.description));
+			typeEntries.sort((a, b) => a.title.localeCompare(b.title));
 
 			lines.push(CHANGE_TYPE_HEADINGS[changeType]!);
 			lines.push("");
@@ -796,17 +803,21 @@ function formatReleaseBody(opts: FormatOptions): string {
 					? ` ([#${entry.prNumber}](https://github.com/${REPO}/pull/${entry.prNumber}))`
 					: "";
 
-				if (changeType === "breaking") {
-					// Breaking changes get bold description for the AI to expand
-					lines.push(`**BREAKING:** ${entry.description}${prLink}`);
-				} else {
-					lines.push(`- ${entry.description}${prLink}`);
+				lines.push(`- ${entry.title}${prLink}`);
+
+				if (changeType === "breaking" && entry.changesetDescription) {
+					// Include changeset description so the raw fallback still
+					// carries migration guidance when AI is skipped.
+					for (const line of entry.changesetDescription.split("\n").slice(1)) {
+						lines.push(line ? `  ${line}` : "");
+					}
 				}
 			}
 			lines.push("");
 		}
 
-		lines.push("---");
+		const changelogUrl = packageToChangelogUrl(pkg, commitRef);
+		lines.push(`For detailed changes, see [\`CHANGELOG\`](${changelogUrl})`);
 		lines.push("");
 	}
 
@@ -833,15 +844,19 @@ function formatReleaseBody(opts: FormatOptions): string {
 
 // ── Main ───────────────────────────────────────────────────────────────
 
-const { version, branch, distTag, dryRun } = parseArgs();
+const { version, branch, dryRun } = parseArgs();
 const isBeta = version.includes("-");
 const previousTag = findPreviousTag(version, isBeta);
+
+const commitRef =
+	process.env.GITHUB_SHA ??
+	execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8" }).trim();
 
 console.log(`Generating release notes for v${version}`);
 console.log(`  Previous tag: ${previousTag}`);
 console.log(`  Release type: ${isBeta ? "pre-release" : "stable"}`);
 console.log(`  Branch: ${branch || "HEAD"}`);
-if (distTag) console.log(`  Dist tag: ${distTag}`);
+console.log(`  Commit: ${commitRef.slice(0, 12)}`);
 console.log("");
 
 console.log("Collecting entries...");
@@ -851,27 +866,51 @@ console.log("");
 
 const body = formatReleaseBody({
 	version,
+	commitRef,
 	entries,
 	previousTag,
 });
 
+// Build changeset context file for the AI rewriting stage.
+// Maps each PR to its full changeset description so the AI can use it
+// as background when rewriting the one-line titles.
+const changesetContext: Record<number, string> = {};
+for (const entry of entries) {
+	if (entry.prNumber && entry.changesetDescription) {
+		changesetContext[entry.prNumber] = entry.changesetDescription;
+	}
+}
+
 if (dryRun) {
 	console.log("=== DRY RUN — Raw changelog ===\n");
 	console.log(body);
+	if (Object.keys(changesetContext).length > 0) {
+		console.log("\n=== Changeset context (for AI) ===\n");
+		console.log(JSON.stringify(changesetContext, null, 2));
+	}
 } else {
 	// Write inside the repo directory so claude-code-action can read it
 	const rawFile = join(process.cwd(), `.release-notes-raw-${version}.md`);
 	writeFileSync(rawFile, body);
 	console.log(`Wrote raw changelog to ${rawFile}`);
+
+	// Write changeset descriptions as AI context
+	if (Object.keys(changesetContext).length > 0) {
+		const contextFile = join(
+			process.cwd(),
+			`.release-notes-context-${version}.json`,
+		);
+		writeFileSync(contextFile, JSON.stringify(changesetContext, null, 2));
+		console.log(`Wrote changeset context to ${contextFile}`);
+		setOutput("context_path", contextFile);
+	} else {
+		console.log(
+			"No changeset context available (AI enrichment will be skipped)",
+		);
+	}
+
 	setOutput("version", version);
 	setOutput("previous_tag", previousTag);
 	setOutput("is_beta", String(isBeta));
 	setOutput("raw_changelog_path", rawFile);
-	setOutput(
-		"pr_numbers",
-		entries
-			.filter((e) => e.prNumber)
-			.map((e) => e.prNumber)
-			.join(","),
-	);
 }
