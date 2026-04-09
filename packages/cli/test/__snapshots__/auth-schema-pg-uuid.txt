@@ -97,7 +97,7 @@ export const twoFactor = pgTable(
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
       .primaryKey(),
-    secret: text("secret").notNull(),
+    secret: text("secret"),
     backupCodes: text("backup_codes").notNull(),
     userId: uuid("user_id")
       .notNull()

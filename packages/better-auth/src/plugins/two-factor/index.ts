@@ -244,7 +244,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						await ctx.context.internalAdapter.deleteSession(
 							ctx.context.session.session.token,
 						);
-						return ctx.json({ backupCodes: backupCodes.backupCodes });
+						return ctx.json({
+							totpURI: null,
+							backupCodes: backupCodes.backupCodes,
+						});
 					}
 
 					const secret = generateRandomString(32);

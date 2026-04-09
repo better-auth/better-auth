@@ -88,7 +88,7 @@ export const twoFactor = mysqlTable(
   "two_factor",
   {
     id: int("id").autoincrement().primaryKey(),
-    secret: varchar("secret", { length: 255 }).notNull(),
+    secret: varchar("secret", { length: 255 }),
     backupCodes: text("backup_codes").notNull(),
     userId: int("user_id")
       .notNull()

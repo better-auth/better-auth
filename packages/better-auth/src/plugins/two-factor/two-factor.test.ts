@@ -80,7 +80,7 @@ describe("two factor", async () => {
 			],
 		});
 		expect(dbUser?.twoFactorEnabled).toBe(false);
-		expect(twoFactor?.secret).toBeDefined();
+		expect(twoFactor?.secret).not.toBeNull();
 		expect(twoFactor?.backupCodes).toBeDefined();
 		expect(twoFactor?.verified).toBe(false);
 	});
@@ -131,7 +131,7 @@ describe("two factor", async () => {
 
 		const decrypted = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: twoFactor.secret,
+			data: twoFactor.secret!,
 		});
 		const code = await createOTP(decrypted).totp();
 
@@ -558,7 +558,7 @@ describe("OTP-only enablement", async () => {
 
 		const json = (await res.json()) as { backupCodes: string[] };
 		expect(json.backupCodes.length).toBe(10);
-		expect((json as any).totpURI).toBeUndefined();
+		expect(json.totpURI).toBeNull();
 
 		const session = await auth.api.getSession({ headers });
 		expect(session?.user.twoFactorEnabled).toBe(true);
@@ -699,7 +699,7 @@ describe("two factor auth API", async () => {
 			backupCodes: string[];
 		};
 		expect(json.backupCodes.length).toBe(10);
-		expect((json as any).totpURI).toBeUndefined();
+		expect(json.totpURI).toBeNull();
 		const session = await auth.api.getSession({
 			headers,
 		});
@@ -1786,7 +1786,7 @@ describe("pre-migration twoFactor rows (verified absent)", async () => {
 		// Verify TOTP should complete enrollment (flip twoFactorEnabled + set verified)
 		const decrypted = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: record!.secret,
+			data: record!.secret!,
 		});
 		const code = await createOTP(decrypted).totp();
 		const verifyRes = await auth.api.verifyTOTP({
@@ -1871,7 +1871,7 @@ describe("OTP-only account adding TOTP (issue #8627)", async () => {
 
 		const decrypted = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: twoFactorRecord!.secret,
+			data: twoFactorRecord!.secret!,
 		});
 		const code = await createOTP(decrypted).totp();
 		const verifyRes = await auth.api.verifyTOTP({
@@ -1913,7 +1913,7 @@ describe("OTP-only account adding TOTP (issue #8627)", async () => {
 		});
 		const decrypted = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: record1!.secret,
+			data: record1!.secret!,
 		});
 		const code = await createOTP(decrypted).totp();
 		const verifyEnrollRes = await auth.api.verifyTOTP({
@@ -1947,7 +1947,7 @@ describe("OTP-only account adding TOTP (issue #8627)", async () => {
 		const signInHeaders = convertSetCookieToCookie(signInRes.headers);
 		const decrypted2 = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: record2!.secret,
+			data: record2!.secret!,
 		});
 		const code2 = await createOTP(decrypted2).totp();
 		const verifyRes = await auth.api.verifyTOTP({
@@ -2098,7 +2098,7 @@ describe("two factor passwordless", async () => {
 		}
 		const decrypted = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: twoFactor.secret,
+			data: twoFactor.secret!,
 		});
 		const code = await createOTP(decrypted).totp();
 		const verifyRes = await auth.api.verifyTOTP({
@@ -2270,7 +2270,7 @@ describe("twoFactorMethods in sign-in response", () => {
 			});
 			const decrypted = await symmetricDecrypt({
 				key: DEFAULT_SECRET,
-				data: twoFactorRow!.secret,
+				data: twoFactorRow!.secret!,
 			});
 			const code = await createOTP(decrypted).totp();
 			await auth.api.verifyTOTP({
@@ -2392,7 +2392,7 @@ describe("twoFactorMethods in sign-in response", () => {
 			});
 			const decrypted = await symmetricDecrypt({
 				key: DEFAULT_SECRET,
-				data: twoFactorRow!.secret,
+				data: twoFactorRow!.secret!,
 			});
 			const code = await createOTP(decrypted).totp();
 			await auth.api.verifyTOTP({

@@ -96,7 +96,7 @@ export const twoFactor = sqliteTable(
   "two_factor",
   {
     id: text("id").primaryKey(),
-    secret: text("secret").notNull(),
+    secret: text("secret"),
     backupCodes: text("backup_codes").notNull(),
     userId: text("user_id")
       .notNull()
