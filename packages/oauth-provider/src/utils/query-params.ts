@@ -10,7 +10,7 @@ export function searchParamsToQuery(
 	const result: Record<string, string | string[]> = {};
 	for (const key of new Set(params.keys())) {
 		const values = params.getAll(key);
-		result[key] = values.length === 1 ? values[0] : values;
+		result[key] = values.length === 1 ? values[0]! : values;
 	}
 	return result;
 }
