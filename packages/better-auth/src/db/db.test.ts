@@ -73,6 +73,55 @@ describe("db", async () => {
 		expect(callback).toBe(true);
 	});
 
+	it("db hooks should preserve a forced UUID on postgres when generateId is uuid", async () => {
+		const existingId = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+		const { auth, db } = await getTestInstance(
+			{
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							async before(user) {
+								return {
+									data: {
+										...user,
+										id: existingId,
+									},
+								};
+							},
+						},
+					},
+				},
+			},
+			{
+				testWith: "postgres",
+				disableTestUser: true,
+			},
+		);
+
+		const result = await auth.api.signUpEmail({
+			body: {
+				email: "forced-id@test.com",
+				name: "forced-id-user",
+				password: "password",
+			},
+		});
+
+		expect(result.user.id).toBe(existingId);
+
+		const createdUser = await db.findOne({
+			model: "user",
+			where: [{ field: "id", value: existingId }],
+		});
+
+		expect(createdUser?.id).toBe(existingId);
+		expect(createdUser?.email).toBe("forced-id@test.com");
+	});
+
 	it("should work with custom field names", async () => {
 		const { client } = await getTestInstance({
 			user: {
