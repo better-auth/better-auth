@@ -95,15 +95,39 @@ export interface SAMLSessionRecord {
 	sessionIndex?: string;
 }
 
-/** Parsed SAML assertion extract from samlify */
+/**
+ * Parsed SAML login response extract from samlify.
+ *
+ * samlify's extractor nests multi-attribute XML elements as objects:
+ * - `response` (Response/@ID, @IssueInstant, @Destination, @InResponseTo)
+ * - `sessionIndex` (AuthnStatement/@AuthnInstant, @SessionNotOnOrAfter, @SessionIndex)
+ * - `conditions` (Conditions/@NotBefore, @NotOnOrAfter)
+ *
+ * Single-value elements remain as strings: `nameID`, `audience`.
+ */
 export interface SAMLAssertionExtract {
 	nameID?: string;
-	sessionIndex?: string;
-	inResponseTo?: string;
+	/**
+	 * From `<AuthnStatement>` — samlify extracts all 3 attributes as an object.
+	 * To get the SessionIndex string, read `sessionIndex.sessionIndex`.
+	 */
+	sessionIndex?: {
+		authnInstant?: string;
+		sessionNotOnOrAfter?: string;
+		sessionIndex?: string;
+	};
 	conditions?: {
 		notBefore?: string;
 		notOnOrAfter?: string;
 	};
+	response?: {
+		id?: string;
+		issueInstant?: string;
+		destination?: string;
+		inResponseTo?: string;
+	};
+	/** Single string or array when multiple `<Audience>` elements are present. */
+	audience?: string | string[];
 }
 
 type BaseSSOProvider = {
@@ -323,9 +347,13 @@ export interface SSOOptions {
 		 * When true, responses without InResponseTo are accepted.
 		 * When false, all responses must correlate to a stored AuthnRequest.
 		 *
+		 * IdP-initiated SSO is a known attack vector — the SAML2Int
+		 * interoperability profile recommends against it. Only enable
+		 * this if your IdP requires it and you understand the risks.
+		 *
 		 * Only applies when InResponseTo validation is enabled.
 		 *
-		 * @default true
+		 * @default false
 		 */
 		allowIdpInitiated?: boolean;
 		/**
