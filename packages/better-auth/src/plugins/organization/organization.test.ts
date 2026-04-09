@@ -2005,6 +2005,541 @@ describe("resend invitation should reuse existing", async () => {
 	});
 });
 
+describe("listInvitations filters with role", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("filters by role", async () => {
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test10@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test11@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const listInvitationsWithMemberFilter =
+			await client.organization.listInvitations({
+				query: {
+					role: ["member"],
+				},
+				fetchOptions: {
+					headers,
+				},
+			});
+
+		expect(listInvitations?.data).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ email: "test10@test.com" }),
+				expect.objectContaining({ email: "test11@test.com" }),
+			]),
+		);
+		expect(listInvitations?.data?.length).toBe(2);
+
+		expect(listInvitationsWithMemberFilter?.data).toEqual(
+			expect.arrayContaining([expect.objectContaining({ role: "member" })]),
+		);
+		expect(listInvitationsWithMemberFilter?.data?.length).toBe(2);
+	});
+});
+
+describe("listInvitations filters with email", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("filters by email", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test10@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test11@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.data?.status).toBe("pending");
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const listInvitationsWithEmail = await client.organization.listInvitations({
+			query: {
+				email: "test11@test.com",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const listInvitationsWithIncorrectEmail =
+			await client.organization.listInvitations({
+				query: {
+					email: "thisdontexists@test.com",
+				},
+				fetchOptions: {
+					headers,
+				},
+			});
+
+		expect(listInvitations?.data).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ email: "test10@test.com" }),
+				expect.objectContaining({ email: "test11@test.com" }),
+			]),
+		);
+		expect(listInvitations?.data?.length).toBe(2);
+
+		expect(listInvitationsWithEmail?.data).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ email: "test11@test.com" }),
+			]),
+		);
+		expect(listInvitationsWithEmail?.data?.length).toBe(1);
+
+		expect(listInvitationsWithIncorrectEmail.data).toEqual([]);
+	});
+});
+
+describe("listInvitations filters with status", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("filters by status", async () => {
+		const invite1 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "status1@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "status2@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		expect(invite1.data?.status).toBe("pending");
+		expect(invite2.data?.status).toBe("pending");
+
+		const result = await client.organization.listInvitations({
+			query: { status: "pending" },
+			fetchOptions: { headers },
+		});
+
+		expect(result.data?.length).toBe(2);
+		expect(result.data).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ email: "status1@test.com" }),
+				expect.objectContaining({ email: "status2@test.com" }),
+			]),
+		);
+	});
+});
+
+describe("listInvitations filters by inviterId", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("filters by inviterId", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "inviter@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		const inviterId = invite.data?.inviterId;
+
+		const result = await client.organization.listInvitations({
+			query: { inviterId },
+			fetchOptions: { headers },
+		});
+
+		expect(result.data?.length).toBe(1);
+		expect(result.data?.[0]?.inviterId).toBe(inviterId);
+
+		const resultEmpty = await client.organization.listInvitations({
+			query: { inviterId: "non-existent-id" },
+			fetchOptions: { headers },
+		});
+
+		expect(resultEmpty.data?.length).toBe(0);
+	});
+});
+
+describe("listInvitations filters with multiple roles", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("filters by multiple roles", async () => {
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "multi1@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "multi2@test.com",
+				role: "owner",
+			},
+			{ headers },
+		);
+
+		const result = await client.organization.listInvitations({
+			query: {
+				role: ["member", "owner"],
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(result.data?.length).toBe(2);
+	});
+});
+
+describe("listInvitations filters with limit & offset", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("supports limit and offset", async () => {
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "p1@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "p2@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		const first = await client.organization.listInvitations({
+			query: { limit: 1, offset: 0, sortBy: "createdAt", sortDirection: "asc" },
+			fetchOptions: { headers },
+		});
+
+		const second = await client.organization.listInvitations({
+			query: { limit: 1, offset: 1, sortBy: "createdAt", sortDirection: "asc" },
+			fetchOptions: { headers },
+		});
+
+		expect(first.data?.length).toBe(1);
+		expect(second.data?.length).toBe(1);
+
+		expect(first.data?.[0]?.email).not.toBe(second.data?.[0]?.email);
+	});
+});
+
+describe("listInvitations filters with sorting", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("supports sorting", async () => {
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "a@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "z@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		const asc = await client.organization.listInvitations({
+			query: {
+				sortBy: "email",
+				sortDirection: "asc",
+			},
+			fetchOptions: { headers },
+		});
+
+		const desc = await client.organization.listInvitations({
+			query: {
+				sortBy: "email",
+				sortDirection: "desc",
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(asc.data?.[0]?.email).toBe("a@test.com");
+		expect(desc.data?.[0]?.email).toBe("z@test.com");
+	});
+});
+
+describe("listInvitations filters with multiple filters", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	it("combines multiple filters correctly", async () => {
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "combo@test.com",
+				role: "member",
+			},
+			{ headers },
+		);
+
+		await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "combo2@test.com",
+				role: "owner",
+			},
+			{ headers },
+		);
+
+		const result = await client.organization.listInvitations({
+			query: {
+				role: ["member"],
+				email: "combo@test.com",
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(result.data?.length).toBe(1);
+		expect(result.data?.[0]?.email).toBe("combo@test.com");
+	});
+});
+
 describe("owner can update roles", async () => {
 	const statement = {
 		custom: ["custom"],
