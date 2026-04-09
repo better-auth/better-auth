@@ -502,6 +502,7 @@ Table: `twoFactor`
         { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
         { name: "secret", type: "string", description: "The secret used to generate the TOTP code." },
         { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
+        { name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment" },
     ]}
 />
 
