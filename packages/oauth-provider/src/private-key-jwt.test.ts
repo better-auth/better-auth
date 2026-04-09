@@ -649,8 +649,8 @@ describe("isPrivateHostname", () => {
 	});
 
 	it("should NOT block legitimate DNS hostnames starting with fc/fd/fe", () => {
-		expect(isPrivateHostname("fdomain.com")).toBe(false);
-		expect(isPrivateHostname("fcorp.example.com")).toBe(false);
+		expect(isPrivateHostname("fd-services.com")).toBe(false);
+		expect(isPrivateHostname("fc-platform.example.com")).toBe(false);
 		expect(isPrivateHostname("february.example.com")).toBe(false);
 		expect(isPrivateHostname("fe80.example.com")).toBe(false);
 	});

@@ -520,7 +520,7 @@ export type ExtractedCredentials =
 			clientId: string;
 	  };
 
-/** Destructures ExtractedCredentials into the fields each grant handler needs. */
+/** Unwraps ExtractedCredentials into the fields each grant handler needs. */
 export function destructureCredentials(
 	credentials: ExtractedCredentials | null,
 ) {

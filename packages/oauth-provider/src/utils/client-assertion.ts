@@ -57,8 +57,8 @@ export function isPrivateHostname(hostname: string): boolean {
 		return true;
 	}
 	// Only apply IPv6 heuristics when the hostname contains ":" (the IPv6
-	// separator). Without this gate, DNS names like "fdomain.com" would be
-	// incorrectly blocked by the "fd" prefix check.
+	// separator). Without this gate, DNS names starting with "fc"/"fd"
+	// would be incorrectly blocked by the unique-local prefix check.
 	if (host.includes(":")) {
 		// IPv4-mapped IPv6 (::ffff:a.b.c.d): extract the trailing IPv4 and check it
 		const v4MappedMatch = host.match(
