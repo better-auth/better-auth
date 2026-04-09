@@ -40,10 +40,19 @@ describe("validateSingleAssertion", () => {
 					</saml:Assertion>
 				</samlp:Response>
 			`;
-			const b64 = Buffer.from(xml).toString("base64");
-			const wrapped = b64.replace(/.{76}/g, "$&\n");
-			expect(wrapped).toContain("\n");
-			expect(() => validateSingleAssertion(wrapped)).not.toThrow();
+			const b64 = encode(xml);
+
+			const wrappedLf = b64.replace(/.{76}/g, "$&\n");
+			const wrappedCrLf = b64.replace(/.{76}/g, "$&\r\n");
+			const wrappedSpacesAndTabs = b64.replace(/.{20}/g, "$& \t ");
+
+			expect(wrappedLf).toContain("\n");
+			expect(wrappedCrLf).toContain("\r\n");
+			expect(wrappedSpacesAndTabs).toContain(" \t ");
+
+			expect(() => validateSingleAssertion(wrappedLf)).not.toThrow();
+			expect(() => validateSingleAssertion(wrappedCrLf)).not.toThrow();
+			expect(() => validateSingleAssertion(wrappedSpacesAndTabs)).not.toThrow();
 		});
 	});
 
