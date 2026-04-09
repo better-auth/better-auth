@@ -116,12 +116,12 @@ async function fetchUserInfo(
 		return null;
 	}
 	return {
+		...userInfo.data,
 		id: userInfo.data.sub ?? "",
 		emailVerified: userInfo.data.email_verified ?? false,
 		email: userInfo.data.email,
 		image: userInfo.data.picture,
 		name: userInfo.data.name,
-		...userInfo.data,
 	};
 }
 
