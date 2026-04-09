@@ -5,6 +5,7 @@ import type {
 	User,
 } from "better-auth";
 import {
+	ASSERTION_SIGNING_ALGORITHMS,
 	createAuthorizationURL,
 	generateState,
 	HIDE_METADATA,
@@ -1679,22 +1680,10 @@ async function handleOIDCCallback(
 			);
 		}
 
-		const validAlgorithms = new Set<AssertionSigningAlgorithm>([
-			"RS256",
-			"RS384",
-			"RS512",
-			"PS256",
-			"PS384",
-			"PS512",
-			"ES256",
-			"ES384",
-			"ES512",
-			"EdDSA",
-		]);
 		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm ?? "RS256";
-		const algorithm: AssertionSigningAlgorithm = validAlgorithms.has(
-			rawAlg as AssertionSigningAlgorithm,
-		)
+		const algorithm: AssertionSigningAlgorithm = (
+			ASSERTION_SIGNING_ALGORITHMS as readonly string[]
+		).includes(rawAlg)
 			? (rawAlg as AssertionSigningAlgorithm)
 			: "RS256";
 

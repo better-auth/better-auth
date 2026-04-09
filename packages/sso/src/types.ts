@@ -219,8 +219,6 @@ export interface SSOOptions {
 				privateKey?: {
 					privateKeyJwk?: JsonWebKey;
 					privateKeyPem?: string;
-					kid?: string;
-					algorithm?: string;
 				};
 		  }>
 		| undefined;
