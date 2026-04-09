@@ -95,6 +95,8 @@ export const nextCookies = () => {
 									) ||
 										error.message.includes("Cannot find module"))
 								) {
+									// Monorepo workspaces outside of Next.js hit this path.
+									// @see https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
 									return;
 								}
 								throw error;
