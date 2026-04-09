@@ -591,7 +591,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+			const membershipLimit = ctx.context.orgOptions?.membershipLimit ?? 100;
 			const membersCount = await adapter.countMembers({
 				organizationId: invitation.organizationId,
 			});
@@ -1342,7 +1342,7 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 				);
 			}
 
-			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+			const membershipLimit = ctx.context.orgOptions?.membershipLimit ?? 100;
 			const membersCount = await adapter.countMembers({
 				organizationId: invitation.organizationId,
 			});
