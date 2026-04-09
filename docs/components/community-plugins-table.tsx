@@ -291,8 +291,8 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "better-auth-invite-plugin",
-		url: "https://github.com/0-Sandy/better-auth-invite-plugin",
+		name: "better-invite",
+		url: "https://github.com/better-invite/better-invite",
 		description:
 			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
 		author: {
@@ -321,6 +321,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "C-W-D-Harshit",
 			github: "C-W-D-Harshit",
 			avatar: "https://github.com/C-W-D-Harshit.png",
+		},
+	},
+	{
+		name: "better-auth-audit-logs",
+		url: "https://github.com/ejirocodes/better-auth-audit-logs",
+		description:
+			"Audit log plugin for Better Auth. Auto-captures auth events with severity inference, PII redaction, custom storage backends, and retention policies.",
+		author: {
+			name: "ejirocodes",
+			github: "ejirocodes",
+			avatar: "https://github.com/ejirocodes.png",
 		},
 	},
 ];

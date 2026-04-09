@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/kysely-adapter",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "description": "Kysely adapter for Better Auth",
   "type": "module",
   "license": "MIT",

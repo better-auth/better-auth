@@ -7,8 +7,9 @@ authentication framework for TypeScript.
 Read the raw changelog at: __RAW_CHANGELOG_PATH__
 
 This raw changelog was generated from git history and PR metadata.
-Each entry has a description, a PR link, and an author attribution.
-Entries are grouped by domain (Core, Database, Identity, etc.).
+Each entry has a description and a PR link.
+Entries are grouped by npm package (`better-auth`, `@better-auth/sso`,
+etc.), then by change type (`Breaking Changes`, `Features`, `Bug Fixes`).
 
 Entries come from two sources:
 - Changeset descriptions (may already look clean but often need tense
@@ -53,19 +54,42 @@ User focus:
   context (the outcome they intended, not just the technical detail)
 
 Breaking changes:
-- Entries with `**BREAKING:**` prefix must clearly explain what changed
-  and what users need to do (migration steps if applicable)
-- Keep the `**BREAKING:**` prefix exactly as-is
+- Entries prefixed with `**BREAKING:**` must be transformed into a rich format:
+  1. Replace the `**BREAKING:**` prefix with a bold title extracted from the description
+  2. Add " — " after the title, followed by user-focused context
+  3. Keep the PR link at the end of the description line
+  4. Below the description, add a code block showing the migration action
+     (the opt-out config, the before/after import change, or the new required option)
+  5. Inspect the PR diff (`gh pr diff <N>`) to find the exact migration action
+- Example transformation:
+  ```
+  Before (raw):
+  **BREAKING:** enable InResponseTo validation by default for SAML flows ([#8736](url))
+
+  After (rewritten):
+  **SAML InResponseTo validation enabled by default** — `enableInResponseToValidation` is now `true` for SP-initiated SAML flows ([#8736](url)). To restore the previous behavior:
+
+  ```ts
+  sso({ saml: { enableInResponseToValidation: false } })
+  ```
+  ```
 
 ## Structural rules (do NOT violate)
 
 - Do NOT add or remove entries; keep every entry from the raw changelog
-- Do NOT modify PR links `([#NNNN](url))` or author attributions `by @username`
-- Do NOT modify the `## Domain` headings or their order
-- Do NOT use em dashes; use parentheses, commas, or colons instead
-- Keep the install banner line and full changelog link exactly as-is
+- Do NOT modify PR links `([#NNNN](url))`
+- Do NOT modify the `## \`package-name\`` headings or their order
+- Do NOT modify the `### ⚠️ Breaking Changes`, `### Features`, or
+  `### Bug Fixes` sub-headings or their order within a package
+- Do NOT add author attributions (`by @username`) to entries
+- Do NOT use em dashes (—); use parentheses, commas, or colons instead
+  (exception: the " — " separator in breaking change titles is allowed)
+- Keep the blog post link, contributors section, and full changelog
+  link exactly as-is
 - Remove duplicate PR number suffixes from description text (the PR
   link in parentheses already provides this; e.g., change
   "fixed foo (#8289)" to "Fixed foo")
+- Do NOT duplicate an entry across multiple sub-sections; each entry
+  appears exactly once under the change type it was classified as
 
 Write the final release notes to: __RAW_CHANGELOG_PATH__.final

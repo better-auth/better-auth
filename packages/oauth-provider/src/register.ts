@@ -174,14 +174,6 @@ export async function checkOAuthClient(
 			error_description: `pkce is required for registered clients.`,
 		});
 	}
-
-	if (settings?.isRegister && client.skip_consent) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_client_metadata",
-			error_description:
-				"skip_consent cannot be set during dynamic client registration",
-		});
-	}
 }
 
 export async function createOAuthClientEndpoint(

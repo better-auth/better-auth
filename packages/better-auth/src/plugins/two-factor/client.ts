@@ -18,8 +18,18 @@ export const twoFactorClient = (
 				/**
 				 * a redirect function to call if a user needs to verify
 				 * their two factor
+				 *
+				 * @param context.twoFactorMethods - The list of
+				 * enabled two factor providers (e.g. ["totp", "otp"]).
+				 * Use this to determine which 2FA UI to show.
 				 */
-				onTwoFactorRedirect?: () => void | Promise<void>;
+				onTwoFactorRedirect?: (context: {
+					/**
+					 * The list of enabled two factor providers
+					 * for the user (e.g. ["totp", "otp"]).
+					 */
+					twoFactorMethods?: string[];
+				}) => void | Promise<void>;
 		  }
 		| undefined,
 ) => {
@@ -51,7 +61,9 @@ export const twoFactorClient = (
 					async onSuccess(context) {
 						if (context.data?.twoFactorRedirect) {
 							if (options?.onTwoFactorRedirect) {
-								await options.onTwoFactorRedirect();
+								await options.onTwoFactorRedirect({
+									twoFactorMethods: context.data.twoFactorMethods,
+								});
 								return;
 							}
 
