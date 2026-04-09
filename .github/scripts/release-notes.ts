@@ -728,7 +728,7 @@ interface FormatOptions {
 }
 
 const CHANGE_TYPE_HEADINGS: Record<string, string> = {
-	breaking: "### ⚠️ Breaking Changes",
+	breaking: "### ❗ Breaking Changes",
 	feat: "### Features",
 	fix: "### Bug Fixes",
 };

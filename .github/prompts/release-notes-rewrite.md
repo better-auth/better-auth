@@ -41,7 +41,7 @@ Rewriting titles:
   link in parentheses already provides this)
 
 Breaking changes:
-- Entries under `### ⚠️ Breaking Changes` need a migration note
+- Entries under `### ❗ Breaking Changes` need a migration note
 - Rewrite the title the same way (past-tense, user-focused)
 - The raw output may include indented changeset details below the title
   line; replace them with a single concise blockquote:
@@ -65,7 +65,7 @@ Breaking changes:
 - Do NOT add or remove entries
 - Do NOT modify PR links `([#NNNN](url))`
 - Do NOT modify `## \`package-name\`` headings or their order
-- Do NOT modify `### ⚠️ Breaking Changes`, `### Features`, or
+- Do NOT modify `### ❗ Breaking Changes`, `### Features`, or
   `### Bug Fixes` sub-headings or their order
 - Do NOT modify the `CHANGELOG` links at the end of each package section
 - Do NOT add author attributions (`by @username`)
