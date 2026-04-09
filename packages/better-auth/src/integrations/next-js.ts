@@ -48,14 +48,17 @@ export const nextCookies = () => {
 						} catch {
 							return;
 						}
-						// Detect RSC via headers, NOT by probing cookies().set().
-						// In Next.js, cookies().set() unconditionally triggers router
-						// cache invalidation -- even if the value is unchanged.
-						// See: next.js/packages/next/src/server/web/spec-extension/adapters/request-cookies.ts
-						//
-						// RSC sends `RSC: 1` without `next-action`. Only in that
-						// context cookies cannot be written -- skip session refresh
-						// to avoid DB/cookie mismatch.
+						/**
+						 * Detect RSC via headers, NOT by probing cookies().set().
+						 * In Next.js, cookies().set() unconditionally triggers router
+						 * cache invalidation -- even if the value is unchanged.
+						 *
+						 * RSC sends `RSC: 1` without `next-action`. Only in that
+						 * context cookies cannot be written -- skip session refresh
+						 * to avoid DB/cookie mismatch.
+						 *
+						 * @see https://github.com/vercel/next.js/blob/8c5af211d580/packages/next/src/server/web/spec-extension/adapters/request-cookies.ts#L112-L157
+						 */
 						const isRSC = headersStore.get("RSC") === "1";
 						const isServerAction = !!headersStore.get("next-action");
 						if (isRSC && !isServerAction) {
