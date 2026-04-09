@@ -152,18 +152,9 @@ See [SECURITY.md](/SECURITY.md) for details.
 
 ### Code Formatting and Linting
 
-[Lefthook](https://lefthook.dev/) runs the following checks in parallel on every
-commit:
-
-| Hook | What it does | Runs on |
-| --- | --- | --- |
-| **biome** | Linting, formatting, and import sorting (auto-fixes and re-stages) | All staged files |
-| **spell** | Spell checking with cspell | All staged files |
-| **format** | Markdown formatting with remark | Staged `docs/**/*.{md,mdx}` only |
-| **lockfile** | Verifies `pnpm-lock.yaml` is in sync | Only when `package.json` or lockfile changes |
-
-Additional checks like dependency linting (knip), type checking, and tests run
-in CI on every pull request.
+[Lefthook](https://lefthook.dev/) runs linting, formatting, and spell checking
+in parallel on every commit. Additional checks like dependency linting (knip),
+type checking, and tests run in CI.
 
 To skip a specific hook by command name, use `LEFTHOOK_EXCLUDE`:
 
