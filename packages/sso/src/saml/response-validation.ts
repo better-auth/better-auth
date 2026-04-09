@@ -2,6 +2,17 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { AUTHN_REQUEST_KEY_PREFIX } from "../constants";
 import type { SAMLAssertionExtract } from "../types";
 
+function errorRedirectUrl(
+	base: string,
+	error: string,
+	description: string,
+): string {
+	const url = new URL(base);
+	url.searchParams.set("error", error);
+	url.searchParams.set("error_description", description);
+	return url.toString();
+}
+
 interface AuthnRequestRecord {
 	id: string;
 	providerId: string;
@@ -64,7 +75,11 @@ export async function validateInResponseTo(
 				{ inResponseTo, providerId: ctx.providerId },
 			);
 			throw c.redirect(
-				`${ctx.redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+				errorRedirectUrl(
+					ctx.redirectUrl,
+					"invalid_saml_response",
+					"Unknown or expired request ID",
+				),
 			);
 		}
 
@@ -81,7 +96,11 @@ export async function validateInResponseTo(
 				`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 			);
 			throw c.redirect(
-				`${ctx.redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+				errorRedirectUrl(
+					ctx.redirectUrl,
+					"invalid_saml_response",
+					"Provider mismatch",
+				),
 			);
 		}
 
@@ -95,7 +114,11 @@ export async function validateInResponseTo(
 			{ providerId: ctx.providerId },
 		);
 		throw c.redirect(
-			`${ctx.redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+			errorRedirectUrl(
+				ctx.redirectUrl,
+				"unsolicited_response",
+				"IdP-initiated SSO not allowed",
+			),
 		);
 	}
 }
@@ -131,7 +154,11 @@ export function validateAudience(
 			{ providerId: ctx.providerId },
 		);
 		throw c.redirect(
-			`${ctx.redirectUrl}?error=invalid_saml_response&error_description=Audience+restriction+missing`,
+			errorRedirectUrl(
+				ctx.redirectUrl,
+				"invalid_saml_response",
+				"Audience restriction missing",
+			),
 		);
 	}
 
@@ -149,7 +176,11 @@ export function validateAudience(
 			},
 		);
 		throw c.redirect(
-			`${ctx.redirectUrl}?error=invalid_saml_response&error_description=Audience+mismatch`,
+			errorRedirectUrl(
+				ctx.redirectUrl,
+				"invalid_saml_response",
+				"Audience mismatch",
+			),
 		);
 	}
 }
