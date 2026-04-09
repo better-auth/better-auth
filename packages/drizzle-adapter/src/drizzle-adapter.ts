@@ -19,6 +19,8 @@ import {
 	gt,
 	gte,
 	inArray,
+	isNotNull,
+	isNull,
 	like,
 	lt,
 	lte,
@@ -27,6 +29,13 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import {
+	insensitiveEq,
+	insensitiveIlike,
+	insensitiveInArray,
+	insensitiveNe,
+	insensitiveNotInArray,
+} from "./query-builders";
 
 export interface DB {
 	[key: string]: any;
@@ -176,33 +185,73 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 						);
 					}
+					const mode = w.mode ?? "sensitive";
+					const isInsensitive =
+						mode === "insensitive" &&
+						(typeof w.value === "string" ||
+							(Array.isArray(w.value) &&
+								w.value.every((v) => typeof v === "string")));
+
 					if (w.operator === "in") {
 						if (!Array.isArray(w.value)) {
 							throw new BetterAuthError(
 								`The value for the field "${w.field}" must be an array when using the "in" operator.`,
 							);
 						}
+						if (isInsensitive) {
+							return [
+								insensitiveInArray(schemaModel[field], w.value as string[]),
+							];
+						}
 						return [inArray(schemaModel[field], w.value)];
 					}
-
 					if (w.operator === "not_in") {
 						if (!Array.isArray(w.value)) {
 							throw new BetterAuthError(
 								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
 							);
 						}
+						if (isInsensitive) {
+							return [
+								insensitiveNotInArray(schemaModel[field], w.value as string[]),
+							];
+						}
 						return [notInArray(schemaModel[field], w.value)];
 					}
-
 					if (w.operator === "contains") {
+						if (isInsensitive && typeof w.value === "string") {
+							return [
+								insensitiveIlike(
+									schemaModel[field],
+									`%${w.value}%`,
+									config.provider,
+								),
+							];
+						}
 						return [like(schemaModel[field], `%${w.value}%`)];
 					}
-
 					if (w.operator === "starts_with") {
+						if (isInsensitive && typeof w.value === "string") {
+							return [
+								insensitiveIlike(
+									schemaModel[field],
+									`${w.value}%`,
+									config.provider,
+								),
+							];
+						}
 						return [like(schemaModel[field], `${w.value}%`)];
 					}
-
 					if (w.operator === "ends_with") {
+						if (isInsensitive && typeof w.value === "string") {
+							return [
+								insensitiveIlike(
+									schemaModel[field],
+									`%${w.value}`,
+									config.provider,
+								),
+							];
+						}
 						return [like(schemaModel[field], `%${w.value}`)];
 					}
 
@@ -215,6 +264,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					if (w.operator === "ne") {
+						if (w.value === null) {
+							return [isNotNull(schemaModel[field])];
+						}
+						if (isInsensitive && typeof w.value === "string") {
+							return [insensitiveNe(schemaModel[field], w.value)];
+						}
 						return [ne(schemaModel[field], w.value)];
 					}
 
@@ -226,6 +281,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return [gte(schemaModel[field], w.value)];
 					}
 
+					// eq operator
+
+					if (w.value === null) {
+						return [isNull(schemaModel[field])];
+					}
+					if (isInsensitive && typeof w.value === "string") {
+						return [insensitiveEq(schemaModel[field], w.value)];
+					}
 					return [eq(schemaModel[field], w.value)];
 				}
 				const andGroup = where.filter(
@@ -236,10 +299,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const andClause = and(
 					...andGroup.map((w) => {
 						const field = getFieldName({ model, field: w.field });
+						const mode = w.mode ?? "sensitive";
+						const isInsensitive =
+							mode === "insensitive" &&
+							(typeof w.value === "string" ||
+								(Array.isArray(w.value) &&
+									w.value.every((v) => typeof v === "string")));
+
 						if (w.operator === "in") {
 							if (!Array.isArray(w.value)) {
 								throw new BetterAuthError(
 									`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+								);
+							}
+							if (isInsensitive) {
+								return insensitiveInArray(
+									schemaModel[field],
+									w.value as string[],
 								);
 							}
 							return inArray(schemaModel[field], w.value);
@@ -250,15 +326,42 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
 								);
 							}
+							if (isInsensitive) {
+								return insensitiveNotInArray(
+									schemaModel[field],
+									w.value as string[],
+								);
+							}
 							return notInArray(schemaModel[field], w.value);
 						}
 						if (w.operator === "contains") {
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveIlike(
+									schemaModel[field],
+									`%${w.value}%`,
+									config.provider,
+								);
+							}
 							return like(schemaModel[field], `%${w.value}%`);
 						}
 						if (w.operator === "starts_with") {
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveIlike(
+									schemaModel[field],
+									`${w.value}%`,
+									config.provider,
+								);
+							}
 							return like(schemaModel[field], `${w.value}%`);
 						}
 						if (w.operator === "ends_with") {
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveIlike(
+									schemaModel[field],
+									`%${w.value}`,
+									config.provider,
+								);
+							}
 							return like(schemaModel[field], `%${w.value}`);
 						}
 						if (w.operator === "lt") {
@@ -274,18 +377,53 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return gte(schemaModel[field], w.value);
 						}
 						if (w.operator === "ne") {
+							if (w.value === null) {
+								return isNotNull(schemaModel[field]);
+							}
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveNe(schemaModel[field], w.value);
+							}
 							return ne(schemaModel[field], w.value);
 						}
+
+						// eq operator
+
+						if (w.value === null) {
+							return isNull(schemaModel[field]);
+						}
+
+						if (isInsensitive && typeof w.value === "string") {
+							return insensitiveEq(schemaModel[field], w.value);
+						}
+
 						return eq(schemaModel[field], w.value);
 					}),
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
 						const field = getFieldName({ model, field: w.field });
+						if (!schemaModel[field]) {
+							throw new BetterAuthError(
+								`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+							);
+						}
+						const mode = w.mode ?? "sensitive";
+						const isInsensitive =
+							mode === "insensitive" &&
+							(typeof w.value === "string" ||
+								(Array.isArray(w.value) &&
+									w.value.every((v) => typeof v === "string")));
+
 						if (w.operator === "in") {
 							if (!Array.isArray(w.value)) {
 								throw new BetterAuthError(
 									`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+								);
+							}
+							if (isInsensitive) {
+								return insensitiveInArray(
+									schemaModel[field],
+									w.value as string[],
 								);
 							}
 							return inArray(schemaModel[field], w.value);
@@ -296,15 +434,42 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
 								);
 							}
+							if (isInsensitive) {
+								return insensitiveNotInArray(
+									schemaModel[field],
+									w.value as string[],
+								);
+							}
 							return notInArray(schemaModel[field], w.value);
 						}
 						if (w.operator === "contains") {
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveIlike(
+									schemaModel[field],
+									`%${w.value}%`,
+									config.provider,
+								);
+							}
 							return like(schemaModel[field], `%${w.value}%`);
 						}
 						if (w.operator === "starts_with") {
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveIlike(
+									schemaModel[field],
+									`${w.value}%`,
+									config.provider,
+								);
+							}
 							return like(schemaModel[field], `${w.value}%`);
 						}
 						if (w.operator === "ends_with") {
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveIlike(
+									schemaModel[field],
+									`%${w.value}`,
+									config.provider,
+								);
+							}
 							return like(schemaModel[field], `%${w.value}`);
 						}
 						if (w.operator === "lt") {
@@ -320,7 +485,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return gte(schemaModel[field], w.value);
 						}
 						if (w.operator === "ne") {
+							if (w.value === null) {
+								return isNotNull(schemaModel[field]);
+							}
+							if (isInsensitive && typeof w.value === "string") {
+								return insensitiveNe(schemaModel[field], w.value);
+							}
 							return ne(schemaModel[field], w.value);
+						}
+
+						// eq operator
+
+						if (w.value === null) {
+							return isNull(schemaModel[field]);
+						}
+
+						if (isInsensitive && typeof w.value === "string") {
+							return insensitiveEq(schemaModel[field], w.value);
 						}
 						return eq(schemaModel[field], w.value);
 					}),
