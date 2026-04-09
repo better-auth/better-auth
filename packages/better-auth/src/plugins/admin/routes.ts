@@ -1831,6 +1831,12 @@ export const completeEnrollment = (opts: AdminOptions) =>
 			const user = await ctx.context.internalAdapter.updateUser(userId, {
 				emailVerified: true,
 			});
+			if (!user) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+				);
+			}
 
 			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 				`user-enrollment:${ctx.body.token}`,
