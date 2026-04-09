@@ -81,6 +81,28 @@ export const auth = betterAuth({
     ],
 })
 ```
+
+When using a [dynamic base URL](/docs/concepts/dynamic-base-url) (allowed hosts or function), you can omit the `domain` property. Better Auth will automatically derive the cookie domain from the resolved host on each request:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: ["auth.example1.com", "auth.example2.com"],
+        protocol: "https",
+    },
+    advanced: {
+        crossSubDomainCookies: {
+            enabled: true,
+            // domain is computed per-request from the resolved baseURL
+        },
+    },
+})
+```
+
+This also works with [function-based baseURL](/docs/concepts/dynamic-base-url#function-based-resolution) for multi-tenant setups. See the Dynamic Base URL documentation for examples and security guidance.
+
 ### Secure Cookies
 
 By default, cookies are secure only when the server is running in production mode. You can force cookies to be always secure by setting `useSecureCookies` to `true` in the `advanced` object in the auth options.

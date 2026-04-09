@@ -14,7 +14,7 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import { getBaseURL, isPerRequestBaseURL } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -221,7 +221,7 @@ export async function getTestInstance<
 		);
 	};
 
-	const clientBaseURL = isDynamicBaseURLConfig(options?.baseURL)
+	const clientBaseURL = isPerRequestBaseURL(options?.baseURL)
 		? getBaseURL(
 				"http://localhost:" + (config?.port || 3000),
 				options?.basePath || "/api/auth",
