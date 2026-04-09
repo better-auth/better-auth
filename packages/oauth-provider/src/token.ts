@@ -2,10 +2,14 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import { signJWT, toExpJWT } from "better-auth/plugins";
+import {
+	resolveSigningAlgorithm,
+	signJWT,
+	toExpJWT,
+} from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import { SignJWT } from "jose";
+import { base64url, SignJWT } from "jose";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -120,6 +124,31 @@ async function createJwtAccessToken(
 }
 
 /**
+ * Computes an OIDC hash (at_hash, c_hash) per OIDC Core §3.1.3.6.
+ * Hashes the token, takes the left half, and base64url-encodes it.
+ */
+async function computeOidcHash(
+	token: string,
+	signingAlg: string,
+): Promise<string> {
+	let hashAlg: string;
+	if (signingAlg === "EdDSA") {
+		hashAlg = "SHA-512";
+	} else if (signingAlg.endsWith("384")) {
+		hashAlg = "SHA-384";
+	} else if (signingAlg.endsWith("512")) {
+		hashAlg = "SHA-512";
+	} else {
+		hashAlg = "SHA-256";
+	}
+
+	const digest = new Uint8Array(
+		await crypto.subtle.digest(hashAlg, new TextEncoder().encode(token)),
+	);
+	return base64url.encode(digest.slice(0, digest.length / 2));
+}
+
+/**
  * Creates a user id token in code_authorization with scope of 'openid'
  * and hybrid/implicit (not yet implemented) flows
  */
@@ -132,6 +161,7 @@ async function createIdToken(
 	nonce?: string,
 	sessionId?: string,
 	authTime?: Date,
+	accessToken?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -156,11 +186,19 @@ async function createIdToken(
 		? undefined
 		: getJwtPlugin(ctx.context).options;
 
+	const signingAlg = opts.disableJwtPlugin
+		? "HS256"
+		: await resolveSigningAlgorithm(ctx, jwtPluginOptions);
+	const atHash = accessToken
+		? await computeOidcHash(accessToken, signingAlg)
+		: undefined;
+
 	const payload: JWTPayload = {
 		...userClaims,
 		auth_time: authTimeSec,
 		acr,
 		...customClaims,
+		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: resolvedSub,
 		aud: client.clientId,
@@ -421,8 +459,8 @@ async function createUserTokens(
 				)
 			: undefined;
 
-	// Sign jwt and refresh tokens in parallel
-	const [accessToken, refreshToken, idToken] = await Promise.all([
+	// Create access token and refresh token in parallel
+	const [accessToken, refreshToken] = await Promise.all([
 		isJwtAccessToken
 			? createJwtAccessToken(
 					ctx,
@@ -471,19 +509,22 @@ async function createUserTokens(
 						authTime,
 					)
 				: undefined,
-		isIdToken
-			? createIdToken(
-					ctx,
-					opts,
-					user,
-					client,
-					scopes,
-					nonce,
-					sessionId,
-					authTime,
-				)
-			: undefined,
 	]);
+
+	// ID token created after access token so at_hash can be computed
+	const idToken = isIdToken
+		? await createIdToken(
+				ctx,
+				opts,
+				user,
+				client,
+				scopes,
+				nonce,
+				sessionId,
+				authTime,
+				accessToken,
+			)
+		: undefined;
 
 	return ctx.json(
 		{

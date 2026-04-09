@@ -10,7 +10,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
+import { base64url, createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -2233,5 +2233,240 @@ describe("scope preservation through authorization code flow", async () => {
 			headers: reqHeaders,
 		});
 		expect(tokens.data?.scope).toBe(requestedScopes.join(" "));
+	});
+});
+
+describe("at_hash in id tokens", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://myapi.example.com";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				validAudiences: [validAudience],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		oauthClient = response;
+	});
+
+	async function getTokens(scopes: string[], resource?: string) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code")!;
+
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const params = new URLSearchParams(body.toString());
+		if (resource) {
+			params.set("resource", resource);
+		}
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: params.toString(),
+			headers: reqHeaders,
+		});
+
+		return tokens.data!;
+	}
+
+	it("should include at_hash when id token is issued with access token", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["openid"]);
+		expect(tokens.id_token).toBeDefined();
+		expect(tokens.access_token).toBeDefined();
+
+		const decoded = decodeJwt(tokens.id_token!);
+		expect(decoded.at_hash).toBeDefined();
+		expect(typeof decoded.at_hash).toBe("string");
+		expect((decoded.at_hash as string).length).toBeGreaterThan(0);
+	});
+
+	/**
+	 * EdDSA (Ed25519) uses SHA-512 per RFC 8032.
+	 * at_hash = base64url(left-half(SHA-512(access_token)))
+	 */
+	it("at_hash should match manual computation for EdDSA", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["openid"]);
+		const decoded = decodeJwt(tokens.id_token!);
+
+		const digest = new Uint8Array(
+			await crypto.subtle.digest(
+				"SHA-512",
+				new TextEncoder().encode(tokens.access_token!),
+			),
+		);
+		const expectedAtHash = base64url.encode(digest.slice(0, digest.length / 2));
+
+		expect(decoded.at_hash).toBe(expectedAtHash);
+	});
+
+	it("at_hash should not be present without openid scope", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["offline_access"], validAudience);
+		expect(tokens.id_token).toBeUndefined();
+	});
+
+	it("customIdTokenClaims should not receive accessToken", async ({
+		expect,
+	}) => {
+		let receivedKeys: string[] = [];
+		const {
+			auth: testAuth,
+			signInWithTestUser: signIn,
+			customFetchImpl: fetchImpl,
+		} = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					customIdTokenClaims: (info) => {
+						receivedKeys = Object.keys(info);
+						return {};
+					},
+				}),
+			],
+		});
+
+		const { headers: testHeaders } = await signIn();
+		const testClient = createAuthClient({
+			plugins: [oauthProviderClient(), jwtClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl: fetchImpl, headers: testHeaders },
+		});
+
+		const testOauthClient = await testAuth.api.adminCreateOAuthClient({
+			headers: testHeaders,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: testOauthClient!.client_id!,
+				clientSecret: testOauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackUrl = "";
+		await testClient.$fetch(url.toString(), {
+			onError(context) {
+				callbackUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: testOauthClient!.client_id!,
+				clientSecret: testOauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		await testClient.$fetch("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(receivedKeys).toContain("user");
+		expect(receivedKeys).toContain("scopes");
+		expect(receivedKeys).toContain("metadata");
+		expect(receivedKeys).not.toContain("accessToken");
 	});
 });

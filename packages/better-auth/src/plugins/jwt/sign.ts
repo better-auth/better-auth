@@ -61,6 +61,26 @@ type JWTPayloadWithOptional = {
 	[propName: string]: unknown | undefined;
 };
 
+/**
+ * Resolves the signing algorithm that signJWT will use.
+ * Mirrors signJWT's key resolution so at_hash and similar
+ * spec-required hashes use the correct algorithm.
+ */
+export async function resolveSigningAlgorithm(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions,
+): Promise<string> {
+	if (options?.jwt?.sign) {
+		return options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	}
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	let key = await adapter.getLatestKey(ctx);
+	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
+		key = await createJwk(ctx, options);
+	}
+	return key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+}
+
 export async function signJWT(
 	ctx: GenericEndpointContext,
 	config: {
