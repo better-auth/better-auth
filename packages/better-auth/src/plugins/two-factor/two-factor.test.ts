@@ -2209,6 +2209,47 @@ describe("twoFactorMethods in sign-in response", () => {
 			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
 		});
 
+		it("should exclude unverified totp from twoFactorMethods", async () => {
+			// Create an unverified TOTP row (abandoned enrollment)
+			await db.update({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				update: { twoFactorEnabled: false },
+			});
+			const { headers } = await auth.api
+				.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					asResponse: true,
+				})
+				.then((res) => ({
+					headers: convertSetCookieToCookie(res.headers),
+				}));
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			// enableTwoFactor creates verified=false; force twoFactorEnabled
+			// back to true to simulate OTP-enrolled user adding TOTP
+			await db.update({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+				update: { twoFactorEnabled: true },
+			});
+
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
+			expect((signInRes as any).twoFactorRedirect).toBe(true);
+			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
+		});
+
 		it("should return twoFactorMethods: ['totp', 'otp'] when user has verified totp", async () => {
 			// reset twoFactorEnabled so we can sign in normally
 			await db.update({

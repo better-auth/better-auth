@@ -495,16 +495,17 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						 * that the user actually has a secret stored.
 						 */
 						if (!options?.totpOptions?.disable) {
-							const userTotpSecret = await ctx.context.adapter.findOne({
-								model: opts.twoFactorTable,
-								where: [
-									{
-										field: "userId",
-										value: data.user.id,
-									},
-								],
-							});
-							if (userTotpSecret) {
+							const userTotpSecret =
+								await ctx.context.adapter.findOne<TwoFactorTable>({
+									model: opts.twoFactorTable,
+									where: [
+										{
+											field: "userId",
+											value: data.user.id,
+										},
+									],
+								});
+							if (userTotpSecret && userTotpSecret.verified !== false) {
 								twoFactorMethods.push("totp");
 							}
 						}
