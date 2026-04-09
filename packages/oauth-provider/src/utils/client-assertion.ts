@@ -15,10 +15,20 @@ import {
 import type { OAuthOptions, SchemaClient, Scope } from "../types";
 import { getClient } from "./index";
 
-// JWKS URI cache with 5-minute TTL
+// JWKS URI cache with 5-minute TTL and bounded size
 const jwksCache = new Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>();
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+
+function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
+	jwksCache.set(uri, { jwks, fetchedAt });
+	if (jwksCache.size > JWKS_CACHE_MAX_ENTRIES) {
+		// Evict oldest entry (Map iterates in insertion order)
+		const oldest = jwksCache.keys().next().value;
+		if (oldest !== undefined) jwksCache.delete(oldest);
+	}
+}
 const ALGORITHMS_LIST = [...ASSERTION_SIGNING_ALGORITHMS] as string[];
 const pendingAssertionIds = new Set<string>();
 
@@ -155,7 +165,7 @@ async function fetchClientJwks(
 
 	try {
 		const jwks = await fetchJwksFromUri(client.jwksUri);
-		jwksCache.set(client.jwksUri, { jwks, fetchedAt: now });
+		setJwksCache(client.jwksUri, jwks, now);
 		return jwks;
 	} catch {
 		// Return stale cache on transient failures, but only within a grace period.
@@ -182,7 +192,7 @@ async function refetchClientJwks(
 	if (!client.jwksUri) return null;
 	try {
 		const jwks = await fetchJwksFromUri(client.jwksUri);
-		jwksCache.set(client.jwksUri, { jwks, fetchedAt: Date.now() });
+		setJwksCache(client.jwksUri, jwks, Date.now());
 		return jwks;
 	} catch {
 		return null;
@@ -303,18 +313,29 @@ export async function verifyClientAssertion(
 			createLocalJWKSet(jwks),
 			verifyOpts,
 		));
-	} catch {
-		// On failure for jwks_uri clients, the key may have been rotated.
-		// Refetch JWKS and retry once before giving up.
-		const refreshed = await refetchClientJwks(client);
-		if (refreshed) {
-			try {
-				({ payload } = await jwtVerify(
-					clientAssertion,
-					createLocalJWKSet(refreshed),
-					verifyOpts,
-				));
-			} catch {
+	} catch (verifyErr) {
+		// Only refetch JWKS on key-related errors (e.g., no matching key after
+		// rotation). Claim validation failures (expired, bad audience) should
+		// not trigger a refetch.
+		const isKeyError =
+			verifyErr instanceof Error &&
+			/no matching key|no applicable key/i.test(verifyErr.message);
+		if (isKeyError) {
+			const refreshed = await refetchClientJwks(client);
+			if (refreshed) {
+				try {
+					({ payload } = await jwtVerify(
+						clientAssertion,
+						createLocalJWKSet(refreshed),
+						verifyOpts,
+					));
+				} catch {
+					throw new APIError("UNAUTHORIZED", {
+						error_description: "client assertion signature verification failed",
+						error: "invalid_client",
+					});
+				}
+			} else {
 				throw new APIError("UNAUTHORIZED", {
 					error_description: "client assertion signature verification failed",
 					error: "invalid_client",
