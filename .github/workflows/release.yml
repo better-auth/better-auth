@@ -153,6 +153,7 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.ai-prompt.outputs.prompt }}
           claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
+          allowed_bots: "github-merge-queue"
 
       - name: Create GitHub Release
         if: steps.changesets.outputs.published == 'true'
