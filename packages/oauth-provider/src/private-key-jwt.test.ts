@@ -9,6 +9,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
+import { isPrivateHostname } from "./utils/client-assertion";
 
 describe("private_key_jwt authentication", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -273,6 +274,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
 	});
 
 	it("should reject expired assertion", async () => {
@@ -297,6 +299,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
 	});
 
 	it("should reject assertion with exp too far in the future", async () => {
@@ -322,6 +325,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
 	});
 
 	it("should reject assertion without jti", async () => {
@@ -345,6 +349,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
 	});
 
 	it("should reject reused jti (replay prevention)", async () => {
@@ -392,6 +397,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(result2.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result2.error?.status).toBeLessThan(500);
 	});
 
 	it("should reject concurrent reuse of the same jti", async () => {
@@ -451,6 +457,78 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
+	});
+
+	it("should reject assertion signed with HS256 (symmetric algorithm)", async () => {
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+		const now = Math.floor(Date.now() / 1000);
+		// Sign with HS256 using a shared secret (symmetric, not allowed for private_key_jwt)
+		const symmetricKey = new TextEncoder().encode(
+			"a]?Y^w0S@}I-lI%i|{5BW?Wl:jLz[I_M",
+		);
+		const assertion = await new SignJWT({})
+			.setProtectedHeader({ alg: "HS256" })
+			.setIssuer(assertionClient.client_id)
+			.setSubject(assertionClient.client_id)
+			.setAudience(tokenEndpoint)
+			.setIssuedAt(now)
+			.setExpirationTime(now + 120)
+			.setJti(crypto.randomUUID())
+			.sign(symmetricKey);
+
+		const result = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: redirectUri,
+				client_id: assertionClient.client_id,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: assertion,
+				code_verifier: codeVerifier,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+
+		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
+	});
+
+	it("should reject assertion with iat too far in the past", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+		// Manually build to control iat separately (signAssertion always uses now for iat)
+		const manualAssertion = await new SignJWT({})
+			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
+			.setIssuer(assertionClient.client_id)
+			.setSubject(assertionClient.client_id)
+			.setAudience(tokenEndpoint)
+			.setIssuedAt(now - 600)
+			.setExpirationTime(now + 60)
+			.setJti(crypto.randomUUID())
+			.sign(rsaPrivateKey);
+
+		const result = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: redirectUri,
+				client_id: assertionClient.client_id,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: manualAssertion,
+				code_verifier: codeVerifier,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+
+		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
 	});
 
 	it("should enforce auth method — secret client cannot use assertion", async () => {
@@ -475,6 +553,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
 	});
 
 	it("should introspect an access token using private_key_jwt authentication", async () => {
@@ -536,6 +615,57 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(result.data).toBe(null);
 		expect(result.error).toBe(null);
+	});
+});
+
+describe("isPrivateHostname", () => {
+	it("should block standard private IPv4 ranges", () => {
+		expect(isPrivateHostname("127.0.0.1")).toBe(true);
+		expect(isPrivateHostname("10.0.0.1")).toBe(true);
+		expect(isPrivateHostname("192.168.1.1")).toBe(true);
+		expect(isPrivateHostname("172.16.0.1")).toBe(true);
+		expect(isPrivateHostname("169.254.169.254")).toBe(true);
+	});
+
+	it("should block localhost and IPv6 loopback", () => {
+		expect(isPrivateHostname("localhost")).toBe(true);
+		expect(isPrivateHostname("::1")).toBe(true);
+		expect(isPrivateHostname("[::1]")).toBe(true);
+	});
+
+	it("should block link-local and unique-local IPv6", () => {
+		expect(isPrivateHostname("[fe80::1]")).toBe(true);
+		expect(isPrivateHostname("fe80::1")).toBe(true);
+		expect(isPrivateHostname("[fd00::1]")).toBe(true);
+		expect(isPrivateHostname("[fc00::1]")).toBe(true);
+	});
+
+	it("should block IPv4-mapped IPv6 addresses with private IPv4", () => {
+		expect(isPrivateHostname("[::ffff:127.0.0.1]")).toBe(true);
+		expect(isPrivateHostname("::ffff:127.0.0.1")).toBe(true);
+		expect(isPrivateHostname("[::ffff:169.254.169.254]")).toBe(true);
+		expect(isPrivateHostname("[::ffff:10.0.0.1]")).toBe(true);
+		expect(isPrivateHostname("[::ffff:192.168.1.1]")).toBe(true);
+	});
+
+	it("should NOT block legitimate DNS hostnames starting with fc/fd/fe", () => {
+		expect(isPrivateHostname("fdomain.com")).toBe(false);
+		expect(isPrivateHostname("fcorp.example.com")).toBe(false);
+		expect(isPrivateHostname("february.example.com")).toBe(false);
+		expect(isPrivateHostname("fe80.example.com")).toBe(false);
+	});
+
+	it("should NOT block public IPv4 addresses", () => {
+		expect(isPrivateHostname("8.8.8.8")).toBe(false);
+		expect(isPrivateHostname("1.1.1.1")).toBe(false);
+	});
+
+	it("should NOT block IPv4-mapped IPv6 with public IPv4", () => {
+		expect(isPrivateHostname("[::ffff:8.8.8.8]")).toBe(false);
+	});
+
+	it("should block cloud metadata endpoints", () => {
+		expect(isPrivateHostname("metadata.google.internal")).toBe(true);
 	});
 });
 

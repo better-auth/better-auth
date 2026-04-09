@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type {
+	ClientAssertionConfig,
+	OAuth2Tokens,
+	OAuth2UserInfo,
+} from "@better-auth/core/oauth2";
 
 export interface GenericOAuthOptions {
 	/**
@@ -168,26 +172,7 @@ export interface GenericOAuthConfig {
 	 * Client assertion config for `private_key_jwt` authentication.
 	 * Required when `authentication` is `"private_key_jwt"`.
 	 */
-	clientAssertion?:
-		| {
-				privateKeyJwk?: JsonWebKey;
-				privateKeyPem?: string;
-				kid?: string;
-				algorithm?:
-					| "RS256"
-					| "RS384"
-					| "RS512"
-					| "PS256"
-					| "PS384"
-					| "PS512"
-					| "ES256"
-					| "ES384"
-					| "ES512"
-					| "EdDSA";
-				/** Assertion lifetime in seconds. @default 120 */
-				expiresIn?: number;
-		  }
-		| undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
 	/**
 	 * Custom headers to include in the discovery request.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).

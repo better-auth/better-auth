@@ -1310,6 +1310,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															"none",
 															"client_secret_basic",
 															"client_secret_post",
+															"private_key_jwt",
 														],
 													},
 													grant_types: {

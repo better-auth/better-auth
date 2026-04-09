@@ -105,6 +105,62 @@ describe("signClientAssertion", () => {
 		expect(p1.jti).not.toBe(p2.jti);
 	});
 
+	it("auto-extracts kid from JWK when not explicitly provided", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), kid: "jwk-kid" };
+
+		const assertion = await signClientAssertion({
+			clientId,
+			tokenEndpoint,
+			privateKeyJwk: privateJwk,
+		});
+
+		const header = decodeProtectedHeader(assertion);
+		expect(header.kid).toBe("jwk-kid");
+	});
+
+	it("prefers explicit kid over JWK-embedded kid", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), kid: "jwk-kid" };
+
+		const assertion = await signClientAssertion({
+			clientId,
+			tokenEndpoint,
+			privateKeyJwk: privateJwk,
+			kid: "explicit-kid",
+		});
+
+		const header = decodeProtectedHeader(assertion);
+		expect(header.kid).toBe("explicit-kid");
+	});
+
+	it("auto-extracts alg from JWK when not explicitly provided", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), alg: "ES256" };
+		const publicJwk = await exportJWK(publicKey);
+
+		const assertion = await signClientAssertion({
+			clientId,
+			tokenEndpoint,
+			privateKeyJwk: privateJwk,
+		});
+
+		const header = decodeProtectedHeader(assertion);
+		expect(header.alg).toBe("ES256");
+
+		const jwks = createLocalJWKSet({ keys: [publicJwk] });
+		const { payload } = await jwtVerify(assertion, jwks, {
+			algorithms: ["ES256"],
+		});
+		expect(payload.iss).toBe(clientId);
+	});
+
 	it("throws when neither JWK nor PEM is provided", async () => {
 		await expect(
 			signClientAssertion({ clientId, tokenEndpoint }),

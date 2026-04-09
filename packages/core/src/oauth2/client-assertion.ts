@@ -2,17 +2,21 @@ import type { JWTHeaderParameters } from "jose";
 import { importJWK, importPKCS8, SignJWT } from "jose";
 
 /** Asymmetric signing algorithms compatible with private_key_jwt (RFC 7523). */
+export const ASSERTION_SIGNING_ALGORITHMS = [
+	"RS256",
+	"RS384",
+	"RS512",
+	"PS256",
+	"PS384",
+	"PS512",
+	"ES256",
+	"ES384",
+	"ES512",
+	"EdDSA",
+] as const;
+
 export type AssertionSigningAlgorithm =
-	| "RS256"
-	| "RS384"
-	| "RS512"
-	| "PS256"
-	| "PS384"
-	| "PS512"
-	| "ES256"
-	| "ES384"
-	| "ES512"
-	| "EdDSA";
+	(typeof ASSERTION_SIGNING_ALGORITHMS)[number];
 
 export interface ClientAssertionConfig {
 	/** Pre-signed JWT assertion string. If provided, signing is skipped. */
@@ -43,7 +47,7 @@ export async function signClientAssertion({
 	privateKeyJwk,
 	privateKeyPem,
 	kid,
-	algorithm = "RS256",
+	algorithm,
 	expiresIn = 120,
 }: {
 	clientId: string;
@@ -54,11 +58,20 @@ export async function signClientAssertion({
 	algorithm?: AssertionSigningAlgorithm;
 	expiresIn?: number;
 }): Promise<string> {
+	// Fall back to JWK-embedded kid/alg when not explicitly provided (RFC 7517).
+	// JsonWebKey includes alg but not kid; access kid via index.
+	const jwk = privateKeyJwk as Record<string, unknown> | undefined;
+	const resolvedKid = kid ?? (jwk?.kid as string | undefined);
+	const resolvedAlg =
+		algorithm ??
+		(privateKeyJwk?.alg as AssertionSigningAlgorithm | undefined) ??
+		"RS256";
+
 	let key: Awaited<ReturnType<typeof importJWK>>;
 	if (privateKeyJwk) {
-		key = await importJWK(privateKeyJwk, algorithm);
+		key = await importJWK(privateKeyJwk, resolvedAlg);
 	} else if (privateKeyPem) {
-		key = await importPKCS8(privateKeyPem, algorithm);
+		key = await importPKCS8(privateKeyPem, resolvedAlg);
 	} else {
 		throw new Error(
 			"private_key_jwt requires either privateKeyJwk or privateKeyPem",
@@ -68,8 +81,8 @@ export async function signClientAssertion({
 	const now = Math.floor(Date.now() / 1000);
 	const jti = crypto.randomUUID();
 
-	const header: JWTHeaderParameters = { alg: algorithm, typ: "JWT" };
-	if (kid) header.kid = kid;
+	const header: JWTHeaderParameters = { alg: resolvedAlg, typ: "JWT" };
+	if (resolvedKid) header.kid = resolvedKid;
 
 	return new SignJWT({})
 		.setProtectedHeader(header)

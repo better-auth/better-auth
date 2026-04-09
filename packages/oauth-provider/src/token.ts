@@ -583,7 +583,11 @@ async function handleAuthorizationCodeGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const credentials = await extractClientCredentials(ctx, opts);
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/token`,
+	);
 	const client_id = credentials?.clientId;
 	const client_secret =
 		credentials?.method === "client_secret_basic" ||
@@ -787,7 +791,11 @@ async function handleClientCredentialsGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const credentials = await extractClientCredentials(ctx, opts);
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/token`,
+	);
 	const client_id = credentials?.clientId;
 	const client_secret =
 		credentials?.method === "client_secret_basic" ||
@@ -933,7 +941,11 @@ async function handleRefreshTokenGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const credentials = await extractClientCredentials(ctx, opts);
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/token`,
+	);
 	const client_id = credentials?.clientId;
 	const client_secret =
 		credentials?.method === "client_secret_basic" ||

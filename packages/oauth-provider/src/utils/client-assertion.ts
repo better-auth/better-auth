@@ -1,4 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { AssertionSigningAlgorithm } from "@better-auth/core/oauth2";
+import { ASSERTION_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
 import {
@@ -9,16 +11,6 @@ import {
 } from "jose";
 import type { OAuthOptions, SchemaClient, Scope } from "../types";
 import { getClient } from "./index";
-
-const SUPPORTED_ASSERTION_ALGS = [
-	"RS256",
-	"PS256",
-	"ES256",
-	"ES512",
-	"EdDSA",
-] as const;
-
-type AssertionAlg = (typeof SUPPORTED_ASSERTION_ALGS)[number];
 
 const ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -62,16 +54,28 @@ export function isPrivateHostname(hostname: string): boolean {
 	if (isPrivateIpv4(host)) {
 		return true;
 	}
-	// Link-local IPv6: fe80::/10 covers fe8*-feb*
-	const isLinkLocal =
-		host.startsWith("fe8") ||
-		host.startsWith("fe9") ||
-		host.startsWith("fea") ||
-		host.startsWith("feb");
-	// Unique-local IPv6: fc00::/7 covers fc* and fd*
-	const isUniqueLocal = host.startsWith("fc") || host.startsWith("fd");
-	if (isLinkLocal || isUniqueLocal) {
-		return true;
+	// Only apply IPv6 heuristics when the hostname contains ":" (the IPv6
+	// separator). Without this gate, DNS names like "fdomain.com" would be
+	// incorrectly blocked by the "fd" prefix check.
+	if (host.includes(":")) {
+		// IPv4-mapped IPv6 (::ffff:a.b.c.d): extract the trailing IPv4 and check it
+		const v4MappedMatch = host.match(
+			/^(?:0{0,4}:){0,4}:?(?:0{0,4}:)?ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/,
+		);
+		if (v4MappedMatch && isPrivateIpv4(v4MappedMatch[1]!)) {
+			return true;
+		}
+		// Link-local IPv6: fe80::/10 covers fe8*-feb*
+		const isLinkLocal =
+			host.startsWith("fe8") ||
+			host.startsWith("fe9") ||
+			host.startsWith("fea") ||
+			host.startsWith("feb");
+		// Unique-local IPv6: fc00::/7 covers fc* and fd*
+		const isUniqueLocal = host.startsWith("fc") || host.startsWith("fd");
+		if (isLinkLocal || isUniqueLocal) {
+			return true;
+		}
 	}
 	if (host === "metadata.google.internal") {
 		return true;
@@ -79,23 +83,8 @@ export function isPrivateHostname(hostname: string): boolean {
 	return false;
 }
 
-async function fetchClientJwks(
-	ctx: GenericEndpointContext,
-	client: SchemaClient<Scope[]>,
-): Promise<JSONWebKeySet> {
-	if (client.jwks) {
-		return JSON.parse(client.jwks) as JSONWebKeySet;
-	}
-
-	if (!client.jwksUri) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client has no JWKS configured",
-			error: "invalid_client",
-		});
-	}
-
-	// SSRF protection: validate the URI before fetching
-	const parsed = new URL(client.jwksUri);
+function validateJwksUri(ctx: GenericEndpointContext, jwksUri: string): void {
+	const parsed = new URL(jwksUri);
 	if (parsed.protocol !== "https:") {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "jwks_uri must use HTTPS",
@@ -115,6 +104,46 @@ async function fetchClientJwks(
 			error: "invalid_client",
 		});
 	}
+}
+
+async function fetchJwksFromUri(jwksUri: string): Promise<JSONWebKeySet> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), JWKS_FETCH_TIMEOUT_MS);
+	try {
+		const response = await fetch(jwksUri, {
+			signal: controller.signal,
+			headers: { accept: "application/json" },
+			redirect: "error",
+		});
+		if (!response.ok) {
+			throw new Error(`JWKS fetch returned ${response.status}`);
+		}
+		const jwks = (await response.json()) as JSONWebKeySet;
+		if (!jwks.keys || !Array.isArray(jwks.keys)) {
+			throw new Error("JWKS response missing keys array");
+		}
+		return jwks;
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+async function fetchClientJwks(
+	ctx: GenericEndpointContext,
+	client: SchemaClient<Scope[]>,
+): Promise<JSONWebKeySet> {
+	if (client.jwks) {
+		return JSON.parse(client.jwks) as JSONWebKeySet;
+	}
+
+	if (!client.jwksUri) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client has no JWKS configured",
+			error: "invalid_client",
+		});
+	}
+
+	validateJwksUri(ctx, client.jwksUri);
 
 	const now = Date.now();
 	const cached = jwksCache.get(client.jwksUri);
@@ -122,24 +151,8 @@ async function fetchClientJwks(
 		return cached.jwks;
 	}
 
-	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), JWKS_FETCH_TIMEOUT_MS);
 	try {
-		const response = await fetch(client.jwksUri, {
-			signal: controller.signal,
-			headers: { accept: "application/json" },
-			redirect: "error",
-		});
-
-		if (!response.ok) {
-			throw new Error(`JWKS fetch returned ${response.status}`);
-		}
-
-		const jwks = (await response.json()) as JSONWebKeySet;
-		if (!jwks.keys || !Array.isArray(jwks.keys)) {
-			throw new Error("JWKS response missing keys array");
-		}
-
+		const jwks = await fetchJwksFromUri(client.jwksUri);
 		jwksCache.set(client.jwksUri, { jwks, fetchedAt: now });
 		return jwks;
 	} catch {
@@ -154,8 +167,23 @@ async function fetchClientJwks(
 			error_description: "failed to fetch client JWKS",
 			error: "invalid_client",
 		});
-	} finally {
-		clearTimeout(timeout);
+	}
+}
+
+/**
+ * Refetch JWKS from jwks_uri when signature verification fails with cached keys.
+ * Handles key rotation: the client may have published a new key that isn't in our cache yet.
+ */
+async function refetchClientJwks(
+	client: SchemaClient<Scope[]>,
+): Promise<JSONWebKeySet | null> {
+	if (!client.jwksUri) return null;
+	try {
+		const jwks = await fetchJwksFromUri(client.jwksUri);
+		jwksCache.set(client.jwksUri, { jwks, fetchedAt: Date.now() });
+		return jwks;
+	} catch {
+		return null;
 	}
 }
 
@@ -192,7 +220,9 @@ export async function verifyClientAssertion(
 	}
 	if (
 		!header.alg ||
-		!SUPPORTED_ASSERTION_ALGS.includes(header.alg as AssertionAlg)
+		!ASSERTION_SIGNING_ALGORITHMS.includes(
+			header.alg as AssertionSigningAlgorithm,
+		)
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported assertion signing algorithm: ${header.alg}`,
@@ -251,25 +281,50 @@ export async function verifyClientAssertion(
 
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, client);
-	const keySet = createLocalJWKSet(jwks);
 	const audience = expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
 	const maxLifetime = opts.assertionMaxLifetime ?? 300;
-
-	// NOTE: We do NOT use jose's maxTokenAge option because it bounds (now - iat),
-	// not (exp - now). Instead we explicitly check the assertion's remaining validity
-	// window below — this correctly caps how far into the future exp can be set,
-	// and ensures the JTI tombstone always outlives the assertion.
-	const { payload } = await jwtVerify(clientAssertion, keySet, {
+	const verifyOpts = {
 		issuer: clientId,
 		subject: clientId,
 		audience,
-		algorithms: [...SUPPORTED_ASSERTION_ALGS],
-	}).catch(() => {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "client assertion signature verification failed",
-			error: "invalid_client",
-		});
-	});
+		algorithms: [...ASSERTION_SIGNING_ALGORITHMS] as string[],
+	};
+
+	// NOTE: We do NOT use jose's maxTokenAge option because it bounds (now - iat),
+	// not (exp - now). Instead we explicitly check the assertion's remaining validity
+	// window below; this correctly caps how far into the future exp can be set,
+	// and ensures the JTI tombstone always outlives the assertion.
+	let payload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
+	try {
+		({ payload } = await jwtVerify(
+			clientAssertion,
+			createLocalJWKSet(jwks),
+			verifyOpts,
+		));
+	} catch {
+		// On failure for jwks_uri clients, the key may have been rotated.
+		// Refetch JWKS and retry once before giving up.
+		const refreshed = await refetchClientJwks(client);
+		if (refreshed) {
+			try {
+				({ payload } = await jwtVerify(
+					clientAssertion,
+					createLocalJWKSet(refreshed),
+					verifyOpts,
+				));
+			} catch {
+				throw new APIError("UNAUTHORIZED", {
+					error_description: "client assertion signature verification failed",
+					error: "invalid_client",
+				});
+			}
+		} else {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "client assertion signature verification failed",
+				error: "invalid_client",
+			});
+		}
+	}
 
 	// exp is REQUIRED per RFC 7523 Section 3 rule 4.
 	// jose's jwtVerify only validates exp when present — it does NOT reject
@@ -329,12 +384,29 @@ export async function verifyClientAssertion(
 		}
 
 		// Store JTI tombstone until the assertion's actual expiry.
+		// If another instance created the tombstone between our find and create
+		// (race in multi-instance deployments), the create may succeed as a
+		// duplicate or throw; either way the assertion is consumed.
 		const jtiExpiry = new Date(payload.exp * 1000);
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: jtiIdentifier,
-			value: clientId,
-			expiresAt: jtiExpiry,
-		});
+		try {
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: jtiIdentifier,
+				value: clientId,
+				expiresAt: jtiExpiry,
+			});
+		} catch (createErr) {
+			// If the tombstone already exists (created by another instance in
+			// the race window), treat it as a replay.
+			const doubleCheck =
+				await ctx.context.internalAdapter.findVerificationValue(jtiIdentifier);
+			if (doubleCheck) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "client assertion jti has already been used",
+					error: "invalid_client",
+				});
+			}
+			throw createErr;
+		}
 	} finally {
 		pendingAssertionIds.delete(jtiIdentifier);
 	}

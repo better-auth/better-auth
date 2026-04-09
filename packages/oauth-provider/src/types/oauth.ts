@@ -1,3 +1,4 @@
+import type { AssertionSigningAlgorithm } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { Prompt } from ".";
 
@@ -96,7 +97,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field token_endpoint_auth_methods_supported).
 	 */
-	token_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	token_endpoint_auth_signing_alg_values_supported?: AssertionSigningAlgorithm[];
 	/**
 	 * URL of a page containing human-readable information
 	 * that developers might want or need to know when using the
@@ -142,7 +143,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field revocation_endpoint_auth_methods_supported).
 	 */
-	revocation_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	revocation_endpoint_auth_signing_alg_values_supported?: AssertionSigningAlgorithm[];
 	/**
 	 * URL of the authorization server's OAuth 2.0
 	 * introspection endpoint [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)
@@ -163,7 +164,7 @@ export interface AuthServerMetadata {
 	 * the "private_key_jwt" and "client_secret_jwt" authentication methods
 	 * (see field introspection_endpoint_auth_methods_supported).
 	 */
-	introspection_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	introspection_endpoint_auth_signing_alg_values_supported?: AssertionSigningAlgorithm[];
 	/**
 	 * Supported code challenge methods.
 	 *

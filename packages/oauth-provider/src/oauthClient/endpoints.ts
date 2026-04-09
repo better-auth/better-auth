@@ -352,7 +352,8 @@ export async function rotateClientSecretEndpoint(
 
 	if (client.public || !client.clientSecret) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "public clients cannot be updated",
+			error_description:
+				"secret rotation is only available for clients using client_secret authentication",
 			error: "invalid_client",
 		});
 	}
