@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.5.6",
+  "version": "1.6.1",
   "description": "Drizzle adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -55,7 +55,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
