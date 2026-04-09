@@ -11,7 +11,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
 import type {
@@ -1408,7 +1408,7 @@ describe("SAML SSO", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
-					providersLimit: async (user) => {
+					providersLimit: async ({ user }) => {
 						return user.email === "pro@example.com" ? 2 : 1;
 					},
 				}),
@@ -1452,6 +1452,175 @@ describe("SAML SSO", async () => {
 						spMetadata: {
 							metadata: spMetadata,
 						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: {
+				message: "You have reached the maximum number of SSO providers",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7750
+	 */
+	it("should pass organizationId to providersLimit function", async () => {
+		const receivedArgs: Array<{
+			userId: string;
+			organizationId?: string;
+		}> = [];
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					providersLimit: async ({ user, organizationId }) => {
+						receivedArgs.push({
+							userId: user.id,
+							organizationId,
+						});
+						return organizationId === "enterprise-org" ? 10 : 0;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-no-org",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: sharedMockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { message: "SSO provider registration is disabled" },
+		});
+		expect(receivedArgs).toHaveLength(1);
+		expect(receivedArgs[0]!.organizationId).toBeUndefined();
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-wrong-org",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					organizationId: "free-org",
+					samlConfig: {
+						entryPoint: sharedMockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { message: "SSO provider registration is disabled" },
+		});
+		expect(receivedArgs).toHaveLength(2);
+		expect(receivedArgs[1]!.organizationId).toBe("free-org");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7750
+	 */
+	it("should scope provider count to organizationId when checking limit", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					providersLimit: ({ organizationId }) => {
+						return organizationId ? 1 : 0;
+					},
+				}),
+				organization(),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org1 = await auth.api.createOrganization({
+			body: { name: "Org One", slug: "org-one" },
+			headers,
+		});
+		const org2 = await auth.api.createOrganization({
+			body: { name: "Org Two", slug: "org-two" },
+			headers,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-org1-provider",
+				issuer: "http://localhost:8081",
+				domain: "org1.example.com",
+				organizationId: org1!.id,
+				samlConfig: {
+					entryPoint: sharedMockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					spMetadata: { metadata: spMetadata },
+				},
+			},
+			headers,
+		});
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-org2-provider",
+				issuer: "http://localhost:8081",
+				domain: "org2.example.com",
+				organizationId: org2!.id,
+				samlConfig: {
+					entryPoint: sharedMockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					spMetadata: { metadata: spMetadata },
+				},
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-org1-provider-2",
+					issuer: "http://localhost:8081",
+					domain: "org1-extra.example.com",
+					organizationId: org1!.id,
+					samlConfig: {
+						entryPoint: sharedMockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: { metadata: spMetadata },
 					},
 				},
 				headers,

@@ -700,7 +700,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 			const limit =
 				typeof options?.providersLimit === "function"
-					? await options.providersLimit(user)
+					? await options.providersLimit({
+							user,
+							organizationId: ctx.body.organizationId,
+						})
 					: (options?.providersLimit ?? 10);
 
 			if (!limit) {
@@ -709,9 +712,18 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			const providerWhere: { field: string; value: string }[] = [
+				{ field: "userId", value: user.id },
+			];
+			if (ctx.body.organizationId) {
+				providerWhere.push({
+					field: "organizationId",
+					value: ctx.body.organizationId,
+				});
+			}
 			const providers = await ctx.context.adapter.findMany({
 				model: "ssoProvider",
-				where: [{ field: "userId", value: user.id }],
+				where: providerWhere,
 			});
 
 			if (providers.length >= limit) {

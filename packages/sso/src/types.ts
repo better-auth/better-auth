@@ -249,14 +249,21 @@ export interface SSOOptions {
 	 *
 	 * @example
 	 * ```ts
-	 * providersLimit: async (user) => {
+	 * providersLimit: async ({ user, organizationId }) => {
+	 *   if (organizationId) {
+	 *     const org = await getOrganization(organizationId);
+	 *     return org.plan === "enterprise" ? 10 : 1;
+	 *   }
 	 *   const plan = await getUserPlan(user);
 	 *   return plan.name === "pro" ? 10 : 1;
 	 * }
 	 * ```
 	 * @default 10
 	 */
-	providersLimit?: (number | ((user: User) => Awaitable<number>)) | undefined;
+	providersLimit?:
+		| number
+		| ((data: { user: User; organizationId?: string }) => Awaitable<number>)
+		| undefined;
 	/**
 	 * Trust the email verified flag from the provider.
 	 *
