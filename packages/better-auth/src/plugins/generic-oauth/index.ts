@@ -115,13 +115,14 @@ async function fetchUserInfo(
 	if (userInfo.error || !userInfo.data) {
 		return null;
 	}
+	const data = userInfo.data;
 	return {
-		...userInfo.data,
-		id: userInfo.data.sub ?? "",
-		emailVerified: userInfo.data.email_verified ?? false,
-		email: userInfo.data.email,
-		image: userInfo.data.picture,
-		name: userInfo.data.name,
+		...data,
+		id: data.sub ?? (data as Record<string, unknown>).id ?? "",
+		emailVerified: data.email_verified ?? false,
+		email: data.email,
+		image: data.picture,
+		name: data.name,
 	};
 }
 
