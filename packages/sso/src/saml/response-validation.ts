@@ -13,9 +13,12 @@ function errorRedirectUrl(
 		url.searchParams.set("error_description", description);
 		return url.toString();
 	} catch {
-		// Relative URL — fall back to manual construction
-		const separator = base.includes("?") ? "&" : "?";
-		return `${base}${separator}error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(description)}`;
+		// Relative URL — fall back to manual construction.
+		// Split off any fragment so query params stay before the hash.
+		const [path, hash] = base.split("#", 2);
+		const separator = path.includes("?") ? "&" : "?";
+		const query = `error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(description)}`;
+		return `${path}${separator}${query}${hash ? `#${hash}` : ""}`;
 	}
 }
 
