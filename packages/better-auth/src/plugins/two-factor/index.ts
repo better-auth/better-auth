@@ -141,8 +141,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 												properties: {
 													totpURI: {
 														type: "string",
+														nullable: true,
 														description:
-															"TOTP URI for authenticator app setup (only present when method is 'totp')",
+															"TOTP URI for authenticator app setup. Null when method is 'otp'.",
 													},
 													backupCodes: {
 														type: "array",
@@ -211,21 +212,25 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							model: opts.twoFactorTable,
 							where: [{ field: "userId", value: user.id }],
 						});
-					await ctx.context.adapter.deleteMany({
-						model: opts.twoFactorTable,
-						where: [{ field: "userId", value: user.id }],
-					});
 
 					if (method === "otp") {
-						await ctx.context.adapter.create({
-							model: opts.twoFactorTable,
-							data: {
-								secret: null,
-								backupCodes: backupCodes.encryptedBackupCodes,
-								userId: user.id,
-								verified: false,
-							},
-						});
+						const otpData = {
+							secret: null,
+							backupCodes: backupCodes.encryptedBackupCodes,
+							verified: null,
+						};
+						if (existingTwoFactor) {
+							await ctx.context.adapter.update({
+								model: opts.twoFactorTable,
+								update: otpData,
+								where: [{ field: "userId", value: user.id }],
+							});
+						} else {
+							await ctx.context.adapter.create({
+								model: opts.twoFactorTable,
+								data: { ...otpData, userId: user.id },
+							});
+						}
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							user.id,
 							{
@@ -255,17 +260,24 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						key: ctx.context.secretConfig,
 						data: secret,
 					});
-					await ctx.context.adapter.create({
-						model: opts.twoFactorTable,
-						data: {
-							secret: encryptedSecret,
-							backupCodes: backupCodes.encryptedBackupCodes,
-							userId: user.id,
-							verified:
-								existingTwoFactor != null &&
-								existingTwoFactor.verified !== false,
-						},
-					});
+					const totpData = {
+						secret: encryptedSecret,
+						backupCodes: backupCodes.encryptedBackupCodes,
+						verified:
+							existingTwoFactor != null && existingTwoFactor.verified === true,
+					};
+					if (existingTwoFactor) {
+						await ctx.context.adapter.update({
+							model: opts.twoFactorTable,
+							update: totpData,
+							where: [{ field: "userId", value: user.id }],
+						});
+					} else {
+						await ctx.context.adapter.create({
+							model: opts.twoFactorTable,
+							data: { ...totpData, userId: user.id },
+						});
+					}
 					const totpURI = createOTP(secret, {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
@@ -535,7 +547,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							if (
 								userTotpSecret &&
 								userTotpSecret.secret &&
-								userTotpSecret.verified !== false
+								userTotpSecret.verified === true
 							) {
 								twoFactorMethods.push("totp");
 							}

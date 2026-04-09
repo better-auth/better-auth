@@ -573,7 +573,7 @@ describe("OTP-only enablement", async () => {
 		expect(twoFactor).toBeDefined();
 		expect(twoFactor?.secret).toBeNull();
 		expect(twoFactor?.backupCodes).toBeDefined();
-		expect(twoFactor?.verified).toBe(false);
+		expect(twoFactor?.verified).toBeNull();
 	});
 
 	it("should only report OTP in twoFactorMethods at sign-in", async () => {
@@ -646,6 +646,53 @@ describe("OTP-only enablement", async () => {
 		expect(verifyRes.data?.user).toBeDefined();
 	});
 
+	it("should reject TOTP enable when totpOptions.disable is set", async () => {
+		const { auth: noTotpAuth, signInWithTestUser: signIn } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						otpOptions: { sendOTP() {} },
+						totpOptions: { disable: true },
+					}),
+				],
+			});
+		const { headers: h } = await signIn();
+		const res = await noTotpAuth.api.enableTwoFactor({
+			body: { password: "password1234!", method: "totp" },
+			headers: h,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("should allow idempotent OTP enable (rotates backup codes)", async () => {
+		const firstCodes = (
+			await auth.api.viewBackupCodes({
+				body: {
+					userId: (await auth.api.getSession({ headers }))?.user.id!,
+				},
+			})
+		).backupCodes;
+
+		const res = await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "otp" },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(res.headers);
+		expect(res.status).toBe(200);
+
+		const newCodes = (
+			await auth.api.viewBackupCodes({
+				body: {
+					userId: (await auth.api.getSession({ headers }))?.user.id!,
+				},
+			})
+		).backupCodes;
+		expect(newCodes).not.toEqual(firstCodes);
+	});
+
 	it("should allow upgrading from OTP to TOTP", async () => {
 		const enableRes = await auth.api.enableTwoFactor({
 			body: { password: testUser.password, method: "totp" },
@@ -666,6 +713,111 @@ describe("OTP-only enablement", async () => {
 		expect(twoFactor?.secret).not.toBeNull();
 		// unverified until user calls verifyTOTP
 		expect(twoFactor?.verified).toBe(false);
+	});
+});
+
+describe("TOTP-to-OTP downgrade", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: { sendOTP() {} },
+			}),
+		],
+	});
+	let { headers } = await signInWithTestUser();
+
+	it("should downgrade from verified TOTP to OTP-only", async () => {
+		// Enable TOTP
+		const totpRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "totp" },
+			headers,
+		});
+		expect(totpRes.totpURI).toBeDefined();
+
+		// Verify the TOTP to make it active
+		const session = await auth.api.getSession({ headers });
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor!.secret!,
+		});
+		const code = await createOTP(decrypted).totp();
+		const verifyRes = await auth.api.verifyTOTP({
+			body: { code },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(verifyRes.headers);
+
+		// Verify TOTP is now active
+		const verifiedRow = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		expect(verifiedRow?.verified).toBe(true);
+
+		// Downgrade to OTP
+		const otpRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "otp" },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(otpRes.headers);
+		const json = (await otpRes.json()) as {
+			totpURI: string | null;
+			backupCodes: string[];
+		};
+		expect(json.totpURI).toBeNull();
+		expect(json.backupCodes.length).toBe(10);
+
+		// DB should now show OTP-only state
+		const downgraded = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		expect(downgraded?.secret).toBeNull();
+		expect(downgraded?.verified).toBeNull();
+
+		// Sign-in should only offer OTP
+		const signInRes = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const signInJson = await signInRes.json();
+		expect(signInJson.twoFactorMethods).toEqual(["otp"]);
+	});
+
+	it("should reject getTOTPURI for OTP-only user", async () => {
+		const res = await auth.api.getTOTPURI({
+			headers,
+			body: { password: testUser.password },
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("should disable 2FA for OTP-only user", async () => {
+		const disableRes = await auth.api.disableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(disableRes.headers);
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.twoFactorEnabled).toBe(false);
+
+		// Sign-in should not require 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(signInRes.status).toBe(200);
+		const json = await signInRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 });
 

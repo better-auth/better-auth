@@ -76,5 +76,5 @@ export interface TwoFactorTable {
 	userId: string;
 	secret: string | null;
 	backupCodes: string;
-	verified: boolean;
+	verified: boolean | null;
 }
