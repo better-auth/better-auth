@@ -1,33 +1,10 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
-import type { BetterFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
-import type { Session, User } from "../types";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
-import type { AuthQueryAtom } from "./query";
-import { getStableAuthQueryState } from "./query";
-import { getStableReference } from "./stable-reference";
 
 const now = () => Math.floor(Date.now() / 1000);
-
-/**
- * Normalize $fetch response: `throw: true` returns data directly, otherwise `{ data, error }`.
- */
-function normalizeSessionResponse(res: unknown): {
-	data: SessionResponse | null;
-	error: unknown;
-} {
-	if (
-		typeof res === "object" &&
-		res !== null &&
-		"data" in res &&
-		"error" in res
-	) {
-		return res as { data: SessionResponse | null; error: unknown };
-	}
-	return { data: res as SessionResponse, error: null };
-}
 
 /**
  * Rate limit: don't refetch on focus if a session request was made within this many seconds
@@ -35,43 +12,22 @@ function normalizeSessionResponse(res: unknown): {
 const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
-	sessionAtom: AuthQueryAtom<
-		{
-			user: User;
-			session: Session;
-		} & Record<string, any>
-	>;
+	fetchSession: () => Promise<void>;
 	sessionSignal: WritableAtom<boolean>;
-	$fetch: BetterFetch;
 	options?: BetterAuthClientOptions | undefined;
 }
 
 interface SessionRefreshState {
-	lastSync: number;
 	lastSessionRequest: number;
-	cachedSession: any;
 	pollInterval?: ReturnType<typeof setInterval> | undefined;
 	unsubscribeBroadcast?: (() => void) | undefined;
 	unsubscribeFocus?: (() => void) | undefined;
 	unsubscribeOnline?: (() => void) | undefined;
+	unsubscribeSignal?: (() => void) | undefined;
 }
 
-export type SessionResponse = (
-	| {
-			session: null;
-			user: null;
-			needsRefresh?: boolean;
-	  }
-	| {
-			session: Session;
-			user: User;
-			needsRefresh?: boolean;
-	  }
-) &
-	Record<string, any>;
-
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
-	const { sessionAtom, sessionSignal, $fetch, options = {} } = opts;
+	const { fetchSession, sessionSignal, options = {} } = opts;
 
 	const refetchInterval = options.sessionOptions?.refetchInterval ?? 0;
 	const refetchOnWindowFocus =
@@ -80,9 +36,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		options.sessionOptions?.refetchWhenOffline ?? false;
 
 	const state: SessionRefreshState = {
-		lastSync: 0,
 		lastSessionRequest: 0,
-		cachedSession: undefined,
 	};
 
 	const shouldRefetch = (): boolean => {
@@ -99,73 +53,27 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		if (!shouldRefetch()) return;
 
 		if (event?.event === "storage") {
-			state.lastSync = now();
-			sessionSignal.set(!sessionSignal.get());
+			void fetchSession();
 			return;
 		}
-
-		const currentSession = sessionAtom.get();
-
-		const fetchSessionWithRefresh = () => {
-			state.lastSessionRequest = now();
-			$fetch<SessionResponse>("/get-session")
-				.then(async (res) => {
-					let { data, error } = normalizeSessionResponse(res);
-
-					if (data?.needsRefresh) {
-						try {
-							const refreshRes = await $fetch<SessionResponse>("/get-session", {
-								method: "POST",
-							});
-							({ data, error } = normalizeSessionResponse(refreshRes));
-						} catch {}
-					}
-
-					const sessionData = data?.session && data?.user ? data : null;
-					const nextSessionData =
-						currentSession.data == null || sessionData == null
-							? sessionData
-							: getStableReference(currentSession.data, sessionData);
-					const nextSession = getStableAuthQueryState(currentSession, {
-						...currentSession,
-						data: nextSessionData,
-						error: error as Parameters<typeof sessionAtom.set>[0]["error"],
-					});
-
-					if (nextSession !== currentSession) {
-						sessionAtom.set(nextSession);
-					}
-					state.lastSync = now();
-					if (currentSession.data !== nextSessionData) {
-						sessionSignal.set(!sessionSignal.get());
-					}
-				})
-				.catch(() => {});
-		};
 
 		if (event?.event === "poll") {
-			fetchSessionWithRefresh();
+			state.lastSessionRequest = now();
+			void fetchSession();
 			return;
 		}
 
-		// Rate limit: don't refetch on focus if a session request was made recently
 		if (event?.event === "visibilitychange") {
 			const timeSinceLastRequest = now() - state.lastSessionRequest;
 			if (timeSinceLastRequest < FOCUS_REFETCH_RATE_LIMIT_SECONDS) {
 				return;
 			}
 			state.lastSessionRequest = now();
-		}
-
-		if (event?.event === "visibilitychange") {
-			fetchSessionWithRefresh();
+			void fetchSession();
 			return;
 		}
 
-		if (currentSession?.data === null || currentSession?.data === undefined) {
-			state.lastSync = now();
-			sessionSignal.set(!sessionSignal.get());
-		}
+		void fetchSession();
 	};
 
 	const broadcastSessionUpdate = (
@@ -181,10 +89,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const setupPolling = () => {
 		if (refetchInterval && refetchInterval > 0) {
 			state.pollInterval = setInterval(() => {
-				const currentSession = sessionAtom.get();
-				if (currentSession?.data) {
-					triggerRefetch({ event: "poll" });
-				}
+				triggerRefetch({ event: "poll" });
 			}, refetchInterval * 1000);
 		}
 	};
@@ -211,11 +116,18 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		});
 	};
 
+	const setupSignalSubscription = () => {
+		state.unsubscribeSignal = sessionSignal.listen(() => {
+			triggerRefetch();
+		});
+	};
+
 	const init = () => {
 		setupPolling();
 		setupBroadcast();
 		setupFocusRefetch();
 		setupOnlineRefetch();
+		setupSignalSubscription();
 
 		getGlobalBroadcastChannel().setup();
 		getGlobalFocusManager().setup();
@@ -239,9 +151,11 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.unsubscribeOnline();
 			state.unsubscribeOnline = undefined;
 		}
-		state.lastSync = 0;
+		if (state.unsubscribeSignal) {
+			state.unsubscribeSignal();
+			state.unsubscribeSignal = undefined;
+		}
 		state.lastSessionRequest = 0;
-		state.cachedSession = undefined;
 	};
 
 	return {

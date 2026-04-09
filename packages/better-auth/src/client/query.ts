@@ -2,7 +2,7 @@ import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import { atom, onMount } from "nanostores";
-import { getStableReference } from "./stable-reference";
+import { isJsonEqual, withEquality } from "./equality";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection
@@ -20,31 +20,17 @@ export type AuthQueryState<T> = {
 
 export type AuthQueryAtom<T> = PreinitializedWritableAtom<AuthQueryState<T>>;
 
-export function getStableAuthQueryState<T>(
-	current: AuthQueryState<T>,
-	next: AuthQueryState<T>,
-): AuthQueryState<T> {
-	const nextData =
-		current.data == null || next.data == null
-			? next.data
-			: getStableReference(current.data, next.data);
-	const nextError = current.error === next.error ? current.error : next.error;
-
-	if (
-		current.data === nextData &&
-		current.error === nextError &&
-		current.isPending === next.isPending &&
-		current.isRefetching === next.isRefetching &&
-		current.refetch === next.refetch
-	) {
-		return current;
-	}
-
-	return {
-		...next,
-		data: nextData,
-		error: nextError,
-	};
+function isAuthQueryStateEqual<T>(
+	a: AuthQueryState<T>,
+	b: AuthQueryState<T>,
+): boolean {
+	return (
+		isJsonEqual(a.data, b.data) &&
+		a.error === b.error &&
+		a.isPending === b.isPending &&
+		a.isRefetching === b.isRefetching &&
+		a.refetch === b.refetch
+	);
 }
 
 export const useAuthQuery = <T>(
@@ -71,6 +57,7 @@ export const useAuthQuery = <T>(
 		isRefetching: false,
 		refetch: (queryParams) => fn(queryParams),
 	});
+	withEquality(value, isAuthQueryStateEqual);
 
 	const fn = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -92,21 +79,23 @@ export const useAuthQuery = <T>(
 					...queryParams?.query,
 				},
 				async onSuccess(context) {
-					const currentValue = value.get();
-					const nextValue = getStableAuthQueryState(currentValue, {
-						data: context.data,
+					const current = value.get();
+					const stableData =
+						current.data != null &&
+						context.data != null &&
+						isJsonEqual(current.data, context.data)
+							? current.data
+							: context.data;
+					value.set({
+						data: stableData,
 						error: null,
 						isPending: false,
 						isRefetching: false,
-						refetch: currentValue.refetch,
+						refetch: value.value.refetch,
 					});
-					if (nextValue !== currentValue) {
-						value.set(nextValue);
-					}
 					await opts?.onSuccess?.(context);
 				},
 				async onError(context) {
-					const currentValue = value.get();
 					const { request } = context;
 					const retryAttempts =
 						typeof request.retry === "number"
@@ -115,47 +104,37 @@ export const useAuthQuery = <T>(
 					const retryAttempt = request.retryAttempt || 0;
 					if (retryAttempts && retryAttempt < retryAttempts) return;
 					const isUnauthorized = context.error.status === 401;
-					const nextValue = getStableAuthQueryState(currentValue, {
+					value.set({
 						error: context.error,
 						data: isUnauthorized
 							? null // clear session on HTTP 401
-							: currentValue.data, // preserve stale data on other errors
+							: value.get().data, // preserve stale data on other errors
 						isPending: false,
 						isRefetching: false,
-						refetch: currentValue.refetch,
+						refetch: value.value.refetch,
 					});
-					if (nextValue !== currentValue) {
-						value.set(nextValue);
-					}
 					await opts?.onError?.(context);
 				},
 				async onRequest(context) {
 					const currentValue = value.get();
-					const nextValue = getStableAuthQueryState(currentValue, {
+					value.set({
 						isPending: currentValue.data === null,
 						data: currentValue.data,
 						error: null,
 						isRefetching: true,
-						refetch: currentValue.refetch,
+						refetch: value.value.refetch,
 					});
-					if (nextValue !== currentValue) {
-						value.set(nextValue);
-					}
 					await opts?.onRequest?.(context);
 				},
 			})
 				.catch((error) => {
-					const currentValue = value.get();
-					const nextValue = getStableAuthQueryState(currentValue, {
+					value.set({
 						error,
-						data: currentValue.data,
+						data: value.get().data,
 						isPending: false,
 						isRefetching: false,
-						refetch: currentValue.refetch,
+						refetch: value.value.refetch,
 					});
-					if (nextValue !== currentValue) {
-						value.set(nextValue);
-					}
 				})
 				.finally(() => {
 					resolve(void 0);
@@ -167,8 +146,10 @@ export const useAuthQuery = <T>(
 		: [initializedAtom];
 	let isMounted = false;
 
+	const cleanups: (() => void)[] = [];
+
 	for (const initAtom of initializedAtom) {
-		initAtom.subscribe(async () => {
+		const unbind = initAtom.subscribe(async () => {
 			if (isServer()) {
 				// On server, don't trigger fetch
 				return;
@@ -184,13 +165,13 @@ export const useAuthQuery = <T>(
 						}
 					}, 0);
 					return () => {
-						value.off();
-						initAtom.off();
+						for (const u of cleanups) u();
 						clearTimeout(timeoutId);
 					};
 				});
 			}
 		});
+		cleanups.push(unbind);
 	}
 	return value;
 };

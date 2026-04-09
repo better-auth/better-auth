@@ -167,6 +167,7 @@ describe("useAuthQuery - error handling", () => {
 		await session().refetch();
 		await vi.runAllTimersAsync();
 
+		// Reference should be preserved because data is structurally identical
 		expect(session().data).toBe(initialData);
 	});
 
@@ -200,6 +201,7 @@ describe("useAuthQuery - error handling", () => {
 		getGlobalFocusManager().setFocused(true);
 		await vi.runAllTimersAsync();
 
+		// Only 2 fetches: initial + focus refetch (no double-fetch)
 		expect(fetchCallCount).toBe(2);
 		expect(session().data).toBe(initialData);
 	});
