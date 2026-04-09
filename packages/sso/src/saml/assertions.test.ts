@@ -28,6 +28,25 @@ describe("validateSingleAssertion", () => {
 		});
 	});
 
+	describe("base64 whitespace handling", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8921
+		 */
+		it("should accept base64 with embedded whitespace from line-wrapping IDPs", () => {
+			const xml = `
+				<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+					<saml:Assertion ID="123">
+						<saml:Subject><saml:NameID>user@example.com</saml:NameID></saml:Subject>
+					</saml:Assertion>
+				</samlp:Response>
+			`;
+			const b64 = Buffer.from(xml).toString("base64");
+			const wrapped = b64.replace(/.{76}/g, "$&\n");
+			expect(wrapped).toContain("\n");
+			expect(() => validateSingleAssertion(wrapped)).not.toThrow();
+		});
+	});
+
 	describe("no assertions", () => {
 		it("should reject response with no assertions", () => {
 			const xml = `
