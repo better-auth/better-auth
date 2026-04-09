@@ -557,23 +557,7 @@ export async function resolveSubjectIdentifier(
 	return userId;
 }
 
-/**
- * Deletes a prompt value
- *
- * @param ctx
- * @param prompt - the prompt value to delete
- */
-export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	const prompts = query.get("prompt")?.split(" ");
-	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
-	if (foundPrompt >= 0) {
-		prompts?.splice(foundPrompt, 1);
-		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
-	}
-	return Object.fromEntries(query);
-}
+export { deleteFromPrompt, searchParamsToQuery } from "./query-params";
 
 enum PKCERequirementErrors {
 	PUBLIC_CLIENT = "pkce is required for public clients",
