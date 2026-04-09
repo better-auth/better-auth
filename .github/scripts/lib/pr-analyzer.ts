@@ -268,6 +268,7 @@ const SCOPE_TO_PACKAGE: Record<string, string> = {
 	"mongo-adapter": "@better-auth/mongo-adapter",
 	"memory-adapter": "@better-auth/memory-adapter",
 	"redis-storage": "@better-auth/redis-storage",
+	cli: "auth",
 };
 
 /**
@@ -295,7 +296,7 @@ const PATH_TO_PACKAGE: [string, string][] = [
 	// Catch-all: everything in better-auth or core maps to the main package
 	["packages/better-auth/", "better-auth"],
 	["packages/core/", "better-auth"],
-	["packages/cli/", "better-auth"],
+	["packages/cli/", "auth"],
 ];
 
 /**

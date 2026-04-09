@@ -264,9 +264,13 @@ function fetchReleaseBody(tag: string): string | null {
 			"--json",
 			"body",
 		]);
-		const body = data.body ?? "";
-		releaseBodyCache.set(tag, body);
-		return body;
+		if (data.body === null) {
+			releaseBodyCache.set(tag, null);
+			return null;
+		}
+
+		releaseBodyCache.set(tag, data.body);
+		return data.body;
 	} catch {
 		releaseBodyCache.set(tag, null);
 		return null;
@@ -710,7 +714,6 @@ interface FormatOptions {
 	version: string;
 	entries: ReleaseEntry[];
 	previousTag: string;
-	distTag: string;
 }
 
 const CHANGE_TYPE_HEADINGS: Record<string, string> = {
@@ -850,7 +853,6 @@ const body = formatReleaseBody({
 	version,
 	entries,
 	previousTag,
-	distTag,
 });
 
 if (dryRun) {

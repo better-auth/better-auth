@@ -60,7 +60,7 @@ Breaking changes:
   3. Keep the PR link at the end of the description line
   4. Below the description, add a code block showing the migration action
      (the opt-out config, the before/after import change, or the new required option)
-  5. Inspect the PR diff (`gh pr diff <N>`) to find the exact config change
+  5. Inspect the PR diff (`gh pr diff <N>`) to find the exact migration action
 - Example transformation:
   ```
   Before (raw):
