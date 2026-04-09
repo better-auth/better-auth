@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
+import type { User } from "../types";
 
 describe("db", async () => {
 	it("should work with custom model names", async () => {
@@ -114,7 +115,7 @@ describe("db", async () => {
 
 		expect(result.user.id).toBe(existingId);
 
-		const createdUser = await db.findOne({
+		const createdUser = await db.findOne<User>({
 			model: "user",
 			where: [{ field: "id", value: existingId }],
 		});
