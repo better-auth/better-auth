@@ -3,7 +3,7 @@
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { ForgetPasswordForm } from "@/components/forms/forget-password-form";
+import { ForgotPasswordForm } from "@/components/forms/forgot-password-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,7 +59,7 @@ export default function Page() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<ForgetPasswordForm onSuccess={() => setIsSubmitted(true)} />
+					<ForgotPasswordForm onSuccess={() => setIsSubmitted(true)} />
 				</CardContent>
 				<CardFooter className="flex justify-center">
 					<Link href="/sign-in">

@@ -109,7 +109,7 @@ export function SignInForm({
 							<div className="flex items-center">
 								<FieldLabel htmlFor="sign-in-password">Password</FieldLabel>
 								<Link
-									href="/forget-password"
+									href="/forgot-password"
 									className="ml-auto inline-block text-sm underline text-foreground"
 								>
 									Forgot your password?

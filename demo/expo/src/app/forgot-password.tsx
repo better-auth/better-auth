@@ -14,12 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
 import { authClient } from "@/lib/auth-client";
 
-export default function ForgetPassword() {
+export default function ForgotPassword() {
 	const [email, setEmail] = useState("");
 	return (
 		<Card className="w-10/12 ">
 			<CardHeader>
-				<CardTitle>Forget Password</CardTitle>
+				<CardTitle>Forgot Password</CardTitle>
 				<CardDescription>
 					Enter your email to reset your password
 				</CardDescription>
@@ -36,7 +36,7 @@ export default function ForgetPassword() {
 				<View className="w-full gap-2">
 					<Button
 						onPress={() => {
-							authClient.forgetPassword({
+							authClient.requestPasswordReset({
 								email,
 								redirectTo: "/reset-password",
 							});
