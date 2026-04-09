@@ -6,7 +6,7 @@ description: Agent identity, registration, discovery, and capability-based autho
 `AI Agents` `MCP` `Capabilities`
 
 <Callout type="warn">
-This plugin is an implementation of a standard on heavy development. It's not yet stable and may change in the future. Please report any issues or bugs on [Github](https://github.com/better-auth/agent-auth).
+  This plugin is an implementation of a standard on heavy development. It's not yet stable and may change in the future. Please report any issues or bugs on [Github](https://github.com/better-auth/agent-auth).
 </Callout>
 
 The Agent Auth plugin lets your Better Auth server act as an **Agent Auth provider**. It's a server implementation of the [Agent Auth Protocol](https://agentauthprotocol.com).
@@ -15,135 +15,136 @@ It gives AI agents a standard way to discover your service, register themselves,
 
 ## Features
 
-- **OpenAPI adapter** — derive capabilities, input/output schemas, and a proxy `onExecute` handler directly from an OpenAPI 3.x spec
-- **MCP adapter** — expose agent auth as MCP tools so any MCP-compatible AI agent can discover and call your capabilities
-- Discovery document at `/.well-known/agent-configuration`
-- Capability listing, description, and execution (optional per-capability `location` URLs)
-- Delegated and autonomous agent modes
-- Device authorization and CIBA approval flows
-- Short-lived signed JWTs with replay protection
-- Audit/event hooks for approvals, grants, and execution
+* **OpenAPI adapter** — derive capabilities, input/output schemas, and a proxy `onExecute` handler directly from an OpenAPI 3.x spec
+* **MCP adapter** — expose agent auth as MCP tools so any MCP-compatible AI agent can discover and call your capabilities
+* Discovery document at `/.well-known/agent-configuration`
+* Capability listing, description, and execution (optional per-capability `location` URLs)
+* Delegated and autonomous agent modes
+* Device authorization and CIBA approval flows
+* Short-lived signed JWTs with replay protection
+* Audit/event hooks for approvals, grants, and execution
 
 ## Installation
 
 <Steps>
-    <Step>
-        ### Install the packages
+  <Step>
+    ### Install the packages
 
-        ```package-install
-        @better-auth/agent-auth
-        ```
+    ```package-install
+    @better-auth/agent-auth
+    ```
 
-        Client and CLI packages (optional):
+    Client and CLI packages (optional):
 
-        ```bash
-        npm install @auth/agent @auth/agent-cli
-        ```
-    </Step>
+    ```bash
+    npm install @auth/agent @auth/agent-cli
+    ```
+  </Step>
 
-    <Step>
-        ### Add the plugin to your auth config
+  <Step>
+    ### Add the plugin to your auth config
 
-        Start by defining the capabilities your service exposes and an `onExecute` handler that performs the action for an authenticated agent.
+    Start by defining the capabilities your service exposes and an `onExecute` handler that performs the action for an authenticated agent.
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth";
-        import { agentAuth } from "@better-auth/agent-auth"; // [!code highlight]
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { agentAuth } from "@better-auth/agent-auth"; // [!code highlight]
 
-        export const auth = betterAuth({
-          plugins: [
-            agentAuth({ // [!code highlight]
-              providerName: "Acme", // [!code highlight]
-              providerDescription: "Acme project and deployment APIs for AI agents.", // [!code highlight]
-              modes: ["delegated", "autonomous"], // [!code highlight]
-              capabilities: [ // [!code highlight]
-                { // [!code highlight]
-                  name: "deploy_project", // [!code highlight]
-                  description: "Deploy a project to production.", // [!code highlight]
-                  input: { // [!code highlight]
-                    type: "object", // [!code highlight]
-                    properties: { // [!code highlight]
-                      projectId: { type: "string" }, // [!code highlight]
-                    }, // [!code highlight]
-                    required: ["projectId"], // [!code highlight]
-                  }, // [!code highlight]
+    export const auth = betterAuth({
+      plugins: [
+        agentAuth({ // [!code highlight]
+          providerName: "Acme", // [!code highlight]
+          providerDescription: "Acme project and deployment APIs for AI agents.", // [!code highlight]
+          modes: ["delegated", "autonomous"], // [!code highlight]
+          capabilities: [ // [!code highlight]
+            { // [!code highlight]
+              name: "deploy_project", // [!code highlight]
+              description: "Deploy a project to production.", // [!code highlight]
+              input: { // [!code highlight]
+                type: "object", // [!code highlight]
+                properties: { // [!code highlight]
+                  projectId: { type: "string" }, // [!code highlight]
                 }, // [!code highlight]
-                { // [!code highlight]
-                  name: "list_projects", // [!code highlight]
-                  description: "List projects the current user can access.", // [!code highlight]
-                }, // [!code highlight]
-              ], // [!code highlight]
-              async onExecute({ capability, arguments: args, agentSession }) { // [!code highlight] 
-                switch (capability) { // [!code highlight]
-                  case "list_projects": // [!code highlight]  
-                    return [{ id: "proj_123", name: "marketing-site" }]; // [!code highlight]
-                  case "deploy_project": // [!code highlight]
-                    return { // [!code highlight]
-                      ok: true, // [!code highlight]
-                      projectId: args?.projectId, // [!code highlight]
-                      requestedBy: agentSession.user.id, // [!code highlight]   
-                    }; // [!code highlight]
-                  default: // [!code highlight]
-                    throw new Error(`Unsupported capability: ${capability}`); // [!code highlight]
-                } // [!code highlight]
+                required: ["projectId"], // [!code highlight]
               }, // [!code highlight]
-            }), // [!code highlight]
+            }, // [!code highlight]
+            { // [!code highlight]
+              name: "list_projects", // [!code highlight]
+              description: "List projects the current user can access.", // [!code highlight]
+            }, // [!code highlight]
           ], // [!code highlight]
-        }); // [!code highlight]
+          async onExecute({ capability, arguments: args, agentSession }) { // [!code highlight] 
+            switch (capability) { // [!code highlight]
+              case "list_projects": // [!code highlight]  
+                return [{ id: "proj_123", name: "marketing-site" }]; // [!code highlight]
+              case "deploy_project": // [!code highlight]
+                return { // [!code highlight]
+                  ok: true, // [!code highlight]
+                  projectId: args?.projectId, // [!code highlight]
+                  requestedBy: agentSession.user.id, // [!code highlight]   
+                }; // [!code highlight]
+              default: // [!code highlight]
+                throw new Error(`Unsupported capability: ${capability}`); // [!code highlight]
+            } // [!code highlight]
+          }, // [!code highlight]
+        }), // [!code highlight]
+      ], // [!code highlight]
+    }); // [!code highlight]
+    ```
+  </Step>
+
+  <Step>
+    ### Expose the discovery document
+
+    The plugin provides `auth.api.getAgentConfiguration()`, but you should expose it from your app root at `/.well-known/agent-configuration`.
+
+    ```ts title="app/.well-known/agent-configuration/route.ts"
+    import { auth } from "@/lib/auth";
+    import { NextResponse } from "next/server";
+
+    export async function GET() {
+      const configuration = await auth.api.getAgentConfiguration();
+      return NextResponse.json(configuration);
+    }
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the agent, host, grant, and approval tables.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
         ```
-    </Step>
+      </Tab>
 
-    <Step>
-        ### Expose the discovery document
-
-        The plugin provides `auth.api.getAgentConfiguration()`, but you should expose it from your app root at `/.well-known/agent-configuration`.
-
-        ```ts title="app/.well-known/agent-configuration/route.ts"
-        import { auth } from "@/lib/auth";
-        import { NextResponse } from "next/server";
-
-        export async function GET() {
-          const configuration = await auth.api.getAgentConfiguration();
-          return NextResponse.json(configuration);
-        }
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
         ```
-    </Step>
+      </Tab>
+    </Tabs>
+  </Step>
 
-    <Step>
-        ### Migrate the database
+  <Step>
+    ### Optional: add the Better Auth client plugin
 
-        Run the migration or generate the schema to add the agent, host, grant, and approval tables.
+    If you want type-safe access to the plugin endpoints from a Better Auth client, add the client plugin too.
 
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx auth migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx auth generate
-            ```
-            </Tab>
-        </Tabs>
-    </Step>
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { agentAuthClient } from "@better-auth/agent-auth/client"; // [!code highlight]
 
-    <Step>
-        ### Optional: add the Better Auth client plugin
-
-        If you want type-safe access to the plugin endpoints from a Better Auth client, add the client plugin too.
-
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client";
-        import { agentAuthClient } from "@better-auth/agent-auth/client"; // [!code highlight]
-
-        export const authClient = createAuthClient({
-          plugins: [
-            agentAuthClient(), // [!code highlight]
-          ],
-        });
-        ```
-    </Step>
+    export const authClient = createAuthClient({
+      plugins: [
+        agentAuthClient(), // [!code highlight]
+      ],
+    });
+    ```
+  </Step>
 </Steps>
 
 ## How It Works
@@ -162,9 +163,9 @@ The discovery document tells agents how to interact with your server. The plugin
 
 Important fields for execution:
 
-- **`issuer`** — The provider’s base URL (Better Auth `baseURL`).
-- **`endpoints`** — Absolute URLs for each route (for example `execute` points at `POST /capability/execute` on that base).
-- **`default_location`** — The full URL of the default execute endpoint. It always matches `endpoints.execute`. Agents use this as the JWT **`aud`** when a capability does not define a custom URL, and as the request URL for those capabilities.
+* **`issuer`** — The provider’s base URL (Better Auth `baseURL`).
+* **`endpoints`** — Absolute URLs for each route (for example `execute` points at `POST /capability/execute` on that base).
+* **`default_location`** — The full URL of the default execute endpoint. It always matches `endpoints.execute`. Agents use this as the JWT **`aud`** when a capability does not define a custom URL, and as the request URL for those capabilities.
 
 Expose it from your app root:
 
@@ -264,8 +265,8 @@ createFromOpenAPI(spec, {
 
 If you only need part of the pipeline, the adapter also exports the lower-level helpers:
 
-- **`fromOpenAPI(spec)`** — returns `Capability[]` only (no handler, no host caps).
-- **`createOpenAPIHandler(spec, opts)`** — returns only the `onExecute` proxy handler so you can pair it with hand-written capabilities or filter the spec yourself.
+* **`fromOpenAPI(spec)`** — returns `Capability[]` only (no handler, no host caps).
+* **`createOpenAPIHandler(spec, opts)`** — returns only the `onExecute` proxy handler so you can pair it with hand-written capabilities or filter the spec yourself.
 
 ```ts title="auth.ts"
 import {
@@ -322,8 +323,8 @@ Optional **`location`** — agents call this URL with the agent JWT instead of t
 
 ### Default execute vs custom `location`
 
-- **No `location`** — Agents `POST` to **`default_location`** (`endpoints.execute`) with `{ capability, arguments }`. After the plugin validates the JWT and grant, it runs **`onExecute`**.
-- **With `location`** — Agents call that URL (your REST handler, another service, an OpenAPI operation URL, etc.). **`onExecute` does not run** for that call. Resolve **`agentSession`** in your handler using the helpers below, then enforce grants and your business logic.
+* **No `location`** — Agents `POST` to **`default_location`** (`endpoints.execute`) with `{ capability, arguments }`. After the plugin validates the JWT and grant, it runs **`onExecute`**.
+* **With `location`** — Agents call that URL (your REST handler, another service, an OpenAPI operation URL, etc.). **`onExecute` does not run** for that call. Resolve **`agentSession`** in your handler using the helpers below, then enforce grants and your business logic.
 
 ### Agent session outside `onExecute`
 
@@ -369,9 +370,9 @@ If that grant has **`constraints`**, validate the request body or query the same
 
 **What you get on the session**
 
-- **`agentSession.user`** — Resolved user for the agent (delegated host user or **`resolveAutonomousUser`**).
-- **`agentSession.agent`** — Id, name, mode, **`capabilityGrants`**, host id, metadata.
-- **`agentSession.host`** — Host record when the agent is linked to a host.
+* **`agentSession.user`** — Resolved user for the agent (delegated host user or **`resolveAutonomousUser`**).
+* **`agentSession.agent`** — Id, name, mode, **`capabilityGrants`**, host id, metadata.
+* **`agentSession.host`** — Host record when the agent is linked to a host.
 
 Types are exported from **`@better-auth/agent-auth`** (for example **`AgentSession`**).
 
@@ -379,8 +380,8 @@ Types are exported from **`@better-auth/agent-auth`** (for example **`AgentSessi
 
 The JWT **`aud`** must match what the server expects for the URL being called:
 
-- **No per-capability `location`** — Use **`default_location`** / **`endpoints.execute`**, or issuer / base URL values the plugin already allows.
-- **With `location`** — **`aud`** should be that same absolute URL. `GET /capability/list` includes `location` when set. Invalid `location` values in config fail at startup.
+* **No per-capability `location`** — Use **`default_location`** / **`endpoints.execute`**, or issuer / base URL values the plugin already allows.
+* **With `location`** — **`aud`** should be that same absolute URL. `GET /capability/list` includes `location` when set. Invalid `location` values in config fail at startup.
 
 **Single capability in the JWT** — If `capabilities` lists exactly one id, **`aud`** may equal that capability’s **`location`** when set.
 
@@ -422,8 +423,8 @@ agentAuth({
 
 The plugin supports two approval methods:
 
-- `device_authorization` for browser-based approval with a user code
-- `ciba` for backchannel approval flows
+* `device_authorization` for browser-based approval with a user code
+* `ciba` for backchannel approval flows
 
 By default, both are enabled. You can restrict or customize them with `approvalMethods` and `resolveApprovalMethod`.
 
@@ -444,15 +445,14 @@ agentAuth({
   The plugin does not render the device approval UI for you. Your app must provide the page referenced by `deviceAuthorizationPage`.
 </Callout>
 
-
 ## Events and Auditing
 
 Use `onEvent` to capture important lifecycle events such as:
 
-- agent creation and revocation
-- host creation and enrollment
-- capability requests and approvals
-- capability execution
+* agent creation and revocation
+* host creation and enrollment
+* capability requests and approvals
+* capability execution
 
 This hook is a good place to write audit logs or feed analytics pipelines.
 
@@ -462,73 +462,73 @@ The Agent Auth plugin supports many options. These are the ones you will usually
 
 <TypeTable
   type={{
-    providerName: {
-      description: "Human-readable provider name returned in discovery metadata.",
-      type: "string",
-      required: false,
-    },
-    providerDescription: {
-      description: "Description returned in the discovery document.",
-      type: "string",
-      required: false,
-    },
-    modes: {
-      description: 'Supported agent modes. Defaults to `["delegated", "autonomous"]`.',
-      type: '("delegated" | "autonomous")[]',
-      required: false,
-    },
-    capabilities: {
-      description:
-        "Capability definitions (`name`, `description`, optional `input`, optional absolute `location` — if set, agents call this URL instead of `default_location` and you use session helpers in your handler).",
-      type: "Capability[]",
-      required: false,
-    },
-    onExecute: {
-      description:
-        "Handler for capabilities invoked via the default execute URL (`default_location`). Not called when the agent uses a custom per-capability `location`.",
-      type: "function",
-      required: false,
-    },
-    requireAuthForCapabilities: {
-      description: "Require a host or agent JWT to list and describe capabilities.",
-      type: "boolean",
-      required: false,
-    },
-    approvalMethods: {
-      description: 'Supported approval methods. Defaults to `["ciba", "device_authorization"]`.',
-      type: "string[]",
-      required: false,
-    },
-    resolveApprovalMethod: {
-      description: "Choose the approval method for a request.",
-      type: "function",
-      required: false,
-    },
-    deviceAuthorizationPage: {
-      description: "Path or absolute URL for the user-facing device approval page.",
-      type: "string",
-      required: false,
-    },
-    defaultHostCapabilities: {
-      description: "Default capabilities applied to newly created hosts.",
-      type: "string[] | function",
-      required: false,
-    },
-    allowDynamicHostRegistration: {
-      description: "Allow unknown hosts to register dynamically.",
-      type: "boolean | function",
-      required: false,
-    },
-    onEvent: {
-      description: "Callback for audit and lifecycle events.",
-      type: "function",
-      required: false,
-    },
-    trustProxy: {
-      description:
-        "Trust `X-Forwarded-Proto` when validating JWT `aud` against request host (use behind a reverse proxy). Defaults to `false`.",
-      type: "boolean",
-      required: false,
-    },
-  }}
+providerName: {
+description: "Human-readable provider name returned in discovery metadata.",
+type: "string",
+required: false,
+},
+providerDescription: {
+description: "Description returned in the discovery document.",
+type: "string",
+required: false,
+},
+modes: {
+description: 'Supported agent modes. Defaults to `["delegated", "autonomous"]`.',
+type: '("delegated" | "autonomous")[]',
+required: false,
+},
+capabilities: {
+description:
+"Capability definitions (`name`, `description`, optional `input`, optional absolute `location` — if set, agents call this URL instead of `default_location` and you use session helpers in your handler).",
+type: "Capability[]",
+required: false,
+},
+onExecute: {
+description:
+"Handler for capabilities invoked via the default execute URL (`default_location`). Not called when the agent uses a custom per-capability `location`.",
+type: "function",
+required: false,
+},
+requireAuthForCapabilities: {
+description: "Require a host or agent JWT to list and describe capabilities.",
+type: "boolean",
+required: false,
+},
+approvalMethods: {
+description: 'Supported approval methods. Defaults to `["ciba", "device_authorization"]`.',
+type: "string[]",
+required: false,
+},
+resolveApprovalMethod: {
+description: "Choose the approval method for a request.",
+type: "function",
+required: false,
+},
+deviceAuthorizationPage: {
+description: "Path or absolute URL for the user-facing device approval page.",
+type: "string",
+required: false,
+},
+defaultHostCapabilities: {
+description: "Default capabilities applied to newly created hosts.",
+type: "string[] | function",
+required: false,
+},
+allowDynamicHostRegistration: {
+description: "Allow unknown hosts to register dynamically.",
+type: "boolean | function",
+required: false,
+},
+onEvent: {
+description: "Callback for audit and lifecycle events.",
+type: "function",
+required: false,
+},
+trustProxy: {
+description:
+"Trust `X-Forwarded-Proto` when validating JWT `aud` against request host (use behind a reverse proxy). Defaults to `false`.",
+type: "boolean",
+required: false,
+},
+}}
 />
