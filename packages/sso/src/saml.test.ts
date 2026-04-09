@@ -2095,7 +2095,7 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).toContain("error=invalid_saml_response");
 	});
 
-	it("should allow unsolicited SAML response when allowIdpInitiated is true (default)", async () => {
+	it("should allow unsolicited SAML response when allowIdpInitiated is explicitly true", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({

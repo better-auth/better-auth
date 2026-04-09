@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { AUTHN_REQUEST_KEY_PREFIX } from "../constants";
 import type { SAMLAssertionExtract } from "../types";
 
 interface AuthnRequestRecord {
@@ -7,8 +8,6 @@ interface AuthnRequestRecord {
 	createdAt: number;
 	expiresAt: number;
 }
-
-const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
 
 export interface InResponseToValidationContext {
 	extract: SAMLAssertionExtract;
