@@ -50,7 +50,7 @@ describe("oauth userinfo", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	async function createAuthUrl(

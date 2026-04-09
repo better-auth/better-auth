@@ -8,7 +8,6 @@ import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
-import { genericOAuthClient } from "./client";
 import { auth0 } from "./providers/auth0";
 import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
@@ -44,7 +43,6 @@ describe("oauth2", async () => {
 	});
 
 	const authClient = createAuthClient({
-		plugins: [genericOAuthClient()],
 		baseURL: "http://localhost:3000",
 		fetchOptions: {
 			customFetchImpl,
@@ -113,8 +111,8 @@ describe("oauth2", async () => {
 
 	it("should delete state cookie with path attribute", async () => {
 		const headers = new Headers();
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "test",
+		const signInRes = await authClient.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			fetchOptions: {
 				onSuccess: cookieSetter(headers),
@@ -135,8 +133,8 @@ describe("oauth2", async () => {
 
 	it("should redirect to the provider and handle the response", async () => {
 		const headers = new Headers();
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "test",
+		const signInRes = await authClient.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -167,8 +165,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "test",
+		const signInRes = await authClient.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -209,8 +207,8 @@ describe("oauth2", async () => {
 
 	it("should redirect to the provider and handle the response after linked", async () => {
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "test",
+		const res = await authClient.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -225,12 +223,12 @@ describe("oauth2", async () => {
 	});
 
 	it("should handle invalid provider ID", async () => {
-		const res = await authClient.signIn.oauth2({
-			providerId: "invalid-provider",
+		const res = await authClient.signIn.social({
+			provider: "invalid-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
-		expect(res.error?.status).toBe(400);
+		expect(res.error?.status).toBe(404);
 	});
 
 	it("should handle server error during OAuth flow", async () => {
@@ -246,9 +244,9 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2(
+		const res = await authClient.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "http://localhost:3000/dashboard",
 				newUserCallbackURL: "http://localhost:3000/new_user",
 			},
@@ -295,7 +293,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -303,8 +300,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const res = await authClient.signIn.oauth2({
-			providerId: "test2",
+		const res = await authClient.signIn.social({
+			provider: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -349,15 +346,14 @@ describe("oauth2", async () => {
 			],
 		});
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 			},
 		});
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "test2",
+		const res = await authClient.signIn.social({
+			provider: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			fetchOptions: {
@@ -405,15 +401,14 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 			},
 		});
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "test2",
+		const res = await authClient.signIn.social({
+			provider: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			requestSignUp: true,
@@ -458,7 +453,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -466,8 +460,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const res = await authClient.signIn.oauth2({
-			providerId: "test3",
+		const res = await authClient.signIn.social({
+			provider: "test3",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -508,15 +502,14 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const signInRes = await client.signIn.oauth2({
-			providerId: "test",
+		const signInRes = await client.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -603,7 +596,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -611,8 +603,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const firstSignIn = await authClient.signIn.oauth2({
-			providerId: "numeric-test",
+		const firstSignIn = await authClient.signIn.social({
+			provider: "numeric-test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -655,8 +647,8 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const secondSignIn = await authClient.signIn.oauth2({
-			providerId: "numeric-test",
+		const secondSignIn = await authClient.signIn.social({
+			provider: "numeric-test",
 			callbackURL: "http://localhost:3000/dashboard",
 		});
 
@@ -713,7 +705,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -721,8 +712,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "custom-numeric",
+		const signInRes = await authClient.signIn.social({
+			provider: "custom-numeric",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -789,7 +780,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -797,8 +787,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "map-profile-numeric",
+		const signInRes = await authClient.signIn.social({
+			provider: "map-profile-numeric",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -870,7 +860,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -878,8 +867,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "strava",
+		const signInRes = await authClient.signIn.social({
+			provider: "strava",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -953,7 +942,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -961,8 +949,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const res = await authClient.signIn.oauth2({
-			providerId: "test-cookie",
+		const res = await authClient.signIn.social({
+			provider: "test-cookie",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -1011,7 +999,6 @@ describe("oauth2", async () => {
 
 		const victimHeaders = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1019,8 +1006,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "test-cookie-csrf",
+		const signInRes = await authClient.signIn.social({
+			provider: "test-cookie-csrf",
 			callbackURL: "http://localhost:3000/dashboard",
 			fetchOptions: {
 				onSuccess: cookieSetter(victimHeaders),
@@ -1029,7 +1016,7 @@ describe("oauth2", async () => {
 		expect(signInRes.data?.url).toBeTruthy();
 
 		const res = await customFetchImpl(
-			"http://localhost:3000/api/auth/oauth2/callback/test-cookie-csrf?code=dummy&state=attacker-controlled-state",
+			"http://localhost:3000/api/auth/callback/test-cookie-csrf?code=dummy&state=attacker-controlled-state",
 			{
 				headers: victimHeaders,
 				redirect: "manual",
@@ -1515,7 +1502,6 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1523,8 +1509,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "custom-provider",
+		const res = await authClient.signIn.social({
+			provider: "custom-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -1583,7 +1569,6 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1591,8 +1576,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "error-provider",
+		const res = await authClient.signIn.social({
+			provider: "error-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			fetchOptions: {
@@ -1683,7 +1668,6 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1691,8 +1675,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "custom-get-provider",
+		const res = await authClient.signIn.social({
+			provider: "custom-get-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/welcome",
 			fetchOptions: {
@@ -1890,387 +1874,6 @@ describe("oauth2", async () => {
 		});
 	});
 
-	describe("RFC 9207 Issuer Validation", () => {
-		it("should allow callback when iss parameter matches configured issuer", async () => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: "iss-match@test.com",
-					name: "Issuer Match User",
-					sub: "iss-match",
-					picture: "https://test.com/picture.png",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
-			});
-
-			const expectedIssuer = server.issuer.url;
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "iss-test",
-								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-								clientId: clientId,
-								clientSecret: clientSecret,
-								pkce: true,
-								issuer: expectedIssuer,
-							},
-						],
-					}),
-				],
-			});
-
-			const authClient = createAuthClient({
-				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
-			});
-
-			const headers = new Headers();
-			const res = await authClient.signIn.oauth2({
-				providerId: "iss-test",
-				callbackURL: "http://localhost:3000/dashboard",
-				newUserCallbackURL: "http://localhost:3000/new_user",
-				fetchOptions: {
-					onSuccess: cookieSetter(headers),
-				},
-			});
-
-			let location: string | null = null;
-			await betterFetch(res.data?.url || "", {
-				method: "GET",
-				redirect: "manual",
-				onError(context) {
-					location = context.response.headers.get("location");
-				},
-			});
-
-			const callbackWithIss = new URL(location!);
-			callbackWithIss.searchParams.set("iss", expectedIssuer!);
-
-			let finalCallbackURL = "";
-			await betterFetch(callbackWithIss.toString(), {
-				method: "GET",
-				customFetchImpl,
-				headers,
-				onError(context) {
-					finalCallbackURL = context.response.headers.get("location") || "";
-					cookieSetter(headers)(context);
-				},
-			});
-
-			expect(finalCallbackURL).toBe("http://localhost:3000/new_user");
-			expect(finalCallbackURL).not.toContain("error=");
-		});
-
-		it("should reject callback when iss parameter does not match configured issuer", async () => {
-			const expectedIssuer = server.issuer.url;
-			const wrongIssuer = "https://evil-server.com";
-
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "iss-mismatch-test",
-								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-								clientId: clientId,
-								clientSecret: clientSecret,
-								pkce: true,
-								issuer: expectedIssuer,
-							},
-						],
-					}),
-				],
-			});
-
-			const authClient = createAuthClient({
-				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
-			});
-
-			const headers = new Headers();
-			const res = await authClient.signIn.oauth2({
-				providerId: "iss-mismatch-test",
-				callbackURL: "http://localhost:3000/dashboard",
-				errorCallbackURL: "http://localhost:3000/error",
-				fetchOptions: {
-					onSuccess: cookieSetter(headers),
-				},
-			});
-
-			let location: string | null = null;
-			await betterFetch(res.data?.url || "", {
-				method: "GET",
-				redirect: "manual",
-				onError(context) {
-					location = context.response.headers.get("location");
-				},
-			});
-
-			const callbackWithWrongIss = new URL(location!);
-			callbackWithWrongIss.searchParams.set("iss", wrongIssuer);
-
-			let finalCallbackURL = "";
-			await betterFetch(callbackWithWrongIss.toString(), {
-				method: "GET",
-				customFetchImpl,
-				headers,
-				onError(context) {
-					finalCallbackURL = context.response.headers.get("location") || "";
-				},
-			});
-
-			expect(finalCallbackURL).toContain("http://localhost:3000/error");
-			expect(finalCallbackURL).toContain("error=issuer_mismatch");
-		});
-
-		it("should use issuer from discovery document when not explicitly configured", async () => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: "iss-discovery@test.com",
-					name: "Issuer Discovery User",
-					sub: "iss-discovery",
-					picture: "https://test.com/picture.png",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
-			});
-
-			const expectedIssuer = server.issuer.url;
-
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "iss-discovery-test",
-								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-								clientId: clientId,
-								clientSecret: clientSecret,
-								pkce: true,
-							},
-						],
-					}),
-				],
-			});
-
-			const authClient = createAuthClient({
-				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
-			});
-
-			const headers = new Headers();
-			const res = await authClient.signIn.oauth2({
-				providerId: "iss-discovery-test",
-				callbackURL: "http://localhost:3000/dashboard",
-				newUserCallbackURL: "http://localhost:3000/new_user",
-				fetchOptions: {
-					onSuccess: cookieSetter(headers),
-				},
-			});
-
-			let location: string | null = null;
-			await betterFetch(res.data?.url || "", {
-				method: "GET",
-				redirect: "manual",
-				onError(context) {
-					location = context.response.headers.get("location");
-				},
-			});
-
-			const callbackWithIss = new URL(location!);
-			callbackWithIss.searchParams.set("iss", expectedIssuer!);
-
-			let finalCallbackURL = "";
-			await betterFetch(callbackWithIss.toString(), {
-				method: "GET",
-				customFetchImpl,
-				headers,
-				onError(context) {
-					finalCallbackURL = context.response.headers.get("location") || "";
-					cookieSetter(headers)(context);
-				},
-			});
-
-			expect(finalCallbackURL).toBe("http://localhost:3000/new_user");
-		});
-
-		it("should not validate iss when not configured and not in discovery", async () => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: "no-iss-check@test.com",
-					name: "No Issuer Check User",
-					sub: "no-iss-check",
-					picture: "https://test.com/picture.png",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
-			});
-
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "no-iss-test",
-								authorizationUrl: `http://localhost:${port}/authorize`,
-								tokenUrl: `http://localhost:${port}/token`,
-								userInfoUrl: `http://localhost:${port}/userinfo`,
-								clientId: clientId,
-								clientSecret: clientSecret,
-								pkce: true,
-							},
-						],
-					}),
-				],
-			});
-
-			const authClient = createAuthClient({
-				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
-			});
-
-			const headers = new Headers();
-			const res = await authClient.signIn.oauth2({
-				providerId: "no-iss-test",
-				callbackURL: "http://localhost:3000/dashboard",
-				newUserCallbackURL: "http://localhost:3000/new_user",
-				fetchOptions: {
-					onSuccess: cookieSetter(headers),
-				},
-			});
-
-			const { callbackURL } = await simulateOAuthFlow(
-				res.data?.url || "",
-				headers,
-				customFetchImpl,
-			);
-
-			expect(callbackURL).toBe("http://localhost:3000/new_user");
-		});
-
-		it("should reject callback when requireIssuerValidation is true and iss is missing", async () => {
-			const expectedIssuer = server.issuer.url;
-
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "strict-iss-test",
-								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-								clientId: clientId,
-								clientSecret: clientSecret,
-								pkce: true,
-								issuer: expectedIssuer,
-								requireIssuerValidation: true,
-							},
-						],
-					}),
-				],
-			});
-
-			const authClient = createAuthClient({
-				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
-			});
-
-			const headers = new Headers();
-			const res = await authClient.signIn.oauth2({
-				providerId: "strict-iss-test",
-				callbackURL: "http://localhost:3000/dashboard",
-				errorCallbackURL: "http://localhost:3000/error",
-				fetchOptions: {
-					onSuccess: cookieSetter(headers),
-				},
-			});
-
-			const { callbackURL } = await simulateOAuthFlow(
-				res.data?.url || "",
-				headers,
-				customFetchImpl,
-			);
-
-			expect(callbackURL).toContain("http://localhost:3000/error");
-			expect(callbackURL).toContain("error=issuer_missing");
-		});
-
-		it("should allow callback without iss when requireIssuerValidation is false", async () => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: "lenient-iss@test.com",
-					name: "Lenient Issuer User",
-					sub: "lenient-iss",
-					picture: "https://test.com/picture.png",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
-			});
-
-			const expectedIssuer = server.issuer.url;
-
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "lenient-iss-test",
-								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-								clientId: clientId,
-								clientSecret: clientSecret,
-								pkce: true,
-								issuer: expectedIssuer,
-								requireIssuerValidation: false,
-							},
-						],
-					}),
-				],
-			});
-
-			const authClient = createAuthClient({
-				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
-			});
-
-			const headers = new Headers();
-			const res = await authClient.signIn.oauth2({
-				providerId: "lenient-iss-test",
-				callbackURL: "http://localhost:3000/dashboard",
-				newUserCallbackURL: "http://localhost:3000/new_user",
-				fetchOptions: {
-					onSuccess: cookieSetter(headers),
-				},
-			});
-
-			const { callbackURL } = await simulateOAuthFlow(
-				res.data?.url || "",
-				headers,
-				customFetchImpl,
-			);
-
-			expect(callbackURL).toBe("http://localhost:3000/new_user");
-		});
-	});
-
 	describe("storeIdentifier: hashed", () => {
 		it("should complete oauth flow when verification identifiers are hashed", async () => {
 			server.service.once("beforeUserinfo", (userInfoResponse) => {
@@ -2304,7 +1907,6 @@ describe("oauth2", async () => {
 			});
 
 			const authClient = createAuthClient({
-				plugins: [genericOAuthClient()],
 				baseURL: "http://localhost:3000",
 				fetchOptions: {
 					customFetchImpl,
@@ -2312,8 +1914,8 @@ describe("oauth2", async () => {
 			});
 
 			const headers = new Headers();
-			const res = await authClient.signIn.oauth2({
-				providerId: "test-hashed",
+			const res = await authClient.signIn.social({
+				provider: "test-hashed",
 				callbackURL: "http://localhost:3000/dashboard",
 				fetchOptions: {
 					onSuccess: cookieSetter(headers),

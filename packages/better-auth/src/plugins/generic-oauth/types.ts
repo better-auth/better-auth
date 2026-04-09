@@ -1,4 +1,3 @@
-import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 
@@ -20,20 +19,6 @@ export interface GenericOAuthConfig {
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
 	discoveryUrl?: string | undefined;
-	/**
-	 * The expected issuer identifier for validation.
-	 * If not provided but discoveryUrl is set, it will be fetched from the discovery document.
-	 * When set, the callback validates that the `iss` parameter matches this value.
-	 * @see https://datatracker.ietf.org/doc/html/rfc9207
-	 */
-	issuer?: string | undefined;
-	/**
-	 * When true, requires the `iss` parameter in callbacks if an issuer is configured.
-	 * This provides stricter security but may break with older OAuth servers
-	 * that don't support issuer identification.
-	 * @default false
-	 */
-	requireIssuerValidation?: boolean | undefined;
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
@@ -134,22 +119,12 @@ export interface GenericOAuthConfig {
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	authorizationUrlParams?:
-		| (
-				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
-		  )
-		| undefined;
+	authorizationUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	tokenUrlParams?:
-		| (
-				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
-		  )
-		| undefined;
+	tokenUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.

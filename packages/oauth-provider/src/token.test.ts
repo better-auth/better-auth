@@ -57,7 +57,7 @@ describe("oauth token - authorization_code", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -402,7 +402,7 @@ describe("oauth token - refresh_token", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -988,7 +988,7 @@ describe("oauth token - client_credentials", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
 	// Registers a confidential client application to work with
@@ -1174,7 +1174,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 
 	let oauthClient: OAuthClient | null;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -1276,7 +1276,7 @@ describe("oauth token - config", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	const state = "123";
 	const scopes = [
@@ -1664,7 +1664,7 @@ describe("oauth token - client secret validation", async () => {
 	const rpBaseUrl = "http://localhost:5010";
 	const validAudience = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
 		"openid",
 		"email",
@@ -1853,7 +1853,7 @@ describe("id token claim override security", async () => {
 
 	let oauthClient: OAuthClient | null;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	beforeAll(async () => {
@@ -2086,8 +2086,8 @@ describe("loopback redirect URI matching", async () => {
 	it("non-loopback with different ports should be rejected", async ({
 		expect,
 	}) => {
-		const registeredUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-		const requestedUri = "http://localhost:9999/api/auth/oauth2/callback/test";
+		const registeredUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+		const requestedUri = "http://localhost:9999/api/auth/callback/test";
 
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -2180,7 +2180,7 @@ describe("scope preservation through authorization code flow", async () => {
 	});
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	it("scopes from authorization request should survive into token response", async ({

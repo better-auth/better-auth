@@ -99,7 +99,7 @@ describe("oauth authorize - unauthenticated", async () => {
 
 	let oauthClient: OAuthClient | null;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		const response = await auth.api.adminCreateOAuthClient({
@@ -185,7 +185,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const requestUri = "urn:better-auth:par:test";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -328,7 +328,7 @@ describe("oauth authorize - authenticated", async () => {
 	let oauthClient: OAuthClient | null;
 	let oauthClientNeedsConsent: OAuthClient | null;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		const response = await auth.api.adminCreateOAuthClient({

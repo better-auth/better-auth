@@ -5,125 +5,60 @@ description: Authenticate users with any OAuth provider
 
 The Generic OAuth plugin provides a flexible way to integrate authentication with any OAuth provider. It supports both OAuth 2.0 and OpenID Connect (OIDC) flows, allowing you to easily add social login or custom OAuth authentication to your application.
 
+Generic OAuth providers are registered as first-class social providers and use the standard `signIn.social` flow — no plugin-specific endpoints needed.
+
 ## Installation
 
-<Steps>
-  <Step>
-    ### Add the plugin to your auth config
+Add the plugin to your auth config.
 
-    To use the Generic OAuth plugin, add it to your auth config.
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { genericOAuth } from "better-auth/plugins" // [!code highlight]
 
-    ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-    import { genericOAuth } from "better-auth/plugins" // [!code highlight]
-
-    export const auth = betterAuth({
-        // ... other config options
-        plugins: [
-            genericOAuth({ // [!code highlight]
-                config: [ // [!code highlight]
-                    { // [!code highlight]
-                        providerId: "provider-id", // [!code highlight]
-                        clientId: "test-client-id", // [!code highlight]
-                        clientSecret: "test-client-secret", // [!code highlight]
-                        discoveryUrl: "https://auth.example.com/.well-known/openid-configuration", // [!code highlight]
-                        // ... other config options // [!code highlight]
-                    }, // [!code highlight]
-                    // Add more providers as needed // [!code highlight]
-                ] // [!code highlight]
-            }) // [!code highlight]
-        ]
-    })
-    ```
-  </Step>
-
-  <Step>
-    ### Add the client plugin
-
-    Include the Generic OAuth client plugin in your authentication client instance.
-
-    ```ts title="auth-client.ts"
-    import { createAuthClient } from "better-auth/client"
-    import { genericOAuthClient } from "better-auth/client/plugins" // [!code highlight]
-
-    export const authClient = createAuthClient({
-        plugins: [
-            genericOAuthClient() // [!code highlight]
-        ]
-    })
-    ```
-  </Step>
-</Steps>
+export const auth = betterAuth({
+    // ... other config options
+    plugins: [
+        genericOAuth({ // [!code highlight]
+            config: [ // [!code highlight]
+                { // [!code highlight]
+                    providerId: "provider-id", // [!code highlight]
+                    clientId: "test-client-id", // [!code highlight]
+                    clientSecret: "test-client-secret", // [!code highlight]
+                    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration", // [!code highlight]
+                    // ... other config options // [!code highlight]
+                }, // [!code highlight]
+                // Add more providers as needed // [!code highlight]
+            ] // [!code highlight]
+        }) // [!code highlight]
+    ]
+})
+```
 
 ## Usage
 
-The Generic OAuth plugin provides endpoints for initiating the OAuth flow and handling the callback. Here's how to use them:
+Generic OAuth providers are used through the standard social sign-in flow:
 
-### Initiate OAuth Sign-In
+### Sign In
 
-To start the OAuth sign-in process:
-
-<APIMethod path="/sign-in/oauth2" method="POST">
 ```ts
-type signInWithOAuth2 = {
-    /**
-     * The provider ID for the OAuth provider. 
-     */
-    providerId: string = "provider-id"
-    /**
-     * The URL to redirect to after sign in. 
-     */
-    callbackURL?: string = "/dashboard"
-    /**
-     * The URL to redirect to if an error occurs. 
-     */
-    errorCallbackURL?: string = "/error-page"
-    /**
-     * The URL to redirect to after login if the user is new. 
-     */
-    newUserCallbackURL?: string = "/welcome"
-    /**
-     * Disable redirect. 
-     */
-    disableRedirect?: boolean = false
-    /**
-     * Scopes to be passed to the provider authorization request. 
-     */
-    scopes?: string[] = ["my-scope"]
-    /**
-     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
-     */
-    requestSignUp?: boolean = false
-}
+await authClient.signIn.social({
+    provider: "provider-id",
+    callbackURL: "/dashboard",
+})
 ```
-</APIMethod>
 
-### Linking OAuth Accounts
+### Link Account
 
-To link an OAuth account to an existing user:
-
-<APIMethod
-  path="/oauth2/link"
-  method="POST"
-  requireSession
->
 ```ts
-type oAuth2LinkAccount = {
-    /**
-     * The OAuth provider ID. 
-     */
-    providerId: string = "my-provider-id"
-    /**
-     * The URL to redirect to once the account linking was complete. 
-     */
-    callbackURL: string = "/successful-link"
-}
+await authClient.linkSocial({
+    provider: "provider-id",
+    callbackURL: "/settings",
+})
 ```
-</APIMethod>
 
 ### Handle OAuth Callback
 
-The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
+The plugin uses the core OAuth callback route at `/callback/:providerId`. This means by default `${baseURL}/api/auth/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
 
 ## Pre-configured Provider Helpers
 
@@ -131,14 +66,14 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 
 ### Supported Providers
 
-- **Auth0** - `auth0(options)`
-- **HubSpot** - `hubspot(options)`
-- **Keycloak** - `keycloak(options)`
-- **LINE** - `line(options)`
-- **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
-- **Okta** - `okta(options)`
-- **Slack** - `slack(options)`
-- **Patreon** - `patreon(options)`
+* **Auth0** - `auth0(options)`
+* **HubSpot** - `hubspot(options)`
+* **Keycloak** - `keycloak(options)`
+* **LINE** - `line(options)`
+* **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
+* **Okta** - `okta(options)`
+* **Slack** - `slack(options)`
+* **Patreon** - `patreon(options)`
 
 ### Example: Using Pre-configured Providers
 
@@ -219,22 +154,23 @@ export const auth = betterAuth({
 
 Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
 
-- **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
-- **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
-- **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
-- **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
-- **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
-- **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
-- **Slack**: No additional required fields
-- **Patreon**: No additional required fields
+* **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+* **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
+* **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
+* **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
+* **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
+* **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
+* **Slack**: No additional required fields
+* **Patreon**: No additional required fields
 
 All providers support the same optional fields:
-- `scopes?: string[]` - Array of OAuth scopes to request
-- `redirectURI?: string` - Custom redirect URI
-- `pkce?: boolean` - Enable PKCE (defaults to `false`)
-- `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
-- `disableSignUp?: boolean` - Disable sign-up entirely
-- `overrideUserInfo?: boolean` - Override user info on sign in
+
+* `scopes?: string[]` - Array of OAuth scopes to request
+* `redirectURI?: string` - Custom redirect URI
+* `pkce?: boolean` - Enable PKCE (defaults to `false`)
+* `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
+* `disableSignUp?: boolean` - Disable sign-up entirely
+* `overrideUserInfo?: boolean` - Override user info on sign in
 
 ## Configuration
 
@@ -248,8 +184,6 @@ Each provider configuration object supports the following options:
 interface GenericOAuthConfig {
   providerId: string;
   discoveryUrl?: string;
-  issuer?: string;
-  requireIssuerValidation?: boolean;
   authorizationUrl?: string;
   tokenUrl?: string;
   userInfoUrl?: string;
@@ -269,11 +203,7 @@ interface GenericOAuthConfig {
 
 **providerId**: A unique string to identify the OAuth provider configuration.
 
-**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` can be auto-discovered.
-
-**issuer**: (Optional) The expected issuer identifier for validation. If not provided but `discoveryUrl` is set, it will be fetched from the discovery document. When set, the callback validates that the `iss` parameter matches this value.
-
-**requireIssuerValidation**: (Optional) When `true`, requires the `iss` parameter in callbacks if an issuer is configured. This provides stricter security but may break with older OAuth servers. Defaults to `false`.
+**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup.
 
 **authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
 
@@ -297,7 +227,6 @@ interface GenericOAuthConfig {
 
 **pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
 
-
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
 
 **getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
@@ -306,9 +235,9 @@ interface GenericOAuthConfig {
 
 **mapProfileToUser**: (Optional) A function to map the provider's user profile to your app's user object. Useful for custom field mapping or transformations.
 
-**authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters. You can also provide a function that returns the parameters.
+**authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters.
 
-**tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. These can override default parameters. You can also provide a function that returns the parameters.
+**tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. These can override default parameters.
 
 **disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
 
@@ -321,69 +250,6 @@ interface GenericOAuthConfig {
 **authorizationHeaders**: (Optional) Custom headers to include in the authorization request. Useful for providers that require special headers.
 
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
-
-## Security: Issuer Validation
-
-Better Auth validates the OAuth provider's issuer to protect against mix-up attacks ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)). A mix-up attack occurs when a malicious authorization server tricks your application into sending an authorization code to the wrong token endpoint.
-
-### How It Works
-
-When an OAuth provider supports RFC 9207, it includes an `iss` (issuer) parameter in the authorization response. Better Auth validates this parameter against the expected issuer to ensure the response came from the intended provider.
-
-### Configuration Examples
-
-**Auto-discovery (recommended for OIDC providers):**
-```ts
-genericOAuth({
-  config: [{
-    providerId: "my-provider",
-    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
-    clientId: "...",
-    clientSecret: "...",
-    // issuer is automatically fetched from discovery document
-  }]
-})
-```
-
-**Manual issuer configuration:**
-```ts
-genericOAuth({
-  config: [{
-    providerId: "custom-oauth",
-    authorizationUrl: "https://auth.example.com/authorize",
-    tokenUrl: "https://auth.example.com/token",
-    issuer: "https://auth.example.com",  // manually specify expected issuer
-    clientId: "...",
-    clientSecret: "...",
-  }]
-})
-```
-
-**Strict mode (recommended for modern providers):**
-```ts
-genericOAuth({
-  config: [{
-    providerId: "secure-provider",
-    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
-    clientId: "...",
-    clientSecret: "...",
-    requireIssuerValidation: true,  // reject if iss parameter is missing
-  }]
-})
-```
-
-### Validation Behavior
-
-| Scenario | `requireIssuerValidation` | Result |
-|----------|---------------------------|--------|
-| `iss` matches expected | - | Success |
-| `iss` doesn't match | - | `issuer_mismatch` error |
-| `iss` missing | `false` (default) | Success (backward compatible) |
-| `iss` missing | `true` | `issuer_missing` error |
-
-<Callout>
-For maximum security with modern OAuth/OIDC providers (Google, Auth0, Okta, etc.), we recommend enabling `requireIssuerValidation: true`.
-</Callout>
 
 ## Advanced Usage
 

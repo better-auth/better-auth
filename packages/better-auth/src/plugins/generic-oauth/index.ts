@@ -1,20 +1,19 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
-import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
+import type {
+	OAuth2Tokens,
+	OAuth2UserInfo,
+	OAuthProvider,
+} from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
+import { decodeJwt } from "jose";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
-import {
-	getUserInfo,
-	oAuth2Callback,
-	oAuth2LinkAccount,
-	signInWithOAuth2,
-} from "./routes";
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
 export * from "./providers";
@@ -50,8 +49,78 @@ export type BaseOAuthProviderOptions = Omit<
 	clientSecret: string;
 };
 
+interface DiscoveryDocument {
+	authorization_endpoint?: string;
+	token_endpoint?: string;
+	userinfo_endpoint?: string;
+	issuer?: string;
+}
+
+async function fetchDiscovery(
+	url: string,
+	headers?: Record<string, string>,
+): Promise<DiscoveryDocument | null> {
+	const result = await betterFetch<DiscoveryDocument>(url, {
+		method: "GET",
+		headers,
+	});
+	return result.data ?? null;
+}
+
+async function fetchUserInfo(
+	tokens: OAuth2Tokens,
+	userInfoUrl: string | undefined,
+): Promise<OAuth2UserInfo | null> {
+	if (tokens.idToken) {
+		const decoded = decodeJwt(tokens.idToken) as {
+			sub: string;
+			email_verified: boolean;
+			email: string;
+			name: string;
+			picture: string;
+		};
+		if (decoded?.sub && decoded?.email) {
+			return {
+				id: decoded.sub,
+				emailVerified: decoded.email_verified,
+				image: decoded.picture,
+				...decoded,
+			};
+		}
+	}
+
+	if (!userInfoUrl) {
+		return null;
+	}
+
+	const userInfo = await betterFetch<{
+		email: string;
+		sub?: string | undefined;
+		name: string;
+		email_verified: boolean;
+		picture: string;
+	}>(userInfoUrl, {
+		method: "GET",
+		headers: {
+			Authorization: `Bearer ${tokens.accessToken}`,
+		},
+	});
+	return {
+		id: userInfo.data?.sub ?? "",
+		emailVerified: userInfo.data?.email_verified ?? false,
+		email: userInfo.data?.email,
+		image: userInfo.data?.picture,
+		name: userInfo.data?.name,
+		...userInfo.data,
+	};
+}
+
 /**
- * A generic OAuth plugin that can be used to add OAuth support to any provider
+ * A generic OAuth plugin that registers any OAuth/OIDC provider
+ * as a first-class social provider.
+ *
+ * Providers are used through the standard `signIn.social` and
+ * `callback/:id` core endpoints — no plugin-specific endpoints needed.
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
 	const seenIds = new Set<string>();
@@ -74,36 +143,36 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 	return {
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
-		init: (ctx: AuthContext) => {
-			const genericProviders = options.config.map((c) => {
-				let finalUserInfoUrl = c.userInfoUrl;
-				return {
+		init: async (ctx: AuthContext) => {
+			const genericProviders: OAuthProvider[] = [];
+
+			for (const c of options.config) {
+				let authorizationUrl = c.authorizationUrl;
+				let tokenUrl = c.tokenUrl;
+				let userInfoUrl = c.userInfoUrl;
+
+				if (c.discoveryUrl) {
+					const discovered = await fetchDiscovery(
+						c.discoveryUrl,
+						c.discoveryHeaders,
+					).catch((err) => {
+						ctx.logger.warn(
+							`Failed to fetch discovery for ${c.providerId}: ${err}`,
+						);
+						return null;
+					});
+					if (discovered) {
+						authorizationUrl ??= discovered.authorization_endpoint;
+						tokenUrl ??= discovered.token_endpoint;
+						userInfoUrl ??= discovered.userinfo_endpoint;
+					}
+				}
+
+				genericProviders.push({
 					id: c.providerId,
 					name: c.providerId,
-					async createAuthorizationURL(data: {
-						state: string;
-						codeVerifier: string;
-						scopes?: string[] | undefined;
-						redirectURI: string;
-						display?: string | undefined;
-						loginHint?: string | undefined;
-					}) {
-						let finalAuthUrl = c.authorizationUrl;
-						if (!finalAuthUrl && c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								authorization_endpoint: string;
-								userinfo_endpoint: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							if (discovery.data) {
-								finalAuthUrl = discovery.data.authorization_endpoint;
-								finalUserInfoUrl =
-									finalUserInfoUrl ?? discovery.data.userinfo_endpoint;
-							}
-						}
-						if (!finalAuthUrl) {
+					createAuthorizationURL(data) {
+						if (!authorizationUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
 								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
@@ -116,40 +185,24 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
 							},
-							authorizationEndpoint: finalAuthUrl,
+							authorizationEndpoint: authorizationUrl,
 							state: data.state,
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
-							scopes: c.scopes || [],
-							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
+							scopes: data.scopes ?? c.scopes ?? [],
+							redirectURI: data.redirectURI,
+							prompt: c.prompt,
+							accessType: c.accessType,
+							responseType: c.responseType,
+							responseMode: c.responseMode,
+							additionalParams: c.authorizationUrlParams,
+							loginHint: data.loginHint,
 						});
 					},
-					async validateAuthorizationCode(data: {
-						code: string;
-						redirectURI: string;
-						codeVerifier?: string | undefined;
-						deviceId?: string | undefined;
-					}) {
-						// Use custom getToken if provided
+					async validateAuthorizationCode(data) {
 						if (c.getToken) {
 							return c.getToken(data);
 						}
-
-						// Standard token exchange flow
-						let finalTokenUrl = c.tokenUrl;
-						if (c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								token_endpoint: string;
-								userinfo_endpoint: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							if (discovery.data) {
-								finalTokenUrl = discovery.data.token_endpoint;
-								finalUserInfoUrl = discovery.data.userinfo_endpoint;
-							}
-						}
-						if (!finalTokenUrl) {
+						if (!tokenUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
@@ -158,33 +211,48 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
-							codeVerifier: data.codeVerifier,
+							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							redirectURI: data.redirectURI,
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
 							},
-							tokenEndpoint: finalTokenUrl,
+							tokenEndpoint: tokenUrl,
 							authentication: c.authentication,
+							additionalParams: c.tokenUrlParams,
 						});
+					},
+					async getUserInfo(tokens) {
+						const raw = c.getUserInfo
+							? await c.getUserInfo(tokens)
+							: await fetchUserInfo(tokens, userInfoUrl);
+						if (!raw) {
+							return null;
+						}
+						const mapped = c.mapProfileToUser
+							? await c.mapProfileToUser(raw)
+							: {};
+						const user = {
+							id: raw.id,
+							email: raw.email,
+							emailVerified: raw.emailVerified,
+							image: raw.image,
+							name: raw.name,
+							...mapped,
+						};
+						return {
+							user: {
+								...user,
+								image: user.image ?? undefined,
+							},
+							data: raw as Record<string, any>,
+						};
 					},
 					async refreshAccessToken(
 						refreshToken: string,
 					): Promise<OAuth2Tokens> {
-						let finalTokenUrl = c.tokenUrl;
-						if (c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								token_endpoint: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							if (discovery.data) {
-								finalTokenUrl = discovery.data.token_endpoint;
-							}
-						}
-						if (!finalTokenUrl) {
+						if (!tokenUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
@@ -197,46 +265,23 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
-							tokenEndpoint: finalTokenUrl,
+							tokenEndpoint: tokenUrl,
 						});
 					},
-					async getUserInfo(tokens: OAuth2Tokens) {
-						const userInfo = c.getUserInfo
-							? await c.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl);
-						if (!userInfo) {
-							return null;
-						}
-
-						const userMap = await c.mapProfileToUser?.(userInfo);
-
-						return {
-							user: {
-								id: userInfo?.id,
-								email: userInfo?.email,
-								emailVerified: userInfo?.emailVerified,
-								image: userInfo?.image,
-								name: userInfo?.name,
-								...userMap,
-							},
-							data: userInfo,
-						};
-					},
+					disableImplicitSignUp: c.disableImplicitSignUp,
+					disableSignUp: c.disableSignUp,
 					options: {
+						disableSignUp: c.disableSignUp,
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
 					},
-				} as OAuthProvider;
-			});
+				} satisfies OAuthProvider);
+			}
+
 			return {
 				context: {
 					socialProviders: genericProviders.concat(ctx.socialProviders),
 				},
 			};
-		},
-		endpoints: {
-			signInWithOAuth2: signInWithOAuth2(options),
-			oAuth2Callback: oAuth2Callback(options),
-			oAuth2LinkAccount: oAuth2LinkAccount(options),
 		},
 		options,
 		$ERROR_CODES: GENERIC_OAUTH_ERROR_CODES,
