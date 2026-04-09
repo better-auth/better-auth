@@ -492,6 +492,7 @@ The plugin requires 1 additional field in the `user` table and 1 additional tabl
 Table: `user`
 
 <DatabaseTable
+    name="user"
     fields={[
         { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
     ]}
@@ -500,6 +501,7 @@ Table: `user`
 Table: `twoFactor`
 
 <DatabaseTable
+    name="twoFactor"
     fields={[
         { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
         { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },

@@ -1405,6 +1405,7 @@ The callback route supports both GET and POST methods automatically, so you don'
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
 
 <DatabaseTable
+  name="ssoProvider"
     fields={[
         {
             name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
@@ -1424,6 +1425,7 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 The `ssoProvider` schema is extended as follows:
 
 <DatabaseTable
+  name="ssoProvider"
     fields={[
         { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isOptional: true },
     ]}
