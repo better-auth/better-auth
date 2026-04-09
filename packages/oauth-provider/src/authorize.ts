@@ -532,7 +532,12 @@ export async function authorizeEndpoint(
 function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 	const params = new URLSearchParams();
 	for (const [key, value] of Object.entries(query)) {
-		if (value != null) {
+		if (value == null) continue;
+		if (Array.isArray(value)) {
+			for (const v of value) {
+				params.append(key, String(v));
+			}
+		} else {
 			params.set(key, String(value));
 		}
 	}
