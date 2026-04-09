@@ -113,7 +113,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											return;
 										}
 
-										if (ctx && ctx.path.startsWith("/callback")) {
+										if (ctx.path.startsWith("/callback")) {
 											const redirectURI =
 												ctx.context.options.onAPIError?.errorURL ||
 												`${ctx.context.baseURL}/error`;

@@ -242,7 +242,7 @@ describe("oidc", async () => {
 		// Make the authorization request
 		let redirectURI = "";
 		const consentHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -327,7 +327,7 @@ describe("oidc", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -415,7 +415,7 @@ describe("oidc", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -1181,7 +1181,7 @@ describe("oidc storage", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -1297,7 +1297,7 @@ describe("oidc token response format", async () => {
 
 		let redirectURI = "";
 		const consentHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -1559,7 +1559,7 @@ describe("oidc-jwt", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";

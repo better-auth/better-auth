@@ -204,7 +204,7 @@ describe("mcp", async () => {
 		expect(data.url).toContain("code_challenge_method=S256");
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -297,7 +297,7 @@ describe("mcp", async () => {
 		expect(data.url).toContain(`client_id=${confidentialClient.clientId}`);
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";

@@ -64,7 +64,10 @@ async function fetchDiscovery(
 		method: "GET",
 		headers,
 	});
-	return result.data ?? null;
+	if (result.error || !result.data) {
+		return null;
+	}
+	return result.data;
 }
 
 async function fetchUserInfo(
@@ -72,20 +75,24 @@ async function fetchUserInfo(
 	userInfoUrl: string | undefined,
 ): Promise<OAuth2UserInfo | null> {
 	if (tokens.idToken) {
-		const decoded = decodeJwt(tokens.idToken) as {
-			sub: string;
-			email_verified: boolean;
-			email: string;
-			name: string;
-			picture: string;
-		};
-		if (decoded?.sub && decoded?.email) {
-			return {
-				id: decoded.sub,
-				emailVerified: decoded.email_verified,
-				image: decoded.picture,
-				...decoded,
+		try {
+			const decoded = decodeJwt(tokens.idToken) as {
+				sub: string;
+				email_verified: boolean;
+				email: string;
+				name: string;
+				picture: string;
 			};
+			if (decoded?.sub && decoded?.email) {
+				return {
+					id: decoded.sub,
+					emailVerified: decoded.email_verified,
+					image: decoded.picture,
+					...decoded,
+				};
+			}
+		} catch {
+			// Malformed ID token — fall through to userinfo endpoint
 		}
 	}
 
@@ -105,12 +112,15 @@ async function fetchUserInfo(
 			Authorization: `Bearer ${tokens.accessToken}`,
 		},
 	});
+	if (userInfo.error || !userInfo.data) {
+		return null;
+	}
 	return {
-		id: userInfo.data?.sub ?? "",
-		emailVerified: userInfo.data?.email_verified ?? false,
-		email: userInfo.data?.email,
-		image: userInfo.data?.picture,
-		name: userInfo.data?.name,
+		id: userInfo.data.sub ?? "",
+		emailVerified: userInfo.data.email_verified ?? false,
+		email: userInfo.data.email,
+		image: userInfo.data.picture,
+		name: userInfo.data.name,
 		...userInfo.data,
 	};
 }
