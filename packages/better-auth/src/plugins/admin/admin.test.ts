@@ -2010,7 +2010,7 @@ describe("soft delete", async () => {
 		expect(res?.users.length).toBe(0);
 	});
 
-	it("restoreUser clears deletedAt and allows sign-in again", async () => {
+	it("restoreUser clears deletedAt (note: accounts are not restored, sign-in requires re-onboarding)", async () => {
 		const { data: signupData } = await client.signUp.email({
 			email: "restore-me@test.com",
 			password: "password123",
