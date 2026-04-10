@@ -338,7 +338,9 @@ export async function processSAMLResponse(
 		),
 		id: attributes[mapping.id || "nameID"] || extract.nameID,
 		email: (
-			attributes[mapping.email || "email"] || extract.nameID
+			attributes[mapping.email || "email"] ||
+			extract.nameID ||
+			""
 		).toLowerCase(),
 		name:
 			[
@@ -402,7 +404,7 @@ export async function processSAMLResponse(
 
 	if (result.error) {
 		throw ctx.redirect(
-			`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
+			`${samlRedirectUrl}?error=${result.error.split(" ").join("_")}`,
 		);
 	}
 
