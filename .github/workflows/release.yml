@@ -116,6 +116,7 @@ jobs:
 
       - name: Rename release PR with version
         if: steps.changesets.outputs.pullRequestNumber
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
