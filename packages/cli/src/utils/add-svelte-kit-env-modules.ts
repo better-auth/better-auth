@@ -77,8 +77,12 @@ function getSvelteKitPathAliases(cwd: string): Record<string, string> {
 			break;
 		}
 	}
-	// Add simple stub for $app/server to prevent CLI errors
+
+	// Stub $app/* modules used by SvelteKit integration
 	aliases["$app/server"] = createDataUriModule(createAppServerModule());
+	aliases["$app/environment"] = createDataUriModule(
+		createAppEnvironmentModule(),
+	);
 
 	const customAliases = getSvelteConfigAliases(cwd);
 	Object.assign(aliases, customAliases);
@@ -122,10 +126,25 @@ function getSvelteConfigAliases(cwd: string): Record<string, string> {
 	return aliases;
 }
 
+/**
+ * @see https://svelte.dev/docs/kit/$app-server
+ */
 function createAppServerModule(): string {
 	return `
-// $app/server stub for CLI compatibility
-export default {};
+export function getRequestEvent() {}
+// jiti dirty hack: .unknown
+`;
+}
+
+/**
+ * @see https://svelte.dev/docs/kit/$app-environment
+ */
+function createAppEnvironmentModule(): string {
+	return `
+export const browser = false;
+export const building = false;
+export const dev = false;
+export const version = "";
 // jiti dirty hack: .unknown
 `;
 }
