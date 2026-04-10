@@ -345,7 +345,7 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
         samlConfig: {
             entryPoint: "https://idp.example.com/sso",
             cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-            callbackUrl: "https://yourapp.com/api/auth/sso/saml2/callback/saml-provider",
+            callbackUrl: "https://yourapp.com/api/auth/sso/saml2/sp/acs/saml-provider",
             audience: "https://yourapp.com",
             wantAssertionsSigned: true,
             signatureAlgorithm: "sha256",
@@ -396,7 +396,7 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
             samlConfig: {
                 entryPoint: "https://idp.example.com/sso",
                 cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-                callbackUrl: "https://yourapp.com/api/auth/sso/saml2/callback/saml-provider",
+                callbackUrl: "https://yourapp.com/api/auth/sso/saml2/sp/acs/saml-provider",
                 audience: "https://yourapp.com",
                 wantAssertionsSigned: true,
                 signatureAlgorithm: "sha256",
@@ -905,7 +905,7 @@ const auth = betterAuth({
                         issuer: "https://your-app.com",
                         entryPoint: "https://idp.example.com/sso",
                         cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-                        callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs",
+                        callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs/default-saml",
                         spMetadata: {
                             entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
                             metadata: "<!-- Your SP Metadata XML -->",
@@ -1264,7 +1264,7 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 </Callout>
 
 <Callout type="info">
-  This option only affects OIDC providers. SAML providers already support custom callback URLs via `callbackUrl` in `samlConfig`.
+  This option only affects OIDC providers. SAML providers use a separate ACS endpoint that is configured automatically.
 </Callout>
 
 <Callout type="info">
@@ -1412,13 +1412,15 @@ The SAML callback endpoint (`/api/auth/sso/saml2/callback/{providerId}`) handles
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
 
-**Important**: The `callbackUrl` in your SAML configuration should point to your application's destination URL (e.g., `/dashboard`), **not** the callback route itself. Better Auth automatically handles the callback route and redirects users to your specified `callbackUrl` after successful authentication.
+**Important**: `callbackUrl` in your SAML configuration is used as the Assertion Consumer Service (ACS) URL. Set it to the SAML callback route for your provider (e.g., `https://yourapp.com/api/auth/sso/saml2/sp/acs/my-provider`). If omitted, Better Auth derives it automatically from your `baseURL` and `providerId`.
+
+The post-login redirect destination is controlled by the `callbackURL` parameter in the client-side `signIn.sso()` call:
 
 ```ts
-samlConfig: {
-  callbackUrl: "/dashboard", // Correct - points to your app destination
-  // callbackUrl: "/api/auth/sso/saml2/callback/my-provider" // Incorrect - don't point to callback route
-}
+await authClient.signIn.sso({
+  providerId: "my-provider",
+  callbackURL: "/dashboard", // Where the user lands after SSO
+});
 ```
 
 The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
@@ -1427,66 +1429,30 @@ The callback route supports both GET and POST methods automatically, so you don'
 
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
 
-export const ssoProviderTableFields = [
-	{
-		name: "id",
-		type: "string",
-		description: "A database identifier",
-		isPrimaryKey: true,
-	},
-	{ name: "issuer", type: "string", description: "The issuer identifier" },
-	{ name: "domain", type: "string", description: "The domain of the provider" },
-	{
-		name: "oidcConfig",
-		type: "string",
-		description: "The OIDC configuration (JSON string)",
-		isOptional: true,
-	},
-	{
-		name: "samlConfig",
-		type: "string",
-		description: "The SAML configuration (JSON string)",
-		isOptional: true,
-	},
-	{
-		name: "userId",
-		type: "string",
-		description: "The user ID",
-		isForeignKey: true,
-	},
-	{
-		name: "providerId",
-		type: "string",
-		description:
-			"The provider ID. Used to identify a provider and to generate a redirect URL.",
-		isUnique: true,
-	},
-	{
-		name: "organizationId",
-		type: "string",
-		description:
-			"The organization Id. If provider is linked to an organization.",
-		isOptional: true,
-	},
-];
-
-<DatabaseTable name="ssoProvider" fields={ssoProviderTableFields} />
+<DatabaseTable
+  fields={[
+{
+    name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
+},
+{ name: "issuer", type: "string", description: "The issuer identifier" },
+{ name: "domain", type: "string", description: "The domain of the provider" },
+{ name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isOptional: true },
+{ name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isOptional: true },
+{ name: "userId", type: "string", description: "The user ID", isForeignKey: true },
+{ name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isUnique: true },
+{ name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isOptional: true }
+]}
+/>
 
 ### If you have enabled domain verification:
 
 The `ssoProvider` schema is extended as follows:
 
-export const ssoProviderDomainVerificationFields = [
-	{
-		name: "domainVerified",
-		type: "boolean",
-		description:
-			"A flag indicating whether the provider domain has been verified.",
-		isOptional: true,
-	},
-];
-
-<DatabaseTable name="ssoProvider" fields={ssoProviderDomainVerificationFields} />
+<DatabaseTable
+  fields={[
+{ name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isOptional: true },
+]}
+/>
 
 ### IdP-Initiated SAML SSO
 
@@ -1496,10 +1462,14 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 
 1. User clicks your app icon in the IdP dashboard
 2. IdP POSTs SAMLResponse to `/api/auth/sso/saml2/callback/{providerId}`
-3. Better Auth processes the assertion, creates a session, and redirects to your `callbackUrl`
+3. Better Auth processes the assertion, creates a session, and redirects to your application
 4. Browser follows the redirect with a GET request (handled automatically)
 
 **No additional configuration required** - the callback route automatically handles both GET and POST requests.
+
+<Callout type="warn">
+  IdP-initiated flows do not carry a RelayState, so the post-login redirect falls back to your application's base URL. To control where users land after SP-initiated SSO, pass the destination via `callbackURL` in the `signIn.sso()` call.
+</Callout>
 
 <Callout type="info">
   If you previously created a manual GET handler for the SAML callback route as a workaround, you can remove it after upgrading. Better Auth now handles GET requests automatically.
@@ -1527,207 +1497,198 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
-export const ssoTypeTable = {
-    provisionUser: {
-        description: "A custom function to provision a user when they sign in with an SSO provider.",
+<TypeTable
+  type={{
+provisionUser: {
+description: "A custom function to provision a user when they sign in with an SSO provider.",
+type: "function",
+},
+provisionUserOnEveryLogin: {
+description: "If true, the provisionUser callback will be called on every login, not just when a new user is registered.",
+type: "boolean",
+default: false,
+},
+organizationProvisioning: {
+description: "Options for provisioning users to an organization.",
+type: "object",
+properties: {
+    disabled: {
+        description: "Disable organization provisioning.",
+        type: "boolean",
+        default: false,
+    },
+    defaultRole: {
+        description: "The default role for new users.",
+        type: "string",
+        enum: ["member", "admin"],
+        default: "member",
+    },
+    getRole: {
+        description: "A custom function to determine the role for new users.",
         type: "function",
     },
-    provisionUserOnEveryLogin: {
-        description:
-            "If true, the provisionUser callback will be called on every login, not just when a new user is registered.",
+},
+},
+defaultOverrideUserInfo: {
+description: "Override user info with the provider info by default.",
+type: "boolean",
+default: false,
+},
+disableImplicitSignUp: {
+description: "Disable implicit sign up for new users. When set to true, sign-in needs to be called with requestSignUp as true to create new users.",
+type: "boolean",
+default: false,
+},
+providersLimit: {
+description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
+type: "number | function",
+default: 10,
+},
+redirectURI: {
+description: "Custom redirect URI for OIDC SSO callbacks. When set, all OIDC providers share this single callback URL instead of per-provider URLs. The provider ID is stored in the OAuth state. Can be a relative path (e.g., '/sso/callback') or a full URL.",
+type: "string",
+required: false,
+},
+domainVerification: {
+description: "Configure the domain verification feature",
+type: "object",
+properties: {
+    enabled: {
+        description: "Enables or disables the domain verification feature",
         type: "boolean",
-        default: false,
+        required: false
     },
-    organizationProvisioning: {
-        description: "Options for provisioning users to an organization.",
-        type: "object",
-        properties: {
-            disabled: {
-                description: "Disable organization provisioning.",
-                type: "boolean",
-                default: false,
-            },
-            defaultRole: {
-                description: "The default role for new users.",
-                type: "string",
-                enum: ["member", "admin"],
-                default: "member",
-            },
-            getRole: {
-                description: "A custom function to determine the role for new users.",
-                type: "function",
-            },
-        },
-    },
-    defaultOverrideUserInfo: {
-        description: "Override user info with the provider info by default.",
-        type: "boolean",
-        default: false,
-    },
-    disableImplicitSignUp: {
-        description:
-            "Disable implicit sign up for new users. When set to true, sign-in needs to be called with requestSignUp as true to create new users.",
-        type: "boolean",
-        default: false,
-    },
-    providersLimit: {
-        description:
-            "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
-        type: "number | function",
-        default: 10,
-    },
-    redirectURI: {
-        description:
-            "Custom redirect URI for OIDC SSO callbacks. When set, all OIDC providers share this single callback URL instead of per-provider URLs. The provider ID is stored in the OAuth state. Can be a relative path (e.g., '/sso/callback') or a full URL.",
+    tokenPrefix: {
+        description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
         type: "string",
         required: false,
+        default: "better-auth-token"
     },
-    domainVerification: {
-        description: "Configure the domain verification feature",
-        type: "object",
-        properties: {
-            enabled: {
-                description: "Enables or disables the domain verification feature",
-                type: "boolean",
-                required: false,
-            },
-            tokenPrefix: {
-                description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
-                type: "string",
-                required: false,
-                default: "better-auth-token",
-            },
-        },
-    },
-    defaultSSO: {
-        description:
-            "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
-        type: "array",
-        items: {
-            type: "object",
-            properties: {
-                domain: {
-                    description: "The domain to match for this default provider.",
-                    type: "string",
-                    required: true,
-                },
-                providerId: {
-                    description: "The provider ID to use for the default provider.",
-                    type: "string",
-                    required: true,
-                },
-                samlConfig: {
-                    description: "SAML configuration for the default provider.",
-                    type: "SAMLConfig",
-                    required: false,
-                },
-                oidcConfig: {
-                    description: "OIDC configuration for the default provider.",
-                    type: "OIDCConfig",
-                    required: false,
-                },
-            },
-        },
-    },
-    saml: {
-        description:
-            "SAML security options for AuthnRequest/InResponseTo validation, replay protection, and timestamp handling.",
-        type: "object",
-        properties: {
-            enableInResponseToValidation: {
-                description: "Enable InResponseTo validation for SP-initiated SAML flows.",
-                type: "boolean",
-                default: true,
-            },
-            allowIdpInitiated: {
-                description:
-                    "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",
-                type: "boolean",
-                default: true,
-            },
-            requestTTL: {
-                description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",
-                type: "number",
-                default: 300000,
-            },
-            clockSkew: {
-                description:
-                    "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
-                type: "number",
-                default: 300000,
-            },
-            requireTimestamps: {
-                description:
-                    "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
-                type: "boolean",
-                default: false,
-            },
-            algorithms: {
-                description: "Algorithm validation options.",
-                type: "object",
-                properties: {
-                    onDeprecated: {
-                        description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
-                        type: "string",
-                        enum: ["reject", "warn", "allow"],
-                        default: "warn",
-                    },
-                },
-            },
-            maxResponseSize: {
-                description: "Maximum allowed size for SAML responses in bytes.",
-                type: "number",
-                default: 262144,
-            },
-            maxMetadataSize: {
-                description: "Maximum allowed size for IdP metadata XML in bytes.",
-                type: "number",
-                default: 102400,
-            },
-        },
-    },
-    modelName: {
-        description: "The model name for the SSO provider table",
-        type: "string",
-        default: "ssoProvider",
-    },
-    fields: {
-        issuer: {
-            description: "Custom name for the issuer column",
+},
+},
+defaultSSO: {
+description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
+type: "array",
+items: {
+    type: "object",
+    properties: {
+        domain: {
+            description: "The domain to match for this default provider.",
             type: "string",
-            default: "issuer",
-        },
-        oidcConfig: {
-            description: "Custom name for the oidcConfig column",
-            type: "string",
-            default: "oidcConfig",
-        },
-        samlConfig: {
-            description: "Custom name for the samlConfig column",
-            type: "string",
-            default: "samlConfig",
-        },
-        userId: {
-            description: "Custom name for the userId column",
-            type: "string",
-            default: "userId",
+            required: true,
         },
         providerId: {
-            description: "Custom name for the providerId column",
+            description: "The provider ID to use for the default provider.",
             type: "string",
-            default: "providerId",
+            required: true,
         },
-        organizationId: {
-            description: "Custom name for the organizationId column",
-            type: "string",
-            default: "organizationId",
+        samlConfig: {
+            description: "SAML configuration for the default provider.",
+            type: "SAMLConfig",
+            required: false,
         },
-        domain: {
-            description: "Custom name for the domain column",
-            type: "string",
-            default: "domain",
+        oidcConfig: {
+            description: "OIDC configuration for the default provider.",
+            type: "OIDCConfig",
+            required: false,
+        },
+    }
+},
+},
+saml: {
+description: "SAML security options for AuthnRequest/InResponseTo validation, replay protection, and timestamp handling.",
+type: "object",
+properties: {
+    enableInResponseToValidation: {
+        description: "Enable InResponseTo validation for SP-initiated SAML flows.",
+        type: "boolean",
+        default: true,
+    },
+    allowIdpInitiated: {
+        description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",
+        type: "boolean",
+        default: true,
+    },
+    requestTTL: {
+        description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",
+        type: "number",
+        default: 300000,
+    },
+    clockSkew: {
+        description: "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
+        type: "number",
+        default: 300000,
+    },
+    requireTimestamps: {
+        description: "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
+        type: "boolean",
+        default: false,
+    },
+    algorithms: {
+        description: "Algorithm validation options.",
+        type: "object",
+        properties: {
+            onDeprecated: {
+                description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
+                type: "string",
+                enum: ["reject", "warn", "allow"],
+                default: "warn",
+            },
         },
     },
+    maxResponseSize: {
+        description: "Maximum allowed size for SAML responses in bytes.",
+        type: "number",
+        default: 262144,
+    },
+    maxMetadataSize: {
+        description: "Maximum allowed size for IdP metadata XML in bytes.",
+        type: "number",
+        default: 102400,
+    },
+},
+},
+modelName: {
+description: "The model name for the SSO provider table",
+type: "string",
+default: "ssoProvider"
+},
+fields: {
+issuer: {
+    description: "Custom name for the issuer column",
+    type: "string",
+    default: "issuer",
+},
+oidcConfig: {
+    description: "Custom name for the oidcConfig column",
+    type: "string",
+    default: "oidcConfig",
+},
+samlConfig: {
+    description: "Custom name for the samlConfig column",
+    type: "string",
+    default: "samlConfig",
+},
+userId: {
+    description: "Custom name for the userId column",
+    type: "string",
+    default: "userId",
+},
+providerId: {
+    description: "Custom name for the providerId column",
+    type: "string",
+    default: "providerId",
+},
+organizationId: {
+    description: "Custom name for the organizationId column",
+    type: "string",
+    default: "organizationId",
+},
+domain: {
+    description: "Custom name for the domain column",
+    type: "string",
+    default: "domain",
 }
-
-<TypeTable type={ssoTypeTable} />
+}
+}}
+/>
