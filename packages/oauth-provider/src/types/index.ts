@@ -96,32 +96,36 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
-	 * Custom redirect URI validation function.
+	 * Custom redirect URI validation function that **extends** the default behavior.
 	 *
-	 * By default, the OAuth provider performs exact string matching against
-	 * registered redirect URIs. This option allows you to implement custom
-	 * validation logic, such as wildcard pattern matching.
+	 * By default, the OAuth provider validates redirect URIs with:
+	 * 1. Exact string matching against registered redirect URIs
+	 * 2. RFC 8252 §7.3 loopback IP support (127.0.0.1/[::1] with flexible ports)
+	 *
+	 * This validator is called **only if default validation fails**, allowing you
+	 * to add custom logic without breaking existing native app loopback callbacks.
 	 *
 	 * **Use Cases:**
 	 * - **Preview deployments**: Match `*.preview.example.com` for platforms
 	 *   like Vercel, Netlify, or Cloudflare Pages where each PR/branch gets
 	 *   a unique subdomain.
-	 * - **Multi-tenant applications**: Match `*.tenants.example.com` where
-	 *   each tenant has their own subdomain.
-	 * - **Development environments**: Match `localhost` with any port.
+	 * - **Multi-tenant applications**: Dynamic tenant subdomains.
 	 *
 	 * **Security Considerations:**
 	 * - Never allow overly broad patterns like `*` or `*.com`
-	 * - Wildcard should only match a single subdomain level (RFC 6125)
-	 * - Consider using a library like `tldts` to prevent wildcards on
+	 * - Validate the full URI (protocol, host, path) - not just the hostname
+	 * - Consider using a library like `tldts` to prevent matches on
 	 *   public suffixes (e.g., `*.co.uk`, `*.github.io`)
 	 * - Always require HTTPS (except for localhost)
 	 * - If the validator throws, the request is rejected (fail-closed)
 	 *
+	 * **Pairwise Subject Note:** For clients using pairwise subject identifiers,
+	 * the sector identifier is derived from registered URIs. Custom-validated
+	 * URIs not in `registeredUris` will share the same sector.
+	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
 	 * @param registeredUris - Array of registered redirect URIs for the client
 	 * @returns `true` if the redirect URI is valid, `false` otherwise.
-	 * @default Exact string match against registered URIs
 	 */
 	validateRedirectUri?: (
 		redirectUri: string,

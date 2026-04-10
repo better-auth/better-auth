@@ -616,7 +616,9 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 
-	const registeredThrowingUri = `${rpBaseUrl}/throw-error-callback`;
+	// URI that triggers the validator to throw - NOT in registered URIs
+	// so default validation fails and custom validator is called
+	const unregisteredThrowingUri = `${rpBaseUrl}/throw-error-callback`;
 
 	const throwingValidator = (
 		uri: string,
@@ -659,7 +661,9 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
-				redirect_uris: [`${rpBaseUrl}/callback`, registeredThrowingUri],
+				// Only register /callback - NOT the throwing URI
+				// This ensures default validation fails and custom validator is called
+				redirect_uris: [`${rpBaseUrl}/callback`],
 				skip_consent: true,
 			},
 		});
@@ -673,7 +677,9 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 		}
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", oauthClient.client_id);
-		authUrl.searchParams.set("redirect_uri", registeredThrowingUri);
+		// Use unregistered URI that triggers throw - default validation fails first,
+		// then custom validator is called and throws
+		authUrl.searchParams.set("redirect_uri", unregisteredThrowingUri);
 		authUrl.searchParams.set("response_type", "code");
 		authUrl.searchParams.set("scope", "openid");
 		authUrl.searchParams.set("state", "validator-throws-test");

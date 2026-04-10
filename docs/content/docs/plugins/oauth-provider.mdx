@@ -1062,33 +1062,36 @@ oauthProvider({
 
 ### Custom Redirect URI Validation
 
-By default, the OAuth provider performs exact string matching against registered redirect URIs. The `validateRedirectUri` option allows you to implement custom validation logic, such as wildcard pattern matching for preview deployments. The validator can be synchronous or asynchronous (e.g., for fetching tenant configuration from a database).
+By default, the OAuth provider performs exact string matching against registered redirect URIs, plus [RFC 8252 §7.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3) loopback IP support (matching `127.0.0.1` and `[::1]` while ignoring port differences).
+
+The `validateRedirectUri` option allows you to **extend** this default behavior with custom validation logic. When provided, the default validation runs first; your custom validator is only called if the default validation fails. This ensures native app loopback callbacks continue working without reimplementing RFC 8252 logic.
 
 **Common Use Cases:**
-- **Preview deployments**: Platforms like Vercel, Netlify, or Cloudflare Pages generate unique subdomains for each PR/branch (e.g., `pr-123.preview.example.com`). Instead of registering each preview URL individually, you can use wildcard matching.
-- **Multi-tenant applications**: Match `*.tenants.example.com` where each tenant has their own subdomain.
-- **Development environments**: Match `localhost` with any port for local development.
+- **Preview deployments**: Platforms like Vercel, Netlify, or Cloudflare Pages generate unique subdomains for each PR/branch (e.g., `pr-123.preview.example.com`).
+- **Multi-tenant applications**: Dynamic tenant subdomains like `acme.app.example.com`.
+- **Development environments**: Additional localhost patterns beyond the default loopback support.
 
 ```ts title="auth.ts"
 oauthProvider({
   validateRedirectUri: (uri, registeredUris) => {
-    // First check exact match
-    if (registeredUris.includes(uri)) {
-      return true;
-    }
+    // This validator is called AFTER default validation fails.
+    // Default validation already handles:
+    // - Exact string matches against registeredUris
+    // - RFC 8252 §7.3 loopback IP port flexibility
     
-    // Custom wildcard matching logic
-    return registeredUris.some((pattern) => {
-      if (!pattern.includes('*')) {
-        return false;
+    // Example: Allow any subdomain of preview.example.com
+    // Note: This matches against the FULL URI, not just the host
+    try {
+      const url = new URL(uri);
+      if (
+        url.protocol === 'https:' &&
+        url.hostname.endsWith('.preview.example.com')
+      ) {
+        return true;
       }
-      // Convert *.example.com to regex pattern
-      // First escape all regex special chars including *
-      const escaped = pattern.replace(/[.+?^${}()|[\]\\*]/g, '\\$&');
-      // Then replace escaped \* with pattern to match single subdomain label
-      const regex = new RegExp('^' + escaped.replace(/\\\*/g, '[^.]+') + '$');
-      return regex.test(uri);
-    });
+    } catch {}
+    
+    return false;
   },
 })
 ```
@@ -1096,9 +1099,13 @@ oauthProvider({
 <Callout type="warn">
 **Security Considerations:**
 - Never allow overly broad patterns like `*` or `*.com`
-- Wildcard should only match a single subdomain level (per RFC 6125)
-- Consider using a library like `tldts` to prevent wildcards on public suffixes (e.g., `*.co.uk`, `*.github.io`)
+- Validate the full URI (protocol, host, path) - not just the hostname
+- Consider using a library like `tldts` to prevent matches on public suffixes (e.g., `*.co.uk`, `*.github.io`)
 - Always require HTTPS (except for localhost)
+</Callout>
+
+<Callout type="info">
+**Pairwise Subject Identifiers:** If you use [pairwise subject identifiers](/docs/plugins/oauth-provider#pairwise-subject-identifiers), the sector identifier is derived from the first registered redirect URI. Custom-validated URIs that don't appear in `client.redirectUris` will share the same sector, which may affect subject isolation for multi-tenant scenarios. Consider using a consistent `sector_identifier_uri` for such clients.
 </Callout>
 
 ### Claims
