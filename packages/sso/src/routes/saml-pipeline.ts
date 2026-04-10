@@ -190,10 +190,13 @@ export async function processSAMLResponse(
 	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId);
 	const idp = createIdP(parsedSamlConfig);
 
-	const samlRedirectUrl =
-		relayState?.callbackURL ||
-		parsedSamlConfig.callbackUrl ||
-		ctx.context.baseURL;
+	const samlRedirectUrl = getSafeRedirectUrl(
+		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
+		params.currentCallbackPath,
+		appOrigin,
+		(url: string, settings?: { allowRelativePaths: boolean }) =>
+			ctx.context.isTrustedOrigin(url, settings),
+	);
 
 	// 8. Single assertion validation
 	// Throws APIError directly (not redirect) since this is a structural issue
