@@ -1680,12 +1680,12 @@ async function handleOIDCCallback(
 			);
 		}
 
-		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm ?? "RS256";
-		const algorithm: AssertionSigningAlgorithm = (
-			ASSERTION_SIGNING_ALGORITHMS as readonly string[]
-		).includes(rawAlg)
-			? (rawAlg as AssertionSigningAlgorithm)
-			: "RS256";
+		const rawAlg = config.privateKeyAlgorithm ?? resolved.algorithm;
+		const algorithm: AssertionSigningAlgorithm | undefined =
+			rawAlg &&
+			(ASSERTION_SIGNING_ALGORITHMS as readonly string[]).includes(rawAlg)
+				? (rawAlg as AssertionSigningAlgorithm)
+				: undefined;
 
 		clientAssertionConfig = {
 			privateKeyJwk: resolved.privateKeyJwk,
