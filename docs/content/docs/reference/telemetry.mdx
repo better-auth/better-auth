@@ -15,20 +15,19 @@ Telemetry data helps us understand how Better Auth is being used across differen
 
 The following data points may be reported. Everything is anonymous and intended for aggregate insights only.
 
-- **Anonymous identifier**: A non-reversible hash derived from your project (`package.json` name and optionally `baseURL`). This lets us de‑duplicate events per project without knowing who you are.
-- **Runtime**: `{ name: "node" | "bun" | "deno", version }`.
-- **Environment**: one of `development`, `production`, `test`, or `ci`.
-- **Framework (if detected)**: `{ name, version }` for frameworks like Next.js, Nuxt, React Router, Astro, SvelteKit, etc.
-- **Database (if detected)**: `{ name, version }` for integrations like PostgreSQL, MySQL, SQLite, Prisma, Drizzle, MongoDB, etc.
-- **System info**: platform, OS release, architecture, CPU count/model/speed, total memory, and flags like `isDocker`, `isWSL`, `isTTY`.
-- **Package manager**: `{ name, version }` derived from the npm user agent.
-- **Redacted auth config snapshot**: A minimized, privacy‑preserving view of your `betterAuth` options produced by `getTelemetryAuthConfig`.
+* **Anonymous identifier**: A non-reversible hash derived from your project (`package.json` name and optionally `baseURL`). This lets us de‑duplicate events per project without knowing who you are.
+* **Runtime**: `{ name: "node" | "bun" | "deno", version }`.
+* **Environment**: one of `development`, `production`, `test`, or `ci`.
+* **Framework (if detected)**: `{ name, version }` for frameworks like Next.js, Nuxt, React Router, Astro, SvelteKit, etc.
+* **Database (if detected)**: `{ name, version }` for integrations like PostgreSQL, MySQL, SQLite, Prisma, Drizzle, MongoDB, etc.
+* **System info**: platform, OS release, architecture, CPU count/model/speed, total memory, and flags like `isDocker`, `isWSL`, `isTTY`.
+* **Package manager**: `{ name, version }` derived from the npm user agent.
+* **Redacted auth config snapshot**: A minimized, privacy‑preserving view of your `betterAuth` options produced by `getTelemetryAuthConfig`.
 
 We also collect anonymous telemetry from the CLI:
 
-- **CLI generate (`cli_generate`)**: outcome `generated | overwritten | appended | no_changes | aborted` plus redacted config.
-- **CLI migrate (`cli_migrate`)**: outcome `migrated | no_changes | aborted | unsupported_adapter` plus adapter id (when relevant) and redacted config.
-
+* **CLI generate (`cli_generate`)**: outcome `generated | overwritten | appended | no_changes | aborted` plus redacted config.
+* **CLI migrate (`cli_migrate`)**: outcome `migrated | no_changes | aborted | unsupported_adapter` plus adapter id (when relevant) and redacted config.
 
 <Callout type="info">
   You can audit telemetry locally by setting the `BETTER_AUTH_TELEMETRY_DEBUG=1` environment variable when running your project or by setting `telemetry: { debug: true }` in your auth config. In this debug mode, telemetry events are logged only to the console.
@@ -47,15 +46,15 @@ We also collect anonymous telemetry from the CLI:
 
 All collected data is fully anonymous and only useful in aggregate. It cannot be traced back to any individual source and is accessible only to a small group of core Better Auth maintainers to guide roadmap decisions.
 
-- **No PII or secrets**: We do not collect emails, usernames, tokens, secrets, client IDs, client secrets, or database URLs.
-- **No full config**: We never send your full `betterAuth` configuration. Instead we send a reduced, redacted snapshot of non‑sensitive toggles and counts.
-- **Redaction by design**: See [detect-auth-config.ts](https://github.com/better-auth/better-auth/blob/main/packages/telemetry/src/detectors/detect-auth-config.ts) in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
+* **No PII or secrets**: We do not collect emails, usernames, tokens, secrets, client IDs, client secrets, or database URLs.
+* **No full config**: We never send your full `betterAuth` configuration. Instead we send a reduced, redacted snapshot of non‑sensitive toggles and counts.
+* **Redaction by design**: See [detect-auth-config.ts](https://github.com/better-auth/better-auth/blob/main/packages/telemetry/src/detectors/detect-auth-config.ts) in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
 
 ## How can I enable it?
 
 You can enable telemetry collection in your auth config or by setting an environment variable.
 
-- Via your auth config.
+* Via your auth config.
 
   ```ts title="auth.ts"
   export const auth = betterAuth({
@@ -66,7 +65,7 @@ You can enable telemetry collection in your auth config or by setting an environ
   });
   ```
 
-- Via an environment variable.
+* Via an environment variable.
 
   ```txt title=".env"
   # Enable telemetry
@@ -76,10 +75,9 @@ You can enable telemetry collection in your auth config or by setting an environ
   BETTER_AUTH_TELEMETRY=0
   ```
 
-
 ### When is telemetry sent?
 
-- On `betterAuth` initialization (`type: "init"`).
-- On CLI actions: `generate` and `migrate` as described above.
+* On `betterAuth` initialization (`type: "init"`).
+* On CLI actions: `generate` and `migrate` as described above.
 
 Telemetry is disabled automatically in tests (`NODE_ENV=test`) unless explicitly overridden by internal tooling.
