@@ -120,7 +120,7 @@ export const useAuthQuery = <T>(
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
-	let isMounted = false;
+	let isInitialized = false;
 
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(async () => {
@@ -128,18 +128,19 @@ export const useAuthQuery = <T>(
 				// On server, don't trigger fetch
 				return;
 			}
-			if (isMounted) {
+			if (isInitialized) {
 				await fn();
 			} else {
 				onMount(value, () => {
 					const timeoutId = setTimeout(async () => {
-						if (!isMounted) {
+						if (!isInitialized) {
 							// Must set to `true` immediately; see https://github.com/better-auth/better-auth/issues/9077
-							isMounted = true;
+							isInitialized = true;
 							await fn();
 						}
 					}, 0);
 					return () => {
+						isInitialized = false;
 						value.off();
 						initAtom.off();
 						clearTimeout(timeoutId);
