@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
 describe("drizzle-adapter", () => {
+	const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+
 	it("should create drizzle adapter", () => {
 		const db = {
 			_: {
@@ -26,8 +28,6 @@ describe("drizzle-adapter", () => {
 				}),
 			} as any;
 		}
-
-		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
 
 		it("should pass when drizzle schema has all required fields with default camelCase names", async () => {
 			const userTable = {
@@ -129,6 +129,61 @@ describe("drizzle-adapter", () => {
 					data: { name: "Test", email: "test@example.com" },
 				}),
 			).rejects.toThrow(/Schema not found/);
+		});
+	});
+
+	describe("supportsUUIDs override (PostgreSQL)", () => {
+		const explicitId = "550e8400-e29b-41d4-a716-446655440000";
+
+		it("passes explicit id through to Drizzle when supportsUUIDs is false with forceAllowId", async () => {
+			const captured: Record<string, unknown>[] = [];
+			const userTable = {
+				id: { name: "id" },
+				name: { name: "name" },
+				email: { name: "email" },
+				emailVerified: { name: "emailVerified" },
+				image: { name: "image" },
+				createdAt: { name: "createdAt" },
+				updatedAt: { name: "updatedAt" },
+			};
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				insert: vi.fn().mockImplementation(() => ({
+					values: (v: Record<string, unknown>) => {
+						captured.push(v);
+						return {
+							returning: vi.fn().mockResolvedValue([v]),
+						};
+					},
+				})),
+			} as any;
+
+			const factory = drizzleAdapter(db, {
+				provider: "pg",
+				supportsUUIDs: false,
+			});
+			const adapter = factory({
+				secret: defaultSecret,
+				advanced: { database: { generateId: "uuid" } },
+			});
+
+			await adapter.create({
+				model: "user",
+				data: {
+					id: explicitId,
+					name: "Hooked",
+					email: "hooked@example.com",
+				},
+				forceAllowId: true,
+			});
+
+			expect(captured[0]).toEqual(
+				expect.objectContaining({
+					id: explicitId,
+					name: "Hooked",
+					email: "hooked@example.com",
+				}),
+			);
 		});
 	});
 });

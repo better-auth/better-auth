@@ -77,6 +77,16 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Passed to the adapter factory as `supportsUUIDs`. When `true` (the default for PostgreSQL),
+	 * UUID primary keys are treated as database-generated and explicit `id` values may be
+	 * omitted during input transforms. Set to `false` if you must supply explicit UUIDs on
+	 * insert (for example, `databaseHooks.user.create.before` after inserting a related row
+	 * that shares the same primary key).
+	 *
+	 * @default `true` for `provider: "pg"`, otherwise `false`.
+	 */
+	supportsUUIDs?: boolean | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -846,7 +856,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
-			supportsUUIDs: config.provider === "pg" ? true : false,
+			supportsUUIDs:
+				config.supportsUUIDs ?? (config.provider === "pg" ? true : false),
 			supportsJSON:
 				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
 					? true

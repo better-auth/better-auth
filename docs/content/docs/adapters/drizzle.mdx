@@ -32,6 +32,25 @@ export const auth = betterAuth({
 });
 ```
 
+## PostgreSQL: explicit user IDs (`supportsUUIDs`)
+
+For PostgreSQL, the Drizzle adapter defaults `supportsUUIDs` to `true` so UUID primary keys are treated as database-generated. If you use **`databaseHooks`** (or similar) to insert a related row first and must pass the **same UUID** as `user.id` on the next insert, set `supportsUUIDs` to `false` so explicit ids are not stripped during adapter input transforms:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db } from "./database.ts";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    supportsUUIDs: false,
+  }),
+});
+```
+
+For MySQL and SQLite the default remains `supportsUUIDs: false`; you only need this override when using PostgreSQL with the default `true` and explicit ids from hooks.
+
 ## Schema generation & migration
 
 The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
