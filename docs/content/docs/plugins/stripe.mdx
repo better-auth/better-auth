@@ -53,7 +53,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
     import Stripe from "stripe"
 
     const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: "2025-11-17.clover", // Latest API version as of Stripe SDK v20.0.0
+        apiVersion: "2026-03-25.dahlia", // Latest API version as of Stripe SDK v22.0.0
     })
 
     export const auth = betterAuth({
@@ -672,12 +672,12 @@ Table Name: `user`
 <DatabaseTable
   name="user"
   fields={[
-  { 
-    name: "stripeCustomerId", 
-    type: "string", 
-    description: "The Stripe customer ID",
-    isOptional: true
-  },
+{ 
+  name: "stripeCustomerId", 
+  type: "string", 
+  description: "The Stripe customer ID",
+  isOptional: true
+},
 ]}
 />
 
@@ -688,12 +688,12 @@ Table Name: `organization` <small className="text-xs">(only when `organization.e
 <DatabaseTable
   name="organization"
   fields={[
-  {
-    name: "stripeCustomerId",
-    type: "string",
-    description: "The Stripe customer ID for the organization",
-    isOptional: true
-  },
+{
+  name: "stripeCustomerId",
+  type: "string",
+  description: "The Stripe customer ID for the organization",
+  isOptional: true
+},
 ]}
 />
 
@@ -704,108 +704,108 @@ Table Name: `subscription`
 <DatabaseTable
   name="subscription"
   fields={[
-  { 
-    name: "id", 
-    type: "string", 
-    description: "Unique identifier for each subscription",
-    isPrimaryKey: true
-  },
-  { 
-    name: "plan", 
-    type: "string", 
-    description: "The name of the subscription plan" 
-  },
-  { 
-    name: "referenceId", 
-    type: "string", 
-    description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
-    isUnique: false
-  },
-  { 
-    name: "stripeCustomerId", 
-    type: "string", 
-    description: "The Stripe customer ID",
-    isOptional: true
-  },
-  { 
-    name: "stripeSubscriptionId", 
-    type: "string", 
-    description: "The Stripe subscription ID",
-    isOptional: true
-  },
-  {
-    name: "status",
-    type: "string",
-    description: "The status of the subscription (active, canceled, etc.)",
-    defaultValue: "incomplete"
-  },
-  { 
-    name: "periodStart", 
-    type: "Date", 
-    description: "Start date of the current billing period",
-    isOptional: true
-  },
-  { 
-    name: "periodEnd", 
-    type: "Date", 
-    description: "End date of the current billing period",
-    isOptional: true
-  },
-  { 
-    name: "cancelAtPeriodEnd", 
-    type: "boolean", 
-    description: "Whether the subscription will be canceled at the end of the period",
-    defaultValue: false,
-    isOptional: true
-  },
-  { 
-    name: "cancelAt", 
-    type: "Date", 
-    description: "If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect",
-    isOptional: true
-  },
-  { 
-    name: "canceledAt", 
-    type: "Date", 
-    description: "If the subscription has been canceled, this is the time when the cancellation was requested. Note: If the subscription was canceled with cancelAtPeriodEnd, this reflects the cancellation request time, not when the subscription actually ends",
-    isOptional: true
-  },
-  { 
-    name: "endedAt", 
-    type: "Date", 
-    description: "If the subscription has ended, this is the date the subscription ended",
-    isOptional: true
-  },
-  { 
-    name: "seats", 
-    type: "number", 
-    description: "Number of seats for team plans",
-    isOptional: true
-  },
-  { 
-    name: "trialStart", 
-    type: "Date", 
-    description: "Start date of the trial period",
-    isOptional: true
-  },
-  {
-    name: "trialEnd",
-    type: "Date",
-    description: "End date of the trial period",
-    isOptional: true
-  },
-  {
-    name: "billingInterval",
-    type: "string",
-    description: "The billing interval of the subscription (e.g. 'month', 'year')",
-    isOptional: true
-  },
-  {
-    name: "stripeScheduleId",
-    type: "string",
-    description: "Stripe Subscription Schedule ID, present when a scheduled plan change is pending",
-    isOptional: true
-  }
+{ 
+  name: "id", 
+  type: "string", 
+  description: "Unique identifier for each subscription",
+  isPrimaryKey: true
+},
+{ 
+  name: "plan", 
+  type: "string", 
+  description: "The name of the subscription plan" 
+},
+{ 
+  name: "referenceId", 
+  type: "string", 
+  description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
+  isUnique: false
+},
+{ 
+  name: "stripeCustomerId", 
+  type: "string", 
+  description: "The Stripe customer ID",
+  isOptional: true
+},
+{ 
+  name: "stripeSubscriptionId", 
+  type: "string", 
+  description: "The Stripe subscription ID",
+  isOptional: true
+},
+{
+  name: "status",
+  type: "string",
+  description: "The status of the subscription (active, canceled, etc.)",
+  defaultValue: "incomplete"
+},
+{ 
+  name: "periodStart", 
+  type: "Date", 
+  description: "Start date of the current billing period",
+  isOptional: true
+},
+{ 
+  name: "periodEnd", 
+  type: "Date", 
+  description: "End date of the current billing period",
+  isOptional: true
+},
+{ 
+  name: "cancelAtPeriodEnd", 
+  type: "boolean", 
+  description: "Whether the subscription will be canceled at the end of the period",
+  defaultValue: false,
+  isOptional: true
+},
+{ 
+  name: "cancelAt", 
+  type: "Date", 
+  description: "If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect",
+  isOptional: true
+},
+{ 
+  name: "canceledAt", 
+  type: "Date", 
+  description: "If the subscription has been canceled, this is the time when the cancellation was requested. Note: If the subscription was canceled with cancelAtPeriodEnd, this reflects the cancellation request time, not when the subscription actually ends",
+  isOptional: true
+},
+{ 
+  name: "endedAt", 
+  type: "Date", 
+  description: "If the subscription has ended, this is the date the subscription ended",
+  isOptional: true
+},
+{ 
+  name: "seats", 
+  type: "number", 
+  description: "Number of seats for team plans",
+  isOptional: true
+},
+{ 
+  name: "trialStart", 
+  type: "Date", 
+  description: "Start date of the trial period",
+  isOptional: true
+},
+{
+  name: "trialEnd",
+  type: "Date",
+  description: "End date of the trial period",
+  isOptional: true
+},
+{
+  name: "billingInterval",
+  type: "string",
+  description: "The billing interval of the subscription (e.g. 'month', 'year')",
+  isOptional: true
+},
+{
+  name: "stripeScheduleId",
+  type: "string",
+  description: "Stripe Subscription Schedule ID, present when a scheduled plan change is pending",
+  isOptional: true
+}
 ]}
 />
 
