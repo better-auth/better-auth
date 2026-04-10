@@ -320,231 +320,227 @@ Better Auth requires the following tables to be present in the database. The typ
 
 Table Name: `user`
 
-<DatabaseTable
-  name="user"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each user",
-isPrimaryKey: true,
-},
-{
-name: "name",
-type: "string",
-description: "User's chosen display name",
-},
-{
-name: "email",
-type: "string",
-description: "User's email address for communication and login",
-isUnique: true,
-},
-{
-name: "emailVerified",
-type: "boolean",
-description: "Whether the user's email is verified",
-},
-{
-name: "image",
-type: "string",
-description: "User's image url",
-isOptional: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the user account was created",
-},
-{
-name: "updatedAt",
-type: "Date",
-description: "Timestamp of the last update to the user's information",
-},
-]}
-/>
+export const userTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each user",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "User's chosen display name",
+	},
+	{
+		name: "email",
+		type: "string",
+		description: "User's email address for communication and login",
+		isUnique: true,
+	},
+	{
+		name: "emailVerified",
+		type: "boolean",
+		description: "Whether the user's email is verified",
+	},
+	{
+		name: "image",
+		type: "string",
+		description: "User's image url",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the user account was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of the last update to the user's information",
+	},
+];
+
+<DatabaseTable name="user" fields={userTableFields} />
 
 ### Session
 
 Table Name: `session`
 
-<DatabaseTable
-  name="session"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each session",
-isPrimaryKey: true,
-},
-{
-name: "userId",
-type: "string",
-description: "The ID of the user",
-isForeignKey: true,
-},
-{
-name: "token",
-type: "string",
-description: "The unique session token",
-isUnique: true,
-},
-{
-name: "expiresAt",
-type: "Date",
-description: "The time when the session expires",
-},
-{
-name: "ipAddress",
-type: "string",
-description: "The IP address of the device",
-isOptional: true,
-},
-{
-name: "userAgent",
-type: "string",
-description: "The user agent information of the device",
-isOptional: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the session was created",
-},
-{
-name: "updatedAt",
-type: "Date",
-description: "Timestamp of when the session was updated",
-},
-]}
-/>
+export const sessionTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each session",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+	},
+	{
+		name: "token",
+		type: "string",
+		description: "The unique session token",
+		isUnique: true,
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The time when the session expires",
+	},
+	{
+		name: "ipAddress",
+		type: "string",
+		description: "The IP address of the device",
+		isOptional: true,
+	},
+	{
+		name: "userAgent",
+		type: "string",
+		description: "The user agent information of the device",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the session was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the session was updated",
+	},
+];
+
+<DatabaseTable name="session" fields={sessionTableFields} />
 
 ### Account
 
 Table Name: `account`
 
-<DatabaseTable
-  name="account"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each account",
-isPrimaryKey: true,
-},
-{
-name: "userId",
-type: "string",
-description: "The ID of the user",
-isForeignKey: true,
-},
-{
-name: "accountId",
-type: "string",
-description:
-"The ID of the account as provided by the SSO or equal to userId for credential accounts",
-},
-{
-name: "providerId",
-type: "string",
-description: "The ID of the provider",
-},
-{
-name: "accessToken",
-type: "string",
-description: "The access token of the account. Returned by the provider",
-isOptional: true,
-},
-{
-name: "refreshToken",
-type: "string",
-description: "The refresh token of the account. Returned by the provider",
-isOptional: true,
-},
-{
-name: "accessTokenExpiresAt",
-type: "Date",
-description: "The time when the access token expires",
-isOptional: true,
-},
-{
-name: "refreshTokenExpiresAt",
-type: "Date",
-description: "The time when the refresh token expires",
-isOptional: true,
-},
-{
-name: "scope",
-type: "string",
-description: "The scope of the account. Returned by the provider",
-isOptional: true,
-},
-{
-name: "idToken",
-type: "string",
-description: "The ID token returned from the provider",
-isOptional: true,
-},
-{
-name: "password",
-type: "string",
-description:
-"The password of the account. Mainly used for email and password authentication",
-isOptional: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the account was created",
-},
-{
-name: "updatedAt",
-type: "Date",
-description: "Timestamp of when the account was updated",
-},
-]}
-/>
+export const accountTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each account",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+	},
+	{
+		name: "accountId",
+		type: "string",
+		description:
+			"The ID of the account as provided by the SSO or equal to userId for credential accounts",
+	},
+	{
+		name: "providerId",
+		type: "string",
+		description: "The ID of the provider",
+	},
+	{
+		name: "accessToken",
+		type: "string",
+		description: "The access token of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "refreshToken",
+		type: "string",
+		description: "The refresh token of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "accessTokenExpiresAt",
+		type: "Date",
+		description: "The time when the access token expires",
+		isOptional: true,
+	},
+	{
+		name: "refreshTokenExpiresAt",
+		type: "Date",
+		description: "The time when the refresh token expires",
+		isOptional: true,
+	},
+	{
+		name: "scope",
+		type: "string",
+		description: "The scope of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "idToken",
+		type: "string",
+		description: "The ID token returned from the provider",
+		isOptional: true,
+	},
+	{
+		name: "password",
+		type: "string",
+		description:
+			"The password of the account. Mainly used for email and password authentication",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the account was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the account was updated",
+	},
+];
+
+<DatabaseTable name="account" fields={accountTableFields} />
 
 ### Verification
 
 Table Name: `verification`
 
-<DatabaseTable
-  name="verification"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each verification",
-isPrimaryKey: true,
-},
-{
-name: "identifier",
-type: "string",
-description: "The identifier for the verification request",
-},
-{
-name: "value",
-type: "string",
-description: "The value to be verified",
-},
-{
-name: "expiresAt",
-type: "Date",
-description: "The time when the verification request expires",
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the verification request was created",
-},
-{
-name: "updatedAt",
-type: "Date",
-description: "Timestamp of when the verification request was updated",
-},
-]}
-/>
+export const verificationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each verification",
+		isPrimaryKey: true,
+	},
+	{
+		name: "identifier",
+		type: "string",
+		description: "The identifier for the verification request",
+	},
+	{
+		name: "value",
+		type: "string",
+		description: "The value to be verified",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The time when the verification request expires",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the verification request was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the verification request was updated",
+	},
+];
+
+<DatabaseTable name="verification" fields={verificationTableFields} />
 
 ## Custom Tables
 

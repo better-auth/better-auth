@@ -452,25 +452,51 @@ The plugin requires 1 additional field in the `user` table and 1 additional tabl
 
 Table: `user`
 
-<DatabaseTable
-  name="user"
-  fields={[
-{ name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
-]}
-/>
+export const twoFactorUserTableFields = [
+	{
+		name: "twoFactorEnabled",
+		type: "boolean",
+		description: "Whether two factor authentication is enabled for the user.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={twoFactorUserTableFields} />
 
 Table: `twoFactor`
 
-<DatabaseTable
-  name="twoFactor"
-  fields={[
-{ name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
-{ name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
-{ name: "secret", type: "string", description: "The secret used to generate the TOTP code." },
-{ name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
-{ name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment" },
-]}
-/>
+export const twoFactorTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "The ID of the two factor authentication.",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+	},
+	{
+		name: "secret",
+		type: "string",
+		description: "The secret used to generate the TOTP code.",
+	},
+	{
+		name: "backupCodes",
+		type: "string",
+		description:
+			"The backup codes used to recover access to the account if the user loses access to their phone or email.",
+	},
+	{
+		name: "verified",
+		type: "boolean",
+		description: "Whether this TOTP secret has been verified during enrollment",
+	},
+];
+
+<DatabaseTable name="twoFactor" fields={twoFactorTableFields} />
 
 ## Options
 

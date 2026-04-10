@@ -2004,71 +2004,69 @@ When teams are enabled, new `team` and `teamMember` tables are added to the data
 
 Table Name: `team`
 
-<DatabaseTable
-  name="team"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each team",
-isPrimaryKey: true,
-},
-{
-name: "name",
-type: "string",
-description: "The name of the team",
-},
-{
-name: "organizationId",
-type: "string",
-description: "The ID of the organization",
-isForeignKey: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the team was created",
-},
-{
-name: "updatedAt",
-type: "Date",
-isOptional: true,
-description: "Timestamp of when the team was created",
-},
-]}
-/>
+export const teamsFeatureTeamTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the team",
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		isOptional: true,
+		description: "Timestamp of when the team was created",
+	},
+];
+
+<DatabaseTable name="team" fields={teamsFeatureTeamTableFields} />
 
 Table Name: `teamMember`
 
-<DatabaseTable
-  name="teamMember"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each team member",
-isPrimaryKey: true,
-},
-{
-name: "teamId",
-type: "string",
-description: "Unique identifier for each team",
-isForeignKey: true,
-},
-{
-name: "userId",
-type: "string",
-description: "The ID of the user",
-isForeignKey: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the team member was created",
-isOptional: true,
-},
-]}
-/>
+export const teamsFeatureTeamMemberTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team member",
+		isPrimaryKey: true,
+	},
+	{
+		name: "teamId",
+		type: "string",
+		description: "Unique identifier for each team",
+		isForeignKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team member was created",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="teamMember" fields={teamsFeatureTeamMemberTableFields} />
 
 ## Schema
 
@@ -2078,151 +2076,147 @@ The organization plugin adds the following tables to the database:
 
 Table Name: `organization`
 
-<DatabaseTable
-  name="organization"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each organization",
-isPrimaryKey: true,
-},
-{
-name: "name",
-type: "string",
-description: "The name of the organization",
-},
-{
-name: "slug",
-type: "string",
-description: "The slug of the organization",
-isUnique: true,
-},
-{
-name: "logo",
-type: "string",
-description: "The logo of the organization",
-isOptional: true,
-},
-{
-name: "metadata",
-type: "string",
-description: "Additional metadata for the organization",
-isOptional: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the organization was created",
-},
-]}
-/>
+export const organizationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each organization",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the organization",
+	},
+	{
+		name: "slug",
+		type: "string",
+		description: "The slug of the organization",
+		isUnique: true,
+	},
+	{
+		name: "logo",
+		type: "string",
+		description: "The logo of the organization",
+		isOptional: true,
+	},
+	{
+		name: "metadata",
+		type: "string",
+		description: "Additional metadata for the organization",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the organization was created",
+	},
+];
+
+<DatabaseTable name="organization" fields={organizationTableFields} />
 
 ### Member
 
 Table Name: `member`
 
-<DatabaseTable
-  name="member"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each member",
-isPrimaryKey: true,
-},
-{
-name: "userId",
-type: "string",
-description: "The ID of the user",
-isForeignKey: true,
-},
-{
-name: "organizationId",
-type: "string",
-description: "The ID of the organization",
-isForeignKey: true,
-},
-{
-name: "role",
-type: "string",
-description: "The role of the user in the organization",
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the member was added to the organization",
-},
-]}
-/>
+export const memberTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each member",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+	},
+	{
+		name: "role",
+		type: "string",
+		description: "The role of the user in the organization",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the member was added to the organization",
+	},
+];
+
+<DatabaseTable name="member" fields={memberTableFields} />
 
 ### Invitation
 
 Table Name: `invitation`
 
-<DatabaseTable
-  name="invitation"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each invitation",
-isPrimaryKey: true,
-},
-{
-name: "email",
-type: "string",
-description: "The email address of the user",
-},
-{
-name: "inviterId",
-type: "string",
-description: "The ID of the inviter",
-isForeignKey: true,
-},
-{
-name: "organizationId",
-type: "string",
-description: "The ID of the organization",
-isForeignKey: true,
-},
-{
-name: "role",
-type: "string",
-description: "The role of the user in the organization",
-isOptional: true,
-},
-{
-name: "status",
-type: "string",
-description: "The status of the invitation",
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the invitation was created"
-},
-{
-name: "expiresAt",
-type: "Date",
-description: "Timestamp of when the invitation expires",
-},
-]}
-/>
+export const invitationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each invitation",
+		isPrimaryKey: true,
+	},
+	{
+		name: "email",
+		type: "string",
+		description: "The email address of the user",
+	},
+	{
+		name: "inviterId",
+		type: "string",
+		description: "The ID of the inviter",
+		isForeignKey: true,
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+	},
+	{
+		name: "role",
+		type: "string",
+		description: "The role of the user in the organization",
+		isOptional: true,
+	},
+	{
+		name: "status",
+		type: "string",
+		description: "The status of the invitation",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the invitation was created",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "Timestamp of when the invitation expires",
+	},
+];
+
+<DatabaseTable name="invitation" fields={invitationTableFields} />
 
 If teams are enabled, you need to add the following fields to the invitation table:
 
-<DatabaseTable
-  name="invitation"
-  fields={[
-{
-name: "teamId",
-type: "string",
-description: "The ID of the team",
-isOptional: true,
-},
-]}
-/>
+export const invitationTeamIdFields = [
+	{
+		name: "teamId",
+		type: "string",
+		description: "The ID of the team",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="invitation" fields={invitationTeamIdFields} />
 
 ### Session
 
@@ -2230,149 +2224,144 @@ Table Name: `session`
 
 You need to add two more fields to the session table to store the active organization ID and the active team ID.
 
-<DatabaseTable
-  name="session"
-  fields={[
-{
-name: "activeOrganizationId",
-type: "string",
-description: "The ID of the active organization",
-isOptional: true,
-},
-{
-name: "activeTeamId",
-type: "string",
-description: "The ID of the active team",
-isOptional: true,
-},
-]}
-/>
+export const sessionActiveOrganizationFields = [
+	{
+		name: "activeOrganizationId",
+		type: "string",
+		description: "The ID of the active organization",
+		isOptional: true,
+	},
+	{
+		name: "activeTeamId",
+		type: "string",
+		description: "The ID of the active team",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="session" fields={sessionActiveOrganizationFields} />
 
 ### Organization Role (optional)
 
 Table Name: `organizationRole`
 
-<DatabaseTable
-  name="organizationRole"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each organization role",
-},
-{
-name: "organizationId",
-type: "string",
-description: "The ID of the organization",
-isForeignKey: true,
-},
-{
-name: "role",
-type: "string",
-description: "The name of the role",
-},
-{
-name: "permission",
-type: "string",
-description: "The permission of the role",
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the organization role was created",
-},
-{
-name: "updatedAt",
-type: "Date",
-description: "Timestamp of when the organization role was updated",
-isOptional: true,
-},
-]}
-/>
+export const organizationRoleTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each organization role",
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+	},
+	{
+		name: "role",
+		type: "string",
+		description: "The name of the role",
+	},
+	{
+		name: "permission",
+		type: "string",
+		description: "The permission of the role",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the organization role was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the organization role was updated",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="organizationRole" fields={organizationRoleTableFields} />
 
 ### Teams (optional)
 
 Table Name: `team`
 
-<DatabaseTable
-  name="team"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each team",
-isPrimaryKey: true,
-},
-{
-name: "name",
-type: "string",
-description: "The name of the team",
-},
-{
-name: "organizationId",
-type: "string",
-description: "The ID of the organization",
-isForeignKey: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the team was created",
-},
-{
-name: "updatedAt",
-type: "Date",
-isOptional: true,
-description: "Timestamp of when the team was created",
-},
-]}
-/>
+export const optionalTeamTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "The name of the team",
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description: "The ID of the organization",
+		isForeignKey: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		isOptional: true,
+		description: "Timestamp of when the team was created",
+	},
+];
+
+<DatabaseTable name="team" fields={optionalTeamTableFields} />
 
 Table Name: `teamMember`
 
-<DatabaseTable
-  name="teamMember"
-  fields={[
-{
-name: "id",
-type: "string",
-description: "Unique identifier for each team member",
-isPrimaryKey: true,
-},
-{
-name: "teamId",
-type: "string",
-description: "Unique identifier for each team",
-isForeignKey: true,
-},
-{
-name: "userId",
-type: "string",
-description: "The ID of the user",
-isForeignKey: true,
-},
-{
-name: "createdAt",
-type: "Date",
-description: "Timestamp of when the team member was created",
-isOptional: true,
-},
-]}
-/>
+export const teamsFeatureTeamTableFields0 = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each team member",
+		isPrimaryKey: true,
+	},
+	{
+		name: "teamId",
+		type: "string",
+		description: "Unique identifier for each team",
+		isForeignKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the team member was created",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="teamMember" fields={teamsFeatureTeamTableFields0} />
 
 Table Name: `invitation`
 
-<DatabaseTable
-  name="invitation"
-  fields={[
-{
-name: "teamId",
-type: "string",
-description: "The ID of the team",
-isOptional: true,
-},
-]}
-/>
+export const teamsFeatureTeamTableFields1 = [
+	{
+		name: "teamId",
+		type: "string",
+		description: "The ID of the team",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="invitation" fields={teamsFeatureTeamTableFields1} />
 
 ### Customizing the Schema
 

@@ -346,25 +346,24 @@ The plugin requires 2 fields to be added to the user table
 
 ### User Table
 
-<DatabaseTable
-  name="user"
-  fields={[
-{ 
-name: "phoneNumber", 
-type: "string", 
-description: "The phone number of the user",
-isUnique: true,
-isOptional: true
-},
-{ 
-name: "phoneNumberVerified", 
-type: "boolean", 
-description: "Whether the phone number is verified or not",
-defaultValue: false,
-isOptional: true
-},
-]}
-/>
+export const phoneNumberUserTableFields = [
+	{
+		name: "phoneNumber",
+		type: "string",
+		description: "The phone number of the user",
+		isUnique: true,
+		isOptional: true,
+	},
+	{
+		name: "phoneNumberVerified",
+		type: "boolean",
+		description: "Whether the phone number is verified or not",
+		defaultValue: false,
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={phoneNumberUserTableFields} />
 
 ### OTP Verification Attempts
 

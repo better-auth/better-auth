@@ -376,38 +376,37 @@ The JWT plugin adds the following tables to the database:
 
 Table Name: `jwks`
 
-<DatabaseTable
-  name="jwks"
-  fields={[
-{ 
-name: "id", 
-type: "string", 
-description: "Unique identifier for each web key",
-isPrimaryKey: true
-},
-{ 
-name: "publicKey", 
-type: "string", 
-description: "The public part of the web key" 
-},
-{ 
-name: "privateKey", 
-type: "string", 
-description: "The private part of the web key" 
-},
-{ 
-name: "createdAt", 
-type: "Date", 
-description: "Timestamp of when the web key was created" 
-},
-{ 
-name: "expiresAt", 
-type: "Date", 
-description: "Timestamp of when the web key expires",
-isOptional: true
-},
-]}
-/>
+export const jwksTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each web key",
+		isPrimaryKey: true,
+	},
+	{
+		name: "publicKey",
+		type: "string",
+		description: "The public part of the web key",
+	},
+	{
+		name: "privateKey",
+		type: "string",
+		description: "The private part of the web key",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the web key was created",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "Timestamp of when the web key expires",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="jwks" fields={jwksTableFields} />
 
 <Callout>
   You can customize the table name and fields for the `jwks` table. See the [Database concept documentation](/docs/concepts/database#custom-table-names) for more information on how to customize plugin schema.

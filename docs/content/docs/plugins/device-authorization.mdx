@@ -585,64 +585,63 @@ The plugin requires a new table to store device authorization data.
 
 Table Name: `deviceCode`
 
-<DatabaseTable
-  name="deviceCode"
-  fields={[
-{ 
-name: "id", 
-type: "string", 
-description: "Unique identifier for the device authorization request",
-isPrimaryKey: true
-},
-{
-name: "deviceCode",
-type: "string",
-description: "The device verification code",
-},
-{
-name: "userCode",
-type: "string",
-description: "The user-friendly code for verification",
-},
-{
-name: "userId",
-type: "string",
-description: "The ID of the user who approved/denied",
-isOptional: true
-},
-{
-name: "clientId",
-type: "string",
-description: "The OAuth client identifier",
-isOptional: true
-},
-{
-name: "scope",
-type: "string",
-description: "Requested OAuth scopes",
-isOptional: true
-},
-{
-name: "status",
-type: "string",
-description: "Current status: pending, approved, or denied",
-},
-{
-name: "expiresAt",
-type: "Date",
-description: "When the device code expires",
-},
-{
-name: "lastPolledAt",
-type: "Date",
-description: "Last time the device polled for status",
-isOptional: true
-},
-{
-name: "pollingInterval",
-type: "number",
-description: "Minimum seconds between polls",
-isOptional: true
-},
-]}
-/>
+export const deviceCodeTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for the device authorization request",
+		isPrimaryKey: true,
+	},
+	{
+		name: "deviceCode",
+		type: "string",
+		description: "The device verification code",
+	},
+	{
+		name: "userCode",
+		type: "string",
+		description: "The user-friendly code for verification",
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user who approved/denied",
+		isOptional: true,
+	},
+	{
+		name: "clientId",
+		type: "string",
+		description: "The OAuth client identifier",
+		isOptional: true,
+	},
+	{
+		name: "scope",
+		type: "string",
+		description: "Requested OAuth scopes",
+		isOptional: true,
+	},
+	{
+		name: "status",
+		type: "string",
+		description: "Current status: pending, approved, or denied",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "When the device code expires",
+	},
+	{
+		name: "lastPolledAt",
+		type: "Date",
+		description: "Last time the device polled for status",
+		isOptional: true,
+	},
+	{
+		name: "pollingInterval",
+		type: "number",
+		description: "Minimum seconds between polls",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />

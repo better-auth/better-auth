@@ -192,12 +192,16 @@ When `storeInDatabase` is enabled, the plugin adds the following field to the `u
 
 Table: `user`
 
-<DatabaseTable
-  name="user"
-  fields={[
-{ name: "lastLoginMethod", type: "string", description: "The last authentication method used by the user", isOptional: true },
-]}
-/>
+export const lastLoginMethodUserTableFields = [
+	{
+		name: "lastLoginMethod",
+		type: "string",
+		description: "The last authentication method used by the user",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={lastLoginMethodUserTableFields} />
 
 ### Custom Schema Configuration
 

@@ -284,29 +284,29 @@ If you are using a database to store rate limit data you need this schema:
 
 Table Name: `rateLimit`
 
-<DatabaseTable
-  name="rateLimit"
-  fields={[
-{ 
-name: "id", 
-type: "string", 
-description: "Database ID",
-isPrimaryKey: true
-},
-{ 
-name: "key",
-type: "string",
-description: "Unique identifier for each rate limit key",
-isUnique: true,
-},
-{ 
-name: "count",
-type: "integer",
-description: "Number of requests made in the current window"
-},
-{
-name: "lastRequest",
-type: "bigint",
-description: "Timestamp of the last request (epoch ms)" 
-}]}
-/>
+export const rateLimitTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Database ID",
+		isPrimaryKey: true,
+	},
+	{
+		name: "key",
+		type: "string",
+		description: "Unique identifier for each rate limit key",
+		isUnique: true,
+	},
+	{
+		name: "count",
+		type: "integer",
+		description: "Number of requests made in the current window",
+	},
+	{
+		name: "lastRequest",
+		type: "bigint",
+		description: "Timestamp of the last request (epoch ms)",
+	},
+];
+
+<DatabaseTable name="rateLimit" fields={rateLimitTableFields} />

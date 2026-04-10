@@ -471,28 +471,53 @@ By default, the SCIM provisioning will automatically map the following fields:
 
 The plugin requires additional fields in the `scimProvider` table to store the provider's configuration.
 
-<DatabaseTable
-  name="scimProvider"
-  fields={[
-{
-name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
-},
-{ name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isUnique: true },
-{ name: "scimToken", type: "string", description: "The SCIM bearer token. Used by your identity provider to authenticate against your server", isUnique: true },
-{ name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isOptional: true },
-]}
-/>
+export const scimProviderTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "A database identifier",
+		isPrimaryKey: true,
+	},
+	{
+		name: "providerId",
+		type: "string",
+		description:
+			"The provider ID. Used to identify a provider and to generate a redirect URL.",
+		isUnique: true,
+	},
+	{
+		name: "scimToken",
+		type: "string",
+		description:
+			"The SCIM bearer token. Used by your identity provider to authenticate against your server",
+		isUnique: true,
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description:
+			"The organization Id. If provider is linked to an organization.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="scimProvider" fields={scimProviderTableFields} />
 
 ### If you have provider ownership enabled via `providerOwnership.enabled`:
 
 The `scimProvider` schema is extended as follows:
 
-<DatabaseTable
-  name="scimProvider"
-  fields={[
-{ name: "userId", type: "string", description: "The user id of the connection owner. Set automatically when generating a token via the API.", isOptional: true },
-]}
-/>
+export const scimProviderOwnershipFields = [
+	{
+		name: "userId",
+		type: "string",
+		description:
+			"The user id of the connection owner. Set automatically when generating a token via the API.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="scimProvider" fields={scimProviderOwnershipFields} />
 
 ## Options
 

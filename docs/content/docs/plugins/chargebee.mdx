@@ -720,163 +720,162 @@ The Chargebee plugin adds the following tables to your database:
 
 Table Name: `user`
 
-<DatabaseTable
-  name="user"
-  fields={[
-{ 
-name: "chargebeeCustomerId", 
-type: "string", 
-description: "The Chargebee customer ID",
-isOptional: true
-},
-]}
-/>
+export const chargebeeUserTableFields = [
+	{
+		name: "chargebeeCustomerId",
+		type: "string",
+		description: "The Chargebee customer ID",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={chargebeeUserTableFields} />
 
 ### Organization
 
 Table Name: `organization` <small className="text-xs">(only when `organization.enabled` is `true`)</small>
 
-<DatabaseTable
-  name="organization"
-  fields={[
-{
-name: "chargebeeCustomerId",
-type: "string",
-description: "The Chargebee customer ID for the organization",
-isOptional: true
-},
-]}
-/>
+export const chargebeeOrganizationTableFields = [
+	{
+		name: "chargebeeCustomerId",
+		type: "string",
+		description: "The Chargebee customer ID for the organization",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="organization" fields={chargebeeOrganizationTableFields} />
 
 ### Subscription
 
 Table Name: `subscription`
 
-<DatabaseTable
-  name="subscription"
-  fields={[
-{ 
-name: "id", 
-type: "string", 
-description: "Unique identifier for each subscription",
-isPrimaryKey: true
-},
-{ 
-name: "referenceId", 
-type: "string", 
-description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
-isUnique: false
-},
-{ 
-name: "chargebeeCustomerId", 
-type: "string", 
-description: "The Chargebee customer ID",
-isOptional: true
-},
-{ 
-name: "chargebeeSubscriptionId", 
-type: "string", 
-description: "The Chargebee subscription ID",
-isOptional: true
-},
-{ 
-name: "status", 
-type: "string", 
-description: "The status of the subscription (future, in_trial, active, non_renewing, paused, cancelled, transferred)",
-defaultValue: "future"
-},
-{ 
-name: "periodStart", 
-type: "Date", 
-description: "Start date of the current billing period",
-isOptional: true
-},
-{ 
-name: "periodEnd", 
-type: "Date", 
-description: "End date of the current billing period",
-isOptional: true
-},
-{ 
-name: "trialStart", 
-type: "Date", 
-description: "Start date of the trial period",
-isOptional: true
-},
-{ 
-name: "trialEnd", 
-type: "Date", 
-description: "End date of the trial period",
-isOptional: true
-},
-{ 
-name: "canceledAt", 
-type: "Date", 
-description: "If the subscription has been canceled, this is the time when it was canceled",
-isOptional: true
-},
-{ 
-name: "seats", 
-type: "number", 
-description: "Number of seats for team plans",
-isOptional: true
-},
-{ 
-name: "metadata", 
-type: "string", 
-description: "JSON string of additional metadata",
-isOptional: true
-}
-]}
-/>
+export const chargebeeSubscriptionTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each subscription",
+		isPrimaryKey: true,
+	},
+	{
+		name: "referenceId",
+		type: "string",
+		description:
+			"The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
+		isUnique: false,
+	},
+	{
+		name: "chargebeeCustomerId",
+		type: "string",
+		description: "The Chargebee customer ID",
+		isOptional: true,
+	},
+	{
+		name: "chargebeeSubscriptionId",
+		type: "string",
+		description: "The Chargebee subscription ID",
+		isOptional: true,
+	},
+	{
+		name: "status",
+		type: "string",
+		description:
+			"The status of the subscription (future, in_trial, active, non_renewing, paused, cancelled, transferred)",
+		defaultValue: "future",
+	},
+	{
+		name: "periodStart",
+		type: "Date",
+		description: "Start date of the current billing period",
+		isOptional: true,
+	},
+	{
+		name: "periodEnd",
+		type: "Date",
+		description: "End date of the current billing period",
+		isOptional: true,
+	},
+	{
+		name: "trialStart",
+		type: "Date",
+		description: "Start date of the trial period",
+		isOptional: true,
+	},
+	{
+		name: "trialEnd",
+		type: "Date",
+		description: "End date of the trial period",
+		isOptional: true,
+	},
+	{
+		name: "canceledAt",
+		type: "Date",
+		description:
+			"If the subscription has been canceled, this is the time when it was canceled",
+		isOptional: true,
+	},
+	{
+		name: "seats",
+		type: "number",
+		description: "Number of seats for team plans",
+		isOptional: true,
+	},
+	{
+		name: "metadata",
+		type: "string",
+		description: "JSON string of additional metadata",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="subscription" fields={chargebeeSubscriptionTableFields} />
 
 ### Subscription Item
 
 Table Name: `subscriptionItem`
 
-<DatabaseTable
-  name="subscriptionItem"
-  fields={[
-{ 
-name: "id", 
-type: "string", 
-description: "Unique identifier",
-isPrimaryKey: true
-},
-{ 
-name: "subscriptionId", 
-type: "string", 
-description: "Foreign key to subscription"
-},
-{ 
-name: "itemPriceId", 
-type: "string", 
-description: "Chargebee item price ID"
-},
-{ 
-name: "itemType", 
-type: "string", 
-description: "Type: plan, addon, or charge"
-},
-{ 
-name: "quantity", 
-type: "number", 
-description: "Quantity of this item"
-},
-{ 
-name: "unitPrice", 
-type: "number", 
-description: "Unit price",
-isOptional: true
-},
-{ 
-name: "amount", 
-type: "number", 
-description: "Total amount for this item",
-isOptional: true
-}
-]}
-/>
+export const chargebeeSubscriptionItemTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier",
+		isPrimaryKey: true,
+	},
+	{
+		name: "subscriptionId",
+		type: "string",
+		description: "Foreign key to subscription",
+	},
+	{
+		name: "itemPriceId",
+		type: "string",
+		description: "Chargebee item price ID",
+	},
+	{
+		name: "itemType",
+		type: "string",
+		description: "Type: plan, addon, or charge",
+	},
+	{
+		name: "quantity",
+		type: "number",
+		description: "Quantity of this item",
+	},
+	{
+		name: "unitPrice",
+		type: "number",
+		description: "Unit price",
+		isOptional: true,
+	},
+	{
+		name: "amount",
+		type: "number",
+		description: "Total amount for this item",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="subscriptionItem" fields={chargebeeSubscriptionItemTableFields} />
 
 ### Customizing the Schema
 
