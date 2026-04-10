@@ -93,10 +93,10 @@ export async function runPluginInit(context: AuthContext) {
 								session.userId,
 							);
 							if (user?.deletedAt) {
-								throw APIError.from("FORBIDDEN", {
-									message: BASE_ERROR_CODES.USER_DELETED,
-									code: "USER_DELETED",
-								});
+								throw APIError.from(
+									"FORBIDDEN",
+									BASE_ERROR_CODES.USER_DELETED,
+								);
 							}
 						},
 					},
