@@ -115,6 +115,38 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 
+	/**
+	 * Cookie integration plugins must be placed **last** in the plugins array.
+	 * When a cookie plugin runs its `after` hooks, it reads the current response
+	 * `Set-Cookie` headers and forwards them to the framework's cookie store
+	 * (Next.js, TanStack Start, SvelteKit, …). Any plugin that runs *after*
+	 * the cookie integration plugin and adds its own cookies will not have
+	 * those cookies forwarded, resulting in silent auth failures (missing
+	 * session, broken 2FA, redirect loops, etc.).
+	 */
+	const COOKIE_INTEGRATION_PLUGIN_IDS = new Set([
+		"next-cookies",
+		"tanstack-start-cookies",
+		"tanstack-start-cookies-solid",
+		"sveltekit-cookies",
+	]);
+
+	if (plugins.length > 1) {
+		const misorderedPlugins = plugins
+			.slice(0, -1)
+			.filter((p) => COOKIE_INTEGRATION_PLUGIN_IDS.has(p.id));
+
+		if (misorderedPlugins.length > 0) {
+			const ids = misorderedPlugins.map((p) => `"${p.id}"`).join(", ");
+			logger.warn(
+				`[better-auth] Misconfiguration detected: cookie integration plugin(s) ${ids} must be placed last in the plugins[] array. ` +
+					`Any plugin that runs after a cookie integration plugin will have its Set-Cookie headers silently dropped by the framework, ` +
+					`which can cause missing sessions, broken 2FA (INVALID_*_COOKIES), null sessions, or redirect loops. ` +
+					`Move the cookie integration plugin to the end of the plugins[] array to fix this.`,
+			);
+		}
+	}
+
 	const isDynamicConfig = isDynamicBaseURLConfig(options.baseURL);
 
 	if (isDynamicBaseURLConfig(options.baseURL)) {

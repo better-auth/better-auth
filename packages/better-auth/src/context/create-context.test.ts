@@ -1922,3 +1922,100 @@ describe("base context creation", () => {
 		});
 	});
 });
+
+describe("cookie integration plugin order guardrail", () => {
+	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
+		const opts: BetterAuthOptions = {
+			baseURL: "http://localhost:3000",
+			...options,
+		};
+		const adapter = await getAdapter(opts);
+		const getDatabaseType = () => "memory";
+		return createAuthContext(adapter, opts, getDatabaseType);
+	};
+
+	it("should warn when a cookie integration plugin is not the last plugin", async () => {
+		const log = vi.fn();
+		await initBase({
+			logger: { level: "warn", log } as any,
+			plugins: [
+				{ id: "next-cookies" },
+				{ id: "some-other-plugin" },
+			],
+		});
+		expect(log).toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining(
+				'cookie integration plugin(s) "next-cookies" must be placed last in the plugins[] array',
+			),
+		);
+	});
+
+	it("should NOT warn when a cookie integration plugin is the last plugin", async () => {
+		const log = vi.fn();
+		await initBase({
+			logger: { level: "warn", log } as any,
+			plugins: [
+				{ id: "some-other-plugin" },
+				{ id: "next-cookies" },
+			],
+		});
+		expect(log).not.toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining("cookie integration plugin"),
+		);
+	});
+
+	it("should NOT warn when there is only one plugin which is a cookie integration plugin", async () => {
+		const log = vi.fn();
+		await initBase({
+			logger: { level: "warn", log } as any,
+			plugins: [{ id: "next-cookies" }],
+		});
+		expect(log).not.toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining("cookie integration plugin"),
+		);
+	});
+
+	it("should warn for all known cookie integration plugin IDs when misplaced", async () => {
+		const cookiePluginIds = [
+			"next-cookies",
+			"tanstack-start-cookies",
+			"tanstack-start-cookies-solid",
+			"sveltekit-cookies",
+		];
+
+		for (const id of cookiePluginIds) {
+			const log = vi.fn();
+			await initBase({
+				logger: { level: "warn", log } as any,
+				plugins: [{ id }, { id: "trailing-plugin" }],
+			});
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(`"${id}"`),
+			);
+		}
+	});
+
+	it("should warn mentioning all misplaced cookie integration plugins", async () => {
+		const log = vi.fn();
+		await initBase({
+			logger: { level: "warn", log } as any,
+			plugins: [
+				{ id: "next-cookies" },
+				{ id: "tanstack-start-cookies" },
+				{ id: "trailing-plugin" },
+			],
+		});
+		expect(log).toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining('"next-cookies"'),
+		);
+		expect(log).toHaveBeenCalledWith(
+			"warn",
+			expect.stringContaining('"tanstack-start-cookies"'),
+		);
+	});
+});
