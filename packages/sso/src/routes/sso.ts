@@ -1948,7 +1948,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 					);
 					throw ctx.redirect(
-						`${redirectUrl}?error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
+						`${redirectUrl}${redirectUrl.includes("?") ? "&" : "?"}error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
 					);
 				}
 				throw error;
