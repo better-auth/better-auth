@@ -303,7 +303,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member;
 		},
-		updateMember: async (memberId: string, role: string) => {
+		updateMember: async (
+			memberId: string,
+			data: { role?: string; active?: boolean },
+		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.update<InferMember<O, false>>({
 				model: "member",
@@ -314,7 +317,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 				update: {
-					role,
+					...(data.role !== undefined ? { role: data.role } : {}),
+					...(data.active !== undefined ? { active: data.active } : {}),
 				},
 			});
 			return member;

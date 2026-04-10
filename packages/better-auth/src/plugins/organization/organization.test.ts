@@ -2527,6 +2527,7 @@ describe("Additional Fields", async () => {
 				id: string;
 				organizationId: string;
 				role: "member" | "admin" | "owner";
+				active: boolean;
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -2773,6 +2774,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			role: "member" | "admin" | "owner";
+			active: boolean;
 			createdAt: Date;
 			userId: string;
 			teamId?: string | undefined;
@@ -2893,6 +2895,7 @@ describe("Additional Fields", async () => {
 				id: string;
 				organizationId: string;
 				role: "member" | "admin" | "owner";
+				active: boolean;
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -3131,6 +3134,7 @@ describe("Additional Fields", async () => {
 				organizationId: string;
 				userId: string;
 				role: string;
+				active: boolean;
 				createdAt: Date;
 				memberRequiredField: string;
 				memberOptionalField?: string | undefined;
