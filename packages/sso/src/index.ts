@@ -31,13 +31,6 @@ export {
 	DEFAULT_MAX_SAML_METADATA_SIZE,
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./constants";
-
-export {
-	type SAMLConditions,
-	type TimestampValidationOptions,
-	validateSAMLTimestamp,
-} from "./routes/sso";
-
 export {
 	type AlgorithmValidationOptions,
 	DataEncryptionAlgorithm,
@@ -46,6 +39,11 @@ export {
 	KeyEncryptionAlgorithm,
 	SignatureAlgorithm,
 } from "./saml";
+export {
+	type SAMLConditions,
+	type TimestampValidationOptions,
+	validateSAMLTimestamp,
+} from "./saml/timestamp";
 
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 import { PACKAGE_VERSION } from "./version";

@@ -24,6 +24,7 @@
     "editor.defaultFormatter": "biomejs.biome"
   },
   "[mdx]": {
-    "editor.defaultFormatter": "unifiedjs.vscode-mdx"
+    "editor.defaultFormatter": "unifiedjs.vscode-mdx",
+    "editor.formatOnSave": false
   }
 }

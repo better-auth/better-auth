@@ -4,38 +4,38 @@ description: LINE provider setup and usage.
 ---
 
 <Steps>
-    <Step>
-        ### Get your LINE credentials
+  <Step>
+    ### Get your LINE credentials
 
-        1. Create a channel in the LINE Developers Console.
-        2. Note your Channel ID (client_id) and Channel secret (client_secret).
-        3. In the channel settings, add your Redirect URI, e.g. `http://localhost:3000/api/auth/callback/line` for local development.
-        4. Enable required scopes (at least `openid`; add `profile`, `email` if you need name, avatar, email).
+    1. Create a channel in the LINE Developers Console.
+    2. Note your Channel ID (client\_id) and Channel secret (client\_secret).
+    3. In the channel settings, add your Redirect URI, e.g. `http://localhost:3000/api/auth/callback/line` for local development.
+    4. Enable required scopes (at least `openid`; add `profile`, `email` if you need name, avatar, email).
 
-        See LINE Login v2.1 reference for details: [`https://developers.line.biz/en/reference/line-login/#issue-access-token`]
-    </Step>
+    See the [LINE Login v2.1 reference](https://developers.line.biz/en/reference/line-login/#issue-access-token) for details.
+  </Step>
 
-    <Step>
-        ### Configure the provider
+  <Step>
+    ### Configure the provider
 
-        Add your LINE credentials to `socialProviders.line` in your auth configuration.
+    Add your LINE credentials to `socialProviders.line` in your auth configuration.
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth";
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
 
-        export const auth = betterAuth({
-          socialProviders: {
-            line: {
-              clientId: process.env.LINE_CLIENT_ID as string,
-              clientSecret: process.env.LINE_CLIENT_SECRET as string,
-              // redirectURI: "https://your.app/api/auth/callback/line", // uncomment to use a custom redirect URI
-              // scope: ["custom"], // uncomment to add additional scopes
-              // disableDefaultScope: true, // uncomment to replace default scopes [`openid`, `profile`, `email`]
-            },
-          },
-        });
-        ```
-    </Step>
+    export const auth = betterAuth({
+      socialProviders: {
+        line: {
+          clientId: process.env.LINE_CLIENT_ID as string,
+          clientSecret: process.env.LINE_CLIENT_SECRET as string,
+          // redirectURI: "https://your.app/api/auth/callback/line", // uncomment to use a custom redirect URI
+          // scope: ["custom"], // uncomment to add additional scopes
+          // disableDefaultScope: true, // uncomment to replace default scopes [`openid`, `profile`, `email`]
+        },
+      },
+    });
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -69,9 +69,9 @@ await authClient.signIn.social({
 
 ### Notes
 
-- Default scopes include `openid profile email`. Adjust as needed via provider options.
-- Verify redirect URI exactly matches the value configured in LINE Developers Console.
-- LINE ID token verification uses the official endpoint and checks audience and optional nonce per spec.
+* Default scopes include `openid profile email`. Adjust as needed via provider options.
+* Verify redirect URI exactly matches the value configured in LINE Developers Console.
+* LINE ID token verification uses the official endpoint and checks audience and optional nonce per spec.
 
 Designing a login button? Follow LINE's button [guidelines](https://developers.line.biz/en/docs/line-login/login-button/).
 
@@ -129,4 +129,3 @@ await authClient.signIn.social({ provider: "line-jp" });
 // Sign in with Thailand channel
 await authClient.signIn.social({ provider: "line-th" });
 ```
-

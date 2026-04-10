@@ -32,7 +32,7 @@ export const auth = betterAuth({
 If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
 
 <Callout type="warn">
-Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
+  Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
 </Callout>
 
 ## `basePath`
@@ -99,29 +99,28 @@ export const auth = betterAuth({
 
 #### Pattern Syntax
 
-| Pattern | Description |
-|---------|-------------|
-| `?` | Matches exactly one character (except `/`) |
-| `*` | Matches zero or more characters that don't cross `/` |
-| `**` | Matches zero or more characters including `/` |
+| Pattern | Description                                          |
+| ------- | ---------------------------------------------------- |
+| `?`     | Matches exactly one character (except `/`)           |
+| `*`     | Matches zero or more characters that don't cross `/` |
+| `**`    | Matches zero or more characters including `/`        |
 
 #### Pattern Examples
 
-| Pattern | Matches | Does Not Match |
-|---------|---------|----------------|
-| `http://*.example.com` | `http://api.example.com`<br/>`http://app.example.com`<br/>`http://api.app.example.com` | `https://api.example.com`<br/>`http://example.com` |
-| `https://**.example.com` | `https://api.example.com`<br/>`https://api.app.example.com` | `http://api.example.com` |
-| `https://example.com` | `https://example.com`<br/>`https://example.com/path` | `https://api.example.com`<br/>`http://example.com` |
-| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br/>`exp://192.168.50.200:19000/auth/callback` | `exp://10.0.0.29:8081/path` |
-| `myapp://` | All URLs starting with `myapp://` | - |
-
+| Pattern                  | Matches                                                                                  | Does Not Match                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `http://*.example.com`   | `http://api.example.com`<br />`http://app.example.com`<br />`http://api.app.example.com` | `https://api.example.com`<br />`http://example.com` |
+| `https://**.example.com` | `https://api.example.com`<br />`https://api.app.example.com`                             | `http://api.example.com`                            |
+| `https://example.com`    | `https://example.com`<br />`https://example.com/path`                                    | `https://api.example.com`<br />`http://example.com` |
+| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br />`exp://192.168.50.200:19000/auth/callback`          | `exp://10.0.0.29:8081/path`                         |
+| `myapp://`               | All URLs starting with `myapp://`                                                        | -                                                   |
 
 <Callout type="info">
-**Notes**
+  **Notes**
 
-- For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
-- For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
-- The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
+  * For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
+  * For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+  * The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
 </Callout>
 
 ## `secret`
@@ -136,8 +135,9 @@ export const auth = betterAuth({
 ```
 
 By default, Better Auth will look for the following environment variables:
-- `process.env.BETTER_AUTH_SECRET`
-- `process.env.AUTH_SECRET`
+
+* `process.env.BETTER_AUTH_SECRET`
+* `process.env.AUTH_SECRET`
 
 If none of these environment variables are set, it will default to `"better-auth-secret-12345678901234567890"`. In production, if it's not set, it will throw an error.
 
@@ -161,9 +161,9 @@ export const auth = betterAuth({
 })
 ```
 
-- The first entry is the **current** key used for all new encryption.
-- Remaining entries are **decryption-only** (previous rotations).
-- Versions are integers. Gaps are allowed (e.g., `1, 3` after revoking version 2).
+* The first entry is the **current** key used for all new encryption.
+* Remaining entries are **decryption-only** (previous rotations).
+* Versions are integers. Gaps are allowed (e.g., `1, 3` after revoking version 2).
 
 You can also set this via the `BETTER_AUTH_SECRETS` environment variable:
 
@@ -227,11 +227,11 @@ export const auth = betterAuth({
 })
 ```
 
-- `sendVerificationEmail`: Function to send verification email
-- `sendOnSignUp`: Send verification email automatically after sign up. `true` always sends, `false` never sends, `undefined` follows `requireEmailVerification` behavior (default: `undefined`)
-- `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
-- `autoSignInAfterVerification`: Auto sign in the user after they verify their email
-- `expiresIn`: Number of seconds the verification token is valid for (default: `3600` seconds)
+* `sendVerificationEmail`: Function to send verification email
+* `sendOnSignUp`: Send verification email automatically after sign up. `true` always sends, `false` never sends, `undefined` follows `requireEmailVerification` behavior (default: `undefined`)
+* `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
+* `autoSignInAfterVerification`: Auto sign in the user after they verify their email
+* `expiresIn`: Number of seconds the verification token is valid for (default: `3600` seconds)
 
 ## `emailAndPassword`
 
@@ -265,19 +265,19 @@ export const auth = betterAuth({
 })
 ```
 
-- `enabled`: Enable email and password authentication (default: `false`)
-- `disableSignUp`: Disable email and password sign up (default: `false`)
-- `requireEmailVerification`: Require email verification before a session can be created
-- `minPasswordLength`: Minimum password length (default: `8`)
-- `maxPasswordLength`: Maximum password length (default: `128`)
-- `autoSignIn`: Automatically sign in the user after sign up
-- `sendResetPassword`: Function to send reset password email
-- `onPasswordReset`: Callback triggered when a user's password is changed successfully
-- `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
-- `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
-- `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
-- `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).
-- `password`: Custom password hashing and verification functions
+* `enabled`: Enable email and password authentication (default: `false`)
+* `disableSignUp`: Disable email and password sign up (default: `false`)
+* `requireEmailVerification`: Require email verification before a session can be created
+* `minPasswordLength`: Minimum password length (default: `8`)
+* `maxPasswordLength`: Maximum password length (default: `128`)
+* `autoSignIn`: Automatically sign in the user after sign up
+* `sendResetPassword`: Function to send reset password email
+* `onPasswordReset`: Callback triggered when a user's password is changed successfully
+* `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
+* `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
+* `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
+* `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).
+* `password`: Custom password hashing and verification functions
 
 ## `socialProviders`
 
@@ -301,23 +301,23 @@ export const auth = betterAuth({
 })
 ```
 
-- `clientId`: OAuth client ID from the provider
-- `clientSecret`: OAuth client secret from the provider
-- `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
-- `redirectURI`: Custom redirect URI for the OAuth callback (optional)
-- `scope`: Additional OAuth scopes to request (optional)
-- `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
-- `disableSignUp`: Disable sign up for new users (optional)
-- `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
-- `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
-- `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
-- `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
-- `getUserInfo`: Custom function to get user info from the provider (optional)
-- `refreshAccessToken`: Custom function to refresh a token (optional)
-- `verifyIdToken`: Custom function to verify the ID token (optional)
-- `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
-- `disableDefaultScope`: Disable the provider's default scopes (optional)
-- `authorizationEndpoint`: Custom authorization endpoint URL (optional)
+* `clientId`: OAuth client ID from the provider
+* `clientSecret`: OAuth client secret from the provider
+* `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
+* `redirectURI`: Custom redirect URI for the OAuth callback (optional)
+* `scope`: Additional OAuth scopes to request (optional)
+* `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
+* `disableSignUp`: Disable sign up for new users (optional)
+* `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
+* `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+* `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
+* `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
+* `getUserInfo`: Custom function to get user info from the provider (optional)
+* `refreshAccessToken`: Custom function to refresh a token (optional)
+* `verifyIdToken`: Custom function to verify the ID token (optional)
+* `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
+* `disableDefaultScope`: Disable the provider's default scopes (optional)
+* `authorizationEndpoint`: Custom authorization endpoint URL (optional)
 
 ## `plugins`
 
@@ -379,11 +379,11 @@ export const auth = betterAuth({
 })
 ```
 
-- `modelName`: The model name for the user (default: `"user"`)
-- `fields`: Map fields to different column names
-- `additionalFields`: Additional fields for the user table
-- `changeEmail`: Configuration for changing email
-- `deleteUser`: Configuration for user deletion
+* `modelName`: The model name for the user (default: `"user"`)
+* `fields`: Map fields to different column names
+* `additionalFields`: Additional fields for the user table
+* `changeEmail`: Configuration for changing email
+* `deleteUser`: Configuration for user deletion
 
 ## `session`
 
@@ -415,14 +415,14 @@ export const auth = betterAuth({
 })
 ```
 
-- `modelName`: The model name for the session (default: `"session"`)
-- `fields`: Map fields to different column names
-- `expiresIn`: Expiration time for the session token in seconds (default: `604800` - 7 days)
-- `updateAge`: How often the session should be refreshed in seconds (default: `86400` - 1 day)
-- `additionalFields`: Additional fields for the session table
-- `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
-- `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
-- `cookieCache`: Enable caching session in cookie
+* `modelName`: The model name for the session (default: `"session"`)
+* `fields`: Map fields to different column names
+* `expiresIn`: Expiration time for the session token in seconds (default: `604800` - 7 days)
+* `updateAge`: How often the session should be refreshed in seconds (default: `86400` - 1 day)
+* `additionalFields`: Additional fields for the session table
+* `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
+* `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
+* `cookieCache`: Enable caching session in cookie
 
 ## `account`
 
@@ -447,8 +447,8 @@ export const auth = betterAuth({
 })
 ```
 
-- `modelName`: The model name for the account
-- `fields`: Map fields to different column names
+* `modelName`: The model name for the account
+* `fields`: Map fields to different column names
 
 ### `encryptOAuthTokens`
 
@@ -463,8 +463,8 @@ will be updated on sign in with the latest data from the provider.
 
 Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
 
-- Default: `false`
-- Automatically set to `true` if no database is provided
+* Default: `false`
+* Automatically set to `true` if no database is provided
 
 When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
 
@@ -481,10 +481,10 @@ const hook = createAuthMiddleware(async (ctx) => {
 
 Configuration for account linking.
 
-- `enabled`: Enable account linking (default: `true`)
-- `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
-- `allowDifferentEmails`: Allow users to link accounts with different email addresses
-- `allowUnlinkingAll`: Allow users to unlink all accounts
+* `enabled`: Enable account linking (default: `true`)
+* `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
+* `allowDifferentEmails`: Allow users to link accounts with different email addresses
+* `allowUnlinkingAll`: Allow users to unlink all accounts
 
 ## `verification`
 
@@ -504,11 +504,11 @@ export const auth = betterAuth({
 })
 ```
 
-- `modelName`: The model name for the verification table
-- `fields`: Map fields to different column names
-- `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
-- `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
-- `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
+* `modelName`: The model name for the verification table
+* `fields`: Map fields to different column names
+* `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
+* `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
+* `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
 
 If `secondaryStorage` is configured, verification records are stored there by default. That behavior applies to flows that use Better Auth's shared verification layer, including OTP and magic-link style flows.
 
@@ -535,13 +535,12 @@ export const auth = betterAuth({
 })
 ```
 
-- `enabled`: Enable rate limiting (defaults: `true` in production, `false` in development)
-- `window`: Time window to use for rate limiting. The value should be in seconds. (default: `10`)
-- `max`: The default maximum number of requests allowed within the window. (default: `100`)
-- `customRules`: Custom rate limit rules to apply to specific paths.
-- `storage`: Storage configuration. If you passed a secondary storage, rate limiting will be stored in the secondary storage. (options: `"memory", "database", "secondary-storage"`, default: `"memory"`)
-- `modelName`: The name of the table to use for rate limiting if database is used as storage. (default: `"rateLimit"`)
-
+* `enabled`: Enable rate limiting (defaults: `true` in production, `false` in development)
+* `window`: Time window to use for rate limiting. The value should be in seconds. (default: `10`)
+* `max`: The default maximum number of requests allowed within the window. (default: `100`)
+* `customRules`: Custom rate limit rules to apply to specific paths.
+* `storage`: Storage configuration. If you passed a secondary storage, rate limiting will be stored in the secondary storage. (options: `"memory", "database", "secondary-storage"`, default: `"memory"`)
+* `modelName`: The name of the table to use for rate limiting if database is used as storage. (default: `"rateLimit"`)
 
 ## `advanced`
 
@@ -600,18 +599,18 @@ export const auth = betterAuth({
 })
 ```
 
-- `ipAddress`: IP address configuration for rate limiting and session tracking
-- `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
-- `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
-- `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
-- `crossSubDomainCookies`: Configure cookies to be shared across subdomains
-- `cookies`: Customize cookie names and attributes
-- `defaultCookieAttributes`: Default attributes for all cookies
-- `cookiePrefix`: Prefix for cookies
-- `database`: Database configuration options
-- `backgroundTasks`: Configure background task handling for deferred operations
-- `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
-- OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+* `ipAddress`: IP address configuration for rate limiting and session tracking
+* `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
+* `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
+* `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
+* `crossSubDomainCookies`: Configure cookies to be shared across subdomains
+* `cookies`: Customize cookie names and attributes
+* `defaultCookieAttributes`: Default attributes for all cookies
+* `cookiePrefix`: Prefix for cookies
+* `database`: Database configuration options
+* `backgroundTasks`: Configure background task handling for deferred operations
+* `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
+* OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 ### `backgroundTasks`
 
@@ -638,6 +637,7 @@ Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitU
     });
     ```
   </Tab>
+
   <Tab value="Cloudflare Workers">
     ```ts
     import { betterAuth } from "better-auth";
@@ -679,17 +679,17 @@ export const auth = betterAuth({
 
 The logger configuration allows you to customize how Better Auth handles logging. It supports the following options:
 
-- `disabled`: Disable all logging when set to `true` (default: `false`)
-- `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
-- `level`: Set the minimum log level to display (default: `"warn"`)
-  - `"debug"`: Show all logs including debug information
-  - `"info"`: Show all logs except debug information
-  - `"warn"`: Show warnings and errors
-  - `"error"`: Show only errors
-- `log`: Custom logging function that receives:
-  - `level`: The log level
-  - `message`: The log message
-  - `...args`: Additional arguments passed to the logger
+* `disabled`: Disable all logging when set to `true` (default: `false`)
+* `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
+* `level`: Set the minimum log level to display (default: `"warn"`)
+  * `"debug"`: Show all logs including debug information
+  * `"info"`: Show all logs except debug information
+  * `"warn"`: Show warnings and errors
+  * `"error"`: Show only errors
+* `log`: Custom logging function that receives:
+  * `level`: The log level
+  * `message`: The log message
+  * `...args`: Additional arguments passed to the logger
 
 Example with custom logging:
 
@@ -802,37 +802,37 @@ export const auth = betterAuth({
 })
 ```
 
-- `throw`: Throw an error on API error (default: `false`)
-- `onError`: Custom error handler
-- `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
-- `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/api/auth/error` to see the error page.
-  - `colors`: Customize color scheme for the error page
-    - `background`: Background color
-    - `foreground`: Foreground/text color
-    - `primary`: Primary accent color
-    - `primaryForeground`: Text color on primary background
-    - `mutedForeground`: Muted text color
-    - `border`: Border color
-    - `destructive`: Error/destructive color
-    - `titleBorder`: Border color for the title
-    - `titleColor`: Title text color
-    - `gridColor`: Background grid color
-    - `cardBackground`: Card background color
-    - `cornerBorder`: Corner decoration border color
-  - `size`: Customize sizing and spacing
-    - `radiusSm`: Small border radius
-    - `radiusMd`: Medium border radius
-    - `radiusLg`: Large border radius
-    - `textSm`: Small text size
-    - `text2xl`: 2xl text size
-    - `text4xl`: 4xl text size
-    - `text6xl`: 6xl text size
-  - `font`: Customize font families
-    - `defaultFamily`: Default font family
-    - `monoFamily`: Monospace font family
-  - `disableTitleBorder`: Disable the border around the title (default: `false`)
-  - `disableCornerDecorations`: Disable corner decorations (default: `false`)
-  - `disableBackgroundGrid`: Disable the background grid pattern (default: `false`)
+* `throw`: Throw an error on API error (default: `false`)
+* `onError`: Custom error handler
+* `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
+* `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/api/auth/error` to see the error page.
+  * `colors`: Customize color scheme for the error page
+    * `background`: Background color
+    * `foreground`: Foreground/text color
+    * `primary`: Primary accent color
+    * `primaryForeground`: Text color on primary background
+    * `mutedForeground`: Muted text color
+    * `border`: Border color
+    * `destructive`: Error/destructive color
+    * `titleBorder`: Border color for the title
+    * `titleColor`: Title text color
+    * `gridColor`: Background grid color
+    * `cardBackground`: Card background color
+    * `cornerBorder`: Corner decoration border color
+  * `size`: Customize sizing and spacing
+    * `radiusSm`: Small border radius
+    * `radiusMd`: Medium border radius
+    * `radiusLg`: Large border radius
+    * `textSm`: Small text size
+    * `text2xl`: 2xl text size
+    * `text4xl`: 4xl text size
+    * `text6xl`: 6xl text size
+  * `font`: Customize font families
+    * `defaultFamily`: Default font family
+    * `monoFamily`: Monospace font family
+  * `disableTitleBorder`: Disable the border around the title (default: `false`)
+  * `disableCornerDecorations`: Disable corner decorations (default: `false`)
+  * `disableBackgroundGrid`: Disable the background grid pattern (default: `false`)
 
 ## `hooks`
 
