@@ -1,4 +1,5 @@
 import { trace } from "@opentelemetry/api";
+import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import {
 	InMemorySpanExporter,
 	SimpleSpanProcessor,
@@ -16,9 +17,29 @@ import {
 import { withSpan } from ".";
 import { ATTR_DB_COLLECTION_NAME, ATTR_DB_OPERATION_NAME } from "./attributes";
 
+const spanWaitDefaults = { timeout: 10_000, interval: 5 } as const;
+
 describe("instrumentation", () => {
 	let provider: NodeTracerProvider;
 	let exporter: InMemorySpanExporter;
+
+	async function waitForSpan(
+		predicate: (s: ReadableSpan) => boolean,
+	): Promise<ReadableSpan> {
+		return vi.waitUntil(
+			() => exporter.getFinishedSpans().find(predicate),
+			spanWaitDefaults,
+		);
+	}
+
+	async function waitForFinishedSpanCount(
+		count: number,
+	): Promise<ReadableSpan[]> {
+		return vi.waitUntil(() => {
+			const spans = exporter.getFinishedSpans();
+			return spans.length === count ? spans : undefined;
+		}, spanWaitDefaults);
+	}
 
 	beforeAll(async () => {
 		exporter = new InMemorySpanExporter();
@@ -37,7 +58,7 @@ describe("instrumentation", () => {
 		vi.resetAllMocks();
 	});
 
-	it("creates a span with name and attributes for sync function", () => {
+	it("creates a span with name and attributes for sync function", async () => {
 		const result = withSpan(
 			"test.sync",
 			{
@@ -49,10 +70,8 @@ describe("instrumentation", () => {
 
 		expect(result).toBe(42);
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-		expect(spans[0]?.name).toBe("test.sync");
-		expect(spans[0]?.attributes).toMatchObject({
+		const span = await waitForSpan((s) => s.name === "test.sync");
+		expect(span.attributes).toMatchObject({
 			[ATTR_DB_OPERATION_NAME]: "findOne",
 			[ATTR_DB_COLLECTION_NAME]: "user",
 		});
@@ -70,13 +89,11 @@ describe("instrumentation", () => {
 
 		expect(result).toBe("session-id");
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-		expect(spans[0]?.name).toBe("test.async");
-		expect(spans[0]?.attributes).toMatchObject({ endpoint: "getSession" });
+		const span = await waitForSpan((s) => s.name === "test.async");
+		expect(span.attributes).toMatchObject({ endpoint: "getSession" });
 	});
 
-	it("records error status and exception when sync function throws", () => {
+	it("records error status and exception when sync function throws", async () => {
 		const err = new Error("sync failure");
 
 		expect(() =>
@@ -85,10 +102,8 @@ describe("instrumentation", () => {
 			}),
 		).toThrow("sync failure");
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-		expect(spans[0]?.name).toBe("test.sync.error");
-		expect(spans[0]?.status).toMatchObject({
+		const span = await waitForSpan((s) => s.name === "test.sync.error");
+		expect(span.status).toMatchObject({
 			code: 2,
 			message: "sync failure",
 		});
@@ -104,49 +119,42 @@ describe("instrumentation", () => {
 			}),
 		).rejects.toThrow("async failure");
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-		expect(spans[0]?.name).toBe("test.async.error");
-		expect(spans[0]?.status).toMatchObject({
+		const span = await waitForSpan((s) => s.name === "test.async.error");
+		expect(span.status).toMatchObject({
 			code: 2,
 			message: "async failure",
 		});
 	});
 
-	it("creates multiple sequential spans", () => {
+	it("creates multiple sequential spans", async () => {
 		void withSpan("first", { order: 1 }, () => 1);
 		void withSpan("second", { order: 2 }, () => 2);
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(2);
+		const spans = await waitForFinishedSpanCount(2);
 		expect(spans.map((s) => s.name)).toEqual(
 			expect.arrayContaining(["first", "second"]),
 		);
 	});
 
-	it("creates nested spans when withSpan is composed", () => {
+	it("creates nested spans when withSpan is composed", async () => {
 		const result = withSpan("outer", { depth: 0 }, () => {
 			return withSpan("inner", { depth: 1 }, () => "ok");
 		});
 
 		expect(result).toBe("ok");
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(2);
+		const spans = await waitForFinishedSpanCount(2);
 		expect(spans.map((s) => s.name).sort()).toEqual(["inner", "outer"]);
 	});
 
-	it("uses better-auth instrumentation scope", () => {
+	it("uses better-auth instrumentation scope", async () => {
 		void withSpan("scope.check", {}, () => undefined);
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-
-		const span = spans[0];
-		expect(span?.instrumentationLibrary?.name).toBe("better-auth");
+		const span = await waitForSpan((s) => s.name === "scope.check");
+		expect(span.instrumentationLibrary?.name).toBe("better-auth");
 	});
 
-	it("does not record error status for redirect APIErrors (sync)", () => {
+	it("does not record error status for redirect APIErrors (sync)", async () => {
 		const redirectError = Object.assign(new Error("Found"), {
 			name: "APIError",
 			statusCode: 302,
@@ -158,10 +166,9 @@ describe("instrumentation", () => {
 			}),
 		).toThrow();
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-		expect(spans[0]?.status.code).toBe(1); // SpanStatusCode.OK
-		expect(spans[0]?.attributes["http.response.status_code"]).toBe(302);
+		const span = await waitForSpan((s) => s.name === "test.redirect.sync");
+		expect(span.status.code).toBe(1); // SpanStatusCode.OK
+		expect(span.attributes["http.response.status_code"]).toBe(302);
 	});
 
 	it("does not record error status for redirect APIErrors (async)", async () => {
@@ -176,13 +183,12 @@ describe("instrumentation", () => {
 			}),
 		).rejects.toThrow();
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-		expect(spans[0]?.status.code).toBe(1); // SpanStatusCode.OK
-		expect(spans[0]?.attributes["http.response.status_code"]).toBe(302);
+		const span = await waitForSpan((s) => s.name === "test.redirect.async");
+		expect(span.status.code).toBe(1); // SpanStatusCode.OK
+		expect(span.attributes["http.response.status_code"]).toBe(302);
 	});
 
-	it("still records error status for non-redirect APIErrors", () => {
+	it("still records error status for non-redirect APIErrors", async () => {
 		const apiError = Object.assign(new Error("Not Found"), {
 			name: "APIError",
 			statusCode: 404,
@@ -194,9 +200,8 @@ describe("instrumentation", () => {
 			}),
 		).toThrow();
 
-		const spans = exporter.getFinishedSpans();
-		expect(spans).toHaveLength(1);
-		expect(spans[0]?.status.code).toBe(2); // SpanStatusCode.ERROR
+		const span = await waitForSpan((s) => s.name === "test.apierror.404");
+		expect(span.status.code).toBe(2); // SpanStatusCode.ERROR
 	});
 
 	it("withSpan runs without throwing when the package fails to load", async () => {
