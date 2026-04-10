@@ -221,8 +221,9 @@ function createRewriteImportPathsPlugin(matchers: PathsMatcher[]) {
 				ExportAllDeclaration(p: BabelNodePath<{ source: StringLiteralNode }>) {
 					rewrite(p.node.source);
 				},
-				ImportExpression(p: BabelNodePath<{ source: StringLiteralNode }>) {
-					rewrite(p.node.source);
+				ImportExpression(p: BabelNodePath<{ source: unknown }>) {
+					// Only string literal sources can be statically rewritten.
+					if (t.isStringLiteral(p.node.source)) rewrite(p.node.source);
 				},
 				CallExpression(
 					p: BabelNodePath<{
