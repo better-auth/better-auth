@@ -132,12 +132,12 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	]);
 
 	if (plugins.length > 1) {
-		const misorderedPlugins = plugins
+		const outOfOrderPlugins = plugins
 			.slice(0, -1)
 			.filter((p) => COOKIE_INTEGRATION_PLUGIN_IDS.has(p.id));
 
-		if (misorderedPlugins.length > 0) {
-			const ids = misorderedPlugins.map((p) => `"${p.id}"`).join(", ");
+		if (outOfOrderPlugins.length > 0) {
+			const ids = outOfOrderPlugins.map((p) => `"${p.id}"`).join(", ");
 			logger.warn(
 				`[better-auth] Misconfiguration detected: cookie integration plugin(s) ${ids} must be placed last in the plugins[] array. ` +
 					`Any plugin that runs after a cookie integration plugin will have its Set-Cookie headers silently dropped by the framework, ` +
