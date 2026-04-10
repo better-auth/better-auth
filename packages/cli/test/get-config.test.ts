@@ -760,6 +760,42 @@ describe("getConfig", async () => {
 		});
 	});
 
+	it("should resolve $app/environment and $app/server imports in SvelteKit projects", async () => {
+		const authPath = path.join(tmpDir, "src");
+		await fs.mkdir(authPath, { recursive: true });
+
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-sveltekit",
+				devDependencies: { "@sveltejs/kit": "^2.0.0" },
+			}),
+		);
+
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+			 import { building } from "$app/environment";
+			 import { getRequestEvent } from "$app/server";
+
+			 export const auth = betterAuth({
+					appName: String(building),
+					emailAndPassword: { enabled: true },
+			 })`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "src/auth.ts",
+			shouldThrowOnError: true,
+		});
+
+		expect(config).toMatchObject({
+			appName: "false",
+			emailAndPassword: { enabled: true },
+		});
+	});
+
 	it("should resolve export default auth", async () => {
 		const authPath = path.join(tmpDir, "server", "auth");
 		await fs.mkdir(authPath, { recursive: true });
