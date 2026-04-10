@@ -49,8 +49,7 @@ const ssoConfig = {
       // SP Configuration
       issuer: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
       entryPoint: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml",
-      callbackUrl: "/dashboard", // Redirect after successful authentication
-      
+      callbackUrl: "http://localhost:3000/dashboard",
       // IdP Configuration
       idpMetadata: {
         entityID: "https://trial-1076874.okta.com/app/exktofb0a62hqLAUL697/sso/saml/metadata",
@@ -157,7 +156,7 @@ await authClient.signIn.sso({
 * Never use these certificates in production
 * The example uses `localhost:3000` - adjust URLs for your environment
 * For production, always use proper IdP providers like Okta, Azure AD, or OneLogin
-* The `callbackUrl` in your SAML config should point to your app's destination (e.g., `/dashboard`), not the callback route itself
+* Set `callbackUrl` in your SAML config to your app's post-login page (e.g., `/dashboard`). For SP-initiated flows, the `callbackURL` in `signIn.sso()` takes priority
 
 ### Step 5: Dynamically Registering SAML Providers
 

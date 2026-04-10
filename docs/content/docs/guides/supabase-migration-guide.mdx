@@ -1103,10 +1103,11 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
     List and export your existing SSO providers from Supabase using the CLI:
 
     ```bash title="Terminal"
-    # List all SSO providers
+    # List all SSO providers (note: this does NOT include metadata XML)
     supabase sso list --project-ref <your-project-ref>
 
-    # Export each provider's details to a JSON file
+    # Export each provider's full details (including metadata XML) to a JSON file
+    # You MUST use `sso show`, not `sso list`, to get the metadata_xml field
     supabase sso show <provider-id> --project-ref <your-project-ref> -o json > sso-provider.json
     ```
 
@@ -1118,6 +1119,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
       "saml": {
         "entity_id": "https://idp.example.com/saml",
         "metadata_url": "https://idp.example.com/saml/metadata",
+        "metadata_xml": "<md:EntityDescriptor xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\" entityID=\"https://idp.example.com/saml\">...</md:EntityDescriptor>",
         "attribute_mapping": {
           "keys": {
             "email": { "name": "mail" },
@@ -1154,11 +1156,16 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
         metadata_url?: string;
         metadata_xml?: string;
         attribute_mapping?: {
-          keys: Record<string, { name: string }>;
+          keys: Record<string, {
+            name?: string;
+            names?: string[];
+            default?: unknown;
+            array?: boolean;
+          }>;
         };
         name_id_format?: string;
       };
-      domains: Array<{ id: string; domain: string }>;
+      domains: Array<{ id?: string; domain: string }>;
     };
 
     type SSOProviderInsertData = {
@@ -1204,23 +1211,41 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
         // Combine all domains into a comma-separated string
         const domains = provider.domains.map(d => d.domain).join(',');
         
-        // Transform Supabase attribute mapping to Better Auth format
+        // Transform Supabase attribute mapping to Better Auth format.
+        // Supabase supports both { name: "attr" } and { names: ["attr1", "attr2"] };
+        // Better Auth only uses a single attribute name, so take the first match.
         const mapping = provider.saml.attribute_mapping?.keys || {};
+        const attrName = (key: string) => mapping[key]?.name || mapping[key]?.names?.[0];
         
+        // If Supabase provided a metadata URL, fetch the XML first.
+        // Better Auth requires inline metadata XML, not a URL.
+        let idpMetadataXml = provider.saml.metadata_xml;
+        if (!idpMetadataXml && provider.saml.metadata_url) {
+          const res = await fetch(provider.saml.metadata_url);
+          if (!res.ok) {
+            console.error(`[SSO] Failed to fetch IdP metadata from ${provider.saml.metadata_url}`);
+            continue;
+          }
+          idpMetadataXml = await res.text();
+        }
+
+        if (!idpMetadataXml) {
+          console.error(`[SSO] No IdP metadata available for provider ${providerId}`);
+          continue;
+        }
+
         const samlConfig = {
           issuer: provider.saml.entity_id,
-          // These will be auto-populated from metadata
           entryPoint: '',
           cert: '',
-          // Callback URL for SAML responses
-          callbackUrl: `${betterAuthUrl}/api/auth/sso/saml2/callback/${providerId}`,
-          // IdP metadata - Better Auth will fetch and parse this
-          idpMetadata: provider.saml.metadata_url 
-            ? { metadataUrl: provider.saml.metadata_url }
-            : { metadata: provider.saml.metadata_xml },
-          // SP metadata configuration
+          // Inline IdP metadata XML (required).
+          // When metadata is present, entryPoint/cert are ignored;
+          // samlify extracts them from the XML.
+          idpMetadata: {
+            metadata: idpMetadataXml,
+          },
           spMetadata: {
-            entityID: `${betterAuthUrl}/api/auth/sso/saml2/sp/metadata`,
+            entityID: `${betterAuthUrl}/api/auth/sso/saml2/sp/metadata?providerId=${providerId}`,
           },
           // Name ID format from Supabase config
           identifierFormat: provider.saml.name_id_format || 
@@ -1228,10 +1253,10 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
           // Map Supabase attribute names to Better Auth fields
           mapping: {
             id: 'nameID',
-            email: mapping.email?.name || 'email',
-            name: mapping.name?.name || 'displayName',
-            firstName: mapping.first_name?.name || 'givenName',
-            lastName: mapping.last_name?.name || 'surname',
+            email: attrName('email') || 'email',
+            name: attrName('name') || 'displayName',
+            firstName: attrName('first_name') || 'givenName',
+            lastName: attrName('last_name') || 'surname',
           },
         };
 
@@ -1359,7 +1384,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
 
     | Setting              | Old Value (Supabase)                                      | New Value (Better Auth)                                                      |
     | -------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
-    | ACS URL / Reply URL  | `https://<project>.supabase.co/auth/v1/sso/saml/acs`      | `https://yourapp.com/api/auth/sso/saml2/callback/<providerId>`               |
+    | ACS URL / Reply URL  | `https://<project>.supabase.co/auth/v1/sso/saml/acs`      | `https://yourapp.com/api/auth/sso/saml2/sp/acs/<providerId>`                 |
     | Entity ID / Audience | `https://<project>.supabase.co/auth/v1/sso/saml/metadata` | `https://yourapp.com/api/auth/sso/saml2/sp/metadata?providerId=<providerId>` |
 
     Replace `<providerId>` with your migrated provider ID (e.g., `sso-550e8400-e29b-41d4-a716-446655440000`).
