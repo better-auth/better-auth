@@ -41,12 +41,19 @@ class NoopOpenTelemetryAPI {
 	readonly trace = new NoopTraceAPI();
 }
 
-function createNoopOpenTelemetryApi(): OpenTelemetryAPI {
-	return new NoopOpenTelemetryAPI() as OpenTelemetryAPI;
-}
+const noopOpenTelemetryAPI = new NoopOpenTelemetryAPI() as OpenTelemetryAPI;
 
-export const { trace, SpanStatusCode }: OpenTelemetryAPI = await import(
-	"@opentelemetry/api"
-)
-	.then((mod) => mod as OpenTelemetryAPI)
-	.catch(() => createNoopOpenTelemetryApi());
+let openTelemetryAPIPromise: Promise<void> | undefined;
+let openTelemetryAPI: OpenTelemetryAPI | undefined;
+
+export function getOpenTelemetryAPI(): OpenTelemetryAPI {
+	if (!openTelemetryAPIPromise) {
+		openTelemetryAPIPromise = import("@opentelemetry/api")
+			.then((mod) => {
+				openTelemetryAPI = mod;
+			})
+			.catch(() => /* ignore failures */ undefined);
+	}
+
+	return openTelemetryAPI ?? noopOpenTelemetryAPI;
+}
