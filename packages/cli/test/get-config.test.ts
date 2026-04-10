@@ -1190,3 +1190,375 @@ describe("getConfig", async () => {
 		});
 	});
 });
+
+/**
+ * Regression suite for user-reported `compilerOptions.paths` scenarios. Tests
+ * use the `tmpdirTest` fixture for isolation and `shouldThrowOnError: true`
+ * so resolution failures surface as real assertion failures. Poisoned modules
+ * placed at wrong paths catch silently-incorrect rewrites.
+ */
+describe("tsconfig paths resolution (user-reported scenarios)", () => {
+	async function writeTree(
+		root: string,
+		files: Record<string, string>,
+	): Promise<void> {
+		for (const [relPath, content] of Object.entries(files)) {
+			const abs = path.join(root, relPath);
+			await fs.mkdir(path.dirname(abs), { recursive: true });
+			await fs.writeFile(abs, content);
+		}
+	}
+
+	/**
+	 * SvelteKit extending `.svelte-kit/tsconfig.json`, with both default and
+	 * namespace imports against `$lib`.
+	 * @see https://github.com/better-auth/better-auth/issues/8933
+	 */
+	tmpdirTest(
+		"resolves $lib imports in an extends setup with default and namespace forms",
+		async ({ tmpdir, expect }) => {
+			const projectRoot = path.join(tmpdir, "my-app");
+			await writeTree(tmpdir, {
+				// Poisoned modules one level above the project root.
+				"src/lib/server/db.ts": `throw new Error("wrong path: $lib resolved to tmpdir parent");`,
+				"src/lib/server/db/schema.ts": `throw new Error("wrong path: $lib/server/db/schema resolved to tmpdir parent");`,
+
+				"my-app/.svelte-kit/tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"$lib": ["../src/lib"],
+							"$lib/*": ["../src/lib/*"]
+						}
+					}
+				}`,
+				"my-app/tsconfig.json": `{
+					"extends": "./.svelte-kit/tsconfig.json"
+				}`,
+				"my-app/src/lib/server/db.ts": `export const db = "my-app-db";`,
+				"my-app/src/lib/server/db/schema.ts": `export const usersTable = "my-app-users";`,
+				"my-app/src/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { db } from "$lib/server/db";
+					import * as schema from "$lib/server/db/schema";
+					const [version] = Object.values(schema);
+					export const auth = betterAuth({
+						appName: db + ":" + version,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: projectRoot,
+				configPath: "src/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "my-app-db:my-app-users",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * SvelteKit nested in a monorepo subdirectory with no tsconfig at the
+	 * repo root.
+	 * @see https://github.com/better-auth/better-auth/issues/8933#issuecomment-4189080622
+	 */
+	tmpdirTest(
+		"resolves $lib imports when SvelteKit lives in a monorepo subdirectory",
+		async ({ tmpdir, expect }) => {
+			const websiteRoot = path.join(tmpdir, "mc-id", "website");
+			await writeTree(tmpdir, {
+				"mc-id/src/lib/server/email-service.ts": `throw new Error("wrong path: $lib resolved to monorepo root");`,
+
+				"mc-id/website/.svelte-kit/tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"$lib": ["../src/lib"],
+							"$lib/*": ["../src/lib/*"]
+						}
+					}
+				}`,
+				"mc-id/website/tsconfig.json": `{
+					"extends": "./.svelte-kit/tsconfig.json"
+				}`,
+				"mc-id/website/src/lib/server/email-service.ts": `export const service = "website-email-service";`,
+				"mc-id/website/src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { service } from "$lib/server/email-service";
+					export const auth = betterAuth({
+						appName: service,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: websiteRoot,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "website-email-service",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * Alias key with a trailing `*` mapped to a substitution template with a
+	 * mid-path `*`, resolving across multiple sibling packages.
+	 * @see https://github.com/better-auth/better-auth/pull/9020
+	 */
+	tmpdirTest(
+		"resolves mid-path wildcard substitutions across multiple sibling packages",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"@web/*": ["./libs/web/*/src/index.ts"]
+						}
+					}
+				}`,
+				"libs/web/ui-kit/src/index.ts": `export const name = "ui-kit";`,
+				"libs/web/data-sdk/src/index.ts": `export const name = "data-sdk";`,
+				"libs/web/auth-sdk/src/index.ts": `export const name = "auth-sdk";`,
+				// Sibling without src/index.ts — must not resolve to a candidate.
+				"libs/web/legacy/README.md": `not a package`,
+				"apps/web/src/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { name as uiKit } from "@web/ui-kit";
+					import { name as dataSdk } from "@web/data-sdk";
+					import { name as authSdk } from "@web/auth-sdk";
+					export const auth = betterAuth({
+						appName: [uiKit, dataSdk, authSdk].join(","),
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "apps/web/src/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ui-kit,data-sdk,auth-sdk",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * `*` must capture strings containing `/` (TypeScript canonical behavior).
+	 * @see https://github.com/microsoft/TypeScript/blob/main/src/compiler/moduleNameResolver.ts
+	 */
+	tmpdirTest(
+		"captures multi-segment star when the import specifier spans `/`",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"@scope/*": ["./packages/*/src/index.ts"]
+						}
+					}
+				}`,
+				"packages/feature/nested/src/index.ts": `export const name = "nested-feature";`,
+				"src/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { name } from "@scope/feature/nested";
+					export const auth = betterAuth({
+						appName: name,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "nested-feature",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * When multiple substitutions exist and all resolve, the first declared
+	 * one wins. Both candidate files exist so ordering is the only signal.
+	 */
+	tmpdirTest(
+		"picks the first substitution candidate in declaration order when multiple exist",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"@db": [
+								"./primary/db.ts",
+								"./secondary/db.ts"
+							]
+						}
+					}
+				}`,
+				"primary/db.ts": `export const db = "primary";`,
+				"secondary/db.ts": `export const db = "secondary";`,
+				"src/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { db } from "@db";
+					export const auth = betterAuth({
+						appName: db,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "primary",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/** Falls through to the next substitution when the first does not exist. */
+	tmpdirTest(
+		"falls through to the next substitution when the first does not exist on disk",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"@db": [
+								"./missing/primary/db.ts",
+								"./fallback/secondary/db.ts"
+							]
+						}
+					}
+				}`,
+				"fallback/secondary/db.ts": `export const db = "secondary-fallback";`,
+				"src/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { db } from "@db";
+					export const auth = betterAuth({
+						appName: db,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "secondary-fallback",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * Covers static `import`, `export * from`, and dynamic `import()` across
+	 * the same mid-path wildcard alias.
+	 */
+	tmpdirTest(
+		"rewrites aliased specifiers across import, re-export, and dynamic import AST nodes",
+		async ({ tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"@pkg/*": ["./packages/*/src/index.ts"]
+						}
+					}
+				}`,
+				"packages/primary/src/index.ts": `export const primary = "primary-value";`,
+				"packages/secondary/src/index.ts": `export const secondary = "secondary-value";`,
+				"packages/barrel/src/index.ts": `export * from "@pkg/primary";`,
+				"src/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { primary } from "@pkg/barrel";
+					const mod = await import("@pkg/secondary");
+					export const auth = betterAuth({
+						appName: primary + "/" + mod.secondary,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "primary-value/secondary-value",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/** Source files with modern ESM/CJS/TS extensions must all be resolvable. */
+	tmpdirTest.for([
+		{ ext: ".ts", body: `export const value = "ts";` },
+		{ ext: ".tsx", body: `export const value = "tsx";` },
+		{ ext: ".mts", body: `export const value = "mts";` },
+		{ ext: ".cts", body: `export const value = "cts";` },
+		{ ext: ".js", body: `export const value = "js";` },
+		{ ext: ".jsx", body: `export const value = "jsx";` },
+		{ ext: ".mjs", body: `export const value = "mjs";` },
+		{ ext: ".cjs", body: `module.exports = { value: "cjs" };` },
+	])(
+		"resolves aliased files ending in $ext",
+		async ({ ext, body }, { tmpdir, expect }) => {
+			await writeTree(tmpdir, {
+				"tsconfig.json": `{
+					"compilerOptions": {
+						"paths": {
+							"@lib": ["./src/lib"]
+						}
+					}
+				}`,
+				[`src/lib${ext}`]: body,
+				"src/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { value } from "@lib";
+					export const auth = betterAuth({
+						appName: value,
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: ext.slice(1),
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+});
