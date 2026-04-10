@@ -4600,11 +4600,10 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			),
 		);
 
-		// Both endpoints throw APIError for structural SAMLResponse issues
-		// (multiple assertions, no assertions, XSW injection)
-		expect(response.status).toBe(400);
-		const body = await response.json();
-		expect(body.code).toBe("SAML_MULTIPLE_ASSERTIONS");
+		// ACS endpoint translates structural errors into browser-friendly redirects
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=SAML_MULTIPLE_ASSERTIONS");
 	});
 
 	it("should reject SAML response with no assertions", async () => {
