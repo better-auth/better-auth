@@ -673,10 +673,28 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				...(includeTeamMembers ? { members: teamMember } : {}),
 			} as any;
 		},
+		findTeamBySlug: async (
+			slug: string,
+			organizationId: string,
+		): Promise<InferTeam<O> | null> => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const team = await adapter.findOne<InferTeam<O, false>>({
+				model: "team",
+				where: [
+					{ field: "slug", value: slug },
+					{ field: "organizationId", value: organizationId },
+				],
+			});
+			return filterOutputFields(
+				team,
+				teamAdditionalFields,
+			) as InferTeam<O> | null;
+		},
 		updateTeam: async (
 			teamId: string,
 			data: {
 				name?: string | undefined;
+				slug?: string | undefined;
 				description?: string | undefined;
 				status?: string | undefined;
 			},
