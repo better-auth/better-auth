@@ -18,6 +18,7 @@ import {
 import { customerMetadata, subscriptionMetadata } from "./metadata";
 import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
 import type {
+	CheckoutSessionLocale,
 	CustomerType,
 	StripeCtxSession,
 	StripeOptions,
@@ -167,7 +168,7 @@ const upgradeSubscriptionBodySchema = z.object({
 	 * If not provided or set to `auto`, the browser's locale is used.
 	 */
 	locale: z
-		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+		.custom<CheckoutSessionLocale>((localization) => {
 			return typeof localization === "string";
 		})
 		.meta({
@@ -1123,10 +1124,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						code: e.code,
 					});
 				});
-			return ctx.json({
+
+			const response: Stripe.Response<Stripe.Checkout.Session> & {
+				redirect: boolean;
+			} = {
 				...checkoutSession,
 				redirect: !ctx.body.disableRedirect,
-			});
+			};
+			return ctx.json(response);
 		},
 	);
 };
@@ -1804,7 +1809,7 @@ const createBillingPortalBodySchema = z.object({
 	 * If not provided or set to `auto`, the browser's locale is used.
 	 */
 	locale: z
-		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+		.custom<CheckoutSessionLocale>((localization) => {
 			return typeof localization === "string";
 		})
 		.meta({
