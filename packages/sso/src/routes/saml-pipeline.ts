@@ -8,6 +8,8 @@ import type { FlowResult } from "samlify/types/src/flow";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import { validateSAMLAlgorithms, validateSingleAssertion } from "../saml";
+import type { SAMLConditions } from "../saml/timestamp";
+import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
@@ -19,8 +21,6 @@ import type {
 } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 import { createIdP, createSP, findSAMLProvider } from "./helpers";
-import type { SAMLConditions } from "./sso";
-import { validateSAMLTimestamp } from "./sso";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -82,7 +82,7 @@ export function getSafeRedirectUrl(
  * Extracts the Assertion ID from a SAML response XML.
  * Used for replay protection per SAML 2.0 Core section 2.3.3.
  */
-export function extractAssertionId(samlContent: string): string | null {
+function extractAssertionId(samlContent: string): string | null {
 	try {
 		const parser = new XMLParser({
 			ignoreAttributes: false,
