@@ -2,6 +2,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
+import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from "jose";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
@@ -1396,6 +1397,201 @@ describe("OIDC SSO with defaultSSO array", async () => {
 		expect(session.data?.user.email).toBe(
 			"default-sso-user@default-oidc-explicit.com",
 		);
+	});
+});
+
+describe("OIDC SSO with private_key_jwt", async () => {
+	let privateJwk: JsonWebKey;
+	let publicJwk: JsonWebKey;
+	let capturedTokenRequest: Record<string, any> | undefined;
+
+	const resolvePrivateKey = vi.fn(async ({ keyId }: { keyId?: string }) => ({
+		privateKeyJwk: privateJwk,
+		kid: keyId,
+		algorithm: "RS256",
+	}));
+
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					resolvePrivateKey,
+				}),
+				organization(),
+			],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	const userinfoHandler = (userInfoResponse: any) => {
+		userInfoResponse.body = {
+			email: "jwt-auth-user@private-key-jwt.com",
+			name: "Private Key JWT User",
+			sub: "private-key-jwt-sub",
+			picture: "https://test.com/private-key-jwt.png",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	};
+
+	const tokenHandler = (token: any) => {
+		token.payload.email = "jwt-auth-user@private-key-jwt.com";
+		token.payload.email_verified = true;
+		token.payload.name = "Private Key JWT User";
+		token.payload.picture = "https://test.com/private-key-jwt.png";
+		token.payload.sub = "private-key-jwt-sub";
+	};
+
+	const responseHandler = (_tokenEndpointResponse: any, req: any) => {
+		capturedTokenRequest = { ...(req.body ?? {}) };
+	};
+
+	beforeAll(async () => {
+		const { privateKey, publicKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		privateJwk = await exportJWK(privateKey);
+		publicJwk = await exportJWK(publicKey);
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.removeAllListeners("beforeResponse");
+		server.service.on("beforeUserinfo", userinfoHandler);
+		server.service.on("beforeTokenSigning", tokenHandler);
+		server.service.on("beforeResponse", responseHandler);
+		await server.issuer.keys.generate("RS256");
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		server.service.removeListener("beforeUserinfo", userinfoHandler);
+		server.service.removeListener("beforeTokenSigning", tokenHandler);
+		server.service.removeListener("beforeResponse", responseHandler);
+		await server.stop().catch(() => {});
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should sign in using private_key_jwt and resolvePrivateKey", async () => {
+		capturedTokenRequest = undefined;
+		resolvePrivateKey.mockClear();
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				issuer: server.issuer.url!,
+				domain: "private-key-jwt.com",
+				providerId: "private-key-jwt-provider",
+				oidcConfig: {
+					clientId: "private-key-jwt-client",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					tokenEndpointAuthentication: "private_key_jwt",
+					privateKeyId: "private-key-jwt-key",
+					privateKeyAlgorithm: "RS256",
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "private-key-jwt-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			signInHeaders,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		expect(resolvePrivateKey).toHaveBeenCalledWith({
+			providerId: "private-key-jwt-provider",
+			keyId: "private-key-jwt-key",
+			issuer: server.issuer.url!,
+		});
+		expect(capturedTokenRequest).toBeDefined();
+		const tokenReq = capturedTokenRequest! as unknown as Record<
+			string,
+			unknown
+		>;
+		expect(tokenReq.client_assertion).toBeDefined();
+		expect(tokenReq.client_assertion_type).toBe(
+			"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		);
+		expect(tokenReq.client_id).toBe("private-key-jwt-client");
+		expect(tokenReq.client_secret).toBeUndefined();
+
+		const jwks = createLocalJWKSet({
+			keys: [
+				{
+					...publicJwk,
+					kid: "private-key-jwt-key",
+					alg: "RS256",
+					use: "sig",
+				},
+			],
+		});
+		const { payload } = await jwtVerify(
+			tokenReq.client_assertion as string,
+			jwks,
+			{
+				algorithms: ["RS256"],
+				audience: `${server.issuer.url}/token`,
+			},
+		);
+		expect(payload.iss).toBe("private-key-jwt-client");
+		expect(payload.sub).toBe("private-key-jwt-client");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("jwt-auth-user@private-key-jwt.com");
 	});
 });
 
