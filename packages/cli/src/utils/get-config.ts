@@ -7,8 +7,7 @@ import babelPresetTypeScript from "@babel/preset-typescript";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
-import type { TsConfigResult } from "get-tsconfig";
-import { createPathsMatcher, getTsconfig, parseTsconfig } from "get-tsconfig";
+import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
@@ -45,80 +44,25 @@ possiblePaths = [
 
 type PathsMatcher = (specifier: string) => string[];
 
-/** Reads `references` from raw tsconfig JSON (stripped out by `parseTsconfig`). */
-function readRawTsconfigReferences(
-	tsconfigPath: string,
-): Array<{ path: string }> | undefined {
-	try {
-		const text = fs.readFileSync(tsconfigPath, "utf-8");
-		const stripped = text
-			.replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) =>
-				g ? "" : m,
-			)
-			.replace(/,(?=\s*[}\]])/g, "");
-		const raw = JSON.parse(stripped);
-		return raw.references;
-	} catch {
-		return undefined;
-	}
-}
-
-/** Recursively collects tsconfigs reachable via `references`. */
-function collectReferencedTsconfigs(
-	tsconfigPath: string,
-	visited = new Set<string>(),
-): TsConfigResult[] {
-	const result: TsConfigResult[] = [];
-	const refs = readRawTsconfigReferences(tsconfigPath);
-	if (!refs) return result;
-
-	const configDir = path.dirname(tsconfigPath);
-	for (const ref of refs) {
-		const resolvedRef = path.resolve(configDir, ref.path);
-		const refTsconfigPath = resolvedRef.endsWith(".json")
-			? resolvedRef
-			: path.join(resolvedRef, "tsconfig.json");
-
-		if (visited.has(refTsconfigPath)) continue;
-		visited.add(refTsconfigPath);
-
-		try {
-			const refConfig = parseTsconfig(refTsconfigPath);
-			result.push({ path: refTsconfigPath, config: refConfig });
-		} catch {
-			continue;
-		}
-
-		result.push(...collectReferencedTsconfigs(refTsconfigPath, visited));
-	}
-	return result;
-}
-
 /**
- * Ordered `paths` matchers from the project tsconfig and any referenced
- * tsconfigs, following TypeScript canonical resolution semantics.
+ * Builds a `paths` matcher from the project tsconfig, following TypeScript
+ * canonical resolution semantics. `createPathsMatcher` handles `extends`
+ * chains and `implicitBaseUrl` internally.
  * @see https://github.com/microsoft/TypeScript/blob/main/src/compiler/moduleNameResolver.ts
  */
-function collectPathsMatchers(cwd: string): PathsMatcher[] {
+function getPathsMatcher(cwd: string): PathsMatcher | null {
 	const configName = fs.existsSync(path.join(cwd, "tsconfig.json"))
 		? "tsconfig.json"
 		: "jsconfig.json";
 	const tsconfig = getTsconfig(cwd, configName);
-	if (!tsconfig) return [];
+	if (!tsconfig) return null;
 
-	const matchers: PathsMatcher[] = [];
 	try {
-		const mainMatcher = createPathsMatcher(tsconfig);
-		if (mainMatcher) matchers.push(mainMatcher);
-		for (const refTsconfig of collectReferencedTsconfigs(tsconfig.path)) {
-			const refMatcher = createPathsMatcher(refTsconfig);
-			if (refMatcher) matchers.push(refMatcher);
-		}
+		return createPathsMatcher(tsconfig);
 	} catch (error) {
 		console.error(error);
 		throw new BetterAuthError("Error parsing tsconfig.json");
 	}
-	return matchers;
 }
 
 /**
@@ -256,9 +200,8 @@ function getVirtualModuleAliases(): Record<string, string> {
  * .tsx files are not supported by Jiti.
  */
 const jitiOptions = (cwd: string): JitiOptions => {
-	const matchers = collectPathsMatchers(cwd);
-	const plugins =
-		matchers.length > 0 ? [createRewriteImportPathsPlugin(matchers)] : [];
+	const matcher = getPathsMatcher(cwd);
+	const plugins = matcher ? [createRewriteImportPathsPlugin([matcher])] : [];
 	return {
 		transformOptions: {
 			babel: {
