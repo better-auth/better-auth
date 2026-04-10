@@ -989,6 +989,64 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 
+	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-csrf",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: false,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		const victimHeaders = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(victimHeaders),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "test-cookie-csrf",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(victimHeaders),
+			},
+		});
+		expect(signInRes.data?.url).toBeTruthy();
+
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/callback/test-cookie-csrf?code=dummy&state=attacker-controlled-state",
+			{
+				headers: victimHeaders,
+				redirect: "manual",
+			},
+		);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toContain("state_mismatch");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: victimHeaders,
+			},
+		});
+		expect(session.data).toBeNull();
+	});
+
 	it("should await async mapProfileToUser", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [

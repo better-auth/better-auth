@@ -391,6 +391,7 @@ describe("oauth register - skip_consent blocked", async () => {
 	it("should reject skip_consent during dynamic registration", async () => {
 		const res = await serverClient.oauth2.register({
 			redirect_uris: ["http://localhost:5000/callback"],
+			// @ts-expect-error testing skip consent mimicing client incorrectly sending parameter
 			skip_consent: true,
 		});
 		expect(res.error?.status).toBe(400);

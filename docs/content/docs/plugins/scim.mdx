@@ -466,6 +466,7 @@ By default, the SCIM provisioning will automatically map the following fields:
 The plugin requires additional fields in the `scimProvider` table to store the provider's configuration.
 
 <DatabaseTable
+  name="scimProvider"
     fields={[
         {
             name: "id", type: "string", description: "A database identifier", isPrimaryKey: true,
@@ -481,6 +482,7 @@ The plugin requires additional fields in the `scimProvider` table to store the p
 The `scimProvider` schema is extended as follows:
 
 <DatabaseTable
+  name="scimProvider"
     fields={[
         { name: "userId", type: "string", description: "The user id of the connection owner. Set automatically when generating a token via the API.", isOptional: true },
     ]}

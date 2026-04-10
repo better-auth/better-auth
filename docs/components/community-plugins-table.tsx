@@ -324,14 +324,14 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@delmaredigital/payload-better-auth",
-		url: "https://github.com/delmaredigital/payload-better-auth",
+		name: "better-auth-audit-logs",
+		url: "https://github.com/ejirocodes/better-auth-audit-logs",
 		description:
-			"Payload CMS adapter and plugin for Better Auth. Use Payload collections as the database backend with auto-generated collections, session utilities, and admin UI components.",
+			"Audit log plugin for Better Auth. Auto-captures auth events with severity inference, PII redaction, custom storage backends, and retention policies.",
 		author: {
-			name: "Delmare Digital",
-			github: "delmaredigital",
-			avatar: "https://github.com/delmaredigital.png",
+			name: "ejirocodes",
+			github: "ejirocodes",
+			avatar: "https://github.com/ejirocodes.png",
 		},
 	},
 ];
