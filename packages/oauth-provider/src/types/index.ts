@@ -96,19 +96,36 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
-	 * Custom redirect URI validation function that **extends** the default behavior.
+	 * Custom redirect URI validation function for composable validation logic.
 	 *
 	 * By default, the OAuth provider validates redirect URIs with:
 	 * 1. Exact string matching against registered redirect URIs
 	 * 2. RFC 8252 §7.3 loopback IP support (127.0.0.1/[::1] with flexible ports)
 	 *
-	 * This validator is called **only if default validation fails**, allowing you
-	 * to add custom logic without breaking existing native app loopback callbacks.
+	 * The `defaultResult` parameter provides the result of the default validation,
+	 * enabling flexible composition patterns:
+	 *
+	 * @example
+	 * ```ts
+	 * // Extend: add preview deployment support while preserving defaults
+	 * validateRedirectUri: (uri, registered, defaultResult) => {
+	 *   return defaultResult || uri.includes('.preview.example.com');
+	 * }
+	 *
+	 * // Replace: full custom control (use with caution)
+	 * validateRedirectUri: (uri, registered, _defaultResult) => {
+	 *   return myCustomValidation(uri, registered);
+	 * }
+	 *
+	 * // Restrict: add extra constraints on top of defaults
+	 * validateRedirectUri: (uri, registered, defaultResult) => {
+	 *   return defaultResult && !isBlocklisted(uri);
+	 * }
+	 * ```
 	 *
 	 * **Use Cases:**
 	 * - **Preview deployments**: Match `*.preview.example.com` for platforms
-	 *   like Vercel, Netlify, or Cloudflare Pages where each PR/branch gets
-	 *   a unique subdomain.
+	 *   like Vercel, Netlify, or Cloudflare Pages.
 	 * - **Multi-tenant applications**: Dynamic tenant subdomains.
 	 *
 	 * **Security Considerations:**
@@ -125,11 +142,13 @@ export interface OAuthOptions<
 	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
 	 * @param registeredUris - Array of registered redirect URIs for the client
+	 * @param defaultResult - Result of the default validation (exact match + RFC 8252 loopback)
 	 * @returns `true` if the redirect URI is valid, `false` otherwise.
 	 */
 	validateRedirectUri?: (
 		redirectUri: string,
 		registeredUris: string[],
+		defaultResult: boolean,
 	) => Awaitable<boolean>;
 	/**
 	 * List of valid audiences if there are multiple.

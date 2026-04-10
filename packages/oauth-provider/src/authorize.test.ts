@@ -490,10 +490,13 @@ describe("oauth authorize - custom validateRedirectUri", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 
-	const customValidator = (uri: string, registeredUris: string[]): boolean => {
-		if (registeredUris.includes(uri)) {
-			return true;
-		}
+	const customValidator = (
+		uri: string,
+		registeredUris: string[],
+		defaultResult: boolean,
+	): boolean => {
+		// Extend default validation with custom *.localhost pattern
+		if (defaultResult) return true;
 		try {
 			const url = new URL(uri);
 			if (url.hostname.endsWith(".localhost")) {
@@ -623,6 +626,7 @@ describe("oauth authorize - validateRedirectUri error handling", async () => {
 	const throwingValidator = (
 		uri: string,
 		_registeredUris: string[],
+		_defaultResult: boolean,
 	): boolean => {
 		if (uri.includes("throw-error")) {
 			throw new Error("Validator intentionally threw");
@@ -705,12 +709,12 @@ describe("oauth authorize - async validateRedirectUri", async () => {
 	const asyncValidator = async (
 		uri: string,
 		registeredUris: string[],
+		defaultResult: boolean,
 	): Promise<boolean> => {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
-		if (registeredUris.includes(uri)) {
-			return true;
-		}
+		// Extend default validation with custom *.localhost pattern
+		if (defaultResult) return true;
 		try {
 			const url = new URL(uri);
 			if (url.hostname.endsWith(".localhost")) {

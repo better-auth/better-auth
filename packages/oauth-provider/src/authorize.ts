@@ -264,8 +264,8 @@ export async function authorizeEndpoint(
 	let isValidRedirectUri = false;
 	if (query.redirect_uri) {
 		try {
-			// Always run default validation first (exact match + RFC 8252 §7.3 loopback IP support)
-			isValidRedirectUri = registeredUris.some((url) => {
+			// Default validation: exact match + RFC 8252 §7.3 loopback IP support
+			const defaultResult = registeredUris.some((url) => {
 				if (url === query.redirect_uri) return true;
 				try {
 					const registered = new URL(url);
@@ -284,12 +284,15 @@ export async function authorizeEndpoint(
 				return false;
 			});
 
-			// If default validation fails, try custom validator as fallback
-			if (!isValidRedirectUri && opts.validateRedirectUri) {
+			if (opts.validateRedirectUri) {
+				// Custom validator receives defaultResult for composition
 				isValidRedirectUri = await opts.validateRedirectUri(
 					query.redirect_uri,
 					registeredUris,
+					defaultResult,
 				);
+			} else {
+				isValidRedirectUri = defaultResult;
 			}
 		} catch {
 			isValidRedirectUri = false;

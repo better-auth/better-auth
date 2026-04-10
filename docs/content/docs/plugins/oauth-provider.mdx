@@ -1062,39 +1062,42 @@ oauthProvider({
 
 ### Custom Redirect URI Validation
 
-By default, the OAuth provider performs exact string matching against registered redirect URIs, plus [RFC 8252 §7.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3) loopback IP support (matching `127.0.0.1` and `[::1]` while ignoring port differences).
+By default, the OAuth provider validates redirect URIs with:
+1. Exact string matching against registered redirect URIs
+2. [RFC 8252 §7.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3) loopback IP support (`127.0.0.1` and `[::1]` with flexible ports)
 
-The `validateRedirectUri` option allows you to **extend** this default behavior with custom validation logic. When provided, the default validation runs first; your custom validator is only called if the default validation fails. This ensures native app loopback callbacks continue working without reimplementing RFC 8252 logic.
-
-**Common Use Cases:**
-- **Preview deployments**: Platforms like Vercel, Netlify, or Cloudflare Pages generate unique subdomains for each PR/branch (e.g., `pr-123.preview.example.com`).
-- **Multi-tenant applications**: Dynamic tenant subdomains like `acme.app.example.com`.
-- **Development environments**: Additional localhost patterns beyond the default loopback support.
+The `validateRedirectUri` option provides composable validation through a `defaultResult` parameter, enabling flexible patterns:
 
 ```ts title="auth.ts"
 oauthProvider({
-  validateRedirectUri: (uri, registeredUris) => {
-    // This validator is called AFTER default validation fails.
-    // Default validation already handles:
-    // - Exact string matches against registeredUris
-    // - RFC 8252 §7.3 loopback IP port flexibility
+  // Extend: add preview deployment support while preserving defaults (recommended)
+  validateRedirectUri: (uri, registeredUris, defaultResult) => {
+    if (defaultResult) return true;
     
-    // Example: Allow any subdomain of preview.example.com
-    // Note: This matches against the FULL URI, not just the host
     try {
       const url = new URL(uri);
-      if (
+      return (
         url.protocol === 'https:' &&
         url.hostname.endsWith('.preview.example.com')
-      ) {
-        return true;
-      }
+      );
     } catch {}
-    
     return false;
   },
 })
 ```
+
+**Composition Patterns:**
+
+| Pattern | Code | Use Case |
+|---------|------|----------|
+| Extend | `return defaultResult \|\| customCheck(uri)` | Add preview deployments, tenant subdomains |
+| Replace | `return customCheck(uri)` | Full custom control (ignores defaults) |
+| Restrict | `return defaultResult && !isBlocked(uri)` | Add extra constraints on top of defaults |
+
+**Common Use Cases:**
+- **Preview deployments**: Match `*.preview.example.com` for Vercel, Netlify, Cloudflare Pages
+- **Multi-tenant applications**: Dynamic tenant subdomains
+- **Development environments**: Additional localhost patterns
 
 <Callout type="warn">
 **Security Considerations:**
@@ -1102,6 +1105,7 @@ oauthProvider({
 - Validate the full URI (protocol, host, path) - not just the hostname
 - Consider using a library like `tldts` to prevent matches on public suffixes (e.g., `*.co.uk`, `*.github.io`)
 - Always require HTTPS (except for localhost)
+- If the validator throws, the request is rejected (fail-closed)
 </Callout>
 
 <Callout type="info">
