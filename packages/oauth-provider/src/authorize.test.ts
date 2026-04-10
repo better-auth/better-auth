@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/client";
-import { generateRandomString } from "better-auth/crypto";
+import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -8,6 +8,55 @@ import { validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
+import { verifyOAuthQueryParams } from "./utils";
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8858
+ */
+describe("HMAC signature verification with reordered params", () => {
+	const secret = "test-secret";
+
+	it("should verify signature when query params are reordered", async () => {
+		// Sign with params in one order
+		const params = new URLSearchParams();
+		params.set("client_id", "my-client");
+		params.set("redirect_uri", "http://localhost/callback");
+		params.set("response_type", "code");
+		params.set("scope", "openid");
+		params.set("exp", String(Math.floor(Date.now() / 1000) + 600));
+		params.sort();
+		const sig = await makeSignature(params.toString(), secret);
+		params.append("sig", sig);
+
+		const signedQuery = params.toString();
+
+		// Simulate CDN reordering: reverse the param order
+		const reordered = new URLSearchParams();
+		const entries = [...new URLSearchParams(signedQuery).entries()].reverse();
+		for (const [k, v] of entries) {
+			reordered.append(k, v);
+		}
+
+		const result = await verifyOAuthQueryParams(reordered.toString(), secret);
+		expect(result).toBe(true);
+	});
+
+	it("should reject tampered params", async () => {
+		const params = new URLSearchParams();
+		params.set("client_id", "my-client");
+		params.set("exp", String(Math.floor(Date.now() / 1000) + 600));
+		params.sort();
+		const sig = await makeSignature(params.toString(), secret);
+		params.append("sig", sig);
+
+		// Tamper with a value
+		const tampered = new URLSearchParams(params.toString());
+		tampered.set("client_id", "evil-client");
+
+		const result = await verifyOAuthQueryParams(tampered.toString(), secret);
+		expect(result).toBe(false);
+	});
+});
 
 describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should allow HTTPS URLs unchanged", () => {

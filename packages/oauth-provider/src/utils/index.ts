@@ -144,6 +144,8 @@ export async function verifyOAuthQueryParams(
 	const sig = queryParams.get("sig");
 	const exp = Number(queryParams.get("exp"));
 	queryParams.delete("sig");
+	// Sort to match signing order — CDN/proxy may reorder query params
+	queryParams.sort();
 	const verifySig = await makeSignature(queryParams.toString(), secret);
 	return (
 		!!sig &&

@@ -627,6 +627,8 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 
+	// Sort params so the HMAC is order-independent (CDN/proxy may reorder query params)
+	params.sort();
 	const signature = await makeSignature(params.toString(), ctx.context.secret);
 	params.append("sig", signature);
 	return params.toString();

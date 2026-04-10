@@ -6,12 +6,7 @@ import { PACKAGE_VERSION } from "./version";
 function parseSignedQuery(search: string) {
 	const params = new URLSearchParams(search);
 	if (params.has("sig")) {
-		const signedParams = new URLSearchParams();
-		for (const [key, value] of params.entries()) {
-			signedParams.append(key, value);
-			if (key === "sig") break;
-		}
-		return signedParams.toString();
+		return params.toString();
 	}
 }
 
