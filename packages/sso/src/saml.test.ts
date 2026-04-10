@@ -4603,7 +4603,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		// ACS endpoint translates structural errors into browser-friendly redirects
 		expect(response.status).toBe(302);
 		const location = response.headers.get("location") || "";
-		expect(location).toContain("error=SAML_MULTIPLE_ASSERTIONS");
+		expect(location).toContain("error=multiple_assertions");
 	});
 
 	it("should reject SAML response with no assertions", async () => {

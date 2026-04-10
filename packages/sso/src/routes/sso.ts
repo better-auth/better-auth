@@ -1940,7 +1940,15 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				// so the user returns to the app instead of seeing raw JSON.
 				// Non-400 errors (404 provider not found, 401 unauthorized) propagate as-is.
 				if (error instanceof APIError && error.statusCode === 400) {
-					const errorCode = error.body?.code || "saml_error";
+					// TODO: unify error codes across endpoints (callbackSSOSAML uses
+					// the raw APIError code, ACS uses lowercase snake_case for backward compat)
+					const internalCode = error.body?.code || "";
+					const errorCode =
+						internalCode === "SAML_MULTIPLE_ASSERTIONS"
+							? "multiple_assertions"
+							: internalCode === "SAML_NO_ASSERTION"
+								? "no_assertion"
+								: internalCode.toLowerCase() || "saml_error";
 					const redirectUrl = getSafeRedirectUrl(
 						ctx.body.RelayState || undefined,
 						currentCallbackPath,
