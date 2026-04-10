@@ -68,6 +68,7 @@ import type {
 	TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+import { checkSSOIsolation } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -263,6 +264,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, activeOrganizationId);
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
 				userId: ctx.context.session.user.id,

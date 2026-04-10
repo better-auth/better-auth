@@ -5,6 +5,7 @@ import {
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
+import { checkSSOIsolation } from "../isolation";
 import type { SSOOptions, SSOProvider } from "../types";
 import { getHostnameFromDomain } from "../utils";
 
@@ -65,6 +66,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 					code: "PROVIDER_NOT_FOUND",
 				});
 			}
+			checkSSOIsolation(ctx, provider.organizationId);
 
 			const userId = ctx.context.session.user.id;
 			let isOrgMember = true;
@@ -171,6 +173,7 @@ export const verifyDomain = (options: SSOOptions) => {
 					code: "PROVIDER_NOT_FOUND",
 				});
 			}
+			checkSSOIsolation(ctx, provider.organizationId);
 
 			const userId = ctx.context.session.user.id;
 			let isOrgMember = true;

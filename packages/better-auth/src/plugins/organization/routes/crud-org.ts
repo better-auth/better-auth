@@ -18,6 +18,7 @@ import type {
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { checkSSOIsolation } from "../utils";
 
 const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({
@@ -464,6 +465,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 			// Check if slug is being updated and validate uniqueness
 			if (typeof ctx.body.data.slug === "string") {
 				const existingOrganization = await adapter.findOrganizationBySlug(
@@ -593,6 +595,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 			if (organizationId === session.session.activeOrganizationId) {
 				/**
 				 * If the organization is deleted, we set the active organization to null
@@ -703,6 +706,8 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				);
 			}
+
+			checkSSOIsolation(ctx, organization.id);
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
 				organizationId: organization.id,
@@ -828,6 +833,8 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
+			checkSSOIsolation(ctx, organizationId);
+
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
 				organizationId,
@@ -901,9 +908,23 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		},
 		async (ctx) => {
 			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const fullSession = await getSessionFromCtx(ctx);
+			if (!fullSession) {
+				const organizations = await adapter.listOrganizations(
+					ctx.context.session.user.id,
+				);
+				return ctx.json(organizations);
+			}
 			const organizations = await adapter.listOrganizations(
-				ctx.context.session.user.id,
+				fullSession.user.id,
 			);
+			const session = fullSession.session as any;
+			const ssoOrgId = session.ssoOrganizationId || session.sso_organization_id;
+			if (ssoOrgId) {
+				return ctx.json(
+					organizations.filter((org) => String(org.id) === String(ssoOrgId)),
+				);
+			}
 			return ctx.json(organizations);
 		},
 	);

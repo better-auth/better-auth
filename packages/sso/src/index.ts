@@ -305,6 +305,20 @@ export function sso<O extends SSOOptions>(
 						: {}),
 				},
 			},
+			session: {
+				fields: {
+					ssoProviderId: {
+						type: "string",
+						required: false,
+						fieldName: "ssoProviderId",
+					},
+					ssoOrganizationId: {
+						type: "string",
+						required: false,
+						fieldName: "ssoOrganizationId",
+					},
+				},
+			},
 		},
 		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;

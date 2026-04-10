@@ -19,6 +19,7 @@ import type {
 	Member,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { checkSSOIsolation } from "../utils";
 
 const baseInvitationSchema = z.object({
 	email: z.string().meta({
@@ -183,6 +184,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				);
 			}
+			checkSSOIsolation(ctx, organizationId);
 
 			const email = ctx.body.email.toLowerCase();
 			const isValidEmail = z.email().safeParse(email);
@@ -580,6 +582,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			checkSSOIsolation(ctx, invitation.organizationId);
+
 			if (
 				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
 				!session.user.emailVerified
@@ -778,6 +782,8 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			checkSSOIsolation(ctx, invitation.organizationId);
+
 			if (
 				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
 				!session.user.emailVerified
@@ -876,6 +882,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				);
 			}
+			checkSSOIsolation(ctx, invitation.organizationId);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: invitation.organizationId,
@@ -1036,6 +1043,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
+			checkSSOIsolation(ctx, invitation.organizationId);
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw APIError.from(
 					"FORBIDDEN",
@@ -1105,6 +1113,7 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 					message: "Organization ID is required",
 				});
 			}
+			checkSSOIsolation(ctx, orgId);
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const isMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
