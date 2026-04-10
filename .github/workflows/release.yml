@@ -107,12 +107,22 @@ jobs:
         with:
           version: pnpm ci:version
           publish: pnpm ci:release
-          title: "chore: version packages"
-          commit: "chore: version packages"
+          title: "chore: release"
+          commit: "chore: release"
           createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
+
+      - name: Rename release PR with version
+        if: steps.changesets.outputs.pullRequestNumber
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        run: |
+          VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          gh pr edit "$PR_NUMBER" --title "chore: release v${VERSION}"
 
       - name: Generate raw release notes
         id: raw-notes
@@ -146,15 +156,13 @@ jobs:
         id: ai-notes
         if: steps.ai-prompt.outcome == 'success'
         continue-on-error: true
-        uses: anthropics/claude-code-action@1b8ee3b94104046d71fde52ec3557651ad8c0d71 # v1.0.29
+        uses: anthropics/claude-code-action/base-action@2ff1acb3ee319fa302837dad6e17c2f36c0d98ea # v1.0.91
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.ai-prompt.outputs.prompt }}
           claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
-          allowed_bots: "github-merge-queue"
 
       - name: Validate AI output
         if: steps.ai-notes.outcome == 'success'
@@ -420,12 +428,11 @@ jobs:
         id: ai-notes
         if: steps.ai-prompt.outcome == 'success'
         continue-on-error: true
-        uses: anthropics/claude-code-action@1b8ee3b94104046d71fde52ec3557651ad8c0d71 # v1.0.29
+        uses: anthropics/claude-code-action/base-action@2ff1acb3ee319fa302837dad6e17c2f36c0d98ea # v1.0.91
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.ai-prompt.outputs.prompt }}
           claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
 
