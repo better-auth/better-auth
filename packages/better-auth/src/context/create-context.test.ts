@@ -1938,10 +1938,7 @@ describe("cookie integration plugin order guardrail", () => {
 		const log = vi.fn();
 		await initBase({
 			logger: { level: "warn", log } as any,
-			plugins: [
-				{ id: "next-cookies" },
-				{ id: "some-other-plugin" },
-			],
+			plugins: [{ id: "next-cookies" }, { id: "some-other-plugin" }],
 		});
 		expect(log).toHaveBeenCalledWith(
 			"warn",
@@ -1955,10 +1952,7 @@ describe("cookie integration plugin order guardrail", () => {
 		const log = vi.fn();
 		await initBase({
 			logger: { level: "warn", log } as any,
-			plugins: [
-				{ id: "some-other-plugin" },
-				{ id: "next-cookies" },
-			],
+			plugins: [{ id: "some-other-plugin" }, { id: "next-cookies" }],
 		});
 		expect(log).not.toHaveBeenCalledWith(
 			"warn",
