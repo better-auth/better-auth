@@ -7,12 +7,16 @@ import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
-import { validateSAMLAlgorithms, validateSingleAssertion } from "../saml";
+import {
+	validateAudience,
+	validateInResponseTo,
+	validateSAMLAlgorithms,
+	validateSingleAssertion,
+} from "../saml";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
 import type {
-	AuthnRequestRecord,
 	SAMLAssertionExtract,
 	SAMLConfig,
 	SAMLSessionRecord,
@@ -240,75 +244,25 @@ export async function processSAMLResponse(
 	});
 
 	// 12. InResponseTo validation
-	const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
-		| string
-		| undefined;
-	const shouldValidateInResponseTo =
-		options?.saml?.enableInResponseToValidation !== false;
+	await validateInResponseTo(ctx, {
+		extract: extract as SAMLAssertionExtract,
+		providerId,
+		options: {
+			enableInResponseToValidation: options?.saml?.enableInResponseToValidation,
+			allowIdpInitiated: options?.saml?.allowIdpInitiated,
+		},
+		redirectUrl: samlRedirectUrl,
+	});
 
-	if (shouldValidateInResponseTo) {
-		const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
+	// 13. Audience restriction validation
+	validateAudience(ctx, {
+		extract: extract as SAMLAssertionExtract,
+		expectedAudience: parsedSamlConfig.audience,
+		providerId,
+		redirectUrl: samlRedirectUrl,
+	});
 
-		if (inResponseTo) {
-			let storedRequest: AuthnRequestRecord | null = null;
-
-			const verification =
-				await ctx.context.internalAdapter.findVerificationValue(
-					`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-				);
-			if (verification) {
-				try {
-					storedRequest = JSON.parse(verification.value) as AuthnRequestRecord;
-					if (storedRequest && storedRequest.expiresAt < Date.now()) {
-						storedRequest = null;
-					}
-				} catch {
-					storedRequest = null;
-				}
-			}
-
-			if (!storedRequest) {
-				ctx.context.logger.error(
-					"SAML InResponseTo validation failed: unknown or expired request ID",
-					{ inResponseTo, providerId },
-				);
-				throw ctx.redirect(
-					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
-				);
-			}
-
-			if (storedRequest.providerId !== providerId) {
-				ctx.context.logger.error(
-					"SAML InResponseTo validation failed: provider mismatch",
-					{
-						inResponseTo,
-						expectedProvider: storedRequest.providerId,
-						actualProvider: providerId,
-					},
-				);
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-				);
-				throw ctx.redirect(
-					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
-				);
-			}
-
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-			);
-		} else if (!allowIdpInitiated) {
-			ctx.context.logger.error(
-				"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
-				{ providerId },
-			);
-			throw ctx.redirect(
-				`${samlRedirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
-			);
-		}
-	}
-
-	// 13. Replay protection
+	// 14. Replay protection
 	const samlContent = (parsedResponse as any).samlContent as string | undefined;
 	const assertionId = samlContent ? extractAssertionId(samlContent) : null;
 
@@ -371,7 +325,7 @@ export async function processSAMLResponse(
 		);
 	}
 
-	// 14. User attribute extraction
+	// 15. User attribute extraction
 	const attributes = extract.attributes || {};
 	const mapping = parsedSamlConfig.mapping ?? {};
 
@@ -412,7 +366,7 @@ export async function processSAMLResponse(
 		});
 	}
 
-	// 15. Session creation
+	// 16. Session creation
 	const isTrustedProvider: boolean =
 		ctx.context.trustedProviders.includes(providerId) ||
 		("domainVerified" in provider &&
@@ -454,7 +408,7 @@ export async function processSAMLResponse(
 
 	const { session, user } = result.data!;
 
-	// 16. Provision user
+	// 17. Provision user
 	if (
 		options?.provisionUser &&
 		(result.isRegister || options.provisionUserOnEveryLogin)
@@ -466,7 +420,7 @@ export async function processSAMLResponse(
 		});
 	}
 
-	// 17. Organization assignment
+	// 18. Organization assignment
 	await assignOrganizationFromProvider(ctx as any, {
 		user,
 		profile: {
@@ -481,17 +435,18 @@ export async function processSAMLResponse(
 		provisioningOptions: options?.organizationProvisioning,
 	});
 
-	// 18. Set session cookie
+	// 19. Set session cookie
 	await setSessionCookie(ctx, { session, user });
 
-	// 19. SLO session record
+	// 20. SLO session record
 	if (options?.saml?.enableSingleLogout && extract.nameID) {
 		const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
 		const samlSessionData: SAMLSessionRecord = {
 			sessionId: session.id,
 			providerId,
 			nameID: extract.nameID,
-			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
+			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex
+				?.sessionIndex,
 		};
 		await ctx.context.internalAdapter
 			.createVerificationValue({
@@ -518,7 +473,7 @@ export async function processSAMLResponse(
 			);
 	}
 
-	// 20. Compute safe redirect URL
+	// 21. Compute safe redirect URL
 	return getSafeRedirectUrl(
 		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
 		currentCallbackPath,
