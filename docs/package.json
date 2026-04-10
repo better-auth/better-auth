@@ -12,8 +12,8 @@
     "lint": "next lint",
     "lint:fix": "pnpm -w biome check docs/ --fix --unsafe",
     "sync-typesense": "node scripts/sync-typesense.ts",
-    "format:md": "remark . --output --quiet",
-    "format:check": "remark . --quiet --frail"
+    "format:md": "remark . --ext md,mdx --output --quiet",
+    "format:check": "remark . --ext md,mdx --quiet --frail"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
