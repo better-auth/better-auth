@@ -129,7 +129,7 @@ const requestAdditionalScopes = async () => {
 ```
 
 <Callout>
-Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
+  Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
 </Callout>
 
 ### Passing Additional Data Through OAuth Flow
@@ -173,7 +173,7 @@ await auth.api.signInSocial({
 The additional data is available in your hooks during the OAuth callback through the `getOAuthState`.
 
 <Callout>
-This usually works for `/callback/:id` paths and the generic OAuth plugin callback path (`/oauth2/callback/:providerId`).
+  This usually works for `/callback/:id` paths and the generic OAuth plugin callback path (`/oauth2/callback/:providerId`).
 </Callout>
 
 Example using an after hook:
@@ -254,15 +254,16 @@ Example using a database hook:
 ```
 
 <Callout>
-By default OAuth state includes the following data:
-- `callbackURL` - the callback URL for the OAuth flow
-- `codeVerifier` - the code verifier for the OAuth flow
-- `errorURL` - the error URL for the OAuth flow
-- `newUserURL` - the new user URL for the OAuth flow
-- `link` - the link for the OAuth flow (email and user id)
-- `requestSignUp` - whether to request sign up for the OAuth flow
-- `expiresAt` - the expiration time of the OAuth state
-- `[key: string]`: any additional data you pass in the OAuth flow
+  By default OAuth state includes the following data:
+
+  * `callbackURL` - the callback URL for the OAuth flow
+  * `codeVerifier` - the code verifier for the OAuth flow
+  * `errorURL` - the error URL for the OAuth flow
+  * `newUserURL` - the new user URL for the OAuth flow
+  * `link` - the link for the OAuth flow (email and user id)
+  * `requestSignUp` - whether to request sign up for the OAuth flow
+  * `expiresAt` - the expiration time of the OAuth state
+  * `[key: string]`: any additional data you pass in the OAuth flow
 </Callout>
 
 ## Provider Options

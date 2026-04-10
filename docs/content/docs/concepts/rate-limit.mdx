@@ -5,11 +5,11 @@ description: Learn how to configure rate limiting in Better Auth, including IP a
 
 Better Auth includes a built-in rate limiter to help manage traffic and prevent abuse. By default, in production mode, the rate limiter is set to:
 
-- Window: 60 seconds
-- Max Requests: 100 requests
+* Window: 60 seconds
+* Max Requests: 100 requests
 
 <Callout type="warning">
-Server-side requests made using `auth.api` aren't affected by rate limiting. Rate limits only apply to client-initiated requests.
+  Server-side requests made using `auth.api` aren't affected by rate limiting. Rate limits only apply to client-initiated requests.
 </Callout>
 
 You can easily customize these settings by passing the rateLimit object to the betterAuth function.
@@ -39,10 +39,12 @@ export const auth = betterAuth({
 ```
 
 In addition to the default settings, Better Auth provides custom rules for specific paths. For example:
-- `/sign-in/email`: Is limited to 3 requests within 10 seconds.
+
+* `/sign-in/email`: Is limited to 3 requests within 10 seconds.
 
 In addition, plugins also define custom rules for specific paths. For example, `twoFactor` plugin has custom rules:
-- `/two-factor/verify`: Is limited to 3 requests within 10 seconds.
+
+* `/two-factor/verify`: Is limited to 3 requests within 10 seconds.
 
 These custom rules ensure that sensitive operations are protected with stricter limits.
 
@@ -101,13 +103,14 @@ export const auth = betterAuth({
 ```
 
 Common IPv6 subnet prefix lengths:
-- `128` (default): Individual IPv6 address - most restrictive
-- `64`: /64 subnet - typical home/business allocation
-- `48`: /48 subnet - larger network allocation
-- `32`: /32 subnet - ISP-level allocation
+
+* `128` (default): Individual IPv6 address - most restrictive
+* `64`: /64 subnet - typical home/business allocation
+* `48`: /48 subnet - larger network allocation
+* `32`: /32 subnet - ISP-level allocation
 
 <Callout type="info">
-IPv6 subnet configuration only affects IPv6 addresses. IPv4 addresses are always rate limited individually.
+  IPv6 subnet configuration only affects IPv6 addresses. IPv4 addresses are always rate limited individually.
 </Callout>
 
 ### Rate Limit Window
@@ -235,7 +238,7 @@ export const auth = betterAuth({
 
 When a request exceeds the rate limit, Better Auth returns the following header:
 
-- `X-Retry-After`: The number of seconds until the user can make another request.
+* `X-Retry-After`: The number of seconds until the user can make another request.
 
 To handle rate limit errors on the client side, you can manage them either globally or on a per-request basis. Since Better Auth clients wrap over Better Fetch, you can pass `fetchOptions` to handle rate limit errors
 
@@ -256,7 +259,6 @@ export const authClient = createAuthClient({
     }
 })
 ```
-
 
 **Per Request Handling**
 
@@ -282,29 +284,29 @@ If you are using a database to store rate limit data you need this schema:
 
 Table Name: `rateLimit`
 
-<DatabaseTable
-    name="rateLimit"
-    fields={[
-        { 
-        name: "id", 
-        type: "string", 
-        description: "Database ID",
-        isPrimaryKey: true
-        },
-        { 
-        name: "key",
-        type: "string",
-        description: "Unique identifier for each rate limit key",
-        isUnique: true,
-        },
-        { 
-        name: "count",
-        type: "integer",
-        description: "Number of requests made in the current window"
-        },
-        {
-        name: "lastRequest",
-        type: "bigint",
-        description: "Timestamp of the last request (epoch ms)" 
-        }]}
-    />
+export const rateLimitTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Database ID",
+		isPrimaryKey: true,
+	},
+	{
+		name: "key",
+		type: "string",
+		description: "Unique identifier for each rate limit key",
+		isUnique: true,
+	},
+	{
+		name: "count",
+		type: "integer",
+		description: "Number of requests made in the current window",
+	},
+	{
+		name: "lastRequest",
+		type: "bigint",
+		description: "Timestamp of the last request (epoch ms)",
+	},
+];
+
+<DatabaseTable name="rateLimit" fields={rateLimitTableFields} />

@@ -30,12 +30,12 @@ Open **[localhost:3000](http://localhost:3000)** to preview.
 
 ## Stack
 
-- **Framework**: Next.js 16 (App Router, Turbopack)
-- **Styling**: Tailwind CSS 4
-- **Animation**: Framer Motion
-- **Docs**: Fumadocs
-- **Icons**: Lucide React
-- **Fonts**: Geist Sans & Geist Mono
+* **Framework**: Next.js 16 (App Router, Turbopack)
+* **Styling**: Tailwind CSS 4
+* **Animation**: Framer Motion
+* **Docs**: Fumadocs
+* **Icons**: Lucide React
+* **Fonts**: Geist Sans & Geist Mono
 
 ## Structure
 

@@ -6,59 +6,62 @@ description: MCP provider plugin for Better Auth
 `OAuth` `MCP`
 
 <Callout type="warn">
-This plugin will soon be deprecated in favor of the [OAuth Provider Plugin](/docs/plugins/oauth-provider).
+  This plugin will soon be deprecated in favor of the [OAuth Provider Plugin](/docs/plugins/oauth-provider).
 </Callout>
 
 The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It handles authentication and makes it easy to issue and manage access tokens for MCP applications.
 
 <Callout type="warn">
-This plugin is based on OIDC Provider plugin. It'll be moved to the OAuth Provider Plugin in the future.
+  This plugin is based on OIDC Provider plugin. It'll be moved to the OAuth Provider Plugin in the future.
 </Callout>
 
 ## Installation
 
 <Steps>
-    <Step>
-        ### Add the Plugin
+  <Step>
+    ### Add the Plugin
 
-        Add the MCP plugin to your auth configuration and specify the login page path.
+    Add the MCP plugin to your auth configuration and specify the login page path.
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth";
-        import { mcp } from "better-auth/plugins"; // [!code highlight]
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { mcp } from "better-auth/plugins"; // [!code highlight]
 
-        export const auth = betterAuth({
-            plugins: [
-                mcp({ // [!code highlight]
-                    loginPage: "/sign-in" // path to your login page // [!code highlight]
-                }) // [!code highlight]
-            ]
-        });
+    export const auth = betterAuth({
+        plugins: [
+            mcp({ // [!code highlight]
+                loginPage: "/sign-in" // path to your login page // [!code highlight]
+            }) // [!code highlight]
+        ]
+    });
+    ```
+
+    <Callout>
+      This doesn't have a client plugin, so you don't need to make any changes to your authClient.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Generate Schema
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
         ```
-        <Callout>
-            This doesn't have a client plugin, so you don't need to make any changes to your authClient.
-        </Callout>
-    </Step>
+      </Tab>
 
-    <Step>
-        ### Generate Schema
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
 
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
-
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx auth migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx auth generate
-            ```
-            </Tab>
-        </Tabs>
-        The MCP plugin uses the same schema as the OIDC Provider plugin. See the [OIDC Provider Schema](/docs/plugins/oidc-provider#schema) section for details.
-    </Step>
+    The MCP plugin uses the same schema as the OIDC Provider plugin. See the [OIDC Provider Schema](/docs/plugins/oidc-provider#schema) section for details.
+  </Step>
 </Steps>
 
 ## Usage
@@ -88,7 +91,6 @@ export const GET = oAuthProtectedResourceMetadata(auth);
 ### MCP Session Handling
 
 You can use the helper function `withMcpAuth` to get the session and handle unauthenticated calls automatically.
-
 
 ```ts title="api/[transport]/route.ts"
 import { auth } from "@/lib/auth";
@@ -188,270 +190,270 @@ export { handler as GET, handler as POST, handler as DELETE };
 
 The MCP plugin accepts the following configuration options:
 
-<TypeTable
-  type={{
-    loginPage: {
-        description: "Path to the login page where users will be redirected for authentication",
-        type: "string",
-        required: true
-    },
-    resource: {
-        description: "The resource that should be returned by the protected resource metadata endpoint",
-        type: "string",
-        required: false
-    },
-    oidcConfig: {
-        description: "Optional OIDC configuration options",
-        type: "object",
-        required: false
-    }
-  }}
-/>
+export const mcpPluginOptionsType = {
+  loginPage: {
+    description: "Path to the login page where users will be redirected for authentication",
+    type: "string",
+    required: true,
+  },
+  resource: {
+    description: "The resource that should be returned by the protected resource metadata endpoint",
+    type: "string",
+    required: false,
+  },
+  oidcConfig: {
+    description: "Optional OIDC configuration options",
+    type: "object",
+    required: false,
+  },
+}
+
+<TypeTable type={mcpPluginOptionsType} />
 
 ### OIDC Configuration
 
 The plugin supports additional OIDC configuration options through the `oidcConfig` parameter:
 
-<TypeTable
-  type={{
-    codeExpiresIn: {
-        description: "Expiration time for authorization codes in seconds",
-        type: "number",
-        default: 600
-    },
-    accessTokenExpiresIn: {
-        description: "Expiration time for access tokens in seconds",
-        type: "number",
-        default: 3600
-    },
-    refreshTokenExpiresIn: {
-        description: "Expiration time for refresh tokens in seconds",
-        type: "number",
-        default: 604800
-    },
-    defaultScope: {
-        description: "Default scope for OAuth requests",
-        type: "string",
-        default: "openid"
-    },
-    scopes: {
-        description: "Additional scopes to support",
-        type: "string[]",
-        default: '["openid", "profile", "email", "offline_access"]'
-    }
-  }}
-/>
+export const mcpOidcConfigOptionsType = {
+  codeExpiresIn: {
+    description: "Expiration time for authorization codes in seconds",
+    type: "number",
+    default: 600,
+  },
+  accessTokenExpiresIn: {
+    description: "Expiration time for access tokens in seconds",
+    type: "number",
+    default: 3600,
+  },
+  refreshTokenExpiresIn: {
+    description: "Expiration time for refresh tokens in seconds",
+    type: "number",
+    default: 604800,
+  },
+  defaultScope: {
+    description: "Default scope for OAuth requests",
+    type: "string",
+    default: "openid",
+  },
+  scopes: {
+    description: "Additional scopes to support",
+    type: "string[]",
+    default: '["openid", "profile", "email", "offline_access"]',
+  },
+}
+
+<TypeTable type={mcpOidcConfigOptionsType} />
 
 ## Remote MCP Client
 
 The examples above use `withMcpAuth` which requires the Better Auth instance to be in the **same process** as the MCP server. If your MCP server runs as a separate service (different repo, different runtime, different language), you can use the **MCP Client** — a lightweight, framework-agnostic HTTP client that validates Bearer tokens against a remote Better Auth server.
 
 <Callout>
-    No additional packages needed — the MCP Client is included in `better-auth`.
+  No additional packages needed — the MCP Client is included in `better-auth`.
 </Callout>
 
 ### Setup
 
 <Steps>
-    <Step>
-        ### Create the client
+  <Step>
+    ### Create the client
 
-        Point it at your Better Auth server's URL (the same `baseURL` + `basePath` from your auth config):
+    Point it at your Better Auth server's URL (the same `baseURL` + `basePath` from your auth config):
 
-        ```ts title="mcp-server.ts"
-        import { createMcpAuthClient } from "better-auth/plugins/mcp/client" // [!code highlight]
+    ```ts title="mcp-server.ts"
+    import { createMcpAuthClient } from "better-auth/plugins/mcp/client" // [!code highlight]
 
-        const mcpAuth = createMcpAuthClient({ // [!code highlight]
-            authURL: "http://localhost:3000/api/auth" // [!code highlight]
-        }) // [!code highlight]
-        ```
-    </Step>
+    const mcpAuth = createMcpAuthClient({ // [!code highlight]
+        authURL: "http://localhost:3000/api/auth" // [!code highlight]
+    }) // [!code highlight]
+    ```
+  </Step>
 
-    <Step>
-        ### Protect your MCP routes
+  <Step>
+    ### Protect your MCP routes
 
-        Use the `handler` wrapper for Web Standard `Request`/`Response` (works with Deno, Bun, Cloudflare Workers, etc.):
+    Use the `handler` wrapper for Web Standard `Request`/`Response` (works with Deno, Bun, Cloudflare Workers, etc.):
 
-        ```ts title="mcp-server.ts"
-        const handler = mcpAuth.handler(async (req, session) => { // [!code highlight]
-            // session.userId, session.scopes, session.clientId
-            return new Response(JSON.stringify({
-                jsonrpc: "2.0",
-                result: { userId: session.userId },
-                id: 1
-            }))
-        }) // [!code highlight]
+    ```ts title="mcp-server.ts"
+    const handler = mcpAuth.handler(async (req, session) => { // [!code highlight]
+        // session.userId, session.scopes, session.clientId
+        return new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            result: { userId: session.userId },
+            id: 1
+        }))
+    }) // [!code highlight]
 
-        Deno.serve(handler)
-        ```
-    </Step>
+    Deno.serve(handler)
+    ```
+  </Step>
 
-    <Step>
-        ### Mount discovery endpoints
+  <Step>
+    ### Mount discovery endpoints
 
-        MCP clients need to discover your OAuth server. Mount these at the root of your MCP server:
+    MCP clients need to discover your OAuth server. Mount these at the root of your MCP server:
 
-        ```ts title="mcp-server.ts"
-        const discovery = mcpAuth.discoveryHandler() // [!code highlight]
-        const protectedResource = mcpAuth.protectedResourceHandler("http://localhost:4000") // [!code highlight]
+    ```ts title="mcp-server.ts"
+    const discovery = mcpAuth.discoveryHandler() // [!code highlight]
+    const protectedResource = mcpAuth.protectedResourceHandler("http://localhost:4000") // [!code highlight]
 
-        // GET /.well-known/oauth-authorization-server → proxied from Better Auth
-        // GET /.well-known/oauth-protected-resource → points MCP clients to Better Auth
-        ```
+    // GET /.well-known/oauth-authorization-server → proxied from Better Auth
+    // GET /.well-known/oauth-protected-resource → points MCP clients to Better Auth
+    ```
 
-        These proxy and cache the metadata from your Better Auth server, so MCP clients can discover the authorization, token, and registration endpoints automatically.
-    </Step>
+    These proxy and cache the metadata from your Better Auth server, so MCP clients can discover the authorization, token, and registration endpoints automatically.
+  </Step>
 </Steps>
 
 ### Framework Adapters
 
 <Tabs items={["Hono", "Express", "Official MCP SDK", "mcp-use"]}>
-    <Tab value="Hono">
-        ```ts title="mcp-server.ts"
-        import { Hono } from "hono"
-        import { mcpAuthHono } from "better-auth/plugins/mcp/client/adapters" // [!code highlight]
+  <Tab value="Hono">
+    ```ts title="mcp-server.ts"
+    import { Hono } from "hono"
+    import { mcpAuthHono } from "better-auth/plugins/mcp/client/adapters" // [!code highlight]
 
-        const app = new Hono()
-        const { middleware, discoveryRoutes } = mcpAuthHono({ // [!code highlight]
+    const app = new Hono()
+    const { middleware, discoveryRoutes } = mcpAuthHono({ // [!code highlight]
+        authURL: "http://localhost:3000/api/auth" // [!code highlight]
+    }) // [!code highlight]
+
+    // Mount OAuth discovery endpoints (required by MCP spec)
+    discoveryRoutes(app, "http://localhost:4000") // [!code highlight]
+
+    // Protect MCP routes
+    app.use("/mcp/*", middleware) // [!code highlight]
+
+    app.post("/mcp", (c) => {
+        const session = c.get("mcpSession") // [!code highlight]
+        // session.userId, session.scopes, etc.
+    })
+    ```
+  </Tab>
+
+  <Tab value="Express">
+    ```ts title="mcp-server.ts"
+    import express from "express"
+    import { createMcpAuthClient } from "better-auth/plugins/mcp/client" // [!code highlight]
+
+    const app = express()
+    const mcpAuth = createMcpAuthClient({ // [!code highlight]
+        authURL: "http://localhost:3000/api/auth" // [!code highlight]
+    }) // [!code highlight]
+
+    app.use("/mcp", mcpAuth.middleware()) // [!code highlight]
+
+    app.post("/mcp", (req, res) => {
+        const session = req.mcpSession // [!code highlight]
+        // session.userId, session.scopes, etc.
+    })
+    ```
+  </Tab>
+
+  <Tab value="Official MCP SDK">
+    ```ts title="mcp-server.ts"
+    import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+    import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
+    import { mcpAuthOfficial } from "better-auth/plugins/mcp/client/adapters" // [!code highlight]
+
+    const auth = mcpAuthOfficial({ // [!code highlight]
+        authURL: "http://localhost:3000/api/auth" // [!code highlight]
+    }) // [!code highlight]
+
+    const mcpServer = new McpServer({ name: "my-server", version: "1.0.0" })
+    const app = express() // your HTTP framework
+
+    app.post("/mcp", auth.handler(async (req, session) => { // [!code highlight]
+        const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => crypto.randomUUID()
+        })
+        await mcpServer.connect(transport)
+        return transport.handleRequest(req)
+    }))
+    ```
+  </Tab>
+
+  <Tab value="mcp-use">
+    Drop-in replacement for `oauthWorkOSProvider`, `oauthSupabaseProvider`, etc.:
+
+    ```ts title="mcp-server.ts"
+    import { MCPServer } from "mcp-use/server"
+    import { mcpAuthMcpUse } from "better-auth/plugins/mcp/client/adapters" // [!code highlight]
+
+    const server = new MCPServer({
+        name: "my-server",
+        version: "1.0.0",
+        oauth: mcpAuthMcpUse({ // [!code highlight]
             authURL: "http://localhost:3000/api/auth" // [!code highlight]
         }) // [!code highlight]
-
-        // Mount OAuth discovery endpoints (required by MCP spec)
-        discoveryRoutes(app, "http://localhost:4000") // [!code highlight]
-
-        // Protect MCP routes
-        app.use("/mcp/*", middleware) // [!code highlight]
-
-        app.post("/mcp", (c) => {
-            const session = c.get("mcpSession") // [!code highlight]
-            // session.userId, session.scopes, etc.
-        })
-        ```
-    </Tab>
-
-    <Tab value="Express">
-        ```ts title="mcp-server.ts"
-        import express from "express"
-        import { createMcpAuthClient } from "better-auth/plugins/mcp/client" // [!code highlight]
-
-        const app = express()
-        const mcpAuth = createMcpAuthClient({ // [!code highlight]
-            authURL: "http://localhost:3000/api/auth" // [!code highlight]
-        }) // [!code highlight]
-
-        app.use("/mcp", mcpAuth.middleware()) // [!code highlight]
-
-        app.post("/mcp", (req, res) => {
-            const session = req.mcpSession // [!code highlight]
-            // session.userId, session.scopes, etc.
-        })
-        ```
-    </Tab>
-
-    <Tab value="Official MCP SDK">
-        ```ts title="mcp-server.ts"
-        import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-        import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
-        import { mcpAuthOfficial } from "better-auth/plugins/mcp/client/adapters" // [!code highlight]
-
-        const auth = mcpAuthOfficial({ // [!code highlight]
-            authURL: "http://localhost:3000/api/auth" // [!code highlight]
-        }) // [!code highlight]
-
-        const mcpServer = new McpServer({ name: "my-server", version: "1.0.0" })
-        const app = express() // your HTTP framework
-
-        app.post("/mcp", auth.handler(async (req, session) => { // [!code highlight]
-            const transport = new StreamableHTTPServerTransport({
-                sessionIdGenerator: () => crypto.randomUUID()
-            })
-            await mcpServer.connect(transport)
-            return transport.handleRequest(req)
-        }))
-        ```
-    </Tab>
-
-    <Tab value="mcp-use">
-        Drop-in replacement for `oauthWorkOSProvider`, `oauthSupabaseProvider`, etc.:
-
-        ```ts title="mcp-server.ts"
-        import { MCPServer } from "mcp-use/server"
-        import { mcpAuthMcpUse } from "better-auth/plugins/mcp/client/adapters" // [!code highlight]
-
-        const server = new MCPServer({
-            name: "my-server",
-            version: "1.0.0",
-            oauth: mcpAuthMcpUse({ // [!code highlight]
-                authURL: "http://localhost:3000/api/auth" // [!code highlight]
-            }) // [!code highlight]
-        })
-        ```
-    </Tab>
+    })
+    ```
+  </Tab>
 </Tabs>
 
 ### Options
 
-<TypeTable
-  type={{
-    authURL: {
-        description: "Full URL to Better Auth endpoints (baseURL + basePath)",
-        type: "string",
-        required: true
-    },
-    resource: {
-        description: "Resource identifier for the protected resource metadata. Defaults to the origin of the server URL.",
-        type: "string",
-        required: false
-    },
-    allowedOrigin: {
-        description: "Allowed CORS origin. Defaults to the authURL origin. Set to '*' to allow all origins (not recommended for production).",
-        type: "string",
-        required: false
-    },
-    fetch: {
-        description: "Custom fetch implementation. Defaults to global fetch.",
-        type: "typeof fetch",
-        required: false
-    }
-  }}
-/>
+export const mcpClientOptionsType = {
+  authURL: {
+    description: "Full URL to Better Auth endpoints (baseURL + basePath)",
+    type: "string",
+    required: true,
+  },
+  resource: {
+    description: "Resource identifier for the protected resource metadata. Defaults to the origin of the server URL.",
+    type: "string",
+    required: false,
+  },
+  allowedOrigin: {
+    description: "Allowed CORS origin. Defaults to the authURL origin. Set to '*' to allow all origins (not recommended for production).",
+    type: "string",
+    required: false,
+  },
+  fetch: {
+    description: "Custom fetch implementation. Defaults to global fetch.",
+    type: "typeof fetch",
+    required: false,
+  },
+}
+
+<TypeTable type={mcpClientOptionsType} />
 
 ### Session Object
 
 The session object returned by `verifyToken` and passed to handlers contains:
 
-<TypeTable
-  type={{
-    accessToken: {
-        description: "The opaque access token",
-        type: "string"
-    },
-    refreshToken: {
-        description: "The refresh token",
-        type: "string"
-    },
-    accessTokenExpiresAt: {
-        description: "When the access token expires",
-        type: "string"
-    },
-    refreshTokenExpiresAt: {
-        description: "When the refresh token expires",
-        type: "string"
-    },
-    clientId: {
-        description: "The OAuth client ID that requested the token",
-        type: "string"
-    },
-    userId: {
-        description: "The authenticated user's ID",
-        type: "string"
-    },
-    scopes: {
-        description: "Space-separated list of granted scopes",
-        type: "string"
-    }
-  }}
-/>
+export const mcpSessionObjectType = {
+  accessToken: {
+    description: "The opaque access token",
+    type: "string",
+  },
+  refreshToken: {
+    description: "The refresh token",
+    type: "string",
+  },
+  accessTokenExpiresAt: {
+    description: "When the access token expires",
+    type: "string",
+  },
+  refreshTokenExpiresAt: {
+    description: "When the refresh token expires",
+    type: "string",
+  },
+  clientId: {
+    description: "The OAuth client ID that requested the token",
+    type: "string",
+  },
+  userId: {
+    description: "The authenticated user's ID",
+    type: "string",
+  },
+  scopes: {
+    description: "Space-separated list of granted scopes",
+    type: "string",
+  },
+}
+
+<TypeTable type={mcpSessionObjectType} />
 
 ## Schema
 
