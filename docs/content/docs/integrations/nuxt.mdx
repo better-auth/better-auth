@@ -16,8 +16,9 @@ export default defineEventHandler((event) => {
 	return auth.handler(toWebRequest(event));
 });
 ```
+
 <Callout type="info">
- You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
+  You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
 </Callout>
 
 ## Create a client
@@ -80,7 +81,6 @@ export default defineEventHandler((event) => {
 });
 ```
 
-
 ### SSR Usage
 
 If you are using Nuxt with SSR, you can use the `useSession` function in the `setup` function of your page component and pass `useFetch` to make it work with SSR.
@@ -98,7 +98,6 @@ const { data: session } = await authClient.useSession(useFetch);
     </p>
 </template>
 ```
-
 
 ### Middleware
 
@@ -118,8 +117,8 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 
 ### Resources & Examples
 
-- [Nuxt and Nuxt Hub example](https://github.com/atinux/nuxthub-better-auth) on GitHub.
-- [NuxtZzle is Nuxt,Drizzle ORM example](https://github.com/leamsigc/nuxt-better-auth-drizzle) on GitHub [preview](https://nuxt-better-auth.giessen.dev/)
-- [Nuxt example](https://stackblitz.com/github/better-auth/examples/tree/main/nuxt-example) on StackBlitz.
-- [NuxSaaS (Github)](https://github.com/NuxSaaS/NuxSaaS) is a full-stack SaaS Starter Kit that leverages Better Auth for secure and efficient user authentication. [Demo](https://nuxsaas.com/)
-- [NuxtOne (Github)](https://github.com/nuxtone/nuxt-one) is a Nuxt-based starter template for building AIaaS (AI-as-a-Service) applications.
+* [Nuxt and Nuxt Hub example](https://github.com/atinux/nuxthub-better-auth) on GitHub.
+* [NuxtZzle is Nuxt,Drizzle ORM example](https://github.com/leamsigc/nuxt-better-auth-drizzle) on GitHub [preview](https://nuxt-better-auth.giessen.dev/)
+* [Nuxt example](https://stackblitz.com/github/better-auth/examples/tree/main/nuxt-example) on StackBlitz.
+* [NuxSaaS (Github)](https://github.com/NuxSaaS/NuxSaaS) is a full-stack SaaS Starter Kit that leverages Better Auth for secure and efficient user authentication. [Demo](https://nuxsaas.com/)
+* [NuxtOne (Github)](https://github.com/nuxtone/nuxt-one) is a Nuxt-based starter template for building AIaaS (AI-as-a-Service) applications.
