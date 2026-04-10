@@ -8,6 +8,41 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { withSpan } from ".";
 import { ATTR_DB_COLLECTION_NAME, ATTR_DB_OPERATION_NAME } from "./attributes";
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8765
+ */
+describe("withSpan no-op behavior (no SDK registered)", () => {
+	it("returns the value of a synchronous function", () => {
+		const result = withSpan("noop.sync", { attr: "value" }, () => 42);
+		expect(result).toBe(42);
+	});
+
+	it("returns the resolved value of an async function", async () => {
+		const result = await withSpan("noop.async", { attr: "value" }, async () => {
+			await new Promise((r) => setTimeout(r, 0));
+			return "async-noop";
+		});
+		expect(result).toBe("async-noop");
+	});
+
+	it("re-throws synchronous errors", () => {
+		expect(() =>
+			withSpan("noop.sync.throw", {}, () => {
+				throw new Error("noop-sync-error");
+			}),
+		).toThrow("noop-sync-error");
+	});
+
+	it("re-throws asynchronous errors", async () => {
+		await expect(
+			withSpan("noop.async.throw", {}, async () => {
+				await Promise.resolve();
+				throw new Error("noop-async-error");
+			}),
+		).rejects.toThrow("noop-async-error");
+	});
+});
+
 describe("instrumentation", () => {
 	let provider: NodeTracerProvider;
 	let exporter: InMemorySpanExporter;

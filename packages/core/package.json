@@ -149,6 +149,7 @@
     }
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/semantic-conventions": "^1.39.0",
     "@standard-schema/spec": "^1.1.0",
     "zod": "^4.3.6"
@@ -169,7 +170,6 @@
   "peerDependencies": {
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "@opentelemetry/api": "^1.9.0",
     "better-call": "catalog:",
     "@cloudflare/workers-types": ">=4",
     "jose": "^6.1.0",
