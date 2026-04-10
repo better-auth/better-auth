@@ -577,3 +577,199 @@ describe("inviteMember role validation", async () => {
 		expect(data).toBeDefined();
 	});
 });
+
+describe("activateMember / deactivateMember", async () => {
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const org = await client.organization.create({
+		name: "active-test",
+		slug: "active-test",
+		fetchOptions: { headers },
+	});
+
+	const newUser = await auth.api.signUpEmail({
+		body: {
+			email: "active-test-user@test.com",
+			name: "active-test",
+			password: "password",
+		},
+	});
+
+	const member = await auth.api.addMember({
+		body: {
+			organizationId: org.data?.id as string,
+			userId: newUser.user.id,
+			role: "admin",
+		},
+	});
+
+	it("should default new members to active", () => {
+		expect(member?.active).toBe(true);
+	});
+
+	it("should deactivate a member", async () => {
+		const result = await auth.api.deactivateMember({
+			body: {
+				memberId: member!.id,
+				organizationId: org.data?.id as string,
+			},
+			headers,
+		});
+		expect(result?.active).toBe(false);
+	});
+
+	it("inactive members should still appear in listMembers", async () => {
+		await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: { headers },
+		});
+		const { data } = await client.organization.listMembers({
+			fetchOptions: { headers },
+		});
+		const deactivated = data?.members.find((m) => m.id === member!.id);
+		expect(deactivated).toBeDefined();
+		expect(deactivated?.active).toBe(false);
+	});
+
+	it("inactive member cannot set active organization", async () => {
+		const memberHeaders = new Headers();
+		await client.signIn.email({
+			email: "active-test-user@test.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) memberHeaders.set("cookie", setCookie);
+				},
+			},
+		});
+		const result = await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: { headers: memberHeaders },
+		});
+		expect(result.error).toBeTruthy();
+		expect(result.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.MEMBER_IS_NOT_ACTIVE.message,
+		);
+	});
+
+	it("should activate a member", async () => {
+		const result = await auth.api.activateMember({
+			body: {
+				memberId: member!.id,
+				organizationId: org.data?.id as string,
+			},
+			headers,
+		});
+		expect(result?.active).toBe(true);
+	});
+
+	it("activated member can set active organization again", async () => {
+		const memberHeaders = new Headers();
+		await client.signIn.email({
+			email: "active-test-user@test.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) memberHeaders.set("cookie", setCookie);
+				},
+			},
+		});
+		const result = await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: { headers: memberHeaders },
+		});
+		expect(result.error).toBeNull();
+	});
+
+	it("should not deactivate the last active owner", async () => {
+		const ownerMember = org.data?.members[0];
+		const result = await auth.api
+			.deactivateMember({
+				body: {
+					memberId: ownerMember!.id,
+					organizationId: org.data?.id as string,
+				},
+				headers,
+			})
+			.catch((e) => e);
+		expect(result.message || result.error?.message).toContain(
+			ORGANIZATION_ERROR_CODES
+				.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER.message,
+		);
+	});
+
+	it("inactive member should fail permission checks", async () => {
+		const organizationId = org.data?.id as string;
+
+		// Deactivate the admin member again
+		await auth.api.deactivateMember({
+			body: {
+				memberId: member!.id,
+				organizationId,
+			},
+			headers,
+		});
+
+		// Create a third user to test with
+		const thirdUser = await auth.api.signUpEmail({
+			body: {
+				email: "active-test-user3@test.com",
+				name: "active-test3",
+				password: "password",
+			},
+		});
+		const thirdUserMember = await auth.api.addMember({
+			body: {
+				organizationId,
+				userId: thirdUser.user.id,
+				role: "member",
+			},
+			headers,
+		});
+
+		// Sign in as the inactive admin
+		const memberHeaders = new Headers();
+		await client.signIn.email({
+			email: "active-test-user@test.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) memberHeaders.set("cookie", setCookie);
+				},
+			},
+		});
+
+		// Try to update a member's role — should fail
+		const updateResult = await client.organization.updateMemberRole(
+			{
+				organizationId: organizationId,
+				memberId: thirdUserMember.id,
+				role: "admin",
+			},
+			{ headers: memberHeaders },
+		);
+		expect(updateResult.error).toBeTruthy();
+
+		// Re-activate for cleanup
+		await auth.api.activateMember({
+			body: {
+				memberId: member!.id,
+				organizationId,
+			},
+			headers,
+		});
+	});
+});

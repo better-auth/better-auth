@@ -6,6 +6,7 @@ export const createUserResource = (
 	baseURL: string,
 	user: User,
 	account?: Account | null,
+	member?: { active?: boolean } | null,
 ) => {
 	return {
 		// Common attributes
@@ -28,7 +29,7 @@ export const createUserResource = (
 			formatted: user.name,
 		},
 		displayName: user.name,
-		active: true,
+		active: member ? member.active !== false : true,
 		emails: [{ primary: true, value: user.email }],
 		schemas: [SCIMUserResourceSchema.id],
 	};

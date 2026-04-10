@@ -9,13 +9,14 @@ type Operation = {
 
 type Mapping = {
 	target: string;
-	resource: "user" | "account";
+	resource: "user" | "account" | "member";
 	map: (user: User, op: Operation, resources: Resources) => any;
 };
 
 type Resources = {
 	user: Record<string, any>;
 	account: Record<string, any>;
+	member: Record<string, any>;
 };
 
 const identity = (user: User, op: Operation, resources: Resources) => {
@@ -63,6 +64,7 @@ const userPatchMappings: Record<string, Mapping> = {
 		map: identity,
 	},
 	"/userName": { resource: "user", target: "email", map: lowerCase },
+	"/active": { resource: "member", target: "active", map: identity },
 };
 
 const normalizePath = (path: string): string => {
@@ -128,7 +130,12 @@ const applyPatchValue = (
 export const buildUserPatch = (user: User, operations: Operation[]) => {
 	const userPatch: Record<string, any> = {};
 	const accountPatch: Record<string, any> = {};
-	const resources: Resources = { user: userPatch, account: accountPatch };
+	const memberPatch: Record<string, any> = {};
+	const resources: Resources = {
+		user: userPatch,
+		account: accountPatch,
+		member: memberPatch,
+	};
 
 	for (const operation of operations) {
 		if (operation.op !== "add" && operation.op !== "replace") {

@@ -90,4 +90,5 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
 	ROLE_IS_ASSIGNED_TO_MEMBERS:
 		"Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
+	MEMBER_IS_NOT_ACTIVE: "Member is not active in this organization",
 });

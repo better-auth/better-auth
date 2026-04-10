@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
+import type { Member } from "better-auth/plugins";
 import { bearer, organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
@@ -716,6 +717,73 @@ describe("SCIM", () => {
 					},
 				}),
 			);
+		});
+
+		it("should update the member active state via PATCH active", async () => {
+			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
+			const org = await registerOrganization("patch-active-org");
+			const scimToken = await getSCIMToken("patch-active-provider", org.id);
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "patch-active-user@test.com",
+					name: { formatted: "Patch Active User" },
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			// Verify user starts as active
+			const initialUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+			expect(initialUser.active).toBe(true);
+
+			// PATCH active to false
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [{ op: "replace", path: "active", value: false }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			// Verify user is now inactive via SCIM GET
+			const deactivatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+			expect(deactivatedUser.active).toBe(false);
+
+			// Verify the member record in DB is also inactive
+			const ctx = await auth.$context;
+			const member = await ctx.adapter.findOne<Member>({
+				model: "member",
+				where: [
+					{ field: "organizationId", value: org.id },
+					{ field: "userId", value: user.id },
+				],
+			});
+			expect(member?.active).toBe(false);
+
+			// PATCH active back to true
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [{ op: "replace", path: "active", value: true }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const reactivatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+			expect(reactivatedUser.active).toBe(true);
 		});
 	});
 });

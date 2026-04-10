@@ -113,6 +113,7 @@ model Member {
   userId         String
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role           String    @db.Text
+  active         Boolean?  @default(true)
   createdAt      DateTime
 
   @@index([organizationId(length: 191)])

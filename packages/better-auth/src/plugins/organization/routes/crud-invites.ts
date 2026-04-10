@@ -204,6 +204,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			const canInvite = await hasPermission(
 				{
 					role: member.role,
+					memberActive: member.active,
 					options: ctx.context.orgOptions,
 					permissions: {
 						invitation: ["create"],
@@ -889,6 +890,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			const canCancel = await hasPermission(
 				{
 					role: member.role,
+					memberActive: member.active,
 					options: ctx.context.orgOptions,
 					permissions: {
 						invitation: ["cancel"],
