@@ -1911,18 +1911,48 @@ export const acsEndpoint = (options?: SSOOptions) => {
 		async (ctx) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
+			const appOrigin = new URL(ctx.context.baseURL).origin;
 
-			const safeRedirectUrl = await processSAMLResponse(
-				ctx,
-				{
-					SAMLResponse: ctx.body.SAMLResponse,
-					RelayState: ctx.body.RelayState,
-					providerId,
-					currentCallbackPath,
-				},
-				options,
-			);
-			throw ctx.redirect(safeRedirectUrl);
+			try {
+				const safeRedirectUrl = await processSAMLResponse(
+					ctx,
+					{
+						SAMLResponse: ctx.body.SAMLResponse,
+						RelayState: ctx.body.RelayState,
+						providerId,
+						currentCallbackPath,
+					},
+					options,
+				);
+				throw ctx.redirect(safeRedirectUrl);
+			} catch (error) {
+				// Re-throw redirects (they use throw for control flow)
+				if (
+					error instanceof Response ||
+					(error &&
+						typeof error === "object" &&
+						"status" in error &&
+						(error as any).status === 302)
+				) {
+					throw error;
+				}
+				// Translate structural SAML errors (400) into browser-friendly redirects
+				// so the user returns to the app instead of seeing raw JSON.
+				// Non-400 errors (404 provider not found, 401 unauthorized) propagate as-is.
+				if (error instanceof APIError && error.statusCode === 400) {
+					const errorCode = error.body?.code || "saml_error";
+					const redirectUrl = getSafeRedirectUrl(
+						ctx.body.RelayState || undefined,
+						currentCallbackPath,
+						appOrigin,
+						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+					);
+					throw ctx.redirect(
+						`${redirectUrl}?error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
+					);
+				}
+				throw error;
+			}
 		},
 	);
 };
