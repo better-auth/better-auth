@@ -29,7 +29,11 @@ import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
 import { totp2fa } from "./totp";
-import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+import type {
+	TwoFactorOptions,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "./types";
 
 export * from "./error-code";
 
@@ -213,15 +217,14 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							ctx.context.session.session.token,
 						);
 					}
-					//delete existing two factor
+					const existingTwoFactor =
+						await ctx.context.adapter.findOne<TwoFactorTable>({
+							model: opts.twoFactorTable,
+							where: [{ field: "userId", value: user.id }],
+						});
 					await ctx.context.adapter.deleteMany({
 						model: opts.twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-						],
+						where: [{ field: "userId", value: user.id }],
 					});
 
 					await ctx.context.adapter.create({
@@ -230,6 +233,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							secret: encryptedSecret,
 							backupCodes: backupCodes.encryptedBackupCodes,
 							userId: user.id,
+							verified:
+								(existingTwoFactor != null &&
+									existingTwoFactor.verified !== false) ||
+								!!options?.skipVerificationOnEnable,
 						},
 					});
 					const totpURI = createOTP(secret, {
@@ -481,8 +488,39 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							ctx.context.secret,
 							twoFactorCookie.attributes,
 						);
+						const twoFactorMethods: string[] = [];
+
+						/**
+						 * totp requires per-user setup, so we check
+						 * that the user actually has a secret stored.
+						 */
+						if (!options?.totpOptions?.disable) {
+							const userTotpSecret =
+								await ctx.context.adapter.findOne<TwoFactorTable>({
+									model: opts.twoFactorTable,
+									where: [
+										{
+											field: "userId",
+											value: data.user.id,
+										},
+									],
+								});
+							if (userTotpSecret && userTotpSecret.verified !== false) {
+								twoFactorMethods.push("totp");
+							}
+						}
+
+						/**
+						 * otp is server-level — if sendOTP is configured,
+						 * any user with 2fa enabled can receive a code.
+						 */
+						if (options?.otpOptions?.sendOTP) {
+							twoFactorMethods.push("otp");
+						}
+
 						return ctx.json({
 							twoFactorRedirect: true,
+							twoFactorMethods,
 						});
 					}),
 				},

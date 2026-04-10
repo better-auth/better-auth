@@ -1118,7 +1118,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Vercel",
 				href: "/docs/authentication/vercel",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1153,7 +1152,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "WeChat",
 				href: "/docs/authentication/wechat",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1497,7 +1495,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Electron",
 				icon: Icons.electron,
 				href: "/docs/integrations/electron",
-				isNew: true,
 			},
 			{
 				title: "SvelteKit",
@@ -1534,7 +1531,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Encore",
 				icon: Icons.encore,
 				href: "/docs/integrations/encore",
-				isNew: true,
 			},
 			{
 				title: "Express",
@@ -1927,7 +1923,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
-				isNew: true,
 			},
 			{
 				title: "SSO",
@@ -1966,7 +1961,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					</svg>
 				),
 				href: "/docs/plugins/scim",
-				isNew: true,
 			},
 			{
 				title: "Utility",
@@ -2138,23 +2132,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						viewBox="0 0 256 257"
 					>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="M147.386 69.071L147.129 0h-38.515l.257 69.071l19.257 26.448zm-38.515 118.371v69.328h38.515v-69.328l-19.258-26.447z"
 						></path>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="m147.386 187.442l40.57 55.976l31.069-22.596l-40.57-55.975l-31.069-10.015zM108.871 69.071L68.044 13.095L36.975 35.691l40.57 55.976l31.326 10.014z"
 						></path>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="M77.545 91.667L11.811 70.355L0 106.816l65.733 21.569l31.069-10.271zm81.653 46.732l19.257 26.448l65.734 21.311L256 149.697l-65.733-21.312z"
 						></path>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="M190.267 128.385L256 106.816l-11.811-36.461l-65.734 21.312l-19.257 26.447zm-124.534 0L0 149.697l11.811 36.461l65.734-21.311l19.257-26.448z"
 						></path>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="m77.545 164.847l-40.57 55.975l31.069 22.596l40.827-55.976v-32.61zm100.91-73.18l40.57-55.976l-31.069-22.596l-40.57 55.976v32.61z"
 						></path>
 					</svg>
@@ -2165,7 +2159,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Test Utils",
 				href: "/docs/plugins/test-utils",
 				icon: () => <FlaskConical className="w-4 h-4" />,
-				isNew: true,
 			},
 			{
 				title: "Payments",
@@ -2306,28 +2299,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
-				title: "Commet",
-				href: "/docs/plugins/commet",
-				icon: () => (
-					<svg
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 500 500"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							d="M250 71L356.521 255.5H143.479L250 71Z"
-							fill="currentColor"
-						/>
-						<path
-							d="M250 440L356.521 255.5H143.479L250 440Z"
-							fill="currentColor"
-						/>
-					</svg>
-				),
-			},
-			{
 				title: "Chargebee",
 				href: "/docs/plugins/chargebee",
 				icon: () => (
@@ -2369,26 +2340,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 							d="M32.5 64C50.1731 64 64.5 49.6731 64.5 32C64.5 20.1555 58.0648 9.81393 48.5 4.28099V31.9999V47.9998H40.5V45.8594C38.1466 47.2207 35.4143 47.9999 32.5 47.9999C23.6634 47.9999 16.5 40.8364 16.5 31.9999C16.5 23.1633 23.6634 15.9999 32.5 15.9999C35.4143 15.9999 38.1466 16.779 40.5 18.1404V1.00812C37.943 0.350018 35.2624 0 32.5 0C14.8269 0 0.500038 14.3269 0.500038 32C0.500038 49.6731 14.8269 64 32.5 64Z"
 							fill="currentColor"
 						/>
-					</svg>
-				),
-			},
-			{
-				title: "Openfort",
-				href: "/docs/plugins/openfort",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						fill="none"
-						aria-hidden="true"
-						viewBox="597.32 331.34 171.36 105.32"
-					>
-						<g fill="currentColor">
-							<rect x="673.9" y="404.26" width="18.2" height="32.4" />
-							<polygon points="768.68,331.36 768.68,331.36 768.68,331.34 610.78,331.34 610.78,331.36 597.32,331.36 597.32,436.64    615.52,436.64 615.52,349.54 750.48,349.54 750.48,436.64 768.68,436.64  " />
-							<polygon points="732.16,367.79 633.83,367.79 633.83,370.19 633.79,370.19 633.79,436.64 651.99,436.64 651.99,385.99    713.9,385.99 713.9,436.64 732.09,436.64 732.09,385.99 732.16,385.99  " />
-						</g>
 					</svg>
 				),
 			},
