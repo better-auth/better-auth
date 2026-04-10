@@ -31,6 +31,14 @@ export type StripeCtxSession = {
 	user: User & WithStripeCustomerId;
 };
 
+export type CheckoutSessionLocale = NonNullable<
+	Stripe.Checkout.SessionCreateParams["locale"]
+>;
+
+export type CheckoutSessionLineItem = NonNullable<
+	Stripe.Checkout.SessionCreateParams["line_items"]
+>[number];
+
 export type StripePlan = {
 	/**
 	 * Monthly price id
@@ -103,7 +111,7 @@ export type StripePlan = {
 	 *
 	 * @see https://docs.stripe.com/billing/subscriptions/mixed-interval#limitations
 	 */
-	lineItems?: Stripe.Checkout.SessionCreateParams.LineItem[] | undefined;
+	lineItems?: CheckoutSessionLineItem[] | undefined;
 	/**
 	 * Free trial days
 	 */

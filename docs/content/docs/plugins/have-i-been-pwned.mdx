@@ -8,6 +8,7 @@ The Have I Been Pwned plugin helps protect user accounts by preventing the use o
 ## Installation
 
 ### Add the plugin to your **auth** config
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { haveIBeenPwned } from "better-auth/plugins" // [!code highlight]
@@ -68,6 +69,6 @@ const auth = betterAuth({
 
 ## Security Notes
 
-- Only the first 5 characters of the password hash are sent to the API
-- The full password is never transmitted
-- Provides an additional layer of account security
+* Only the first 5 characters of the password hash are sent to the API
+* The full password is never transmitted
+* Provides an additional layer of account security
