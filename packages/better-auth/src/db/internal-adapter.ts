@@ -270,9 +270,24 @@ export const createInternalAdapter = (
 						image: null,
 					};
 
-					const anonymized = options.user?.deleteUser?.anonymizeUser
+					const rawAnonymized = options.user?.deleteUser?.anonymizeUser
 						? options.user.deleteUser.anonymizeUser(user)
 						: defaultAnonymized;
+
+					// Strip reserved fields that must not be overwritten by the
+					// anonymize callback (referential integrity / security fields).
+					const RESERVED_FIELDS = new Set([
+						"id",
+						"createdAt",
+						"updatedAt",
+						"emailVerified",
+						"deletedAt",
+					]);
+					const anonymized = Object.fromEntries(
+						Object.entries(rawAnonymized).filter(
+							([key]) => !RESERVED_FIELDS.has(key),
+						),
+					);
 
 					await updateWithHooks<User>(
 						{ ...anonymized, deletedAt: new Date() },

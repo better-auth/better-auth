@@ -2113,4 +2113,98 @@ describe("soft delete", async () => {
 		expect(dbUser?.name).toBe(`anon-${userId}`);
 		expect(dbUser?.email).toBe(`custom-deleted-${userId}@gone.invalid`);
 	});
+
+	it("anonymizeUser callback cannot overwrite reserved fields (id, createdAt, updatedAt, emailVerified, deletedAt)", async () => {
+		const {
+			signInWithTestUser: customSignIn,
+			customFetchImpl: customFetch,
+			db: customDb,
+		} = await getTestInstance(
+			{
+				plugins: [admin()],
+				user: {
+					deleteUser: {
+						enabled: true,
+						softDelete: true,
+						// Malicious / buggy callback that tries to overwrite reserved fields
+						anonymizeUser: (user) => ({
+							name: "Anonymized",
+							email: `anon-${user.id}@gone.invalid`,
+							id: "hacked-id",
+							createdAt: new Date(0),
+							updatedAt: new Date(0),
+							emailVerified: false,
+							deletedAt: new Date(0),
+						}),
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return { data: { ...user, role: "admin" } };
+								}
+							},
+						},
+					},
+				},
+			},
+			{ testUser: { name: "Admin" } },
+		);
+
+		const customClient = createAuthClient({
+			fetchOptions: { customFetchImpl: customFetch },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: customAdminHeaders } = await customSignIn();
+
+		const { data: signupData } = await customClient.signUp.email({
+			email: "reserved-fields@test.com",
+			password: "password123",
+			name: "Reserved Fields User",
+		});
+		const userId = signupData?.user.id!;
+
+		const originalUser = await customDb.findOne<{
+			id: string;
+			createdAt: Date;
+			emailVerified: boolean;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+
+		await customClient.admin.removeUser(
+			{ userId },
+			{ headers: customAdminHeaders },
+		);
+
+		const dbUser = await customDb.findOne<{
+			id: string;
+			name: string;
+			email: string;
+			createdAt: Date;
+			updatedAt: Date;
+			emailVerified: boolean;
+			deletedAt: Date | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+
+		// Reserved fields must not be changed
+		expect(dbUser?.id).toBe(originalUser?.id);
+		expect(dbUser?.createdAt).toEqual(originalUser?.createdAt);
+		expect(dbUser?.emailVerified).toBe(originalUser?.emailVerified);
+		// deletedAt should be set to now (not to new Date(0) from callback)
+		expect(dbUser?.deletedAt).not.toBeNull();
+		expect(dbUser?.deletedAt?.getTime()).toBeGreaterThan(
+			new Date(0).getTime() + 1000,
+		);
+		// Non-reserved fields are anonymized
+		expect(dbUser?.name).toBe("Anonymized");
+		expect(dbUser?.email).toBe(`anon-${userId}@gone.invalid`);
+	});
 });
