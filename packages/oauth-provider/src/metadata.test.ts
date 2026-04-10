@@ -90,14 +90,17 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
@@ -147,14 +150,17 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,

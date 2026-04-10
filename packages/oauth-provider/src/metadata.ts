@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { ASSERTION_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
@@ -50,14 +51,26 @@ export function authServerMetadata(
 				: []),
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
+		],
+		token_endpoint_auth_signing_alg_values_supported: [
+			...ASSERTION_SIGNING_ALGORITHMS,
 		],
 		introspection_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
+		],
+		introspection_endpoint_auth_signing_alg_values_supported: [
+			...ASSERTION_SIGNING_ALGORITHMS,
 		],
 		revocation_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
+		],
+		revocation_endpoint_auth_signing_alg_values_supported: [
+			...ASSERTION_SIGNING_ALGORITHMS,
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,

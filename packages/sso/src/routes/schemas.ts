@@ -30,8 +30,10 @@ const oidcConfigSchema = z.object({
 	tokenEndpoint: z.string().url().optional(),
 	userInfoEndpoint: z.string().url().optional(),
 	tokenEndpointAuthentication: z
-		.enum(["client_secret_post", "client_secret_basic"])
+		.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
 		.optional(),
+	privateKeyId: z.string().optional(),
+	privateKeyAlgorithm: z.string().optional(),
 	jwksEndpoint: z.string().url().optional(),
 	discoveryEndpoint: z.string().url().optional(),
 	scopes: z.array(z.string()).optional(),

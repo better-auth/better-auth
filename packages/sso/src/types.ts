@@ -24,7 +24,8 @@ export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
-	clientSecret: string;
+	/** Required for client_secret_basic/client_secret_post. Optional for private_key_jwt. */
+	clientSecret?: string;
 	authorizationEndpoint?: string | undefined;
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string | undefined;
@@ -32,8 +33,12 @@ export interface OIDCConfig {
 	overrideUserInfo?: boolean | undefined;
 	tokenEndpoint?: string | undefined;
 	tokenEndpointAuthentication?:
-		| ("client_secret_post" | "client_secret_basic")
+		| ("client_secret_post" | "client_secret_basic" | "private_key_jwt")
 		| undefined;
+	/** Key ID for private_key_jwt key resolution */
+	privateKeyId?: string | undefined;
+	/** Signing algorithm for private_key_jwt. @default "RS256" */
+	privateKeyAlgorithm?: string | undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
 }
@@ -231,6 +236,14 @@ export interface SSOOptions {
 				 * OIDC configuration
 				 */
 				oidcConfig?: OIDCConfig;
+				/**
+				 * Private key for `private_key_jwt` authentication.
+				 * Only used with defaultSSO — not stored in DB.
+				 */
+				privateKey?: {
+					privateKeyJwk?: JsonWebKey;
+					privateKeyPem?: string;
+				};
 		  }>
 		| undefined;
 	/**
@@ -324,6 +337,21 @@ export interface SSOOptions {
 	 * per-provider callback URLs. Can be a path or a full URL.
 	 */
 	redirectURI?: string;
+	/**
+	 * Callback to resolve private key material for private_key_jwt authentication.
+	 * Called during token exchange when a provider uses tokenEndpointAuthentication: "private_key_jwt".
+	 * Keeps private keys out of the database — supports HSM/KMS/Vault integration.
+	 */
+	resolvePrivateKey?: (params: {
+		providerId: string;
+		keyId?: string;
+		issuer: string;
+	}) => Promise<{
+		privateKeyJwk?: JsonWebKey;
+		privateKeyPem?: string;
+		kid?: string;
+		algorithm?: string;
+	}>;
 	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.

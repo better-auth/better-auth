@@ -316,7 +316,33 @@ interface GenericOAuthConfig {
 
 **disableSignUp**: (Optional) If true, disables sign-up for new users entirely. Only existing users can sign in.
 
-**authentication**: (Optional) The authentication method for token requests. Can be `'basic'` or `'post'`. Defaults to `'post'`.
+**authentication**: (Optional) The authentication method for token requests. Can be `'basic'`, `'post'`, or `'private_key_jwt'`. Defaults to `'post'`.
+
+**clientAssertion**: (Optional) Configuration for `private_key_jwt` authentication. Required when `authentication` is `'private_key_jwt'`. Accepts:
+* `privateKeyJwk` — Private key in JWK format
+* `privateKeyPem` — Private key in PKCS#8 PEM format
+* `kid` — Key ID to include in the JWT header
+* `algorithm` — Signing algorithm (defaults to `'RS256'`)
+* `expiresIn` — Assertion lifetime in seconds (defaults to `120`)
+
+```ts
+genericOAuth({
+    config: [
+        {
+            providerId: "my-idp",
+            clientId: "your-client-id",
+            discoveryUrl: "https://idp.example.com/.well-known/openid-configuration",
+            authentication: "private_key_jwt",
+            clientAssertion: {
+                privateKeyJwk: { /* your JWK */ },
+                kid: "my-key-1",
+                algorithm: "RS256",
+            },
+            pkce: true,
+        },
+    ],
+}),
+```
 
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers.
 

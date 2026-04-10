@@ -400,6 +400,14 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						},
 						tokenEndpoint: finalTokenUrl,
 						authentication: providerConfig.authentication,
+						clientAssertion:
+							providerConfig.authentication === "private_key_jwt" &&
+							providerConfig.clientAssertion
+								? {
+										...providerConfig.clientAssertion,
+										tokenEndpoint: finalTokenUrl,
+									}
+								: undefined,
 						additionalParams,
 					});
 				}
