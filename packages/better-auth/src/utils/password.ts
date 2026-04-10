@@ -8,6 +8,12 @@ export async function validatePassword(
 		userId: string;
 	},
 ) {
+	if (!data.password || typeof data.password !== "string") {
+		return false;
+	}
+
+	const password = data.password.trim();
+	if (!password) return false;
 	const accounts = await ctx.context.internalAdapter.findAccounts(data.userId);
 	const credentialAccount = accounts?.find(
 		(account) => account.providerId === "credential",
@@ -18,7 +24,7 @@ export async function validatePassword(
 	}
 	const compare = await ctx.context.password.verify({
 		hash: currentPassword,
-		password: data.password,
+		password,
 	});
 	return compare;
 }
