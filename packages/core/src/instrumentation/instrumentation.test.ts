@@ -15,9 +15,22 @@ import {
 	vi,
 } from "vitest";
 import { withSpan } from ".";
+import { getOpenTelemetryAPI } from "./api";
 import { ATTR_DB_COLLECTION_NAME, ATTR_DB_OPERATION_NAME } from "./attributes";
 
 const spanWaitDefaults = { timeout: 10_000, interval: 5 } as const;
+
+async function primeLazyOpenTelemetryForTests(): Promise<void> {
+	getOpenTelemetryAPI();
+	await import("@opentelemetry/api");
+	await vi.waitUntil(
+		() =>
+			"setGlobalTracerProvider" in (getOpenTelemetryAPI().trace as object)
+				? true
+				: undefined,
+		spanWaitDefaults,
+	);
+}
 
 describe("instrumentation", () => {
 	let provider: NodeTracerProvider;
@@ -47,6 +60,7 @@ describe("instrumentation", () => {
 			spanProcessors: [new SimpleSpanProcessor(exporter)],
 		});
 		trace.setGlobalTracerProvider(provider);
+		await primeLazyOpenTelemetryForTests();
 	});
 
 	afterAll(async () => {
