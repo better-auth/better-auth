@@ -78,7 +78,7 @@ model Verification {
 
 model TwoFactor {
   id          Int      @id @default(autoincrement())
-  secret      String?
+  secret      String
   backupCodes String
   userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)

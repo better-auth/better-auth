@@ -15,7 +15,7 @@ export const schema = {
 		fields: {
 			secret: {
 				type: "string",
-				required: false,
+				required: true,
 				returned: false,
 				index: true,
 			},
@@ -37,8 +37,8 @@ export const schema = {
 			verified: {
 				type: "boolean",
 				required: false,
-				// defaults to true so pre-migration rows are treated as verified.
-				// enableTwoFactor sets: false (TOTP pending), null (OTP-only), true (re-rolling verified TOTP).
+				// defaults to true so existing rows are treated as verified during migration.
+				// new rows from enableTwoFactor explicitly set this to false.
 				defaultValue: true,
 				input: false,
 			},

@@ -78,7 +78,7 @@ model Verification {
 
 model TwoFactor {
   id          String   @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
-  secret      String?
+  secret      String
   backupCodes String
   userId      String   @db.Uuid
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)

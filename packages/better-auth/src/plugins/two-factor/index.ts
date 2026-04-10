@@ -130,7 +130,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						openapi: {
 							summary: "Enable two factor authentication",
 							description:
-								"Enable two factor authentication. Pass method 'totp' (default) to generate a TOTP URI for authenticator apps, or 'otp' to enable email/SMS-based codes immediately. Both methods return backup codes.",
+								"Enable two factor authentication. Pass method 'totp' (default) to set up an authenticator app (returns TOTP URI and backup codes), or 'otp' to enable email/SMS-based codes immediately.",
 							responses: {
 								200: {
 									description: "Successful response",
@@ -139,21 +139,26 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 											schema: {
 												type: "object",
 												properties: {
+													method: {
+														type: "string",
+														enum: ["otp", "totp"],
+														description: "The 2FA method that was enabled.",
+													},
 													totpURI: {
 														type: "string",
-														nullable: true,
 														description:
-															"TOTP URI for authenticator app setup. Null when method is 'otp'.",
+															"TOTP URI for authenticator app setup. Only present when method is 'totp'.",
 													},
 													backupCodes: {
 														type: "array",
 														items: {
 															type: "string",
 														},
-														description: "Recovery backup codes",
+														description:
+															"Recovery backup codes. Only present when method is 'totp'.",
 													},
 												},
-												required: ["totpURI", "backupCodes"],
+												required: ["method"],
 											},
 										},
 									},
@@ -202,35 +207,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						);
 					}
 
-					const backupCodes = await generateBackupCodes(
-						ctx.context.secretConfig,
-						backupCodeOptions,
-					);
-
-					const existingTwoFactor =
-						await ctx.context.adapter.findOne<TwoFactorTable>({
-							model: opts.twoFactorTable,
-							where: [{ field: "userId", value: user.id }],
-						});
-
 					if (method === "otp") {
-						const otpData = {
-							secret: null,
-							backupCodes: backupCodes.encryptedBackupCodes,
-							verified: null,
-						};
-						if (existingTwoFactor) {
-							await ctx.context.adapter.update({
-								model: opts.twoFactorTable,
-								update: otpData,
-								where: [{ field: "id", value: existingTwoFactor.id }],
-							});
-						} else {
-							await ctx.context.adapter.create({
-								model: opts.twoFactorTable,
-								data: { ...otpData, userId: user.id },
-							});
-						}
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							user.id,
 							{
@@ -249,12 +226,18 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						await ctx.context.internalAdapter.deleteSession(
 							ctx.context.session.session.token,
 						);
-						return ctx.json({
-							totpURI: null,
-							backupCodes: backupCodes.backupCodes,
-						});
+						return ctx.json({ method: "otp" as const });
 					}
 
+					const backupCodes = await generateBackupCodes(
+						ctx.context.secretConfig,
+						backupCodeOptions,
+					);
+					const existingTwoFactor =
+						await ctx.context.adapter.findOne<TwoFactorTable>({
+							model: opts.twoFactorTable,
+							where: [{ field: "userId", value: user.id }],
+						});
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secretConfig,
@@ -282,7 +265,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
 					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
-					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
+					return ctx.json({
+						method: "totp" as const,
+						totpURI,
+						backupCodes: backupCodes.backupCodes,
+					});
 				},
 			),
 			/**
@@ -544,11 +531,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 										},
 									],
 								});
-							if (
-								userTotpSecret &&
-								userTotpSecret.secret &&
-								userTotpSecret.verified !== false
-							) {
+							if (userTotpSecret && userTotpSecret.verified !== false) {
 								twoFactorMethods.push("totp");
 							}
 						}

@@ -74,7 +74,7 @@ export interface TwoFactorProvider {
 export interface TwoFactorTable {
 	id: string;
 	userId: string;
-	secret: string | null;
+	secret: string;
 	backupCodes: string;
-	verified: boolean | null;
+	verified: boolean;
 }

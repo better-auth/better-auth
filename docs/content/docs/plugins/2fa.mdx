@@ -86,8 +86,8 @@ This plugin offers two main methods to do a second factor verification:
 
 To enable two-factor authentication, call `twoFactor.enable`. The user must provide their password if they have an email/password account. You can choose between two methods:
 
-* **`totp`** (default) — sets up an authenticator app. The user must verify a TOTP code before 2FA becomes active. Returns `{ totpURI, backupCodes }`.
-* **`otp`** — enables email/SMS-based codes immediately, with no extra verification step. Returns `{ totpURI: null, backupCodes }`. Requires `otpOptions.sendOTP` to be configured on the server.
+* **`totp`** (default) — sets up an authenticator app. The user must verify a TOTP code before 2FA becomes active. Returns `{ method: "totp", totpURI, backupCodes }`.
+* **`otp`** — enables email/SMS-based codes immediately, with no extra verification step. Returns `{ method: "otp" }`. Requires `otpOptions.sendOTP` to be configured on the server.
 
 <Callout type="warn">
   By default, enabling 2FA requires a password. Users who signed up via OAuth, passkeys, magic links, or anonymous auth cannot enable 2FA unless you set `allowPasswordless: true` in the plugin config.
@@ -114,13 +114,14 @@ To enable two-factor authentication, call `twoFactor.enable`. The user must prov
 
 When `method` is `"totp"` (default):
 
-* Returns `{ totpURI, backupCodes }`. Use `totpURI` to display a QR code.
+* Returns `{ method: "totp", totpURI, backupCodes }`. Use `totpURI` to display a QR code.
 * `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. See [verifying TOTP](#totp).
 
 When `method` is `"otp"`:
 
-* Returns `{ totpURI: null, backupCodes }`. `twoFactorEnabled` is set to `true` immediately.
+* Returns `{ method: "otp" }`. `twoFactorEnabled` is set to `true` immediately.
 * Requires `otpOptions.sendOTP` to be configured on the server.
+* OTP codes are sent via the configured `sendOTP` function at sign-in time. Setting `twoFactorEnabled` directly via a database hook achieves the same result.
 
 ### Sign In with 2FA
 
@@ -474,9 +475,9 @@ Table: `twoFactor`
   fields={[
 { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
 { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
-{ name: "secret", type: "string", description: "The encrypted TOTP secret. Null for OTP-only users.", isOptional: true },
+{ name: "secret", type: "string", description: "The secret used to generate the TOTP code." },
 { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email." },
-{ name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment. Null for OTP-only users.", isOptional: true },
+{ name: "verified", type: "boolean", description: "Whether this TOTP secret has been verified during enrollment" },
 ]}
 />
 
@@ -541,23 +542,23 @@ backup codes are generated and stored in the database when the user enabled two 
 <TypeTable
   type={{
 amount: {
-    description: "The amount of backup codes to generate",
-    type: "number",
-    default: 10,
+description: "The amount of backup codes to generate",
+type: "number",
+default: 10,
 },
 length: {
-    description: "The length of the backup codes",
-    type: "number",
-    default: 10,
+description: "The length of the backup codes",
+type: "number",
+default: 10,
 },
 customBackupCodesGenerate: {
-    description: "A function that generates custom backup codes. It takes no parameters and returns an array of strings.",
-    type: "function",
+description: "A function that generates custom backup codes. It takes no parameters and returns an array of strings.",
+type: "function",
 },
 storeBackupCodes: {
-    description: "How to store the backup codes in the database. Whether to store it as plain text or encrypted. You can also provide a custom encryptor.",
-    type: "string",
-    default: "plain",
+description: "How to store the backup codes in the database. Whether to store it as plain text or encrypted. You can also provide a custom encryptor.",
+type: "string",
+default: "plain",
 },
 }}
 />
