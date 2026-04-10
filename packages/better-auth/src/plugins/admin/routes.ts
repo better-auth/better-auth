@@ -1502,6 +1502,11 @@ const restoreUserBodySchema = z.object({
  * Restore a soft-deleted user by clearing their `deletedAt` field.
  * The user's anonymized name/email/image are **not** restored — those were
  * overwritten during the soft delete and cannot be recovered.
+ *
+ * **Important:** soft-delete removes the user's linked accounts (credential
+ * and OAuth) as part of the deletion.  Clearing `deletedAt` alone is not
+ * sufficient for the user to sign in — an admin must also set a new password
+ * via `setUserPassword`, or the user must re-link an OAuth provider.
  */
 export const restoreUser = (opts: AdminOptions) =>
 	createAuthEndpoint(
@@ -1515,7 +1520,7 @@ export const restoreUser = (opts: AdminOptions) =>
 					operationId: "restoreUser",
 					summary: "Restore a soft-deleted user",
 					description:
-						"Clears the deletedAt field of a soft-deleted user, allowing them to sign in again.",
+						"Clears the deletedAt field of a soft-deleted user. Note: linked accounts (credential and OAuth) are removed during soft-delete and are not restored by this endpoint. To allow sign-in, an admin must set a new password or the user must re-link a provider.",
 					responses: {
 						200: {
 							description: "User restored",
