@@ -5766,12 +5766,6 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 });
 
 /**
- * SAML SSO Hardening Tests (TDD Red Phase)
- *
- * These tests encode requirements from SAML 2.0 Core, Profiles, and Bindings,
- * plus better-auth-specific behaviors. They are written to fail against the
- * current codebase, exposing bugs that the refactor will fix.
- *
  * @see https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
  * @see https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf
  */
