@@ -140,7 +140,6 @@ export const useAuthQuery = <T>(
 						}
 					}, 0);
 					return () => {
-						isInitialized = false;
 						value.off();
 						initAtom.off();
 						clearTimeout(timeoutId);
