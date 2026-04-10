@@ -8,7 +8,7 @@ export async function validatePassword(
 		userId: string;
 	},
 ) {
-	if (!data.password || typeof data.password !== "string") {
+	if (!data.password) {
 		return false;
 	}
 
