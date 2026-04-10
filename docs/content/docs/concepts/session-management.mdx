@@ -5,6 +5,8 @@ description: Learn about session management in Better Auth, including session ex
 
 Better Auth manages session using a traditional cookie-based session management. The session is stored in a cookie and is sent to the server on every request. The server then verifies the session and returns the user data if the session is valid.
 
+The main `session_token` cookie is still the server-side session identifier. If you enable `session.cookieCache`, Better Auth also writes a separate `session_data` cookie for short-lived cached session data. This cache cookie is distinct from the JWT plugin's `/token` endpoint and `set-auth-jwt` header output.
+
 ## Session table
 
 The session table stores the session data. The session table has the following fields:
@@ -247,7 +249,7 @@ When `cookieCache` is enabled, revoked sessions may remain active on other devic
 Better Auth supports three different encoding strategies for cookie cache:
 
 - **`compact`** (default): Uses base64url encoding with HMAC-SHA256 signature. Most compact format with no JWT spec overhead. Best for performance and size.
-- **`jwt`**: Standard JWT with HMAC-SHA256 signature (HS256). Signed but not encrypted - readable by anyone but tamper-proof. Follows JWT spec for interoperability.
+- **`jwt`**: Standard JWT. By default this uses HMAC-SHA256 (HS256) with your Better Auth secret. If you need JWKS-verifiable session cache cookies, install the `jwt()` plugin and set `session.cookieCache.jwt.keySource = "jwks"` to use its asymmetric signing keys instead.
 - **`jwe`**: Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation. Fully encrypted tokens - neither readable nor tamperable. Most secure but largest size.
 
 **Comparison:**
@@ -275,8 +277,32 @@ export const auth = betterAuth({
 **When to use each:**
 
 - **Use `compact`** when you need maximum performance and smallest cookie size. Best for most applications where cookies are only used internally by Better Auth.
-- **Use `jwt`** when you need JWT compatibility for external systems, or when you want standard JWT tokens that can be verified by third-party tools. The tokens are readable (base64-encoded JSON) but tamper-proof.
+- **Use `jwt`** when you need JWT compatibility for external systems, or when you want standard JWT tokens that can be verified by third-party tools. The tokens are readable (base64-encoded JSON) but tamper-proof. Add `jwt: { keySource: "jwks" }` if you want the cookie-cache JWT to verify against Better Auth's JWKS instead of a shared secret.
 - **Use `jwe`** when you need maximum security and want to hide session data from the client. The tokens are fully encrypted and cannot be read without the secret key. Use this for sensitive data or compliance requirements.
+
+### JWKS-backed cookie-cache JWTs
+
+If you want the `session_data` cookie to be verifiable with the JWT plugin's JWKS endpoint instead of a shared secret, enable the JWT plugin and opt into JWKS-backed signing explicitly:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { jwt } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [jwt()],
+    session: {
+        cookieCache: {
+            enabled: true,
+            strategy: "jwt",
+            jwt: {
+                keySource: "jwks"
+            }
+        }
+    }
+})
+```
+
+This only affects the `session_data` cookie. The primary `session_token` cookie is still an opaque session identifier and is not exposed through JWKS.
 
 If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true` this will force the server to fetch the session from the database and also refresh the cookie cache.
 

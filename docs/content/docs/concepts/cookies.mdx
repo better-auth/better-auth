@@ -3,7 +3,15 @@ title: Cookies
 description: Learn how Better Auth uses cookies, including cookie prefixes, custom cookie attributes, cross-subdomain sharing, secure cookies, and handling Safari ITP with proxies.
 ---
 
-Cookies are used to store data such as session tokens, session data, OAuth state, and more. All cookies are signed using the `secret` key provided in the auth options or the `BETTER_AUTH_SECRET` environment variable. If you use [versioned secrets](/docs/reference/options#secrets) for rotation, encrypted cookie data (such as JWE session caches) will automatically use the current key and remain decryptable with previous keys.
+Cookies are used to store data such as session tokens, session data, OAuth state, and more.
+
+- The primary `session_token` cookie remains an opaque, secret-signed session identifier.
+- The `session_data` cookie is only present when `session.cookieCache` is enabled, and its encoding depends on the configured strategy:
+  - `compact`: base64url + HMAC with your Better Auth secret
+  - `jwt`: HS256 by default, or asymmetric JWKS-backed signing when `session.cookieCache.jwt.keySource = "jwks"` and the `jwt()` plugin is installed
+  - `jwe`: encrypted with your Better Auth secret
+
+If you use [versioned secrets](/docs/reference/options#secrets) for rotation, secret-backed cookie data (including signed cookies and encrypted JWE session caches) will automatically use the current key and remain compatible with previous keys where supported.
 
 ### Cookie Prefix
 

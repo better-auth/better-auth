@@ -926,6 +926,20 @@ export type BetterAuthOptions = {
 					 */
 					strategy?: "compact" | "jwt" | "jwe";
 					/**
+					 * JWT-specific configuration for `strategy: "jwt"`.
+					 */
+					jwt?: {
+						/**
+						 * Which key source signs and verifies cookie-cache JWTs.
+						 *
+						 * - `"secret"`: uses the Better Auth secret with HS256.
+						 * - `"jwks"`: uses the installed `jwt()` plugin's asymmetric JWKS keys.
+						 *
+						 * @default "secret"
+						 */
+						keySource?: "secret" | "jwks";
+					};
+					/**
 					 * Controls stateless cookie cache refresh behavior.
 					 *
 					 * When enabled, the cookie cache will be automatically refreshed before expiry

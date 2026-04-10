@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db/adapter-kysely";
+import { jwt } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
@@ -411,6 +412,89 @@ describe("base context creation", () => {
 				enabled: true,
 				updateAge: 500,
 			});
+		});
+
+		it("should require the jwt plugin for cookie-cache JWKS mode", async () => {
+			await expect(
+				initBase({
+					session: {
+						cookieCache: {
+							enabled: true,
+							strategy: "jwt",
+							jwt: {
+								keySource: "jwks",
+							},
+						} as any,
+					},
+				}),
+			).rejects.toThrow(
+				'`session.cookieCache.jwt.keySource = "jwks"` requires the `jwt()` plugin to be installed.',
+			);
+		});
+
+		it("should reject remote signing for cookie-cache JWKS mode", async () => {
+			await expect(
+				initBase({
+					session: {
+						cookieCache: {
+							enabled: true,
+							strategy: "jwt",
+							jwt: {
+								keySource: "jwks",
+							},
+						} as any,
+					},
+					plugins: [
+						jwt({
+							jwks: {
+								remoteUrl: "https://example.com/jwks",
+								keyPairConfig: {
+									alg: "RS256",
+								},
+							},
+							jwt: {
+								sign: async () => "signed-remotely",
+							},
+						}),
+					],
+				}),
+			).rejects.toThrow(
+				"Cookie-cache JWT JWKS mode does not support `jwt({ jwt: { sign } })`.",
+			);
+		});
+
+		it("should warn when cookie-cache maxAge exceeds the JWKS grace period", async () => {
+			const log = vi.fn();
+			await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				session: {
+					cookieCache: {
+						enabled: true,
+						strategy: "jwt",
+						maxAge: 301,
+						jwt: {
+							keySource: "jwks",
+						},
+					} as any,
+				},
+				plugins: [
+					jwt({
+						jwks: {
+							gracePeriod: 300,
+						},
+					}),
+				],
+			});
+
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.maxAge` (301s) exceeds the JWT plugin JWKS grace period (300s)",
+				),
+			);
 		});
 
 		it("should allow custom session timeouts", async () => {
