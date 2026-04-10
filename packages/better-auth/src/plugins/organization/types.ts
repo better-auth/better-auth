@@ -341,6 +341,62 @@ export interface OrganizationOptions {
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
 	/**
+	 * Send a confirmation email before deleting an organization.
+	 *
+	 * When this option is provided, calling `organization.delete` will NOT
+	 * immediately delete the organization. Instead it will generate a
+	 * short-lived token, store it in the verification table and invoke this
+	 * callback so you can email a confirmation link to the owner.
+	 *
+	 * The confirmation link should point to `GET
+	 * /organization/delete/callback?token=<token>` (or you can confirm
+	 * programmatically by passing `token` in the body of the next
+	 * `organization.delete` call).
+	 *
+	 * @example
+	 * ```ts
+	 * sendDeleteOrganizationEmail: async (data) => {
+	 * 	const url = data.url; // pre-built callback URL
+	 * 	await sendEmail(data.user.email, "Confirm organization deletion", `Click: ${url}`);
+	 * }
+	 * ```
+	 */
+	sendDeleteOrganizationEmail?:
+		| ((
+				data: {
+					/**
+					 * The organization that is about to be deleted
+					 */
+					organization: Organization;
+					/**
+					 * The user requesting the deletion (must be owner)
+					 */
+					user: User;
+					/**
+					 * Pre-built callback URL including the token.
+					 * Redirect the user here to confirm deletion.
+					 */
+					url: string;
+					/**
+					 * The raw verification token (32-char alphanumeric).
+					 * Use this if you want to build the URL yourself.
+					 */
+					token: string;
+				},
+				/**
+				 * The original request object
+				 */
+				request?: Request,
+		  ) => Promise<void>)
+		| undefined;
+	/**
+	 * Expiration time (in seconds) for the organization deletion
+	 * verification token sent via `sendDeleteOrganizationEmail`.
+	 *
+	 * @default 86400 (24 hours)
+	 */
+	deleteOrganizationTokenExpiresIn?: number | undefined;
+	/**
 	 * Hooks for organization
 	 */
 	organizationHooks?:

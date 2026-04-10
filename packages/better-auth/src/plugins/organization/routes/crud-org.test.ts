@@ -473,3 +473,345 @@ describe("organization hooks", async () => {
 		expect(internalOrg?.name).toBe("Internal Org");
 	});
 });
+
+describe("delete organization", async () => {
+	it("should delete immediately when no email confirmation is configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "to-delete", slug: "to-delete" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: { organizationId: org?.id },
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
+
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
+	});
+
+	it("should send verification email and not delete immediately", async () => {
+		let capturedToken = "";
+		let capturedUrl = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async (data) => {
+						capturedToken = data.token;
+						capturedUrl = data.url;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "confirm-delete", slug: "confirm-delete" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: { organizationId: org?.id },
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Verification email sent",
+		});
+		expect(capturedToken).toHaveLength(32);
+		expect(capturedUrl).toContain("/organization/delete/callback");
+		expect(capturedUrl).toContain(capturedToken);
+
+		// Organization should still exist
+		const stillExists = await auth.api.getFullOrganization({
+			query: { organizationId: org?.id },
+			headers,
+		});
+		expect(stillExists).not.toBeNull();
+	});
+
+	it("should confirm deletion via token in body", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async (data) => {
+						capturedToken = data.token;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "confirm-body", slug: "confirm-body" },
+			headers,
+		});
+
+		// Step 1: initiate
+		await auth.api.deleteOrganization({
+			body: { organizationId: org?.id },
+			headers,
+		});
+		expect(capturedToken).toHaveLength(32);
+
+		// Step 2: confirm via token in body
+		const res = await auth.api.deleteOrganization({
+			body: { organizationId: org?.id, token: capturedToken },
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
+
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
+	});
+
+	it("should confirm deletion via callback endpoint", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async (data) => {
+						capturedToken = data.token;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "confirm-callback", slug: "confirm-callback" },
+			headers,
+		});
+
+		// Step 1: initiate
+		await auth.api.deleteOrganization({
+			body: { organizationId: org?.id },
+			headers,
+		});
+
+		// Step 2: confirm via GET callback
+		const res = await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
+
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
+	});
+
+	it("should reject invalid token", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async () => {},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "invalid-token", slug: "invalid-token" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganizationCallback({
+			query: { token: "invalid-token-value" },
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+
+		// Org should still exist
+		const stillExists = await auth.api.getFullOrganization({
+			query: { organizationId: org?.id },
+			headers,
+		});
+		expect(stillExists).not.toBeNull();
+	});
+
+	it("should reject token belonging to a different user", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async (data) => {
+						capturedToken = data.token;
+					},
+				}),
+			],
+		});
+		const { headers: ownerHeaders } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "wrong-user", slug: "wrong-user" },
+			headers: ownerHeaders,
+		});
+
+		// Owner initiates deletion
+		await auth.api.deleteOrganization({
+			body: { organizationId: org?.id },
+			headers: ownerHeaders,
+		});
+
+		// A different user tries to use the token
+		await auth.api.signUpEmail({
+			body: { email: "other@test.com", password: "password", name: "Other" },
+		});
+		const { headers: otherHeaders } = await signInWithUser(
+			"other@test.com",
+			"password",
+		);
+
+		const res = await auth.api.deleteOrganizationCallback({
+			query: { token: capturedToken },
+			headers: otherHeaders,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+		const body = await res.json();
+		expect(body.code).toBe("INVALID_ORGANIZATION_DELETION_TOKEN");
+	});
+
+	it("should call beforeDeleteOrganization and afterDeleteOrganization hooks", async () => {
+		const beforeHook = vi.fn();
+		const afterHook = vi.fn();
+		let capturedToken = "";
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async (data) => {
+						capturedToken = data.token;
+					},
+					organizationHooks: {
+						beforeDeleteOrganization: async ({ organization }) => {
+							beforeHook(organization.name);
+						},
+						afterDeleteOrganization: async ({ organization }) => {
+							afterHook(organization.name);
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "hooks-test", slug: "hooks-test" },
+			headers,
+		});
+
+		await auth.api.deleteOrganization({
+			body: { organizationId: org?.id },
+			headers,
+		});
+		await auth.api.deleteOrganization({
+			body: { organizationId: org?.id, token: capturedToken },
+			headers,
+		});
+
+		expect(beforeHook).toHaveBeenCalledWith("hooks-test");
+		expect(afterHook).toHaveBeenCalledWith("hooks-test");
+	});
+	it("should verify password before sending email when password is provided", async () => {
+		let capturedToken = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async (data) => {
+						capturedToken = data.token;
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "pw-test", slug: "pw-test" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: {
+				organizationId: org?.id,
+				password: "test123456",
+			},
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Verification email sent",
+		});
+		expect(capturedToken).toBeTruthy();
+	});
+
+	it("should reject deletion when wrong password is provided", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					sendDeleteOrganizationEmail: async () => {},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "pw-wrong", slug: "pw-wrong" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: {
+				organizationId: org?.id,
+				password: "wrong-password",
+			},
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("should delete immediately with correct password and no email configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "pw-immediate", slug: "pw-immediate" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: {
+				organizationId: org?.id,
+				password: "test123456",
+			},
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
+
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
+	});
+});
