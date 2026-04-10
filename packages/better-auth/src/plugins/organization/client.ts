@@ -235,6 +235,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			"/organization/get-full-organization": "GET",
 			"/organization/list-user-teams": "GET",
 			"/organization/get-invitation": "GET",
+			"/organization/get-invitation-preview": "GET",
 			"/organization/signup-with-invitation": "POST",
 		},
 		atomListeners: [

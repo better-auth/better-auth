@@ -3628,7 +3628,70 @@ describe("organization additionalFields with returned: false", async () => {
 	});
 });
 
-describe("getInvitation without auth", async () => {
+describe("getInvitation requires auth", async () => {
+	const { signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			plugins: [organization({ async sendInvitationEmail() {} })],
+		});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	const { headers: ownerHeaders } = await signInWithTestUser();
+
+	it("should return UNAUTHORIZED without a session", async () => {
+		const org = await client.organization.create({
+			name: "Auth Required Org",
+			slug: "auth-required-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invite = await client.organization.inviteMember({
+			email: "authrequired@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(invite.data).toBeDefined();
+
+		// Fetch without any auth headers should be unauthorized
+		const res = await client.organization.getInvitation({
+			query: { id: invite.data!.id },
+		});
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("should return invitation when authenticated as the invited user", async () => {
+		const org = await client.organization.create({
+			name: "Auth Check Org",
+			slug: "auth-check-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invitedEmail = "invited-auth@test.com";
+		const invitedHeaders = new Headers();
+		await client.signUp.email(
+			{ email: invitedEmail, password: "password123", name: "Invited User" },
+			{ onSuccess: cookieSetter(invitedHeaders) },
+		);
+		const invite = await client.organization.inviteMember({
+			email: invitedEmail,
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(invite.data).toBeDefined();
+		const res = await client.organization.getInvitation({
+			query: { id: invite.data!.id },
+			fetchOptions: { headers: invitedHeaders },
+		});
+		expect(res.data?.id).toBe(invite.data!.id);
+		expect(res.data?.organizationName).toBe("Auth Check Org");
+	});
+});
+
+describe("getInvitationPreview (public endpoint)", async () => {
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [organization({ async sendInvitationEmail() {} })],
 	});
@@ -3641,30 +3704,35 @@ describe("getInvitation without auth", async () => {
 
 	const { headers: ownerHeaders } = await signInWithTestUser();
 
-	it("should return invitation details without requiring a session", async () => {
+	it("should return invitation preview without auth", async () => {
 		const org = await client.organization.create({
-			name: "Open Org",
-			slug: "open-org",
+			name: "Preview Org",
+			slug: "preview-org",
 			fetchOptions: { headers: ownerHeaders },
 		});
 		const invite = await client.organization.inviteMember({
-			email: "newmember@test.com",
+			email: "preview@test.com",
 			role: "member",
 			organizationId: org.data!.id,
 			fetchOptions: { headers: ownerHeaders },
 		});
 		expect(invite.data).toBeDefined();
 
-		// Fetch without any auth headers
-		const res = await client.organization.getInvitation({
+		// Fetch without auth headers — should succeed
+		const res = await client.organization.getInvitationPreview({
 			query: { id: invite.data!.id },
 		});
 		expect(res.data?.id).toBe(invite.data!.id);
-		expect(res.data?.organizationName).toBe("Open Org");
+		expect(res.data?.organizationName).toBe("Preview Org");
+		expect(res.data?.organizationSlug).toBe("preview-org");
+		expect(res.data?.role).toBe("member");
+		expect(res.data?.inviterName).toBeDefined();
+		// inviterEmail must NOT be present in the preview response
+		expect((res.data as any)?.inviterEmail).toBeUndefined();
 	});
 
 	it("should return error for non-existent invitation", async () => {
-		const res = await client.organization.getInvitation({
+		const res = await client.organization.getInvitationPreview({
 			query: { id: "nonexistent-id" },
 		});
 		expect(res.error?.status).toBe(400);

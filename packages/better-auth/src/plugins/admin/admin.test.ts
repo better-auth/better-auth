@@ -1836,29 +1836,30 @@ describe("edge cases: userId validation", async () => {
 describe("user enrollment flow", async () => {
 	let enrollmentToken: string | undefined;
 
-	const { auth, signInWithTestUser, customFetchImpl, db } = await getTestInstance(
-		{
-			plugins: [
-				admin({
-					sendEnrollmentEmail: async (data) => {
-						enrollmentToken = data.token;
-					},
-				}),
-			],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "EnrollAdmin") {
-								return { data: { ...user, role: "admin" } };
-							}
+	const { auth, signInWithTestUser, customFetchImpl, db } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						sendEnrollmentEmail: async (data) => {
+							enrollmentToken = data.token;
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "EnrollAdmin") {
+									return { data: { ...user, role: "admin" } };
+								}
+							},
 						},
 					},
 				},
 			},
-		},
-		{ testUser: { name: "EnrollAdmin" } },
-	);
+			{ testUser: { name: "EnrollAdmin" } },
+		);
 
 	const client = createAuthClient({
 		fetchOptions: { customFetchImpl },

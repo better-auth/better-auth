@@ -954,6 +954,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 		"/organization/get-invitation",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgMiddleware],
 			query: getInvitationQuerySchema,
 			metadata: {
@@ -1019,6 +1020,129 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				throw APIError.fromStatus("UNAUTHORIZED", {
+					message: "Not authenticated",
+				});
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const invitation = await adapter.findInvitationById(ctx.query.id);
+			if (
+				!invitation ||
+				invitation.status !== "pending" ||
+				invitation.expiresAt < new Date()
+			) {
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Invitation not found!",
+				});
+			}
+			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				);
+			}
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+			const member = await adapter.findMemberByOrgId({
+				userId: invitation.inviterId,
+				organizationId: invitation.organizationId,
+			});
+			if (!member) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+
+			return ctx.json({
+				...invitation,
+				organizationName: organization.name,
+				organizationSlug: organization.slug,
+				inviterEmail: member.user.email,
+			});
+		},
+	);
+
+/**
+ * ### Endpoint
+ *
+ * GET `/organization/get-invitation-preview`
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.getInvitationPreview`
+ *
+ * **client:**
+ * `authClient.organization.getInvitationPreview`
+ *
+ * Returns public, non-sensitive details about a pending invitation without
+ * requiring authentication. This is intended for invitation landing pages
+ * that need to display context (org name, role) before the user has signed
+ * in or created an account.
+ *
+ * Only the inviter's display name (not email) is returned for privacy.
+ * The invitation ID itself acts as the access secret, following the same
+ * pattern as password-reset links.
+ */
+export const getInvitationPreview = <O extends OrganizationOptions>(
+	options: O,
+) =>
+	createAuthEndpoint(
+		"/organization/get-invitation-preview",
+		{
+			method: "GET",
+			use: [orgMiddleware],
+			query: getInvitationQuerySchema,
+			metadata: {
+				openapi: {
+					operationId: "getInvitationPreview",
+					summary: "Get public invitation preview",
+					description:
+						"Returns non-sensitive invitation details without requiring authentication, for use on invitation landing pages.",
+					responses: {
+						200: {
+							description: "Invitation preview",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: { type: "string" },
+											role: { type: "string" },
+											status: { type: "string" },
+											expiresAt: { type: "string" },
+											organizationName: { type: "string" },
+											organizationSlug: { type: "string" },
+											inviterName: { type: "string" },
+										},
+										required: [
+											"id",
+											"role",
+											"status",
+											"expiresAt",
+											"organizationName",
+											"organizationSlug",
+											"inviterName",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const invitation = await adapter.findInvitationById(ctx.query.id);
 			if (
@@ -1049,12 +1173,14 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
-
 			return ctx.json({
-				...invitation,
+				id: invitation.id,
+				role: invitation.role,
+				status: invitation.status,
+				expiresAt: invitation.expiresAt,
 				organizationName: organization.name,
 				organizationSlug: organization.slug,
-				inviterEmail: inviterMember.user.email,
+				inviterName: inviterMember.user.name,
 			});
 		},
 	);
@@ -1348,7 +1474,10 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 
 			// For numeric limits we can reject early. Function-based limits need the
 			// user object and are checked after creation (with cleanup on failure).
-			if (typeof membershipLimit === "number" && membersCount >= membershipLimit) {
+			if (
+				typeof membershipLimit === "number" &&
+				membersCount >= membershipLimit
+			) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
