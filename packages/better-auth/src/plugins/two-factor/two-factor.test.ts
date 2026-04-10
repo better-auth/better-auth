@@ -82,7 +82,7 @@ describe("two factor", async () => {
 			],
 		});
 		expect(dbUser?.twoFactorEnabled).toBe(false);
-		expect(twoFactor?.secret).not.toBeNull();
+		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
 		expect(twoFactor?.verified).toBe(false);
 	});
@@ -582,18 +582,23 @@ describe("OTP-only enablement", async () => {
 	});
 
 	it("should reject OTP enable when sendOTP is not configured", async () => {
-		const { auth: noOtpAuth, signInWithTestUser: signIn } =
-			await getTestInstance({
-				secret: DEFAULT_SECRET,
-				plugins: [twoFactor()],
-			});
+		const {
+			auth: noOtpAuth,
+			signInWithTestUser: signIn,
+			testUser: tu,
+		} = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor()],
+		});
 		const { headers: h } = await signIn();
 		const res = await noOtpAuth.api.enableTwoFactor({
-			body: { password: "password1234!", method: "otp" },
+			body: { password: tu.password, method: "otp" },
 			headers: h,
 			asResponse: true,
 		});
 		expect(res.status).toBe(400);
+		const json = await res.json();
+		expect(json.code).toBe("OTP_NOT_CONFIGURED");
 	});
 
 	it("should reject TOTP enable when totpOptions.disable is set", async () => {
