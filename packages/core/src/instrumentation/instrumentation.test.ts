@@ -4,7 +4,15 @@ import {
 	SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { withSpan } from ".";
 import { ATTR_DB_COLLECTION_NAME, ATTR_DB_OPERATION_NAME } from "./attributes";
 
@@ -26,6 +34,7 @@ describe("instrumentation", () => {
 
 	beforeEach(() => {
 		exporter.reset();
+		vi.resetAllMocks();
 	});
 
 	it("creates a span with name and attributes for sync function", () => {
@@ -188,5 +197,15 @@ describe("instrumentation", () => {
 		const spans = exporter.getFinishedSpans();
 		expect(spans).toHaveLength(1);
 		expect(spans[0]?.status.code).toBe(2); // SpanStatusCode.ERROR
+	});
+
+	it("withSpan runs without throwing when the package fails to load", async () => {
+		vi.resetModules();
+		vi.doMock("@opentelemetry/api", () => {
+			throw new Error("simulated missing optional peer");
+		});
+
+		const { withSpan } = await import("./tracer");
+		expect(withSpan("fallback", { k: 1 }, () => 99)).toBe(99);
 	});
 });

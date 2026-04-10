@@ -1,5 +1,5 @@
 import type { Span } from "@opentelemetry/api";
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { SpanStatusCode, trace } from "./api";
 import { ATTR_HTTP_RESPONSE_STATUS_CODE } from "./attributes";
 
 const INSTRUMENTATION_SCOPE = "better-auth";

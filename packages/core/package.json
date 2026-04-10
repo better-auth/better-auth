@@ -179,6 +179,9 @@
   "peerDependenciesMeta": {
     "@cloudflare/workers-types": {
       "optional": true
+    },
+    "@opentelemetry/api": {
+      "optional": true
     }
   }
 }
