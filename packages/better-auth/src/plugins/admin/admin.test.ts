@@ -1984,6 +1984,32 @@ describe("soft delete", async () => {
 		expect(res.data?.users.length).toBeGreaterThanOrEqual(1);
 	});
 
+	it("listUsers excludes soft-deleted when includeDeleted=false (string)", async () => {
+		const { data: signupData } = await client.signUp.email({
+			email: "tobe-deleted3@test.com",
+			password: "password123",
+			name: "To Be Deleted 3",
+		});
+		const userId = signupData?.user.id!;
+
+		await client.admin.removeUser({ userId }, { headers: adminHeaders });
+
+		// Pass the string "false" (as it arrives from URL query params) —
+		// z.coerce.boolean() would mis-parse this as true, so we use
+		// z.union([z.boolean(), z.enum(["true","false"]).transform(...)]) instead.
+		const anonymizedEmail = `deleted-${userId}@deleted.invalid`;
+		const res = await auth.api.listUsers({
+			query: {
+				searchField: "email",
+				searchValue: anonymizedEmail,
+				// @ts-expect-error — testing string query param as sent by HTTP
+				includeDeleted: "false",
+			},
+			headers: adminHeaders,
+		});
+		expect(res?.users.length).toBe(0);
+	});
+
 	it("restoreUser clears deletedAt and allows sign-in again", async () => {
 		const { data: signupData } = await client.signUp.email({
 			email: "restore-me@test.com",

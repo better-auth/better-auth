@@ -584,8 +584,11 @@ const listUsersQuerySchema = z.object({
 			description: "The operator to use for the filter",
 		})
 		.optional(),
-	includeDeleted: z.coerce
-		.boolean()
+	includeDeleted: z
+		.union([
+			z.boolean(),
+			z.enum(["true", "false"]).transform((v) => v === "true"),
+		])
 		.meta({
 			description:
 				"When true, includes soft-deleted users in the results. Defaults to false.",

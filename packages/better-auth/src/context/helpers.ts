@@ -80,15 +80,16 @@ export async function runPluginInit(context: AuthContext) {
 	}
 
 	// When soft delete is enabled, block sign-in for deleted users.
+	// Closes over `context` so the check runs even when the hook fires
+	// without a request context (e.g. programmatic session creation).
 	if (options.user?.deleteUser?.softDelete) {
 		dbHooks.push({
 			source: "core:soft-delete",
 			hooks: {
 				session: {
 					create: {
-						async before(session, ctx) {
-							if (!ctx) return;
-							const user = await ctx.context.internalAdapter.findUserById(
+						async before(session) {
+							const user = await context.internalAdapter.findUserById(
 								session.userId,
 							);
 							if (user?.deletedAt) {
