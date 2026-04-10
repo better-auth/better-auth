@@ -7,250 +7,250 @@ This page contains frequently asked questions, common issues, and other helpful 
 
 <Accordions>
   <Accordion id="auth-client-not-working" title="Auth client not working">
-  When encountering `createAuthClient` related errors, make sure to have the correct import path as it varies based on environment.
+    When encountering `createAuthClient` related errors, make sure to have the correct import path as it varies based on environment.
 
-If you're using the auth client on react front-end, you'll need to import it from `/react`:
+    If you're using the auth client on react front-end, you'll need to import it from `/react`:
 
-```ts title="component.ts"
-import { createAuthClient } from "better-auth/react";
-```
+    ```ts title="component.ts"
+    import { createAuthClient } from "better-auth/react";
+    ```
 
-Where as if you're using the auth client in Next.js middleware, server-actions, server-components or anything server-related, you'll likely need to import it from `/client`:
+    Where as if you're using the auth client in Next.js middleware, server-actions, server-components or anything server-related, you'll likely need to import it from `/client`:
 
-```ts title="server.ts"
-import { createAuthClient } from "better-auth/client";
-```
+    ```ts title="server.ts"
+    import { createAuthClient } from "better-auth/client";
+    ```
+  </Accordion>
 
-</Accordion>
+  <Accordion id="getsession-not-working" title="getSession not working">
+    If you try to call `authClient.getSession` on a server environment (e.g, a Next.js server component), it doesn't work since it can't access the cookies. You can use the `auth.api.getSession` instead and pass the request headers to it.
 
-<Accordion id="getsession-not-working" title="getSession not working">
-If you try to call `authClient.getSession` on a server environment (e.g, a Next.js server component), it doesn't work since it can't access the cookies. You can use the `auth.api.getSession` instead and pass the request headers to it. 
+    ```tsx title="server.tsx"
+    import { auth } from "./auth";
+    import { headers } from "next/headers";
 
-```tsx title="server.tsx"
-import { auth } from "./auth";
-import { headers } from "next/headers";
+    const session = await auth.api.getSession({
+        headers: await headers()
+    })
+    ```
 
-const session = await auth.api.getSession({
-    headers: await headers()
-})
-```
+    if you need to use the auth client on the server for different purposes, you still can pass the request headers to it:
 
-if you need to use the auth client on the server for different purposes, you still can pass the request headers to it:
+    ```tsx title="server.tsx"
+    import { authClient } from "./auth-client";
+    import { headers } from "next/headers";
 
-```tsx title="server.tsx"
-import { authClient } from "./auth-client";
-import { headers } from "next/headers";
+    const session = await authClient.getSession({
+        fetchOptions:{
+          headers: await headers()
+        }
+    })
+    ```
+  </Accordion>
 
-const session = await authClient.getSession({
-    fetchOptions:{
-      headers: await headers()
+  <Accordion id="corporate-proxy-configuration" title="How to configure a corporate proxy for server-side requests">
+    If you need to configure a corporate proxy for Better Auth's outbound requests (e.g., OAuth provider requests), you can use undici's ProxyAgent to set up a global fetch proxy.
+
+    ```typescript title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { ProxyAgent, setGlobalDispatcher } from "undici";
+
+    const proxyAgent = new ProxyAgent("http://your-proxy.example.com:8080");
+    setGlobalDispatcher(proxyAgent);
+
+    export const auth = betterAuth({
+      // your configuration
+    });
+    ```
+
+    Since Better Auth runs on the server side, you have full control over Node.js's fetch behavior through undici's global dispatcher. This approach allows all outbound requests from Better Auth to go through your corporate proxy.
+
+    <Callout type="info">
+      Learn more about undici ProxyAgent in the [undici documentation](https://github.com/nodejs/undici/blob/main/docs/docs/api/ProxyAgent.md).
+    </Callout>
+  </Accordion>
+
+  <Accordion id="adding-custom-fields-to-the-users-table" title="Adding custom fields to the users table">
+    Better Auth provides a type-safe way to extend the user and session schemas, take a look at our docs on <Link href="/docs/concepts/database#extending-core-schema">extending core schema</Link>.
+  </Accordion>
+
+  <Accordion id="difference-between-getsession-and-usesession" title="Difference between getSession and useSession">
+    Both `useSession` and `getSession` instances are used fundamentally different based on the situation.
+
+    `useSession` is a hook, meaning it can trigger re-renders whenever session data changes.
+
+    If you have UI you need to change based on user or session data, you can use this hook.
+
+    <Callout type="warn">
+      For performance reasons, do not use this hook on your `layout.tsx` file. We
+      recommend using RSC and use your server auth instance to get the session data
+      via `auth.api.getSession`.
+    </Callout>
+
+    `getSession` returns a promise containing data and error.
+
+    For all other situations where you shouldn't use `useSession`, is when you should be using `getSession`.
+
+    <Callout type="info">
+      `getSession` is available on both server and client auth instances.
+      Not just the latter.
+    </Callout>
+  </Accordion>
+
+  <Accordion id="common-typescript-errors" title="Common TypeScript Errors">
+    If you're facing typescript errors, make sure your tsconfig has `strict` set to `true`:
+
+    ```json title="tsconfig.json"
+    {
+      "compilerOptions": {
+        "strict": true,
+      }
     }
-})
-```
-</Accordion>
+    ```
 
-<Accordion id="corporate-proxy-configuration" title="How to configure a corporate proxy for server-side requests">
-If you need to configure a corporate proxy for Better Auth's outbound requests (e.g., OAuth provider requests), you can use undici's ProxyAgent to set up a global fetch proxy.
+    if you can't set strict to true, you can enable strictNullChecks:
 
-```typescript title="auth.ts"
-import { betterAuth } from "better-auth";
-import { ProxyAgent, setGlobalDispatcher } from "undici";
+    ```json title="tsconfig.json"
+    {
+      "compilerOptions": {
+        "strictNullChecks": true,
+      }
+    }
+    ```
 
-const proxyAgent = new ProxyAgent("http://your-proxy.example.com:8080");
-setGlobalDispatcher(proxyAgent);
+    You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">TypeScript docs</Link>.
+  </Accordion>
 
-export const auth = betterAuth({
-  // your configuration
-});
-```
+  <Accordion id="can-i-remove-name-image-or-email-fields-from-the-user-table" title="Can I remove `name`, `image`, or `email` fields from the user table?">
+    At this time, you can't remove the `name`, `image`, or `email` fields from the user table.
 
-Since Better Auth runs on the server side, you have full control over Node.js's fetch behavior through undici's global dispatcher. This approach allows all outbound requests from Better Auth to go through your corporate proxy.
+    We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
+  </Accordion>
 
-<Callout type="info">
-  Learn more about undici ProxyAgent in the [undici documentation](https://github.com/nodejs/undici/blob/main/docs/docs/api/ProxyAgent.md).
-</Callout>
-</Accordion>
+  <Accordion id="dual-module-hazard-issue" title="Dual Module Hazard Issue">
+    If you're encountering errors like:
 
-<Accordion id="adding-custom-fields-to-the-users-table" title="Adding custom fields to the users table">
+    ```
+    No request state found. Please make sure you are calling this function within a `runWithRequestState` callback.
+    ```
 
-Better Auth provides a type-safe way to extend the user and session schemas, take a look at our docs on <Link href="/docs/concepts/database#extending-core-schema">extending core schema</Link>.
+    This is typically caused by a **dual module hazard** - when multiple versions of `better-auth` or `@better-auth/core` exist in your dependency tree. This commonly occurs after upgrading to v1.4+, especially in Cloudflare Workers, Nuxt, or when using plugins like `oauthProvider`.
 
-</Accordion>
+    ### How to Diagnose
 
-<Accordion id="difference-between-getsession-and-usesession" title="Difference between getSession and useSession">
-Both `useSession` and `getSession` instances are used fundamentally different based on the situation.
+    Check if you have duplicate versions of Better Auth packages:
 
-`useSession` is a hook, meaning it can trigger re-renders whenever session data changes.
+    ```bash
+    # For pnpm users
+    pnpm why @better-auth/core
+    pnpm why better-auth
 
-If you have UI you need to change based on user or session data, you can use this hook.
+    # For npm users
+    npm ls @better-auth/core
+    npm ls better-auth
 
-<Callout type="warn">
-  For performance reasons, do not use this hook on your `layout.tsx` file. We
-  recommend using RSC and use your server auth instance to get the session data
-  via `auth.api.getSession`.
-</Callout>
+    # For yarn users
+    yarn why @better-auth/core
+    yarn why better-auth
+    ```
 
-`getSession` returns a promise containing data and error.
+    If you see multiple versions listed, you have a dual module hazard.
 
-For all other situations where you shouldn't use `useSession`, is when you should be using `getSession`.
+    ### How to Fix
 
-<Callout type="info">
-   `getSession` is available on both server and client auth instances.
-   Not just the latter.
-</Callout>
-</Accordion>
+    #### Basic Steps
 
-<Accordion id="common-typescript-errors" title="Common TypeScript Errors">
-If you're facing typescript errors, make sure your tsconfig has `strict` set to `true`:
-```json title="tsconfig.json"
-{
-  "compilerOptions": {
-    "strict": true,
-  }
-}
-```
+    Start by ensuring your dependencies are clean and all Better Auth packages use compatible versions.
 
-if you can't set strict to true, you can enable strictNullChecks:
-```json title="tsconfig.json"
-{
-  "compilerOptions": {
-    "strictNullChecks": true,
-  }
-}
-```
+    <Callout type="tip">
+      **Clean reinstall:**
 
-You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">TypeScript docs</Link>.
-</Accordion>
-<Accordion id="can-i-remove-name-image-or-email-fields-from-the-user-table" title="Can I remove `name`, `image`, or `email` fields from the user table?">
-At this time, you can't remove the `name`, `image`, or `email` fields from the user table.
+      ```bash
+      # Remove node_modules and lockfile
+      rm -rf node_modules
+      rm pnpm-lock.yaml # or package-lock.json or yarn.lock
 
-We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
-</Accordion>
+      # Reinstall dependencies
+      pnpm install # or npm install or yarn install
+      ```
 
-<Accordion id="dual-module-hazard-issue" title="Dual Module Hazard Issue">
-If you're encountering errors like:
+      Check your `package.json` and make sure all Better Auth related packages (`better-auth`, `@better-auth/core`, `@better-auth/oauth-provider`, etc.) are using compatible versions.
+    </Callout>
 
-```
-No request state found. Please make sure you are calling this function within a `runWithRequestState` callback.
-```
+    #### Package Manager Resolution Issues
 
-This is typically caused by a **dual module hazard** - when multiple versions of `better-auth` or `@better-auth/core` exist in your dependency tree. This commonly occurs after upgrading to v1.4+, especially in Cloudflare Workers, Nuxt, or when using plugins like `oauthProvider`.
+    If you're using Yarn v1 (Classic) or potentially other package managers like pnpm v9, you may need to force `better-call` to resolve to a single instance.
 
-### How to Diagnose
+    <Callout type="warn">
+      **For Yarn v1 / pnpm v9 users:**
 
-Check if you have duplicate versions of Better Auth packages:
+      Manually install `better-call` and add it to both `dependencies` and `resolutions` to force it to be hoisted to the top level:
 
-```bash
-# For pnpm users
-pnpm why @better-auth/core
-pnpm why better-auth
+      ```json title="package.json"
+      {
+        "dependencies": {
+          "better-call": "^1.1.8",
+          // ... other dependencies
+        },
+        "resolutions": {
+          "better-call": "^1.1.8"
+        }
+      }
+      ```
 
-# For npm users
-npm ls @better-auth/core
-npm ls better-auth
+      Then reinstall your dependencies:
 
-# For yarn users
-yarn why @better-auth/core
-yarn why better-auth
-```
+      ```bash
+      yarn install # or pnpm install
+      ```
 
-If you see multiple versions listed, you have a dual module hazard.
+      Note: Yarn v3 and pnpm v10 don't typically have this issue.
+    </Callout>
 
-### How to Fix
+    <Callout type="error">
+      **Important:** Make sure to install `better-auth` and related packages in `dependencies`, not `devDependencies`.
+    </Callout>
 
-#### Basic Steps
+    #### Bundler Resolution Issues
 
-Start by ensuring your dependencies are clean and all Better Auth packages use compatible versions.
+    This is a bundler-level issue where the same module gets resolved to different instances. The goal is to make your bundler resolve the module to the same instance.
 
-<Callout type="tip">
-**Clean reinstall:**
+    <Callout type="info">
+      **For Next.js users:**
 
-```bash
-# Remove node_modules and lockfile
-rm -rf node_modules
-rm pnpm-lock.yaml # or package-lock.json or yarn.lock
+      Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
 
-# Reinstall dependencies
-pnpm install # or npm install or yarn install
-```
+      ```ts title="next.config.js"
+      const config = {
+        serverExternalPackages: ['better-auth']
+      };
+      ```
+    </Callout>
 
-Check your `package.json` and make sure all Better Auth related packages (`better-auth`, `@better-auth/core`, `@better-auth/oauth-provider`, etc.) are using compatible versions.
-</Callout>
+    <Callout type="info">
+      **For Cloudflare Workers users:**
 
-#### Package Manager Resolution Issues
+      Make sure you have the `nodejs_compat` compatibility flag enabled in your `wrangler.toml`:
 
-If you're using Yarn v1 (Classic) or potentially other package managers like pnpm v9, you may need to force `better-call` to resolve to a single instance.
+      ```toml title="wrangler.toml"
+      compatibility_flags = ["nodejs_compat"]
+      ```
+    </Callout>
 
-<Callout type="warn">
-**For Yarn v1 / pnpm v9 users:**
+    #### Verify the Fix
 
-Manually install `better-call` and add it to both `dependencies` and `resolutions` to force it to be hoisted to the top level:
+    Run the diagnostic commands again to confirm only one version of each package exists:
 
-```json title="package.json"
-{
-  "dependencies": {
-    "better-call": "^1.1.8",
-    // ... other dependencies
-  },
-  "resolutions": {
-    "better-call": "^1.1.8"
-  }
-}
-```
+    ```bash
+    pnpm why @better-auth/core
+    pnpm why better-auth
+    pnpm why better-call
+    ```
 
-Then reinstall your dependencies:
+    You should see only one version listed for each package.
 
-```bash
-yarn install # or pnpm install
-```
-
-Note: Yarn v3 and pnpm v10 don't typically have this issue.
-</Callout>
-
-<Callout type="error">
-**Important:** Make sure to install `better-auth` and related packages in `dependencies`, not `devDependencies`.
-</Callout>
-
-#### Bundler Resolution Issues
-
-This is a bundler-level issue where the same module gets resolved to different instances. The goal is to make your bundler resolve the module to the same instance.
-
-<Callout type="info">
-**For Next.js users:**
-
-Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
-
-```ts title="next.config.js"
-const config = {
-  serverExternalPackages: ['better-auth']
-};
-```
-</Callout>
-
-<Callout type="info">
-**For Cloudflare Workers users:**
-
-Make sure you have the `nodejs_compat` compatibility flag enabled in your `wrangler.toml`:
-
-```toml title="wrangler.toml"
-compatibility_flags = ["nodejs_compat"]
-```
-</Callout>
-
-#### Verify the Fix
-
-Run the diagnostic commands again to confirm only one version of each package exists:
-
-```bash
-pnpm why @better-auth/core
-pnpm why better-auth
-pnpm why better-call
-```
-
-You should see only one version listed for each package.
-
-<Callout type="info">
-  Related issues: [#6613](https://github.com/better-auth/better-auth/issues/6613), [yjs#438](https://github.com/yjs/yjs/issues/438)
-</Callout>
-</Accordion>
+    <Callout type="info">
+      Related issues: [#6613](https://github.com/better-auth/better-auth/issues/6613), [yjs#438](https://github.com/yjs/yjs/issues/438)
+    </Callout>
+  </Accordion>
 </Accordions>

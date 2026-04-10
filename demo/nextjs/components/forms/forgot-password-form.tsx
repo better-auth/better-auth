@@ -15,33 +15,33 @@ import {
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 
-const forgetPasswordSchema = z.object({
+const forgotPasswordSchema = z.object({
 	email: z.email("Please enter a valid email address."),
 });
 
-type ForgetPasswordFormValues = z.infer<typeof forgetPasswordSchema>;
+type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 
-interface ForgetPasswordFormProps {
+interface ForgotPasswordFormProps {
 	onSuccess?: () => void;
 	onError?: (error: string) => void;
 	redirectTo?: string;
 }
 
-export function ForgetPasswordForm({
+export function ForgotPasswordForm({
 	onSuccess,
 	onError,
 	redirectTo = "/reset-password",
-}: ForgetPasswordFormProps) {
+}: ForgotPasswordFormProps) {
 	const [loading, startTransition] = useTransition();
 
-	const form = useForm<ForgetPasswordFormValues>({
-		resolver: zodResolver(forgetPasswordSchema),
+	const form = useForm<ForgotPasswordFormValues>({
+		resolver: zodResolver(forgotPasswordSchema),
 		defaultValues: {
 			email: "",
 		},
 	});
 
-	const onSubmit = (data: ForgetPasswordFormValues) => {
+	const onSubmit = (data: ForgotPasswordFormValues) => {
 		startTransition(async () => {
 			try {
 				await authClient.requestPasswordReset({
@@ -63,10 +63,10 @@ export function ForgetPasswordForm({
 					control={form.control}
 					render={({ field, fieldState }) => (
 						<Field data-invalid={fieldState.invalid}>
-							<FieldLabel htmlFor="forget-email">Email</FieldLabel>
+							<FieldLabel htmlFor="forgot-email">Email</FieldLabel>
 							<Input
 								{...field}
-								id="forget-email"
+								id="forgot-email"
 								type="email"
 								placeholder="Enter your email"
 								aria-invalid={fieldState.invalid}

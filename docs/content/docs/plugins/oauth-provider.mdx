@@ -1066,7 +1066,7 @@ Internally, we support the following claims are supported: \["sub", "iss", "aud"
 
 Id token and user info claims should be namespaced when possible to avoid potential future conflicts.
 
-Claims added inside `customIdTokenClaims` and `customUserInfoClaims` should be added to the `advertisedMetadata.claims_supported` so clients can validate that claim received. In the following example, it would be the base claims plus "locale" and "[https://example.com/org](https://example.com/org)".
+Claims added inside `customIdTokenClaims` and `customUserInfoClaims` should be added to the `advertisedMetadata.claims_supported` so clients can validate that claim received. In the following example, it would be the base claims plus `locale` and `https://example.com/org`.
 
 Pro tip: these functions can may also throw errors such as a user is no longer a member of the organization or no longer has the requested permissions.
 
@@ -1670,8 +1670,7 @@ The OAuth Provider plugin adds the following tables to the database:
 
 Table Name: `oauthClient`
 
-<DatabaseTable
-  fields={[
+export const oauthClientTableFields = [
   {
     name: "id",
     type: "string",
@@ -1687,7 +1686,8 @@ Table Name: `oauthClient`
   {
     name: "clientSecret",
     type: "string",
-    description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
+    description:
+      "Secret key for the OAuth client. Optional for public clients using PKCE.",
     isOptional: true,
   },
   {
@@ -1699,19 +1699,22 @@ Table Name: `oauthClient`
   {
     name: "skipConsent",
     type: "boolean",
-    description: "Field that indicates if the application can skip consent. You may choose to enable this for trusted applications.",
+    description:
+      "Field that indicates if the application can skip consent. You may choose to enable this for trusted applications.",
     isOptional: true,
   },
   {
     name: "enableEndSession",
     type: "boolean",
-    description: "Field that indicates if the application can logout via an id_token. You may choose to enable this for trusted applications.",
+    description:
+      "Field that indicates if the application can logout via an id_token. You may choose to enable this for trusted applications.",
     isOptional: true,
   },
   {
     name: "subjectType",
     type: "string",
-    description: "Subject identifier type for this client. Set to \"pairwise\" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.",
+    description:
+      'Subject identifier type for this client. Set to "pairwise" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.',
     isOptional: true,
   },
   {
@@ -1731,7 +1734,8 @@ Table Name: `oauthClient`
   {
     name: "referenceId",
     type: "string",
-    description: "ID of the reference of the client owner if not a user. (optional)",
+    description:
+      "ID of the reference of the client owner if not a user. (optional)",
     isOptional: true,
   },
   {
@@ -1767,7 +1771,8 @@ Table Name: `oauthClient`
   {
     name: "contacts",
     type: "string[]",
-    description: "Client contact list (ie customer service emails, phone numbers) to be displayed on UI Screens",
+    description:
+      "Client contact list (ie customer service emails, phone numbers) to be displayed on UI Screens",
     isOptional: true,
   },
   {
@@ -1785,7 +1790,8 @@ Table Name: `oauthClient`
   {
     name: "softwareId",
     type: "string",
-    description: "Client-defined software identifier. This should remain the same across multiple versions for the same piece of software.",
+    description:
+      "Client-defined software identifier. This should remain the same across multiple versions for the same piece of software.",
     isOptional: true,
   },
   {
@@ -1797,7 +1803,8 @@ Table Name: `oauthClient`
   {
     name: "softwareStatement",
     type: "string",
-    description: "Signed JWT containing the software metadata as signed claims.",
+    description:
+      "Signed JWT containing the software metadata as signed claims.",
     isOptional: true,
   },
   {
@@ -1814,25 +1821,15 @@ Table Name: `oauthClient`
   {
     name: "tokenEndpointAuthMethod",
     type: "string",
-    description: "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post', 'private_key_jwt']",
-    isOptional: true,
-  },
-  {
-    name: "jwks",
-    type: "string",
-    description: "JSON Web Key Set containing the client's public keys for private_key_jwt authentication. Stored as a JSON string.",
-    isOptional: true,
-  },
-  {
-    name: "jwksUri",
-    type: "string",
-    description: "URL for the client's JWK Set endpoint. Must be HTTPS. Mutually exclusive with jwks.",
+    description:
+      "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post', 'private_key_jwt']",
     isOptional: true,
   },
   {
     name: "grantTypes",
     type: "string[]",
-    description: "Array of supported grant types. Supports: ['authorization_code', 'client_credentials', 'refresh_token']",
+    description:
+      "Array of supported grant types. Supports: ['authorization_code', 'client_credentials', 'refresh_token']",
     isOptional: true,
   },
   {
@@ -1850,7 +1847,8 @@ Table Name: `oauthClient`
   {
     name: "type",
     type: "string",
-    description: "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
+    description:
+      "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
     isOptional: true,
   },
   {
@@ -1865,15 +1863,15 @@ Table Name: `oauthClient`
     description: "Additional metadata for the OAuth client",
     isOptional: true,
   },
-]}
-/>
+];
+
+<DatabaseTable name="oauthClient" fields={oauthClientTableFields} />
 
 ### OAuth Refresh Token
 
 Table Name: `oauthRefreshToken`
 
-<DatabaseTable
-  fields={[
+export const oauthRefreshTokenTableFields = [
   {
     name: "id",
     type: "string",
@@ -1895,7 +1893,8 @@ Table Name: `oauthRefreshToken`
   {
     name: "sessionId",
     type: "string",
-    description: "ID of the session used at issuance of the token (and still active)",
+    description:
+      "ID of the session used at issuance of the token (and still active)",
     isForeignKey: true,
     isOptional: true,
     references: { model: "session", field: "id" },
@@ -1927,7 +1926,8 @@ Table Name: `oauthRefreshToken`
   {
     name: "authTime",
     type: "Date",
-    description: "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
+    description:
+      "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
     isOptional: true,
   },
   {
@@ -1940,15 +1940,15 @@ Table Name: `oauthRefreshToken`
     type: "Date",
     description: "Timestamp when the token will expire",
   },
-]}
-/>
+];
+
+<DatabaseTable name="oauthRefreshToken" fields={oauthRefreshTokenTableFields} />
 
 ### OAuth Access Token
 
 Table Name: `oauthAccessToken`
 
-<DatabaseTable
-  fields={[
+export const oauthAccessTokenTableFields = [
   {
     name: "id",
     type: "string",
@@ -1966,12 +1966,13 @@ Table Name: `oauthAccessToken`
     type: "string",
     description: "ID of the OAuth client",
     isForeignKey: true,
-    references: { model: "oauthClient", field: "clientId" }
+    references: { model: "oauthClient", field: "clientId" },
   },
   {
     name: "sessionId",
     type: "string",
-    description: "ID of the session used at issuance of the token (and still active)",
+    description:
+      "ID of the session used at issuance of the token (and still active)",
     isForeignKey: true,
     isOptional: true,
     references: { model: "session", field: "id" },
@@ -2013,34 +2014,34 @@ Table Name: `oauthAccessToken`
     type: "Date",
     description: "Timestamp when the token will expire",
   },
-]}
-/>
+];
+
+<DatabaseTable name="oauthAccessToken" fields={oauthAccessTokenTableFields} />
 
 ### OAuth Consent
 
 Table Name: `oauthConsent`
 
-<DatabaseTable
-  fields={[
+export const oauthConsentTableFields = [
   {
     name: "id",
     type: "string",
     description: "Database ID of the consent",
-    isPrimaryKey: true
+    isPrimaryKey: true,
   },
   {
     name: "userId",
     type: "string",
     description: "ID of the user who gave consent",
     isForeignKey: true,
-    references: { model: "user", field: "id" }
+    references: { model: "user", field: "id" },
   },
   {
     name: "clientId",
     type: "string",
     description: "ID of the OAuth client",
     isForeignKey: true,
-    references: { model: "oauthClient", field: "clientId" }
+    references: { model: "oauthClient", field: "clientId" },
   },
   {
     name: "referenceId",
@@ -2063,8 +2064,9 @@ Table Name: `oauthConsent`
     type: "Date",
     description: "Timestamp of when the consent was last updated",
   },
-]}
-/>
+];
+
+<DatabaseTable name="oauthConsent" fields={oauthConsentTableFields} />
 
 ## Options
 
