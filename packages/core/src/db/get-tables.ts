@@ -192,6 +192,16 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.user?.fields?.updatedAt || "updatedAt",
 				},
+				...(options.user?.deleteUser?.softDelete
+					? {
+							deletedAt: {
+								type: "date" as const,
+								required: false,
+								input: false,
+								fieldName: "deletedAt",
+							},
+						}
+					: {}),
 				...user?.fields,
 				...options.user?.additionalFields,
 			},
