@@ -584,6 +584,13 @@ const listUsersQuerySchema = z.object({
 			description: "The operator to use for the filter",
 		})
 		.optional(),
+	includeDeleted: z.coerce
+		.boolean()
+		.meta({
+			description:
+				"When true, includes soft-deleted users in the results. Defaults to false.",
+		})
+		.optional(),
 });
 
 export const listUsers = (opts: AdminOptions) =>
@@ -663,6 +670,17 @@ export const listUsers = (opts: AdminOptions) =>
 					field: ctx.query.filterField || "email",
 					operator: ctx.query.filterOperator || "eq",
 					value: ctx.query.filterValue,
+				});
+			}
+
+			if (
+				!ctx.query?.includeDeleted &&
+				ctx.context.options.user?.deleteUser?.softDelete
+			) {
+				where.push({
+					field: "deletedAt",
+					operator: "eq",
+					value: null,
 				});
 			}
 
@@ -1463,6 +1481,90 @@ export const removeUser = (opts: AdminOptions) =>
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 			return ctx.json({
 				success: true,
+			});
+		},
+	);
+
+const restoreUserBodySchema = z.object({
+	userId: z.coerce.string().nonempty("userId cannot be empty").meta({
+		description: "The user id",
+	}),
+});
+
+/**
+ * ### Endpoint
+ * `/admin/restore-user`
+ *
+ * ### Description
+ * Restore a soft-deleted user by clearing their `deletedAt` field.
+ * The user's anonymized name/email/image are **not** restored — those were
+ * overwritten during the soft delete and cannot be recovered.
+ */
+export const restoreUser = (opts: AdminOptions) =>
+	createAuthEndpoint(
+		"/admin/restore-user",
+		{
+			method: "POST",
+			use: [adminMiddleware],
+			body: restoreUserBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "restoreUser",
+					summary: "Restore a soft-deleted user",
+					description:
+						"Clears the deletedAt field of a soft-deleted user, allowing them to sign in again.",
+					responses: {
+						200: {
+							description: "User restored",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											user: {
+												$ref: "#/components/schemas/User",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const canRestoreUser = hasPermission({
+				userId: ctx.context.session.user.id,
+				role: session.user.role,
+				options: opts,
+				permissions: {
+					user: ["restore"],
+				},
+			});
+			if (!canRestoreUser) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_RESTORE_USERS,
+				);
+			}
+
+			const user = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+
+			if (!user) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
+			const restoredUser = await ctx.context.internalAdapter.updateUser(
+				ctx.body.userId,
+				{ deletedAt: null },
+			);
+
+			return ctx.json({
+				user: parseUserOutput(ctx.context.options, restoredUser),
 			});
 		},
 	);

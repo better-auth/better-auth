@@ -846,6 +846,25 @@ export type BetterAuthOptions = {
 					 * @default 1 day (60 * 60 * 24) in seconds
 					 */
 					deleteTokenExpiresIn?: number;
+					/**
+					 * When enabled, deleting a user will anonymize their record instead of
+					 * performing a hard delete. Sessions and accounts are always removed.
+					 *
+					 * @default false
+					 */
+					softDelete?: boolean;
+					/**
+					 * Custom anonymization strategy applied when soft-deleting a user.
+					 *
+					 * Return a partial user object with the fields you want to overwrite.
+					 * The `deletedAt` timestamp is always set automatically.
+					 *
+					 * Default strategy:
+					 * - `email` → `"deleted-{userId}@deleted.invalid"`
+					 * - `name`  → `"Deleted User"`
+					 * - `image` → `null`
+					 */
+					anonymizeUser?: (user: User) => Partial<User & Record<string, any>>;
 				};
 		  })
 		| undefined;

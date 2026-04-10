@@ -354,6 +354,92 @@ export const auth = betterAuth({
 });
 ```
 
+### Soft Delete
+
+Instead of permanently removing user records from your database, you can enable **soft delete** to anonymize and deactivate the account while keeping the row intact. This preserves referential integrity with related tables (posts, orders, logs, etc.) and supports auditing.
+
+Soft delete is opt-in. Enable it by setting `softDelete: true` inside `user.deleteUser`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            softDelete: true,
+        },
+    },
+});
+```
+
+**What happens on deletion:**
+
+- The user record is **anonymized** (email, name, image are overwritten) and marked with `deletedAt: Date`.
+- All sessions are revoked and all credential/OAuth accounts are removed so the user cannot sign back in with their original credentials.
+- The user row itself is **not** removed from the database.
+
+**Default anonymization strategy:**
+
+| Field   | Value |
+|---------|-------|
+| `email` | `deleted-{userId}@deleted.invalid` |
+| `name`  | `"Deleted User"` |
+| `image` | `null` |
+
+The `deleted-{userId}@deleted.invalid` pattern is unique per user and uses an RFC-reserved TLD that can never receive email.
+
+**Custom anonymization:**
+
+You can supply your own anonymization callback:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            softDelete: true,
+            anonymizeUser: (user) => ({
+                name: `anon-${user.id}`,
+                email: `custom-${user.id}@gone.invalid`,
+                image: null,
+            }),
+        },
+    },
+});
+```
+
+**Sign-in is blocked for soft-deleted users.** If a user tries to sign in, they will receive a `403 FORBIDDEN` response with error code `USER_DELETED`.
+
+**Database schema:** The `deletedAt` field is automatically added to the user table when soft delete is enabled. Run the schema migration (`pnpm dlx @better-auth/cli migrate`) after enabling this option.
+
+#### Restoring a Soft-Deleted User (Admin Plugin)
+
+When using the [Admin plugin](/docs/plugins/admin), admins can restore a soft-deleted user via `restoreUser`. This clears the `deletedAt` field, allowing sign-in again.
+
+> **Note:** Restoring does not recover the original email, name, or image — those were overwritten at deletion time. You are responsible for re-onboarding the user (e.g. prompting them to set a new email).
+
+```ts title="server"
+await auth.api.restoreUser({
+    body: { userId: "..." },
+    headers: adminHeaders,
+});
+```
+
+```ts title="client"
+await authClient.admin.restoreUser({ userId: "..." });
+```
+
+#### listUsers with soft-deleted accounts
+
+By default, `listUsers` excludes soft-deleted users. Pass `includeDeleted: true` to include them:
+
+```ts title="client"
+const { data } = await authClient.admin.listUsers({
+    query: { includeDeleted: true },
+});
+```
+
 ## Accounts
 
 Better Auth supports multiple authentication methods. Each authentication method is called a provider. For example, email and password authentication is a provider, Google authentication is a provider, etc.

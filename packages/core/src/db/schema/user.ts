@@ -11,6 +11,7 @@ export const userSchema = coreSchema.extend({
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
 	image: z.string().nullish(),
+	deletedAt: z.date().nullish(),
 });
 
 export type BaseUser = z.infer<typeof userSchema>;

@@ -255,6 +255,34 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
+			const isSoftDelete = options.user?.deleteUser?.softDelete === true;
+
+			if (isSoftDelete) {
+				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+
+				if (user) {
+					const defaultAnonymized = {
+						email: `deleted-${userId}@deleted.invalid`,
+						name: "Deleted User",
+						image: null,
+					};
+
+					const anonymized = options.user?.deleteUser?.anonymizeUser
+						? options.user.deleteUser.anonymizeUser(user)
+						: defaultAnonymized;
+
+					await updateWithHooks<User>(
+						{ ...anonymized, deletedAt: new Date() },
+						[{ field: "id", value: userId }],
+						"user",
+						undefined,
+					);
+				}
+			}
+
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -278,16 +306,18 @@ export const createInternalAdapter = (
 				undefined,
 			);
 
-			await deleteWithHooks(
-				[
-					{
-						field: "id",
-						value: userId,
-					},
-				],
-				"user",
-				undefined,
-			);
+			if (!isSoftDelete) {
+				await deleteWithHooks(
+					[
+						{
+							field: "id",
+							value: userId,
+						},
+					],
+					"user",
+					undefined,
+				);
+			}
 		},
 		createSession: async (
 			userId: string,

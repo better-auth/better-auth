@@ -5,6 +5,7 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defu } from "defu";
 import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
@@ -76,6 +77,31 @@ export async function runPluginInit(context: AuthContext) {
 	// Add the global database hooks last
 	if (options.databaseHooks) {
 		dbHooks.push({ source: "user", hooks: options.databaseHooks });
+	}
+
+	// When soft delete is enabled, block sign-in for deleted users.
+	if (options.user?.deleteUser?.softDelete) {
+		dbHooks.push({
+			source: "core:soft-delete",
+			hooks: {
+				session: {
+					create: {
+						async before(session, ctx) {
+							if (!ctx) return;
+							const user = await ctx.context.internalAdapter.findUserById(
+								session.userId,
+							);
+							if (user?.deletedAt) {
+								throw APIError.from("FORBIDDEN", {
+									message: BASE_ERROR_CODES.USER_DELETED,
+									code: "USER_DELETED",
+								});
+							}
+						},
+					},
+				},
+			},
+		});
 	}
 
 	context.internalAdapter = createInternalAdapter(context.adapter, {

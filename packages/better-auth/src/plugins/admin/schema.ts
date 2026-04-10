@@ -24,6 +24,11 @@ export const schema = {
 				required: false,
 				input: false,
 			},
+			deletedAt: {
+				type: "date",
+				required: false,
+				input: false,
+			},
 		},
 	},
 	session: {

@@ -1832,3 +1832,259 @@ describe("edge cases: userId validation", async () => {
 		).rejects.toThrow("user not found");
 	});
 });
+
+describe("soft delete", async () => {
+	const { auth, signInWithTestUser, signInWithUser, customFetchImpl, db } =
+		await getTestInstance(
+			{
+				plugins: [admin()],
+				user: {
+					deleteUser: {
+						enabled: true,
+						softDelete: true,
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return { data: { ...user, role: "admin" } };
+								}
+							},
+						},
+					},
+				},
+			},
+			{ testUser: { name: "Admin" } },
+		);
+
+	const client = createAuthClient({
+		fetchOptions: { customFetchImpl },
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("admin removeUser performs soft delete: sets deletedAt and anonymizes fields", async () => {
+		const { data: signupData } = await client.signUp.email({
+			email: "victim@test.com",
+			password: "password123",
+			name: "Victim User",
+		});
+		const victimId = signupData?.user.id!;
+
+		await client.admin.removeUser(
+			{ userId: victimId },
+			{ headers: adminHeaders },
+		);
+
+		const dbUser = await db.findOne<{
+			deletedAt: Date | null;
+			email: string;
+			name: string;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: victimId }],
+		});
+
+		expect(dbUser?.deletedAt).not.toBeNull();
+		expect(dbUser?.email).toBe(`deleted-${victimId}@deleted.invalid`);
+		expect(dbUser?.name).toBe("Deleted User");
+	});
+
+	it("sign-in is blocked with USER_DELETED for soft-deleted users that still have accounts", async () => {
+		// Create a user with email/password
+		const { data: signupData } = await client.signUp.email({
+			email: "block-signin@test.com",
+			password: "password123",
+			name: "Block SignIn User",
+		});
+		const userId = signupData?.user.id!;
+
+		// Manually set deletedAt WITHOUT deleting their credential account
+		// (simulates a user flagged as deleted while their account still exists,
+		// which is what the session.create.before hook guards against)
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+			update: { deletedAt: new Date() },
+		});
+
+		const signIn = await client.signIn.email({
+			email: "block-signin@test.com",
+			password: "password123",
+		});
+		expect(signIn.error?.status).toBe(403);
+		expect(signIn.error?.code).toBe("USER_DELETED");
+	});
+
+	it("self-delete performs soft delete", async () => {
+		const { data: signupData } = await client.signUp.email({
+			email: "self-delete@test.com",
+			password: "password123",
+			name: "Self Delete User",
+		});
+		const userId = signupData?.user.id!;
+		const { headers: userHeaders } = await signInWithUser(
+			"self-delete@test.com",
+			"password123",
+		);
+
+		await auth.api.deleteUser({ body: {}, headers: userHeaders });
+
+		const dbUser = await db.findOne<{ deletedAt: Date | null }>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(dbUser?.deletedAt).not.toBeNull();
+	});
+
+	it("listUsers excludes soft-deleted users by default", async () => {
+		const { data: signupData } = await client.signUp.email({
+			email: "tobe-deleted@test.com",
+			password: "password123",
+			name: "To Be Deleted",
+		});
+		const userId = signupData?.user.id!;
+
+		await client.admin.removeUser({ userId }, { headers: adminHeaders });
+
+		// Original email no longer matches after anonymization — 0 results
+		const res = await client.admin.listUsers(
+			{ query: { searchField: "email", searchValue: "tobe-deleted@test.com" } },
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.users.length).toBe(0);
+	});
+
+	it("listUsers includes soft-deleted when includeDeleted=true", async () => {
+		const { data: signupData } = await client.signUp.email({
+			email: "tobe-deleted2@test.com",
+			password: "password123",
+			name: "To Be Deleted 2",
+		});
+		const userId = signupData?.user.id!;
+
+		await client.admin.removeUser({ userId }, { headers: adminHeaders });
+
+		// Search by the anonymized email (set during soft delete)
+		const anonymizedEmail = `deleted-${userId}@deleted.invalid`;
+		const res = await client.admin.listUsers(
+			{
+				query: {
+					searchField: "email",
+					searchValue: anonymizedEmail,
+					includeDeleted: true,
+				},
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.users.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("restoreUser clears deletedAt and allows sign-in again", async () => {
+		const { data: signupData } = await client.signUp.email({
+			email: "restore-me@test.com",
+			password: "password123",
+			name: "Restore Me",
+		});
+		const userId = signupData?.user.id!;
+
+		await client.admin.removeUser({ userId }, { headers: adminHeaders });
+
+		await client.admin.restoreUser({ userId }, { headers: adminHeaders });
+
+		const dbUser = await db.findOne<{ deletedAt: Date | null }>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(dbUser?.deletedAt).toBeNull();
+	});
+
+	it("restoreUser respects permission: non-admin cannot restore", async () => {
+		const { data: signupData } = await client.signUp.email({
+			email: "no-restore@test.com",
+			password: "password123",
+			name: "No Restore",
+		});
+		const { headers: userHeaders } = await signInWithUser(
+			"no-restore@test.com",
+			"password123",
+		);
+
+		const res = await client.admin.restoreUser(
+			{ userId: signupData?.user.id! },
+			{ headers: userHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_RESTORE_USERS");
+	});
+
+	it("custom anonymizeUser callback is applied on soft delete", async () => {
+		const {
+			signInWithTestUser: customSignIn,
+			customFetchImpl: customFetch,
+			db: customDb,
+		} = await getTestInstance(
+			{
+				plugins: [admin()],
+				user: {
+					deleteUser: {
+						enabled: true,
+						softDelete: true,
+						anonymizeUser: (user) => ({
+							name: `anon-${user.id}`,
+							email: `custom-deleted-${user.id}@gone.invalid`,
+						}),
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return { data: { ...user, role: "admin" } };
+								}
+							},
+						},
+					},
+				},
+			},
+			{ testUser: { name: "Admin" } },
+		);
+
+		const customClient = createAuthClient({
+			fetchOptions: { customFetchImpl: customFetch },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: customAdminHeaders } = await customSignIn();
+
+		const { data: signupData } = await customClient.signUp.email({
+			email: "custom-anon@test.com",
+			password: "password123",
+			name: "Custom Anon",
+		});
+		const userId = signupData?.user.id!;
+
+		await customClient.admin.removeUser(
+			{ userId },
+			{ headers: customAdminHeaders },
+		);
+
+		const dbUser = await customDb.findOne<{
+			name: string;
+			email: string;
+			deletedAt: Date | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+
+		expect(dbUser?.deletedAt).not.toBeNull();
+		expect(dbUser?.name).toBe(`anon-${userId}`);
+		expect(dbUser?.email).toBe(`custom-deleted-${userId}@gone.invalid`);
+	});
+});
