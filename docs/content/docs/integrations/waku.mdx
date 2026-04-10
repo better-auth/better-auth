@@ -10,7 +10,7 @@ Better Auth can be easily integrated with Waku. Before you start, make sure you 
 Create a file named `auth.ts` in your application. Import Better Auth and create your instance.
 
 <Callout type="warn">
-Make sure to export the auth instance with the variable name `auth` or as a `default` export.
+  Make sure to export the auth instance with the variable name `auth` or as a `default` export.
 </Callout>
 
 ```ts title="src/auth.ts"
@@ -41,7 +41,7 @@ export const POST = async (request: Request): Promise<Response> => {
 ```
 
 <Callout type="info">
- You can change the path on your better-auth configuration but it's recommended to keep it as `src/pages/_api/api/auth/[...route].ts`
+  You can change the path on your better-auth configuration but it's recommended to keep it as `src/pages/_api/api/auth/[...route].ts`
 </Callout>
 
 ## Create a client
@@ -85,7 +85,6 @@ export const someAuthenticatedAction = async () => {
 ```
 
 **Example: Getting Session on a RSC**
-
 
 ```tsx
 import { auth } from "../auth"
@@ -177,7 +176,7 @@ In Waku middleware, it's recommended to only check for the existence of a sessio
 You can use the `getSessionCookie` helper from Better Auth for this purpose:
 
 <Callout type="warn">
-The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, if you customized the cookie name or prefix, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
+  The <code>getSessionCookie()</code> function does not automatically reference the auth config specified in <code>auth.ts</code>. Therefore, if you customized the cookie name or prefix, you need to ensure that the configuration in <code>getSessionCookie()</code> matches the config defined in your <code>auth.ts</code>.
 </Callout>
 
 ```ts title="src/middleware/auth.ts"
@@ -226,21 +225,22 @@ export default authMiddleware;
 ```
 
 <Callout type="warn">
-	**Security Warning:** The `getSessionCookie` function only checks for the
-	existence of a session cookie; it does **not** validate it. Relying solely
-	on this check for security is dangerous, as anyone can manually create a
-	cookie to bypass it. You must always validate the session on your server for
-	any protected actions or pages.
+  **Security Warning:** The `getSessionCookie` function only checks for the
+  existence of a session cookie; it does **not** validate it. Relying solely
+  on this check for security is dangerous, as anyone can manually create a
+  cookie to bypass it. You must always validate the session on your server for
+  any protected actions or pages.
 </Callout>
 
 <Callout type="info">
-If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
-```ts
-const sessionCookie = getSessionCookie(request, {
-    cookieName: "my_session_cookie",
-    cookiePrefix: "my_prefix"
-})
-```
+  If you have a custom cookie name or prefix, you can pass it to the `getSessionCookie` function.
+
+  ```ts
+  const sessionCookie = getSessionCookie(request, {
+      cookieName: "my_session_cookie",
+      cookiePrefix: "my_prefix"
+  })
+  ```
 </Callout>
 
 Alternatively, you can use the `getCookieCache` helper to get the session object from the cookie cache.
@@ -299,7 +299,6 @@ export function getSession(): Promise<Session | null> {
   return sessionPromise;
 }
 ```
-
 
 ```tsx title="src/pages/dashboard.tsx"
 import { getSession } from "../auth";

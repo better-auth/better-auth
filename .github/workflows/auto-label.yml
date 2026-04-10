@@ -9,7 +9,13 @@ permissions: {}
 jobs:
   label:
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'better-auth'
+    # Skip PRs targeting next (retargeted or direct) to avoid label explosion
+    # from the large diff between next and feature branches.
+    # Skip bot sync PRs (main→next) which touch many files but are purely devops.
+    if: >
+      github.repository_owner == 'better-auth' &&
+      github.event.pull_request.base.ref != 'next' &&
+      github.actor != 'better-release[bot]'
     permissions:
       contents: read
       pull-requests: write
