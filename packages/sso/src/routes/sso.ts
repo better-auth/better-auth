@@ -754,9 +754,15 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 				// Validate that the config has a usable IdP entry point
 				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
-				const hasEntryPoint =
-					body.samlConfig.entryPoint &&
-					body.samlConfig.entryPoint.startsWith("http");
+				let hasEntryPoint = false;
+				if (body.samlConfig.entryPoint) {
+					try {
+						new URL(body.samlConfig.entryPoint);
+						hasEntryPoint = true;
+					} catch {
+						// not a valid URL
+					}
+				}
 				const hasSingleSignOnService =
 					body.samlConfig.idpMetadata?.singleSignOnService?.length;
 				if (!hasIdpMetadata && !hasEntryPoint && !hasSingleSignOnService) {
