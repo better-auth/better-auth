@@ -64,6 +64,7 @@ interface DiscoveryDocument {
 	token_endpoint?: string;
 	userinfo_endpoint?: string;
 	issuer?: string;
+	id_token_signing_alg_values_supported?: string[];
 }
 
 async function fetchDiscovery(
@@ -198,6 +199,7 @@ export const genericOAuth = <const ID extends string>(
 				let userInfoUrl = c.userInfoUrl;
 
 				let issuer: string | undefined;
+				let isOidc = false;
 
 				if (c.discoveryUrl) {
 					const discovered = await fetchDiscovery(
@@ -214,6 +216,9 @@ export const genericOAuth = <const ID extends string>(
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
 						issuer = discovered.issuer;
+						isOidc =
+							Array.isArray(discovered.id_token_signing_alg_values_supported) &&
+							discovered.id_token_signing_alg_values_supported.length > 0;
 					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
 							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
@@ -252,11 +257,13 @@ export const genericOAuth = <const ID extends string>(
 							authorizationEndpoint: authorizationUrl,
 							state: data.state,
 							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
-							// TODO: auto-inject "openid" when the provider uses OIDC discovery
-							// (detectable via id_token_signing_alg_values_supported in the
-							// discovery document) so OIDC providers work without requiring
-							// developers to manually add "openid" to their scopes config.
-							scopes: [...(data.scopes ?? []), ...(c.scopes ?? [])],
+							scopes: (() => {
+								const merged = [...(data.scopes ?? []), ...(c.scopes ?? [])];
+								if (isOidc && !merged.includes("openid")) {
+									merged.unshift("openid");
+								}
+								return merged;
+							})(),
 							redirectURI: data.redirectURI,
 							prompt: c.prompt,
 							accessType: c.accessType,

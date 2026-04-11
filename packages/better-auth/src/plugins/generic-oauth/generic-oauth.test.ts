@@ -1693,7 +1693,9 @@ describe("oauth2", async () => {
 		});
 
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		expect(res.data?.url).toContain("scope=profile");
+		const scopeParam = new URL(res.data!.url!).searchParams.get("scope") || "";
+		expect(scopeParam).toContain("profile");
+		expect(scopeParam).toContain("openid");
 
 		// Complete the OAuth flow
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
