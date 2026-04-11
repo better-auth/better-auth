@@ -258,7 +258,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							await ctx.context.runInBackgroundOrAwait(
 								ctx.context.options.emailAndPassword.onExistingUserSignUp(
 									{ user: dbUser.user },
-									ctx.request,
+									ctx.request?.clone(),
 								),
 							);
 						}
@@ -387,7 +387,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									url,
 									token,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}
