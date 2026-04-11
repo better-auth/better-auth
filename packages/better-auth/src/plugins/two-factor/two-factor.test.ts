@@ -2433,3 +2433,124 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/7231
+ */
+describe("backup codes storage configurations", () => {
+	const customEncrypt = async (data: string) =>
+		Buffer.from(data).toString("base64") + ":custom";
+	const customDecrypt = async (data: string) => {
+		const [encoded] = data.split(":custom");
+		return Buffer.from(encoded!, "base64").toString("utf-8");
+	};
+
+	const modes = [
+		{
+			name: "plain",
+			config: "plain" as const,
+			decodeStored: (raw: string) => JSON.parse(raw) as string[],
+			verifyFormat: (_raw: string) => {},
+		},
+		{
+			name: "encrypted",
+			config: "encrypted" as const,
+			decodeStored: async (raw: string) =>
+				JSON.parse(
+					await symmetricDecrypt({ key: DEFAULT_SECRET, data: raw }),
+				) as string[],
+			verifyFormat: (raw: string) => {
+				expect(() => JSON.parse(raw)).toThrow();
+			},
+		},
+		{
+			name: "custom",
+			config: { encrypt: customEncrypt, decrypt: customDecrypt },
+			decodeStored: async (raw: string) =>
+				JSON.parse(await customDecrypt(raw)) as string[],
+			verifyFormat: (raw: string) => {
+				expect(raw).toContain(":custom");
+			},
+		},
+	];
+
+	for (const mode of modes) {
+		it(`should preserve ${mode.name} storage format after backup code verification`, async () => {
+			const { client, testUser, sessionSetter, db } = await getTestInstance(
+				{
+					secret: DEFAULT_SECRET,
+					plugins: [
+						twoFactor({
+							backupCodeOptions: { storeBackupCodes: mode.config },
+							skipVerificationOnEnable: true,
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [twoFactorClient()] } },
+			);
+
+			const headers = new Headers();
+			const session = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: { onSuccess: sessionSetter(headers) },
+			});
+
+			const enableRes = await client.twoFactor.enable({
+				password: testUser.password,
+				fetchOptions: { headers },
+			});
+
+			const initialCodes = enableRes.data?.backupCodes!;
+			expect(initialCodes).toHaveLength(10);
+
+			// Verify initial storage format
+			const twoFactorBefore = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: session.data?.user.id as string }],
+			});
+			mode.verifyFormat(twoFactorBefore!.backupCodes);
+			const storedCodes = await mode.decodeStored(twoFactorBefore!.backupCodes);
+			expect(storedCodes).toEqual(initialCodes);
+
+			// Use a backup code
+			const signInHeaders = new Headers();
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					onSuccess(context) {
+						const parsed = parseSetCookieHeader(
+							context.response.headers.get("Set-Cookie") || "",
+						);
+						signInHeaders.append(
+							"cookie",
+							`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
+						);
+					},
+				},
+			});
+
+			const usedCode = initialCodes[0]!;
+			await client.twoFactor.verifyBackupCode({
+				code: usedCode,
+				fetchOptions: { headers: signInHeaders },
+			});
+
+			// Verify storage format is preserved and used code is removed
+			const twoFactorAfter = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: session.data?.user.id as string }],
+			});
+			mode.verifyFormat(twoFactorAfter!.backupCodes);
+			const remainingCodes = await mode.decodeStored(
+				twoFactorAfter!.backupCodes,
+			);
+			expect(remainingCodes).toHaveLength(9);
+			expect(remainingCodes).not.toContain(usedCode);
+			expect(remainingCodes).toEqual(
+				initialCodes.filter((code) => code !== usedCode),
+			);
+		});
+	}
+});
