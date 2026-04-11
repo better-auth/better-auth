@@ -3,7 +3,7 @@ title: Generic OAuth
 description: Authenticate users with any OAuth provider
 ---
 
-The Generic OAuth plugin lets you add any OAuth 2.0 or OpenID Connect (OIDC) provider to your application. Providers are registered as first-class social providers and use the standard `signIn.social` flow.
+The Generic OAuth plugin lets you add any OAuth 2.1 or OpenID Connect (OIDC) provider to your application. Providers are registered as first-class social providers and use the standard `signIn.social` flow, with PKCE and issuer validation enabled by default.
 
 ## When to Use This Plugin
 
@@ -250,7 +250,7 @@ interface GenericOAuthConfig {
 
 **prompt**: (Optional) Controls the authentication experience (e.g., force login, consent, etc.).
 
-**pkce**: (Optional) Enables PKCE (Proof Key for Code Exchange). Defaults to `true`. Disable only for providers that explicitly reject PKCE.
+**pkce**: (Optional) Enables PKCE (Proof Key for Code Exchange), required by OAuth 2.1. Defaults to `true`. Disable only for providers that explicitly reject PKCE.
 
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
 

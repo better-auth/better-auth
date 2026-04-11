@@ -84,7 +84,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 		| undefined;
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange).
-	 * Recommended by OAuth 2.0 Security BCP for all authorization code flows.
+	 * Required by OAuth 2.1 for all authorization code flows.
 	 * Disable only for providers that explicitly reject PKCE.
 	 * @default true
 	 */
