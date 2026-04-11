@@ -24,7 +24,8 @@ export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
-	clientSecret: string;
+	/** Required for client_secret_basic/client_secret_post. Optional for private_key_jwt. */
+	clientSecret?: string;
 	authorizationEndpoint?: string | undefined;
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string | undefined;
@@ -32,24 +33,41 @@ export interface OIDCConfig {
 	overrideUserInfo?: boolean | undefined;
 	tokenEndpoint?: string | undefined;
 	tokenEndpointAuthentication?:
-		| ("client_secret_post" | "client_secret_basic")
+		| ("client_secret_post" | "client_secret_basic" | "private_key_jwt")
 		| undefined;
+	/** Key ID for private_key_jwt key resolution */
+	privateKeyId?: string | undefined;
+	/** Signing algorithm for private_key_jwt. @default "RS256" */
+	privateKeyAlgorithm?: string | undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
 }
 
 export interface SAMLConfig {
+	/**
+	 * SP Entity ID. Used as the `entityID` in SP metadata when
+	 * `spMetadata.entityID` is not set. Also used as the expected
+	 * audience for SAML assertion validation when `audience` is not set.
+	 */
 	issuer: string;
+	/**
+	 * IdP SSO URL. Used as the redirect destination when
+	 * `idpMetadata.metadata` is not provided. Ignored when
+	 * IdP metadata XML is set (the SSO URL is extracted from the XML).
+	 */
 	entryPoint: string;
+	/**
+	 * IdP signing certificate. Used to verify SAML response signatures
+	 * when `idpMetadata.metadata` is not provided. Ignored when IdP
+	 * metadata XML is set (the certificate is extracted from the XML).
+	 * When both this and `idpMetadata.cert` are set, `idpMetadata.cert` takes precedence.
+	 */
 	cert: string;
-	callbackUrl: string;
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
 				metadata?: string;
 				entityID?: string;
-				entityURL?: string;
-				redirectURL?: string;
 				cert?: string;
 				privateKey?: string;
 				privateKeyPass?: string;
@@ -66,7 +84,12 @@ export interface SAMLConfig {
 				}>;
 		  }
 		| undefined;
-	spMetadata: {
+	/**
+	 * SP metadata configuration. All fields are optional; when omitted,
+	 * SP metadata is auto-generated from `issuer`, `wantAssertionsSigned`,
+	 * `authnRequestsSigned`, and `identifierFormat`.
+	 */
+	spMetadata?: {
 		metadata?: string | undefined;
 		entityID?: string | undefined;
 		binding?: string | undefined;
@@ -76,15 +99,26 @@ export interface SAMLConfig {
 		encPrivateKey?: string | undefined;
 		encPrivateKeyPass?: string | undefined;
 	};
+	/**
+	 * Request signed assertions from the IdP. When true, the SP metadata
+	 * advertises `WantAssertionsSigned="true"` and samlify will reject
+	 * unsigned assertions.
+	 */
 	wantAssertionsSigned?: boolean | undefined;
 	authnRequestsSigned?: boolean | undefined;
 	signatureAlgorithm?: string | undefined;
 	digestAlgorithm?: string | undefined;
 	identifierFormat?: string | undefined;
 	privateKey?: string | undefined;
-	decryptionPvk?: string | undefined;
-	additionalParams?: Record<string, any> | undefined;
 	mapping?: SAMLMapping | undefined;
+}
+
+/** Stored AuthnRequest record for InResponseTo validation */
+export interface AuthnRequestRecord {
+	id: string;
+	providerId: string;
+	createdAt: number;
+	expiresAt: number;
 }
 
 /** Session data stored during SAML login for Single Logout */
@@ -95,15 +129,39 @@ export interface SAMLSessionRecord {
 	sessionIndex?: string;
 }
 
-/** Parsed SAML assertion extract from samlify */
+/**
+ * Parsed SAML login response extract from samlify.
+ *
+ * samlify's extractor nests multi-attribute XML elements as objects:
+ * - `response` (Response/@ID, @IssueInstant, @Destination, @InResponseTo)
+ * - `sessionIndex` (AuthnStatement/@AuthnInstant, @SessionNotOnOrAfter, @SessionIndex)
+ * - `conditions` (Conditions/@NotBefore, @NotOnOrAfter)
+ *
+ * Single-value elements remain as strings: `nameID`, `audience`.
+ */
 export interface SAMLAssertionExtract {
 	nameID?: string;
-	sessionIndex?: string;
-	inResponseTo?: string;
+	/**
+	 * From `<AuthnStatement>` — samlify extracts all 3 attributes as an object.
+	 * To get the SessionIndex string, read `sessionIndex.sessionIndex`.
+	 */
+	sessionIndex?: {
+		authnInstant?: string;
+		sessionNotOnOrAfter?: string;
+		sessionIndex?: string;
+	};
 	conditions?: {
 		notBefore?: string;
 		notOnOrAfter?: string;
 	};
+	response?: {
+		id?: string;
+		issueInstant?: string;
+		destination?: string;
+		inResponseTo?: string;
+	};
+	/** Single string or array when multiple `<Audience>` elements are present. */
+	audience?: string | string[];
 }
 
 type BaseSSOProvider = {
@@ -207,6 +265,14 @@ export interface SSOOptions {
 				 * OIDC configuration
 				 */
 				oidcConfig?: OIDCConfig;
+				/**
+				 * Private key for `private_key_jwt` authentication.
+				 * Only used with defaultSSO — not stored in DB.
+				 */
+				privateKey?: {
+					privateKeyJwk?: JsonWebKey;
+					privateKeyPem?: string;
+				};
 		  }>
 		| undefined;
 	/**
@@ -301,6 +367,21 @@ export interface SSOOptions {
 	 */
 	redirectURI?: string;
 	/**
+	 * Callback to resolve private key material for private_key_jwt authentication.
+	 * Called during token exchange when a provider uses tokenEndpointAuthentication: "private_key_jwt".
+	 * Keeps private keys out of the database — supports HSM/KMS/Vault integration.
+	 */
+	resolvePrivateKey?: (params: {
+		providerId: string;
+		keyId?: string;
+		issuer: string;
+	}) => Promise<{
+		privateKeyJwk?: JsonWebKey;
+		privateKeyPem?: string;
+		kid?: string;
+		algorithm?: string;
+	}>;
+	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.
 	 */
@@ -323,9 +404,13 @@ export interface SSOOptions {
 		 * When true, responses without InResponseTo are accepted.
 		 * When false, all responses must correlate to a stored AuthnRequest.
 		 *
+		 * IdP-initiated SSO is a known attack vector — the SAML2Int
+		 * interoperability profile recommends against it. Only enable
+		 * this if your IdP requires it and you understand the risks.
+		 *
 		 * Only applies when InResponseTo validation is enabled.
 		 *
-		 * @default true
+		 * @default false
 		 */
 		allowIdpInitiated?: boolean;
 		/**

@@ -1,4 +1,4 @@
-import type { LiteralString } from "@better-auth/core";
+import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
@@ -115,6 +115,13 @@ export interface OAuthOptions<
 	scopeExpirations?: {
 		[K in Scopes[number]]?: number | string | Date;
 	};
+	/**
+	 * Maximum lifetime in seconds for client assertion JWTs
+	 * used with `private_key_jwt` authentication.
+	 *
+	 * @default 300 (5 minutes)
+	 */
+	assertionMaxLifetime?: number;
 	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
@@ -677,15 +684,32 @@ export interface OAuthOptions<
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
 	 */
 	pairwiseSecret?: string;
+	/**
+	 * Resolves a `request_uri` at the authorize endpoint (PAR support).
+	 *
+	 * When the authorize endpoint receives a `request_uri` parameter, this callback
+	 * resolves it to the original authorization parameters. Return null if the URI
+	 * is invalid or expired.
+	 */
+	requestUriResolver?: (input: {
+		requestUri: string;
+		clientId: string;
+		ctx: GenericEndpointContext;
+	}) => Promise<Record<string, string> | null>;
 }
 
 export interface OAuthAuthorizationQuery {
 	/**
 	 * The response type.
 	 * - "code": authorization code flow.
+	 * Optional in the query when using request_uri (PAR) — resolved from stored params.
 	 */
 	// NEVER SUPPORT "token" or "id_token" - depreciated in oAuth2.1
-	response_type: "code";
+	response_type?: "code";
+	/**
+	 * PAR request_uri. When present, other params are resolved from the stored request.
+	 */
+	request_uri?: string;
 	/**
 	 * The redirect URI for the client. Must be one of the registered redirect URLs for the client.
 	 */
@@ -880,9 +904,14 @@ export interface SchemaClient<
 	tokenEndpointAuthMethod?:
 		| "none"
 		| "client_secret_basic"
-		| "client_secret_post";
+		| "client_secret_post"
+		| "private_key_jwt";
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
+	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */
+	jwks?: string;
+	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
+	jwksUri?: string;
 	//---- RFC6749 Spec ----//
 	/**
 	 * Indicates whether the client is public or confidential.

@@ -1,0 +1,38 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "docs": "0.1.0",
+    "@better-auth/api-key": "1.6.0",
+    "better-auth": "1.6.0",
+    "auth": "1.6.0",
+    "@better-auth/core": "1.6.0",
+    "@better-auth/drizzle-adapter": "1.6.0",
+    "@better-auth/electron": "1.6.0",
+    "@better-auth/expo": "1.6.0",
+    "@better-auth/i18n": "1.6.0",
+    "@better-auth/kysely-adapter": "1.6.0",
+    "@better-auth/memory-adapter": "1.6.0",
+    "@better-auth/mongo-adapter": "1.6.0",
+    "@better-auth/oauth-provider": "1.6.0",
+    "@better-auth/passkey": "1.6.0",
+    "@better-auth/prisma-adapter": "1.6.0",
+    "@better-auth/redis-storage": "1.6.0",
+    "@better-auth/scim": "1.6.0",
+    "@better-auth/sso": "1.6.0",
+    "@better-auth/stripe": "1.6.0",
+    "@better-auth/telemetry": "1.6.0",
+    "@better-auth/test-utils": "1.6.0"
+  },
+  "changesets": [
+    "fix-password-reset-callback-operation-id",
+    "honest-regions-jam",
+    "pr-8926",
+    "pr-9032",
+    "pr-9084",
+    "private-key-jwt",
+    "saml-response-validation-hardening",
+    "sso-saml-hardening",
+    "two-factor-otp-enable"
+  ]
+}

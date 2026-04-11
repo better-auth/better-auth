@@ -2,10 +2,10 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import { signJWT, toExpJWT } from "better-auth/plugins";
+import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import { SignJWT } from "jose";
+import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -16,8 +16,9 @@ import type {
 import type { GrantType } from "./types/oauth";
 import { userNormalClaims } from "./userinfo";
 import {
-	basicToClientCredentials,
 	decryptStoredClientSecret,
+	destructureCredentials,
+	extractClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
 	isPKCERequired,
@@ -119,6 +120,31 @@ async function createJwtAccessToken(
 }
 
 /**
+ * Computes an OIDC hash (at_hash, c_hash) per OIDC Core §3.1.3.6.
+ * Hashes the token, takes the left half, and base64url-encodes it.
+ */
+async function computeOidcHash(
+	token: string,
+	signingAlg: string,
+): Promise<string> {
+	let hashAlg: string;
+	if (signingAlg === "EdDSA") {
+		hashAlg = "SHA-512";
+	} else if (signingAlg.endsWith("384")) {
+		hashAlg = "SHA-384";
+	} else if (signingAlg.endsWith("512")) {
+		hashAlg = "SHA-512";
+	} else {
+		hashAlg = "SHA-256";
+	}
+
+	const digest = new Uint8Array(
+		await crypto.subtle.digest(hashAlg, new TextEncoder().encode(token)),
+	);
+	return base64url.encode(digest.slice(0, digest.length / 2));
+}
+
+/**
  * Creates a user id token in code_authorization with scope of 'openid'
  * and hybrid/implicit (not yet implemented) flows
  */
@@ -131,6 +157,7 @@ async function createIdToken(
 	nonce?: string,
 	sessionId?: string,
 	authTime?: Date,
+	accessToken?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -155,11 +182,26 @@ async function createIdToken(
 		? undefined
 		: getJwtPlugin(ctx.context).options;
 
+	// Resolve the signing key once: used for both at_hash and signing
+	const resolvedKey =
+		!opts.disableJwtPlugin && !jwtPluginOptions?.jwt?.sign
+			? await resolveSigningKey(ctx, jwtPluginOptions)
+			: undefined;
+
+	// For custom signer, alg is guaranteed set by JWT plugin init validation
+	const signingAlg = opts.disableJwtPlugin
+		? "HS256"
+		: (resolvedKey?.alg ?? jwtPluginOptions?.jwks?.keyPairConfig?.alg!);
+	const atHash = accessToken
+		? await computeOidcHash(accessToken, signingAlg)
+		: undefined;
+
 	const payload: JWTPayload = {
 		...userClaims,
 		auth_time: authTimeSec,
 		acr,
 		...customClaims,
+		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: resolvedSub,
 		aud: client.clientId,
@@ -175,8 +217,8 @@ async function createIdToken(
 		return undefined;
 	}
 
-	return opts.disableJwtPlugin
-		? new SignJWT(payload)
+	const idToken = opts.disableJwtPlugin
+		? await new SignJWT(payload)
 				.setProtectedHeader({ alg: "HS256" })
 				.sign(
 					new TextEncoder().encode(
@@ -187,10 +229,28 @@ async function createIdToken(
 						),
 					),
 				)
-		: signJWT(ctx, {
+		: await signJWT(ctx, {
 				options: jwtPluginOptions,
 				payload,
+				resolvedKey: resolvedKey ?? undefined,
 			});
+
+	// When using a custom jwt.sign callback, validate that the actual
+	// signing algorithm matches what was used for at_hash (OIDC Core §3.1.3.6)
+	if (idToken && atHash && jwtPluginOptions?.jwt?.sign) {
+		const header = decodeProtectedHeader(idToken);
+		if (header.alg !== signingAlg) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				error_description:
+					`ID token signed with "${header.alg}" but at_hash was computed ` +
+					`for "${signingAlg}". Ensure jwt.sign uses the algorithm ` +
+					`declared in keyPairConfig.alg.`,
+				error: "server_error",
+			});
+		}
+	}
+
+	return idToken;
 }
 
 /**
@@ -420,8 +480,8 @@ async function createUserTokens(
 				)
 			: undefined;
 
-	// Sign jwt and refresh tokens in parallel
-	const [accessToken, refreshToken, idToken] = await Promise.all([
+	// Create access token and refresh token in parallel
+	const [accessToken, refreshToken] = await Promise.all([
 		isJwtAccessToken
 			? createJwtAccessToken(
 					ctx,
@@ -470,19 +530,22 @@ async function createUserTokens(
 						authTime,
 					)
 				: undefined,
-		isIdToken
-			? createIdToken(
-					ctx,
-					opts,
-					user,
-					client,
-					scopes,
-					nonce,
-					sessionId,
-					authTime,
-				)
-			: undefined,
 	]);
+
+	// ID token created after access token so at_hash can be computed
+	const idToken = isIdToken
+		? await createIdToken(
+				ctx,
+				opts,
+				user,
+				client,
+				scopes,
+				nonce,
+				sessionId,
+				authTime,
+				accessToken,
+			)
+		: undefined;
 
 	return ctx.json(
 		{
@@ -568,7 +631,7 @@ async function checkVerificationValue(
 		verificationValue.query?.redirect_uri !== redirect_uri
 	) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "missing verification redirect_uri",
+			error_description: "redirect_uri mismatch",
 			error: "invalid_request",
 		});
 	}
@@ -583,27 +646,26 @@ async function handleAuthorizationCodeGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/token`,
+	);
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
+
+	const {
 		code,
 		code_verifier,
 		redirect_uri,
 	}: {
-		client_id?: string;
-		client_secret?: string;
 		code?: string;
 		code_verifier?: string;
 		redirect_uri?: string;
 	} = ctx.body;
-	const authorization = ctx.request?.headers.get("authorization") || null;
-
-	// Convert basic authorization
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -627,7 +689,7 @@ async function handleAuthorizationCodeGrant(
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 
-	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce) {
+	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce && !preVerifiedClient) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Either code_verifier or client_secret is required",
 			error: "invalid_request",
@@ -657,6 +719,7 @@ async function handleAuthorizationCodeGrant(
 		client_id,
 		client_secret,
 		scopes,
+		preVerifiedClient,
 	);
 
 	// Parse scopes from the authorization request
@@ -676,11 +739,11 @@ async function handleAuthorizationCodeGrant(
 			});
 		}
 	} else {
-		// PKCE is optional - must have either PKCE or client_secret
-		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
+		// PKCE is optional - must have either PKCE, client_secret, or client_assertion
+		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret || preVerifiedClient)) {
 			throw new APIError("BAD_REQUEST", {
 				error_description:
-					"Either PKCE (code_verifier) or client authentication (client_secret) is required",
+					"Either PKCE (code_verifier) or client authentication (client_secret or client_assertion) is required",
 				error: "invalid_request",
 			});
 		}
@@ -788,23 +851,18 @@ async function handleClientCredentialsGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
-		scope,
-	}: {
-		client_id?: string;
-		client_secret?: string;
-		scope?: string;
-	} = ctx.body;
-	const authorization = ctx.request?.headers.get("authorization") || null;
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/token`,
+	);
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
 
-	// Convert basic authorization
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
+	const { scope }: { scope?: string } = ctx.body;
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -812,7 +870,7 @@ async function handleClientCredentialsGrant(
 			error: "invalid_grant",
 		});
 	}
-	if (!client_secret) {
+	if (!client_secret && !preVerifiedClient) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing a required client_secret",
 			error: "invalid_grant",
@@ -825,6 +883,8 @@ async function handleClientCredentialsGrant(
 		opts,
 		client_id,
 		client_secret,
+		undefined,
+		preVerifiedClient,
 	);
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
@@ -938,26 +998,24 @@ async function handleRefreshTokenGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/token`,
+	);
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
+
+	const {
 		refresh_token,
 		scope,
 	}: {
-		client_id?: string;
-		client_secret?: string;
 		refresh_token?: string;
 		scope?: string;
 	} = ctx.body;
-
-	const authorization = ctx.request?.headers.get("authorization") || null;
-
-	// Convert basic authorization
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -1052,6 +1110,7 @@ async function handleRefreshTokenGrant(
 		client_id,
 		client_secret, // Optional for refresh_grant but required on confidential clients
 		requestedScopes ?? scopes,
+		preVerifiedClient,
 	);
 
 	const user = await ctx.context.internalAdapter.findUserById(

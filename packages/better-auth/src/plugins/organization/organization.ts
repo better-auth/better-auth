@@ -166,13 +166,11 @@ const createHasPermissionBodySchema = z
 		organizationId: z.string().optional(),
 	})
 	.and(
-		z.union([
+		z.xor([
 			z.object({
 				permission: z.record(z.string(), z.array(z.string())),
-				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),
 			z.object({
-				permission: z.record(z.string(), z.array(z.string())).optional(),
 				permissions: z.record(z.string(), z.array(z.string())),
 			}),
 		]),

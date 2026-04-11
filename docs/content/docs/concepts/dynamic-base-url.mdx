@@ -4,9 +4,10 @@ description: Configure Better Auth to work with multiple domains and preview dep
 ---
 
 When deploying to platforms like Vercel, your application can run on multiple URLs simultaneously:
-- Custom domains (e.g., `myapp.com`, `www.myapp.com`)
-- Preview deployments (e.g., `my-app-abc123.vercel.app`)
-- Branch previews (e.g., `feature-branch.myapp.com`)
+
+* Custom domains (e.g., `myapp.com`, `www.myapp.com`)
+* Preview deployments (e.g., `my-app-abc123.vercel.app`)
+* Branch previews (e.g., `feature-branch.myapp.com`)
 
 Better Auth supports dynamic base URL resolution using an **allowlist-based approach** that determines the correct URL from each incoming request.
 
@@ -34,12 +35,12 @@ When a request comes in, Better Auth extracts the host from the `x-forwarded-hos
 
 The `allowedHosts` array supports wildcard patterns:
 
-| Pattern | Matches |
-|---------|---------|
-| `myapp.com` | Exact match only |
-| `*.vercel.app` | Any subdomain of vercel.app |
+| Pattern               | Matches                             |
+| --------------------- | ----------------------------------- |
+| `myapp.com`           | Exact match only                    |
+| `*.vercel.app`        | Any subdomain of vercel.app         |
 | `preview-*.myapp.com` | Subdomains starting with `preview-` |
-| `localhost:*` | localhost on any port |
+| `localhost:*`         | localhost on any port               |
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -68,11 +69,12 @@ export const auth = betterAuth({
 ```
 
 With a fallback configured:
-- Matching hosts use the derived URL
-- Non-matching hosts use the fallback URL (no error thrown)
+
+* Matching hosts use the derived URL
+* Non-matching hosts use the fallback URL (no error thrown)
 
 <Callout type="warn">
-Use fallbacks carefully. Silent fallbacks can mask misconfigurations. Consider whether throwing an error (the default) is more appropriate for your use case.
+  Use fallbacks carefully. Silent fallbacks can mask misconfigurations. Consider whether throwing an error (the default) is more appropriate for your use case.
 </Callout>
 
 ## Protocol Configuration
@@ -88,15 +90,15 @@ export const auth = betterAuth({
 })
 ```
 
-| Value | Behavior |
-|-------|----------|
-| `"https"` | Always use HTTPS |
-| `"http"` | Always use HTTP |
-| `"auto"` | Derive from `x-forwarded-proto` header, then request URL; defaults to HTTPS if neither is available |
-| Not set | Same as `"auto"` |
+| Value     | Behavior                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------- |
+| `"https"` | Always use HTTPS                                                                                    |
+| `"http"`  | Always use HTTP                                                                                     |
+| `"auto"`  | Derive from `x-forwarded-proto` header, then request URL; defaults to HTTPS if neither is available |
+| Not set   | Same as `"auto"`                                                                                    |
 
 <Callout type="info">
-The `protocol` setting controls how the **URL is constructed** for each request. For the cookie `Secure` flag, Better Auth uses `protocol: "https"` → secure, `protocol: "http"` → not secure, and for `"auto"` or unset → falls back to `NODE_ENV === "production"`. You can always override this with `advanced.useSecureCookies`.
+  The `protocol` setting controls how the **URL is constructed** for each request. For the cookie `Secure` flag, Better Auth uses `protocol: "https"` → secure, `protocol: "http"` → not secure, and for `"auto"` or unset → falls back to `NODE_ENV === "production"`. You can always override this with `advanced.useSecureCookies`.
 </Callout>
 
 For mixed environments (local dev + production), you can use environment variables:
@@ -210,8 +212,9 @@ export const auth = betterAuth({
 ```
 
 With this configuration:
-- A request to `auth.example1.com` sets cookies with `Domain=auth.example1.com`
-- A request to `auth.example2.com` sets cookies with `Domain=auth.example2.com`
+
+* A request to `auth.example1.com` sets cookies with `Domain=auth.example1.com`
+* A request to `auth.example2.com` sets cookies with `Domain=auth.example2.com`
 
 If you want to use the same domain for all hosts, you can set `domain` explicitly:
 
@@ -233,13 +236,13 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-With a static `baseURL` string, `crossSubDomainCookies` derives the domain from that string at init time. With dynamic base URL, the domain is computed per-request from the resolved host. Learn more about cross-subdomain cookies in the [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) documentation.
+  With a static `baseURL` string, `crossSubDomainCookies` derives the domain from that string at init time. With dynamic base URL, the domain is computed per-request from the resolved host. Learn more about cross-subdomain cookies in the [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) documentation.
 </Callout>
 
 ## Security Considerations
 
 <Callout type="info">
-Dynamic base URL uses an **allowlist-based approach** for security. Only hosts explicitly listed in `allowedHosts` are accepted.
+  Dynamic base URL uses an **allowlist-based approach** for security. Only hosts explicitly listed in `allowedHosts` are accepted.
 </Callout>
 
 1. **Allowlist is mandatory** - You cannot accept arbitrary hosts
@@ -251,8 +254,8 @@ This differs from some other auth libraries that auto-trust platforms or accept 
 
 ## Configuration Reference
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `allowedHosts` | `string[]` | Required | List of allowed host patterns |
-| `fallback` | `string` | - | URL to use when host doesn't match |
-| `protocol` | `"http" \| "https" \| "auto"` | `"auto"` | Protocol for URL construction. `"auto"` derives from request headers, defaults to HTTPS |
+| Property       | Type                          | Default  | Description                                                                             |
+| -------------- | ----------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `allowedHosts` | `string[]`                    | Required | List of allowed host patterns                                                           |
+| `fallback`     | `string`                      | -        | URL to use when host doesn't match                                                      |
+| `protocol`     | `"http" \| "https" \| "auto"` | `"auto"` | Protocol for URL construction. `"auto"` derives from request headers, defaults to HTTPS |

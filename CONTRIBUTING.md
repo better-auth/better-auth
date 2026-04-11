@@ -1,58 +1,23 @@
 # Contributing to Better Auth
 
-Thank you for your interest in contributing to Better Auth.
-This guide will help you get started with the contribution process.
+Hi, we really appreciate your interest in contributing to Better Auth. This guide will help you get started. Your contributions make Better Auth even better for everyone. Before you begin, please take a moment to review the following guidelines.
 
-## Code of Conduct
+By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-This project and everyone participating in it is governed by our
-[Code of Conduct](/CODE_OF_CONDUCT.md).
-By participating, you are expected to uphold this code.
+## Repository Setup
 
-## Project Structure
-
-The Better Auth monorepo is organized as follows:
-
-* `/packages/better-auth` - Core authentication library
-* `/packages/cli` - Command-line interface tools
-* `/packages/expo` - Expo integration
-* `/packages/stripe` - Stripe payment integration
-* `/packages/sso` - SSO plugin with SAML and OIDC support
-* `/docs` - Documentation website
-* `/examples` - Example applications
-* `/demo` - Demo applications
-
-## Development Guidelines
-
-When contributing to Better Auth:
-
-* Keep changes focused.
-  Large PRs are harder to review and unlikely to be accepted.
-  We recommend opening an issue and discussing it with us first.
-* Ensure all code is type-safe and takes full advantage of TypeScript features.
-* Write clear, self-explanatory code.
-  Use comments only when truly necessary.
-* Maintain a consistent and predictable API across all supported frameworks.
-* Follow the existing code style and conventions.
-* We aim for stability, so avoid changes that would require users to run a
-  migration or update their config...
-
-## Getting Started
-
-1. Fork the repository to your GitHub account
-
-2. Clone your fork locally:
+1. Fork the repository and clone it locally:
 
    ```bash
    git clone https://github.com/your-username/better-auth.git
    cd better-auth
    ```
 
-3. Install Node.js (LTS version recommended)
+2. Install Node.js (LTS version recommended)
 
    > **Note**: This project is configured to use
    > [nvm](https://github.com/nvm-sh/nvm) to manage the local Node.js version,
-   > as such this is simplest way to get you up and running.
+   > as such this is the simplest way to get you up and running.
 
    Once installed, use:
 
@@ -65,7 +30,7 @@ When contributing to Better Auth:
    [Node.js installation](https://nodejs.org/en/download) for other supported
    methods.
 
-4. Install `pnpm` if you haven’t already:
+3. Install [pnpm](https://pnpm.io/)
 
    > **Note:** This project is configured to manage [pnpm](https://pnpm.io/) via
    > [corepack](https://github.com/nodejs/corepack).
@@ -78,202 +43,184 @@ When contributing to Better Auth:
    npm install -g pnpm
    ```
 
-5. Install project dependencies:
+4. Install project dependencies:
 
    ```bash
    pnpm install
    ```
 
-6. Create a `.env` file from the example:
-   * On Unix-based systems:
-     ```bash
-     cp -n ./docs/.env.example ./docs/.env
-     ```
-   * On Windows:
-     ```batch
-     copy /Y .\docs\.env.example .\docs\.env
-     ```
-
-7. Build the project:
+5. Build the project:
 
    ```bash
    pnpm build
    ```
 
-8. Run the documentation locally:
-
-   ```bash
-   pnpm -F docs dev
-   ```
-
-## Code Formatting with BiomeJS
-
-We use [BiomeJS](https://biomejs.dev/) for code formatting and linting.
-Before committing, please ensure your code is properly formatted:
-
-```bash
-# Format all code
-pnpm format
-
-# Check for linting issues
-pnpm lint
-
-# Fix auto-fixable issues
-pnpm lint:fix
-```
-
-## Development Workflow
-
-1. Create a new branch for your changes:
-
-   ```bash
-   git checkout -b type/description
-   # Example: git checkout -b feat/oauth-provider
-   ```
-
-   Branch type prefixes:
-
-   * `feat/` - New features
-   * `fix/` - Bug fixes
-   * `docs/` - Documentation changes
-   * `refactor/` - Code refactoring
-   * `test/` - Test-related changes
-   * `chore/` - Build process or tooling changes
-
-2. Make your changes following the code style guidelines
-
-3. Add tests for your changes
-
-4. Run database containers (needed for testing database adapters)
-
-   ```bash
-   docker compose up -d
-   ```
-
-   > Note: On MacOS, the **mssql** container will likely require Rosetta
-   > emulation and at least 2GB of RAM of allocated memory. See their
-   > [container requirements](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver17\&tabs=cli\&pivots=cs1-bash#prerequisites).
-
-5. Run the test suite:
-
-   ```bash
-   # Run all tests
-   pnpm test
-
-   # Run tests for a specific package
-   pnpm -F "{package_name}" test
-   
-   # Example: Run tests for better-auth package (includes all plugins)
-   pnpm -F "better-auth" test
-   
-   # Example: Run tests for a specific plugin
-   pnpm -F "better-auth" test password-history
-   ```
-
-6. Ensure all tests pass and the code is properly formatted
-
-7. Commit your changes with a descriptive message following this format:
-   For changes that need to be included in the changelog (excluding docs or
-   chore changes), use the `fix` or `feat` format with a specific scope:
-
-   ```text
-   fix(organization): fix incorrect member role assignment.
-
-   feat(two-factor): add support for TOTP authentication.
-   ```
-
-   For core library changes that don’t have a specific plugin or scope, you can
-   use `fix` and `feat` without a scope:
-
-   ```text
-   fix: resolve memory leak in session handling.
-
-   feat: add support for custom error messages.
-   ```
-
-   For documentation changes, use `docs`:
-
-   ```bash
-   docs: improve authentication flow explanation
-   docs: fix typos in API reference
-   ```
-
-   For changes that refactor or don’t change the functionality of the library or
-   docs, use `chore`:
-
-   ```bash
-   chore(refactor): reorganize authentication middleware
-   chore: update dependencies to latest versions
-   ```
-
-   Each commit message should be clear and descriptive, explaining what the
-   change does.
-   For features and fixes, include context about what was added or resolved.
-
-8. Push your branch to your fork
-
-9. Open a pull request against the **main** branch. In your PR description:
-   * Clearly describe what changes you made and why
-   * Include any relevant context or background
-   * List any breaking changes or deprecations
-   * Add screenshots for UI changes
-   * Reference related issues or discussions
-
 ## Testing
 
-All contributions must include appropriate tests. Follow these guidelines:
+Bug fixes and new features must include tests.
 
-* Write unit tests for new features
-* Ensure all tests pass before submitting a pull request
-* Update existing tests if your changes affect their behavior
-* Follow the existing test patterns and structure
-* Test across different environments when applicable
+Run the full test suite:
 
-## Pull Request Process
+```bash
+pnpm test
+```
 
-1. Create a draft pull request early to facilitate discussion
-2. Reference any related issues in your PR description
-3. Ensure all tests pass and the build is successful
-4. Update documentation as needed
-5. Keep your PR focused on a single feature or bug fix
-6. Be responsive to code review feedback.
-7. Update the CHANGELOG.md if your changes are user-facing.
+Or filter by file or directory:
 
-## Code Style
+```bash
+pnpm vitest packages/better-auth/src/plugins/organization --run
+```
 
-* Follow the existing code style
-* Use TypeScript types and interfaces effectively
-* Keep functions small and focused
-* Use meaningful variable and function names
-* Add comments for complex logic
-* Update relevant documentation when making API changes
-* Follow the BiomeJS formatting rules
-* Avoid using Classes
+### Unit Tests
 
-## Component-Specific Guidelines
+Use `getTestInstance()` from `better-auth/test` to set up test instances:
 
-### Core Library (`/packages/better-auth`)
+```typescript
+import { getTestInstance } from "better-auth/test";
 
-* Keep the core library focused on essential authentication functionality
-* Plugins in the core generally are made by core members.
-  If you have a plugin idea consider open sourcing it yourself instead.
-* Ensure all public APIs are well-documented with JSDoc comments
-* Maintain backward compatibility.
-  If it’s super necessary, provide a clear migration path
-* Follow the existing patterns for error handling and logging
+const { client, auth } = await getTestInstance({
+  plugins: [organization()],
+});
+```
 
-### Documentation (`/docs`)
+### Database Adapter Tests
 
-* Keep documentation up-to-date with code changes
-* Use clear, concise language
-* Include code examples for common use cases
-* Document any breaking changes in the migration guide
-* Follow the existing documentation style and structure
+Adapter tests require Docker containers. Start them before running adapter tests:
 
-## Security Issues
+> **Note:** On macOS, the MSSQL container requires Rosetta emulation and at
+> least 2 GB of allocated memory.
 
-For security-related issues, please email
-[security@better-auth.com](mailto:security@better-auth.com).
-Include a detailed description of the vulnerability and steps to reproduce it.
-All reports will be reviewed and addressed promptly.
-For more information, see our [security documentation](/SECURITY.md).
+```bash
+docker compose up -d
+```
+
+### E2E Tests
+
+End-to-end tests live in `e2e/` and are split into three suites: smoke, adapter,
+and integration.
+
+### Regression Tests
+
+When writing a test for a specific GitHub issue, add a `@see` comment:
+
+```typescript
+/**
+ * @see https://github.com/better-auth/better-auth/issues/1234
+ */
+it("should handle the previously broken behavior", async () => {
+  // ...
+});
+```
+
+## Documentation
+
+The documentation site lives in `docs/` and content is organized under `docs/content/docs/` by topic.
+
+To run the docs locally:
+
+```bash
+pnpm -F docs dev
+```
+
+When making changes to public APIs, please update the relevant documentation.
+
+## Issue Guidelines
+
+Before opening an issue, search existing issues to avoid duplicates.
+We provide templates to help you get started.
+
+### Bug Reports
+
+Use the [bug report template](https://github.com/better-auth/better-auth/issues/new?template=bug_report.yml).
+Provide a clear description of the bug with steps to reproduce and a minimal
+reproduction.
+
+### Feature Requests
+
+New features start with discussion. Open a [feature request](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml) describing the problem, your proposed solution, and how it would benefit the project. This gives us room to align on scope and API shape before anyone writes code.
+
+### Security Reports
+
+Do not open a public issue for security vulnerabilities.
+Email [security@better-auth.com](mailto:security@better-auth.com) instead.
+See [SECURITY.md](/SECURITY.md) for details.
+
+## Pull Request Guidelines
+
+> [!NOTE]
+> For new features, please open an issue first to discuss before moving forward. We do not review large feature PRs opened without going through an issue first.
+
+### Code Formatting and Linting
+
+[Lefthook](https://lefthook.dev/) runs linting, formatting, and spell checking
+in parallel on every commit. Additional checks like dependency linting (knip),
+type checking, and tests run in CI.
+
+To skip a specific hook by command name, use `LEFTHOOK_EXCLUDE`:
+
+```bash
+LEFTHOOK_EXCLUDE=spell git commit -m "your message"
+```
+
+Run `pnpm typecheck` and make sure it passes before opening your PR.
+
+### Branch Targeting
+
+- **`main` is the stable track.** It ships bug fixes, security work, additive
+  improvements, and behavior changes that do not require user action. New
+  capabilities can land here too as long as they are well-tested, non-breaking,
+  and safe to adopt immediately.
+- **`next` is the beta track.** It ships new features, refactors, and breaking
+  changes, after a beta cycle that gives users a window to adapt.
+
+Automation moves PRs with `minor` or `major` changesets from `main` to `next`
+for you.
+
+### Changesets
+
+PRs that touch `packages/**` need a changeset before they can be merged. Run
+`pnpm changeset` when you're ready to submit, or update it during review if
+your changes evolve. The CLI walks you through picking the affected packages,
+a bump type, and a short user-facing description for the changelog. Commit
+the generated file with your PR.
+
+Pick the bump type based on user impact:
+
+- **`patch`** for bug fixes and additive changes existing users don't need to know about.
+- **`minor`** or **`major`** for anything existing users need to be aware of (see [Branch Targeting](#branch-targeting)).
+
+If you're not sure whether your change needs one, a maintainer will handle
+it before merge.
+
+### Submitting a PR
+
+1. Open a pull request against the **`main`** branch.
+
+2. PR titles must follow the [Conventional Commits](https://www.conventionalcommits.org/)
+   format, with an optional scope for the affected package or feature:
+
+   ```
+   `feat(scope): description` or
+   `fix(scope): description` or
+   `perf: description` or
+   `docs: description` or
+   `chore: description` etc.
+   ```
+
+   - The subject must start with a lowercase letter.
+   - Use `docs` when changes are confined to `docs/`.
+   - Append `!` for breaking changes (e.g. `feat(scope)!: description`). These go through `next`, not `main`.
+
+3. In your PR description:
+   - Clearly describe what you changed and why
+   - Reference related issues (e.g. "Closes #1234")
+   - List any potential breaking changes
+   - Add screenshots for UI changes
+
+## AI Policy
+
+We welcome AI-assisted contributions, whether code or issue reports, as long
+as they solve a real problem. Code must follow our coding standards and
+include appropriate tests and documentation. You should also review and
+understand what you're submitting well enough to discuss it. PRs and issues
+that do not meet these guidelines will be closed.

@@ -17,7 +17,6 @@ import {
 import {
 	acsEndpoint,
 	callbackSSO,
-	callbackSSOSAML,
 	callbackSSOShared,
 	initiateSLO,
 	registerSSOProvider,
@@ -31,13 +30,6 @@ export {
 	DEFAULT_MAX_SAML_METADATA_SIZE,
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./constants";
-
-export {
-	type SAMLConditions,
-	type TimestampValidationOptions,
-	validateSAMLTimestamp,
-} from "./routes/sso";
-
 export {
 	type AlgorithmValidationOptions,
 	DataEncryptionAlgorithm,
@@ -46,6 +38,11 @@ export {
 	KeyEncryptionAlgorithm,
 	SignatureAlgorithm,
 } from "./saml";
+export {
+	type SAMLConditions,
+	type TimestampValidationOptions,
+	validateSAMLTimestamp,
+} from "./saml/timestamp";
 
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 import { PACKAGE_VERSION } from "./version";
@@ -102,7 +99,6 @@ type SSOEndpoints<O extends SSOOptions> = {
 	signInSSO: ReturnType<typeof signInSSO>;
 	callbackSSO: ReturnType<typeof callbackSSO>;
 	callbackSSOShared: ReturnType<typeof callbackSSOShared>;
-	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
 	sloEndpoint: ReturnType<typeof sloEndpoint>;
 	initiateSLO: ReturnType<typeof initiateSLO>;
@@ -127,9 +123,8 @@ export type SSOPlugin<O extends SSOOptions> = {
  * which won't have a matching Origin header.
  */
 const SAML_SKIP_ORIGIN_CHECK_PATHS = [
-	"/sso/saml2/callback", // SP-initiated SSO callback (prefix matches /callback/:providerId)
-	"/sso/saml2/sp/acs", // IdP-initiated SSO ACS (prefix matches /sp/acs/:providerId)
-	"/sso/saml2/sp/slo", // IdP-initiated SLO (prefix matches /sp/slo/:providerId)
+	"/sso/saml2/sp/acs", // SAML ACS endpoint (prefix matches /sp/acs/:providerId)
+	"/sso/saml2/sp/slo", // SAML SLO endpoint (prefix matches /sp/slo/:providerId)
 ];
 
 export function sso<
@@ -165,7 +160,6 @@ export function sso<O extends SSOOptions>(
 		signInSSO: signInSSO(optionsWithStore),
 		callbackSSO: callbackSSO(optionsWithStore),
 		callbackSSOShared: callbackSSOShared(optionsWithStore),
-		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
 		sloEndpoint: sloEndpoint(optionsWithStore),
 		initiateSLO: initiateSLO(optionsWithStore),

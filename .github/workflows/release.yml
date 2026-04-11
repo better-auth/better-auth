@@ -1,3 +1,4 @@
+# cSpell:words anthropics
 name: Release
 
 on:
@@ -12,6 +13,16 @@ on:
         description: 'Snapshot tag (e.g. "snapshot"). Leave empty for normal release.'
         required: false
         default: ''
+        type: string
+      preview_version:
+        description: 'Preview release notes for a version (e.g. "1.6.0-beta.0"). Leave empty for normal release.'
+        required: false
+        default: ''
+        type: string
+      preview_branch:
+        description: 'Branch to read changeset data from (for preview mode).'
+        required: false
+        default: 'next'
         type: string
 
 permissions: {}
@@ -29,7 +40,7 @@ env:
 jobs:
   release:
     if: >
-      (github.event_name != 'workflow_dispatch' || inputs.snapshot == '') &&
+      (github.event_name != 'workflow_dispatch' || (inputs.snapshot == '' && inputs.preview_version == '')) &&
       github.repository_owner == 'better-auth' &&
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/heads/release/'))
     runs-on: ubuntu-latest
@@ -96,12 +107,154 @@ jobs:
         with:
           version: pnpm ci:version
           publish: pnpm ci:release
-          title: "chore: version packages"
-          commit: "chore: version packages"
-          createGithubReleases: true
+          title: "chore: release"
+          commit: "chore: release"
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NPM_CONFIG_TAG: ${{ steps.npm-tag.outputs.tag }}
+
+      - name: Rename release PR with version
+        if: steps.changesets.outputs.pullRequestNumber
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        run: |
+          VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          gh pr edit "$PR_NUMBER" --title "chore: release v${VERSION}"
+
+      - name: Generate raw release notes
+        id: raw-notes
+        if: steps.changesets.outputs.published == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: node .github/scripts/release-notes.ts --branch "$GITHUB_REF_NAME"
+
+      - name: Build AI prompt from template
+        id: ai-prompt
+        if: steps.raw-notes.outcome == 'success'
+        continue-on-error: true
+        env:
+          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
+          CONTEXT_PATH: ${{ steps.raw-notes.outputs.context_path }}
+        run: |
+          PROMPT=$(sed \
+            -e "s|__RAW_CHANGELOG_PATH__|${RAW_PATH}|g" \
+            -e "s|__CONTEXT_PATH__|${CONTEXT_PATH:-none}|g" \
+            -e "s|__GITHUB_REPOSITORY__|${GITHUB_REPOSITORY}|g" \
+            .github/prompts/release-notes-rewrite.md)
+          EOF_DELIM="PROMPT_EOF_$(openssl rand -hex 8)"
+          echo "prompt<<${EOF_DELIM}" >> "$GITHUB_OUTPUT"
+          echo "$PROMPT" >> "$GITHUB_OUTPUT"
+          echo "${EOF_DELIM}" >> "$GITHUB_OUTPUT"
+
+      - name: Rewrite release notes with AI
+        id: ai-notes
+        if: steps.ai-prompt.outcome == 'success'
+        continue-on-error: true
+        uses: anthropics/claude-code-action/base-action@2ff1acb3ee319fa302837dad6e17c2f36c0d98ea # v1.0.91
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.ai-prompt.outputs.prompt }}
+          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
+
+      - name: Validate AI output
+        if: steps.ai-notes.outcome == 'success'
+        continue-on-error: true
+        env:
+          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
+        run: |
+          FINAL="${RAW_PATH}.final"
+          if [ ! -f "$FINAL" ]; then
+            echo "AI did not produce output file"
+            exit 0
+          fi
+
+          # Count PR links in both files
+          RAW_COUNT=$(grep -coP '\[#\d+\]' "$RAW_PATH" || true)
+          FINAL_COUNT=$(grep -coP '\[#\d+\]' "$FINAL" || true)
+
+          if [ "$FINAL_COUNT" -lt "$RAW_COUNT" ]; then
+            echo "::warning::AI output has fewer PR links ($FINAL_COUNT) than raw ($RAW_COUNT). Falling back to raw notes."
+            rm -f "$FINAL"
+            exit 0
+          fi
+
+          # Verify all package headings from raw are present in final
+          MISSING=0
+          while IFS= read -r heading; do
+            if ! grep -qF "$heading" "$FINAL"; then
+              echo "::warning::Missing package heading: $heading"
+              MISSING=$((MISSING + 1))
+            fi
+          done < <(grep -oP '## `[^`]+`' "$RAW_PATH")
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo "::warning::AI output is missing $MISSING package heading(s). Falling back to raw notes."
+            rm -f "$FINAL"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.changesets.outputs.published == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.raw-notes.outputs.version }}
+          IS_BETA: ${{ steps.raw-notes.outputs.is_beta }}
+          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          # Determine version: from raw-notes output, or parse from publishedPackages
+          if [ -z "$VERSION" ]; then
+            VERSION=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version // empty')
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::warning::Could not determine version, skipping release creation"
+            exit 0
+          fi
+
+          TAG="v${VERSION}"
+
+          # Use AI-rewritten notes > raw notes > minimal fallback
+          if [ -n "$RAW_PATH" ] && [ -f "${RAW_PATH}.final" ]; then
+            NOTES_FILE="${RAW_PATH}.final"
+            echo "Using AI-rewritten release notes"
+          elif [ -n "$RAW_PATH" ] && [ -f "${RAW_PATH}" ]; then
+            NOTES_FILE="${RAW_PATH}"
+            echo "Using raw release notes (AI step skipped or failed)"
+          else
+            NOTES_FILE=$(mktemp)
+            echo "Release ${TAG}" > "$NOTES_FILE"
+            echo "Using minimal fallback (note generation failed)"
+          fi
+
+          # Tag the exact commit that triggered this workflow run
+          COMMIT_SHA="${GITHUB_SHA}"
+
+          # Create tag via GitHub API (git push has no credentials with persist-credentials: false)
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/tags/${TAG}" -f sha="$COMMIT_SHA" 2>/dev/null \
+            || echo "Tag $TAG already exists"
+
+          # Create or update release, targeting the exact commit
+          PRERELEASE_FLAG=""
+          if [ "$IS_BETA" = "true" ] || echo "$VERSION" | grep -q '-'; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$NOTES_FILE" $PRERELEASE_FLAG
+            echo "Updated release $TAG"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file "$NOTES_FILE" --target "$COMMIT_SHA" $PRERELEASE_FLAG
+            echo "Created release $TAG"
+          fi
 
       - name: Sync main to next via PR
         if: github.ref_name == 'main'
@@ -120,6 +273,7 @@ jobs:
           EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Sync PR #$EXISTING already exists ($AHEAD commits pending)"
+            gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --add-label devops || true
           else
             SYNC_BODY="Brings stable fixes from main into the next branch."
             SYNC_BODY="$SYNC_BODY\n\n**This PR must be merged by a maintainer using 'Create a merge commit'** (not squash, not rebase). This preserves individual fix commits and their verified signatures."
@@ -130,6 +284,7 @@ jobs:
               --head main \
               --repo "$GITHUB_REPOSITORY" \
               --title "chore: sync main to next" \
+              --label devops \
               --body "$(echo -e "$SYNC_BODY")" || true
 
             EXISTING=$(gh pr list --base next --head "${GITHUB_REPOSITORY_OWNER}:main" --state open --repo "$GITHUB_REPOSITORY" --json number --jq '.[0].number // empty')
@@ -196,3 +351,108 @@ jobs:
         env:
           SNAPSHOT_TAG: ${{ inputs.snapshot }}
         run: pnpm changeset publish --no-git-tag --tag "$SNAPSHOT_TAG"
+
+  preview-notes:
+    if: github.event_name == 'workflow_dispatch' && inputs.preview_version != '' && github.repository_owner == 'better-auth'
+    runs-on: ubuntu-latest
+    environment: Release
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      # Always check out main for trusted scripts — the preview_branch
+      # input controls which ref changeset files are read from (via --branch),
+      # not which code is executed.
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Validate inputs
+        env:
+          INPUT_VERSION: ${{ inputs.preview_version }}
+          INPUT_BRANCH: ${{ inputs.preview_branch }}
+        run: |
+          git fetch origin "$INPUT_BRANCH" || { echo "::error::Branch '$INPUT_BRANCH' not found"; exit 1; }
+          if echo "$INPUT_VERSION" | grep -q '-'; then
+            if ! git show "origin/${INPUT_BRANCH}:.changeset/pre.json" >/dev/null 2>&1; then
+              echo "::error::Version '$INPUT_VERSION' is a pre-release but branch '$INPUT_BRANCH' has no .changeset/pre.json"
+              exit 1
+            fi
+          fi
+
+      - name: Generate raw release notes
+        id: raw-notes
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.preview_version }}
+          INPUT_BRANCH: ${{ inputs.preview_branch }}
+        run: |
+          node .github/scripts/release-notes.ts \
+            --version "$INPUT_VERSION" \
+            --branch "origin/$INPUT_BRANCH"
+
+      - name: Build AI prompt from template
+        id: ai-prompt
+        continue-on-error: true
+        env:
+          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
+          CONTEXT_PATH: ${{ steps.raw-notes.outputs.context_path }}
+        run: |
+          PROMPT=$(sed \
+            -e "s|__RAW_CHANGELOG_PATH__|${RAW_PATH}|g" \
+            -e "s|__CONTEXT_PATH__|${CONTEXT_PATH:-none}|g" \
+            -e "s|__GITHUB_REPOSITORY__|${GITHUB_REPOSITORY}|g" \
+            .github/prompts/release-notes-rewrite.md)
+          EOF_DELIM="PROMPT_EOF_$(openssl rand -hex 8)"
+          echo "prompt<<${EOF_DELIM}" >> "$GITHUB_OUTPUT"
+          echo "$PROMPT" >> "$GITHUB_OUTPUT"
+          echo "${EOF_DELIM}" >> "$GITHUB_OUTPUT"
+
+      - name: Rewrite release notes with AI
+        id: ai-notes
+        if: steps.ai-prompt.outcome == 'success'
+        continue-on-error: true
+        uses: anthropics/claude-code-action/base-action@2ff1acb3ee319fa302837dad6e17c2f36c0d98ea # v1.0.91
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.ai-prompt.outputs.prompt }}
+          claude_args: --max-turns 100 --allowedTools "Read Write Bash(gh pr diff*) Bash(gh pr view*)"
+
+      - name: Post results to job summary
+        env:
+          RAW_PATH: ${{ steps.raw-notes.outputs.raw_changelog_path }}
+          VERSION: ${{ steps.raw-notes.outputs.version }}
+        run: |
+          {
+            echo "# Release Notes Preview: v${VERSION}"
+            echo ""
+            if [ -f "${RAW_PATH}.final" ]; then
+              echo "## AI-Rewritten (final)"
+              echo ""
+              cat "${RAW_PATH}.final"
+              echo ""
+              echo "---"
+              echo ""
+            fi
+            echo "## Raw (deterministic)"
+            echo ""
+            cat "${RAW_PATH}"
+          } >> "$GITHUB_STEP_SUMMARY"
