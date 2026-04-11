@@ -92,6 +92,14 @@ describe("oauth2", async () => {
 
 		if (!location) throw new Error("No redirect location found");
 
+		// RFC 9207: inject iss parameter into the callback URL
+		// (the mock server doesn't add it, but real OIDC servers do)
+		const callbackWithIss = new URL(location);
+		if (!callbackWithIss.searchParams.has("iss")) {
+			callbackWithIss.searchParams.set("iss", `http://localhost:${port}`);
+		}
+		location = callbackWithIss.toString();
+
 		let callbackURL = "";
 		let setCookieHeader = "";
 		const newHeaders = new Headers();
@@ -767,10 +775,10 @@ describe("oauth2", async () => {
 							pkce: true,
 							mapProfileToUser: (profile) => {
 								return {
-									id: profile.user_id,
-									email: profile.email,
+									id: String(profile.user_id),
+									email: profile.email ?? undefined,
 									name: profile.name,
-									emailVerified: profile.email_verified,
+									emailVerified: !!profile.email_verified,
 								};
 							},
 						},
@@ -846,10 +854,10 @@ describe("oauth2", async () => {
 							mapProfileToUser: (profile) => {
 								const fullName = `${profile.firstname} ${profile.lastname}`;
 								return {
-									id: profile.id,
+									id: String(profile.id),
 									email: `${profile.id}@strava.local`,
 									name: fullName,
-									image: profile.profile,
+									image: profile.profile as string,
 									emailVerified: true,
 								};
 							},

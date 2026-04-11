@@ -132,14 +132,18 @@ export const callbackOAuth = createAuthEndpoint(
 
 		// RFC 9207: validate authorization server issuer identifier
 		if (provider.issuer) {
-			if (iss) {
-				if (iss !== provider.issuer) {
-					c.context.logger.error("OAuth issuer mismatch", {
-						expected: provider.issuer,
-						received: iss,
-					});
-					throw redirectOnError("issuer_mismatch");
-				}
+			if (!iss) {
+				c.context.logger.error("OAuth issuer parameter missing", {
+					expected: provider.issuer,
+				});
+				throw redirectOnError("issuer_missing");
+			}
+			if (iss !== provider.issuer) {
+				c.context.logger.error("OAuth issuer mismatch", {
+					expected: provider.issuer,
+					received: iss,
+				});
+				throw redirectOnError("issuer_mismatch");
 			}
 		}
 

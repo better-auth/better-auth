@@ -77,15 +77,17 @@ async function fetchDiscovery(
 	if (result.error || !result.data) {
 		return null;
 	}
-	// RFC 8414 Section 3.3: the issuer in the metadata MUST match
-	// the base of the discovery URL (strip the .well-known suffix)
+	// RFC 8414 Section 3: validate that the issuer matches the discovery URL.
+	// Two URL shapes exist:
+	//   Suffix-based:  {issuer}/.well-known/openid-configuration
+	//   Path-based:    /.well-known/oauth-authorization-server/{path}
 	if (result.data.issuer) {
 		try {
+			const normalizedIssuer = result.data.issuer.replace(/\/$/, "");
 			const discoveryBase = url
 				.replace(/\/\.well-known\/openid-configuration\/?$/, "")
-				.replace(/\/\.well-known\/oauth-authorization-server\/?$/, "")
+				.replace(/\/\.well-known\/oauth-authorization-server(\/|$)/, "/")
 				.replace(/\/$/, "");
-			const normalizedIssuer = result.data.issuer.replace(/\/$/, "");
 			if (normalizedIssuer !== discoveryBase) {
 				return null;
 			}
@@ -195,8 +197,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						c.discoveryUrl,
 						c.discoveryHeaders,
 					).catch((err) => {
-						ctx.logger.warn(
-							`Failed to fetch discovery for ${c.providerId}: ${err}`,
+						ctx.logger.error(
+							`Discovery fetch failed for "${c.providerId}": ${err}`,
 						);
 						return null;
 					});
@@ -205,7 +207,21 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
 						issuer = discovered.issuer;
+					} else if (!authorizationUrl || !tokenUrl) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
+						);
 					}
+				}
+
+				if (
+					!c.clientSecret &&
+					!c.clientAssertion &&
+					c.authentication !== "private_key_jwt"
+				) {
+					ctx.logger.warn(
+						`Provider "${c.providerId}": no clientSecret or clientAssertion configured. Token exchange will fail unless this is a public client.`,
+					);
 				}
 
 				genericProviders.push({
@@ -228,7 +244,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							authorizationEndpoint: authorizationUrl,
 							state: data.state,
-							codeVerifier: c.pkce ? data.codeVerifier : undefined,
+							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
 							scopes: [...(data.scopes ?? []), ...(c.scopes ?? [])],
 							redirectURI: data.redirectURI,
 							prompt: c.prompt,
@@ -252,7 +268,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
-							codeVerifier: c.pkce ? data.codeVerifier : undefined,
+							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
 							redirectURI: data.redirectURI,
 							options: {
 								clientId: c.clientId,

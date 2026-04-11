@@ -83,8 +83,10 @@ export interface GenericOAuthConfig {
 		  )
 		| undefined;
 	/**
-	 * Whether to use PKCE (Proof Key for Code Exchange)
-	 * @default false
+	 * Whether to use PKCE (Proof Key for Code Exchange).
+	 * Recommended by OAuth 2.0 Security BCP for all authorization code flows.
+	 * Disable only for providers that explicitly reject PKCE.
+	 * @default true
 	 */
 	pkce?: boolean | undefined;
 	/**
@@ -117,12 +119,13 @@ export interface GenericOAuthConfig {
 		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
 		| undefined;
 	/**
-	 * Custom function to map the user profile to a User object.
+	 * Custom function to map the provider's user profile to your app's user fields.
+	 * The profile contains standard OAuth2 fields plus any provider-specific extras.
 	 */
 	mapProfileToUser?:
 		| ((
-				profile: Record<string, any>,
-		  ) => Partial<Partial<User>> | Promise<Partial<User>>)
+				profile: OAuth2UserInfo & Record<string, unknown>,
+		  ) => Partial<User> | Promise<Partial<User>>)
 		| undefined;
 	/**
 	 * Additional search-params to add to the authorizationUrl.

@@ -169,7 +169,7 @@ All providers support the same optional fields:
 
 * `scopes?: string[]` - Array of OAuth scopes to request
 * `redirectURI?: string` - Custom redirect URI
-* `pkce?: boolean` - Enable PKCE (defaults to `false`)
+* `pkce?: boolean` - Enable PKCE (defaults to `true`)
 * `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
 * `disableSignUp?: boolean` - Disable sign-up entirely
 * `overrideUserInfo?: boolean` - Override user info on sign in
@@ -227,7 +227,7 @@ interface GenericOAuthConfig {
 
 **prompt**: (Optional) Controls the authentication experience (e.g., force login, consent, etc.).
 
-**pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
+**pkce**: (Optional) Enables PKCE (Proof Key for Code Exchange). Defaults to `true`. Disable only for providers that explicitly reject PKCE.
 
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
 

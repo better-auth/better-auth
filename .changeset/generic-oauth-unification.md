@@ -15,3 +15,5 @@ Unify generic OAuth into core social sign-in flow. Generic OAuth providers now u
 - `genericOAuthClient()` client plugin is no longer needed (deprecated, will be removed in a future release)
 - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>` (function form removed)
 - `issuer` and `requireIssuerValidation` config fields removed; when OIDC discovery provides an issuer, callback issuer validation is applied automatically
+- `pkce` now defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+- `mapProfileToUser` profile parameter is now typed as `OAuth2UserInfo & Record<string, unknown>` (was `Record<string, any>`)
