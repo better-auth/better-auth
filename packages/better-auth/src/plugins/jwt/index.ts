@@ -16,7 +16,7 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
-export { resolveSigningAlgorithm, signJWT } from "./sign";
+export { resolveSigningKey, signJWT } from "./sign";
 export type * from "./types";
 export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";

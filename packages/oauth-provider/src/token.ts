@@ -2,14 +2,10 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import {
-	resolveSigningAlgorithm,
-	signJWT,
-	toExpJWT,
-} from "better-auth/plugins";
+import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import { base64url, SignJWT } from "jose";
+import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -186,13 +182,19 @@ async function createIdToken(
 		? undefined
 		: getJwtPlugin(ctx.context).options;
 
+	// Resolve the signing key once: used for both at_hash and signing
+	const resolvedKey =
+		!opts.disableJwtPlugin && !jwtPluginOptions?.jwt?.sign
+			? await resolveSigningKey(ctx, jwtPluginOptions)
+			: undefined;
+
+	// For custom signer, alg is guaranteed set by JWT plugin init validation
 	const signingAlg = opts.disableJwtPlugin
 		? "HS256"
-		: await resolveSigningAlgorithm(ctx, jwtPluginOptions);
-	const atHash =
-		accessToken && signingAlg
-			? await computeOidcHash(accessToken, signingAlg)
-			: undefined;
+		: (resolvedKey?.alg ?? jwtPluginOptions?.jwks?.keyPairConfig?.alg!);
+	const atHash = accessToken
+		? await computeOidcHash(accessToken, signingAlg)
+		: undefined;
 
 	const payload: JWTPayload = {
 		...userClaims,
@@ -215,8 +217,8 @@ async function createIdToken(
 		return undefined;
 	}
 
-	return opts.disableJwtPlugin
-		? new SignJWT(payload)
+	const idToken = opts.disableJwtPlugin
+		? await new SignJWT(payload)
 				.setProtectedHeader({ alg: "HS256" })
 				.sign(
 					new TextEncoder().encode(
@@ -227,10 +229,28 @@ async function createIdToken(
 						),
 					),
 				)
-		: signJWT(ctx, {
+		: await signJWT(ctx, {
 				options: jwtPluginOptions,
 				payload,
+				resolvedKey: resolvedKey ?? undefined,
 			});
+
+	// When using a custom jwt.sign callback, validate that the actual
+	// signing algorithm matches what was used for at_hash (OIDC Core §3.1.3.6)
+	if (idToken && atHash && jwtPluginOptions?.jwt?.sign) {
+		const header = decodeProtectedHeader(idToken);
+		if (header.alg !== signingAlg) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				error_description:
+					`ID token signed with "${header.alg}" but at_hash was computed ` +
+					`for "${signingAlg}". Ensure jwt.sign uses the algorithm ` +
+					`declared in keyPairConfig.alg.`,
+				error: "server_error",
+			});
+		}
+	}
+
+	return idToken;
 }
 
 /**
