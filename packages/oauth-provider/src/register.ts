@@ -3,14 +3,34 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
-import type { OAuthClient } from "./types/oauth";
+import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
+
+/**
+ * Resolves the auth method and type for unauthenticated DCR.
+ * Overrides confidential methods to "none" per RFC 7591 Section 3.2.1.
+ * Clears type "web" since it is only valid for confidential clients.
+ */
+function resolveUnauthenticatedAuth(body: OAuthClient): {
+	tokenEndpointAuthMethod: TokenEndpointAuthMethod;
+	type: OAuthClient["type"];
+} {
+	if (body.token_endpoint_auth_method === "none") {
+		return {
+			tokenEndpointAuthMethod: "none",
+			type: body.type,
+		};
+	}
+	return {
+		tokenEndpointAuthMethod: "none",
+		type: body.type === "web" ? undefined : body.type,
+	};
+}
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	// Check if registration endpoint is enabled
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
 			error: "access_denied",
@@ -21,7 +41,6 @@ export async function registerEndpoint(
 	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
 
-	// Check authorization
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
 		throw new APIError("UNAUTHORIZED", {
 			error: "invalid_token",
@@ -29,38 +48,24 @@ export async function registerEndpoint(
 		});
 	}
 
-	// Unauthenticated DCR: override confidential methods to public.
-	//
-	// RFC 7591 §3.2.1 allows the server to "reject or replace any of the
-	// client's requested metadata values submitted during the registration
-	// and substitute them with suitable values."
-	//
-	// When no session is present, a client_secret provides no meaningful
-	// trust: anyone can register and receive one, so PKCE (always required
-	// for registered clients) is the actual security boundary.  Silently
-	// downgrading to "none" keeps real-world MCP clients (Claude, Codex,
-	// etc.) working while the response communicates the actual method back
-	// to the client per RFC 7591 §3.2.1.
-	//
-	// If token_endpoint_auth_method is omitted, RFC 7591 §2 defaults it to
-	// "client_secret_basic", which also triggers this override.
 	if (!session) {
-		const requestedMethod = body.token_endpoint_auth_method;
-		if (requestedMethod !== "none") {
-			body.token_endpoint_auth_method = "none";
-			// Clear type so checkOAuthClient does not reject the now-public
-			// client for having type "web" (confidential-only).
-			if (body.type === "web") {
-				body.type = undefined;
-			}
+		if (body.grant_types?.includes("client_credentials")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"client_credentials grant requires authenticated registration",
+			});
 		}
+
+		const resolved = resolveUnauthenticatedAuth(body);
+		body.token_endpoint_auth_method = resolved.tokenEndpointAuthMethod;
+		body.type = resolved.type;
 	}
 
-	// Ensure dynamically registered clients shall have a scope
-	if (!ctx.body.scope) {
-		ctx.body.scope = (
-			opts.clientRegistrationDefaultScopes ?? opts.scopes
-		)?.join(" ");
+	if (!body.scope) {
+		body.scope = (opts.clientRegistrationDefaultScopes ?? opts.scopes)?.join(
+			" ",
+		);
 	}
 
 	return createOAuthClientEndpoint(ctx, opts, {
