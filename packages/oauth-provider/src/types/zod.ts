@@ -2,7 +2,7 @@ import * as z from "zod";
 
 const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
 
-function isLocalhost(hostname: string): boolean {
+export function isLocalhost(hostname: string): boolean {
 	return (
 		hostname === "localhost" ||
 		hostname === "127.0.0.1" ||

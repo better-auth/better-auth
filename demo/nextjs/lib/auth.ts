@@ -358,6 +358,7 @@ const authOptions = {
 			consentPage: "/oauth/consent",
 			allowDynamicClientRegistration: true,
 			allowUnauthenticatedClientRegistration: true,
+			clientIdMetadataDocument: {},
 			scopes: [
 				"openid",
 				"profile",

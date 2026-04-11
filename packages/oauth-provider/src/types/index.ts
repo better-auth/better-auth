@@ -130,10 +130,13 @@ export interface OAuthOptions<
 	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
-	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
-	 * when the MCP protocol standardizes unauthenticated dynamic client registration.
-	 * As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991)
-	 * and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+	 * When enabled, the `/oauth2/register` endpoint accepts requests
+	 * without a session, but only for public clients
+	 * (`token_endpoint_auth_method: "none"`).
+	 *
+	 * For verified client discovery (MCP), consider using
+	 * {@link clientIdMetadataDocument} instead, which verifies client
+	 * identity through domain ownership.
 	 *
 	 * @default false
 	 */
@@ -144,6 +147,59 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
+	/**
+	 * Enable [Client ID Metadata Document](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 * support for unauthenticated dynamic client registration.
+	 *
+	 * When present, clients can identify themselves by providing an HTTPS URL as
+	 * their `client_id`. The authorization server fetches and validates the metadata
+	 * document hosted at that URL, creating a public client automatically.
+	 *
+	 * This is the mechanism used by [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow)
+	 * for dynamic client discovery.
+	 *
+	 * @see https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+	 */
+	clientIdMetadataDocument?: {
+		/**
+		 * How frequently the server should re-fetch metadata documents to
+		 * pick up changes from the client.
+		 *
+		 * @default "60m"
+		 */
+		refreshRate?: number | string;
+		/**
+		 * Metadata fields whose URL values must share the same origin as
+		 * the `client_id` URL. This prevents a client from claiming
+		 * redirect URIs on a different domain.
+		 *
+		 * Set to an empty array to disable origin restrictions
+		 * (not recommended for production).
+		 *
+		 * @default ["redirect_uris", "post_logout_redirect_uris", "client_uri"]
+		 */
+		originBoundFields?: string[];
+		/**
+		 * Called after a client is created from a metadata document
+		 * for the first time. Use this to assign trust levels, prefetch
+		 * logos, or perform other post-creation processing.
+		 */
+		onClientCreated?: (data: {
+			client: SchemaClient<Scope[]>;
+			metadata: Record<string, unknown>;
+			ctx: GenericEndpointContext;
+		}) => Awaitable<void>;
+		/**
+		 * Called after a client is refreshed from a re-fetched metadata
+		 * document. Use this for change-detection logging or updating
+		 * derived fields.
+		 */
+		onClientRefreshed?: (data: {
+			client: SchemaClient<Scope[]>;
+			metadata: Record<string, unknown>;
+			ctx: GenericEndpointContext;
+		}) => Awaitable<void>;
+	};
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.
