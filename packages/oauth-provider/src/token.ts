@@ -189,9 +189,10 @@ async function createIdToken(
 	const signingAlg = opts.disableJwtPlugin
 		? "HS256"
 		: await resolveSigningAlgorithm(ctx, jwtPluginOptions);
-	const atHash = accessToken
-		? await computeOidcHash(accessToken, signingAlg)
-		: undefined;
+	const atHash =
+		accessToken && signingAlg
+			? await computeOidcHash(accessToken, signingAlg)
+			: undefined;
 
 	const payload: JWTPayload = {
 		...userClaims,
