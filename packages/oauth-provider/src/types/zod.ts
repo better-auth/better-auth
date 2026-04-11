@@ -15,7 +15,7 @@ function isLocalhost(hostname: string): boolean {
  * Runtime schema for OAuthAuthorizationQuery.
  * Uses passthrough to tolerate fields added by future extensions (PAR, FPA, etc.)
  */
-export const oauthAuthorizationQuerySchema = z
+const oauthAuthorizationQuerySchema = z
 	.object({
 		response_type: z.literal("code").optional(),
 		request_uri: z.string().optional(),
