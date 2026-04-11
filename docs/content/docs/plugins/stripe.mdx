@@ -40,7 +40,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
     Next, install the Stripe SDK on your server:
 
     ```package-install
-    stripe@^20.0.0
+    stripe@^22.0.0
     ```
   </Step>
 
@@ -53,7 +53,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
     import Stripe from "stripe"
 
     const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: "2025-11-17.clover", // Latest API version as of Stripe SDK v20.0.0
+        apiVersion: "2026-03-25.dahlia", // Latest API version as of Stripe SDK v22.0.0
     })
 
     export const auth = betterAuth({
