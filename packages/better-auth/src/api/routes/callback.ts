@@ -4,10 +4,10 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
+import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
-import { OAUTH_CALLBACK_ERROR_CODES } from "../../plugins/generic-oauth/error-codes";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 
 const schema = z.object({
@@ -131,21 +131,15 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.PROVIDER_NOT_FOUND);
 		}
 
-		// RFC 9207: validate authorization server issuer identifier
-		if (provider.issuer) {
-			if (!iss) {
-				c.context.logger.error("OAuth issuer parameter missing", {
-					expected: provider.issuer,
-				});
-				throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISSING);
-			}
-			if (iss !== provider.issuer) {
-				c.context.logger.error("OAuth issuer mismatch", {
-					expected: provider.issuer,
-					received: iss,
-				});
-				throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISMATCH);
-			}
+		// RFC 9207: validate authorization server issuer identifier.
+		// Only validated when the provider sends the iss parameter;
+		// older OAuth servers that don't support RFC 9207 omit it.
+		if (iss && provider.issuer && iss !== provider.issuer) {
+			c.context.logger.error("OAuth issuer mismatch", {
+				expected: provider.issuer,
+				received: iss,
+			});
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISMATCH);
 		}
 
 		let tokens: OAuth2Tokens | null;
@@ -214,7 +208,7 @@ export const callbackOAuth = createAuthEndpoint(
 				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
-				return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_DOESNT_MATCH);
+				return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_DOES_NOT_MATCH);
 			}
 
 			const existingAccount =

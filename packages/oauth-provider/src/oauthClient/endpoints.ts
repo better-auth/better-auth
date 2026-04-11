@@ -278,7 +278,14 @@ export async function updateClientEndpoint(
 			// Generate a new secret when switching away from private_key_jwt
 			// to prevent clients from being stuck without credentials
 			if (!schemaUpdates.clientSecret) {
-				schemaUpdates.clientSecret = generateRandomString(32, "a-z", "A-Z");
+				const rawSecret =
+					opts.generateClientSecret?.() ||
+					generateRandomString(32, "a-z", "A-Z");
+				schemaUpdates.clientSecret = await storeClientSecret(
+					ctx,
+					opts,
+					rawSecret,
+				);
 			}
 		}
 	}

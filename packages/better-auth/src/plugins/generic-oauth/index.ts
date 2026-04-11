@@ -78,20 +78,10 @@ async function fetchDiscovery(
 	if (result.error || !result.data) {
 		return null;
 	}
-	// RFC 8414 Section 3: validate that the issuer matches the discovery URL.
-	// Two URL shapes exist:
-	//   Suffix-based:  {issuer}/.well-known/openid-configuration
-	//   Path-based:    /.well-known/oauth-authorization-server/{path}
+	// Validate the issuer is a syntactically valid URL
 	if (result.data.issuer) {
 		try {
-			const normalizedIssuer = result.data.issuer.replace(/\/$/, "");
-			const discoveryBase = url
-				.replace(/\/\.well-known\/openid-configuration\/?$/, "")
-				.replace(/\/\.well-known\/oauth-authorization-server(\/|$)/, "/")
-				.replace(/\/$/, "");
-			if (normalizedIssuer !== discoveryBase) {
-				return null;
-			}
+			new URL(result.data.issuer);
 		} catch {
 			return null;
 		}
