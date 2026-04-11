@@ -53,6 +53,9 @@ Because of that, the recommended setup is to keep `testUtils` out of your produc
 Better Auth infers plugin helpers best from statically defined plugin arrays. If you conditionally spread `testUtils()` into `plugins`, TypeScript can stop inferring `ctx.test` correctly.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { testUtils } from "better-auth/plugins"
+
 export const auth = betterAuth({
     plugins: [
         ...(process.env.NODE_ENV === "test"
