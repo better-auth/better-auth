@@ -673,7 +673,7 @@ describe("Email Verification Secondary Storage", async () => {
 	// Fix: use ctx.request?.clone() to pass a fresh readable copy.
 	it("should not throw locked body error when request is passed to sendVerificationEmail", async () => {
 		let errorThrown: Error | undefined;
-		const _capturedToken = ""
+		const _capturedToken = "";
 
 		const { auth, testUser } = await getTestInstance({
 			emailAndPassword: {
@@ -685,7 +685,6 @@ describe("Email Verification Secondary Storage", async () => {
 					{ user, url, token: _token },
 					request,
 				) => {
-				
 					try {
 						if (request) {
 							// Simulates what the user in issue #8969 was doing
