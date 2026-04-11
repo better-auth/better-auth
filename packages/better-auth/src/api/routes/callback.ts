@@ -16,6 +16,7 @@ const schema = z.object({
 	error_description: z.string().optional(),
 	state: z.string().optional(),
 	user: z.string().optional(),
+	iss: z.string().optional(),
 });
 
 export const callbackOAuth = createAuthEndpoint(
@@ -76,6 +77,7 @@ export const callbackOAuth = createAuthEndpoint(
 			error_description,
 			device_id,
 			user: userData,
+			iss,
 		} = queryOrBody;
 
 		if (!state) {
@@ -126,6 +128,19 @@ export const callbackOAuth = createAuthEndpoint(
 				"not found",
 			);
 			throw redirectOnError("oauth_provider_not_found");
+		}
+
+		// RFC 9207: validate authorization server issuer identifier
+		if (provider.issuer) {
+			if (iss) {
+				if (iss !== provider.issuer) {
+					c.context.logger.error("OAuth issuer mismatch", {
+						expected: provider.issuer,
+						received: iss,
+					});
+					throw redirectOnError("issuer_mismatch");
+				}
+			}
 		}
 
 		let tokens: OAuth2Tokens | null;

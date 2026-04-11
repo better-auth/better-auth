@@ -67,6 +67,19 @@ async function fetchDiscovery(
 	if (result.error || !result.data) {
 		return null;
 	}
+	// RFC 8414 Section 3.3: the issuer in the metadata MUST match the
+	// expected origin derived from the discovery URL
+	if (result.data.issuer) {
+		const expectedOrigin = new URL(url).origin;
+		try {
+			const issuerOrigin = new URL(result.data.issuer).origin;
+			if (issuerOrigin !== expectedOrigin) {
+				return null;
+			}
+		} catch {
+			return null;
+		}
+	}
 	return result.data;
 }
 
@@ -162,6 +175,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				let tokenUrl = c.tokenUrl;
 				let userInfoUrl = c.userInfoUrl;
 
+				let issuer: string | undefined;
+
 				if (c.discoveryUrl) {
 					const discovered = await fetchDiscovery(
 						c.discoveryUrl,
@@ -176,12 +191,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						authorizationUrl ??= discovered.authorization_endpoint;
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
+						issuer = discovered.issuer;
 					}
 				}
 
 				genericProviders.push({
 					id: c.providerId,
-					name: c.providerId,
+					name: c.name ?? c.providerId,
+					issuer,
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
 							throw APIError.from(
@@ -199,7 +216,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							authorizationEndpoint: authorizationUrl,
 							state: data.state,
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
-							scopes: data.scopes ?? c.scopes ?? [],
+							scopes: [...(data.scopes ?? []), ...(c.scopes ?? [])],
 							redirectURI: data.redirectURI,
 							prompt: c.prompt,
 							accessType: c.accessType,
@@ -286,6 +303,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						overrideUserInfoOnSignIn: c.overrideUserInfo,
 					},
 				} satisfies OAuthProvider);
+			}
+
+			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));
+			for (const gp of genericProviders) {
+				if (existingIds.has(gp.id)) {
+					ctx.logger.warn(
+						`Generic OAuth provider "${gp.id}" shadows a built-in social provider with the same ID`,
+					);
+				}
 			}
 
 			return {

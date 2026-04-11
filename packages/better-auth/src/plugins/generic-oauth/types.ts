@@ -15,6 +15,11 @@ export interface GenericOAuthConfig {
 	/** Unique identifier for the OAuth provider */
 	providerId: string;
 	/**
+	 * Human-readable display name for this provider.
+	 * Defaults to `providerId` if not set.
+	 */
+	name?: string | undefined;
+	/**
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */

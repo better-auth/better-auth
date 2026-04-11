@@ -577,16 +577,7 @@ export const tempPluginsConfig = {
 				},
 			],
 		},
-		authClient: {
-			function: "genericOAuthClient",
-			imports: [
-				{
-					path: "better-auth/client/plugins",
-					imports: [createImport({ name: "genericOAuthClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
+		authClient: null,
 	},
 	anonymous: {
 		displayName: "Anonymous",
