@@ -44,17 +44,30 @@ export interface OIDCConfig {
 }
 
 export interface SAMLConfig {
+	/**
+	 * SP Entity ID. Used as the `entityID` in SP metadata when
+	 * `spMetadata.entityID` is not set. Also used as the expected
+	 * audience for SAML assertion validation when `audience` is not set.
+	 */
 	issuer: string;
+	/**
+	 * IdP SSO URL. Used as the redirect destination when
+	 * `idpMetadata.metadata` is not provided. Ignored when
+	 * IdP metadata XML is set (the SSO URL is extracted from the XML).
+	 */
 	entryPoint: string;
+	/**
+	 * IdP signing certificate. Used to verify SAML response signatures
+	 * when `idpMetadata.metadata` is not provided. Ignored when IdP
+	 * metadata XML is set (the certificate is extracted from the XML).
+	 * When both this and `idpMetadata.cert` are set, `idpMetadata.cert` takes precedence.
+	 */
 	cert: string;
-	callbackUrl: string;
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
 				metadata?: string;
 				entityID?: string;
-				entityURL?: string;
-				redirectURL?: string;
 				cert?: string;
 				privateKey?: string;
 				privateKeyPass?: string;
@@ -71,7 +84,12 @@ export interface SAMLConfig {
 				}>;
 		  }
 		| undefined;
-	spMetadata: {
+	/**
+	 * SP metadata configuration. All fields are optional; when omitted,
+	 * SP metadata is auto-generated from `issuer`, `wantAssertionsSigned`,
+	 * `authnRequestsSigned`, and `identifierFormat`.
+	 */
+	spMetadata?: {
 		metadata?: string | undefined;
 		entityID?: string | undefined;
 		binding?: string | undefined;
@@ -81,14 +99,17 @@ export interface SAMLConfig {
 		encPrivateKey?: string | undefined;
 		encPrivateKeyPass?: string | undefined;
 	};
+	/**
+	 * Request signed assertions from the IdP. When true, the SP metadata
+	 * advertises `WantAssertionsSigned="true"` and samlify will reject
+	 * unsigned assertions.
+	 */
 	wantAssertionsSigned?: boolean | undefined;
 	authnRequestsSigned?: boolean | undefined;
 	signatureAlgorithm?: string | undefined;
 	digestAlgorithm?: string | undefined;
 	identifierFormat?: string | undefined;
 	privateKey?: string | undefined;
-	decryptionPvk?: string | undefined;
-	additionalParams?: Record<string, any> | undefined;
 	mapping?: SAMLMapping | undefined;
 }
 

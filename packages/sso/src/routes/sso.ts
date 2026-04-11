@@ -22,9 +22,7 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
-import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
-import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import * as z from "zod";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -41,7 +39,6 @@ import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
 	OIDCConfig,
-	SAMLAssertionExtract,
 	SAMLConfig,
 	SAMLSessionRecord,
 	SSOOptions,
@@ -84,7 +81,6 @@ function getOIDCRedirectURI(
 
 const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
-	format: z.enum(["xml", "json"]).default("xml"),
 });
 
 export const spMetadata = (options?: SSOOptions) => {
@@ -132,42 +128,20 @@ export const spMetadata = (options?: SSOOptions) => {
 				});
 			}
 
-			const sloLocation = `${ctx.context.baseURL}/sso/saml2/sp/slo/${ctx.query.providerId}`;
-			const singleLogoutService = options?.saml?.enableSingleLogout
-				? [
-						{
-							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-							Location: sloLocation,
-						},
-						{
-							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-							Location: sloLocation,
-						},
-					]
-				: undefined;
-
-			const sp = parsedSamlConfig.spMetadata.metadata
-				? saml.ServiceProvider({
-						metadata: parsedSamlConfig.spMetadata.metadata,
-					})
-				: saml.SPMetadata({
-						entityID:
-							parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
-						assertionConsumerService: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location:
-									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs/${ctx.query.providerId}`,
+			const sp = createSP(
+				parsedSamlConfig,
+				ctx.context.baseURL,
+				ctx.query.providerId,
+				options?.saml?.enableSingleLogout
+					? {
+							sloOptions: {
+								wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
+								wantLogoutResponseSigned:
+									options?.saml?.wantLogoutResponseSigned,
 							},
-						],
-						singleLogoutService,
-						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-						authnRequestsSigned: parsedSamlConfig.authnRequestsSigned || false,
-						nameIDFormat: parsedSamlConfig.identifierFormat
-							? [parsedSamlConfig.identifierFormat]
-							: undefined,
-					});
+						}
+					: undefined,
+			);
 			return new Response(sp.getMetadata(), {
 				headers: {
 					"Content-Type": "application/xml",
@@ -286,9 +260,6 @@ const ssoProviderBodySchema = z.object({
 			cert: z.string({}).meta({
 				description: "The certificate of the provider",
 			}),
-			callbackUrl: z.string({}).meta({
-				description: "The callback URL of the provider",
-			}),
 			audience: z.string().optional(),
 			idpMetadata: z
 				.object({
@@ -317,24 +288,24 @@ const ssoProviderBodySchema = z.object({
 						}),
 				})
 				.optional(),
-			spMetadata: z.object({
-				metadata: z.string().optional(),
-				entityID: z.string().optional(),
-				binding: z.string().optional(),
-				privateKey: z.string().optional(),
-				privateKeyPass: z.string().optional(),
-				isAssertionEncrypted: z.boolean().optional(),
-				encPrivateKey: z.string().optional(),
-				encPrivateKeyPass: z.string().optional(),
-			}),
+			spMetadata: z
+				.object({
+					metadata: z.string().optional(),
+					entityID: z.string().optional(),
+					binding: z.string().optional(),
+					privateKey: z.string().optional(),
+					privateKeyPass: z.string().optional(),
+					isAssertionEncrypted: z.boolean().optional(),
+					encPrivateKey: z.string().optional(),
+					encPrivateKeyPass: z.string().optional(),
+				})
+				.optional(),
 			wantAssertionsSigned: z.boolean().optional(),
 			authnRequestsSigned: z.boolean().optional(),
 			signatureAlgorithm: z.string().optional(),
 			digestAlgorithm: z.string().optional(),
 			identifierFormat: z.string().optional(),
 			privateKey: z.string().optional(),
-			decryptionPvk: z.string().optional(),
-			additionalParams: z.record(z.string(), z.any()).optional(),
 			mapping: z
 				.object({
 					id: z.string({}).meta({
@@ -827,7 +798,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								issuer: body.issuer,
 								entryPoint: body.samlConfig.entryPoint,
 								cert: body.samlConfig.cert,
-								callbackUrl: body.samlConfig.callbackUrl,
 								audience: body.samlConfig.audience,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
@@ -837,8 +807,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								digestAlgorithm: body.samlConfig.digestAlgorithm,
 								identifierFormat: body.samlConfig.identifierFormat,
 								privateKey: body.samlConfig.privateKey,
-								decryptionPvk: body.samlConfig.decryptionPvk,
-								additionalParams: body.samlConfig.additionalParams,
 								mapping: body.samlConfig.mapping,
 							})
 						: null,
@@ -1283,72 +1251,13 @@ export const signInSSO = (options?: SSOOptions) => {
 					false,
 				);
 
-				let metadata = parsedSamlConfig.spMetadata.metadata;
-
-				if (!metadata) {
-					metadata =
-						saml
-							.SPMetadata({
-								entityID:
-									parsedSamlConfig.spMetadata?.entityID ||
-									parsedSamlConfig.issuer,
-								assertionConsumerService: [
-									{
-										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-										Location:
-											parsedSamlConfig.callbackUrl ||
-											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
-									},
-								],
-								wantMessageSigned:
-									parsedSamlConfig.wantAssertionsSigned || false,
-								authnRequestsSigned:
-									parsedSamlConfig.authnRequestsSigned || false,
-								nameIDFormat: parsedSamlConfig.identifierFormat
-									? [parsedSamlConfig.identifierFormat]
-									: undefined,
-							})
-							.getMetadata() || "";
-				}
-
-				const sp = saml.ServiceProvider({
-					metadata: metadata,
-					allowCreate: true,
-					privateKey:
-						parsedSamlConfig.spMetadata?.privateKey ||
-						parsedSamlConfig.privateKey,
-					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
-					relayState,
-				});
-
-				const idpData = parsedSamlConfig.idpMetadata;
-				let idp: IdentityProvider;
-				if (!idpData?.metadata) {
-					idp = saml.IdentityProvider({
-						entityID: idpData?.entityID || parsedSamlConfig.issuer,
-						singleSignOnService: idpData?.singleSignOnService || [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-								Location: parsedSamlConfig.entryPoint,
-							},
-						],
-						signingCert: idpData?.cert || parsedSamlConfig.cert,
-						wantAuthnRequestsSigned:
-							parsedSamlConfig.authnRequestsSigned || false,
-						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-						encPrivateKey: idpData?.encPrivateKey,
-						encPrivateKeyPass: idpData?.encPrivateKeyPass,
-					});
-				} else {
-					idp = saml.IdentityProvider({
-						metadata: idpData.metadata,
-						privateKey: idpData.privateKey,
-						privateKeyPass: idpData.privateKeyPass,
-						isAssertionEncrypted: idpData.isAssertionEncrypted,
-						encPrivateKey: idpData.encPrivateKey,
-						encPrivateKeyPass: idpData.encPrivateKeyPass,
-					});
-				}
+				const sp = createSP(
+					parsedSamlConfig,
+					ctx.context.baseURL,
+					provider.providerId,
+					{ relayState },
+				);
+				const idp = createIdP(parsedSamlConfig);
 				const loginRequest = sp.createLoginRequest(
 					idp,
 					"redirect",
@@ -1882,17 +1791,17 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 	);
 };
 
-const callbackSSOSAMLBodySchema = z.object({
+const acsEndpointBodySchema = z.object({
 	SAMLResponse: z.string(),
 	RelayState: z.string().optional(),
 });
 
-export const callbackSSOSAML = (options?: SSOOptions) => {
+export const acsEndpoint = (options?: SSOOptions) => {
 	return createAuthEndpoint(
-		"/sso/saml2/callback/:providerId",
+		"/sso/saml2/sp/acs/:providerId",
 		{
 			method: ["GET", "POST"],
-			body: callbackSSOSAMLBodySchema.optional(),
+			body: acsEndpointBodySchema.optional(),
 			query: z
 				.object({
 					RelayState: z.string().optional(),
@@ -1905,100 +1814,20 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					"application/json",
 				],
 				openapi: {
-					operationId: "handleSAMLCallback",
-					summary: "Callback URL for SAML provider",
-					description:
-						"This endpoint is used as the callback URL for SAML providers. Supports both GET and POST methods for IdP-initiated and SP-initiated flows.",
-					responses: {
-						"302": {
-							description: "Redirects to the callback URL",
-						},
-						"400": {
-							description: "Invalid SAML response",
-						},
-						"401": {
-							description: "Unauthorized - SAML authentication failed",
-						},
-					},
-				},
-			},
-		},
-		async (ctx) => {
-			const { providerId } = ctx.params;
-			const appOrigin = new URL(ctx.context.baseURL).origin;
-			const errorURL =
-				ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
-			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/callback/${providerId}`;
-
-			// Determine if this is a GET request by checking both method AND body presence
-			// When called via auth.api.*, ctx.method may not be reliable, so we also check for body
-			const isGetRequest = ctx.method === "GET" && !ctx.body?.SAMLResponse;
-
-			if (isGetRequest) {
-				const session = await getSessionFromCtx(ctx);
-
-				if (!session?.session) {
-					throw ctx.redirect(`${errorURL}?error=invalid_request`);
-				}
-
-				const relayState = ctx.query?.RelayState as string | undefined;
-				const safeRedirectUrl = getSafeRedirectUrl(
-					relayState,
-					currentCallbackPath,
-					appOrigin,
-					(url, settings) => ctx.context.isTrustedOrigin(url, settings),
-				);
-
-				throw ctx.redirect(safeRedirectUrl);
-			}
-
-			if (!ctx.body?.SAMLResponse) {
-				throw new APIError("BAD_REQUEST", {
-					message: "SAMLResponse is required for POST requests",
-				});
-			}
-
-			const safeRedirectUrl = await processSAMLResponse(
-				ctx,
-				{
-					SAMLResponse: ctx.body.SAMLResponse,
-					RelayState: ctx.body.RelayState,
-					providerId,
-					currentCallbackPath,
-				},
-				options,
-			);
-			throw ctx.redirect(safeRedirectUrl);
-		},
-	);
-};
-
-const acsEndpointBodySchema = z.object({
-	SAMLResponse: z.string(),
-	RelayState: z.string().optional(),
-});
-
-export const acsEndpoint = (options?: SSOOptions) => {
-	return createAuthEndpoint(
-		"/sso/saml2/sp/acs/:providerId",
-		{
-			method: "POST",
-			body: acsEndpointBodySchema,
-			metadata: {
-				...HIDE_METADATA,
-				allowedMediaTypes: [
-					"application/x-www-form-urlencoded",
-					"application/json",
-				],
-				openapi: {
 					operationId: "handleSAMLAssertionConsumerService",
 					summary: "SAML Assertion Consumer Service",
 					description:
-						"Handles SAML responses from IdP after successful authentication",
+						"Handles SAML responses from IdP after successful authentication. Supports GET for post-auth redirects and POST for SAML response processing.",
 					responses: {
 						"302": {
 							description:
-								"Redirects to the callback URL after successful authentication",
+								"Redirects after authentication (success or error with query params)",
+						},
+						"400": {
+							description: "Missing SAMLResponse in POST body",
+						},
+						"404": {
+							description: "SAML provider not found",
 						},
 					},
 				},
@@ -2008,6 +1837,33 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
+
+			// GET: post-auth redirect (e.g., after IdP-initiated flow completes)
+			const isGetRequest = ctx.method === "GET" && !ctx.body?.SAMLResponse;
+			if (isGetRequest) {
+				const session = await getSessionFromCtx(ctx);
+				if (!session?.session) {
+					const errorURL =
+						ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
+					throw ctx.redirect(`${errorURL}?error=invalid_request`);
+				}
+				const relayState = ctx.query?.RelayState as string | undefined;
+				throw ctx.redirect(
+					getSafeRedirectUrl(
+						relayState,
+						currentCallbackPath,
+						appOrigin,
+						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+					),
+				);
+			}
+
+			// POST: SAML response processing
+			if (!ctx.body?.SAMLResponse) {
+				throw new APIError("BAD_REQUEST", {
+					message: "SAMLResponse is required for POST requests",
+				});
+			}
 
 			try {
 				const safeRedirectUrl = await processSAMLResponse(
@@ -2022,7 +1878,6 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				);
 				throw ctx.redirect(safeRedirectUrl);
 			} catch (error) {
-				// Re-throw redirects (they use throw for control flow)
 				if (
 					error instanceof Response ||
 					(error &&
@@ -2032,21 +1887,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				) {
 					throw error;
 				}
-				// Translate structural SAML errors (400) into browser-friendly redirects
-				// so the user returns to the app instead of seeing raw JSON.
-				// Non-400 errors (404 provider not found, 401 unauthorized) propagate as-is.
 				if (error instanceof APIError && error.statusCode === 400) {
-					// TODO: unify error codes across endpoints (callbackSSOSAML uses
-					// the raw APIError code, ACS uses lowercase snake_case for backward compat)
-					const internalCode = error.body?.code || "";
-					const errorCode =
-						internalCode === "SAML_MULTIPLE_ASSERTIONS"
-							? "multiple_assertions"
-							: internalCode === "SAML_NO_ASSERTION"
-								? "no_assertion"
-								: internalCode.toLowerCase() || "saml_error";
+					const errorCode = (error.body?.code || "saml_error").toLowerCase();
 					const redirectUrl = getSafeRedirectUrl(
-						ctx.body.RelayState || undefined,
+						ctx.body?.RelayState || undefined,
 						currentCallbackPath,
 						appOrigin,
 						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2240,7 +2084,9 @@ async function handleLogoutRequest(
 	}
 
 	const { nameID } = parsed.extract;
-	const sessionIndex = (parsed.extract as SAMLAssertionExtract).sessionIndex;
+	// LogoutRequest SessionIndex is a plain string (unlike login response
+	// where samlify nests it as { sessionIndex: string } from AuthnStatement)
+	const sessionIndex = parsed.extract.sessionIndex as string | undefined;
 
 	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
 	const stored = await ctx.context.internalAdapter.findVerificationValue(key);

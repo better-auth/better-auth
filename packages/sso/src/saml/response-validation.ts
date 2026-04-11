@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { AUTHN_REQUEST_KEY_PREFIX } from "../constants";
-import type { SAMLAssertionExtract } from "../types";
+import type { AuthnRequestRecord, SAMLAssertionExtract } from "../types";
 
 function errorRedirectUrl(
 	base: string,
@@ -13,8 +13,6 @@ function errorRedirectUrl(
 		url.searchParams.set("error_description", description);
 		return url.toString();
 	} catch {
-		// Relative URL — fall back to manual construction.
-		// Split off any fragment so query params stay before the hash.
 		const hashIdx = base.indexOf("#");
 		const path = hashIdx >= 0 ? base.slice(0, hashIdx) : base;
 		const hash = hashIdx >= 0 ? base.slice(hashIdx + 1) : undefined;
@@ -22,13 +20,6 @@ function errorRedirectUrl(
 		const query = `error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(description)}`;
 		return `${path}${separator}${query}${hash ? `#${hash}` : ""}`;
 	}
-}
-
-interface AuthnRequestRecord {
-	id: string;
-	providerId: string;
-	createdAt: number;
-	expiresAt: number;
 }
 
 export interface InResponseToValidationContext {
@@ -154,6 +145,10 @@ export function validateAudience(
 	ctx: AudienceValidationContext,
 ): void {
 	if (!ctx.expectedAudience) {
+		c.context.logger.warn(
+			"Could not determine SP entity ID for audience validation; skipping",
+			{ providerId: ctx.providerId },
+		);
 		return;
 	}
 

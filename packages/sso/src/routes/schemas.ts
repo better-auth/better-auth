@@ -45,7 +45,6 @@ const oidcConfigSchema = z.object({
 const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),
 	cert: z.string().optional(),
-	callbackUrl: z.string().url().optional(),
 	audience: z.string().optional(),
 	idpMetadata: z
 		.object({
@@ -85,8 +84,6 @@ const samlConfigSchema = z.object({
 	digestAlgorithm: z.string().optional(),
 	identifierFormat: z.string().optional(),
 	privateKey: z.string().optional(),
-	decryptionPvk: z.string().optional(),
-	additionalParams: z.record(z.string(), z.any()).optional(),
 	mapping: samlMappingSchema,
 });
 
