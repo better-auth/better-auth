@@ -3,6 +3,20 @@ import * as saml from "samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse } from "../utils";
 
+/**
+ * Normalizes a PEM string by trimming leading/trailing whitespace from each
+ * line. Native `crypto.createPrivateKey` (used by samlify 2.12+) rejects PEM
+ * blocks with leading whitespace, which is common when keys are stored in
+ * indented config files, environment variables, or JSON.
+ */
+function normalizePem(pem: string | undefined): string | undefined {
+	if (!pem) return pem;
+	return pem
+		.split("\n")
+		.map((line) => line.trim())
+		.join("\n");
+}
+
 export async function findSAMLProvider(
 	providerId: string,
 	options: SSOOptions | undefined,
@@ -95,10 +109,10 @@ export function createSP(
 		wantLogoutRequestSigned: opts?.sloOptions?.wantLogoutRequestSigned ?? false,
 		wantLogoutResponseSigned:
 			opts?.sloOptions?.wantLogoutResponseSigned ?? false,
-		privateKey: spData?.privateKey || config.privateKey,
+		privateKey: normalizePem(spData?.privateKey || config.privateKey),
 		privateKeyPass: spData?.privateKeyPass,
 		isAssertionEncrypted: spData?.isAssertionEncrypted || false,
-		encPrivateKey: spData?.encPrivateKey,
+		encPrivateKey: normalizePem(spData?.encPrivateKey),
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
 		relayState: opts?.relayState,
 	});
@@ -109,10 +123,10 @@ export function createIdP(config: SAMLConfig) {
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
 			metadata: idpData.metadata,
-			privateKey: idpData.privateKey,
+			privateKey: normalizePem(idpData.privateKey),
 			privateKeyPass: idpData.privateKeyPass,
 			isAssertionEncrypted: idpData.isAssertionEncrypted,
-			encPrivateKey: idpData.encPrivateKey,
+			encPrivateKey: normalizePem(idpData.encPrivateKey),
 			encPrivateKeyPass: idpData.encPrivateKeyPass,
 		});
 	}
@@ -125,10 +139,10 @@ export function createIdP(config: SAMLConfig) {
 			},
 		],
 		singleLogoutService: idpData?.singleLogoutService,
-		signingCert: idpData?.cert || config.cert,
+		signingCert: normalizePem(idpData?.cert || config.cert),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
 		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-		encPrivateKey: idpData?.encPrivateKey,
+		encPrivateKey: normalizePem(idpData?.encPrivateKey),
 		encPrivateKeyPass: idpData?.encPrivateKeyPass,
 	});
 }
