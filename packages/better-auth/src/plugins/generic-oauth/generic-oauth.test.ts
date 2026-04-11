@@ -131,7 +131,7 @@ describe("oauth2", async () => {
 		expect(stateCookie?.path).toBe("/");
 	});
 
-	it("should redirect to the provider and handle the response", async () => {
+	it("should complete full sign-in flow and return correct session data", async () => {
 		const headers = new Headers();
 		const signInRes = await authClient.signIn.social({
 			provider: "test",
@@ -145,11 +145,29 @@ describe("oauth2", async () => {
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
-		const { callbackURL } = await simulateOAuthFlow(
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe("oauth2@test.com");
+		expect(session.data?.user.name).toBe("OAuth2 Test");
+		expect(session.data?.session.userId).toBe(session.data?.user.id);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "test",
+			accountId: "oauth2",
+		});
 	});
 
 	it("should redirect to the provider and handle the response for a new user", async () => {
