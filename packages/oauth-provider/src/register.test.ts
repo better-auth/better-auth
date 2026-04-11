@@ -287,11 +287,73 @@ describe("oauth register - unauthenticated", async () => {
 		expect(response.data?.client_secret).toBeUndefined();
 	});
 
-	it("should not create confidential clients without authentication", async () => {
+	/**
+	 * RFC 7591 §2: when token_endpoint_auth_method is omitted, the default
+	 * is "client_secret_basic". Unauthenticated DCR overrides this to "none"
+	 * per RFC 7591 §3.2.1 ("the server MAY reject or replace any of the
+	 * client's requested metadata values").
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should override omitted auth method (RFC 7591 default) to public", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
 			redirect_uris: [redirectUri],
 		});
-		expect(response.error?.status).toBe(401);
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.public).toBe(true);
+	});
+
+	/**
+	 * Real-world MCP clients (Claude, Codex, Factory Droid) send
+	 * token_endpoint_auth_method: "client_secret_post" in their DCR payload.
+	 * The server overrides this to "none" and communicates the actual method
+	 * in the registration response so compliant clients can adjust.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should override client_secret_post to public for unauthenticated DCR", async () => {
+		const response = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_post",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.public).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should override client_secret_basic to public for unauthenticated DCR", async () => {
+		const response = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_basic",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.public).toBe(true);
+	});
+
+	/**
+	 * When a client sends type: "web" with a confidential method, the
+	 * override should also clear the type to avoid a validation error
+	 * (type "web" is only valid for confidential clients).
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should clear type 'web' when overriding confidential to public", async () => {
+		const response = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_post",
+			type: "web",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
 	});
 });
 

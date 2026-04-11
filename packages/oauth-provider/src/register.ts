@@ -29,17 +29,31 @@ export async function registerEndpoint(
 		});
 	}
 
-	// Determine whether registration request for public client
-	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
-	const isPublic = body.token_endpoint_auth_method === "none";
-
-	// Check unauthenticated user is requesting a confidential client
-	if (!session && !isPublic) {
-		throw new APIError("UNAUTHORIZED", {
-			error: "invalid_request",
-			error_description:
-				"Authentication required for confidential client registration",
-		});
+	// Unauthenticated DCR: override confidential methods to public.
+	//
+	// RFC 7591 §3.2.1 allows the server to "reject or replace any of the
+	// client's requested metadata values submitted during the registration
+	// and substitute them with suitable values."
+	//
+	// When no session is present, a client_secret provides no meaningful
+	// trust: anyone can register and receive one, so PKCE (always required
+	// for registered clients) is the actual security boundary.  Silently
+	// downgrading to "none" keeps real-world MCP clients (Claude, Codex,
+	// etc.) working while the response communicates the actual method back
+	// to the client per RFC 7591 §3.2.1.
+	//
+	// If token_endpoint_auth_method is omitted, RFC 7591 §2 defaults it to
+	// "client_secret_basic", which also triggers this override.
+	if (!session) {
+		const requestedMethod = body.token_endpoint_auth_method;
+		if (requestedMethod !== "none") {
+			body.token_endpoint_auth_method = "none";
+			// Clear type so checkOAuthClient does not reject the now-public
+			// client for having type "web" (confidential-only).
+			if (body.type === "web") {
+				body.type = undefined;
+			}
+		}
 	}
 
 	// Ensure dynamically registered clients shall have a scope
