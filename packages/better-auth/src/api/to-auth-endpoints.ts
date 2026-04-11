@@ -22,7 +22,9 @@ import type {
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
+import { resolveRequestContext } from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
+import { isDynamicBaseURLConfig } from "../utils/url";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -66,6 +68,38 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
+/**
+ * Cross-realm-safe Request detection:
+ * Plain `instanceof Request` misses polyfilled or cross-realm Requests.
+ */
+function isRequestLike(value: unknown): value is Request {
+	if (value == null || typeof value !== "object") return false;
+	if (value instanceof Request) return true;
+	if (!(Symbol.toStringTag in value)) return false;
+	return value[Symbol.toStringTag] === "Request";
+}
+
+/**
+ * Cold-path helper:
+ * only invoked when the dynamic config branch is taken,
+ * so the static path pays zero async wrapping cost.
+ */
+async function resolveDynamicContext(
+	rawCtx: AuthContext,
+	input: UserInputContext | undefined,
+): Promise<AuthContext> {
+	if (isRequestLike(input?.request)) {
+		return resolveRequestContext(rawCtx, input.request as Request);
+	}
+	if (!input?.headers) return rawCtx;
+	const headers = new Headers(input.headers);
+	if (!headers.has("host") && !headers.has("x-forwarded-host")) {
+		return rawCtx;
+	}
+	const request = new Request("http://placeholder.invalid", { headers });
+	return resolveRequestContext(rawCtx, request);
+}
+
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
 	ctx: AuthContext | Promise<AuthContext>,
@@ -89,10 +123,16 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				: endpointMethod;
 
 			const run = async () => {
-				const authContext = await ctx;
+				const rawContext = await ctx;
 				const methodName =
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
 				const route = endpoint.path ?? "/:virtual";
+
+				// Direct API calls bypass the handler's per-request resolution.
+				// Rehydrate only when the dynamic branch actually applies so the static path stays zero-overhead.
+				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
+					? await resolveDynamicContext(rawContext, context)
+					: rawContext;
 
 				let internalContext: InternalContext = {
 					...context,

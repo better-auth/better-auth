@@ -5,10 +5,17 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { defu } from "defu";
+import { createCookieGetter, getCookies } from "../cookies";
 import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import {
+	getBaseURL,
+	getOrigin,
+	isDynamicBaseURLConfig,
+	resolveBaseURL,
+} from "../utils/url";
 
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
@@ -144,6 +151,56 @@ export async function getTrustedOrigins(
 		trustedOrigins.push(...envTrustedOrigins.split(","));
 	}
 	return trustedOrigins.filter((v): v is string => Boolean(v));
+}
+
+/**
+ * Produce a per-request clone of an AuthContext configured with a dynamic baseURL.
+ * Resolves the host against `allowedHosts` and rehydrates `trustedOrigins` and cookie helpers
+ * so downstream code sees values matching the resolved host.
+ *
+ * Throws when the host cannot be resolved (unknown host, no fallback, etc.).
+ * Caller is expected to only invoke this when `isDynamicBaseURLConfig` holds.
+ */
+export async function resolveRequestContext(
+	ctx: AuthContext,
+	request: Request,
+): Promise<AuthContext> {
+	const dynamicBaseURLConfig = ctx.options.baseURL;
+	const basePath = ctx.options.basePath || "/api/auth";
+	const baseURL = resolveBaseURL(dynamicBaseURLConfig, basePath, request);
+	if (!baseURL) {
+		throw new BetterAuthError(
+			"Could not resolve base URL from request. Check your allowedHosts config.",
+		);
+	}
+
+	const resolved = Object.create(
+		Object.getPrototypeOf(ctx),
+		Object.getOwnPropertyDescriptors(ctx),
+	) as AuthContext;
+	resolved.baseURL = baseURL;
+	resolved.options = {
+		...ctx.options,
+		baseURL: getOrigin(baseURL) || undefined,
+	};
+
+	// getTrustedOrigins expands allowedHosts when passed the dynamic config,
+	// so feed it the original object rather than the resolved origin string.
+	const trustedOriginOptions: BetterAuthOptions = {
+		...resolved.options,
+		baseURL: dynamicBaseURLConfig,
+	};
+	resolved.trustedOrigins = await getTrustedOrigins(
+		trustedOriginOptions,
+		request,
+	);
+
+	if (ctx.options.advanced?.crossSubDomainCookies?.enabled) {
+		resolved.authCookies = getCookies(resolved.options);
+		resolved.createAuthCookie = createCookieGetter(resolved.options);
+	}
+
+	return resolved;
 }
 
 export async function getAwaitableValue<T extends Record<string, any>>(
