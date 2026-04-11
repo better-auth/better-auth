@@ -130,7 +130,6 @@ describe("SSO provider read endpoints", () => {
 					samlConfig: {
 						entryPoint: "https://idp.example.com/sso",
 						cert: TEST_CERT,
-						callbackUrl: "http://localhost:3000/api/sso/callback",
 						audience: "my-audience",
 						wantAssertionsSigned: true,
 						spMetadata: {},
@@ -382,7 +381,6 @@ describe("SSO provider read endpoints", () => {
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
 					cert: TEST_CERT,
-					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
 					spMetadata: {},
@@ -425,7 +423,6 @@ describe("SSO provider read endpoints", () => {
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
 					cert: TEST_CERT,
-					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
 					spMetadata: {},
@@ -621,7 +618,6 @@ describe("SSO provider read endpoints", () => {
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
 					cert: TEST_CERT,
-					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
 					spMetadata: {},
@@ -662,7 +658,6 @@ describe("SSO provider read endpoints", () => {
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
 					cert: TEST_CERT,
-					callbackUrl: "http://localhost:3000/api/sso/callback",
 					audience: "my-audience",
 					wantAssertionsSigned: true,
 					spMetadata: {},
@@ -740,7 +735,6 @@ describe("SSO provider read endpoints", () => {
 				samlConfig: JSON.stringify({
 					entryPoint: "https://idp.example.com/sso",
 					cert: "invalid-cert-data",
-					callbackUrl: "http://localhost:3000/api/sso/callback",
 				}),
 			});
 
@@ -1084,7 +1078,6 @@ describe("SSO provider read endpoints", () => {
 					samlConfig: {
 						entryPoint: "https://idp.example.com/sso",
 						cert: TEST_CERT,
-						callbackUrl: "http://localhost:3000/api/sso/callback",
 						spMetadata: {},
 					},
 				},

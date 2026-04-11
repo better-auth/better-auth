@@ -52,45 +52,54 @@ export function createSP(
 ) {
 	const spData = config.spMetadata;
 	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
-	// TODO: derive ACS URL exclusively from baseURL + providerId.
-	// callbackUrl doubles as both ACS and post-auth redirect, which breaks
-	// when it points to an app destination (e.g., /dashboard).
-	const acsUrl =
-		config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`;
+	const acsUrl = `${baseURL}/sso/saml2/sp/acs/${providerId}`;
+
+	// When no SP metadata XML is provided, generate it so samlify can read
+	// authnRequestsSigned and other flags that only work via metadata.
+	let metadata = spData?.metadata;
+	if (!metadata) {
+		metadata =
+			saml
+				.SPMetadata({
+					entityID: spData?.entityID || config.issuer,
+					assertionConsumerService: [
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+							Location: acsUrl,
+						},
+					],
+					singleLogoutService: opts?.sloOptions
+						? [
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+									Location: sloLocation,
+								},
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+									Location: sloLocation,
+								},
+							]
+						: undefined,
+					wantMessageSigned: config.wantAssertionsSigned || false,
+					authnRequestsSigned: config.authnRequestsSigned || false,
+					nameIDFormat: config.identifierFormat
+						? [config.identifierFormat]
+						: undefined,
+				})
+				.getMetadata() || "";
+	}
 
 	return saml.ServiceProvider({
-		entityID: spData?.entityID || config.issuer,
-		assertionConsumerService: spData?.metadata
-			? undefined
-			: [
-					{
-						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-						Location: acsUrl,
-					},
-				],
-		singleLogoutService: [
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-				Location: sloLocation,
-			},
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-				Location: sloLocation,
-			},
-		],
-		wantMessageSigned: config.wantAssertionsSigned || false,
+		metadata,
+		allowCreate: true,
 		wantLogoutRequestSigned: opts?.sloOptions?.wantLogoutRequestSigned ?? false,
 		wantLogoutResponseSigned:
 			opts?.sloOptions?.wantLogoutResponseSigned ?? false,
-		metadata: spData?.metadata,
 		privateKey: spData?.privateKey || config.privateKey,
 		privateKeyPass: spData?.privateKeyPass,
 		isAssertionEncrypted: spData?.isAssertionEncrypted || false,
 		encPrivateKey: spData?.encPrivateKey,
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
-		nameIDFormat: config.identifierFormat
-			? [config.identifierFormat]
-			: undefined,
 		relayState: opts?.relayState,
 	});
 }
