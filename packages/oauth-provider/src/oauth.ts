@@ -333,7 +333,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 							public_client_supported:
+								!!opts.clientIdMetadataDocument ||
 								opts.allowUnauthenticatedClientRegistration,
+							cimd_supported: !!opts.clientIdMetadataDocument,
 							grant_types_supported: opts.grantTypes,
 							jwt_disabled: opts.disableJwtPlugin,
 						});

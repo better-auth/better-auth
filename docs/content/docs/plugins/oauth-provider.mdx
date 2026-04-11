@@ -1245,6 +1245,44 @@ PKCE prevents authorization code interception attacks. Even for confidential cli
 
 Only disable PKCE for confidential clients when absolutely necessary for legacy compatibility.
 
+### Client ID Metadata Documents
+
+[Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/) allow clients to identify themselves without prior registration by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`.
+
+This is the mechanism used by [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow) for dynamic client discovery.
+
+To enable Client ID Metadata Document support:
+
+```ts title="auth.ts"
+oauthProvider({
+  clientIdMetadataDocument: {},
+})
+```
+
+#### Configuration
+
+The `clientIdMetadataDocument` object accepts the following options:
+
+* `refreshRate` (default: `"60m"`): how frequently the server re-fetches metadata documents to pick up changes.
+* `originBoundFields` (default: `["redirect_uris", "post_logout_redirect_uris", "client_uri"]`): metadata fields whose URL values must share the same origin as the `client_id` URL. Localhost redirect URIs are always allowed for local/native app flows.
+* `onClientCreated({ client, metadata, ctx })`: called after a client is created from a metadata document for the first time.
+* `onClientRefreshed({ client, metadata, ctx })`: called after a client is refreshed from a re-fetched metadata document.
+
+```ts title="auth.ts"
+oauthProvider({
+  clientIdMetadataDocument: {
+    refreshRate: "10m",
+    originBoundFields: ["redirect_uris", "post_logout_redirect_uris"],
+    onClientCreated({ client, metadata, ctx }) {
+      // assign trust levels, prefetch logos, etc.
+    },
+    onClientRefreshed({ client, metadata, ctx }) {
+      // detect field changes, update derived data, etc.
+    },
+  },
+})
+```
+
 ### Organizations
 
 OAuth Clients are tied to either a user or `reference_id` at registration and is immutable. If you are utilizing the [organization plugin](/docs/plugins/organization), you must ensure that the [`activeOrganizationId`](/docs/plugins/organization#active-organization) is set on your active session when you create new clients.
@@ -1557,7 +1595,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
   </Step>
 
   <Step>
-    If you use `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
+    If you use `clientIdMetadataDocument` or `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
 
     ```ts
     await auth.api.createOAuthClient({
@@ -1571,7 +1609,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
     These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
 
     <Callout type="info">
-      If you choose to not support `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
+      If you choose to not support `clientIdMetadataDocument` or `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
     </Callout>
   </Step>
 

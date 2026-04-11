@@ -179,6 +179,13 @@ export interface AuthServerMetadata {
 	 * @default true
 	 */
 	authorization_response_iss_parameter_supported?: boolean;
+	/**
+	 * Whether the server supports Client ID Metadata Documents
+	 * for unauthenticated dynamic client registration.
+	 *
+	 * @see https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+	 */
+	client_id_metadata_document_supported?: boolean;
 }
 
 /**

@@ -9,6 +9,7 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
+import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
 import type {
@@ -18,6 +19,11 @@ import type {
 	Scope,
 	StoreTokenType,
 } from "../types";
+import {
+	createMetadataDocumentClient,
+	isUrlClientId,
+	refreshMetadataDocumentClient,
+} from "./cimd";
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
@@ -165,10 +171,27 @@ export async function getClient(
 		return Object.assign({}, trustedClient);
 	}
 
-	const dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
+	let dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
 		model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 		where: [{ field: "clientId", value: clientId }],
 	});
+
+	if (options.clientIdMetadataDocument && isUrlClientId(clientId)) {
+		const updatedAt =
+			dbClient?.updatedAt ??
+			dbClient?.createdAt ??
+			new Date(Math.floor(Date.now() / 1000) * 1000);
+		const iat = Math.floor(updatedAt.getTime() / 1000);
+		const rate = options.clientIdMetadataDocument.refreshRate ?? "60m";
+		// toExpJWT treats numbers as absolute timestamps, so convert
+		// numeric seconds to a relative offset for correct TTL behavior
+		const exp = typeof rate === "number" ? iat + rate : toExpJWT(rate, iat);
+		if (!dbClient) {
+			dbClient = await createMetadataDocumentClient(ctx, clientId, options);
+		} else if (exp < Date.now() / 1000) {
+			dbClient = await refreshMetadataDocumentClient(ctx, clientId, options);
+		}
+	}
 
 	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
 		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
