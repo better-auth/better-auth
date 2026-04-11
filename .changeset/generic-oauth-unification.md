@@ -5,15 +5,15 @@
 "@better-auth/oauth-provider": patch
 ---
 
-Unify generic OAuth into core social sign-in flow. Generic OAuth providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints.
+Rewrite the generic OAuth plugin as a first-class social provider with RFC-compliant security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE on by default, RFC 9207 issuer validation, OIDC auto-discovery, and typed provider IDs.
 
 **Breaking changes:**
 
 - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
 - `oauth2.link()` replaced by `linkSocial()`
-- Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id` (update your OAuth provider dashboard)
-- `genericOAuthClient()` client plugin is no longer needed (deprecated, will be removed in a future release)
-- `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>` (function form removed)
-- `issuer` and `requireIssuerValidation` config fields removed; when OIDC discovery provides an issuer, callback issuer validation is applied automatically
-- `pkce` now defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
-- `mapProfileToUser` profile parameter is now typed as `OAuth2UserInfo & Record<string, unknown>` (was `Record<string, any>`)
+- Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+- `genericOAuthClient()` deprecated (no longer needed)
+- `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+- `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+- `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+- `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
