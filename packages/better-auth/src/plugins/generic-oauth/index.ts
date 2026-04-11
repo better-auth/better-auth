@@ -102,6 +102,11 @@ async function fetchUserInfo(
 	tokens: OAuth2Tokens,
 	userInfoUrl: string | undefined,
 ): Promise<OAuth2UserInfo | null> {
+	// TODO: verify id_token signature using the provider's JWKS endpoint
+	// (discoverable from jwks_uri in the OIDC discovery document). Currently
+	// we only decode without cryptographic verification, which is acceptable
+	// when the token arrives over a TLS-protected server-to-server channel
+	// but does not satisfy OIDC Core 1.0 Section 3.1.3.7.
 	if (tokens.idToken) {
 		try {
 			const decoded = decodeJwt(tokens.idToken) as {
@@ -247,6 +252,10 @@ export const genericOAuth = <const ID extends string>(
 							authorizationEndpoint: authorizationUrl,
 							state: data.state,
 							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
+							// TODO: auto-inject "openid" when the provider uses OIDC discovery
+							// (detectable via id_token_signing_alg_values_supported in the
+							// discovery document) so OIDC providers work without requiring
+							// developers to manually add "openid" to their scopes config.
 							scopes: [...(data.scopes ?? []), ...(c.scopes ?? [])],
 							redirectURI: data.redirectURI,
 							prompt: c.prompt,
