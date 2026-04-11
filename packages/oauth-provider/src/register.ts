@@ -9,7 +9,7 @@ import { parseClientMetadata, storeClientSecret } from "./utils";
 /**
  * Resolves the auth method and type for unauthenticated DCR.
  * Overrides confidential methods to "none" per RFC 7591 Section 3.2.1.
- * Clears type "web" since it is only valid for confidential clients.
+ * When overriding, clears type "web" since it is only valid for confidential clients.
  */
 function resolveUnauthenticatedAuth(body: OAuthClient): {
 	tokenEndpointAuthMethod: TokenEndpointAuthMethod;

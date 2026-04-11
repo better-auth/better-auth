@@ -370,6 +370,7 @@ describe("oauth register - unauthenticated", async () => {
 		expect(response.data?.client_id).toBeDefined();
 		expect(response.data?.client_secret).toBeUndefined();
 		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.type).toBeUndefined();
 	});
 
 	/**
