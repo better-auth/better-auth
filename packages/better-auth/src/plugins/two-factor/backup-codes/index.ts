@@ -74,7 +74,7 @@ export async function encodeBackupCodes(
 	}
 	if (
 		typeof options?.storeBackupCodes === "object" &&
-		"encrypt" in options.storeBackupCodes
+		"encrypt" in options?.storeBackupCodes
 	) {
 		return options.storeBackupCodes.encrypt(json);
 	}
