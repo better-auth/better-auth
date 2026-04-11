@@ -1,5 +1,5 @@
 ---
-"@better-auth/oauth-provider": minor
+"@better-auth/oauth-provider": patch
 ---
 
 feat(oauth-provider): add `customTokenResponseFields` callback and Zod validation for authorization codes
