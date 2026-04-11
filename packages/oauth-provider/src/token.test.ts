@@ -1490,7 +1490,6 @@ describe("oauth token - config", async () => {
 		const refreshedTokens = await client.oauth2.token(
 			{
 				resource: validAudience,
-				// @ts-expect-error refresh token is sent
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
@@ -1600,7 +1599,6 @@ describe("oauth token - config", async () => {
 		// Refresh token
 		const refreshedTokens = await client.oauth2.token(
 			{
-				// @ts-expect-error refresh token is sent
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
