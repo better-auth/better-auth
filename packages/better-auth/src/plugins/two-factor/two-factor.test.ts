@@ -8,6 +8,7 @@ import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { anonymous } from "../anonymous";
+import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
@@ -2344,5 +2345,91 @@ describe("twoFactorMethods in sign-in response", () => {
 			expect((signInRes as any).twoFactorRedirect).toBe(true);
 			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8627
+ */
+describe("2FA enforcement on non-credential sign-in paths", async () => {
+	let magicLinkURL = "";
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP() {},
+				},
+				skipVerificationOnEnable: true,
+			}),
+			magicLink({
+				sendMagicLink({ url }) {
+					magicLinkURL = url;
+				},
+			}),
+		],
+	});
+
+	it("should enforce 2FA on magic-link sign-in", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		await auth.api.signInMagicLink({
+			body: { email: testUser.email },
+			headers: new Headers(),
+		});
+
+		const url = new URL(magicLinkURL);
+		const token = url.searchParams.get("token")!;
+		const callbackURL = url.searchParams.get("callbackURL")!;
+
+		const verifyRes = await auth.api.magicLinkVerify({
+			query: { token, callbackURL },
+			headers: new Headers(),
+			asResponse: true,
+		});
+
+		const json = await verifyRes.json();
+		expect(json.twoFactorRedirect).toBe(true);
+	});
+
+	it("should not enforce 2FA on authenticated non-sign-in endpoints", async () => {
+		const {
+			auth: a,
+			signInWithTestUser: signIn,
+			testUser: tu,
+		} = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+		let { headers: h } = await signIn();
+		const enableRes = await a.api.enableTwoFactor({
+			body: { password: tu.password },
+			headers: h,
+			asResponse: true,
+		});
+		h = convertSetCookieToCookie(enableRes.headers);
+
+		const session = await a.api.getSession({ headers: h });
+		expect(session?.user.twoFactorEnabled).toBe(true);
+
+		const updateRes = await a.api.updateUser({
+			body: { name: "updated-name" },
+			headers: h,
+			asResponse: true,
+		});
+
+		expect(updateRes.ok).toBe(true);
+		const json = await updateRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 });

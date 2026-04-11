@@ -378,9 +378,8 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				{
 					matcher(context) {
 						return (
-							context.path === "/sign-in/email" ||
-							context.path === "/sign-in/username" ||
-							context.path === "/sign-in/phone-number"
+							context.context.newSession != null &&
+							!context.path?.startsWith("/two-factor/")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -390,6 +389,12 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						}
 
 						if (!data?.user.twoFactorEnabled) {
+							return;
+						}
+
+						// Skip if the request already had an authenticated session
+						// (session refresh, updateUser, etc. are not sign-in flows)
+						if (ctx.context.session) {
 							return;
 						}
 
