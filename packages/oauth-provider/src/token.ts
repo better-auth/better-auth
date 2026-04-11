@@ -422,6 +422,17 @@ async function createUserTokens(
 	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
 	const isIdToken = user && scopes.includes("openid");
 
+	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
+	const customFields = opts.customTokenResponseFields
+		? await opts.customTokenResponseFields({
+				grantType,
+				user,
+				scopes,
+				metadata: parseClientMetadata(client.metadata),
+				verificationValue,
+			})
+		: undefined;
+
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
 		isRefreshToken && user && !isJwtAccessToken
@@ -505,16 +516,6 @@ async function createUserTokens(
 				)
 			: undefined,
 	]);
-
-	const customFields = opts.customTokenResponseFields
-		? await opts.customTokenResponseFields({
-				grantType,
-				user,
-				scopes,
-				metadata: parseClientMetadata(client.metadata),
-				verificationValue,
-			})
-		: undefined;
 
 	return ctx.json(
 		{
