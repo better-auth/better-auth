@@ -120,8 +120,8 @@ export interface SAMLResponseParams {
 /**
  * Unified SAML response processing pipeline.
  *
- * Both `/sso/saml2/callback/:providerId` (POST) and `/sso/saml2/sp/acs/:providerId`
- * delegate to this function. It handles the full lifecycle: provider lookup,
+ * The `/sso/saml2/sp/acs/:providerId` endpoint delegates to this function.
+ * It handles the full lifecycle: provider lookup,
  * SP/IdP construction, response validation, session creation, and redirect
  * URL computation.
  */
@@ -195,7 +195,7 @@ export async function processSAMLResponse(
 	const idp = createIdP(parsedSamlConfig);
 
 	const samlRedirectUrl = getSafeRedirectUrl(
-		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
+		relayState?.callbackURL,
 		params.currentCallbackPath,
 		appOrigin,
 		(url: string, settings?: { allowRelativePaths: boolean }) =>
@@ -233,6 +233,10 @@ export async function processSAMLResponse(
 
 	const { extract } = parsedResponse!;
 
+	// Destination validation (SAML Core §3.2.2) is handled by samlify's
+	// parseLoginResponse, which checks the Response Destination against the
+	// SP's registered ACS URL from the metadata.
+
 	// 10. Algorithm validation
 	validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
@@ -257,7 +261,7 @@ export async function processSAMLResponse(
 	// 13. Audience restriction validation
 	validateAudience(ctx, {
 		extract: extract as SAMLAssertionExtract,
-		expectedAudience: parsedSamlConfig.audience,
+		expectedAudience: parsedSamlConfig.audience || sp.entityMeta.getEntityID(),
 		providerId,
 		redirectUrl: samlRedirectUrl,
 	});
@@ -375,14 +379,7 @@ export async function processSAMLResponse(
 			!!(provider as { domainVerified?: boolean }).domainVerified &&
 			validateEmailDomain(userInfo.email as string, provider.domain));
 
-	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
-	// fields. Currently callbackUrl serves both purposes, which means
-	// IdP-initiated flows (no RelayState) fall back to either a URL that may be
-	// the ACS endpoint (blocked by loop protection) or baseURL.
-	const callbackUrl =
-		relayState?.callbackURL ||
-		parsedSamlConfig.callbackUrl ||
-		ctx.context.baseURL;
+	const postAuthRedirect = relayState?.callbackURL || ctx.context.baseURL;
 
 	const result = await handleOAuthUserInfo(ctx, {
 		userInfo: {
@@ -397,7 +394,7 @@ export async function processSAMLResponse(
 			accessToken: "",
 			refreshToken: "",
 		},
-		callbackURL: callbackUrl,
+		callbackURL: postAuthRedirect,
 		disableSignUp: options?.disableImplicitSignUp,
 		isTrustedProvider,
 	});
@@ -477,7 +474,7 @@ export async function processSAMLResponse(
 
 	// 21. Compute safe redirect URL
 	return getSafeRedirectUrl(
-		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
+		relayState?.callbackURL,
 		currentCallbackPath,
 		appOrigin,
 		(url: string, settings?: { allowRelativePaths: boolean }) =>

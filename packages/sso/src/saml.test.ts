@@ -533,7 +533,7 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 		}
 	});
 	app.post(
-		"/api/sso/saml2/callback/:providerId",
+		"/api/sso/saml2/sp/acs/:providerId",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
 			try {
@@ -609,7 +609,6 @@ describe("SAML SSO with defaultSSO array", async () => {
 					issuer: "http://localhost:8081",
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -703,7 +702,6 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 					issuer: "http://localhost:8082",
 					entryPoint: "http://localhost:8082/api/sso/saml2/idp/redirect",
 					cert: certificate,
-					callbackUrl: "http://localhost:8082/dashboard",
 					wantAssertionsSigned: false,
 					authnRequestsSigned: true,
 					signatureAlgorithm: "sha256",
@@ -809,7 +807,6 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 								issuer: "http://localhost:8082",
 								entryPoint: "http://localhost:8082/api/sso/saml2/idp/redirect",
 								cert: certificate,
-								callbackUrl: "http://localhost:8082/dashboard",
 								authnRequestsSigned: true,
 								spMetadata: {},
 								idpMetadata: {
@@ -855,7 +852,6 @@ describe("SAML SSO without signed AuthnRequests", async () => {
 					issuer: "http://localhost:8082",
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8082/dashboard",
 					wantAssertionsSigned: false,
 					authnRequestsSigned: false,
 					signatureAlgorithm: "sha256",
@@ -926,7 +922,6 @@ describe("SAML SSO with idpMetadata but without metadata XML (fallback to top-le
 					issuer: "http://localhost:8083/issuer",
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
 					cert: certificate,
-					callbackUrl: "http://localhost:8083/dashboard",
 					wantAssertionsSigned: false,
 					authnRequestsSigned: false,
 					spMetadata: {},
@@ -1089,7 +1084,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1122,7 +1116,6 @@ describe("SAML SSO", async () => {
 			samlConfig: {
 				entryPoint: sharedMockIdP.metadataUrl,
 				cert: expect.any(String),
-				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 				wantAssertionsSigned: false,
 				signatureAlgorithm: "sha256",
 				digestAlgorithm: "sha256",
@@ -1145,7 +1138,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/sp/acs",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1197,7 +1189,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: `${issuer}/api/sso/saml2/sp/acs`,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1242,7 +1233,7 @@ describe("SAML SSO", async () => {
 			`<EntityDescriptor entityID="${issuer}"`,
 		);
 		expect(spMetadataResResValue).toContain(
-			`Location="${issuer}/api/sso/saml2/sp/acs"`,
+			`Location="http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider-1"`,
 		);
 	});
 	it("should initiate SAML login and handle response", async () => {
@@ -1259,7 +1250,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1306,7 +1296,7 @@ describe("SAML SSO", async () => {
 		});
 		let redirectLocation = "";
 		await betterFetch(
-			"http://localhost:8081/api/sso/saml2/callback/saml-provider-1",
+			"http://localhost:8081/api/sso/saml2/sp/acs/saml-provider-1",
 			{
 				method: "POST",
 				redirect: "manual",
@@ -1339,7 +1329,6 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1370,7 +1359,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1391,7 +1379,6 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1430,7 +1417,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1451,7 +1437,6 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1485,7 +1470,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -1503,7 +1487,6 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -1533,7 +1516,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1572,7 +1554,7 @@ describe("SAML SSO", async () => {
 		});
 
 		const samlRedirectUrl = new URL(signInResponse?.url);
-		const callbackResponse = await auth.api.callbackSSOSAML({
+		const callbackResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -1590,7 +1572,7 @@ describe("SAML SSO", async () => {
 		expect(callbackResponse.headers.get("location")).toContain("dashboard");
 	});
 
-	it("should initiate SAML login and fallback to callbackUrl on invalid RelayState", async () => {
+	it("should initiate SAML login and fallback to baseURL on invalid RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
@@ -1604,7 +1586,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1642,7 +1623,7 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		const callbackResponse = await auth.api.callbackSSOSAML({
+		const callbackResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -1659,7 +1640,7 @@ describe("SAML SSO", async () => {
 
 		expect(callbackResponse.status).toBe(302);
 		expect(callbackResponse.headers.get("location")).toBe(
-			"http://localhost:3000/dashboard",
+			"http://localhost:3000",
 		);
 	});
 
@@ -1677,7 +1658,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1717,7 +1697,7 @@ describe("SAML SSO", async () => {
 		});
 
 		const samlRedirectUrl = new URL(signInResponse?.url);
-		const callbackResponse = await auth.api.callbackSSOSAML({
+		const callbackResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -1757,7 +1737,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1785,7 +1764,7 @@ describe("SAML SSO", async () => {
 
 		const response = await authWithDisabledSignUp.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/saml-test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -1825,7 +1804,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1891,7 +1869,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1930,7 +1907,7 @@ describe("SAML SSO", async () => {
 
 		const response = await authUntrusted.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/untrusted-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/untrusted-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -1971,7 +1948,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2010,7 +1986,7 @@ describe("SAML SSO", async () => {
 
 		const response = await authWithTrusted.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/trusted-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/trusted-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2026,7 +2002,7 @@ describe("SAML SSO", async () => {
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).not.toContain("error");
-		expect(redirectLocation).toContain("dashboard");
+		expect(redirectLocation).toBe("http://localhost:3000");
 	});
 
 	it("should reject unsolicited SAML response when allowIdpInitiated is false", async () => {
@@ -2051,7 +2027,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2077,7 +2052,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/strict-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/strict-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2117,7 +2092,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2143,7 +2117,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/permissive-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/permissive-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2182,7 +2156,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2208,7 +2181,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/legacy-saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/legacy-saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2248,8 +2221,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl:
-						"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
 					audience: "http://localhost:3000",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
@@ -2278,7 +2249,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2321,7 +2292,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2349,7 +2319,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/db-fallback-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/db-fallback-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2392,7 +2362,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					audience: "https://wrong-audience.example.com",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
@@ -2418,7 +2387,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/audience-mismatch-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/audience-mismatch-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2461,7 +2430,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					audience: "http://localhost:3001/api/sso/saml2/sp/metadata",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
@@ -2487,7 +2455,7 @@ describe("SAML SSO", async () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/audience-match-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/audience-match-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2524,7 +2492,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2609,8 +2576,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl:
-						"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2651,7 +2616,7 @@ describe("SAML SSO", async () => {
 		// IdP POSTs back without relay_state cookie (SameSite=Lax blocks cross-site POST cookies)
 		const callbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/saml-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
 				{
 					method: "POST",
 					headers: {
@@ -2668,7 +2633,7 @@ describe("SAML SSO", async () => {
 		expect(callbackResponse.status).toBe(302);
 		const redirectLocation = callbackResponse.headers.get("location") || "";
 		expect(redirectLocation).toContain("/dashboard");
-		expect(redirectLocation).not.toContain("/sso/saml2/callback/");
+		expect(redirectLocation).not.toContain("/sso/saml2/sp/acs/");
 		expect(redirectLocation).not.toContain("error");
 	});
 
@@ -2687,8 +2652,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl:
-						"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-provider",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2752,7 +2715,7 @@ describe("SAML SSO", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7777
 	 */
-	it("should fallback to provider callbackUrl on ACS route when RelayState is invalid", async () => {
+	it("should fallback to baseURL on ACS route when RelayState is invalid", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
 		});
@@ -2767,7 +2730,6 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2791,7 +2753,7 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// POST with a garbage RelayState - should fallback to provider callbackUrl
+		// POST with a garbage RelayState - should fallback to baseURL
 		const acsResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-bad-relay-provider",
@@ -2810,8 +2772,8 @@ describe("SAML SSO", async () => {
 
 		expect(acsResponse.status).toBe(302);
 		const location = acsResponse.headers.get("location") || "";
-		// Should redirect to the provider's callbackUrl, not the garbage RelayState
-		expect(location).toContain("dashboard");
+		// Should redirect to baseURL with error, not the garbage RelayState
+		expect(location).toContain("http://localhost:3000");
 		expect(location).not.toContain("not-a-valid-relay-state");
 	});
 });
@@ -2906,7 +2868,6 @@ describe("SAML SSO with custom fields", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -2939,7 +2900,6 @@ describe("SAML SSO with custom fields", () => {
 			samlConfig: {
 				entryPoint: sharedMockIdP.metadataUrl,
 				cert: expect.any(String),
-				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 				wantAssertionsSigned: false,
 				signatureAlgorithm: "sha256",
 				digestAlgorithm: "sha256",
@@ -3041,7 +3001,6 @@ describe("SSO Provider Config Parsing", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/sso",
 					cert: "test-cert",
-					callbackUrl: "http://localhost:3000/callback",
 					spMetadata: {
 						entityID: "test-entity",
 					},
@@ -3160,7 +3119,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3193,7 +3151,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3208,10 +3166,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
 		const redirectLocation = postResponse.headers.get("location");
-		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(redirectLocation).toBe("http://localhost:3000");
 
 		const cookieHeader = postResponse.headers.get("set-cookie");
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			query: {
 				RelayState: "http://localhost:3000/dashboard",
@@ -3235,7 +3193,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		});
 
 		const getResponse = await auth.api
-			.callbackSSOSAML({
+			.acsEndpoint({
 				method: "GET",
 				params: {
 					providerId: "test-provider",
@@ -3259,7 +3217,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(redirectLocation).toContain("error=invalid_request");
 	});
 
-	it("should prevent redirect loop when callbackUrl points to callback route", async () => {
+	it("should redirect to baseURL after ACS, not back to the ACS route", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
@@ -3267,7 +3225,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		const { headers } = await signInWithTestUser();
 
 		const callbackRouteUrl =
-			"http://localhost:3000/api/auth/sso/saml2/callback/loop-test-provider";
+			"http://localhost:3000/api/auth/sso/saml2/sp/acs/loop-test-provider";
 
 		await auth.api.registerSSOProvider({
 			body: {
@@ -3280,7 +3238,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: callbackRouteUrl,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3313,7 +3270,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3349,7 +3306,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3382,7 +3338,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3395,7 +3351,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		});
 
 		const cookieHeader = postResponse.headers.get("set-cookie");
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			query: {
 				RelayState: "http://localhost:3000/custom-path",
@@ -3421,7 +3377,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		const { headers } = await signInWithTestUser();
 
 		const callbackRouteUrl =
-			"http://localhost:3000/api/auth/sso/saml2/callback/issue-6615-provider";
+			"http://localhost:3000/api/auth/sso/saml2/sp/acs/issue-6615-provider";
 
 		await auth.api.registerSSOProvider({
 			body: {
@@ -3434,7 +3390,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3467,7 +3422,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3483,10 +3438,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse.status).toBe(302);
 		const postRedirectLocation = postResponse.headers.get("location");
 		expect(postRedirectLocation).not.toBe(callbackRouteUrl);
-		expect(postRedirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(postRedirectLocation).toBe("http://localhost:3000");
 
 		const cookieHeader = postResponse.headers.get("set-cookie");
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			params: {
 				providerId: "issue-6615-provider",
@@ -3519,7 +3474,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3553,8 +3507,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		}
 
 		// Test POST with malicious RelayState - raw RelayState is not trusted
-		// Falls back to parsedSamlConfig.callbackUrl
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3571,8 +3524,8 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		const postRedirectLocation = postResponse.headers.get("location");
 		// Should NOT redirect to evil.com - raw RelayState is ignored
 		expect(postRedirectLocation).not.toContain("evil.com");
-		// Falls back to samlConfig.callbackUrl
-		expect(postRedirectLocation).toBe("http://localhost:3000/dashboard");
+		// Falls back to baseURL
+		expect(postRedirectLocation).toBe("http://localhost:3000");
 	});
 
 	it("should prevent open redirect via GET with malicious RelayState", async () => {
@@ -3593,7 +3546,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3627,7 +3579,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		}
 
 		// First do POST to establish session
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3641,7 +3593,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		const cookieHeader = postResponse.headers.get("set-cookie");
 
 		// Test GET with malicious RelayState in query params
-		const getResponse = await auth.api.callbackSSOSAML({
+		const getResponse = await auth.api.acsEndpoint({
 			method: "GET",
 			query: {
 				RelayState: "https://evil.com/steal-cookies",
@@ -3679,7 +3631,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3712,7 +3663,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3727,7 +3678,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
 		const redirectLocation = postResponse.headers.get("location");
-		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+		expect(redirectLocation).toBe("http://localhost:3000");
 	});
 
 	it("should block protocol-relative URL attacks (//evil.com)", async () => {
@@ -3748,7 +3699,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 						"/idp/post",
 					),
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -3782,8 +3732,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		}
 
 		// Test POST with protocol-relative URL - raw RelayState is not trusted
-		// Falls back to parsedSamlConfig.callbackUrl
-		const postResponse = await auth.api.callbackSSOSAML({
+		const postResponse = await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -3800,8 +3749,8 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		const redirectLocation = postResponse.headers.get("location");
 		// Should NOT redirect to evil.com - raw RelayState is ignored
 		expect(redirectLocation).not.toContain("evil.com");
-		// Falls back to samlConfig.callbackUrl
-		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+		// Falls back to baseURL
+		expect(redirectLocation).toBe("http://localhost:3000");
 	});
 });
 
@@ -4051,7 +4000,6 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4067,7 +4015,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 			// Origin check should be bypassed for SAML callback endpoints
 			const callbackRes = await auth.handler(
 				new Request(
-					"http://localhost:8081/api/auth/sso/saml2/callback/origin-bypass-callback",
+					"http://localhost:8081/api/auth/sso/saml2/sp/acs/origin-bypass-callback",
 					{
 						method: "POST",
 						headers: {
@@ -4105,7 +4053,6 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/sp/acs",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4206,7 +4153,6 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4221,7 +4167,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 			// Even with origin bypass, malicious RelayState should be rejected
 			const callbackRes = await auth.handler(
 				new Request(
-					"http://localhost:8081/api/auth/sso/saml2/callback/relay-security-test",
+					"http://localhost:8081/api/auth/sso/saml2/sp/acs/relay-security-test",
 					{
 						method: "POST",
 						headers: {
@@ -4262,7 +4208,6 @@ describe("SAML Response Security", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4286,7 +4231,7 @@ describe("SAML Response Security", () => {
 
 		const callbackRes = await auth.handler(
 			new Request(
-				"http://localhost:8081/api/auth/sso/saml2/callback/security-test-provider",
+				"http://localhost:8081/api/auth/sso/saml2/sp/acs/security-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4300,9 +4245,9 @@ describe("SAML Response Security", () => {
 			),
 		);
 
-		expect(callbackRes.status).toBe(400);
-		const body = await callbackRes.json();
-		expect(body.message).toBe("Invalid SAML response");
+		expect(callbackRes.status).toBe(302);
+		const location = callbackRes.headers.get("location") || "";
+		expect(location).toContain("error=");
 	});
 
 	it("should reject SAML response with tampered nameID", async () => {
@@ -4319,7 +4264,6 @@ describe("SAML Response Security", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4338,7 +4282,7 @@ describe("SAML Response Security", () => {
 
 		const callbackRes = await auth.handler(
 			new Request(
-				"http://localhost:8081/api/auth/sso/saml2/callback/tamper-test-provider",
+				"http://localhost:8081/api/auth/sso/saml2/sp/acs/tamper-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4352,7 +4296,9 @@ describe("SAML Response Security", () => {
 			),
 		);
 
-		expect(callbackRes.status).toBe(400);
+		expect(callbackRes.status).toBe(302);
+		const location = callbackRes.headers.get("location") || "";
+		expect(location).toContain("error=");
 	});
 });
 
@@ -4382,7 +4328,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4408,7 +4353,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		const firstResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/replay-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4428,7 +4373,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		const replayResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/replay-test-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4462,7 +4407,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4542,7 +4486,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4568,7 +4511,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		const callbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/cross-endpoint-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/cross-endpoint-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4623,7 +4566,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4665,21 +4607,20 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			"base64",
 		);
 
-		await expect(
-			auth.api.callbackSSOSAML({
-				body: {
-					SAMLResponse: encodedResponse,
-					RelayState: "http://localhost:3000/dashboard",
-				},
-				params: {
-					providerId: "multi-assertion-callback-provider",
-				},
-			}),
-		).rejects.toMatchObject({
+		const response = await auth.api.acsEndpoint({
 			body: {
-				code: "SAML_MULTIPLE_ASSERTIONS",
+				SAMLResponse: encodedResponse,
+				RelayState: "http://localhost:3000/dashboard",
 			},
+			params: {
+				providerId: "multi-assertion-callback-provider",
+			},
+			asResponse: true,
 		});
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=saml_multiple_assertions");
 	});
 
 	it("should reject SAML response with multiple assertions on ACS endpoint", async () => {
@@ -4697,7 +4638,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4758,7 +4698,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		// ACS endpoint translates structural errors into browser-friendly redirects
 		expect(response.status).toBe(302);
 		const location = response.headers.get("location") || "";
-		expect(location).toContain("error=multiple_assertions");
+		expect(location).toContain("error=saml_multiple_assertions");
 	});
 
 	it("should reject SAML response with no assertions", async () => {
@@ -4776,7 +4716,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4804,21 +4743,20 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const encodedResponse = Buffer.from(noAssertionResponse).toString("base64");
 
-		await expect(
-			auth.api.callbackSSOSAML({
-				body: {
-					SAMLResponse: encodedResponse,
-					RelayState: "http://localhost:3000/dashboard",
-				},
-				params: {
-					providerId: "no-assertion-provider",
-				},
-			}),
-		).rejects.toMatchObject({
+		const response = await auth.api.acsEndpoint({
 			body: {
-				code: "SAML_NO_ASSERTION",
+				SAMLResponse: encodedResponse,
+				RelayState: "http://localhost:3000/dashboard",
 			},
+			params: {
+				providerId: "no-assertion-provider",
+			},
+			asResponse: true,
 		});
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=saml_no_assertion");
 	});
 
 	it("should reject SAML response with XSW-style assertion injection in Extensions", async () => {
@@ -4836,7 +4774,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4879,21 +4816,20 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		const encodedResponse =
 			Buffer.from(xswInjectionResponse).toString("base64");
 
-		await expect(
-			auth.api.callbackSSOSAML({
-				body: {
-					SAMLResponse: encodedResponse,
-					RelayState: "http://localhost:3000/dashboard",
-				},
-				params: {
-					providerId: "xsw-injection-provider",
-				},
-			}),
-		).rejects.toMatchObject({
+		const response = await auth.api.acsEndpoint({
 			body: {
-				code: "SAML_MULTIPLE_ASSERTIONS",
+				SAMLResponse: encodedResponse,
+				RelayState: "http://localhost:3000/dashboard",
 			},
+			params: {
+				providerId: "xsw-injection-provider",
+			},
+			asResponse: true,
 		});
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=saml_multiple_assertions");
 	});
 
 	it("should accept valid SAML response with exactly one assertion", async () => {
@@ -4911,7 +4847,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4937,7 +4872,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const response = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/single-assertion-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/single-assertion-provider",
 				{
 					method: "POST",
 					headers: {
@@ -4970,7 +4905,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5006,7 +4940,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const firstCallbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/email-case-provider",
 				{
 					method: "POST",
 					headers: {
@@ -5021,9 +4955,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		);
 
 		expect(firstCallbackResponse.status).toBe(302);
-		expect(firstCallbackResponse.headers.get("location")).toContain(
-			"dashboard",
-		);
 		expect(firstCallbackResponse.headers.get("location")).not.toContain(
 			"error",
 		);
@@ -5060,7 +4991,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		const secondCallbackResponse = await auth.handler(
 			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/email-case-provider",
 				{
 					method: "POST",
 					headers: {
@@ -5075,9 +5006,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		);
 
 		expect(secondCallbackResponse.status).toBe(302);
-		expect(secondCallbackResponse.headers.get("location")).toContain(
-			"dashboard",
-		);
 		expect(secondCallbackResponse.headers.get("location")).not.toContain(
 			"error",
 		);
@@ -5143,7 +5071,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5225,7 +5152,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5276,7 +5202,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5314,7 +5239,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5353,7 +5277,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5405,7 +5328,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5464,7 +5386,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5548,7 +5469,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5632,7 +5552,6 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:8081/callback",
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5715,7 +5634,6 @@ describe("SAML provisionUser should only be called for new users", async () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5751,7 +5669,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		const samlRedirectUrl1 = new URL(response1.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -5787,7 +5705,7 @@ describe("SAML provisionUser should only be called for new users", async () => {
 		});
 
 		const samlRedirectUrl2 = new URL(response2.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse2.samlResponse,
@@ -5831,7 +5749,6 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5867,7 +5784,7 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 		});
 
 		const samlRedirectUrl1 = new URL(response1.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
@@ -5903,7 +5820,7 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 		});
 
 		const samlRedirectUrl2 = new URL(response2.response?.url);
-		await auth.api.callbackSSOSAML({
+		await auth.api.acsEndpoint({
 			method: "POST",
 			body: {
 				SAMLResponse: samlResponse2.samlResponse,
@@ -5928,20 +5845,16 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
  */
 describe("SAML SSO Hardening", () => {
 	/**
-	 * RFC: SAML 2.0 Core §2.3.3 - ACS URL in SP metadata MUST match the ACS URL
-	 * in AuthnRequests. When callbackUrl is omitted, both should derive the same
-	 * ACS from baseURL + providerId.
+	 * SAML 2.0 Core §2.3.3: ACS URL in SP metadata MUST match the ACS URL
+	 * in AuthnRequests. Both derive from baseURL + providerId.
 	 */
 	describe("ACS URL consistency (provider.id vs providerId)", () => {
-		// When callbackUrl is split from ACS URL, SP metadata should
-		// always derive the ACS from baseURL + providerId regardless of callbackUrl.
-		it.todo("should use providerId (not internal row ID) in SP metadata ACS URL when callbackUrl is an app destination", async () => {
+		it("should use providerId (not internal row ID) in SP metadata ACS URL", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [sso()],
 			});
 			const { headers } = await signInWithTestUser();
 
-			// Register with callbackUrl pointing to app destination (not an ACS route).
 			// When spMetadata.metadata is absent, the SP metadata endpoint should
 			// generate an ACS URL from baseURL + providerId, not from provider.id (row UUID).
 			await auth.api.registerSSOProvider({
@@ -5952,7 +5865,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/dashboard",
 						spMetadata: {},
 					},
 				},
@@ -5964,15 +5876,11 @@ describe("SAML SSO Hardening", () => {
 			});
 			const xml = await spMetadataRes.text();
 
-			// When callbackUrl is an app destination (not an ACS URL), the SP metadata
-			// generator should still use a proper ACS URL with the providerId.
 			// The generated metadata should contain the providerId, not the row UUID.
 			expect(xml).toContain("acs-consistency-test");
 		});
 
-		// When callbackUrl is split from ACS URL, both SP metadata
-		// and AuthnRequest should derive ACS from the same source.
-		it.todo("should produce matching ACS URLs in SP metadata and AuthnRequest", async () => {
+		it("should produce matching ACS URLs in SP metadata and AuthnRequest", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [sso()],
 			});
@@ -5986,7 +5894,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/dashboard",
 						idpMetadata: {
 							metadata: idpMetadata,
 						},
@@ -6038,7 +5945,6 @@ describe("SAML SSO Hardening", () => {
 									issuer: "http://localhost:8081",
 									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 									cert: certificate,
-									callbackUrl: "http://localhost:3000/dashboard",
 									spMetadata: { metadata: spMetadata },
 								},
 							},
@@ -6057,7 +5963,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/dashboard",
 						spMetadata: { metadata: spMetadata },
 						idpMetadata: { metadata: idpMetadata },
 					},
@@ -6100,7 +6005,6 @@ describe("SAML SSO Hardening", () => {
 									issuer: "http://localhost:8081",
 									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 									cert: certificate,
-									callbackUrl: "http://localhost:3000/dashboard",
 									spMetadata: { metadata: spMetadata },
 								},
 							},
@@ -6154,7 +6058,6 @@ describe("SAML SSO Hardening", () => {
 						samlConfig: {
 							entryPoint: "not-a-url",
 							cert: "placeholder",
-							callbackUrl: "http://localhost:3000/dashboard",
 							spMetadata: {},
 						},
 					},
@@ -6171,10 +6074,10 @@ describe("SAML SSO Hardening", () => {
 	/**
 	 * SAML 2.0 Bindings §3.5.3 - RelayState is an opaque reference to state
 	 * maintained at the SP. The SP MUST use it to determine where to redirect
-	 * the user after authentication. Config-level callbackUrl is a fallback.
+	 * the user after authentication.
 	 */
-	describe("RelayState priority over callbackUrl", () => {
-		it("should redirect to RelayState callbackURL, not config callbackUrl", async () => {
+	describe("RelayState controls post-auth redirect", () => {
+		it("should redirect to RelayState callbackURL after authentication", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [sso()],
 			});
@@ -6188,7 +6091,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl: "http://localhost:3000/from-config",
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
 					},
@@ -6217,7 +6119,7 @@ describe("SAML SSO Hardening", () => {
 			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
 
 			// POST to callback with RelayState
-			const callbackResponse = (await auth.api.callbackSSOSAML({
+			const callbackResponse = (await auth.api.acsEndpoint({
 				method: "POST",
 				body: {
 					SAMLResponse: samlResponse.samlResponse,
@@ -6229,7 +6131,7 @@ describe("SAML SSO Hardening", () => {
 
 			const location = callbackResponse.headers.get("location") || "";
 
-			// MUST redirect to the RelayState callbackURL, not config's callbackUrl
+			// MUST redirect to the RelayState callbackURL
 			expect(location).toContain("/from-relay-state");
 			expect(location).not.toContain("/from-config");
 		});
