@@ -137,8 +137,10 @@ export interface OAuthOptions<
 	 * - If the validator throws, the request is rejected (fail-closed)
 	 *
 	 * **Pairwise Subject Note:** For clients using pairwise subject identifiers,
-	 * the sector identifier is derived from registered URIs. Custom-validated
-	 * URIs not in `registeredUris` will share the same sector.
+	 * the sector identifier is derived from the client's first registered
+	 * redirect URI. Custom-validated URIs that are not that registered URI
+	 * will still share the same sector derived from the first registered
+	 * redirect URI.
 	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
 	 * @param registeredUris - Array of registered redirect URIs for the client

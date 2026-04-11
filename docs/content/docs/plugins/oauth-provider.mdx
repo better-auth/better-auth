@@ -1063,6 +1063,7 @@ oauthProvider({
 ### Custom Redirect URI Validation
 
 By default, the OAuth provider validates redirect URIs with:
+
 1. Exact string matching against registered redirect URIs
 2. [RFC 8252 §7.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3) loopback IP support (`127.0.0.1` and `[::1]` with flexible ports)
 
@@ -1088,28 +1089,30 @@ oauthProvider({
 
 **Composition Patterns:**
 
-| Pattern | Code | Use Case |
-|---------|------|----------|
-| Extend | `return defaultResult \|\| customCheck(uri)` | Add preview deployments, tenant subdomains |
-| Replace | `return customCheck(uri)` | Full custom control (ignores defaults) |
-| Restrict | `return defaultResult && !isBlocked(uri)` | Add extra constraints on top of defaults |
+| Pattern  | Code                                         | Use Case                                   |
+| -------- | -------------------------------------------- | ------------------------------------------ |
+| Extend   | `return defaultResult \|\| customCheck(uri)` | Add preview deployments, tenant subdomains |
+| Replace  | `return customCheck(uri)`                    | Full custom control (ignores defaults)     |
+| Restrict | `return defaultResult && !isBlocked(uri)`    | Add extra constraints on top of defaults   |
 
 **Common Use Cases:**
-- **Preview deployments**: Match `*.preview.example.com` for Vercel, Netlify, Cloudflare Pages
-- **Multi-tenant applications**: Dynamic tenant subdomains
-- **Development environments**: Additional localhost patterns
+
+* **Preview deployments**: Match `*.preview.example.com` for Vercel, Netlify, Cloudflare Pages
+* **Multi-tenant applications**: Dynamic tenant subdomains
+* **Development environments**: Additional localhost patterns
 
 <Callout type="warn">
-**Security Considerations:**
-- Never allow overly broad patterns like `*` or `*.com`
-- Validate the full URI (protocol, host, path) - not just the hostname
-- Consider using a library like `tldts` to prevent matches on public suffixes (e.g., `*.co.uk`, `*.github.io`)
-- Always require HTTPS (except for localhost)
-- If the validator throws, the request is rejected (fail-closed)
+  **Security Considerations:**
+
+  * Never allow overly broad patterns like `*` or `*.com`
+  * Validate the full URI (protocol, host, path) - not just the hostname
+  * Consider using a library like `tldts` to prevent matches on public suffixes (e.g., `*.co.uk`, `*.github.io`)
+  * Always require HTTPS (except for localhost)
+  * If the validator throws, the request is rejected (fail-closed)
 </Callout>
 
 <Callout type="info">
-**Pairwise Subject Identifiers:** If you use [pairwise subject identifiers](/docs/plugins/oauth-provider#pairwise-subject-identifiers), the sector identifier is derived from the first registered redirect URI. Custom-validated URIs that don't appear in `client.redirectUris` will share the same sector, which may affect subject isolation for multi-tenant scenarios. Consider using a consistent `sector_identifier_uri` for such clients.
+  **Pairwise Subject Identifiers:** If you use [pairwise subject identifiers](/docs/plugins/oauth-provider#pairwise-subject-identifiers), the sector identifier is derived from the first registered redirect URI. Custom-validated URIs that don't appear in `client.redirectUris` will share the same sector, which may affect subject isolation for multi-tenant scenarios. Consider using a consistent `sector_identifier_uri` for such clients.
 </Callout>
 
 ### Claims
