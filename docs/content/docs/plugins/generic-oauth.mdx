@@ -60,6 +60,8 @@ await authClient.linkSocial({
 
 The plugin uses the core OAuth callback route at `/callback/:providerId`. This means by default `${baseURL}/api/auth/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
 
+Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
+
 ## Pre-configured Provider Helpers
 
 Better Auth provides pre-configured helper functions for popular OAuth providers. These helpers handle the provider-specific configuration, including discovery URLs and user info endpoints.
@@ -217,7 +219,7 @@ interface GenericOAuthConfig {
 
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
-**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL.
+**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include `:providerId` placeholder (e.g., `https://example.com/api/auth/oauth2/callback/my-provider`).
 
 **responseType**: (Optional) The OAuth response type. Defaults to `"code"` for authorization code flow.
 
@@ -243,7 +245,34 @@ interface GenericOAuthConfig {
 
 **disableSignUp**: (Optional) If true, disables sign-up for new users entirely. Only existing users can sign in.
 
-**authentication**: (Optional) The authentication method for token requests. Can be `'basic'` or `'post'`. Defaults to `'post'`.
+**authentication**: (Optional) The authentication method for token requests. Can be `'basic'`, `'post'`, or `'private_key_jwt'`. Defaults to `'post'`.
+
+**clientAssertion**: (Optional) Configuration for `private_key_jwt` authentication. Required when `authentication` is `'private_key_jwt'`. Accepts:
+
+* `privateKeyJwk` — Private key in JWK format
+* `privateKeyPem` — Private key in PKCS#8 PEM format
+* `kid` — Key ID to include in the JWT header
+* `algorithm` — Signing algorithm (defaults to `'RS256'`)
+* `expiresIn` — Assertion lifetime in seconds (defaults to `120`)
+
+```ts
+genericOAuth({
+    config: [
+        {
+            providerId: "my-idp",
+            clientId: "your-client-id",
+            discoveryUrl: "https://idp.example.com/.well-known/openid-configuration",
+            authentication: "private_key_jwt",
+            clientAssertion: {
+                privateKeyJwk: { /* your JWK */ },
+                kid: "my-key-1",
+                algorithm: "RS256",
+            },
+            pkce: true,
+        },
+    ],
+}),
+```
 
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers.
 

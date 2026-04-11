@@ -7,11 +7,11 @@ description: Better Auth Infrastructure provides a managed SMS service for sendi
 
 The SMS service offers:
 
-- Pre-built SMS templates for common auth flows
-- E.164 phone number format support
-- Type-safe template variables
-- No infrastructure to manage
-- Global delivery support
+* Pre-built SMS templates for common auth flows
+* E.164 phone number format support
+* Type-safe template variables
+* No infrastructure to manage
+* Global delivery support
 
 <Callout type="warn">
   Note that SMS delivery is intended to only be used for authentication flows.
@@ -72,6 +72,7 @@ await sendSMS({
 ```
 
 **Example message:**
+
 > Your verification code is 123456. It expires in 10 minutes.
 
 ### two-factor
@@ -87,6 +88,7 @@ await sendSMS({
 ```
 
 **Example message:**
+
 > Your two-factor authentication code is 123456. Do not share this code with anyone.
 
 ### sign-in-otp
@@ -102,6 +104,7 @@ await sendSMS({
 ```
 
 **Example message:**
+
 > Your sign-in code is 123456. It expires in 10 minutes.
 
 ### Default (No Template)
@@ -116,6 +119,7 @@ await sendSMS({
 ```
 
 **Example message:**
+
 > Your verification code is 123456.
 
 ## Phone Number Format
@@ -127,16 +131,18 @@ Phone numbers must be in E.164 format:
 ```
 
 **Examples:**
-- US: `+14155551234`
-- UK: `+447911123456`
-- Germany: `+4915112345678`
-- Japan: `+819012345678`
+
+* US: `+14155551234`
+* UK: `+447911123456`
+* Germany: `+4915112345678`
+* Japan: `+819012345678`
 
 **Common mistakes:**
-- Missing `+` prefix: `14155551234` ❌
-- Including spaces: `+1 415 555 1234` ❌
-- Including dashes: `+1-415-555-1234` ❌
-- Including parentheses: `+1 (415) 555-1234` ❌
+
+* Missing `+` prefix: `14155551234` ❌
+* Including spaces: `+1 415 555 1234` ❌
+* Including dashes: `+1-415-555-1234` ❌
+* Including parentheses: `+1 (415) 555-1234` ❌
 
 ## Configuration
 
@@ -173,11 +179,11 @@ async function sendSMS(
 
 ### SendSMSOptions
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `to` | `string` | Yes | Phone number in E.164 format |
-| `code` | `string` | Yes | The OTP code to send |
-| `template` | `SMSTemplateId` | No | Template to use (defaults to generic) |
+| Property   | Type            | Required | Description                           |
+| ---------- | --------------- | -------- | ------------------------------------- |
+| `to`       | `string`        | Yes      | Phone number in E.164 format          |
+| `code`     | `string`        | Yes      | The OTP code to send                  |
+| `template` | `SMSTemplateId` | No       | Template to use (defaults to generic) |
 
 ### createSMSSender
 
@@ -247,9 +253,9 @@ if (!result.success) {
 
 When using the `dash()` or `sentinel()` plugins with Better Auth's phone authentication, SMS messages are automatically sent for:
 
-- Phone number verification
-- Phone-based two-factor authentication
-- Phone OTP sign-in
+* Phone number verification
+* Phone-based two-factor authentication
+* Phone OTP sign-in
 
 You don't need to call `sendSMS()` manually for these flows - the plugins handle it automatically.
 
@@ -282,8 +288,8 @@ export const auth = betterAuth({
 
 ## Plan Requirements
 
-| Feature | Starter | Pro | Business | Enterprise |
-|---------|---------|-----|----------|------------|
-| Transactional SMS | - | Yes | Yes | Yes |
+| Feature           | Starter | Pro | Business | Enterprise |
+| ----------------- | ------- | --- | -------- | ---------- |
+| Transactional SMS | -       | Yes | Yes      | Yes        |
 
 Transactional SMS is available on Pro plans and above.

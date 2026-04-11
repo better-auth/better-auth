@@ -1,5 +1,9 @@
 import type { User } from "@better-auth/core/db";
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type {
+	ClientAssertionConfig,
+	OAuth2Tokens,
+	OAuth2UserInfo,
+} from "@better-auth/core/oauth2";
 
 export interface GenericOAuthOptions {
 	/**
@@ -143,7 +147,12 @@ export interface GenericOAuthConfig {
 	 * Authentication method for token requests.
 	 * @default "post"
 	 */
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	/**
+	 * Client assertion config for `private_key_jwt` authentication.
+	 * Required when `authentication` is `"private_key_jwt"`.
+	 */
+	clientAssertion?: ClientAssertionConfig | undefined;
 	/**
 	 * Custom headers to include in the discovery request.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).

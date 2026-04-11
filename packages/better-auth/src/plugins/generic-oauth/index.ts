@@ -16,6 +16,16 @@ import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
+function buildClientAssertion(
+	config: GenericOAuthConfig,
+	tokenEndpoint: string,
+) {
+	if (config.authentication !== "private_key_jwt" || !config.clientAssertion) {
+		return undefined;
+	}
+	return { ...config.clientAssertion, tokenEndpoint };
+}
+
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
@@ -67,13 +77,16 @@ async function fetchDiscovery(
 	if (result.error || !result.data) {
 		return null;
 	}
-	// RFC 8414 Section 3.3: the issuer in the metadata MUST match the
-	// expected origin derived from the discovery URL
+	// RFC 8414 Section 3.3: the issuer in the metadata MUST match
+	// the base of the discovery URL (strip the .well-known suffix)
 	if (result.data.issuer) {
-		const expectedOrigin = new URL(url).origin;
 		try {
-			const issuerOrigin = new URL(result.data.issuer).origin;
-			if (issuerOrigin !== expectedOrigin) {
+			const discoveryBase = url
+				.replace(/\/\.well-known\/openid-configuration\/?$/, "")
+				.replace(/\/\.well-known\/oauth-authorization-server\/?$/, "")
+				.replace(/\/$/, "");
+			const normalizedIssuer = result.data.issuer.replace(/\/$/, "");
+			if (normalizedIssuer !== discoveryBase) {
 				return null;
 			}
 		} catch {
@@ -249,6 +262,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: tokenUrl,
 							authentication: c.authentication,
 							additionalParams: c.tokenUrlParams,
+							clientAssertion: buildClientAssertion(c, tokenUrl),
 						});
 					},
 					async getUserInfo(tokens) {
@@ -293,6 +307,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
+							clientAssertion: buildClientAssertion(c, tokenUrl),
 							tokenEndpoint: tokenUrl,
 						});
 					},

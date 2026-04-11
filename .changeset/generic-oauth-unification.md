@@ -14,4 +14,4 @@ Unify generic OAuth into core social sign-in flow. Generic OAuth providers now u
 - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id` (update your OAuth provider dashboard)
 - `genericOAuthClient()` client plugin is no longer needed (deprecated, will be removed in a future release)
 - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>` (function form removed)
-- `issuer` and `requireIssuerValidation` config fields removed; issuer validation is now automatic via OIDC discovery
+- `issuer` and `requireIssuerValidation` config fields removed; when OIDC discovery provides an issuer, callback issuer validation is applied automatically
