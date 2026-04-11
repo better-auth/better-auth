@@ -5,19 +5,19 @@ import type {
 	OAuth2UserInfo,
 } from "@better-auth/core/oauth2";
 
-export interface GenericOAuthOptions {
+export interface GenericOAuthOptions<ID extends string = string> {
 	/**
 	 * Array of OAuth provider configurations.
 	 */
-	config: GenericOAuthConfig[];
+	config: GenericOAuthConfig<ID>[];
 }
 
 /**
  * Configuration interface for generic OAuth providers.
  */
-export interface GenericOAuthConfig {
+export interface GenericOAuthConfig<ID extends string = string> {
 	/** Unique identifier for the OAuth provider */
-	providerId: string;
+	providerId: ID;
 	/**
 	 * Human-readable display name for this provider.
 	 * Defaults to `providerId` if not set.

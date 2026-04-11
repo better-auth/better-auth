@@ -3,9 +3,32 @@ title: Generic OAuth
 description: Authenticate users with any OAuth provider
 ---
 
-The Generic OAuth plugin provides a flexible way to integrate authentication with any OAuth provider. It supports both OAuth 2.0 and OpenID Connect (OIDC) flows, allowing you to easily add social login or custom OAuth authentication to your application.
+The Generic OAuth plugin lets you add any OAuth 2.0 or OpenID Connect (OIDC) provider to your application. Providers are registered as first-class social providers and use the standard `signIn.social` flow.
 
-Generic OAuth providers are registered as first-class social providers and use the standard `signIn.social` flow — no plugin-specific endpoints needed.
+## When to Use This Plugin
+
+Use the Generic OAuth plugin when:
+
+* Your provider is not one of the [built-in social providers](/docs/authentication/social) (Google, GitHub, Discord, etc.)
+* You need to connect to a corporate identity provider (Keycloak, Okta, Auth0, Microsoft Entra ID)
+* You want to support a provider with custom or non-standard OAuth endpoints
+
+If your provider is already built-in, use `socialProviders` in your auth config instead; built-in providers support mobile id-token sign-in and have provider-specific optimizations.
+
+### Customization Options
+
+Every aspect of the OAuth flow can be overridden:
+
+| Need                                                           | Config field                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------ |
+| Provider uses non-standard token exchange (GET, custom params) | `getToken`                                                   |
+| Provider returns a non-standard user profile                   | `getUserInfo`                                                |
+| You need to map profile fields to your user model              | `mapProfileToUser`                                           |
+| Provider requires extra authorization parameters               | `authorizationUrlParams`                                     |
+| Provider requires extra token parameters                       | `tokenUrlParams`                                             |
+| Provider requires custom HTTP headers                          | `discoveryHeaders`, `authorizationHeaders`                   |
+| Provider does not support OIDC discovery                       | Set `authorizationUrl`, `tokenUrl`, `userInfoUrl` explicitly |
+| Provider rejects PKCE                                          | Set `pkce: false`                                            |
 
 ## Installation
 

@@ -161,7 +161,9 @@ async function fetchUserInfo(
  * Providers are used through the standard `signIn.social` and
  * `callback/:id` core endpoints — no plugin-specific endpoints needed.
  */
-export const genericOAuth = (options: GenericOAuthOptions) => {
+export const genericOAuth = <const ID extends string>(
+	options: GenericOAuthOptions<ID>,
+) => {
 	const seenIds = new Set<string>();
 	const nonUniqueIds = new Set<string>();
 
