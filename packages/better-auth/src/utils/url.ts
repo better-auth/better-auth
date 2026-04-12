@@ -202,6 +202,15 @@ export function isDynamicBaseURLConfig(
 	);
 }
 
+// `instanceof Request` misses polyfilled or cross-realm instances.
+export function isRequestLike(value: unknown): value is Request {
+	if (value == null || typeof value !== "object") return false;
+	if (value instanceof Request) return true;
+
+	if (!(Symbol.toStringTag in value)) return false;
+	return value[Symbol.toStringTag] === "Request";
+}
+
 /**
  * Extracts the host from the request headers.
  * Tries x-forwarded-host first (for proxy setups), then falls back to host header.
@@ -209,23 +218,30 @@ export function isDynamicBaseURLConfig(
  * @param request The incoming request
  * @returns The host string or null if not found
  */
-export function getHostFromRequest(request: Request): string | null {
-	const forwardedHost = request.headers.get("x-forwarded-host");
+export function getHostFromRequest(source: Request | Headers): string | null {
+	const headers = isRequestLike(source) ? source.headers : source;
+
+	const forwardedHost = headers.get("x-forwarded-host");
 	if (forwardedHost && validateProxyHeader(forwardedHost, "host")) {
 		return forwardedHost;
 	}
 
-	const host = request.headers.get("host");
+	const host = headers.get("host");
 	if (host && validateProxyHeader(host, "host")) {
 		return host;
 	}
 
-	try {
-		const url = new URL(request.url);
-		return url.host;
-	} catch {
-		return null;
+	// URL fallback only when a full Request is available.
+	if (isRequestLike(source)) {
+		try {
+			const url = new URL(source.url);
+			return url.host;
+		} catch {
+			return null;
+		}
 	}
+
+	return null;
 }
 
 /**
@@ -237,24 +253,28 @@ export function getHostFromRequest(request: Request): string | null {
  * @returns The protocol ("http" or "https")
  */
 export function getProtocolFromRequest(
-	request: Request,
+	source: Request | Headers,
 	configProtocol?: "http" | "https" | "auto" | undefined,
 ): "http" | "https" {
 	if (configProtocol === "http" || configProtocol === "https") {
 		return configProtocol;
 	}
 
-	const forwardedProto = request.headers.get("x-forwarded-proto");
+	const headers = isRequestLike(source) ? source.headers : source;
+	const forwardedProto = headers.get("x-forwarded-proto");
 	if (forwardedProto && validateProxyHeader(forwardedProto, "proto")) {
 		return forwardedProto as "http" | "https";
 	}
 
-	try {
-		const url = new URL(request.url);
-		if (url.protocol === "http:" || url.protocol === "https:") {
-			return url.protocol.slice(0, -1) as "http" | "https";
-		}
-	} catch {}
+	// URL fallback only when a full Request is available.
+	if (isRequestLike(source)) {
+		try {
+			const url = new URL(source.url);
+			if (url.protocol === "http:" || url.protocol === "https:") {
+				return url.protocol.slice(0, -1) as "http" | "https";
+			}
+		} catch {}
+	}
 
 	return "https";
 }
@@ -314,10 +334,10 @@ export const matchesHostPattern = (host: string, pattern: string): boolean => {
  */
 export function resolveDynamicBaseURL(
 	config: DynamicBaseURLConfig,
-	request: Request,
+	source: Request | Headers,
 	basePath: string,
 ): string {
-	const host = getHostFromRequest(request);
+	const host = getHostFromRequest(source);
 
 	if (!host) {
 		if (config.fallback) {
@@ -334,7 +354,7 @@ export function resolveDynamicBaseURL(
 	);
 
 	if (isAllowed) {
-		const protocol = getProtocolFromRequest(request, config.protocol);
+		const protocol = getProtocolFromRequest(source, config.protocol);
 		return withPath(`${protocol}://${host}`, basePath);
 	}
 
@@ -363,13 +383,13 @@ export function resolveDynamicBaseURL(
 export function resolveBaseURL(
 	config: BaseURLConfig | undefined,
 	basePath: string,
-	request?: Request,
+	source?: Request | Headers,
 	loadEnv?: boolean,
 	trustedProxyHeaders?: boolean,
 ): string | undefined {
 	if (isDynamicBaseURLConfig(config)) {
-		if (request) {
-			return resolveDynamicBaseURL(config, request, basePath);
+		if (source) {
+			return resolveDynamicBaseURL(config, source, basePath);
 		}
 		if (config.fallback) {
 			return withPath(config.fallback, basePath);
@@ -377,12 +397,14 @@ export function resolveBaseURL(
 		return getBaseURL(
 			undefined,
 			basePath,
-			request,
+			undefined,
 			loadEnv,
 			trustedProxyHeaders,
 		);
 	}
 
+	// Static config path -> getBaseURL needs a full Request for URL parsing.
+	const request = isRequestLike(source) ? source : undefined;
 	if (typeof config === "string") {
 		return getBaseURL(config, basePath, request, loadEnv, trustedProxyHeaders);
 	}

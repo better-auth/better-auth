@@ -14,6 +14,7 @@ import {
 	getBaseURL,
 	getOrigin,
 	isDynamicBaseURLConfig,
+	isRequestLike,
 	resolveBaseURL,
 } from "../utils/url";
 
@@ -159,11 +160,11 @@ export async function getTrustedOrigins(
  */
 export async function resolveRequestContext(
 	ctx: AuthContext,
-	request?: Request,
+	source?: Request | Headers,
 ): Promise<AuthContext> {
 	const dynamicBaseURLConfig = ctx.options.baseURL;
 	const basePath = ctx.options.basePath || "/api/auth";
-	const baseURL = resolveBaseURL(dynamicBaseURLConfig, basePath, request);
+	const baseURL = resolveBaseURL(dynamicBaseURLConfig, basePath, source);
 	if (!baseURL) {
 		throw new BetterAuthError(
 			"Could not resolve base URL from request. Check your allowedHosts config.",
@@ -185,6 +186,8 @@ export async function resolveRequestContext(
 		...resolved.options,
 		baseURL: dynamicBaseURLConfig,
 	};
+	// getTrustedOrigins user callback expects Request|undefined (public API).
+	const request = isRequestLike(source) ? source : undefined;
 	resolved.trustedOrigins = await getTrustedOrigins(
 		trustedOriginOptions,
 		request,

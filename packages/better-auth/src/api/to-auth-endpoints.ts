@@ -24,7 +24,7 @@ import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { resolveRequestContext } from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
-import { isDynamicBaseURLConfig } from "../utils/url";
+import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -68,17 +68,9 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
-/**
- * `instanceof Request` misses polyfilled / cross-realm instances.
- */
-function isRequestLike(value: unknown): value is Request {
-	if (value == null || typeof value !== "object") return false;
-	if (value instanceof Request) return true;
-	if (!(Symbol.toStringTag in value)) return false;
-	return value[Symbol.toStringTag] === "Request";
-}
-
-function pickRequest(input: UserInputContext | undefined): Request | undefined {
+function pickSource(
+	input: UserInputContext | undefined,
+): Request | Headers | undefined {
 	if (isRequestLike(input?.request)) return input.request as Request;
 	if (!input?.headers) return undefined;
 
@@ -86,27 +78,23 @@ function pickRequest(input: UserInputContext | undefined): Request | undefined {
 	const hasHost = headers.has("host") || headers.has("x-forwarded-host");
 	if (!hasHost) return undefined;
 
-	// `https://` keeps `protocol: "auto"` from downgrading
-	// `.invalid` marks the URL unused (RFC 2606)
-	return new Request("https://placeholder.invalid", { headers });
+	return headers;
 }
 
-/**
- * Direct `auth.api.*()` calls bypass the HTTP handler's per-request resolution.
- */
+// Direct `auth.api` calls bypass the HTTP handler's per-request resolution.
 async function resolveDynamicContext(
 	rawCtx: AuthContext,
 	input: UserInputContext | undefined,
 ): Promise<AuthContext> {
-	const request = pickRequest(input);
+	const source = pickSource(input);
 	const config = rawCtx.options.baseURL;
 	const hasFallback =
 		isDynamicBaseURLConfig(config) && Boolean(config.fallback);
 
-	const canResolve = request !== undefined || hasFallback;
+	const canResolve = source !== undefined || hasFallback;
 	if (!canResolve) return rawCtx;
 
-	return resolveRequestContext(rawCtx, request);
+	return resolveRequestContext(rawCtx, source);
 }
 
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
