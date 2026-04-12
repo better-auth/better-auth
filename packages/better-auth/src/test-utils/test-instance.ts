@@ -154,9 +154,12 @@ export async function getTestInstance<
 		const pattern =
 			allowedHosts?.find((h) => !h.includes("*") && !h.includes("?")) ??
 			allowedHosts?.[0];
+		// Split on `/` and `#` only — `?` is an allowedHosts wildcard, not a
+		// query-string delimiter, and substituting it into a valid host char
+		// happens next.
 		const host = pattern
 			?.replace(/^https?:\/\//, "")
-			.split(/[/?#]/)[0]
+			.split(/[/#]/)[0]
 			?.replace(/\*/g, "test")
 			.replace(/\?/g, "x");
 		const headers = host ? new Headers({ host }) : undefined;
