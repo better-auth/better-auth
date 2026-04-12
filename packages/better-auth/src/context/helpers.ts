@@ -161,10 +161,17 @@ export async function getTrustedOrigins(
 export async function resolveRequestContext(
 	ctx: AuthContext,
 	source?: Request | Headers,
+	trustedProxyHeaders?: boolean,
 ): Promise<AuthContext> {
 	const dynamicBaseURLConfig = ctx.options.baseURL;
 	const basePath = ctx.options.basePath || "/api/auth";
-	const baseURL = resolveBaseURL(dynamicBaseURLConfig, basePath, source);
+	const baseURL = resolveBaseURL(
+		dynamicBaseURLConfig,
+		basePath,
+		source,
+		undefined,
+		trustedProxyHeaders,
+	);
 	if (!baseURL) {
 		throw new BetterAuthError(
 			"Could not resolve base URL from request. Check your allowedHosts config.",
