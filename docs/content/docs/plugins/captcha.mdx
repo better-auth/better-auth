@@ -28,7 +28,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     export const auth = betterAuth({
         plugins: [
             captcha({ // [!code highlight]
-                provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox // [!code highlight]
+                provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox, yandex-smart-captcha // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
             }), // [!code highlight]
         ],
@@ -76,11 +76,11 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
   </Step>
 
   <Step>
-    it validates the captcha token on the server, by calling the captcha provider's `/siteverify`.
+    it validates the captcha token on the server, by calling the captcha provider's verification endpoint.
   </Step>
 
   <Step>
-    * if the token is missing, gets rejected by the captcha provider, or if the `/siteverify` endpoint is
+    * if the token is missing, gets rejected by the captcha provider, or if the verification endpoint is
       unavailable, the plugin returns an error and interrupts the request.
     * if the token is accepted by the captcha provider, the middleware returns `undefined`, meaning the request is allowed to proceed.
   </Step>
