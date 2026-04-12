@@ -224,7 +224,7 @@ export function isRequestLike(value: unknown): value is Request {
  * @param request The incoming request
  * @returns The host string or null if not found
  */
-export function getHostFromRequest(source: Request | Headers): string | null {
+export function getHostFromSource(source: Request | Headers): string | null {
 	const headers = isRequestLike(source) ? source.headers : source;
 
 	const forwardedHost = headers.get("x-forwarded-host");
@@ -258,7 +258,7 @@ export function getHostFromRequest(source: Request | Headers): string | null {
  * @param configProtocol Protocol override from config
  * @returns The protocol ("http" or "https")
  */
-export function getProtocolFromRequest(
+export function getProtocolFromSource(
 	source: Request | Headers,
 	configProtocol?: "http" | "https" | "auto" | undefined,
 ): "http" | "https" {
@@ -343,7 +343,7 @@ export function resolveDynamicBaseURL(
 	source: Request | Headers,
 	basePath: string,
 ): string {
-	const host = getHostFromRequest(source);
+	const host = getHostFromSource(source);
 
 	if (!host) {
 		if (config.fallback) {
@@ -360,7 +360,7 @@ export function resolveDynamicBaseURL(
 	);
 
 	if (isAllowed) {
-		const protocol = getProtocolFromRequest(source, config.protocol);
+		const protocol = getProtocolFromSource(source, config.protocol);
 		return withPath(`${protocol}://${host}`, basePath);
 	}
 

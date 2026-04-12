@@ -982,7 +982,7 @@ describe("dynamic baseURL resolution", () => {
 	it("should reject Node IncomingMessage-shaped objects when duck typing", async () => {
 		// A Node http.IncomingMessage has url/method/headers but also socket,
 		// and its headers are a plain object (not Web Headers). Accepting it
-		// as a Fetch Request would crash inside getHostFromRequest.
+		// as a Fetch Request would crash inside getHostFromSource.
 		const authContext = init({
 			baseURL: {
 				allowedHosts: ["example.com"],
