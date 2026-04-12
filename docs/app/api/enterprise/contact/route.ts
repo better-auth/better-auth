@@ -14,11 +14,17 @@ function escapeHtml(text: string): string {
 }
 
 export async function POST(request: Request) {
+	let body: unknown;
 	try {
-		const body = await request.json();
+		body = await request.json();
+	} catch {
+		return NextResponse.json({ message: "Invalid request" }, { status: 400 });
+	}
 
+	try {
 		// honeypot - bots fill hidden fields
-		if (typeof body?._hp === "string" && body._hp) {
+		const raw = body as Record<string, unknown>;
+		if (typeof raw._hp === "string" && raw._hp) {
 			return NextResponse.json({});
 		}
 
