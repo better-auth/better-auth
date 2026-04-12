@@ -77,8 +77,8 @@ type UserInputContext = Partial<
  *
  * - `rawCtx.baseURL` already set: HTTP handler rehydrated upstream; return as-is.
  * - Direct `auth.api` call with a source or a configured `fallback`: resolve here.
- * - Neither: throw `APIError` with a helpful message instead of crashing later
- *   on `new URL("")` in downstream plugins.
+ * - Neither: throw `APIError` with a helpful message. Leaving `baseURL = ""`
+ *   would let plugins build `new URL("")` and crash cryptically downstream.
  */
 async function resolveDynamicContext(
 	rawCtx: AuthContext,

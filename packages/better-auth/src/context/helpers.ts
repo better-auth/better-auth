@@ -185,9 +185,10 @@ export function pickSource(
 }
 
 /**
- * Default for `trustedProxyHeaders` on the dynamic `baseURL` path. Defaults
- * to `true` for backward compatibility; the hardening that aligns it with
- * the static-config default (undefined → false) is tracked separately.
+ * Returns the effective `trustedProxyHeaders` value for dynamic `baseURL`
+ * resolution. When the user hasn't set `advanced.trustedProxyHeaders`,
+ * proxy headers (`x-forwarded-host` / `x-forwarded-proto`) are trusted by
+ * default so deployments behind a reverse proxy work without extra config.
  */
 export function resolveDynamicTrustedProxyHeaders(
 	options: BetterAuthOptions,
