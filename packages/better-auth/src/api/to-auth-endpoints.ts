@@ -71,7 +71,7 @@ type UserInputContext = Partial<
 function pickSource(
 	input: UserInputContext | undefined,
 ): Request | Headers | undefined {
-	if (isRequestLike(input?.request)) return input.request as Request;
+	if (isRequestLike(input?.request)) return input.request;
 	if (!input?.headers) return undefined;
 
 	const headers = new Headers(input.headers);
