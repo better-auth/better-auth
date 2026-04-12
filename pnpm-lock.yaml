@@ -631,6 +631,9 @@ importers:
 
   e2e/integration/vanilla-node:
     dependencies:
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../../../packages/oauth-provider
       better-auth:
         specifier: workspace:*
         version: link:../../../packages/better-auth
