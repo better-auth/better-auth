@@ -1150,44 +1150,6 @@ describe("dynamic baseURL resolution", () => {
 		const res = await authEndpoints.readBaseURL({ request: crossRealm });
 		expect(res).toBeInstanceOf(Response);
 	});
-
-	it("should inherit the resolved baseURL across chained auth.api calls", async () => {
-		const firstEndpoint = createAuthEndpoint(
-			"/first",
-			{ method: "GET" },
-			async (c) => ({ baseURL: c.context.baseURL }),
-		);
-		const secondEndpoint = createAuthEndpoint(
-			"/second",
-			{ method: "GET" },
-			async (c) => ({ baseURL: c.context.baseURL }),
-		);
-		const authContext = init({
-			baseURL: {
-				allowedHosts: ["example.com"],
-				protocol: "https",
-			},
-		});
-		const api = toAuthEndpoints(
-			{ first: firstEndpoint, second: secondEndpoint },
-			authContext,
-		);
-
-		const outer = await api.first({
-			headers: new Headers({ host: "example.com" }),
-		});
-		expect(outer.baseURL).toBe("https://example.com/api/auth");
-
-		// Simulate a chained call from inside an outer handler's scope: when the
-		// first invocation's ALS store is still active, the second call must
-		// inherit the resolved baseURL even without forwarded headers.
-		const { runWithRequestState } = await import("@better-auth/core/context");
-		const inner = await runWithRequestState(new WeakMap(), async () => {
-			await api.first({ headers: new Headers({ host: "example.com" }) });
-			return api.second();
-		});
-		expect(inner.baseURL).toBe("https://example.com/api/auth");
-	});
 });
 
 describe("custom response code", () => {

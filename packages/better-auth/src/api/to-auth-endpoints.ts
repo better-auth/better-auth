@@ -24,8 +24,7 @@ import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { pickSource, resolveRequestContext } from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
-import { getOrigin, isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
-import { getResolvedBaseURL, setResolvedBaseURL } from "./state/base-url";
+import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -69,53 +68,19 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
-function cloneContextWithBaseURL(
-	ctx: AuthContext,
-	baseURL: string,
-): AuthContext {
-	const clone = Object.create(
-		Object.getPrototypeOf(ctx),
-		Object.getOwnPropertyDescriptors(ctx),
-	) as AuthContext;
-	clone.baseURL = baseURL;
-	clone.options = {
-		...ctx.options,
-		baseURL: getOrigin(baseURL) || undefined,
-	};
-	return clone;
-}
-
 /**
  * Resolves the per-call `AuthContext` for endpoints with a dynamic `baseURL`.
  *
- * Four paths, in order:
- *  1. `rawCtx.baseURL` already set: HTTP handler rehydrated upstream. Seed
- *     the ALS store and return as-is so nested calls can inherit.
- *  2. Request-scoped ALS store has a value: a parent call already resolved
- *     it in this request, reuse via a lightweight clone.
- *  3. No ALS value: top-level direct `auth.api` call. Resolve from
- *     `input.request`/`input.headers`, or from `config.fallback`. Store the
- *     result in ALS so nested calls from the endpoint handler inherit it.
- *  4. No source and no fallback: throw `APIError` with a helpful message
- *     instead of crashing later on `new URL("")`.
+ * - `rawCtx.baseURL` already set: HTTP handler rehydrated upstream; return as-is.
+ * - Direct `auth.api` call with a source or a configured `fallback`: resolve here.
+ * - Neither: throw `APIError` with a helpful message instead of crashing later
+ *   on `new URL("")` in downstream plugins.
  */
 async function resolveDynamicContext(
 	rawCtx: AuthContext,
 	input: UserInputContext | undefined,
 ): Promise<AuthContext> {
-	const trustedProxyHeaders = rawCtx.options.advanced?.trustedProxyHeaders;
-
-	if (rawCtx.baseURL) {
-		if (!(await getResolvedBaseURL())) {
-			await setResolvedBaseURL(rawCtx.baseURL);
-		}
-		return rawCtx;
-	}
-
-	const fromAls = await getResolvedBaseURL();
-	if (fromAls) {
-		return cloneContextWithBaseURL(rawCtx, fromAls);
-	}
+	if (rawCtx.baseURL) return rawCtx;
 
 	const source = pickSource(input);
 	const config = rawCtx.options.baseURL;
@@ -131,14 +96,9 @@ async function resolveDynamicContext(
 		});
 	}
 
+	const trustedProxyHeaders = rawCtx.options.advanced?.trustedProxyHeaders;
 	try {
-		const resolved = await resolveRequestContext(
-			rawCtx,
-			source,
-			trustedProxyHeaders,
-		);
-		await setResolvedBaseURL(resolved.baseURL);
-		return resolved;
+		return await resolveRequestContext(rawCtx, source, trustedProxyHeaders);
 	} catch (err) {
 		if (err instanceof BetterAuthError) {
 			throw new APIError("INTERNAL_SERVER_ERROR", { message: err.message });

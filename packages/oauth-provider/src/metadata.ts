@@ -122,10 +122,7 @@ export function oidcServerMetadata(
 export const oauthProviderAuthServerMetadata = <
 	Auth extends {
 		api: {
-			getOAuthServerConfig: (args: {
-				request: Request;
-				asResponse: false;
-			}) => any;
+			getOAuthServerConfig: (...args: any) => any;
 		};
 	},
 >(
@@ -165,7 +162,7 @@ export const oauthProviderAuthServerMetadata = <
 export const oauthProviderOpenIdConfigMetadata = <
 	Auth extends {
 		api: {
-			getOpenIdConfig: (args: { request: Request; asResponse: false }) => any;
+			getOpenIdConfig: (...args: any) => any;
 		};
 	},
 >(

@@ -988,8 +988,15 @@ export const withMcpAuth = <
 ) => {
 	return async (req: Request) => {
 		const basePath = auth.options.basePath || "/api/auth";
+		const trustedProxyHeaders = auth.options.advanced?.trustedProxyHeaders;
 		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
-			? resolveBaseURL(auth.options.baseURL, basePath, req)
+			? resolveBaseURL(
+					auth.options.baseURL,
+					basePath,
+					req,
+					undefined,
+					trustedProxyHeaders,
+				)
 			: getBaseURL(
 					typeof auth.options.baseURL === "string"
 						? auth.options.baseURL
@@ -1038,7 +1045,10 @@ export const oAuthDiscoveryMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMcpOAuthConfig();
+		const res = await auth.api.getMcpOAuthConfig({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {
@@ -1062,7 +1072,10 @@ export const oAuthProtectedResourceMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMCPProtectedResource();
+		const res = await auth.api.getMCPProtectedResource({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {
