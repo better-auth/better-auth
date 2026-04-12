@@ -3842,3 +3842,181 @@ describe("signupWithInvitation", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 });
+
+describe("signupWithInvitation rollback behavior", async () => {
+	let failCredentialLink = false;
+	let failAfterAccept = false;
+
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail() {},
+				organizationHooks: {
+					afterAcceptInvitation: async () => {
+						if (failAfterAccept) {
+							throw new Error("after accept failed");
+						}
+					},
+				},
+			}),
+		],
+		databaseHooks: {
+			account: {
+				create: {
+					before: async (account) => {
+						if (failCredentialLink && account.providerId === "credential") {
+							throw new Error("credential link failed");
+						}
+					},
+				},
+			},
+		},
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	const { headers: ownerHeaders } = await signInWithTestUser();
+
+	it("should allow retry when credential linking fails before invitation acceptance completes", async () => {
+		const org = await client.organization.create({
+			name: "Retry Link Org",
+			slug: "retry-link-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invite = await client.organization.inviteMember({
+			email: "retry-link@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		failCredentialLink = true;
+		const failed = await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Retry Link",
+			password: "securepass123",
+		});
+		failCredentialLink = false;
+
+		expect(failed.error?.status).toBe(500);
+
+		const retried = await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Retry Link",
+			password: "securepass123",
+		});
+		expect(retried.data?.invitation.status).toBe("accepted");
+		expect(retried.data?.user?.email).toBe("retry-link@test.com");
+	});
+
+	it("should allow retry when afterAcceptInvitation throws", async () => {
+		const org = await client.organization.create({
+			name: "Retry Hook Org",
+			slug: "retry-hook-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const invite = await client.organization.inviteMember({
+			email: "retry-hook@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		failAfterAccept = true;
+		const failed = await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Retry Hook",
+			password: "securepass123",
+		});
+		failAfterAccept = false;
+
+		expect(failed.error?.status).toBe(500);
+
+		const retried = await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Retry Hook",
+			password: "securepass123",
+		});
+		expect(retried.data?.invitation.status).toBe("accepted");
+		expect(retried.data?.user?.email).toBe("retry-hook@test.com");
+	});
+});
+
+describe("signupWithInvitation session activation", async () => {
+	let observedMaximumMembersSession:
+		| { user: { id: string }; session: { token: string } }
+		| null
+		| undefined;
+
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail() {},
+				teams: {
+					enabled: true,
+					defaultTeam: {
+						enabled: false,
+					},
+					maximumMembersPerTeam: ({ session }) => {
+						observedMaximumMembersSession = session;
+						return 10;
+					},
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	const { headers: ownerHeaders } = await signInWithTestUser();
+
+	it("should persist active organization and team in the created session", async () => {
+		const org = await client.organization.create({
+			name: "Signup Session Org",
+			slug: "signup-session-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		const team = await client.organization.createTeam(
+			{
+				name: "Signup Team",
+				organizationId: org.data!.id,
+			},
+			{
+				headers: ownerHeaders,
+			},
+		);
+		const invite = await client.organization.inviteMember({
+			email: "signup-session@test.com",
+			role: "member",
+			organizationId: org.data!.id,
+			teamId: team.data!.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		const signup = await client.organization.signupWithInvitation({
+			invitationId: invite.data!.id,
+			name: "Signup Session",
+			password: "securepass123",
+		});
+		const createdSession = await client.getSession({
+			fetchOptions: {
+				headers: new Headers({
+					Authorization: `Bearer ${signup.data?.token}`,
+				}),
+			},
+		});
+
+		expect(observedMaximumMembersSession).toBeNull();
+		expect(createdSession.data?.session.activeOrganizationId).toBe(org.data!.id);
+		expect((createdSession.data?.session as { activeTeamId?: string }).activeTeamId)
+			.toBe(team.data!.id);
+	});
+});

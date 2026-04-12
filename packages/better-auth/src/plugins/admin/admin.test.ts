@@ -1835,6 +1835,7 @@ describe("edge cases: userId validation", async () => {
 
 describe("user enrollment flow", async () => {
 	let enrollmentToken: string | undefined;
+	let blockEnrollmentVerificationUpdate = false;
 
 	const { auth, signInWithTestUser, customFetchImpl, db } =
 		await getTestInstance(
@@ -1852,6 +1853,16 @@ describe("user enrollment flow", async () => {
 							before: async (user) => {
 								if (user.name === "EnrollAdmin") {
 									return { data: { ...user, role: "admin" } };
+								}
+							},
+						},
+						update: {
+							before: async (user) => {
+								if (
+									blockEnrollmentVerificationUpdate &&
+									user.emailVerified === true
+								) {
+									return false;
 								}
 							},
 						},
@@ -1999,5 +2010,34 @@ describe("user enrollment flow", async () => {
 			})
 			.catch((e) => e);
 		expect(err.body?.code).toBe("USER_ALREADY_HAS_PASSWORD");
+	});
+
+	it("should allow retrying enrollment when credential creation succeeded before email verification update failed", async () => {
+		enrollmentToken = undefined;
+		await client.admin.createUser(
+			{
+				name: "Retry Verification",
+				email: "retryverification@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		const retryToken = enrollmentToken!;
+
+		blockEnrollmentVerificationUpdate = true;
+		const firstErr: any = await auth.api
+			.completeEnrollment({
+				body: { token: retryToken, password: "retrypass123" },
+			})
+			.catch((e) => e);
+		blockEnrollmentVerificationUpdate = false;
+
+		expect(firstErr.body?.code).toBe("FAILED_TO_UPDATE_USER");
+
+		const retryRes = await auth.api.completeEnrollment({
+			body: { token: retryToken, password: "differentpass123" },
+		});
+		expect(retryRes.user?.email).toBe("retryverification@test.com");
+		expect(retryRes.user?.emailVerified).toBe(true);
 	});
 });
