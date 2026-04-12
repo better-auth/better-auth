@@ -116,14 +116,12 @@ const METADATA_CACHE_CONTROL =
 	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
 
 function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
-	return new Response(JSON.stringify(body), {
-		status: 200,
-		headers: {
-			"Cache-Control": METADATA_CACHE_CONTROL,
-			...extraHeaders,
-			"Content-Type": "application/json",
-		},
-	});
+	const headers = new Headers(extraHeaders);
+	if (!headers.has("Cache-Control")) {
+		headers.set("Cache-Control", METADATA_CACHE_CONTROL);
+	}
+	headers.set("Content-Type", "application/json");
+	return new Response(JSON.stringify(body), { status: 200, headers });
 }
 
 /**

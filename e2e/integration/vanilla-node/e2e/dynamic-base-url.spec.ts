@@ -84,7 +84,10 @@ test.describe("dynamic baseURL (HTTP)", () => {
 	test("direct auth.api calls resolve baseURL from forwarded headers", async () => {
 		const { port, stop } = await setupServer({
 			baseURL: {
-				allowedHosts: ["tenant-a.localhost", "tenant-b.localhost"],
+				// `:*` so the ephemeral test port matches the pattern; without it
+				// resolution falls through to `fallback` and the test would pass
+				// even if per-request resolution were broken.
+				allowedHosts: ["tenant-a.localhost:*", "tenant-b.localhost:*"],
 				protocol: "http",
 				fallback: "http://fallback.localhost",
 			},
@@ -109,7 +112,7 @@ test.describe("dynamic baseURL (HTTP)", () => {
 		const { port, stop } = await setupServer(
 			{
 				baseURL: {
-					allowedHosts: ["tenant-a.localhost"],
+					allowedHosts: ["tenant-a.localhost:*"],
 					protocol: "http",
 				},
 			},
@@ -119,17 +122,12 @@ test.describe("dynamic baseURL (HTTP)", () => {
 		try {
 			const res = await httpGet(
 				port,
-				"/whoami",
-				`not-allowed.localhost:${port}`,
+				"/whoami-no-source",
+				`tenant-a.localhost:${port}`,
 			);
-			expect([200, 500]).toContain(res.status);
-			const body = JSON.parse(res.body) as {
-				error?: string;
-				session?: unknown;
-			};
-			if (res.status === 500) {
-				expect(body.error).toMatch(/baseURL|allowedHosts|fallback/i);
-			}
+			expect(res.status).toBe(500);
+			const body = JSON.parse(res.body) as { error?: string };
+			expect(body.error).toMatch(/baseURL|headers|fallback/i);
 		} finally {
 			await stop();
 		}
