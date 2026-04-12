@@ -1150,6 +1150,48 @@ describe("dynamic baseURL resolution", () => {
 		const res = await authEndpoints.readBaseURL({ request: crossRealm });
 		expect(res).toBeInstanceOf(Response);
 	});
+
+	it("should infer http for loopback hosts on the headers-only path", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["localhost:3000"],
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "localhost:3000" }),
+		});
+		expect(res.baseURL).toBe("http://localhost:3000/api/auth");
+	});
+
+	it("should rehydrate trustedProviders per call when configured as a function", async () => {
+		const hosts: string[] = [];
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
+				protocol: "https",
+			},
+			account: {
+				accountLinking: {
+					trustedProviders: async (req) => {
+						const host = req?.headers.get("host");
+						if (host) hosts.push(host);
+						return ["google"];
+					},
+				},
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "tenant-a.example.com" }),
+		});
+		await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "tenant-b.example.com" }),
+		});
+		expect(hosts).toEqual(["tenant-a.example.com", "tenant-b.example.com"]);
+	});
 });
 
 describe("custom response code", () => {

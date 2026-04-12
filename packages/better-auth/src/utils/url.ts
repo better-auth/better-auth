@@ -284,7 +284,29 @@ export function getProtocolFromSource(
 		} catch {}
 	}
 
+	// Headers-only path (or invalid request URL): infer `http` for loopback
+	// hosts so direct `auth.api` calls on local dev don't silently resolve to
+	// `https://localhost:3000` while the HTTP handler resolves `http://...`.
+	const host = headers.get("host");
+	if (host && isLoopbackHost(host)) {
+		return "http";
+	}
+
 	return "https";
+}
+
+function isLoopbackHost(host: string): boolean {
+	const h = host.toLowerCase();
+	return (
+		h === "localhost" ||
+		h.startsWith("localhost:") ||
+		h === "127.0.0.1" ||
+		h.startsWith("127.0.0.1:") ||
+		h === "[::1]" ||
+		h.startsWith("[::1]:") ||
+		h === "0.0.0.0" ||
+		h.startsWith("0.0.0.0:")
+	);
 }
 
 /**

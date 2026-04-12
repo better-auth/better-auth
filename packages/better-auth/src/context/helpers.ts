@@ -234,9 +234,14 @@ export async function resolveRequestContext(
 		...resolved.options,
 		baseURL: dynamicBaseURLConfig,
 	};
+	const syntheticRequest = sourceAsRequest(source, baseURL);
 	resolved.trustedOrigins = await getTrustedOrigins(
 		trustedOriginOptions,
-		sourceAsRequest(source, baseURL),
+		syntheticRequest,
+	);
+	resolved.trustedProviders = await getTrustedProviders(
+		resolved.options,
+		syntheticRequest,
 	);
 
 	if (ctx.options.advanced?.crossSubDomainCookies?.enabled) {

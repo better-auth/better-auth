@@ -1007,7 +1007,9 @@ export const withMcpAuth = <
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
 		const session = await auth.api.getMcpSession({
+			request: req,
 			headers: req.headers,
+			asResponse: false,
 		});
 		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
 		if (!session) {
