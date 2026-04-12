@@ -205,15 +205,29 @@ export function isDynamicBaseURLConfig(
 /**
  * Check if a value is a `Request`
  * - `instanceof`: works for native Request instances
- * - `toString`: handles where instanceof check fails but the object is still a valid Request
+ * - `toString`: handles where instanceof check fails but the object is still a
+ *   valid Request (e.g. cross-realm, polyfills). Paired with a shape check so
+ *   an object that only spoofs `Symbol.toStringTag` without the real shape is
+ *   rejected before downstream code tries to read `.headers` / `.url`.
  *
  * @param value The value to check
  * @returns `true` if the value is a Request instance
  */
 export function isRequestLike(value: unknown): value is Request {
+	if (value instanceof Request) return true;
+	if (
+		typeof value !== "object" ||
+		value === null ||
+		Object.prototype.toString.call(value) !== "[object Request]"
+	) {
+		return false;
+	}
+	const v = value as { url?: unknown; headers?: unknown };
 	return (
-		value instanceof Request ||
-		Object.prototype.toString.call(value) === "[object Request]"
+		typeof v.url === "string" &&
+		typeof v.headers === "object" &&
+		v.headers !== null &&
+		typeof (v.headers as { get?: unknown }).get === "function"
 	);
 }
 
@@ -287,7 +301,10 @@ export function getProtocolFromSource(
 	// Headers-only path (or invalid request URL): infer `http` for loopback
 	// hosts so direct `auth.api` calls on local dev don't silently resolve to
 	// `https://localhost:3000` while the HTTP handler resolves `http://...`.
-	const host = headers.get("host");
+	// Use the same resolved host as `getHostFromSource` so loopback detection
+	// honors `x-forwarded-host` (when `trustedProxyHeaders` is enabled) and
+	// the URL fallback — not the raw `host` header.
+	const host = getHostFromSource(source, trustedProxyHeaders);
 	if (host && isLoopbackHost(host)) {
 		return "http";
 	}
