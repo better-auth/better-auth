@@ -1012,7 +1012,11 @@ export const withMcpAuth = <
 			headers: req.headers,
 			asResponse: false,
 		});
-		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
+		// Omit the `resource_metadata` URL when we can't build a valid one,
+		// so clients don't follow `Bearer resource_metadata="undefined/..."`.
+		const wwwAuthenticateValue = baseURL
+			? `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`
+			: "Bearer";
 		if (!session) {
 			return Response.json(
 				{
