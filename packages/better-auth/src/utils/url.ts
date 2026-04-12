@@ -202,13 +202,19 @@ export function isDynamicBaseURLConfig(
 	);
 }
 
-// `instanceof Request` misses polyfilled or cross-realm instances.
+/**
+ * Check if a value is a `Request`
+ * - `instanceof`: works for native Request instances
+ * - `toString`: handles where instanceof check fails but the object is still a valid Request
+ *
+ * @param value The value to check
+ * @returns `true` if the value is a Request instance
+ */
 export function isRequestLike(value: unknown): value is Request {
-	if (value == null || typeof value !== "object") return false;
-	if (value instanceof Request) return true;
-
-	if (!(Symbol.toStringTag in value)) return false;
-	return value[Symbol.toStringTag] === "Request";
+	return (
+		value instanceof Request ||
+		Object.prototype.toString.call(value) === "[object Request]"
+	);
 }
 
 /**
