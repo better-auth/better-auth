@@ -124,8 +124,6 @@ export async function createAuthServer(
 			return;
 		}
 
-		// Server-side direct `auth.api` call that forwards the incoming headers,
-		// as documented for dynamic baseURL. Used by the E2E regression for #9105.
 		if (req.url === "/whoami") {
 			const headers = new Headers();
 			for (const [k, v] of Object.entries(req.headers)) {

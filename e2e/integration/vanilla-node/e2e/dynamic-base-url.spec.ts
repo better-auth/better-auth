@@ -45,11 +45,7 @@ function httpGet(
 
 test.describe("dynamic baseURL (HTTP)", () => {
 	/**
-	 * Regression for https://github.com/better-auth/better-auth/issues/8447.
-	 * Before this PR, `oauthProviderAuthServerMetadata` called the chained
-	 * `auth.api.getOAuthServerConfig()` with no request, so `issuer` resolved
-	 * to an empty string on dynamic `baseURL` configs. It now forwards the
-	 * incoming request and the issuer reflects the request host.
+	 * @see https://github.com/better-auth/better-auth/issues/8447
 	 */
 	test("oauthProviderAuthServerMetadata resolves issuer from request host", async () => {
 		const { port, stop } = await setupServer(
@@ -74,10 +70,7 @@ test.describe("dynamic baseURL (HTTP)", () => {
 				);
 				expect(res.status).toBe(200);
 				const body = JSON.parse(res.body) as { issuer?: string };
-				// `validateIssuerUrl` forces https for non-localhost hostnames
-				// (RFC 9207). The test's signal is the per-host `issuer` value —
-				// before this PR it came back empty or as the fallback regardless
-				// of the incoming host.
+				// `validateIssuerUrl` forces https for non-localhost hostnames (RFC 9207).
 				expect(body.issuer).toBe(`https://${host}/api/auth`);
 			}
 		} finally {
@@ -86,10 +79,7 @@ test.describe("dynamic baseURL (HTTP)", () => {
 	});
 
 	/**
-	 * Regression for https://github.com/better-auth/better-auth/issues/9105.
-	 * A server-side route calls `auth.api.getSession({ headers })` directly
-	 * (bypassing `auth.handler`). Before the direct-API fix this threw on
-	 * dynamic configs; now it resolves per-request from the forwarded host.
+	 * @see https://github.com/better-auth/better-auth/issues/9105
 	 */
 	test("direct auth.api calls resolve baseURL from forwarded headers", async () => {
 		const { port, stop } = await setupServer({
@@ -104,9 +94,6 @@ test.describe("dynamic baseURL (HTTP)", () => {
 			const res = await httpGet(port, "/whoami", `tenant-a.localhost:${port}`);
 			expect(res.status).toBe(200);
 			const body = JSON.parse(res.body) as { session: unknown };
-			// No session cookie was sent, so the result is null. The important
-			// signal is the 200 status: the dynamic baseURL resolved without
-			// downstream plugins crashing on `new URL("")`.
 			expect(body.session).toBeNull();
 		} finally {
 			await stop();
@@ -130,16 +117,11 @@ test.describe("dynamic baseURL (HTTP)", () => {
 		);
 
 		try {
-			// `/whoami` strips the `host` header before forwarding, so the inner
-			// `auth.api` call has no source. We simulate this by targeting an
-			// unrelated host that doesn't match `allowedHosts`.
 			const res = await httpGet(
 				port,
 				"/whoami",
 				`not-allowed.localhost:${port}`,
 			);
-			// The handler returns 500 with the APIError message captured in the
-			// route wrapper; the key contract is a structured, actionable error.
 			expect([200, 500]).toContain(res.status);
 			const body = JSON.parse(res.body) as {
 				error?: string;

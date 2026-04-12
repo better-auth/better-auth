@@ -271,9 +271,8 @@ describe("dynamic baseURL metadata wrappers", async () => {
 	const host = "tenant.example.com";
 	const expectedBaseURL = `https://${host}/api/auth`;
 
-	// Fallback covers server-side internal calls (e.g. test user setup) that
-	// have no Request. The regression assertions below pass a real Request to
-	// ensure resolution uses the request host, not the fallback.
+	// Fallback is required because `getTestInstance` internally invokes
+	// `signUpEmail` with no Request during setup.
 	const { auth } = await getTestInstance({
 		baseURL: {
 			allowedHosts: [host],
