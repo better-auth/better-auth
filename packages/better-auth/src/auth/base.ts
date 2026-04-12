@@ -43,9 +43,12 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				);
 			} else {
 				handlerCtx = ctx;
-				// Static config with no baseURL: memoize on the shared ctx from the
-				// first request. A concurrent-first-requests race is harmless since
-				// both writes resolve to the same value.
+				// Static config with no baseURL: memoize on the shared ctx from
+				// the first request. A concurrent-first-requests race is
+				// harmless since both writes resolve to the same value. Cloning
+				// via `Object.create` (as the dynamic branch does) would break
+				// downstream references that depend on `ctx.options` being
+				// mutated in place.
 				if (!ctx.options.baseURL) {
 					const baseURL = getBaseURL(
 						undefined,
