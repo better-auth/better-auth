@@ -69,8 +69,7 @@ type UserInputContext = Partial<
 >;
 
 /**
- * Cross-realm-safe Request detection:
- * Plain `instanceof Request` misses polyfilled or cross-realm Requests.
+ * `instanceof Request` misses polyfilled / cross-realm instances.
  */
 function isRequestLike(value: unknown): value is Request {
 	if (value == null || typeof value !== "object") return false;
@@ -79,24 +78,34 @@ function isRequestLike(value: unknown): value is Request {
 	return value[Symbol.toStringTag] === "Request";
 }
 
+function pickRequest(input: UserInputContext | undefined): Request | undefined {
+	if (isRequestLike(input?.request)) return input.request as Request;
+	if (!input?.headers) return undefined;
+
+	const headers = new Headers(input.headers);
+	const hasHost = headers.has("host") || headers.has("x-forwarded-host");
+	if (!hasHost) return undefined;
+
+	// `https://` keeps `protocol: "auto"` from downgrading
+	// `.invalid` marks the URL unused (RFC 2606)
+	return new Request("https://placeholder.invalid", { headers });
+}
+
 /**
- * Cold-path helper:
- * only invoked when the dynamic config branch is taken,
- * so the static path pays zero async wrapping cost.
+ * Direct `auth.api.*()` calls bypass the HTTP handler's per-request resolution.
  */
 async function resolveDynamicContext(
 	rawCtx: AuthContext,
 	input: UserInputContext | undefined,
 ): Promise<AuthContext> {
-	if (isRequestLike(input?.request)) {
-		return resolveRequestContext(rawCtx, input.request as Request);
-	}
-	if (!input?.headers) return rawCtx;
-	const headers = new Headers(input.headers);
-	if (!headers.has("host") && !headers.has("x-forwarded-host")) {
-		return rawCtx;
-	}
-	const request = new Request("http://placeholder.invalid", { headers });
+	const request = pickRequest(input);
+	const config = rawCtx.options.baseURL;
+	const hasFallback =
+		isDynamicBaseURLConfig(config) && Boolean(config.fallback);
+
+	const canResolve = request !== undefined || hasFallback;
+	if (!canResolve) return rawCtx;
+
 	return resolveRequestContext(rawCtx, request);
 }
 

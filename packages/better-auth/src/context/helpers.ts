@@ -154,16 +154,12 @@ export async function getTrustedOrigins(
 }
 
 /**
- * Produce a per-request clone of an AuthContext configured with a dynamic baseURL.
- * Resolves the host against `allowedHosts` and rehydrates `trustedOrigins` and cookie helpers
- * so downstream code sees values matching the resolved host.
- *
- * Throws when the host cannot be resolved (unknown host, no fallback, etc.).
- * Caller is expected to only invoke this when `isDynamicBaseURLConfig` holds.
+ * Per-request clone with `baseURL`, `trustedOrigins` and cookies rehydrated
+ * for the resolved host. Throws when the URL cannot be resolved.
  */
 export async function resolveRequestContext(
 	ctx: AuthContext,
-	request: Request,
+	request?: Request,
 ): Promise<AuthContext> {
 	const dynamicBaseURLConfig = ctx.options.baseURL;
 	const basePath = ctx.options.basePath || "/api/auth";
@@ -184,8 +180,7 @@ export async function resolveRequestContext(
 		baseURL: getOrigin(baseURL) || undefined,
 	};
 
-	// getTrustedOrigins expands allowedHosts when passed the dynamic config,
-	// so feed it the original object rather than the resolved origin string.
+	// Pass the dynamic config so getTrustedOrigins can expand `allowedHosts`.
 	const trustedOriginOptions: BetterAuthOptions = {
 		...resolved.options,
 		baseURL: dynamicBaseURLConfig,
