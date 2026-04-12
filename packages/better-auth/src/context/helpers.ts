@@ -174,7 +174,10 @@ export function pickSource(
 	if (isRequestLike(input?.request)) return input.request;
 	if (!input?.headers) return undefined;
 
-	const headers = new Headers(input.headers);
+	const headers =
+		input.headers instanceof Headers
+			? input.headers
+			: new Headers(input.headers);
 	if (!headers.has("host") && !headers.has("x-forwarded-host")) {
 		return undefined;
 	}
@@ -182,22 +185,21 @@ export function pickSource(
 }
 
 /**
- * Wraps a `Headers` value as a `Request` so `trustedOrigins(req)` callbacks
- * can always read `req.headers`. Returns the original `Request` unchanged.
+ * Default for `trustedProxyHeaders` on the dynamic `baseURL` path. Defaults
+ * to `true` for backward compatibility; the hardening that aligns it with
+ * the static-config default (undefined → false) is tracked separately.
  */
-function sourceAsRequest(
-	source: Request | Headers | undefined,
-	fallbackURL: string,
-): Request | undefined {
-	if (!source) return undefined;
-	if (isRequestLike(source)) return source;
-	return new Request(fallbackURL, { headers: source });
+export function resolveDynamicTrustedProxyHeaders(
+	options: BetterAuthOptions,
+): boolean {
+	return options.advanced?.trustedProxyHeaders ?? true;
 }
 
 /**
- * Per-request clone with `baseURL`, `trustedOrigins` and cookies rehydrated
- * for the resolved host. Throws `BetterAuthError` when the URL cannot be
- * resolved; callers on the direct-API path convert this to `APIError`.
+ * Per-request clone with `baseURL`, `trustedOrigins`, `trustedProviders`
+ * and cookies rehydrated for the resolved host. Throws `BetterAuthError`
+ * when the URL cannot be resolved; callers on the direct-API path convert
+ * this to `APIError`.
  */
 export async function resolveRequestContext(
 	ctx: AuthContext,
@@ -234,14 +236,29 @@ export async function resolveRequestContext(
 		...resolved.options,
 		baseURL: dynamicBaseURLConfig,
 	};
-	const syntheticRequest = sourceAsRequest(source, baseURL);
+	// Only synthesize a Request for the user-facing callbacks that need one.
+	const needsRequest =
+		typeof ctx.options.trustedOrigins === "function" ||
+		typeof ctx.options.account?.accountLinking?.trustedProviders === "function";
+	let callbackRequest: Request | undefined;
+	if (needsRequest) {
+		if (isRequestLike(source)) {
+			callbackRequest = source;
+		} else if (source) {
+			callbackRequest = new Request(baseURL, { headers: source });
+		} else {
+			callbackRequest = undefined;
+		}
+	} else {
+		callbackRequest = undefined;
+	}
 	resolved.trustedOrigins = await getTrustedOrigins(
 		trustedOriginOptions,
-		syntheticRequest,
+		callbackRequest,
 	);
 	resolved.trustedProviders = await getTrustedProviders(
 		resolved.options,
-		syntheticRequest,
+		callbackRequest,
 	);
 
 	if (ctx.options.advanced?.crossSubDomainCookies?.enabled) {

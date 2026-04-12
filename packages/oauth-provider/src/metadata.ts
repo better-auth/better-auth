@@ -111,6 +111,21 @@ export function oidcServerMetadata(
 	return metadata;
 }
 
+// Cache for 15s with a short stale window; metadata rarely changes.
+const METADATA_CACHE_CONTROL =
+	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
+
+function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
+	return new Response(JSON.stringify(body), {
+		status: 200,
+		headers: {
+			"Cache-Control": METADATA_CACHE_CONTROL,
+			...extraHeaders,
+			"Content-Type": "application/json",
+		},
+	});
+}
+
 /**
  * Provides an exportable `/.well-known/oauth-authorization-server`.
  *
@@ -127,27 +142,14 @@ export const oauthProviderAuthServerMetadata = <
 	},
 >(
 	auth: Auth,
-	opts?: {
-		headers?: HeadersInit;
-	},
+	opts?: { headers?: HeadersInit },
 ) => {
 	return async (request: Request) => {
 		const res = await auth.api.getOAuthServerConfig({
 			request,
 			asResponse: false,
 		});
-		return new Response(JSON.stringify(res), {
-			status: 200,
-			headers: {
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...opts?.headers,
-				"Content-Type": "application/json",
-			},
-		});
+		return metadataResponse(res, opts?.headers);
 	};
 };
 
@@ -167,26 +169,13 @@ export const oauthProviderOpenIdConfigMetadata = <
 	},
 >(
 	auth: Auth,
-	opts?: {
-		headers?: HeadersInit;
-	},
+	opts?: { headers?: HeadersInit },
 ) => {
 	return async (request: Request) => {
 		const res = await auth.api.getOpenIdConfig({
 			request,
 			asResponse: false,
 		});
-		return new Response(JSON.stringify(res), {
-			status: 200,
-			headers: {
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...opts?.headers,
-				"Content-Type": "application/json",
-			},
-		});
+		return metadataResponse(res, opts?.headers);
 	};
 };

@@ -15,6 +15,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
+import { resolveDynamicTrustedProxyHeaders } from "../../context/helpers";
 import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
@@ -988,10 +989,7 @@ export const withMcpAuth = <
 ) => {
 	return async (req: Request) => {
 		const basePath = auth.options.basePath || "/api/auth";
-		// Match the dynamic-baseURL default: trust proxy headers unless the
-		// user explicitly opts out.
-		const trustedProxyHeaders =
-			auth.options.advanced?.trustedProxyHeaders ?? true;
+		const trustedProxyHeaders = resolveDynamicTrustedProxyHeaders(auth.options);
 		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
 			? resolveBaseURL(
 					auth.options.baseURL,

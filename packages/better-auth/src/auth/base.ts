@@ -5,6 +5,7 @@ import { getEndpoints, router } from "../api";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
+	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
 } from "../context/helpers";
 import type { Auth } from "../types";
@@ -35,13 +36,10 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			if (isDynamicBaseURLConfig(options.baseURL)) {
 				// Per-request clone avoids mutating shared ctx under concurrent
 				// requests that may resolve to different hosts.
-				// Default to trusting proxy headers on the dynamic path so
-				// existing deployments behind reverse proxies keep working;
-				// users can opt out via `advanced.trustedProxyHeaders: false`.
 				handlerCtx = await resolveRequestContext(
 					ctx,
 					request,
-					ctx.options.advanced?.trustedProxyHeaders ?? true,
+					resolveDynamicTrustedProxyHeaders(ctx.options),
 				);
 			} else {
 				handlerCtx = ctx;

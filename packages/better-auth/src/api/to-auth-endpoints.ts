@@ -22,7 +22,11 @@ import type {
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
-import { pickSource, resolveRequestContext } from "../context/helpers";
+import {
+	pickSource,
+	resolveDynamicTrustedProxyHeaders,
+	resolveRequestContext,
+} from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
@@ -96,12 +100,12 @@ async function resolveDynamicContext(
 		});
 	}
 
-	// Default to trusting proxy headers on the dynamic path for backward
-	// compatibility; users opt out with `advanced.trustedProxyHeaders: false`.
-	const trustedProxyHeaders =
-		rawCtx.options.advanced?.trustedProxyHeaders ?? true;
 	try {
-		return await resolveRequestContext(rawCtx, source, trustedProxyHeaders);
+		return await resolveRequestContext(
+			rawCtx,
+			source,
+			resolveDynamicTrustedProxyHeaders(rawCtx.options),
+		);
 	} catch (err) {
 		if (err instanceof BetterAuthError) {
 			throw new APIError("INTERNAL_SERVER_ERROR", { message: err.message });
@@ -138,8 +142,6 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
 				const route = endpoint.path ?? "/:virtual";
 
-				// Direct API calls bypass the handler's per-request resolution.
-				// Rehydrate only when the dynamic branch actually applies so the static path stays zero-overhead.
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;

@@ -141,22 +141,16 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
-		// For dynamic baseURL configs, synthesize headers targeting an allowed
-		// host so server-side setup resolves correctly. Prefers a concrete
-		// host; falls back to substituting wildcards in the first pattern so
-		// wildcard-only configs still resolve. Configs with no allowedHosts
-		// and no `fallback` will throw from `signUpEmail`; pass
-		// `{ disableTestUser: true }` to skip in that case.
+		// Synthesize a host header from allowedHosts so setup resolves under
+		// dynamic baseURL. `?` is a wildcard, not a query-string delimiter,
+		// so it's replaced, not split on.
 		const dynamicBaseURL = isDynamicBaseURLConfig(auth.options.baseURL)
 			? auth.options.baseURL
 			: undefined;
-		const allowedHosts = dynamicBaseURL?.allowedHosts;
 		const pattern =
-			allowedHosts?.find((h) => !h.includes("*") && !h.includes("?")) ??
-			allowedHosts?.[0];
-		// Split on `/` and `#` only — `?` is an allowedHosts wildcard, not a
-		// query-string delimiter, and substituting it into a valid host char
-		// happens next.
+			dynamicBaseURL?.allowedHosts.find(
+				(h) => !h.includes("*") && !h.includes("?"),
+			) ?? dynamicBaseURL?.allowedHosts[0];
 		const host = pattern
 			?.replace(/^https?:\/\//, "")
 			.split(/[/#]/)[0]

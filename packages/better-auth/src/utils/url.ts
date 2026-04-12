@@ -298,12 +298,8 @@ export function getProtocolFromSource(
 		} catch {}
 	}
 
-	// Headers-only path (or invalid request URL): infer `http` for loopback
-	// hosts so direct `auth.api` calls on local dev don't silently resolve to
-	// `https://localhost:3000` while the HTTP handler resolves `http://...`.
-	// Use the same resolved host as `getHostFromSource` so loopback detection
-	// honors `x-forwarded-host` (when `trustedProxyHeaders` is enabled) and
-	// the URL fallback — not the raw `host` header.
+	// Local dev: prefer `http` for loopback hosts so the headers-only path
+	// doesn't diverge from the HTTP handler's URL-derived scheme.
 	const host = getHostFromSource(source, trustedProxyHeaders);
 	if (host && isLoopbackHost(host)) {
 		return "http";
