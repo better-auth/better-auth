@@ -35,7 +35,11 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			if (isDynamicBaseURLConfig(options.baseURL)) {
 				// Per-request clone avoids mutating shared ctx under concurrent
 				// requests that may resolve to different hosts.
-				handlerCtx = await resolveRequestContext(ctx, request);
+				handlerCtx = await resolveRequestContext(
+					ctx,
+					request,
+					ctx.options.advanced?.trustedProxyHeaders,
+				);
 			} else {
 				handlerCtx = ctx;
 				// Static config: resolve once from the first request when no
