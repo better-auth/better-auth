@@ -1028,12 +1028,13 @@ describe("dynamic baseURL resolution", () => {
 		expect(sharedCtx.baseURL).toBe("");
 	});
 
-	it("should ignore x-forwarded-host when trustedProxyHeaders is not enabled", async () => {
+	it("should ignore x-forwarded-host when trustedProxyHeaders is explicitly disabled", async () => {
 		const authContext = init({
 			baseURL: {
 				allowedHosts: ["example.com", "evil.com"],
 				protocol: "https",
 			},
+			advanced: { trustedProxyHeaders: false },
 		});
 		const authEndpoints = toAuthEndpoints(endpoints, authContext);
 

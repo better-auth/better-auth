@@ -988,7 +988,10 @@ export const withMcpAuth = <
 ) => {
 	return async (req: Request) => {
 		const basePath = auth.options.basePath || "/api/auth";
-		const trustedProxyHeaders = auth.options.advanced?.trustedProxyHeaders;
+		// Match the dynamic-baseURL default: trust proxy headers unless the
+		// user explicitly opts out.
+		const trustedProxyHeaders =
+			auth.options.advanced?.trustedProxyHeaders ?? true;
 		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
 			? resolveBaseURL(
 					auth.options.baseURL,

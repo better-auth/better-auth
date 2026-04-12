@@ -96,7 +96,10 @@ async function resolveDynamicContext(
 		});
 	}
 
-	const trustedProxyHeaders = rawCtx.options.advanced?.trustedProxyHeaders;
+	// Default to trusting proxy headers on the dynamic path for backward
+	// compatibility; users opt out with `advanced.trustedProxyHeaders: false`.
+	const trustedProxyHeaders =
+		rawCtx.options.advanced?.trustedProxyHeaders ?? true;
 	try {
 		return await resolveRequestContext(rawCtx, source, trustedProxyHeaders);
 	} catch (err) {
