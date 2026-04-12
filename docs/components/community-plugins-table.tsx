@@ -274,13 +274,7 @@ export function CommunityPluginsTable() {
 	});
 
 	return (
-		<div className="w-full">
-			<div className="flex items-center justify-between text-xs text-muted-foreground">
-				<p>
-					Showing {table.getRowModel().rows.length} of {communityPlugins.length}{" "}
-					plugins
-				</p>
-			</div>
+		<div className="w-full space-y-4">
 			<div className="relative">
 				<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 				<input
@@ -291,7 +285,8 @@ export function CommunityPluginsTable() {
 					className="w-full rounded-lg border bg-background pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				/>
 			</div>
-			<div className="rounded-lg">
+
+			<div className="rounded-lg border">
 				<div className="overflow-x-auto">
 					<table className="w-full">
 						<thead>
@@ -342,6 +337,13 @@ export function CommunityPluginsTable() {
 							)}
 						</tbody>
 					</table>
+				</div>
+			</div>
+
+			<div className="flex items-center justify-between text-sm text-muted-foreground">
+				<div>
+					Showing {table.getRowModel().rows.length} of {communityPlugins.length}{" "}
+					plugins
 				</div>
 			</div>
 		</div>
