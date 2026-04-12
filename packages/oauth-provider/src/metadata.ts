@@ -122,7 +122,10 @@ export function oidcServerMetadata(
 export const oauthProviderAuthServerMetadata = <
 	Auth extends {
 		api: {
-			getOAuthServerConfig: (...args: any) => any;
+			getOAuthServerConfig: (args: {
+				request: Request;
+				asResponse: false;
+			}) => any;
 		};
 	},
 >(
@@ -131,8 +134,11 @@ export const oauthProviderAuthServerMetadata = <
 		headers?: HeadersInit;
 	},
 ) => {
-	return async (_request: Request) => {
-		const res = await auth.api.getOAuthServerConfig();
+	return async (request: Request) => {
+		const res = await auth.api.getOAuthServerConfig({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {
@@ -159,7 +165,7 @@ export const oauthProviderAuthServerMetadata = <
 export const oauthProviderOpenIdConfigMetadata = <
 	Auth extends {
 		api: {
-			getOpenIdConfig: (...args: any) => any;
+			getOpenIdConfig: (args: { request: Request; asResponse: false }) => any;
 		};
 	},
 >(
@@ -168,8 +174,11 @@ export const oauthProviderOpenIdConfigMetadata = <
 		headers?: HeadersInit;
 	},
 ) => {
-	return async (_request: Request) => {
-		const res = await auth.api.getOpenIdConfig();
+	return async (request: Request) => {
+		const res = await auth.api.getOpenIdConfig({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

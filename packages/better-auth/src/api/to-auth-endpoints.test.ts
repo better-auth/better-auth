@@ -1027,6 +1027,167 @@ describe("dynamic baseURL resolution", () => {
 		const sharedCtx = await authContext;
 		expect(sharedCtx.baseURL).toBe("");
 	});
+
+	it("should ignore x-forwarded-host when trustedProxyHeaders is not enabled", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com", "evil.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "evil.com",
+			}),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
+	it("should honor x-forwarded-host when trustedProxyHeaders is enabled", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com", "proxy.example.com"],
+				protocol: "https",
+			},
+			advanced: { trustedProxyHeaders: true },
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "proxy.example.com",
+			}),
+		});
+		expect(res.baseURL).toBe("https://proxy.example.com/api/auth");
+	});
+
+	it("should throw APIError when the host is not in allowedHosts", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await expect(
+			authEndpoints.readBaseURL({
+				headers: new Headers({ host: "not-allowed.com" }),
+			}),
+		).rejects.toSatisfy(isAPIError);
+	});
+
+	it("should throw APIError when called with no source and no fallback", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await expect(authEndpoints.readBaseURL()).rejects.toSatisfy(isAPIError);
+	});
+
+	it("should use fallback when source is missing", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+				fallback: "https://default.example.com",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL();
+		expect(res.baseURL).toBe("https://default.example.com/api/auth");
+	});
+
+	it("should expose a Request-like to a user-defined trustedOrigins callback", async () => {
+		let seenHost: string | null | undefined;
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+			trustedOrigins: async (req) => {
+				seenHost = req?.headers.get("host");
+				return [];
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "example.com" }),
+		});
+		expect(seenHost).toBe("example.com");
+	});
+
+	it("should return a Response for cross-realm Request inputs", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		// Simulate a cross-realm Request: passes the `[object Request]`
+		// toString check but fails `instanceof Request`.
+		const realRequest = new Request(
+			"https://example.com/api/auth/read-base-url",
+		);
+		const crossRealm = Object.create(Object.prototype);
+		crossRealm.url = realRequest.url;
+		crossRealm.method = realRequest.method;
+		crossRealm.headers = realRequest.headers;
+		Object.defineProperty(crossRealm, Symbol.toStringTag, { value: "Request" });
+
+		const res = await authEndpoints.readBaseURL({ request: crossRealm });
+		expect(res).toBeInstanceOf(Response);
+	});
+
+	it("should inherit the resolved baseURL across chained auth.api calls", async () => {
+		const firstEndpoint = createAuthEndpoint(
+			"/first",
+			{ method: "GET" },
+			async (c) => ({ baseURL: c.context.baseURL }),
+		);
+		const secondEndpoint = createAuthEndpoint(
+			"/second",
+			{ method: "GET" },
+			async (c) => ({ baseURL: c.context.baseURL }),
+		);
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const api = toAuthEndpoints(
+			{ first: firstEndpoint, second: secondEndpoint },
+			authContext,
+		);
+
+		const outer = await api.first({
+			headers: new Headers({ host: "example.com" }),
+		});
+		expect(outer.baseURL).toBe("https://example.com/api/auth");
+
+		// Simulate a chained call from inside an outer handler's scope: when the
+		// first invocation's ALS store is still active, the second call must
+		// inherit the resolved baseURL even without forwarded headers.
+		const { runWithRequestState } = await import("@better-auth/core/context");
+		const inner = await runWithRequestState(new WeakMap(), async () => {
+			await api.first({ headers: new Headers({ host: "example.com" }) });
+			return api.second();
+		});
+		expect(inner.baseURL).toBe("https://example.com/api/auth");
+	});
 });
 
 describe("custom response code", () => {

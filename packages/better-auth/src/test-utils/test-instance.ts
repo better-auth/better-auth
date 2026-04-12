@@ -141,9 +141,21 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
+		// For dynamic baseURL configs, synthesize headers targeting the first
+		// concrete allowedHost so server-side setup resolves correctly.
+		const dynamicBaseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? auth.options.baseURL
+			: undefined;
+		const concreteHost = dynamicBaseURL?.allowedHosts.find(
+			(h) => !h.includes("*") && !h.includes("?"),
+		);
+		const headers = concreteHost
+			? new Headers({ host: concreteHost.replace(/^https?:\/\//, "") })
+			: undefined;
 		//@ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
+			headers,
 		});
 	}
 

@@ -6,7 +6,7 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import {
 	ATTR_CONTEXT,
 	ATTR_HOOK_TYPE,
@@ -22,9 +22,10 @@ import type {
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
-import { resolveRequestContext } from "../context/helpers";
+import { pickSource, resolveRequestContext } from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
-import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
+import { getOrigin, isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
+import { getResolvedBaseURL, setResolvedBaseURL } from "./state/base-url";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -68,33 +69,82 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
-function pickSource(
-	input: UserInputContext | undefined,
-): Request | Headers | undefined {
-	if (isRequestLike(input?.request)) return input.request;
-	if (!input?.headers) return undefined;
-
-	const headers = new Headers(input.headers);
-	const hasHost = headers.has("host") || headers.has("x-forwarded-host");
-	if (!hasHost) return undefined;
-
-	return headers;
+function cloneContextWithBaseURL(
+	ctx: AuthContext,
+	baseURL: string,
+): AuthContext {
+	const clone = Object.create(
+		Object.getPrototypeOf(ctx),
+		Object.getOwnPropertyDescriptors(ctx),
+	) as AuthContext;
+	clone.baseURL = baseURL;
+	clone.options = {
+		...ctx.options,
+		baseURL: getOrigin(baseURL) || undefined,
+	};
+	return clone;
 }
 
-// Direct `auth.api` calls bypass the HTTP handler's per-request resolution.
+/**
+ * Resolves the per-call `AuthContext` for endpoints with a dynamic `baseURL`.
+ *
+ * Four paths, in order:
+ *  1. `rawCtx.baseURL` already set: HTTP handler rehydrated upstream. Seed
+ *     the ALS store and return as-is so nested calls can inherit.
+ *  2. Request-scoped ALS store has a value: a parent call already resolved
+ *     it in this request, reuse via a lightweight clone.
+ *  3. No ALS value: top-level direct `auth.api` call. Resolve from
+ *     `input.request`/`input.headers`, or from `config.fallback`. Store the
+ *     result in ALS so nested calls from the endpoint handler inherit it.
+ *  4. No source and no fallback: throw `APIError` with a helpful message
+ *     instead of crashing later on `new URL("")`.
+ */
 async function resolveDynamicContext(
 	rawCtx: AuthContext,
 	input: UserInputContext | undefined,
 ): Promise<AuthContext> {
+	const trustedProxyHeaders = rawCtx.options.advanced?.trustedProxyHeaders;
+
+	if (rawCtx.baseURL) {
+		if (!(await getResolvedBaseURL())) {
+			await setResolvedBaseURL(rawCtx.baseURL);
+		}
+		return rawCtx;
+	}
+
+	const fromAls = await getResolvedBaseURL();
+	if (fromAls) {
+		return cloneContextWithBaseURL(rawCtx, fromAls);
+	}
+
 	const source = pickSource(input);
 	const config = rawCtx.options.baseURL;
 	const hasFallback =
 		isDynamicBaseURLConfig(config) && Boolean(config.fallback);
 
-	const canResolve = source !== undefined || hasFallback;
-	if (!canResolve) return rawCtx;
+	if (source === undefined && !hasFallback) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message:
+				"Dynamic baseURL could not be resolved for this direct auth.api call. " +
+				"Pass `headers: request.headers` (or `request`) to the call, " +
+				"or add `fallback` to your baseURL config.",
+		});
+	}
 
-	return resolveRequestContext(rawCtx, source);
+	try {
+		const resolved = await resolveRequestContext(
+			rawCtx,
+			source,
+			trustedProxyHeaders,
+		);
+		await setResolvedBaseURL(resolved.baseURL);
+		return resolved;
+	} catch (err) {
+		if (err instanceof BetterAuthError) {
+			throw new APIError("INTERNAL_SERVER_ERROR", { message: err.message });
+		}
+		throw err;
+	}
 }
 
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
@@ -142,7 +192,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
-				const hasRequest = context?.request instanceof Request;
+				const hasRequest = isRequestLike(context?.request);
 				const shouldReturnResponse = context?.asResponse ?? hasRequest;
 				return withSpan(
 					`${methodName} ${route}`,
