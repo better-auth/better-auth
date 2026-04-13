@@ -1245,6 +1245,13 @@ PKCE prevents authorization code interception attacks. Even for confidential cli
 
 Only disable PKCE for confidential clients when absolutely necessary for legacy compatibility.
 
+### Unauthenticated client discovery
+
+Some clients (notably MCP clients) need to connect to your authorization server without being registered in advance. The OAuth Provider plugin supports this through two mechanisms:
+
+* **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a public client at request time.
+* **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP calls [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
+
 ### Organizations
 
 OAuth Clients are tied to either a user or `reference_id` at registration and is immutable. If you are utilizing the [organization plugin](/docs/plugins/organization), you must ensure that the [`activeOrganizationId`](/docs/plugins/organization#active-organization) is set on your active session when you create new clients.
@@ -1557,7 +1564,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
   </Step>
 
   <Step>
-    If you use `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
+    If you use the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
 
     ```ts
     await auth.api.createOAuthClient({
@@ -1571,7 +1578,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
     These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
 
     <Callout type="info">
-      If you choose to not support `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
+      If you choose not to support the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
     </Callout>
   </Step>
 

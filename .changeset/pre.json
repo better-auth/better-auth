@@ -6,6 +6,7 @@
     "@better-auth/api-key": "1.6.0",
     "better-auth": "1.6.0",
     "auth": "1.6.0",
+    "@better-auth/cimd": "1.6.0",
     "@better-auth/core": "1.6.0",
     "@better-auth/drizzle-adapter": "1.6.0",
     "@better-auth/electron": "1.6.0",
@@ -25,6 +26,7 @@
     "@better-auth/test-utils": "1.6.0"
   },
   "changesets": [
+    "cimd-plugin",
     "fix-password-reset-callback-operation-id",
     "honest-regions-jam",
     "pr-8926",
