@@ -23,6 +23,11 @@ import type {
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
+import {
+	getOrigin,
+	isDynamicBaseURLConfig,
+	resolveBaseURL,
+} from "../utils/url";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -90,6 +95,27 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 			const run = async () => {
 				const authContext = await ctx;
+
+				let effectiveAuthContext = authContext;
+				if (isDynamicBaseURLConfig(authContext.options.baseURL)) {
+					const basePath = authContext.options.basePath || "/api/auth";
+					const resolved = resolveBaseURL(
+						authContext.options.baseURL,
+						basePath,
+						context?.request,
+					);
+					if (resolved && resolved !== authContext.baseURL) {
+						effectiveAuthContext = {
+							...authContext,
+							baseURL: resolved,
+							options: {
+								...authContext.options,
+								baseURL: getOrigin(resolved) || undefined,
+							},
+						};
+					}
+				}
+
 				const methodName =
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
 				const route = endpoint.path ?? "/:virtual";
@@ -97,7 +123,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				let internalContext: InternalContext = {
 					...context,
 					context: {
-						...authContext,
+						...effectiveAuthContext,
 						returned: undefined,
 						responseHeaders: undefined,
 						session: null,
@@ -115,7 +141,8 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					},
 					async () =>
 						runWithEndpointContext(internalContext, async () => {
-							const { beforeHooks, afterHooks } = getHooks(authContext);
+							const { beforeHooks, afterHooks } =
+								getHooks(effectiveAuthContext);
 							const before = await runBeforeHooks(
 								internalContext,
 								beforeHooks,
@@ -213,7 +240,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 							if (
 								isAPIError(result.response) &&
-								shouldPublishLog(authContext.logger.level, "debug")
+								shouldPublishLog(effectiveAuthContext.logger.level, "debug")
 							) {
 								// inherit stack from errorStack if debug mode is enabled
 								result.response.stack = result.response.errorStack;
