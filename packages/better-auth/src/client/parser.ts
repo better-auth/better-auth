@@ -110,9 +110,9 @@ function betterJSONParse<T = unknown>(
 	}
 
 	if (!JSON_SIGNATURE.test(trimmed)) {
-		if (strict) {
-			throw new SyntaxError("[better-json] Invalid JSON");
-		}
+		// Input doesn't look like JSON (e.g. HTML, plain text) — return as-is
+		// regardless of strict mode. Strict only applies to JSON-shaped input
+		// that fails to parse (e.g. truncated JSON responses).
 		return value as T;
 	}
 
@@ -164,6 +164,9 @@ function betterJSONParse<T = unknown>(
 		return JSON.parse(trimmed, secureReviver);
 	} catch (error) {
 		if (strict) {
+			// Input matched JSON_SIGNATURE (starts with ", [, {, or number)
+			// but failed to parse — this is likely truncated or malformed JSON,
+			// not a non-JSON response. Always throw to surface the error.
 			throw error;
 		}
 		return value as T;
