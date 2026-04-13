@@ -649,6 +649,36 @@ export const auth = betterAuth({
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 * OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
+### `database`
+
+Set custom strategies for ID generation and findMany queries.
+
+* `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: random nanoid-style string).
+* `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+
+#### `generateId`
+
+| Value | Behavior |
+| --- | --- |
+| Custom function | Called with `{ model, size }` — the returned string is used as the ID |
+| `false` | Defers to the database's own auto-generated ID (e.g. auto-increment) |
+| `"serial"` | Same as `false` — the ID column type becomes `number` and no JS-side value is generated; uses `GENERATED ALWAYS AS IDENTITY` in PostgreSQL |
+| `"uuid"` | Uses the database's native `gen_random_uuid()` / `uuid()` where supported, otherwise falls back to `crypto.randomUUID()` |
+| _(unset)_ | Generates a random base-62 string |
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	advanced: {
+		database: {
+			generateId: "uuid",
+			defaultFindManyLimit: 50,
+		},
+	},
+});
+```
+
 ### `backgroundTasks`
 
 Configure background task handling for deferred operations. Background tasks allow non-critical operations (like cleanup, analytics, timing-attack mitigation, or rate limit counter updates) to run after the response is sent. This can significantly improve response times on serverless platforms.
