@@ -298,15 +298,18 @@ export function verifyApiKey({
 					? resolveConfiguration(ctx.context, configurations, apiKey.configId)
 					: lookupOpts;
 
-				if (opts.deferUpdates) {
-					ctx.context.runInBackground(
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+				if (opts.keyExpiration.autoCleanup) {
+					const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
+						(err) => {
 							ctx.context.logger.error(
 								"Failed to delete expired API keys:",
 								err,
 							);
-						}),
+						},
 					);
+					if (opts.deferUpdates) {
+						ctx.context.runInBackground(cleanupTask);
+					}
 				}
 			} catch (error) {
 				ctx.context.logger.error("Failed to validate API key:", error);

@@ -32,6 +32,15 @@ describe("api-key", async () => {
 		vi.useRealTimers();
 	});
 
+	const setCleanupCheckTime = (date = new Date("2030-01-01T00:00:00.000Z")) => {
+		vi.useFakeTimers();
+		vi.setSystemTime(date);
+	};
+
+	const advanceCleanupCheckTime = () => {
+		vi.advanceTimersByTime(11_000);
+	};
+
 	// =========================================================================
 	// CREATE API KEY
 	// =========================================================================
@@ -4433,6 +4442,305 @@ describe("api-key", async () => {
 			expect(updatedKey.enabled).toBe(false);
 			expect(updatedKey.configId).toBe("org-keys");
 			expect(updatedKey.referenceId).toBe(org.id);
+		});
+	});
+
+	describe("keyExpiration.autoCleanup", () => {
+		it("should keep inline cleanup enabled by default", async () => {
+			setCleanupCheckTime();
+
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [apiKey()],
+			});
+
+			const { user } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+			await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			expect(deleteManySpy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					model: "apikey",
+				}),
+			);
+		});
+
+		it("should disable inline cleanup for create, get, list, update, and delete when autoCleanup is false", async () => {
+			setCleanupCheckTime();
+
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey({
+						keyExpiration: {
+							autoCleanup: false,
+						},
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			expect(deleteManySpy).not.toHaveBeenCalled();
+
+			advanceCleanupCheckTime();
+			await auth.api.getApiKey({
+				query: {
+					id: createdKey.id,
+				},
+				headers,
+			});
+			expect(deleteManySpy).not.toHaveBeenCalled();
+
+			advanceCleanupCheckTime();
+			await auth.api.listApiKeys({
+				headers,
+			});
+			expect(deleteManySpy).not.toHaveBeenCalled();
+
+			advanceCleanupCheckTime();
+			await auth.api.updateApiKey({
+				body: {
+					keyId: createdKey.id,
+					name: "updated-inline-cleanup-disabled",
+				},
+				headers,
+			});
+			expect(deleteManySpy).not.toHaveBeenCalled();
+
+			advanceCleanupCheckTime();
+			await auth.api.deleteApiKey({
+				body: {
+					keyId: createdKey.id,
+				},
+				headers,
+			});
+			expect(deleteManySpy).not.toHaveBeenCalled();
+		});
+
+		it("should not run inline cleanup from the API key session hook when autoCleanup is false", async () => {
+			setCleanupCheckTime();
+
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey({
+						enableSessionForAPIKeys: true,
+						keyExpiration: {
+							autoCleanup: false,
+						},
+					}),
+				],
+			});
+
+			const { user } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			deleteManySpy.mockClear();
+			advanceCleanupCheckTime();
+
+			const apiKeyHeaders = new Headers({
+				"x-api-key": createdKey.key,
+			});
+
+			const session = await auth.api.getSession({
+				headers: apiKeyHeaders,
+			});
+
+			expect(session?.session).toBeDefined();
+			expect(deleteManySpy).not.toHaveBeenCalled();
+		});
+
+		it("should not queue expired key cleanup during verify when autoCleanup is false and deferUpdates is enabled", async () => {
+			setCleanupCheckTime();
+
+			const deferredPromises: Array<Promise<unknown>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (promise: Promise<unknown>) => {
+							deferredPromises.push(promise);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+						keyExpiration: {
+							autoCleanup: false,
+						},
+					}),
+				],
+			});
+
+			const { user } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			deleteManySpy.mockClear();
+			deferredPromises.length = 0;
+
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey.key,
+				},
+			});
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises.length).toBeGreaterThan(0);
+
+			await Promise.all(deferredPromises);
+
+			expect(deleteManySpy).not.toHaveBeenCalled();
+		});
+
+		it("should still delete expired API keys through the explicit cleanup endpoint when autoCleanup is false", async () => {
+			setCleanupCheckTime();
+
+			const { auth, signInWithTestUser, db } = await getTestInstance({
+				plugins: [
+					apiKey({
+						keyExpiration: {
+							autoCleanup: false,
+						},
+					}),
+				],
+			});
+
+			const { user } = await signInWithTestUser();
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			await db.update({
+				model: "apikey",
+				where: [
+					{
+						field: "id",
+						value: createdKey.id,
+					},
+				],
+				update: {
+					expiresAt: new Date(Date.now() - 60_000),
+				},
+			});
+
+			const expiredKeyBeforeCleanup = await db.findOne({
+				model: "apikey",
+				where: [
+					{
+						field: "id",
+						value: createdKey.id,
+					},
+				],
+			});
+
+			expect(expiredKeyBeforeCleanup).not.toBeNull();
+
+			const result = await auth.api.deleteAllExpiredApiKeys();
+
+			expect(result.success).toBe(true);
+
+			const expiredKeyAfterCleanup = await db.findOne({
+				model: "apikey",
+				where: [
+					{
+						field: "id",
+						value: createdKey.id,
+					},
+				],
+			});
+
+			expect(expiredKeyAfterCleanup).toBeNull();
+		});
+
+		it("should use the resolved key configuration to decide inline cleanup in multi-config routes", async () => {
+			setCleanupCheckTime();
+
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey([
+						{
+							configId: "default",
+							keyExpiration: {
+								autoCleanup: true,
+							},
+						},
+						{
+							configId: "manual-cleanup",
+							keyExpiration: {
+								autoCleanup: false,
+							},
+						},
+					]),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+			const defaultKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					configId: "default",
+				},
+			});
+			const manualCleanupKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					configId: "manual-cleanup",
+				},
+			});
+
+			deleteManySpy.mockClear();
+
+			advanceCleanupCheckTime();
+			await auth.api.getApiKey({
+				query: {
+					id: manualCleanupKey.id,
+					configId: "manual-cleanup",
+				},
+				headers,
+			});
+			expect(deleteManySpy).not.toHaveBeenCalled();
+
+			advanceCleanupCheckTime();
+			await auth.api.getApiKey({
+				query: {
+					id: defaultKey.id,
+					configId: "default",
+				},
+				headers,
+			});
+			expect(deleteManySpy).toHaveBeenCalledTimes(1);
 		});
 	});
 });

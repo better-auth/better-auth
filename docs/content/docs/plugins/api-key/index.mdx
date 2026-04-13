@@ -454,6 +454,10 @@ This function will delete all API keys that have an expired expiration date.
   We automatically delete expired API keys every time any apiKey plugin
   endpoints were called, however they are rate-limited to a 10 second cool down
   each call to prevent multiple calls to the database.
+
+  If you'd rather manage cleanup yourself, set `keyExpiration.autoCleanup` to
+  `false` and call `auth.api.deleteAllExpiredApiKeys()` from a cron job or other
+  external maintenance flow.
 </Callout>
 
 ## Next Steps
