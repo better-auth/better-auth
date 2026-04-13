@@ -4681,7 +4681,7 @@ describe("api-key", async () => {
 			expect(expiredKeyAfterCleanup).toBeNull();
 		});
 
-		it("should use the resolved key configuration to decide inline cleanup in multi-config routes", async () => {
+		it("should use the resolved key configuration for key lookups", async () => {
 			setCleanupCheckTime();
 
 			const { auth, signInWithTestUser } = await getTestInstance({

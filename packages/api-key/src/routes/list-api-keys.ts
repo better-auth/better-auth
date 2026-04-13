@@ -279,15 +279,21 @@ export function listApiKeys({
 			const expectedReferencesType = organizationId ? "organization" : "user";
 
 			let allApiKeys: ApiKey[] = [];
-			const resolvedConfig = configId
+			const requestedConfig = configId
 				? resolveConfiguration(ctx.context, configurations, configId)
 				: null;
+			const cleanupConfigs = requestedConfig
+				? [requestedConfig]
+				: configurations.filter(
+						(config) =>
+							(config.references ?? "user") === expectedReferencesType,
+					);
 
-			if (resolvedConfig) {
+			if (requestedConfig) {
 				const { apiKeys } = await listApiKeysFromStorage(
 					ctx,
 					referenceId,
-					resolvedConfig,
+					requestedConfig,
 					{
 						limit: undefined,
 						offset: undefined,
@@ -363,9 +369,9 @@ export function listApiKeys({
 				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
 			}
 
-			const shouldAutoCleanup = resolvedConfig
-				? resolvedConfig.keyExpiration.autoCleanup
-				: configurations.every((config) => config.keyExpiration.autoCleanup);
+			const shouldAutoCleanup =
+				cleanupConfigs.length > 0 &&
+				cleanupConfigs.every((config) => config.keyExpiration.autoCleanup);
 
 			if (shouldAutoCleanup) {
 				deleteAllExpiredApiKeys(ctx.context);
