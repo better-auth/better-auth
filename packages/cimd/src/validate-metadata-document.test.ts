@@ -127,6 +127,26 @@ describe("validateClientIdUrl", () => {
 		expect(validateClientIdUrl("https://8.8.8.8/meta")).toBeNull();
 	});
 
+	it("rejects 6to4 anycast relay 192.88.99.1 (RFC 7526 deprecated)", () => {
+		expect(validateClientIdUrl("https://192.88.99.1/meta")).toContain(
+			"private",
+		);
+	});
+
+	it("rejects multicast addresses (RFC 5771, 224.0.0.0/4)", () => {
+		expect(validateClientIdUrl("https://224.0.0.1/meta")).toContain("private");
+		expect(validateClientIdUrl("https://239.255.255.250/meta")).toContain(
+			"private",
+		);
+	});
+
+	it("rejects reserved/future-use and broadcast addresses (240.0.0.0/4)", () => {
+		expect(validateClientIdUrl("https://240.0.0.1/meta")).toContain("private");
+		expect(validateClientIdUrl("https://255.255.255.255/meta")).toContain(
+			"private",
+		);
+	});
+
 	it("rejects IPv4-mapped IPv6 targeting private IPs", () => {
 		expect(
 			validateClientIdUrl("https://[::ffff:169.254.169.254]/meta"),

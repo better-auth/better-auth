@@ -22,6 +22,56 @@ const MAX_RESPONSE_BYTES = 5 * 1024; // 5 KB per spec recommendation (§6.6)
  */
 const JSON_CONTENT_TYPE_RE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 
+function tooLargeError(): APIError {
+	return new APIError("BAD_REQUEST", {
+		error: "invalid_client",
+		error_description: `Metadata document exceeds ${MAX_RESPONSE_BYTES / 1024}KB size limit`,
+	});
+}
+
+/**
+ * Stream a Response body into a decoded string, aborting as soon as the
+ * running byte count exceeds `max`. Guarantees no more than `max + one
+ * chunk` bytes ever sit in memory before the request is canceled.
+ */
+async function readBodyWithLimit(
+	response: Response,
+	max: number,
+): Promise<string> {
+	const reader = response.body?.getReader();
+	if (!reader) {
+		// Runtimes without streaming body support fall back to `text()`; we
+		// re-apply the size check on the buffered result for defense in
+		// depth.
+		const text = await response.text();
+		if (new TextEncoder().encode(text).byteLength > max) {
+			throw tooLargeError();
+		}
+		return text;
+	}
+
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		total += value.byteLength;
+		if (total > max) {
+			await reader.cancel();
+			throw tooLargeError();
+		}
+		chunks.push(value);
+	}
+
+	const merged = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		merged.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return new TextDecoder().decode(merged);
+}
+
 /**
  * RFC 7591 / CIMD fields accepted from external metadata documents.
  *
@@ -279,15 +329,22 @@ async function fetchAndValidateMetadataDocument(
 		});
 	}
 
-	// §6.6: enforce response size on the raw wire bytes before parsing.
-	const bodyText = await response.text();
-	const byteLength = new TextEncoder().encode(bodyText).byteLength;
-	if (byteLength > MAX_RESPONSE_BYTES) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_client",
-			error_description: `Metadata document exceeds ${MAX_RESPONSE_BYTES / 1024}KB size limit`,
-		});
+	// §6.6: enforce the response size limit BEFORE buffering the body. A
+	// malicious host that serves a multi-gigabyte document would otherwise
+	// exhaust memory up to the 5 s timeout. Two layers:
+	//   1. Reject immediately if Content-Length declares > 5 KB.
+	//   2. Stream-read with a running byte counter and abort on overrun,
+	//      so responses without Content-Length are still bounded.
+	const contentLengthHeader = response.headers.get("content-length");
+	if (contentLengthHeader) {
+		const declared = Number.parseInt(contentLengthHeader, 10);
+		if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+			await response.body?.cancel();
+			throw tooLargeError();
+		}
 	}
+
+	const bodyText = await readBodyWithLimit(response, MAX_RESPONSE_BYTES);
 
 	let data: Record<string, unknown>;
 	try {

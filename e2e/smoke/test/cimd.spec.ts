@@ -128,11 +128,17 @@ describe("CIMD end-to-end flow", () => {
 
 		const authorizeRes = await fetch(authorizeUrl, {
 			method: "GET",
-			headers: { cookie: sessionCookies, origin: authBaseUrl },
+			headers: {
+				cookie: sessionCookies,
+				origin: authBaseUrl,
+				// Force the JSON envelope shape (`{ redirect, url }`). Without
+				// an explicit Accept, a future change to server-side
+				// content negotiation could switch this to a raw 302 and
+				// break the test silently.
+				accept: "application/json",
+			},
 			redirect: "manual",
 		});
-		// better-auth returns `{ redirect: true, url: "/consent?..." }` so
-		// framework-level clients can opt into following; browsers get a 302.
 		const authorizePayload = (await authorizeRes.json()) as {
 			redirect?: boolean;
 			url?: string;
@@ -297,7 +303,11 @@ describe("CIMD end-to-end flow", () => {
 				`&code_challenge_method=S256`,
 			{
 				method: "GET",
-				headers: { cookie: sessionCookies, origin: authBaseUrl },
+				headers: {
+					cookie: sessionCookies,
+					origin: authBaseUrl,
+					accept: "application/json",
+				},
 				redirect: "manual",
 			},
 		);

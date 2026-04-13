@@ -36,7 +36,12 @@ export function isLocalhost(hostname: string): boolean {
 	);
 }
 
-/** Check whether a dotted-decimal IPv4 address is private/reserved. */
+/**
+ * Check whether a dotted-decimal IPv4 address is private, reserved, or
+ * otherwise non-routable for a public SSRF target. Covers the subset of
+ * RFC 6890 special-purpose ranges that an adversarial `client_id` URL
+ * could point at to reach internal infrastructure or disrupt fetches.
+ */
 function isPrivateIpv4(host: string): boolean {
 	const parts = host.split(".");
 	if (parts.length !== 4 || parts.some((p) => !/^\d{1,3}$/.test(p))) {
@@ -44,7 +49,11 @@ function isPrivateIpv4(host: string): boolean {
 	}
 	const a = Number(parts[0]);
 	const b = Number(parts[1]);
+	const c = Number(parts[2]);
 	return (
+		// Loopback (127.0.0.0/8), private (RFC 1918), "this network"
+		// (0.0.0.0/8), link-local (169.254.0.0/16), shared address space
+		// (100.64.0.0/10).
 		a === 127 ||
 		a === 10 ||
 		a === 0 ||
@@ -52,10 +61,19 @@ function isPrivateIpv4(host: string): boolean {
 		(a === 192 && b === 168) ||
 		(a === 169 && b === 254) ||
 		(a === 100 && b >= 64 && b <= 127) ||
+		// Benchmarking (RFC 2544): 198.18.0.0/15.
 		(a === 198 && (b === 18 || b === 19)) ||
-		(a === 192 && b === 0 && Number(parts[2]) === 2) ||
-		(a === 198 && b === 51 && Number(parts[2]) === 100) ||
-		(a === 203 && b === 0 && Number(parts[2]) === 113)
+		// Documentation (RFC 5737).
+		(a === 192 && b === 0 && c === 2) ||
+		(a === 198 && b === 51 && c === 100) ||
+		(a === 203 && b === 0 && c === 113) ||
+		// 6to4 anycast relay (RFC 7526 deprecated): 192.88.99.0/24.
+		(a === 192 && b === 88 && c === 99) ||
+		// Multicast (RFC 5771): 224.0.0.0/4.
+		(a >= 224 && a <= 239) ||
+		// Reserved / future use (RFC 1112 + broadcast 255.255.255.255):
+		// 240.0.0.0/4.
+		a >= 240
 	);
 }
 
