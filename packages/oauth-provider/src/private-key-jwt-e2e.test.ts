@@ -1,5 +1,4 @@
 import { createAuthClient } from "better-auth/client";
-import { genericOAuthClient } from "better-auth/client/plugins";
 import { toNodeHandler } from "better-auth/node";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
@@ -25,7 +24,7 @@ describe("private_key_jwt e2e", async () => {
 	const authServerBaseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5002";
 	const providerId = "jwt-assertion-provider";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	// Generate RSA key pair
 	const keyPair = await generateKeyPair("RS256", { extractable: true });
@@ -152,16 +151,15 @@ describe("private_key_jwt e2e", async () => {
 		});
 
 		const rpClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: { customFetchImpl: rpFetchImpl },
 		});
 
 		// Step 1: RP initiates OAuth flow
 		const rpHeaders = new Headers();
-		const signInResult = await rpClient.signIn.oauth2(
+		const signInResult = await rpClient.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{
@@ -293,15 +291,14 @@ describe("private_key_jwt e2e", async () => {
 		});
 
 		const rpClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: { customFetchImpl: rpFetchImpl },
 		});
 
 		const rpHeaders = new Headers();
-		const signInResult = await rpClient.signIn.oauth2(
+		const signInResult = await rpClient.signIn.social(
 			{
-				providerId,
+				provider: providerId,
 				callbackURL: "/success",
 			},
 			{

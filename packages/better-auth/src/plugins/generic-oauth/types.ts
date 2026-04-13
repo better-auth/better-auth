@@ -1,4 +1,3 @@
-import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type {
 	ClientAssertionConfig,
@@ -6,38 +5,29 @@ import type {
 	OAuth2UserInfo,
 } from "@better-auth/core/oauth2";
 
-export interface GenericOAuthOptions {
+export interface GenericOAuthOptions<ID extends string = string> {
 	/**
 	 * Array of OAuth provider configurations.
 	 */
-	config: GenericOAuthConfig[];
+	config: GenericOAuthConfig<ID>[];
 }
 
 /**
  * Configuration interface for generic OAuth providers.
  */
-export interface GenericOAuthConfig {
+export interface GenericOAuthConfig<ID extends string = string> {
 	/** Unique identifier for the OAuth provider */
-	providerId: string;
+	providerId: ID;
+	/**
+	 * Human-readable display name for this provider.
+	 * Defaults to `providerId` if not set.
+	 */
+	name?: string | undefined;
 	/**
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
 	discoveryUrl?: string | undefined;
-	/**
-	 * The expected issuer identifier for validation.
-	 * If not provided but discoveryUrl is set, it will be fetched from the discovery document.
-	 * When set, the callback validates that the `iss` parameter matches this value.
-	 * @see https://datatracker.ietf.org/doc/html/rfc9207
-	 */
-	issuer?: string | undefined;
-	/**
-	 * When true, requires the `iss` parameter in callbacks if an issuer is configured.
-	 * This provides stricter security but may break with older OAuth servers
-	 * that don't support issuer identification.
-	 * @default false
-	 */
-	requireIssuerValidation?: boolean | undefined;
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
@@ -93,8 +83,10 @@ export interface GenericOAuthConfig {
 		  )
 		| undefined;
 	/**
-	 * Whether to use PKCE (Proof Key for Code Exchange)
-	 * @default false
+	 * Whether to use PKCE (Proof Key for Code Exchange).
+	 * Required by OAuth 2.1 for all authorization code flows.
+	 * Disable only for providers that explicitly reject PKCE.
+	 * @default true
 	 */
 	pkce?: boolean | undefined;
 	/**
@@ -127,33 +119,24 @@ export interface GenericOAuthConfig {
 		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
 		| undefined;
 	/**
-	 * Custom function to map the user profile to a User object.
+	 * Custom function to map the provider's user profile to your app's user fields.
+	 * The profile contains standard OAuth2 fields plus any provider-specific extras.
 	 */
 	mapProfileToUser?:
 		| ((
-				profile: Record<string, any>,
-		  ) => Partial<Partial<User>> | Promise<Partial<User>>)
+				profile: OAuth2UserInfo & Record<string, unknown>,
+		  ) => Partial<User> | Promise<Partial<User>>)
 		| undefined;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	authorizationUrlParams?:
-		| (
-				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
-		  )
-		| undefined;
+	authorizationUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
-	tokenUrlParams?:
-		| (
-				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
-		  )
-		| undefined;
+	tokenUrlParams?: Record<string, string> | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
