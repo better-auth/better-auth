@@ -4618,6 +4618,41 @@ describe("api-key", async () => {
 			expect(deleteManySpy).not.toHaveBeenCalled();
 		});
 
+		it("should not run verify cleanup inline when deferUpdates is disabled", async () => {
+			setCleanupCheckTime();
+
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey({
+						keyExpiration: {
+							autoCleanup: true,
+						},
+					}),
+				],
+			});
+
+			const { user } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			deleteManySpy.mockClear();
+
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey.key,
+				},
+			});
+
+			expect(result.valid).toBe(true);
+			expect(deleteManySpy).not.toHaveBeenCalled();
+		});
+
 		it("should still delete expired API keys through the explicit cleanup endpoint when autoCleanup is false", async () => {
 			setCleanupCheckTime();
 

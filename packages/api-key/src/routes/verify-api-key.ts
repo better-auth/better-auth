@@ -298,7 +298,7 @@ export function verifyApiKey({
 					? resolveConfiguration(ctx.context, configurations, apiKey.configId)
 					: lookupOpts;
 
-				if (opts.keyExpiration.autoCleanup) {
+				if (opts.keyExpiration.autoCleanup && opts.deferUpdates) {
 					const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
 						(err) => {
 							ctx.context.logger.error(
