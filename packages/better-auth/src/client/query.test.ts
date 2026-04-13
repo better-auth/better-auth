@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getGlobalFocusManager } from "./focus-manager";
 import { createAuthClient } from "./solid";
 import { testClientPlugin } from "./test-plugin";
 
@@ -15,6 +16,9 @@ describe("useAuthQuery - error handling", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 		vi.restoreAllMocks();
+		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
+		delete (globalThis as any)[Symbol.for("better-auth:focus-manager")];
+		delete (globalThis as any)[Symbol.for("better-auth:online-manager")];
 	});
 
 	it("should preserve stale data on network error (fetch throws)", async () => {
@@ -137,5 +141,68 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toMatchObject({
 			user: { id: "1", email: "test@test.com" },
 		});
+	});
+
+	it("should preserve the session data reference when refetch returns identical data", async () => {
+		const getSessionPayload = () => ({
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+		});
+
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(JSON.stringify(getSessionPayload())),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const session = client.useSession();
+		await vi.runAllTimersAsync();
+
+		const initialData = session().data;
+		expect(initialData).not.toBeNull();
+
+		await session().refetch();
+		await vi.runAllTimersAsync();
+
+		// Reference should be preserved because data is structurally identical
+		expect(session().data).toBe(initialData);
+	});
+
+	it("should avoid an extra post-focus session fetch when the refreshed payload is unchanged", async () => {
+		let fetchCallCount = 0;
+		const getSessionPayload = () => ({
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+		});
+
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			sessionOptions: {
+				refetchOnWindowFocus: true,
+			},
+			fetchOptions: {
+				customFetchImpl: async () => {
+					fetchCallCount++;
+					return new Response(JSON.stringify(getSessionPayload()));
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const session = client.useSession();
+		await vi.runAllTimersAsync();
+
+		const initialData = session().data;
+		expect(fetchCallCount).toBe(1);
+
+		getGlobalFocusManager().setFocused(true);
+		await vi.runAllTimersAsync();
+
+		// Only 2 fetches: initial + focus refetch (no double-fetch)
+		expect(fetchCallCount).toBe(2);
+		expect(session().data).toBe(initialData);
 	});
 });

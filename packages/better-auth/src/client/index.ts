@@ -6,6 +6,7 @@ import type {
 import { PACKAGE_VERSION } from "../version";
 
 export * from "./broadcast-channel";
+export * from "./equality";
 export {
 	type FocusListener,
 	type FocusManager,
