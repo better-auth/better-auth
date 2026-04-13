@@ -398,6 +398,28 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it("rejects non-redirect origin-bound field with localhost URL", () => {
+		// Localhost bypass only applies to redirect URI fields. A localhost
+		// value on client_uri still fails origin binding.
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			redirect_uris: ["https://example.com/callback"],
+			client_uri: "http://localhost:3000/about",
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("same origin");
+	});
+
+	it("accepts localhost URL on post_logout_redirect_uris", () => {
+		// post_logout_redirect_uris also qualifies as a redirect URI field.
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			redirect_uris: ["https://example.com/callback"],
+			post_logout_redirect_uris: ["http://localhost:3000/logout"],
+		});
+		expect(result.valid).toBe(true);
+	});
+
 	it("validates client_uri for SSRF (private address)", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,

@@ -1,0 +1,203 @@
+---
+title: Client ID Metadata Document (CIMD)
+description: Unauthenticated dynamic client discovery for Better Auth's OAuth provider.
+---
+
+`OAuth2` `MCP`
+
+[Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/) let clients identify themselves to your authorization server without prior registration. Instead of sending a pre-registered `client_id`, the client sends the HTTPS URL of a metadata document it hosts. Your server fetches that document, validates it, and creates (or refreshes) a public client record.
+
+This is the mechanism [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow) uses so authorization servers can discover clients on the fly.
+
+The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) via its `clientResolver` option, so every OAuth endpoint that authenticates a client (authorize, token, introspect, revoke, userinfo, PAR, logout) works seamlessly with URL-format `client_id` values.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    @better-auth/cimd
+    ```
+  </Step>
+
+  <Step>
+    ### Add the plugin to the server
+
+    Install `cimd()` alongside `oauthProvider()`. The plugin requires `oauth-provider` to be present and will throw at startup if it is missing.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { jwt } from "better-auth/plugins";
+    import { oauthProvider } from "@better-auth/oauth-provider";
+    import { cimd } from "@better-auth/cimd"; // [!code highlight]
+
+    export const auth = betterAuth({
+      plugins: [
+        jwt(),
+        oauthProvider({
+          loginPage: "/login",
+          consentPage: "/consent",
+          scopes: ["openid", "profile", "email", "offline_access"],
+        }),
+        cimd(), // [!code highlight]
+      ],
+    });
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+Once installed, your authorization server accepts an HTTPS URL as a `client_id` on any OAuth endpoint. The first time a URL `client_id` is seen, the server fetches the metadata document and creates a public client. Subsequent requests reuse that record until it is older than `refreshRate`, at which point it is re-fetched.
+
+```http
+GET /api/auth/oauth2/authorize?
+    response_type=code
+    &client_id=https%3A%2F%2Fmcp-client.example.com%2Fclient-metadata.json
+    &redirect_uri=https%3A%2F%2Fmcp-client.example.com%2Fcallback
+    &scope=openid
+    &code_challenge=...
+    &code_challenge_method=S256
+```
+
+The CIMD client is stored in the standard `oauthClient` table with its URL as the `clientId`, so it shows up in the same queries and admin UIs as any other registered client.
+
+### Discovery metadata
+
+The plugin advertises `client_id_metadata_document_supported: true` on the `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses. MCP clients and other spec-aware consumers use that flag to decide whether to attempt a URL `client_id`.
+
+## Configuration
+
+```ts title="auth.ts"
+cimd({
+  refreshRate: "10m",
+  originBoundFields: ["redirect_uris", "post_logout_redirect_uris", "client_uri"],
+  allowFetch(url) {
+    return new URL(url).hostname.endsWith(".trusted.example");
+  },
+  onClientCreated({ client, metadata, ctx }) {
+    // assign trust levels, prefetch logos, populate audit log, etc.
+  },
+  onClientRefreshed({ client, metadata, ctx }) {
+    // detect field changes, update derived data, etc.
+  },
+});
+```
+
+### Options
+
+<TypeTable
+  type={{
+  refreshRate: {
+    type: "number | string",
+    default: '"60m"',
+    description:
+      "How frequently to re-fetch a client's metadata document. Number values are seconds; strings are duration expressions (e.g. `\"60m\"`, `\"1d\"`). A value of `0` makes every request stale (useful for tests).",
+  },
+  originBoundFields: {
+    type: "string[]",
+    default: '["redirect_uris", "post_logout_redirect_uris", "client_uri"]',
+    description:
+      "Metadata fields whose URL values must share the same origin as the `client_id` URL. Localhost is accepted for redirect URI fields (for native and desktop flows) but never for `client_uri` or custom fields. Pass an empty array to disable origin binding.",
+  },
+  allowFetch: {
+    type: "(url, ctx) => boolean | Promise<boolean>",
+    default: "always allow",
+    description:
+      "Pre-fetch gate: return `false` to reject a `client_id` URL before the metadata document is requested. Use this for origin allowlists, per-host rate limiting, or DNS-level defenses beyond the built-in IP-literal SSRF check.",
+  },
+  onClientCreated: {
+    type: "(data: { client, metadata, ctx }) => void | Promise<void>",
+    description:
+      "Called once, after a new client has been persisted. The `metadata` argument is the raw JSON body of the metadata document.",
+  },
+  onClientRefreshed: {
+    type: "(data: { client, metadata, ctx }) => void | Promise<void>",
+    description:
+      "Called each time an existing client record is re-fetched and updated. Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes; use this hook to detect document changes or sync derived data.",
+  },
+}}
+/>
+
+## Metadata document requirements
+
+The fetched document must satisfy both §3 and §4.1 of the draft. Key rules enforced by the plugin:
+
+* `client_id` in the body must equal the fetch URL byte-for-byte.
+* HTTPS only. HTTP is allowed only for `localhost`, `127.0.0.1`, `[::1]`, and `*.localhost` to support local development.
+* No fragments, credentials, or `./` / `../` dot segments in the URL.
+* A path component is required (`https://example.com/` is rejected; `https://example.com/meta.json` is accepted).
+* `client_secret` and `client_secret_expires_at` are prohibited.
+* `token_endpoint_auth_method` must be `"none"` or `"private_key_jwt"`. Symmetric methods (`client_secret_post`, `client_secret_basic`, `client_secret_jwt`) are rejected.
+* `redirect_uris` is required and must be a non-empty array of absolute HTTP(S) URIs.
+* `grant_types` (if present) must be a subset of `["authorization_code", "refresh_token"]`.
+* `response_types` (if present) must be a subset of `["code"]`.
+* Admin-only fields (`disabled`, `skip_consent`, `enable_end_session`) from the document are discarded.
+* Only RFC 7591 / CIMD fields are persisted; unknown fields are dropped.
+
+### Example document
+
+```json title="https://mcp-client.example.com/client-metadata.json"
+{
+  "client_id": "https://mcp-client.example.com/client-metadata.json",
+  "client_name": "Example MCP Client",
+  "client_uri": "https://mcp-client.example.com",
+  "redirect_uris": [
+    "https://mcp-client.example.com/callback",
+    "http://127.0.0.1:3000/callback"
+  ],
+  "token_endpoint_auth_method": "none",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "scope": "openid profile email offline_access"
+}
+```
+
+## Security
+
+The plugin ships defense in depth against common abuses of unauthenticated client discovery:
+
+* **SSRF protection.** Private and reserved IP ranges (RFC 6890), IPv4-mapped IPv6, link-local addresses, and cloud metadata endpoints (`metadata.google.internal`, `169.254.169.254`) are all rejected. No DNS resolution is performed, so the same rules run identically on Node, Bun, Deno, and Cloudflare Workers.
+* **Fetch hardening.** 5-second timeout, 5 KB response size limit (UTF-8 byte-counted), no redirect following, `Accept: application/json` only.
+* **Origin binding.** Fields in `originBoundFields` must share the `client_id` origin. Cross-domain redirect injection is blocked by default.
+* **No secrets from documents.** Symmetric authentication methods and `client_secret` fields are rejected before anything is written to the database.
+* **Admin-field stripping.** `disabled`, `skip_consent`, `enable_end_session`, and `require_pkce` cannot be set, escalated, or weakened from an external document.
+* **Admin overrides survive refreshes.** `disabled`, `skipConsent`, and `enableEndSession` set by an admin on a persisted CIMD client are preserved across stale refreshes: the document can't silently undo a revoke or consent override.
+* **Allowlist parsing.** Only the recognized RFC 7591 / CIMD fields are persisted. Arbitrary fields are discarded.
+
+## Operational notes
+
+* **Refresh runs on the OAuth hot path.** When a CIMD client's record is older than `refreshRate`, the next OAuth request for that client awaits the metadata document refresh before completing. A slow or unreachable metadata host raises tail latency on `/oauth2/authorize`, `/oauth2/token`, `/oauth2/introspect`, and friends for that client. Pick `refreshRate` generous enough that the refresh stays rare, and keep `allowFetch` aligned with your metadata hosts' reliability profile.
+* **No fetch deduplication yet.** Concurrent requests for the same stale client can all trigger independent metadata fetches. An external coordination layer or higher `refreshRate` is the practical mitigation today.
+* **HTTP allowed only for localhost.** `localhost`, `127.0.0.1`, `[::1]`, and `*.localhost` are accepted over plain HTTP so you can develop locally. Every other host must use HTTPS.
+
+## Composition with `clientDiscovery`
+
+Under the hood, `cimd()` appends a `ClientDiscovery` entry to `oauthProvider`'s `clientDiscovery` option. If you prefer to wire it explicitly, or want to compose CIMD with other discovery implementations, use the `cimdClientDiscovery` factory:
+
+```ts title="auth.ts"
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { cimdClientDiscovery } from "@better-auth/cimd";
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    oauthProvider({
+      clientDiscovery: [
+        cimdClientDiscovery({ refreshRate: "60m" }),
+        // other discovery implementations can go here
+      ],
+    }),
+  ],
+});
+```
+
+The `clientDiscovery` option accepts a single `ClientDiscovery` or an array. Entries are consulted in order after the database lookup in `getClient()`; the first entry whose `matches()` returns `true` and whose `resolve()` returns a non-null client wins. Each entry can also contribute `discoveryMetadata` that the server merges into `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses.
+
+## Related
+
+* [OAuth Provider plugin](./oauth-provider) — the host plugin this one extends.
+* [IETF draft: Client ID Metadata Document](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+* [MCP authorization spec — CIMD flow](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow)

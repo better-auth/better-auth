@@ -9,21 +9,16 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
-import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
 import type {
+	ClientDiscovery,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
 	Scope,
 	StoreTokenType,
 } from "../types";
-import {
-	createMetadataDocumentClient,
-	isUrlClientId,
-	refreshMetadataDocumentClient,
-} from "./cimd";
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
@@ -176,20 +171,13 @@ export async function getClient(
 		where: [{ field: "clientId", value: clientId }],
 	});
 
-	if (options.clientIdMetadataDocument && isUrlClientId(clientId)) {
-		const updatedAt =
-			dbClient?.updatedAt ??
-			dbClient?.createdAt ??
-			new Date(Math.floor(Date.now() / 1000) * 1000);
-		const iat = Math.floor(updatedAt.getTime() / 1000);
-		const rate = options.clientIdMetadataDocument.refreshRate ?? "60m";
-		// toExpJWT treats numbers as absolute timestamps, so convert
-		// numeric seconds to a relative offset for correct TTL behavior
-		const exp = typeof rate === "number" ? iat + rate : toExpJWT(rate, iat);
-		if (!dbClient) {
-			dbClient = await createMetadataDocumentClient(ctx, clientId, options);
-		} else if (exp < Date.now() / 1000) {
-			dbClient = await refreshMetadataDocumentClient(ctx, clientId, options);
+	const discoveries = toClientDiscoveryArray(options.clientDiscovery);
+	for (const discovery of discoveries) {
+		if (!discovery.matches(clientId)) continue;
+		const resolved = await discovery.resolve(ctx, clientId, dbClient);
+		if (resolved) {
+			dbClient = resolved;
+			break;
 		}
 	}
 
@@ -198,6 +186,36 @@ export async function getClient(
 	}
 
 	return dbClient;
+}
+
+/**
+ * Normalize the `clientDiscovery` option into an array. Accepts a single
+ * {@link ClientDiscovery}, an array of them, or `undefined`.
+ *
+ * @internal
+ */
+export function toClientDiscoveryArray(
+	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+): ClientDiscovery<Scope[]>[] {
+	if (!discovery) return [];
+	return Array.isArray(discovery) ? discovery : [discovery];
+}
+
+/**
+ * Merge `discoveryMetadata` from every configured {@link ClientDiscovery}
+ * into a single object. Entries are spread in order; later entries override
+ * earlier ones on key collisions.
+ *
+ * @internal
+ */
+export function mergeDiscoveryMetadata(
+	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+): Record<string, unknown> {
+	const discoveries = toClientDiscoveryArray(discovery);
+	return discoveries.reduce<Record<string, unknown>>(
+		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
+		{},
+	);
 }
 
 /**

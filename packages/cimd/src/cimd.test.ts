@@ -1,3 +1,5 @@
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
 import { toNodeHandler } from "better-auth/node";
 import { jwt } from "better-auth/plugins/jwt";
@@ -5,8 +7,7 @@ import { getTestInstance } from "better-auth/test";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProvider } from "./oauth";
+import { cimd } from "./index";
 
 describe("Client ID Metadata Document - integration", async () => {
 	const port = 3002;
@@ -38,13 +39,13 @@ describe("Client ID Metadata Document - integration", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				clientIdMetadataDocument: {},
 				scopes: ["openid", "profile", "email", "offline_access"],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
 				},
 			}),
+			cimd(),
 		],
 	});
 

@@ -29,6 +29,53 @@ export type AuthorizePrompt =
 	| "login consent"
 	| "select_account consent";
 
+/**
+ * Describes how to resolve a `client_id` from an external source (a URL-based
+ * metadata document, a federated registry, an attestation header, etc.) and
+ * what fields that source contributes to discovery metadata.
+ *
+ * Plugins install one of these onto {@link OAuthOptions.clientDiscovery}.
+ * The host walks the configured entries in order and returns the first
+ * non-null `resolve()` result.
+ */
+export interface ClientDiscovery<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * Stable identifier used in error messages and diagnostics. Convention
+	 * is to match the plugin id (for example `"cimd"`).
+	 */
+	readonly id: string;
+	/**
+	 * Return `true` if this discovery handles the given `client_id`. Called
+	 * on every `getClient()` lookup for every configured discovery, so keep
+	 * it cheap and synchronous.
+	 */
+	matches: (clientId: string) => boolean;
+	/**
+	 * Resolve a client when this discovery matches. Receives the existing DB
+	 * record (or `null`) so an implementation can decide between creating,
+	 * refreshing, or passing through to the database result.
+	 *
+	 * Return:
+	 * - a client record: `getClient()` returns it (creation / refresh / takeover).
+	 * - `null`: `getClient()` falls through to the next matching discovery
+	 *   or to the database record (if any).
+	 */
+	resolve: (
+		ctx: GenericEndpointContext,
+		clientId: string,
+		existing: SchemaClient<Scopes> | null,
+	) => Awaitable<SchemaClient<Scopes> | null>;
+	/**
+	 * Fields merged into `/.well-known/oauth-authorization-server` and
+	 * `/.well-known/openid-configuration` responses. Useful for advertising
+	 * RFC-registered discovery flags like
+	 * `client_id_metadata_document_supported`.
+	 */
+	discoveryMetadata?: Record<string, unknown>;
+}
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -134,9 +181,9 @@ export interface OAuthOptions<
 	 * without a session, but only for public clients
 	 * (`token_endpoint_auth_method: "none"`).
 	 *
-	 * For verified client discovery (MCP), consider using
-	 * {@link clientIdMetadataDocument} instead, which verifies client
-	 * identity through domain ownership.
+	 * For verified client discovery (MCP), consider installing the
+	 * `@better-auth/cimd` plugin, which verifies client identity through
+	 * domain ownership via Client ID Metadata Documents.
 	 *
 	 * @default false
 	 */
@@ -148,58 +195,20 @@ export interface OAuthOptions<
 	 */
 	allowDynamicClientRegistration?: boolean;
 	/**
-	 * Enable [Client ID Metadata Document](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
-	 * support for unauthenticated dynamic client registration.
+	 * Discovery implementations consulted by `getClient()` when resolving
+	 * a `client_id`. Each entry decides whether it handles the `client_id`
+	 * via {@link ClientDiscovery.matches}, then creates, refreshes, or
+	 * passes on a client record. Entries run in order; the first one to
+	 * return a client wins.
 	 *
-	 * When present, clients can identify themselves by providing an HTTPS URL as
-	 * their `client_id`. The authorization server fetches and validates the metadata
-	 * document hosted at that URL, creating a public client automatically.
+	 * Each entry also contributes {@link ClientDiscovery.discoveryMetadata}
+	 * into the `/.well-known/oauth-authorization-server` and
+	 * `/.well-known/openid-configuration` responses.
 	 *
-	 * This is the mechanism used by [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow)
-	 * for dynamic client discovery.
-	 *
-	 * @see https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+	 * Plugins such as `@better-auth/cimd` install an entry here at init
+	 * time; users can also pass discovery implementations directly.
 	 */
-	clientIdMetadataDocument?: {
-		/**
-		 * How frequently the server should re-fetch metadata documents to
-		 * pick up changes from the client.
-		 *
-		 * @default "60m"
-		 */
-		refreshRate?: number | string;
-		/**
-		 * Metadata fields whose URL values must share the same origin as
-		 * the `client_id` URL. This prevents a client from claiming
-		 * redirect URIs on a different domain.
-		 *
-		 * Set to an empty array to disable origin restrictions
-		 * (not recommended for production).
-		 *
-		 * @default ["redirect_uris", "post_logout_redirect_uris", "client_uri"]
-		 */
-		originBoundFields?: string[];
-		/**
-		 * Called after a client is created from a metadata document
-		 * for the first time. Use this to assign trust levels, prefetch
-		 * logos, or perform other post-creation processing.
-		 */
-		onClientCreated?: (data: {
-			client: SchemaClient<Scope[]>;
-			metadata: Record<string, unknown>;
-			ctx: GenericEndpointContext;
-		}) => Awaitable<void>;
-		/**
-		 * Called after a client is refreshed from a re-fetched metadata
-		 * document. Use this for change-detection logging or updating
-		 * derived fields.
-		 */
-		onClientRefreshed?: (data: {
-			client: SchemaClient<Scope[]>;
-			metadata: Record<string, unknown>;
-			ctx: GenericEndpointContext;
-		}) => Awaitable<void>;
-	};
+	clientDiscovery?: ClientDiscovery<Scopes> | ClientDiscovery<Scopes>[];
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.

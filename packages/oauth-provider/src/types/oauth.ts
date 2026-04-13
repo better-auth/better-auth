@@ -180,10 +180,14 @@ export interface AuthServerMetadata {
 	 */
 	authorization_response_iss_parameter_supported?: boolean;
 	/**
-	 * Whether the server supports Client ID Metadata Documents
-	 * for unauthenticated dynamic client registration.
+	 * Whether the authorization server supports discovering clients via
+	 * [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 * (an HTTPS URL as `client_id`).
 	 *
-	 * @see https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+	 * Set at runtime by the `@better-auth/cimd` plugin (or any other
+	 * `ClientDiscovery` that contributes this field via
+	 * {@link ClientDiscovery.discoveryMetadata}). oauth-provider never sets
+	 * it on its own.
 	 */
 	client_id_metadata_document_supported?: boolean;
 }

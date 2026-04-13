@@ -1,19 +1,35 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-auth/api";
-import { checkOAuthClient, oauthToSchema } from "../register";
-import type { OAuthClient, OAuthOptions, SchemaClient, Scope } from "../types";
+import type {
+	OAuthClient,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "@better-auth/oauth-provider";
+import { checkOAuthClient, oauthToSchema } from "@better-auth/oauth-provider";
+import { APIError } from "better-call";
+import type { CimdOptions } from "./types";
 import {
 	validateCimdMetadata,
 	validateClientIdUrl,
 } from "./validate-metadata-document";
 
-export { isUrlClientId } from "./validate-metadata-document";
-
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_RESPONSE_BYTES = 5 * 1024; // 5 KB per spec recommendation (§6.6)
 
-/** RFC 7591 / CIMD fields accepted from external metadata documents. */
+/**
+ * Accepts `application/json` and the draft's `application/<AS-defined>+json`
+ * form. Parameters (charset, etc.) are allowed after the subtype.
+ */
+const JSON_CONTENT_TYPE_RE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
+
+/**
+ * RFC 7591 / CIMD fields accepted from external metadata documents.
+ *
+ * Security-sensitive fields — `require_pkce`, `disabled`, `skip_consent`,
+ * `enable_end_session` — are deliberately excluded. An attacker-controlled
+ * document MUST NOT be able to weaken the server's PKCE policy or escalate
+ * admin-only flags.
+ */
 const ALLOWED_METADATA_FIELDS = new Set([
 	"client_id",
 	"redirect_uris",
@@ -32,6 +48,7 @@ const ALLOWED_METADATA_FIELDS = new Set([
 	"software_statement",
 	"post_logout_redirect_uris",
 	"subject_type",
+	"type",
 	"jwks",
 	"jwks_uri",
 ]);
@@ -66,12 +83,17 @@ function toOAuthClientBody(metadata: Record<string, unknown>): OAuthClient {
 export async function createMetadataDocumentClient(
 	ctx: GenericEndpointContext,
 	clientIdUrl: string,
-	opts: OAuthOptions<Scope[]>,
+	cimdOptions: CimdOptions,
+	oauthOptions: OAuthOptions<Scope[]>,
 ): Promise<SchemaClient<Scope[]>> {
-	const metadata = await fetchAndValidateMetadataDocument(clientIdUrl, opts);
+	const metadata = await fetchAndValidateMetadataDocument(
+		ctx,
+		clientIdUrl,
+		cimdOptions,
+	);
 	const oauthClient = toOAuthClientBody(metadata);
 
-	await checkOAuthClient(oauthClient, opts, { isRegister: true });
+	await checkOAuthClient(oauthClient, oauthOptions, { isRegister: true });
 
 	const isPrivateKeyJwt =
 		oauthClient.token_endpoint_auth_method === "private_key_jwt";
@@ -92,7 +114,7 @@ export async function createMetadataDocumentClient(
 		public: !isPrivateKeyJwt,
 	});
 
-	const model = opts.schema?.oauthClient?.modelName ?? "oauthClient";
+	const model = oauthOptions.schema?.oauthClient?.modelName ?? "oauthClient";
 	let client: SchemaClient<Scope[]>;
 	try {
 		client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
@@ -104,8 +126,8 @@ export async function createMetadataDocumentClient(
 			},
 		});
 	} catch (err) {
-		// A concurrent request may have created this client first.
-		// If the record exists, return it; otherwise re-throw the original error.
+		// A concurrent request may have created this client first. If the
+		// record exists by now, return it; otherwise re-throw the original.
 		const existing = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
 			model,
 			where: [{ field: "clientId", value: clientIdUrl }],
@@ -116,35 +138,38 @@ export async function createMetadataDocumentClient(
 		throw err;
 	}
 
-	await opts.clientIdMetadataDocument?.onClientCreated?.({
-		client,
-		metadata,
-		ctx,
-	});
+	await cimdOptions.onClientCreated?.({ client, metadata, ctx });
 
 	return client;
 }
 
 /**
  * Refresh an existing client by re-fetching its metadata document.
+ *
+ * Admin-controlled fields (`disabled`, `skip_consent`, `enable_end_session`)
+ * are never overwritten from the document — they are read from `existing`
+ * and preserved so admin decisions survive a refresh.
  */
 export async function refreshMetadataDocumentClient(
 	ctx: GenericEndpointContext,
 	clientIdUrl: string,
-	opts: OAuthOptions<Scope[]>,
+	existing: SchemaClient<Scope[]>,
+	cimdOptions: CimdOptions,
+	oauthOptions: OAuthOptions<Scope[]>,
 ): Promise<SchemaClient<Scope[]>> {
-	const metadata = await fetchAndValidateMetadataDocument(clientIdUrl, opts);
+	const metadata = await fetchAndValidateMetadataDocument(
+		ctx,
+		clientIdUrl,
+		cimdOptions,
+	);
 	const oauthClient = toOAuthClientBody(metadata);
 
-	await checkOAuthClient(oauthClient, opts, { isRegister: true });
+	await checkOAuthClient(oauthClient, oauthOptions, { isRegister: true });
 
 	const isPrivateKeyJwt =
 		oauthClient.token_endpoint_auth_method === "private_key_jwt";
 	const schema = oauthToSchema({
 		...oauthClient,
-		disabled: undefined,
-		skip_consent: undefined,
-		enable_end_session: undefined,
 		jwks: isPrivateKeyJwt ? oauthClient.jwks : undefined,
 		jwks_uri: isPrivateKeyJwt ? oauthClient.jwks_uri : undefined,
 		client_id: clientIdUrl,
@@ -153,29 +178,36 @@ export async function refreshMetadataDocumentClient(
 		public: !isPrivateKeyJwt,
 	});
 
-	const model = opts.schema?.oauthClient?.modelName ?? "oauthClient";
+	// Preserve admin-controlled flags that the document MUST NOT influence.
+	const preservedAdminFields = {
+		disabled: existing.disabled,
+		skipConsent: existing.skipConsent,
+		enableEndSession: existing.enableEndSession,
+	};
+
+	const model = oauthOptions.schema?.oauthClient?.modelName ?? "oauthClient";
 	const client = await ctx.context.adapter.update<SchemaClient<Scope[]>>({
 		model,
 		where: [{ field: "clientId", value: clientIdUrl }],
 		update: {
 			...schema,
+			...preservedAdminFields,
 			updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
 		},
 	});
 
 	if (!client) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "server_error",
-			error_description:
-				"Failed to update client from metadata document (client may have been deleted)",
+		// `update` returning null means no row matched — the client was
+		// deleted between the read and the write. That's a race against an
+		// admin delete, not a server fault, so surface it as an OAuth
+		// invalid_client rather than a 500.
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: "client no longer exists",
 		});
 	}
 
-	await opts.clientIdMetadataDocument?.onClientRefreshed?.({
-		client,
-		metadata,
-		ctx,
-	});
+	await cimdOptions.onClientRefreshed?.({ client, metadata, ctx });
 
 	return client;
 }
@@ -185,8 +217,9 @@ export async function refreshMetadataDocumentClient(
  * and return the parsed metadata.
  */
 async function fetchAndValidateMetadataDocument(
+	ctx: GenericEndpointContext,
 	clientIdUrl: string,
-	opts: OAuthOptions<Scope[]>,
+	cimdOptions: CimdOptions,
 ): Promise<Record<string, unknown>> {
 	// §3: validate the URL structure before fetching
 	const urlError = validateClientIdUrl(clientIdUrl);
@@ -197,9 +230,23 @@ async function fetchAndValidateMetadataDocument(
 		});
 	}
 
-	let result: { data: Record<string, unknown> | null; error: unknown };
+	// Pre-fetch gate: operators can block domains, rate-limit, or reject
+	// URLs whose hostnames resolve to non-public addresses (DNS-level SSRF
+	// defense beyond the IP-literal check in `validateClientIdUrl`).
+	if (cimdOptions.allowFetch) {
+		const allowed = await cimdOptions.allowFetch(clientIdUrl, ctx);
+		if (!allowed) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client",
+				error_description:
+					"client_id URL is not permitted by the server's fetch policy",
+			});
+		}
+	}
+
+	let response: Response;
 	try {
-		result = await betterFetch<Record<string, unknown>>(clientIdUrl, {
+		response = await fetch(clientIdUrl, {
 			headers: { Accept: "application/json" },
 			redirect: "error",
 			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -215,28 +262,48 @@ async function fetchAndValidateMetadataDocument(
 		});
 	}
 
-	if (result.error || !result.data) {
+	if (!response.ok) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client",
-			error_description: "Metadata document returned a non-success response",
+			error_description: `Metadata document fetch returned HTTP ${response.status}`,
 		});
 	}
 
-	// §6.6: enforce response size limit
-	const serialized = JSON.stringify(result.data);
-	if (serialized.length > MAX_RESPONSE_BYTES) {
+	// Content-Type must be JSON per RFC 7591. The CIMD draft also permits
+	// `application/<AS-defined>+json`, so accept any `*+json` subtype.
+	const contentType = response.headers.get("content-type") ?? "";
+	if (!JSON_CONTENT_TYPE_RE.test(contentType)) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: `Metadata document must be JSON (got Content-Type "${contentType || "(none)"}")`,
+		});
+	}
+
+	// §6.6: enforce response size on the raw wire bytes before parsing.
+	const bodyText = await response.text();
+	const byteLength = new TextEncoder().encode(bodyText).byteLength;
+	if (byteLength > MAX_RESPONSE_BYTES) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client",
 			error_description: `Metadata document exceeds ${MAX_RESPONSE_BYTES / 1024}KB size limit`,
 		});
 	}
 
+	let data: Record<string, unknown>;
+	try {
+		data = JSON.parse(bodyText) as Record<string, unknown>;
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: "Metadata document is not valid JSON",
+		});
+	}
+
 	// §4.1: validate the document contents
-	const originBoundFields = opts.clientIdMetadataDocument?.originBoundFields;
 	const validation = validateCimdMetadata(
 		clientIdUrl,
-		result.data,
-		originBoundFields,
+		data,
+		cimdOptions.originBoundFields,
 	);
 
 	if (!validation.valid) {
@@ -246,5 +313,5 @@ async function fetchAndValidateMetadataDocument(
 		});
 	}
 
-	return result.data;
+	return data;
 }

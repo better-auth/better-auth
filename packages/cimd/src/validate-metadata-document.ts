@@ -2,11 +2,6 @@
 // Implements draft-ietf-oauth-client-id-metadata-document §3 and §4.1.
 // Zero side-effect imports: testable without building the monorepo.
 
-import { isLocalhost } from "../types/zod";
-
-// TODO: extract into a shared utils/ssrf.ts and unify with
-// isPrivateHostname in utils/client-assertion.ts.
-
 const DOT_SEGMENT_RE = /\/\.\.?(?:\/|$|#|\?)/;
 
 const PROHIBITED_FIELDS = new Set([
@@ -28,6 +23,17 @@ export interface ClientIdMetadataDocumentResult {
 	valid: boolean;
 	error?: string;
 	warnings?: string[];
+}
+
+/** Hostnames that are considered "localhost" for development flows. */
+export function isLocalhost(hostname: string): boolean {
+	return (
+		hostname === "localhost" ||
+		hostname === "127.0.0.1" ||
+		hostname === "[::1]" ||
+		hostname === "::1" ||
+		hostname.endsWith(".localhost")
+	);
 }
 
 /** Check whether a dotted-decimal IPv4 address is private/reserved. */
@@ -73,14 +79,14 @@ function hexGroupsToIpv4(hi: string, lo: string): string {
 
 /**
  * Check whether a hostname is private/reserved per RFC 6890.
+ *
  * Handles bracketed IPv6 (as returned by URL.hostname), IPv4-mapped
  * IPv6 in both dotted-decimal and hex-normalized forms, and cloud
- * metadata hostnames.
- * No DNS resolution: runtime-compatible across all platforms.
+ * metadata hostnames. No DNS resolution, so it runs identically on
+ * Node, Bun, Deno, and Workers.
  */
 function isPrivateHost(hostname: string): boolean {
 	const lower = hostname.toLowerCase();
-	// Strip IPv6 brackets (URL.hostname returns "[::1]" for IPv6)
 	const host =
 		lower.startsWith("[") && lower.endsWith("]") ? lower.slice(1, -1) : lower;
 
@@ -90,16 +96,12 @@ function isPrivateHost(hostname: string): boolean {
 	if (isPrivateIpv4(host)) {
 		return true;
 	}
-	// IPv6 checks only when the host contains ":" (prevents false positives
-	// on DNS names starting with "fc" or "fd")
 	if (host.includes(":")) {
-		// IPv4-mapped IPv6 in dotted-decimal form (::ffff:a.b.c.d)
-		const dottedMatch = V4_MAPPED_DOTTED_RE.exec(host);
+		const dottedMatch = host.match(V4_MAPPED_DOTTED_RE);
 		if (dottedMatch && isPrivateIpv4(dottedMatch[1]!)) {
 			return true;
 		}
-		// IPv4-mapped IPv6 in hex form (e.g. ::ffff:a9fe:a9fe, as normalized by URL parser)
-		const hexMatch = V4_MAPPED_HEX_RE.exec(host);
+		const hexMatch = host.match(V4_MAPPED_HEX_RE);
 		if (hexMatch) {
 			const ipv4 = hexGroupsToIpv4(hexMatch[1]!, hexMatch[2]!);
 			if (isPrivateIpv4(ipv4)) {
@@ -145,7 +147,7 @@ export function isUrlClientId(clientId: string): boolean {
  * Returns null on success, error string on failure.
  */
 export function validateClientIdUrl(url: string): string | null {
-	// §3: check raw URL for dot segments before URL class normalizes them
+	// §3: check the raw URL for dot segments before the URL class normalizes them
 	if (DOT_SEGMENT_RE.test(url)) {
 		return "client_id URL MUST NOT contain dot segments";
 	}
@@ -188,10 +190,7 @@ export function validateClientIdUrl(url: string): string | null {
 	return null;
 }
 
-/**
- * Check if a URL has a query string (§3 SHOULD NOT).
- * Returns a warning string if present, null otherwise.
- */
+/** Warning: §3 SHOULD NOT have a query string. */
 function checkUrlQueryWarning(url: string): string | null {
 	try {
 		const parsed = new URL(url);
@@ -216,9 +215,9 @@ function isAbsoluteHttpUri(uri: string): boolean {
 /**
  * Validate a fetched Client ID Metadata Document per §4.1.
  *
- * @param fetchUrl - The URL the document was fetched from
- * @param raw - The parsed JSON body of the response
- * @param originBoundFields - Fields whose values must share the same origin as the client_id URL
+ * @param fetchUrl - The URL the document was fetched from.
+ * @param raw - The parsed JSON body of the response.
+ * @param originBoundFields - Fields whose URL values must share the same origin as the `client_id` URL.
  */
 export function validateCimdMetadata(
 	fetchUrl: string,
@@ -412,12 +411,12 @@ export function validateCimdMetadata(
 				};
 			}
 
-			// Allow localhost redirect URIs for native/local app flows (MCP spec
-			// examples include http://127.0.0.1:3000/callback). The localhost
-			// exception only applies to redirect_uris, not to client_uri or
-			// other origin-bound fields.
-			const localhostAllowed =
-				key === "redirect_uris" && isLocalhost(uri.hostname);
+			// Allow localhost redirect URIs for local/native app flows; the
+			// localhost exception only applies to redirect URI fields, never
+			// to client_uri or other origin-bound fields.
+			const isRedirectField =
+				key === "redirect_uris" || key === "post_logout_redirect_uris";
+			const localhostAllowed = isRedirectField && isLocalhost(uri.hostname);
 			if (uri.origin !== clientIdOrigin && !localhostAllowed) {
 				return {
 					valid: false,
