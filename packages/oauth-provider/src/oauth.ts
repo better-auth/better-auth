@@ -30,6 +30,8 @@ import { userInfoEndpoint } from "./userinfo";
 import {
 	deleteFromPrompt,
 	getJwtPlugin,
+	mergeDiscoveryMetadata,
+	toClientDiscoveryArray,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -333,11 +335,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 							public_client_supported:
-								opts.allowUnauthenticatedClientRegistration,
+								opts.allowUnauthenticatedClientRegistration ||
+								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
 							grant_types_supported: opts.grantTypes,
 							jwt_disabled: opts.disableJwtPlugin,
 						});
-						return authMetadata;
+						return {
+							...authMetadata,
+							...mergeDiscoveryMetadata(opts.clientDiscovery),
+						};
 					}
 				},
 			),
