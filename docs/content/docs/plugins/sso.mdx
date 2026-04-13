@@ -1573,24 +1573,24 @@ items: {
 type: "object",
 properties: {
 domain: {
-    description: "The domain to match for this default provider.",
-    type: "string",
-    required: true,
+description: "The domain to match for this default provider.",
+type: "string",
+required: true,
 },
 providerId: {
-    description: "The provider ID to use for the default provider.",
-    type: "string",
-    required: true,
+description: "The provider ID to use for the default provider.",
+type: "string",
+required: true,
 },
 samlConfig: {
-    description: "SAML configuration for the default provider.",
-    type: "SAMLConfig",
-    required: false,
+description: "SAML configuration for the default provider.",
+type: "SAMLConfig",
+required: false,
 },
 oidcConfig: {
-    description: "OIDC configuration for the default provider.",
-    type: "OIDCConfig",
-    required: false,
+description: "OIDC configuration for the default provider.",
+type: "OIDCConfig",
+required: false,
 },
 }
 },
@@ -1628,12 +1628,12 @@ algorithms: {
 description: "Algorithm validation options.",
 type: "object",
 properties: {
-    onDeprecated: {
-        description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
-        type: "string",
-        enum: ["reject", "warn", "allow"],
-        default: "warn",
-    },
+onDeprecated: {
+description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
+type: "string",
+enum: ["reject", "warn", "allow"],
+default: "warn",
+},
 },
 },
 maxResponseSize: {
