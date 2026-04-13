@@ -46,6 +46,11 @@
       "dev-source": "./src/client.ts",
       "types": "./dist/client.d.mts",
       "default": "./dist/client.mjs"
+    },
+    "./locales": {
+      "dev-source": "./src/locales/index.ts",
+      "types": "./dist/locales/index.d.mts",
+      "default": "./dist/locales/index.mjs"
     }
   },
   "typesVersions": {
@@ -55,6 +60,9 @@
       ],
       "client": [
         "./dist/client.d.mts"
+      ],
+      "locales": [
+        "./dist/locales/index.d.mts"
       ]
     }
   },
