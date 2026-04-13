@@ -245,7 +245,7 @@ function fieldToDBField(field: Field): DBFieldAttribute {
 		references = {
 			model: field.references.model,
 			field: field.references.field,
-			onDelete: field.references.onDelete,
+			onDelete: field.references.onDelete ?? "cascade",
 		};
 	}
 
