@@ -24,5 +24,15 @@
     "@better-auth/telemetry": "1.6.0",
     "@better-auth/test-utils": "1.6.0"
   },
-  "changesets": []
+  "changesets": [
+    "fix-password-reset-callback-operation-id",
+    "honest-regions-jam",
+    "pr-8926",
+    "pr-9032",
+    "pr-9084",
+    "private-key-jwt",
+    "saml-response-validation-hardening",
+    "sso-saml-hardening",
+    "two-factor-otp-enable"
+  ]
 }

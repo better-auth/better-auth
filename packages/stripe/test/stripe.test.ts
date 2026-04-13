@@ -147,6 +147,12 @@ describe("stripe", () => {
 	const mockStripe = {
 		prices: {
 			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
+			retrieve: vi.fn().mockImplementation((priceId: string) =>
+				Promise.resolve({
+					id: priceId,
+					recurring: { usage_type: "licensed", interval: "month" },
+				}),
+			),
 		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
@@ -7905,6 +7911,575 @@ describe("stripe", () => {
 			// Should redirect gracefully
 			expect(response.status).toBe(302);
 			expect(response.headers.get("location")).toContain(callbackURL);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8920
+	 */
+	describe("metered usage pricing", () => {
+		it("should not include quantity for metered base price in checkout session", async () => {
+			vi.clearAllMocks();
+
+			const meteredPriceId = "price_metered_base";
+
+			const meteredMockStripe = {
+				...mockStripe,
+				prices: {
+					...mockStripe.prices,
+					retrieve: vi.fn().mockResolvedValue({
+						id: meteredPriceId,
+						recurring: {
+							usage_type: "metered",
+							interval: "month",
+						},
+					}),
+				},
+			};
+
+			const meteredStripeOptions = {
+				stripeClient: meteredMockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test",
+				createCustomerOnSignUp: true,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							name: "metered-plan",
+							priceId: meteredPriceId,
+						},
+					],
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(meteredStripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{ email: "metered@test.com", password: "password", name: "Metered" },
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "metered@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await client.subscription.upgrade({
+				plan: "metered-plan",
+				fetchOptions: { headers },
+			});
+
+			expect(meteredMockStripe.checkout.sessions.create).toHaveBeenCalled();
+			const createCall =
+				meteredMockStripe.checkout.sessions.create.mock.calls[0][0];
+			const baseLineItem = createCall.line_items.find(
+				(item: { price: string }) => item.price === meteredPriceId,
+			);
+
+			expect(baseLineItem).toBeDefined();
+			expect(baseLineItem).not.toHaveProperty("quantity");
+		});
+
+		it("should still include quantity for licensed base price in checkout session", async () => {
+			vi.clearAllMocks();
+
+			const licensedPriceId = "price_licensed_base";
+
+			const licensedMockStripe = {
+				...mockStripe,
+				prices: {
+					...mockStripe.prices,
+					retrieve: vi.fn().mockResolvedValue({
+						id: licensedPriceId,
+						recurring: {
+							usage_type: "licensed",
+							interval: "month",
+						},
+					}),
+				},
+			};
+
+			const licensedStripeOptions = {
+				stripeClient: licensedMockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test",
+				createCustomerOnSignUp: true,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							name: "licensed-plan",
+							priceId: licensedPriceId,
+						},
+					],
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(licensedStripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "licensed@test.com",
+					password: "password",
+					name: "Licensed",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "licensed@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await client.subscription.upgrade({
+				plan: "licensed-plan",
+				fetchOptions: { headers },
+			});
+
+			expect(licensedMockStripe.checkout.sessions.create).toHaveBeenCalled();
+			const createCall =
+				licensedMockStripe.checkout.sessions.create.mock.calls[0][0];
+			const baseLineItem = createCall.line_items.find(
+				(item: { price: string }) => item.price === licensedPriceId,
+			);
+
+			expect(baseLineItem).toBeDefined();
+			expect(baseLineItem).toHaveProperty("quantity", 1);
+		});
+
+		it("should not include quantity for metered price during billing portal upgrade", async () => {
+			vi.clearAllMocks();
+
+			const oldPriceId = "price_old_licensed";
+			const meteredPriceId = "price_metered_upgrade";
+			const subscriptionId = "sub_metered_upgrade";
+
+			const upgradeMockStripe = {
+				...mockStripe,
+				prices: {
+					...mockStripe.prices,
+					retrieve: vi.fn().mockResolvedValue({
+						id: meteredPriceId,
+						recurring: {
+							usage_type: "metered",
+							interval: "month",
+						},
+					}),
+				},
+				subscriptions: {
+					...mockStripe.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: subscriptionId,
+								status: "active",
+								items: {
+									data: [
+										{
+											id: "si_old",
+											price: {
+												id: oldPriceId,
+												recurring: {
+													usage_type: "licensed",
+													interval: "month",
+												},
+											},
+											quantity: 1,
+										},
+									],
+								},
+								schedule: null,
+							},
+						],
+					}),
+					update: vi.fn().mockResolvedValue({}),
+				},
+				subscriptionSchedules: {
+					...mockStripe.subscriptionSchedules,
+					list: vi.fn().mockResolvedValue({ data: [] }),
+				},
+			};
+
+			const upgradeStripeOptions = {
+				stripeClient: upgradeMockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test",
+				createCustomerOnSignUp: true,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							name: "old-plan",
+							priceId: oldPriceId,
+						},
+						{
+							name: "metered-plan",
+							priceId: meteredPriceId,
+						},
+					],
+				},
+			} satisfies StripeOptions;
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(upgradeStripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const headers = new Headers();
+			const userRes = await client.signUp.email(
+				{
+					email: "metered-upgrade@test.com",
+					password: "password",
+					name: "Upgrade",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "metered-upgrade@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					id: "db_sub_metered_upgrade",
+					plan: "old-plan",
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_mock123",
+					stripeSubscriptionId: subscriptionId,
+					status: "active",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+
+			await client.subscription.upgrade({
+				plan: "metered-plan",
+				fetchOptions: { headers },
+			});
+
+			expect(
+				upgradeMockStripe.billingPortal.sessions.create,
+			).toHaveBeenCalled();
+			const portalCall =
+				upgradeMockStripe.billingPortal.sessions.create.mock.calls[0][0];
+			const portalItem =
+				portalCall.flow_data.subscription_update_confirm.items[0];
+
+			expect(portalItem.price).toBe(meteredPriceId);
+			expect(portalItem).not.toHaveProperty("quantity");
+		});
+
+		it("should not include quantity for metered price during direct subscription upgrade", async () => {
+			vi.clearAllMocks();
+
+			const oldPriceId = "price_old_licensed";
+			const meteredPriceId = "price_metered_direct";
+			const subscriptionId = "sub_metered_direct";
+
+			const upgradeMockStripe = {
+				...mockStripe,
+				prices: {
+					...mockStripe.prices,
+					retrieve: vi.fn().mockResolvedValue({
+						id: meteredPriceId,
+						recurring: {
+							usage_type: "metered",
+							interval: "month",
+						},
+					}),
+				},
+				subscriptions: {
+					...mockStripe.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: subscriptionId,
+								status: "active",
+								items: {
+									data: [
+										{
+											id: "si_old",
+											price: {
+												id: oldPriceId,
+												recurring: {
+													usage_type: "licensed",
+													interval: "month",
+												},
+											},
+											quantity: 1,
+										},
+									],
+								},
+								schedule: null,
+							},
+						],
+					}),
+					update: vi.fn().mockResolvedValue({}),
+				},
+				subscriptionSchedules: {
+					...mockStripe.subscriptionSchedules,
+					list: vi.fn().mockResolvedValue({ data: [] }),
+				},
+			};
+
+			const upgradeStripeOptions = {
+				stripeClient: upgradeMockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test",
+				createCustomerOnSignUp: true,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							name: "old-plan",
+							priceId: oldPriceId,
+							lineItems: [{ price: "price_addon_old" }],
+						},
+						{
+							name: "metered-plan",
+							priceId: meteredPriceId,
+						},
+					],
+				},
+			} satisfies StripeOptions;
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(upgradeStripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const headers = new Headers();
+			const userRes = await client.signUp.email(
+				{
+					email: "metered-direct@test.com",
+					password: "password",
+					name: "Direct",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "metered-direct@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					id: "db_sub_metered_direct",
+					plan: "old-plan",
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_mock123",
+					stripeSubscriptionId: subscriptionId,
+					status: "active",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+
+			await client.subscription.upgrade({
+				plan: "metered-plan",
+				fetchOptions: { headers },
+			});
+
+			expect(upgradeMockStripe.subscriptions.update).toHaveBeenCalled();
+			const updateCall =
+				upgradeMockStripe.subscriptions.update.mock.calls[0][1];
+			const meteredItem = updateCall.items.find(
+				(item: { price?: string }) => item.price === meteredPriceId,
+			);
+
+			expect(meteredItem).toBeDefined();
+			expect(meteredItem).not.toHaveProperty("quantity");
+		});
+
+		it("should not include quantity for metered price during scheduled upgrade", async () => {
+			vi.clearAllMocks();
+
+			const oldPriceId = "price_old_scheduled";
+			const meteredPriceId = "price_metered_scheduled";
+			const subscriptionId = "sub_metered_scheduled";
+
+			const scheduleMockStripe = {
+				...mockStripe,
+				prices: {
+					...mockStripe.prices,
+					retrieve: vi.fn().mockResolvedValue({
+						id: meteredPriceId,
+						recurring: {
+							usage_type: "metered",
+							interval: "month",
+						},
+					}),
+				},
+				subscriptions: {
+					...mockStripe.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: subscriptionId,
+								status: "active",
+								items: {
+									data: [
+										{
+											id: "si_old_scheduled",
+											price: {
+												id: oldPriceId,
+												recurring: {
+													usage_type: "licensed",
+													interval: "month",
+												},
+											},
+											quantity: 1,
+											current_period_start: Math.floor(Date.now() / 1000),
+											current_period_end:
+												Math.floor(Date.now() / 1000) + 30 * 86400,
+										},
+									],
+								},
+								schedule: null,
+							},
+						],
+					}),
+				},
+				subscriptionSchedules: {
+					...mockStripe.subscriptionSchedules,
+					list: vi.fn().mockResolvedValue({ data: [] }),
+					create: vi.fn().mockResolvedValue({
+						id: "sub_sched_metered",
+						phases: [
+							{
+								start_date: Math.floor(Date.now() / 1000),
+								end_date: Math.floor(Date.now() / 1000) + 30 * 86400,
+								items: [
+									{
+										price: oldPriceId,
+										quantity: 1,
+									},
+								],
+							},
+						],
+					}),
+					update: vi.fn().mockResolvedValue({}),
+				},
+			};
+
+			const scheduleStripeOptions = {
+				stripeClient: scheduleMockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test",
+				createCustomerOnSignUp: true,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							name: "old-plan",
+							priceId: oldPriceId,
+						},
+						{
+							name: "metered-plan",
+							priceId: meteredPriceId,
+						},
+					],
+				},
+			} satisfies StripeOptions;
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(scheduleStripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const headers = new Headers();
+			const userRes = await client.signUp.email(
+				{
+					email: "metered-schedule@test.com",
+					password: "password",
+					name: "Schedule",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "metered-schedule@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					id: "db_sub_metered_scheduled",
+					plan: "old-plan",
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_mock123",
+					stripeSubscriptionId: subscriptionId,
+					status: "active",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+
+			await client.subscription.upgrade({
+				plan: "metered-plan",
+				scheduleAtPeriodEnd: true,
+				fetchOptions: { headers },
+			});
+
+			expect(
+				scheduleMockStripe.subscriptionSchedules.update,
+			).toHaveBeenCalled();
+			const scheduleUpdate =
+				scheduleMockStripe.subscriptionSchedules.update.mock.calls[0][1];
+			const newPhase = scheduleUpdate.phases[1];
+			const meteredItem = newPhase.items.find(
+				(item: { price: string }) => item.price === meteredPriceId,
+			);
+
+			expect(meteredItem).toBeDefined();
+			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 	});
 });

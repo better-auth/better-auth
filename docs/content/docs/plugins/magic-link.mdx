@@ -8,7 +8,7 @@ Magic link or email link is a way to authenticate users without a password. When
 ## Installation
 
 <Steps>
-    <Step>
+  <Step>
     ### Add the server Plugin
 
     Add the magic link plugin to your server:
@@ -27,9 +27,9 @@ Magic link or email link is a way to authenticate users without a password. When
         ]
     })
     ```
-    </Step>
+  </Step>
 
-    <Step>
+  <Step>
     ### Add the client Plugin
 
     Add the magic link plugin to your client:
@@ -37,15 +37,14 @@ Magic link or email link is a way to authenticate users without a password. When
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
     import { magicLinkClient } from "better-auth/client/plugins"; // [!code highlight]
-    
+
     export const authClient = createAuthClient({
         plugins: [
             magicLinkClient() // [!code highlight]
         ]
     });
     ```
-    </Step>
-
+  </Step>
 </Steps>
 
 ## Usage
@@ -54,49 +53,43 @@ Magic link or email link is a way to authenticate users without a password. When
 
 To sign in with a magic link, you need to call `signIn.magicLink` with the user's email address. The `sendMagicLink` function is called to send the magic link to the user's email.
 
-
-<APIMethod
-  path="/sign-in/magic-link"
-  method="POST"
-  requireSession
->
-  
-```ts
-type signInMagicLink = {
-    /**
-     * Email address to send the magic link. 
-     */
-    email: string = "user@email.com"
-    /**
-     * User display name. Only used if the user is registering for the first time. 
-     */
-    name?: string = "my-name"
-    /**
-     * URL to redirect after magic link verification. 
-     */
-    callbackURL?: string = "/dashboard"
-    /**
-     * URL to redirect after new user signup
-     */
-    newUserCallbackURL?: string = "/welcome"
-    /**
-     * URL to redirect if an error happen on verification
-     * If only callbackURL is provided but without an `errorCallbackURL` then they will be 
-     * redirected to the callbackURL with an `error` query parameter.
-     */
-    errorCallbackURL?: string = "/error"
-    /**
-     * Additional metadata forwarded to the sendMagicLink callback.
-     */
-    metadata?: Record<string, any> = { inviteId: "123" }
-}
-```
+<APIMethod path="/sign-in/magic-link" method="POST" requireSession>
+  ```ts
+  type signInMagicLink = {
+      /**
+       * Email address to send the magic link. 
+       */
+      email: string = "user@email.com"
+      /**
+       * User display name. Only used if the user is registering for the first time. 
+       */
+      name?: string = "my-name"
+      /**
+       * URL to redirect after magic link verification. 
+       */
+      callbackURL?: string = "/dashboard"
+      /**
+       * URL to redirect after new user signup
+       */
+      newUserCallbackURL?: string = "/welcome"
+      /**
+       * URL to redirect if an error happen on verification
+       * If only callbackURL is provided but without an `errorCallbackURL` then they will be 
+       * redirected to the callbackURL with an `error` query parameter.
+       */
+      errorCallbackURL?: string = "/error"
+      /**
+       * Additional metadata forwarded to the sendMagicLink callback.
+       */
+      metadata?: Record<string, any> = { inviteId: "123" }
+  }
+  ```
 </APIMethod>
 
 <Callout>
-If the user has not signed up, unless `disableSignUp` is set to `true`, the user will be signed up automatically.
+  If the user has not signed up, unless `disableSignUp` is set to `true`, the user will be signed up automatically.
 
-`signIn.magicLink`, `auth.api.signInMagicLink`, and `POST /sign-in/magic-link` return only `{ status: true }` and do not expose the magic link token. Use the server-only **Generate Magic Link** section below if you need the `url` and `token`.
+  `signIn.magicLink`, `auth.api.signInMagicLink`, and `POST /sign-in/magic-link` return only `{ status: true }` and do not expose the magic link token. Use the server-only **Generate Magic Link** section below if you need the `url` and `token`.
 </Callout>
 
 ### Generate Magic Link
@@ -104,40 +97,33 @@ If the user has not signed up, unless `disableSignUp` is set to `true`, the user
 For trusted server-side workflows, you can generate a magic link without calling
 `sendMagicLink` by using `auth.api.generateMagicLink()`.
 
-<APIMethod
-  path="/magic-link/generate-magic-link"
-  method="POST"
-  isServerOnly
-  requireHeaders
-  resultVariable="response"
->
-  
-```ts
-type generateMagicLink = {
-    /**
-     * Email address to generate the magic link for.
-     */
-    email: string = "user@email.com"
-    /**
-     * User display name. Only used if the user is registering for the first time.
-     */
-    name?: string = "my-name"
-    /**
-     * URL to redirect after magic link verification.
-     */
-    callbackURL?: string = "/dashboard"
-    /**
-     * URL to redirect after new user signup.
-     */
-    newUserCallbackURL?: string = "/welcome"
-    /**
-     * URL to redirect if an error happens on verification.
-     * If only callbackURL is provided but without an `errorCallbackURL` then they will be
-     * redirected to the callbackURL with an `error` query parameter.
-     */
-    errorCallbackURL?: string = "/error"
-}
-```
+<APIMethod path="/magic-link/generate-magic-link" method="POST" isServerOnly requireHeaders resultVariable="response">
+  ```ts
+  type generateMagicLink = {
+      /**
+       * Email address to generate the magic link for.
+       */
+      email: string = "user@email.com"
+      /**
+       * User display name. Only used if the user is registering for the first time.
+       */
+      name?: string = "my-name"
+      /**
+       * URL to redirect after magic link verification.
+       */
+      callbackURL?: string = "/dashboard"
+      /**
+       * URL to redirect after new user signup.
+       */
+      newUserCallbackURL?: string = "/welcome"
+      /**
+       * URL to redirect if an error happens on verification.
+       * If only callbackURL is provided but without an `errorCallbackURL` then they will be
+       * redirected to the callbackURL with an `error` query parameter.
+       */
+      errorCallbackURL?: string = "/error"
+  }
+  ```
 </APIMethod>
 
 `generateMagicLink` returns the generated `url` and raw `token`, and leaves
@@ -162,34 +148,29 @@ When you send the URL generated by the `sendMagicLink` function to a user, click
 
 If you want to handle the verification manually, (e.g, if you send the user a different URL), you can use the `verify` function.
 
-
-<APIMethod
-  path="/magic-link/verify"
-  method="GET"
-  requireSession
->
-```ts
-type magicLinkVerify = {
-    /**
-     * Verification token. 
-     */
-    token: string = "123456"
-    /**
-     * URL to redirect after magic link verification, if not provided will return the session. 
-     */
-    callbackURL?: string = "/dashboard"
-}
-```
+<APIMethod path="/magic-link/verify" method="GET" requireSession>
+  ```ts
+  type magicLinkVerify = {
+      /**
+       * Verification token. 
+       */
+      token: string = "123456"
+      /**
+       * URL to redirect after magic link verification, if not provided will return the session. 
+       */
+      callbackURL?: string = "/dashboard"
+  }
+  ```
 </APIMethod>
 
 ## Configuration Options
 
 **sendMagicLink**: The `sendMagicLink` function is called when a user requests a magic link. It takes an object with the following properties:
 
-- `email`: The email address of the user.
-- `url`: The URL to be sent to the user. This URL contains the token.
-- `token`: The token if you want to send the token with custom URL.
-- `metadata`: Additional request metadata passed from `signIn.magicLink`.
+* `email`: The email address of the user.
+* `url`: The URL to be sent to the user. This URL contains the token.
+* `token`: The token if you want to send the token with custom URL.
+* `metadata`: Additional request metadata passed from `signIn.magicLink`.
 
 and a `ctx` context object as the second parameter.
 
@@ -204,7 +185,7 @@ If you use `auth.api.generateMagicLink()`, `sendMagicLink` is not called and
 
 **generateToken**: The `generateToken` function is called to generate a token which is used to uniquely identify the user. The default value is a random string. There is one parameter:
 
-- `email`: The email address of the user.
+* `email`: The email address of the user.
 
 <Callout type="warn">
   When using `generateToken`, ensure that the returned string is hard to guess
@@ -216,8 +197,8 @@ If you use `auth.api.generateMagicLink()`, `sendMagicLink` is not called and
 
 The `storeToken` function can be one of the following:
 
-- `"plain"`: The token is stored in plain text.
-- `"hashed"`: The token is hashed using the default hasher.
-- `{ type: "custom-hasher", hash: (token: string) => Promise<string> }`: The token is hashed using a custom hasher.
+* `"plain"`: The token is stored in plain text.
+* `"hashed"`: The token is hashed using the default hasher.
+* `{ type: "custom-hasher", hash: (token: string) => Promise<string> }`: The token is hashed using a custom hasher.
 
 The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config. If you configure `secondaryStorage`, magic link verification records can be stored there instead of the database.
