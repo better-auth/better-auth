@@ -1849,7 +1849,7 @@ export const oauthRefreshTokenTableFields = [
       "ID of the session used at issuance of the token (and still active)",
     isForeignKey: true,
     isOptional: true,
-    references: { model: "session", field: "id" },
+    references: { model: "session", field: "id", onDelete: "set null" },
   },
   {
     name: "userId",
@@ -1927,7 +1927,7 @@ export const oauthAccessTokenTableFields = [
       "ID of the session used at issuance of the token (and still active)",
     isForeignKey: true,
     isOptional: true,
-    references: { model: "session", field: "id" },
+    references: { model: "session", field: "id", onDelete: "set null" },
   },
   {
     name: "refreshId",
