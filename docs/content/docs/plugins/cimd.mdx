@@ -9,7 +9,7 @@ description: Unauthenticated dynamic client discovery for Better Auth's OAuth pr
 
 This is the mechanism [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow) uses so authorization servers can discover clients on the fly.
 
-The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) via its `clientResolver` option, so every OAuth endpoint that authenticates a client (authorize, token, introspect, revoke, userinfo, PAR, logout) works seamlessly with URL-format `client_id` values.
+The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) by appending a `ClientDiscovery` entry to its `clientDiscovery` option, so every OAuth endpoint that authenticates a client (authorize, token, introspect, revoke, userinfo, PAR, logout) works seamlessly with URL-format `client_id` values.
 
 ## Installation
 
@@ -90,34 +90,34 @@ cimd({
 
 <TypeTable
   type={{
-  refreshRate: {
-    type: "number | string",
-    default: '"60m"',
-    description:
-      "How frequently to re-fetch a client's metadata document. Number values are seconds; strings are duration expressions (e.g. `\"60m\"`, `\"1d\"`). A value of `0` makes every request stale (useful for tests).",
-  },
-  originBoundFields: {
-    type: "string[]",
-    default: '["redirect_uris", "post_logout_redirect_uris", "client_uri"]',
-    description:
-      "Metadata fields whose URL values must share the same origin as the `client_id` URL. Localhost is accepted for redirect URI fields (for native and desktop flows) but never for `client_uri` or custom fields. Pass an empty array to disable origin binding.",
-  },
-  allowFetch: {
-    type: "(url, ctx) => boolean | Promise<boolean>",
-    default: "always allow",
-    description:
-      "Pre-fetch gate: return `false` to reject a `client_id` URL before the metadata document is requested. Use this for origin allowlists, per-host rate limiting, or DNS-level defenses beyond the built-in IP-literal SSRF check.",
-  },
-  onClientCreated: {
-    type: "(data: { client, metadata, ctx }) => void | Promise<void>",
-    description:
-      "Called once, after a new client has been persisted. The `metadata` argument is the raw JSON body of the metadata document.",
-  },
-  onClientRefreshed: {
-    type: "(data: { client, metadata, ctx }) => void | Promise<void>",
-    description:
-      "Called each time an existing client record is re-fetched and updated. Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes; use this hook to detect document changes or sync derived data.",
-  },
+refreshRate: {
+  type: "number | string",
+  default: '"60m"',
+  description:
+    "How frequently to re-fetch a client's metadata document. Number values are seconds; strings are duration expressions (e.g. `\"60m\"`, `\"1d\"`). A value of `0` makes every request stale (useful for tests).",
+},
+originBoundFields: {
+  type: "string[]",
+  default: '["redirect_uris", "post_logout_redirect_uris", "client_uri"]',
+  description:
+    "Metadata fields whose URL values must share the same origin as the `client_id` URL. Localhost is accepted for redirect URI fields (for native and desktop flows) but never for `client_uri` or custom fields. Pass an empty array to disable origin binding.",
+},
+allowFetch: {
+  type: "(url, ctx) => boolean | Promise<boolean>",
+  default: "always allow",
+  description:
+    "Pre-fetch gate: return `false` to reject a `client_id` URL before the metadata document is requested. Use this for origin allowlists, per-host rate limiting, or DNS-level defenses beyond the built-in IP-literal SSRF check.",
+},
+onClientCreated: {
+  type: "(data: { client, metadata, ctx }) => void | Promise<void>",
+  description:
+    "Called once, after a new client has been persisted. The `metadata` argument is the raw JSON body of the metadata document.",
+},
+onClientRefreshed: {
+  type: "(data: { client, metadata, ctx }) => void | Promise<void>",
+  description:
+    "Called each time an existing client record is re-fetched and updated. Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes; use this hook to detect document changes or sync derived data.",
+},
 }}
 />
 
@@ -159,8 +159,8 @@ The fetched document must satisfy both §3 and §4.1 of the draft. Key rules enf
 
 The plugin ships defense in depth against common abuses of unauthenticated client discovery:
 
-* **SSRF protection.** Private and reserved IP ranges (RFC 6890), IPv4-mapped IPv6, link-local addresses, and cloud metadata endpoints (`metadata.google.internal`, `169.254.169.254`) are all rejected. No DNS resolution is performed, so the same rules run identically on Node, Bun, Deno, and Cloudflare Workers.
-* **Fetch hardening.** 5-second timeout, 5 KB response size limit (UTF-8 byte-counted), no redirect following, `Accept: application/json` only.
+* **SSRF protection (server-side request forgery).** Private and reserved IP ranges (RFC 6890), IPv4-mapped IPv6, link-local addresses, and cloud metadata endpoints (`metadata.google.internal`, `169.254.169.254`) are all rejected. The plugin does no DNS resolution, so the same rules run identically on Node, Bun, Deno, and Cloudflare Workers.
+* **Fetch hardening.** 5s timeout, 5 KB response size limit (UTF-8 byte-counted), no redirect following, `Accept: application/json` only.
 * **Origin binding.** Fields in `originBoundFields` must share the `client_id` origin. Cross-domain redirect injection is blocked by default.
 * **No secrets from documents.** Symmetric authentication methods and `client_secret` fields are rejected before anything is written to the database.
 * **Admin-field stripping.** `disabled`, `skip_consent`, `enable_end_session`, and `require_pkce` cannot be set, escalated, or weakened from an external document.
