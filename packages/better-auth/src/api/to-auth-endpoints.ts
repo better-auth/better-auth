@@ -22,7 +22,9 @@ import type {
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
+import { resolveRequestContext } from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
+import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -66,6 +68,35 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
+function pickSource(
+	input: UserInputContext | undefined,
+): Request | Headers | undefined {
+	if (isRequestLike(input?.request)) return input.request;
+	if (!input?.headers) return undefined;
+
+	const headers = new Headers(input.headers);
+	const hasHost = headers.has("host") || headers.has("x-forwarded-host");
+	if (!hasHost) return undefined;
+
+	return headers;
+}
+
+// Direct `auth.api` calls bypass the HTTP handler's per-request resolution.
+async function resolveDynamicContext(
+	rawCtx: AuthContext,
+	input: UserInputContext | undefined,
+): Promise<AuthContext> {
+	const source = pickSource(input);
+	const config = rawCtx.options.baseURL;
+	const hasFallback =
+		isDynamicBaseURLConfig(config) && Boolean(config.fallback);
+
+	const canResolve = source !== undefined || hasFallback;
+	if (!canResolve) return rawCtx;
+
+	return resolveRequestContext(rawCtx, source);
+}
+
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
 	ctx: AuthContext | Promise<AuthContext>,
@@ -89,10 +120,16 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				: endpointMethod;
 
 			const run = async () => {
-				const authContext = await ctx;
+				const rawContext = await ctx;
 				const methodName =
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
-				const pathName = context?.path ?? endpoint.path ?? "/:virtual";
+				const route = endpoint.path ?? "/:virtual";
+
+				// Direct API calls bypass the handler's per-request resolution.
+				// Rehydrate only when the dynamic branch actually applies so the static path stays zero-overhead.
+				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
+					? await resolveDynamicContext(rawContext, context)
+					: rawContext;
 
 				let internalContext: InternalContext = {
 					...context,
@@ -108,9 +145,9 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				const hasRequest = context?.request instanceof Request;
 				const shouldReturnResponse = context?.asResponse ?? hasRequest;
 				return withSpan(
-					`${methodName} ${pathName}`,
+					`${methodName} ${route}`,
 					{
-						[ATTR_HTTP_ROUTE]: pathName,
+						[ATTR_HTTP_ROUTE]: route,
 						[ATTR_OPERATION_ID]: operationId,
 					},
 					async () =>
@@ -166,9 +203,9 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								internalContext,
 								() =>
 									withSpan(
-										`handler ${pathName}`,
+										`handler ${route}`,
 										{
-											[ATTR_HTTP_ROUTE]: pathName,
+											[ATTR_HTTP_ROUTE]: route,
 											[ATTR_OPERATION_ID]: operationId,
 										},
 										() => (endpoint as any)(internalContext as any),
@@ -285,12 +322,12 @@ async function runBeforeHooks(
 		}
 		if (matched) {
 			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
-			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const route = endpoint.path ?? "/:virtual";
 			const result = await withSpan(
-				`hook before ${path} ${hookSource}`,
+				`hook before ${route} ${hookSource}`,
 				{
 					[ATTR_HOOK_TYPE]: "before",
-					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_HTTP_ROUTE]: route,
 					[ATTR_CONTEXT]: hookSource,
 					[ATTR_OPERATION_ID]: operationId,
 				},
@@ -342,12 +379,12 @@ async function runAfterHooks(
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
 			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
-			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const route = endpoint.path ?? "/:virtual";
 			const result = (await withSpan(
-				`hook after ${path} ${hookSource}`,
+				`hook after ${route} ${hookSource}`,
 				{
 					[ATTR_HOOK_TYPE]: "after",
-					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_HTTP_ROUTE]: route,
 					[ATTR_CONTEXT]: hookSource,
 					[ATTR_OPERATION_ID]: operationId,
 				},

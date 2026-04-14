@@ -1,4 +1,9 @@
-import { randomUUID } from "node:crypto";
+import {
+	createPrivateKey,
+	createPublicKey,
+	createVerify,
+	randomUUID,
+} from "node:crypto";
 import type { createServer } from "node:http";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
@@ -356,15 +361,62 @@ const createTemplateCallback =
 		};
 	};
 
-const createMockSAMLIdP = (port: number) => {
+/**
+ * Verifies a SAML HTTP-Redirect binding signature per SAML 2.0 Bindings §3.4.4.1.
+ * The signed string is reconstructed from the raw query string (everything before &Signature=).
+ */
+function verifyRedirectSignature(
+	rawUrl: string,
+	spSigningKey: string,
+	spSigningKeyPass?: string,
+): boolean {
+	const queryStart = rawUrl.indexOf("?");
+	if (queryStart === -1) return false;
+	const queryString = rawUrl.substring(queryStart + 1);
+
+	const signatureParam = "&Signature=";
+	const signatureIndex = queryString.indexOf(signatureParam);
+	if (signatureIndex === -1) return false;
+
+	const signedData = queryString.substring(0, signatureIndex);
+	const signatureValue = decodeURIComponent(
+		queryString.substring(signatureIndex + signatureParam.length),
+	);
+
+	const cleanKey = spSigningKey
+		.split("\n")
+		.map((line) => line.trim())
+		.join("\n");
+	const privateKey = createPrivateKey({
+		key: cleanKey,
+		format: "pem",
+		...(spSigningKeyPass ? { passphrase: spSigningKeyPass } : {}),
+	});
+	const publicKey = createPublicKey(privateKey);
+
+	const verifier = createVerify("RSA-SHA256");
+	verifier.update(signedData);
+	return verifier.verify(publicKey, signatureValue, "base64");
+}
+
+interface MockIdPOptions {
+	idpMetadataXml?: string;
+	wantAuthnRequestsSigned?: boolean;
+	spSigningKey?: string;
+	spSigningKeyPass?: string;
+}
+
+const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 	const app: ExpressApp = express();
 	let server: ReturnType<typeof createServer> | undefined;
 
 	app.use(bodyParser.urlencoded({ extended: true }));
 	app.use(bodyParser.json());
 
+	const idpMetadataXml = options.idpMetadataXml || idpMetadata;
+
 	const idp = saml.IdentityProvider({
-		metadata: idpMetadata,
+		metadata: idpMetadataXml,
 		privateKey: idPk,
 		isAssertionEncrypted: false,
 		privateKeyPass: "jXmKf9By6ruLnUdRo90G",
@@ -396,9 +448,43 @@ const createMockSAMLIdP = (port: number) => {
 	const sp = saml.ServiceProvider({
 		metadata: spMetadata,
 	});
-	app.get(
-		"/api/sso/saml2/idp/post",
-		async (req: ExpressRequest, res: ExpressResponse) => {
+
+	const handleIdPRequest = async (
+		req: ExpressRequest,
+		res: ExpressResponse,
+	) => {
+		try {
+			if (options.wantAuthnRequestsSigned) {
+				const { SAMLRequest, SigAlg, Signature } = req.query;
+				if (!SAMLRequest || !SigAlg || !Signature) {
+					return res
+						.status(400)
+						.json({ error: "Missing required signature parameters" });
+				}
+				if (!options.spSigningKey) {
+					return res
+						.status(500)
+						.json({ error: "Mock IdP not configured with SP signing key" });
+				}
+				const expectedSigAlg =
+					"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+				if (String(SigAlg) !== expectedSigAlg) {
+					return res.status(400).json({
+						error: `Unsupported signature algorithm: ${String(SigAlg)}`,
+					});
+				}
+				const isValid = verifyRedirectSignature(
+					req.originalUrl,
+					options.spSigningKey,
+					options.spSigningKeyPass,
+				);
+				if (!isValid) {
+					return res
+						.status(400)
+						.json({ error: "Invalid AuthnRequest signature" });
+				}
+			}
+
 			const emailCase = req.query.emailCase as string;
 			const emailValue =
 				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
@@ -414,30 +500,16 @@ const createMockSAMLIdP = (port: number) => {
 				user,
 				createTemplateCallback(idp, sp, user.emailAddress),
 			);
-			res.status(200).send({ samlResponse: context, entityEndpoint });
-		},
-	);
-	app.get(
-		"/api/sso/saml2/idp/redirect",
-		async (req: ExpressRequest, res: ExpressResponse) => {
-			const emailCase = req.query.emailCase as string;
-			const emailValue =
-				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
-			const user = {
-				email: emailValue,
-				emailAddress: emailValue,
-				famName: "hello world",
-			};
-			const { context, entityEndpoint } = await idp.createLoginResponse(
-				sp,
-				{} as any,
-				saml.Constants.wording.binding.post,
-				user,
-				createTemplateCallback(idp, sp, user.emailAddress),
-			);
-			res.status(200).send({ samlResponse: context, entityEndpoint });
-		},
-	);
+			res.status(200).json({ samlResponse: context, entityEndpoint });
+		} catch (error) {
+			res.status(500).json({
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	};
+
+	app.get("/api/sso/saml2/idp/post", handleIdPRequest);
+	app.get("/api/sso/saml2/idp/redirect", handleIdPRequest);
 	app.post("/api/sso/saml2/sp/acs", async (req: any, res: any) => {
 		try {
 			const parseResult = await sp.parseLoginResponse(
@@ -480,7 +552,7 @@ const createMockSAMLIdP = (port: number) => {
 		"/api/sso/saml2/idp/metadata",
 		(req: ExpressRequest, res: ExpressResponse) => {
 			res.type("application/xml");
-			res.send(idpMetadata);
+			res.send(idpMetadataXml);
 		},
 	);
 	const start = () =>
@@ -589,9 +661,8 @@ describe("SAML SSO with defaultSSO array", async () => {
 });
 
 describe("SAML SSO with signed AuthnRequests", async () => {
-	// IdP metadata with WantAuthnRequestsSigned="true" for testing signed requests
 	const idpMetadataWithSignedRequests = `
-    <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/idp/metadata">
+    <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8082/api/sso/saml2/idp/metadata">
     <md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
         <md:KeyDescriptor use="signing">
         <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
@@ -600,11 +671,18 @@ describe("SAML SSO with signed AuthnRequests", async () => {
             </ds:X509Data>
         </ds:KeyInfo>
         </md:KeyDescriptor>
-        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/redirect"/>
-        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/post"/>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8082/api/sso/saml2/idp/redirect"/>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8082/api/sso/saml2/idp/post"/>
         </md:IDPSSODescriptor>
     </md:EntityDescriptor>
     `;
+
+	const signedMockIdP = createMockSAMLIdP(8082, {
+		idpMetadataXml: idpMetadataWithSignedRequests,
+		wantAuthnRequestsSigned: true,
+		spSigningKey: idPk,
+		spSigningKeyPass: "jXmKf9By6ruLnUdRo90G",
+	});
 
 	const data = {
 		user: [],
@@ -619,13 +697,13 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 	const ssoOptions = {
 		defaultSSO: [
 			{
-				domain: "localhost:8081",
+				domain: "localhost:8082",
 				providerId: "signed-saml",
 				samlConfig: {
-					issuer: "http://localhost:8081",
-					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					issuer: "http://localhost:8082",
+					entryPoint: "http://localhost:8082/api/sso/saml2/idp/redirect",
 					cert: certificate,
-					callbackUrl: "http://localhost:8081/dashboard",
+					callbackUrl: "http://localhost:8082/dashboard",
 					wantAssertionsSigned: false,
 					authnRequestsSigned: true,
 					signatureAlgorithm: "sha256",
@@ -653,7 +731,15 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 		plugins: [sso(ssoOptions)],
 	});
 
-	it("should generate signed AuthnRequest when authnRequestsSigned is true", async () => {
+	beforeAll(async () => {
+		await signedMockIdP.start();
+	});
+
+	afterAll(async () => {
+		await signedMockIdP.stop();
+	});
+
+	it("should generate signed AuthnRequest with Signature and SigAlg", async () => {
 		const signInResponse = await auth.api.signInSSO({
 			body: {
 				providerId: "signed-saml",
@@ -662,13 +748,90 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 		});
 
 		expect(signInResponse).toEqual({
-			url: expect.stringContaining("http://localhost:8081"),
+			url: expect.stringContaining("http://localhost:8082"),
 			redirect: true,
 		});
-		// When authnRequestsSigned is true and privateKey is provided,
-		// samlify adds Signature and SigAlg parameters to the redirect URL
 		expect(signInResponse.url).toContain("Signature=");
 		expect(signInResponse.url).toContain("SigAlg=");
+	});
+
+	it("should include RelayState in the signed URL", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "signed-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse.url).toContain("RelayState=");
+		// RelayState must appear before Signature (it's part of the signed data)
+		const relayStateIdx = signInResponse.url.indexOf("RelayState=");
+		const signatureIdx = signInResponse.url.indexOf("Signature=");
+		expect(relayStateIdx).toBeLessThan(signatureIdx);
+	});
+
+	it("should produce a signature the IdP can verify", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "signed-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		// The mock IdP at port 8082 verifies the AuthnRequest signature.
+		// If the signature is invalid, it returns 400.
+		const res = await fetch(signInResponse.url);
+		const body = await res.json();
+		expect({ status: res.status, body }).toMatchObject({
+			status: 200,
+			body: expect.objectContaining({ samlResponse: expect.any(String) }),
+		});
+	});
+
+	it("should throw when authnRequestsSigned is true but no privateKey is provided", async () => {
+		const noKeyAuth = betterAuth({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+			}),
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			plugins: [
+				sso({
+					defaultSSO: [
+						{
+							domain: "localhost:8082",
+							providerId: "no-key-saml",
+							samlConfig: {
+								issuer: "http://localhost:8082",
+								entryPoint: "http://localhost:8082/api/sso/saml2/idp/redirect",
+								cert: certificate,
+								callbackUrl: "http://localhost:8082/dashboard",
+								authnRequestsSigned: true,
+								spMetadata: {},
+								idpMetadata: {
+									metadata: idpMetadataWithSignedRequests,
+								},
+								identifierFormat:
+									"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		await expect(
+			noKeyAuth.api.signInSSO({
+				body: {
+					providerId: "no-key-saml",
+					callbackURL: "http://localhost:3000/dashboard",
+				},
+			}),
+		).rejects.toThrow(/privateKey/);
 	});
 });
 
@@ -4437,6 +4600,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			),
 		);
 
+		// ACS endpoint translates structural errors into browser-friendly redirects
 		expect(response.status).toBe(302);
 		const location = response.headers.get("location") || "";
 		expect(location).toContain("error=multiple_assertions");
@@ -5598,5 +5762,319 @@ describe("SAML provisionUserOnEveryLogin should call provisionUser on every sign
 		});
 
 		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * @see https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
+ * @see https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf
+ */
+describe("SAML SSO Hardening", () => {
+	/**
+	 * RFC: SAML 2.0 Core §2.3.3 - ACS URL in SP metadata MUST match the ACS URL
+	 * in AuthnRequests. When callbackUrl is omitted, both should derive the same
+	 * ACS from baseURL + providerId.
+	 */
+	describe("ACS URL consistency (provider.id vs providerId)", () => {
+		// When callbackUrl is split from ACS URL, SP metadata should
+		// always derive the ACS from baseURL + providerId regardless of callbackUrl.
+		it.todo("should use providerId (not internal row ID) in SP metadata ACS URL when callbackUrl is an app destination", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// Register with callbackUrl pointing to app destination (not an ACS route).
+			// When spMetadata.metadata is absent, the SP metadata endpoint should
+			// generate an ACS URL from baseURL + providerId, not from provider.id (row UUID).
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "acs-consistency-test",
+					issuer: "http://localhost:8081",
+					domain: "acs-test.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:3000/dashboard",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const spMetadataRes = await auth.api.spMetadata({
+				query: { providerId: "acs-consistency-test" },
+			});
+			const xml = await spMetadataRes.text();
+
+			// When callbackUrl is an app destination (not an ACS URL), the SP metadata
+			// generator should still use a proper ACS URL with the providerId.
+			// The generated metadata should contain the providerId, not the row UUID.
+			expect(xml).toContain("acs-consistency-test");
+		});
+
+		// When callbackUrl is split from ACS URL, both SP metadata
+		// and AuthnRequest should derive ACS from the same source.
+		it.todo("should produce matching ACS URLs in SP metadata and AuthnRequest", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "acs-match-test",
+					issuer: "http://localhost:8081",
+					domain: "acs-match.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:3000/dashboard",
+						idpMetadata: {
+							metadata: idpMetadata,
+						},
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			// Get ACS URL from SP metadata
+			const spMetadataRes = await auth.api.spMetadata({
+				query: { providerId: "acs-match-test" },
+			});
+			const metadataXml = await spMetadataRes.text();
+			const metadataAcsMatch = metadataXml.match(
+				/Location="([^"]*\/sso\/saml2\/sp\/acs[^"]*)"/,
+			);
+			expect(metadataAcsMatch).not.toBeNull();
+			const metadataAcsUrl = metadataAcsMatch![1];
+
+			// Get ACS URL from AuthnRequest
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "acs-match-test",
+					callbackURL: "/dashboard",
+				},
+			});
+			// The redirect URL's SAMLRequest contains the ACS URL; we verify
+			// they both derive from the same providerId
+			expect(metadataAcsUrl).toContain("acs-match-test");
+			expect(signInResponse.url).toBeDefined();
+		});
+	});
+
+	/**
+	 * Better-auth specific: acsEndpoint provider lookup MUST fall back to the
+	 * database when defaultSSO is configured but no entry matches the providerId.
+	 */
+	describe("Provider lookup fallback", () => {
+		it("should find DB provider even when defaultSSO is configured with different providers", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						defaultSSO: [
+							{
+								providerId: "default-provider",
+								domain: "default.example.com",
+								samlConfig: {
+									issuer: "http://localhost:8081",
+									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+									cert: certificate,
+									callbackUrl: "http://localhost:3000/dashboard",
+									spMetadata: { metadata: spMetadata },
+								},
+							},
+						],
+					}),
+				],
+			});
+
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "db-provider",
+					issuer: "http://localhost:8081",
+					domain: "db.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:3000/dashboard",
+						spMetadata: { metadata: spMetadata },
+						idpMetadata: { metadata: idpMetadata },
+					},
+				},
+				headers,
+			});
+
+			// POST a SAMLResponse to ACS for the DB provider
+			// The endpoint MUST find "db-provider" in the database, not fall back to defaultSSO[0]
+			const response = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/db-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "invalid-but-tests-provider-lookup",
+						}),
+					},
+				),
+			);
+
+			// Should NOT return 404 (which would mean it didn't find the provider)
+			// It will return 400 because the SAMLResponse is invalid, but the
+			// provider lookup itself should succeed
+			expect(response.status).not.toBe(404);
+		});
+
+		it("should return 404 for nonexistent providerId even when defaultSSO is configured", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					sso({
+						defaultSSO: [
+							{
+								providerId: "default-provider",
+								domain: "default.example.com",
+								samlConfig: {
+									issuer: "http://localhost:8081",
+									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+									cert: certificate,
+									callbackUrl: "http://localhost:3000/dashboard",
+									spMetadata: { metadata: spMetadata },
+								},
+							},
+						],
+					}),
+				],
+			});
+
+			// POST to ACS for a provider that doesn't exist anywhere
+			const response = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/nonexistent-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "irrelevant",
+						}),
+					},
+				),
+			);
+
+			// MUST be 404 — should NOT fall back to defaultSSO[0]
+			expect(response.status).toBe(404);
+		});
+	});
+
+	/**
+	 * Better-auth specific: registration-time validation should catch config
+	 * errors early rather than failing silently at sign-in time.
+	 */
+	describe("Registration-time config validation", () => {
+		it("should reject registration with empty entryPoint and no idpMetadata.metadata", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// This config has no way to reach the IdP: entryPoint is empty and
+			// there's no idpMetadata.metadata to extract it from. The registration
+			// should fail instead of creating a broken provider that silently fails
+			// at sign-in time.
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						providerId: "broken-config",
+						issuer: "http://localhost:8081",
+						domain: "broken.example.com",
+						samlConfig: {
+							entryPoint: "not-a-url",
+							cert: "placeholder",
+							callbackUrl: "http://localhost:3000/dashboard",
+							spMetadata: {},
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: expect.objectContaining({
+					message: expect.stringContaining("entryPoint"),
+				}),
+			});
+		});
+	});
+
+	/**
+	 * SAML 2.0 Bindings §3.5.3 - RelayState is an opaque reference to state
+	 * maintained at the SP. The SP MUST use it to determine where to redirect
+	 * the user after authentication. Config-level callbackUrl is a fallback.
+	 */
+	describe("RelayState priority over callbackUrl", () => {
+		it("should redirect to RelayState callbackURL, not config callbackUrl", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "relay-priority-test",
+					issuer: "http://localhost:8081",
+					domain: "relay.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:3000/from-config",
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			// Sign in with a specific callbackURL
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "relay-priority-test",
+					callbackURL: "/from-relay-state",
+				},
+			});
+
+			// Get SAMLResponse from mock IdP
+			let samlResponse: any;
+			await betterFetch(signInResponse.url as string, {
+				onSuccess: async (context) => {
+					samlResponse = await context.data;
+				},
+			});
+
+			// Extract RelayState from the sign-in redirect URL
+			const signInUrl = new URL(signInResponse.url as string);
+			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
+
+			// POST to callback with RelayState
+			const callbackResponse = (await auth.api.callbackSSOSAML({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: relayState,
+				},
+				params: { providerId: "relay-priority-test" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			const location = callbackResponse.headers.get("location") || "";
+
+			// MUST redirect to the RelayState callbackURL, not config's callbackUrl
+			expect(location).toContain("/from-relay-state");
+			expect(location).not.toContain("/from-config");
+		});
 	});
 });
