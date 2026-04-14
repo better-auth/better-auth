@@ -14,6 +14,7 @@ import type {
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
+import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
 import {
 	decryptStoredClientSecret,
@@ -72,7 +73,7 @@ export async function tokenEndpoint(
 async function createJwtAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	user: User,
+	user: User | undefined,
 	client: SchemaClient<Scope[]>,
 	audience: string | string[],
 	scopes: string[],
@@ -102,7 +103,7 @@ async function createJwtAccessToken(
 		options: jwtPluginOptions,
 		payload: {
 			...customClaims,
-			sub: user.id,
+			sub: user?.id,
 			aud:
 				typeof audience === "string"
 					? audience
@@ -424,22 +425,42 @@ async function checkResource(
 	return audience?.length === 1 ? audience.at(0) : audience;
 }
 
+interface CreateUserTokensParams {
+	client: SchemaClient<Scope[]>;
+	scopes: string[];
+	grantType: GrantType;
+	user?: User;
+	referenceId?: string;
+	sessionId?: string;
+	nonce?: string;
+	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+	authTime?: Date;
+	verificationValue?: VerificationValue;
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	client: SchemaClient<Scope[]>,
-	scopes: string[],
-	user: User,
-	referenceId?: string,
-	sessionId?: string,
-	nonce?: string,
-	additional?: {
-		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
-	},
-	authTime?: Date,
+	params: CreateUserTokensParams,
 ) {
+	const {
+		client,
+		scopes,
+		user,
+		grantType,
+		referenceId,
+		sessionId,
+		nonce,
+		refreshToken: existingRefreshToken,
+		authTime,
+		verificationValue,
+	} = params;
+
 	const iat = Math.floor(Date.now() / 1000);
-	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
+	const baseExpiry = user
+		? (opts.accessTokenExpiresIn ?? 3600)
+		: (opts.m2mAccessTokenExpiresIn ?? 3600);
+	const defaultExp = iat + baseExpiry;
 	const exp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
@@ -455,14 +476,26 @@ async function createUserTokens(
 	// Check requested audience if sent as the resource parameter
 	const audience = await checkResource(ctx, opts, scopes);
 	const isRefreshToken =
-		additional?.refreshToken?.scopes?.includes("offline_access") ||
-		scopes.includes("offline_access");
+		user &&
+		(existingRefreshToken?.scopes?.includes("offline_access") ||
+			scopes.includes("offline_access"));
 	const isJwtAccessToken = audience && !opts.disableJwtPlugin;
-	const isIdToken = scopes.includes("openid");
+	const isIdToken = user && scopes.includes("openid");
+
+	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
+	const customFields = opts.customTokenResponseFields
+		? await opts.customTokenResponseFields({
+				grantType,
+				user,
+				scopes,
+				metadata: parseClientMetadata(client.metadata),
+				verificationValue,
+			})
+		: undefined;
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
-		isRefreshToken && !isJwtAccessToken
+		isRefreshToken && user && !isJwtAccessToken
 			? await createRefreshToken(
 					ctx,
 					opts,
@@ -475,7 +508,7 @@ async function createUserTokens(
 						exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 						sid: sessionId,
 					},
-					additional?.refreshToken,
+					existingRefreshToken,
 					authTime,
 				)
 			: undefined;
@@ -513,7 +546,7 @@ async function createUserTokens(
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
-			: isRefreshToken
+			: isRefreshToken && user
 				? createRefreshToken(
 						ctx,
 						opts,
@@ -526,7 +559,7 @@ async function createUserTokens(
 							exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
 							sid: sessionId,
 						},
-						additional?.refreshToken,
+						existingRefreshToken,
 						authTime,
 					)
 				: undefined,
@@ -549,10 +582,11 @@ async function createUserTokens(
 
 	return ctx.json(
 		{
+			...customFields,
 			access_token: accessToken,
 			expires_in: exp - iat,
 			expires_at: exp,
-			token_type: "Bearer",
+			token_type: "Bearer" as const,
 			refresh_token: refreshToken?.token,
 			scope: scopes.join(" "),
 			id_token: idToken,
@@ -577,9 +611,6 @@ async function checkVerificationValue(
 	const verification = await ctx.context.internalAdapter.findVerificationValue(
 		await storeToken(opts.storeTokens, code, "authorization_code"),
 	);
-	const verificationValue: VerificationValue = verification
-		? JSON.parse(verification?.value)
-		: undefined;
 
 	if (!verification) {
 		throw new APIError("UNAUTHORIZED", {
@@ -588,12 +619,11 @@ async function checkVerificationValue(
 		});
 	}
 
-	// Delete used code
+	// Delete used code (single-use per RFC 6749 §4.1.2)
 	await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 		await storeToken(opts.storeTokens, code, "authorization_code"),
 	);
 
-	// Check verification
 	if (!verification.expiresAt || verification.expiresAt < new Date()) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "code expired",
@@ -601,29 +631,29 @@ async function checkVerificationValue(
 		});
 	}
 
-	// Check verification value
-	if (!verificationValue) {
+	let rawValue: unknown;
+	try {
+		rawValue = JSON.parse(verification.value);
+	} catch {
 		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing verification value content",
+			error_description: "malformed verification value",
 			error: "invalid_verification",
 		});
 	}
-	if (verificationValue.type !== "authorization_code") {
+	const parsed = verificationValueSchema.safeParse(rawValue);
+	if (!parsed.success) {
 		throw new APIError("UNAUTHORIZED", {
-			error_description: "incorrect verification type",
+			error_description: "malformed verification value",
 			error: "invalid_verification",
 		});
 	}
+	// Zod's passthrough adds index signature; the schema already validates the structure
+	const verificationValue = parsed.data as VerificationValue;
+
 	if (verificationValue.query.client_id !== client_id) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "invalid client_id",
 			error: "invalid_client",
-		});
-	}
-	if (!verificationValue.userId) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "missing user_id on challenge",
-			error: "invalid_user",
 		});
 	}
 	if (
@@ -827,18 +857,17 @@ async function handleAuthorizationCodeGrant(
 			? normalizeTimestampValue(verificationValue.authTime)
 			: resolveSessionAuthTime(session);
 
-	return createUserTokens(
-		ctx,
-		opts,
+	return createUserTokens(ctx, opts, {
 		client,
-		verificationValue.query.scope?.split(" ") ?? [],
+		scopes: verificationValue.query.scope?.split(" ") ?? [],
 		user,
-		verificationValue.referenceId,
-		session.id,
-		verificationValue.query?.nonce,
-		undefined,
+		grantType: "authorization_code",
+		referenceId: verificationValue.referenceId,
+		sessionId: session.id,
+		nonce: verificationValue.query?.nonce,
 		authTime,
-	);
+		verificationValue,
+	});
 }
 
 /**
@@ -916,76 +945,11 @@ async function handleClientCredentialsGrant(
 			[];
 	}
 
-	// Check requested audience if sent as the resource parameter
-	const jwtPluginOptions = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context).options;
-	const audience = await checkResource(ctx, opts, requestedScopes);
-
-	const iat = Math.floor(Date.now() / 1000);
-	const defaultExp = iat + (opts.m2mAccessTokenExpiresIn ?? 3600);
-	const exp =
-		opts.scopeExpirations && requestedScopes
-			? requestedScopes
-					.map((sc) =>
-						opts.scopeExpirations?.[sc]
-							? toExpJWT(opts.scopeExpirations[sc], iat)
-							: defaultExp,
-					)
-					.reduce((prev, curr) => {
-						return prev < curr ? prev : curr;
-					}, defaultExp)
-			: defaultExp;
-
-	const customClaims = opts.customAccessTokenClaims
-		? await opts.customAccessTokenClaims({
-				scopes: requestedScopes,
-				resource: ctx.body.resource,
-				metadata: parseClientMetadata(client.metadata),
-			})
-		: {};
-
-	const accessToken =
-		audience && !opts.disableJwtPlugin
-			? await signJWT(ctx, {
-					options: jwtPluginOptions,
-					payload: {
-						...customClaims,
-						aud: audience,
-						azp: client.clientId,
-						scope: requestedScopes.join(" "),
-						iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-						iat,
-						exp,
-					},
-				})
-			: await createOpaqueAccessToken(
-					ctx,
-					opts,
-					undefined,
-					client,
-					requestedScopes,
-					{
-						iat,
-						exp,
-					},
-				);
-
-	return ctx.json(
-		{
-			access_token: accessToken,
-			expires_in: exp - iat,
-			expires_at: exp,
-			token_type: "Bearer",
-			scope: requestedScopes.join(" "),
-		},
-		{
-			headers: {
-				"Cache-Control": "no-store",
-				Pragma: "no-cache",
-			},
-		},
-	);
+	return createUserTokens(ctx, opts, {
+		client,
+		scopes: requestedScopes,
+		grantType: "client_credentials",
+	});
 }
 
 /**
@@ -1129,18 +1093,14 @@ async function handleRefreshTokenGrant(
 			: undefined;
 
 	// Generate new tokens
-	return createUserTokens(
-		ctx,
-		opts,
+	return createUserTokens(ctx, opts, {
 		client,
-		requestedScopes ?? scopes,
+		scopes: requestedScopes ?? scopes,
 		user,
-		refreshToken.referenceId,
-		refreshToken.sessionId,
-		undefined,
-		{
-			refreshToken,
-		},
+		grantType: "refresh_token",
+		referenceId: refreshToken.referenceId,
+		sessionId: refreshToken.sessionId,
+		refreshToken,
 		authTime,
-	);
+	});
 }

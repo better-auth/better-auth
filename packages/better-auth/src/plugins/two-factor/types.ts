@@ -30,6 +30,11 @@ export interface TwoFactorOptions {
 	 */
 	backupCodeOptions?: BackupCodeOptions | undefined;
 	/**
+	 * Skip verification on enabling two factor authentication.
+	 * @default false
+	 */
+	skipVerificationOnEnable?: boolean | undefined;
+	/**
 	 * Allow enabling and managing 2FA without a password when the user does not
 	 * have a credential account (e.g. passkey-only users).
 	 * When enabled, password is still required if a credential account exists.
