@@ -78,6 +78,23 @@ export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 	unknown
 >;
 
+/**
+ * Extension contracts for platform plugins.
+ *
+ * Host plugins augment this interface to declare the shape
+ * of contributions they accept from other plugins.
+ *
+ * @example
+ * ```ts
+ * declare module "@better-auth/core" {
+ *   interface BetterAuthExtensionRegistry {
+ *     "oauth-provider": OAuthProviderExtension;
+ *   }
+ * }
+ * ```
+ */
+export interface BetterAuthExtensionRegistry {}
+
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = EndpointContext<string, any> & {
@@ -260,6 +277,18 @@ export type PluginContext<Options extends BetterAuthOptions> = {
 	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
 	) => ID extends InferPluginID<Options> ? true : boolean;
+	/**
+	 * Collect all extension contributions targeting a host plugin.
+	 *
+	 * @example
+	 * ```ts
+	 * const extensions = ctx.getExtensions("oauth-provider");
+	 * // extensions is OAuthProviderExtension[]
+	 * ```
+	 */
+	getExtensions: <ID extends keyof BetterAuthExtensionRegistry>(
+		hostId: ID,
+	) => BetterAuthExtensionRegistry[ID][];
 };
 
 export type InfoContext = {
