@@ -56,3 +56,5 @@ Plugins like `@better-auth/cimd` append an entry here at init time, so multiple 
 The `checkOAuthClient` and `oauthToSchema` helpers are now exported for plugins that create client records directly.
 
 `jwks_uri` validation now accepts a same-origin URL when the `client_id` itself is an HTTPS URL, since URL-based discovery flows verify the origin through the `client_id` itself.
+
+Docs recommendation to remove the oauth-provider configuration `allowUnauthenticatedClientRegistration` while using CIMD.
