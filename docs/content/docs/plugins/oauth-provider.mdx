@@ -421,7 +421,7 @@ oauthProvider({
 To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config.
 
 <Callout type="info">
-  For MCP, [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) is [available](/docs/plugins/cimd). [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
+  For MCP, [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) are [available](/docs/plugins/cimd). [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
 </Callout>
 
 ```ts title="auth.ts"
@@ -1146,7 +1146,7 @@ oauthProvider({
 })
 ```
 
-Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header (ie without a session). This is especially useful for an MCP to dynamically register themselves as a public client without an active session. For MCP support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of the public client.
+Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header (i.e. without a session). This is especially useful for an MCP to dynamically register themselves as a public client without an active session. For MCP support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of the public client.
 
 ```ts title="auth.ts"
 oauthProvider({

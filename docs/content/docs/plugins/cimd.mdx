@@ -87,7 +87,7 @@ cimd({
 ```
 
 <Callout type="info">
-  In most cases, it is recommended to remove the oauth-provider configuration `allowUnauthenticatedClientRegistration` when using the CIMD plugin. CIMD provides additional identity behavior and deduplication of client ids for the same URL (eg. client).
+  In most cases, it is recommended to remove the oauth-provider configuration `allowUnauthenticatedClientRegistration` when using the CIMD plugin. CIMD provides additional identity behavior and deduplicates multiple registrations for the same `client_id` URL.
 </Callout>
 
 ### Options
