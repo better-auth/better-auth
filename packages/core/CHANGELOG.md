@@ -1,5 +1,7 @@
 # @better-auth/core
 
+## 1.7.0-beta.1
+
 ## 1.7.0-beta.0
 
 ### Minor Changes

@@ -27,14 +27,26 @@
   },
   "changesets": [
     "cimd-plugin",
+    "dcr-graceful-override-confidential",
+    "dynamic-baseurl-hardening",
+    "fix-2fa-bypass",
+    "fix-backup-codes-storage",
     "fix-password-reset-callback-operation-id",
+    "fix-stripe-defu-prototype-pollution",
+    "generic-oauth-unification",
     "honest-regions-jam",
+    "honest-symbols-stick",
+    "lovely-toes-swim",
+    "oauth-provider-at-hash",
+    "oauth-provider-token-refactor",
     "pr-8926",
     "pr-9032",
     "pr-9084",
     "private-key-jwt",
     "saml-response-validation-hardening",
     "sso-saml-hardening",
+    "sso-saml-model-split",
+    "sso-upgrade-samlify",
     "two-factor-otp-enable"
   ]
 }

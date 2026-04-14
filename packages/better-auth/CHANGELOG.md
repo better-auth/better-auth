@@ -1,5 +1,65 @@
 # better-auth
 
+## 1.7.0-beta.1
+
+### Minor Changes
+
+- [#9069](https://github.com/better-auth/better-auth/pull/9069) [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Rewrite the generic OAuth plugin as a first-class social provider with OAuth 2.1 security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE required by default (OAuth 2.1), RFC 9207 issuer validation, OIDC auto-discovery with `openid` scope injection, and typed provider IDs.
+
+  **Breaking changes:**
+  - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
+  - `oauth2.link()` replaced by `linkSocial()`
+  - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+  - `genericOAuthClient()` deprecated (no longer needed)
+  - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+  - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+  - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+  - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
+
+- [#9079](https://github.com/better-auth/better-auth/pull/9079) [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider): compute `at_hash` in ID tokens per OIDC Core §3.1.3.6
+
+  ID tokens issued alongside an access token now include the `at_hash` claim, which cryptographically binds the two tokens to prevent token substitution attacks. The hash algorithm is selected based on the actual signing key's algorithm (EdDSA/Ed25519 uses SHA-512, RS/ES/PS384 uses SHA-384, RS/ES/PS512 uses SHA-512, all others use SHA-256).
+
+  A new `resolveSigningKey()` export is available from `better-auth/plugins` to resolve the current JWKS signing key (including its algorithm). When using a custom `jwt.sign` callback, the signed ID token's header is validated against the declared algorithm to prevent `at_hash` mismatches.
+
+### Patch Changes
+
+- [#9131](https://github.com/better-auth/better-auth/pull/9131) [`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - harden dynamic `baseURL` handling for direct `auth.api.*` calls and plugin metadata helpers
+
+  **Direct `auth.api.*` calls**
+  - Throw `APIError` with a clear message when the baseURL can't be resolved (no source and no `fallback`), instead of leaving `ctx.context.baseURL = ""` for downstream plugins to crash on.
+  - Convert `allowedHosts` mismatches on the direct-API path to `APIError`.
+  - Honor `advanced.trustedProxyHeaders` on the dynamic path (default `true`, unchanged). Previously `x-forwarded-host` / `-proto` were unconditionally trusted with `allowedHosts`; they now go through the same gate as the static path. The default flip to `false` ships in a follow-up PR.
+  - `resolveRequestContext` rehydrates `trustedProviders` and cookies per call (in addition to `trustedOrigins`). User-defined `trustedOrigins(req)` / `trustedProviders(req)` callbacks receive a `Request` synthesized from forwarded headers when no full `Request` is available.
+  - Infer `http` for loopback hosts (`localhost`, `127.0.0.1`, `[::1]`, `0.0.0.0`) on the headers-only protocol fallback, so local-dev calls don't silently resolve to `https://localhost:3000`.
+  - `hasRequest` uses `isRequestLike`, which now rejects objects that spoof `Symbol.toStringTag` without a real `url` / `headers.get` shape.
+
+  **Plugin metadata helpers**
+  - `oauthProviderAuthServerMetadata`, `oauthProviderOpenIdConfigMetadata`, `oAuthDiscoveryMetadata`, and `oAuthProtectedResourceMetadata` forward the incoming request to their chained `auth.api` calls, so `issuer` and discovery URLs reflect the request host on dynamic configs.
+  - `withMcpAuth` forwards the incoming request to `getMcpSession`, threads `trustedProxyHeaders`, and emits a bare `Bearer` challenge when `baseURL` can't be resolved (instead of `Bearer resource_metadata="undefined/..."`).
+  - `metadataResponse` in `@better-auth/oauth-provider` normalizes headers via `new Headers()` so callers can pass `Headers`, tuple arrays, or records without silently dropping entries.
+
+- [#9122](https://github.com/better-auth/better-auth/pull/9122) [`484ce6a`](https://github.com/better-auth/better-auth/commit/484ce6a262c39b9c1be91d37774a2a13de3a5a1f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(two-factor): enforce 2FA on all sign-in paths
+
+  The 2FA after-hook now triggers on any endpoint that creates a new session, covering magic-link, OAuth, passkey, email-OTP, SIWE, and all future sign-in methods. Authenticated requests (session refreshes, profile updates) are excluded.
+
+- [#7231](https://github.com/better-auth/better-auth/pull/7231) [`f875897`](https://github.com/better-auth/better-auth/commit/f8758975ae475429d56b34aa6067e304ee973c8f) Thanks [@Byte-Biscuit](https://github.com/Byte-Biscuit)! - fix(two-factor): preserve backup codes storage format after verification
+
+  After using a backup code, remaining codes are now re-saved using the same `storeBackupCodes` strategy (plain, encrypted, or custom) configured by the user. Previously, codes were always re-encrypted with the built-in symmetric encryption, breaking subsequent verifications for plain or custom storage modes.
+
+- [#9078](https://github.com/better-auth/better-auth/pull/9078) [`9a6d475`](https://github.com/better-auth/better-auth/commit/9a6d4759cd4451f0535d53f171bcfc8891c41db7) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix(client): prevent isMounted race condition causing many rps
+
+- [#9113](https://github.com/better-auth/better-auth/pull/9113) [`513dabb`](https://github.com/better-auth/better-auth/commit/513dabb132e2c08a5b6d3b7e88dd397fcd66c1af) Thanks [@bytaesu](https://github.com/bytaesu)! - resolve dynamic `baseURL` from request headers on direct `auth.api` calls
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.1
+  - @better-auth/drizzle-adapter@1.7.0-beta.1
+  - @better-auth/kysely-adapter@1.7.0-beta.1
+  - @better-auth/memory-adapter@1.7.0-beta.1
+  - @better-auth/mongo-adapter@1.7.0-beta.1
+  - @better-auth/prisma-adapter@1.7.0-beta.1
+  - @better-auth/telemetry@1.7.0-beta.1
+
 ## 1.7.0-beta.0
 
 ### Minor Changes
