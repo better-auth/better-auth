@@ -66,5 +66,8 @@
     "@better-auth/oauth-provider": "workspace:^",
     "better-auth": "workspace:^",
     "better-call": "catalog:"
+  },
+  "dependencies": {
+    "ipaddr.js": "^2.3.0"
   }
 }
