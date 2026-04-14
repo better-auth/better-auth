@@ -936,6 +936,99 @@ describe("debug mode stack trace", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9105
+ */
+describe("dynamic baseURL resolution", () => {
+	const endpoints = {
+		readBaseURL: createAuthEndpoint(
+			"/read-base-url",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				return { baseURL: c.context.baseURL };
+			},
+		),
+	};
+
+	it("should resolve dynamic baseURL from headers for direct auth.api calls", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "example.com" }),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
+	it("should leave baseURL untouched for static string config", async () => {
+		const authContext = init({
+			baseURL: "https://static.example.com",
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "other.example.com" }),
+		});
+		expect(res.baseURL).toBe("https://static.example.com/api/auth");
+	});
+
+	it("should reject Node IncomingMessage-shaped objects when duck typing", async () => {
+		// A Node http.IncomingMessage has url/method/headers but also socket,
+		// and its headers are a plain object (not Web Headers). Accepting it
+		// as a Fetch Request would crash inside getHostFromSource.
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const fakeIncomingMessage = {
+			url: "/read-base-url",
+			method: "GET",
+			headers: { host: "example.com" },
+			socket: {},
+		};
+		const res = await authEndpoints.readBaseURL({
+			request: fakeIncomingMessage as unknown as Request,
+			headers: new Headers({ host: "example.com" }),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
+	it("should not mutate the shared authContext across calls", async () => {
+		const authContext = init({
+			baseURL: {
+				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
+				protocol: "https",
+			},
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const [resA, resB] = await Promise.all([
+			authEndpoints.readBaseURL({
+				headers: new Headers({ host: "tenant-a.example.com" }),
+			}),
+			authEndpoints.readBaseURL({
+				headers: new Headers({ host: "tenant-b.example.com" }),
+			}),
+		]);
+		expect(resA.baseURL).toBe("https://tenant-a.example.com/api/auth");
+		expect(resB.baseURL).toBe("https://tenant-b.example.com/api/auth");
+
+		const sharedCtx = await authContext;
+		expect(sharedCtx.baseURL).toBe("");
+	});
+});
+
 describe("custom response code", () => {
 	const endpoints = {
 		responseWithStatus: createAuthEndpoint(

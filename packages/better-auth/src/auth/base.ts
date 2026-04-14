@@ -2,15 +2,13 @@ import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
-import { getTrustedOrigins, getTrustedProviders } from "../context/helpers";
-import { createCookieGetter, getCookies } from "../cookies";
-import type { Auth } from "../types";
 import {
-	getBaseURL,
-	getOrigin,
-	isDynamicBaseURLConfig,
-	resolveBaseURL,
-} from "../utils/url";
+	getTrustedOrigins,
+	getTrustedProviders,
+	resolveRequestContext,
+} from "../context/helpers";
+import type { Auth } from "../types";
+import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,
@@ -35,40 +33,9 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			let handlerCtx: AuthContext;
 
 			if (isDynamicBaseURLConfig(options.baseURL)) {
-				// Create per-request context to avoid concurrent request race conditions.
-				// Each request may resolve to a different host, so we must not mutate the shared ctx.
-				handlerCtx = Object.create(
-					Object.getPrototypeOf(ctx),
-					Object.getOwnPropertyDescriptors(ctx),
-				) as AuthContext;
-				const baseURL = resolveBaseURL(options.baseURL, basePath, request);
-				if (baseURL) {
-					handlerCtx.baseURL = baseURL;
-					handlerCtx.options = {
-						...ctx.options,
-						baseURL: getOrigin(baseURL) || undefined,
-					};
-				} else {
-					throw new BetterAuthError(
-						"Could not resolve base URL from request. Check your allowedHosts config.",
-					);
-				}
-				// Use a typed variable so the baseURL override doesn't need
-				// an unsafe cast — the spread is structurally BetterAuthOptions.
-				const trustedOriginOptions: BetterAuthOptions = {
-					...handlerCtx.options,
-					baseURL: options.baseURL,
-				};
-				handlerCtx.trustedOrigins = await getTrustedOrigins(
-					trustedOriginOptions,
-					request,
-				);
-				// When crossSubDomainCookies is enabled, recompute cookies
-				// per-request so the domain matches the resolved host.
-				if (options.advanced?.crossSubDomainCookies?.enabled) {
-					handlerCtx.authCookies = getCookies(handlerCtx.options);
-					handlerCtx.createAuthCookie = createCookieGetter(handlerCtx.options);
-				}
+				// Per-request clone avoids mutating shared ctx under concurrent
+				// requests that may resolve to different hosts.
+				handlerCtx = await resolveRequestContext(ctx, request);
 			} else {
 				handlerCtx = ctx;
 				// Static config: resolve once from the first request when no
