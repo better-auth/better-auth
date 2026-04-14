@@ -1,11 +1,33 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useTransition } from "react";
+import { useRef } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import type * as z from "zod";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { Button } from "@/components/ui/button";
+import {
+	Form,
+	FormControl,
+	FormField,
+	FormItem,
+	FormLabel,
+	FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { contactSchema } from "@/lib/enterprise-contact";
 
 const included = [
 	"Self-service SSO",
@@ -68,9 +90,9 @@ function EnterpriseHero() {
 								delay: 0.3 + i * 0.05,
 								ease: "easeOut",
 							}}
-							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
+							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/6 last:border-0"
 						>
-							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-[10px] leading-none select-none shrink-0">
+							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-xs leading-none select-none shrink-0">
 								+
 							</span>
 							<span className="text-xs text-foreground/70 dark:text-foreground/50 font-mono tracking-wide">
@@ -106,48 +128,52 @@ function EnterpriseHero() {
 }
 
 export function EnterprisePageClient() {
-	const [loading, startTransition] = useTransition();
+	const hpRef = useRef<HTMLInputElement>(null);
+	const form = useForm<z.infer<typeof contactSchema>>({
+		resolver: zodResolver(contactSchema),
+		defaultValues: {
+			fullName: "",
+			company: "",
+			email: "",
+			companySize: "",
+			description: "",
+		},
+	});
 
-	const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) =>
-		startTransition(async () => {
-			e.preventDefault();
-
-			try {
-				const formData = new FormData(e.currentTarget);
-				const response = await fetch("/api/enterprise/contact", {
-					method: "POST",
-					body: JSON.stringify({
-						fullName: formData.get("fullName"),
-						company: formData.get("company"),
-						email: formData.get("email"),
-						companySize: formData.get("companySize"),
-						description: formData.get("description"),
-					}),
-					headers: {
-						"Content-Type": "application/json",
-					},
-				});
-				const data = await response.json();
-				if (!response.ok || response.status !== 200 || !data.success) {
-					throw new Error(data.message || "An unknown error occurred");
+	const onSubmit = async (data: z.infer<typeof contactSchema>) => {
+		try {
+			const response = await fetch("/api/enterprise/contact", {
+				method: "POST",
+				body: JSON.stringify({
+					...data,
+					_hp: hpRef.current?.value,
+				}),
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+			if (!response.ok) {
+				const { message } = await response.json();
+				if (response.status === 422) {
+					form.setError("email", { message });
+					return;
 				}
-			} catch (error) {
-				console.error("Failed to send contact form", error);
-				toast.error(
-					(error instanceof Error ? error.message : undefined) ??
-						"Failed to send contact form.",
-				);
+				toast.error(message || "Something went wrong. Please try again.");
 				return;
 			}
 			toast.success("Thank you for your interest! We'll be in touch soon.");
-		});
+			form.reset();
+		} catch {
+			toast.error("Something went wrong. Please try again.");
+		}
+	};
 
 	return (
 		<div className="relative min-h-dvh pt-14 lg:pt-0">
 			<div className="relative text-foreground">
 				<div className="flex flex-col lg:flex-row">
 					{/* Left side — Enterprise hero */}
-					<div className="hidden lg:block relative w-full shrink-0 lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/6 overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
@@ -158,7 +184,7 @@ export function EnterprisePageClient() {
 					<div className="relative w-full lg:w-[60%] overflow-x-hidden no-scrollbar">
 						<div className="px-5 lg:p-8 lg:pt-20 space-y-8">
 							{/* Mobile header */}
-							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
+							<div className="lg:hidden relative border-b border-foreground/6 overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
 								<HalftoneBackground />
 								<div className="relative space-y-2 py-16">
 									<div className="flex items-center gap-1.5">
@@ -204,152 +230,151 @@ export function EnterprisePageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground dark:text-foreground font-mono mb-5">
-									# Get a demo
-								</p>
-
-								<div className="relative border border-foreground/[0.12] overflow-hidden">
+								<div className="relative border overflow-hidden max-w-xl lg:mt-8 bg-card">
 									<div className="px-4 py-4 sm:px-5 sm:py-5">
 										<div className="space-y-1.5 mb-5">
-											<h2 className="text-base font-medium text-foreground/90 dark:text-foreground/85">
+											<h2 className="text-lg text-foreground font-medium">
 												Get in touch
 											</h2>
-											<p className="text-xs text-foreground/50 dark:text-foreground/45">
+											<p className="text-sm text-foreground/50">
 												Fill out the form and we&apos;ll be in touch soon.
 											</p>
 										</div>
 
-										<form onSubmit={handleSubmit} className="space-y-3.5">
-											<div>
-												<label
-													htmlFor="enterprise-name"
-													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
-												>
-													Full name
-												</label>
-												<input
-													id="enterprise-name"
-													name="fullName"
-													type="text"
-													placeholder="Your name"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
-												/>
-											</div>
-
-											<div>
-												<label
-													htmlFor="enterprise-company"
-													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
-												>
-													Company
-												</label>
-												<input
-													id="enterprise-company"
-													name="company"
-													type="text"
-													placeholder="Company name"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
-												/>
-											</div>
-
-											<div>
-												<label
-													htmlFor="enterprise-email"
-													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
-												>
-													Company email
-												</label>
-												<input
-													id="enterprise-email"
-													type="email"
-													name="email"
-													placeholder="name@company.com"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors font-mono"
-												/>
-											</div>
-
-											<div>
-												<label
-													htmlFor="enterprise-size"
-													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
-												>
-													Company size
-												</label>
-												<select
-													id="enterprise-size"
-													name="companySize"
-													className="w-full px-3 py-2 bg-background text-foreground border border-foreground/[0.15] text-sm focus:outline-none focus:border-foreground/40 transition-colors appearance-none cursor-pointer font-mono"
-												>
-													<option
-														value=""
-														className="bg-background text-foreground"
-													>
-														Select
-													</option>
-
-													<option
-														value="1-10"
-														className="bg-background text-foreground"
-													>
-														1-10
-													</option>
-
-													<option
-														value="11-50"
-														className="bg-background text-foreground"
-													>
-														11-50
-													</option>
-
-													<option
-														value="51-200"
-														className="bg-background text-foreground"
-													>
-														51-200
-													</option>
-
-													<option
-														value="201-500"
-														className="bg-background text-foreground"
-													>
-														201-500
-													</option>
-
-													<option
-														value="501+"
-														className="bg-background text-foreground"
-													>
-														501+
-													</option>
-												</select>
-											</div>
-
-											<div>
-												<label
-													htmlFor="enterprise-help"
-													className="block text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/45 font-mono mb-1.5"
-												>
-													What do you need help with?
-												</label>
-												<textarea
-													id="enterprise-help"
-													name="description"
-													rows={4}
-													placeholder="Tell us about your project and requirements..."
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm placeholder:text-foreground/35 dark:placeholder:text-foreground/25 focus:outline-none focus:border-foreground/40 transition-colors resize-none font-mono"
-												/>
-											</div>
-
-											<button
-												disabled={loading}
-												type="submit"
-												className="w-full py-2 bg-foreground text-background text-sm font-mono uppercase tracking-widest hover:opacity-90 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+										<Form {...form}>
+											<form
+												onSubmit={form.handleSubmit(onSubmit)}
+												className="space-y-3.5"
 											>
-												{loading ? "Sending..." : "Send"}
-											</button>
-										</form>
+												{/* honeypot */}
+												<div
+													aria-hidden="true"
+													className="absolute opacity-0 pointer-events-none h-0 overflow-hidden"
+												>
+													<input
+														ref={hpRef}
+														type="text"
+														tabIndex={-1}
+														autoComplete="off"
+													/>
+												</div>
 
-										<p className="mt-4 text-foreground/40 dark:text-foreground/30 text-[10px] leading-relaxed">
+												<FormField
+													control={form.control}
+													name="fullName"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Full Name
+															</FormLabel>
+															<FormControl>
+																<Input {...field} placeholder="Your name" />
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="company"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Company
+															</FormLabel>
+															<FormControl>
+																<Input {...field} placeholder="Company name" />
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="email"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Company Email
+															</FormLabel>
+															<FormControl>
+																<Input
+																	{...field}
+																	type="email"
+																	placeholder="name@company.com"
+																/>
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="companySize"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Company Size
+															</FormLabel>
+															<Select
+																value={field.value}
+																onValueChange={field.onChange}
+															>
+																<FormControl>
+																	<SelectTrigger>
+																		<SelectValue placeholder="Select" />
+																	</SelectTrigger>
+																</FormControl>
+																<SelectContent>
+																	<SelectItem value="1-10">1-10</SelectItem>
+																	<SelectItem value="11-50">11-50</SelectItem>
+																	<SelectItem value="51-200">51-200</SelectItem>
+																	<SelectItem value="201-500">
+																		201-500
+																	</SelectItem>
+																	<SelectItem value="501+">501+</SelectItem>
+																</SelectContent>
+															</Select>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="description"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																What do you need help with?
+															</FormLabel>
+															<FormControl>
+																<Textarea
+																	{...field}
+																	rows={4}
+																	placeholder="Tell us about your project and requirements..."
+																	className="min-h-[100px]"
+																/>
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<Button
+													disabled={form.formState.isSubmitting}
+													type="submit"
+													className="w-full font-mono uppercase tracking-widest"
+												>
+													{form.formState.isSubmitting ? "Sending..." : "Send"}
+												</Button>
+											</form>
+										</Form>
+
+										<p className="mt-4 text-foreground/50 text-xs leading-relaxed">
 											By submitting, you agree to our{" "}
 											<Link
 												href="/legal/terms"

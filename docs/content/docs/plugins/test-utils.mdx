@@ -6,7 +6,7 @@ description: Testing utilities for integration and E2E testing
 The Test Utils plugin provides helpers for writing integration and E2E tests against Better Auth. It includes factories, database helpers, authentication helpers, and OTP capture functionality.
 
 <Callout type="warn">
-This plugin is designed for test environments only. Do not use it in production.
+  This plugin is designed for test environments only. Do not use it in production.
 </Callout>
 
 ## Installation
@@ -27,6 +27,7 @@ This plugin is designed for test environments only. Do not use it in production.
     })
     ```
   </Step>
+
   <Step>
     ### Access test helpers via context
 
@@ -175,20 +176,21 @@ for (const cookie of cookies) {
 ```
 
 Each cookie object contains:
-- `name` - Cookie name (e.g., "better-auth.session_token")
-- `value` - Cookie value
-- `domain` - Cookie domain
-- `path` - Cookie path (defaults to "/")
-- `httpOnly` - Whether cookie is HTTP-only
-- `secure` - Whether cookie requires HTTPS
-- `sameSite` - SameSite attribute ("Lax", "Strict", or "None")
+
+* `name` - Cookie name (e.g., "better-auth.session\_token")
+* `value` - Cookie value
+* `domain` - Cookie domain
+* `path` - Cookie path (defaults to "/")
+* `httpOnly` - Whether cookie is HTTP-only
+* `secure` - Whether cookie requires HTTPS
+* `sameSite` - SameSite attribute ("Lax", "Strict", or "None")
 
 ### OTP Capture
 
 When `captureOTP: true` is set, the plugin passively captures OTPs as they are created. This allows you to retrieve OTPs in tests without needing to mock email or SMS sending.
 
 <Callout>
-OTP capture is passive - it does not prevent OTPs from being sent via your configured `sendVerificationOTP` function. It simply stores a copy for test retrieval.
+  OTP capture is passive - it does not prevent OTPs from being sent via your configured `sendVerificationOTP` function. It simply stores a copy for test retrieval.
 </Callout>
 
 ```ts title="auth.ts"
@@ -224,8 +226,8 @@ const otp = test.getOTP("user@example.com")
 
 ## Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| Option       | Type      | Default | Description                                       |
+| ------------ | --------- | ------- | ------------------------------------------------- |
 | `captureOTP` | `boolean` | `false` | Enable OTP capture for testing verification flows |
 
 ## Examples
