@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/electron",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Better Auth integration for Electron applications.",
   "type": "module",
   "license": "MIT",

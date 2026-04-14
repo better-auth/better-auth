@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -509,7 +509,7 @@
   },
   "devDependencies": {
     "@lynx-js/react": "^0.116.3",
-    "@sveltejs/kit": "^2.53.3",
+    "@sveltejs/kit": "^2.57.1",
     "@tanstack/react-start": "^1.163.2",
     "@tanstack/solid-start": "^1.163.2",
     "@types/bun": "^1.3.9",
