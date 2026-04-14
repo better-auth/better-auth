@@ -293,7 +293,7 @@ Users must be authenticated to approve or deny device authorization requests:
 export default function DeviceApprovalPage() {
   const { user } = useAuth(); // Must be authenticated
   const searchParams = useSearchParams();
-  const userCode = searchParams.get("userCode");
+  const userCode = searchParams.get("user_code");
   const [isProcessing, setIsProcessing] = useState(false);
   
   const handleApprove = async () => {
