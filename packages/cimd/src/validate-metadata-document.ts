@@ -2,8 +2,7 @@
 // Implements draft-ietf-oauth-client-id-metadata-document §3 and §4.1.
 import ipaddr from "ipaddr.js";
 
-const DOT_SEGMENT_RE =
-	/\/\.\.?(?:\/|$|#|\?)/; /** IP ranges considered publicly routable by default. */
+const DOT_SEGMENT_RE = /\/\.\.?(?:\/|$|#|\?)/;
 export const DEFAULT_ALLOWED_IP_RANGES: ReadonlySet<string> = new Set([
 	"unicast",
 ]);
@@ -54,12 +53,26 @@ function isPrivateHost(
 	if (lower === "metadata.google.internal") {
 		return true;
 	}
-	const host =
-		lower.startsWith("[") && lower.endsWith("]") ? lower.slice(1, -1) : lower;
+	const wasBracketed = lower.startsWith("[") && lower.endsWith("]");
+	// Strip brackets from IPv6 literals (e.g. "[::1]" → "::1").
+	let host = wasBracketed ? lower.slice(1, -1) : lower;
+	// Strip IPv6 zone identifiers before range-checking. Zone IDs appear as
+	// "%" or "%25" (percent-encoded) in URL hostnames, e.g. "fe80::1%25eth0".
+	// ipaddr.js cannot parse them, so we strip the suffix first.
+	const zoneIdx = host.indexOf("%");
+	if (zoneIdx !== -1) {
+		host = host.slice(0, zoneIdx);
+	}
 	try {
 		// process() converts IPv4-mapped IPv6 → IPv4 before range-checking.
 		return !allowedRanges.has(ipaddr.process(host).range());
 	} catch {
+		// If the hostname looked like an IP literal (was bracket-enclosed or
+		// contains a colon), reject it rather than letting a malformed address
+		// slip through as a "domain name".
+		if (wasBracketed || host.includes(":")) {
+			return true;
+		}
 		// Not a parseable IP address (e.g. a regular domain name). Domain
 		// names are not blocked here; use `allowFetch` for DNS-level checks.
 		return false;

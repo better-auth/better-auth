@@ -33,14 +33,16 @@ export interface CimdOptions {
 	 * The set of ipaddr.js range names that are considered publicly routable
 	 * and therefore allowed as `client_id` URL hosts.
 	 *
-	 * Any resolved IP address whose range is **not** in this set is rejected
-	 * as a potential SSRF target. ipaddr.js range names include `"unicast"`,
-	 * `"private"`, `"loopback"`, `"linkLocal"`, `"multicast"`, etc.
+	 * If the `client_id` URL host is an IP literal, its range must be in this
+	 * set or the URL is rejected as a potential SSRF target. ipaddr.js range
+	 * names include `"unicast"`, `"private"`, `"loopback"`, `"linkLocal"`,
+	 * `"multicast"`, etc.
 	 *
 	 * Override this only if you operate an internal deployment where
 	 * clients are expected to live on RFC 1918 addresses.
 	 *
-	 * For custom IPs and CIDR ranges, use `allowFetch`.
+	 * For custom IPs and CIDR ranges, or for DNS-level hostname checks, use
+	 * `allowFetch`.
 	 *
 	 * @default new Set(["unicast"])
 	 */

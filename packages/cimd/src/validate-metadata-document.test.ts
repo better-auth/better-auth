@@ -499,3 +499,90 @@ describe("validateCimdMetadata", () => {
 		expect(result.error).toContain("logo_uri");
 	});
 });
+
+describe("allowedIpRanges override", () => {
+	// validateClientIdUrl
+
+	it("allows https://10.0.0.1/... when 'private' is in allowedIpRanges", () => {
+		const allowed = new Set(["unicast", "private"]);
+		expect(
+			validateClientIdUrl("https://10.0.0.1/client-metadata.json", allowed),
+		).toBeNull();
+	});
+
+	it("allows https://192.168.1.1/... when 'private' is in allowedIpRanges", () => {
+		const allowed = new Set(["unicast", "private"]);
+		expect(
+			validateClientIdUrl("https://192.168.1.1/client-metadata.json", allowed),
+		).toBeNull();
+	});
+
+	it("allows https://172.16.0.1/... when 'private' is in allowedIpRanges", () => {
+		const allowed = new Set(["unicast", "private"]);
+		expect(
+			validateClientIdUrl("https://172.16.0.1/client-metadata.json", allowed),
+		).toBeNull();
+	});
+
+	it("blocks metadata.google.internal even when 'private' is in allowedIpRanges", () => {
+		/**
+		 * Cloud metadata hostnames are blocked at the name level, before any
+		 * IP-range check, so no allowedIpRanges override can unblock them.
+		 */
+		const allowed = new Set(["unicast", "private", "loopback", "linkLocal"]);
+		expect(
+			validateClientIdUrl(
+				"https://metadata.google.internal/computeMetadata/v1/",
+				allowed,
+			),
+		).toContain("private");
+	});
+
+	it("still blocks 169.254.169.254 (link-local) when only 'private' is added", () => {
+		// link-local range is not covered by 'private'; only adding 'linkLocal'
+		// would allow it. Verify the default unicast+private set still rejects it.
+		const allowed = new Set(["unicast", "private"]);
+		expect(
+			validateClientIdUrl("https://169.254.169.254/latest/meta-data/", allowed),
+		).toContain("private");
+	});
+
+	// validateCimdMetadata (4th argument) — controls SSRF checks on embedded
+	// URI fields such as client_uri and logo_uri, not on the fetchUrl itself.
+
+	it("allows client_uri with private IP in validateCimdMetadata when 'private' is in allowedIpRanges", () => {
+		const fetchUrl = "https://example.com/client-metadata.json";
+		const allowed = new Set(["unicast", "private"]);
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				client_uri: "https://10.0.0.1/about",
+			}),
+			// Pass [] so the origin-bound check ignores client_uri; we only
+			// want to exercise the SSRF / allowedIpRanges path.
+			[],
+			allowed,
+		);
+		expect(result.valid).toBe(true);
+	});
+
+	it("blocks metadata.google.internal in client_uri even with broad allowedIpRanges", () => {
+		/**
+		 * The name-level block for cloud metadata hostnames in isPrivateHost()
+		 * fires before any allowedRanges lookup, so no allowedIpRanges
+		 * configuration can unblock metadata.google.internal.
+		 */
+		const fetchUrl = "https://example.com/client-metadata.json";
+		const allowed = new Set(["unicast", "private", "loopback", "linkLocal"]);
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				client_uri: "https://metadata.google.internal/",
+			}),
+			[],
+			allowed,
+		);
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("private");
+	});
+});
