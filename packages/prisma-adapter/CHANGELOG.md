@@ -1,5 +1,12 @@
 # @better-auth/prisma-adapter
 
+## 1.6.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.3
+
 ## 1.6.2
 
 ### Patch Changes
