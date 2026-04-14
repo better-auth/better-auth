@@ -30,8 +30,10 @@ const oidcConfigSchema = z.object({
 	tokenEndpoint: z.string().url().optional(),
 	userInfoEndpoint: z.string().url().optional(),
 	tokenEndpointAuthentication: z
-		.enum(["client_secret_post", "client_secret_basic"])
+		.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
 		.optional(),
+	privateKeyId: z.string().optional(),
+	privateKeyAlgorithm: z.string().optional(),
 	jwksEndpoint: z.string().url().optional(),
 	discoveryEndpoint: z.string().url().optional(),
 	scopes: z.array(z.string()).optional(),
@@ -43,7 +45,6 @@ const oidcConfigSchema = z.object({
 const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),
 	cert: z.string().optional(),
-	callbackUrl: z.string().url().optional(),
 	audience: z.string().optional(),
 	idpMetadata: z
 		.object({
@@ -83,8 +84,6 @@ const samlConfigSchema = z.object({
 	digestAlgorithm: z.string().optional(),
 	identifierFormat: z.string().optional(),
 	privateKey: z.string().optional(),
-	decryptionPvk: z.string().optional(),
-	additionalParams: z.record(z.string(), z.any()).optional(),
 	mapping: samlMappingSchema,
 });
 

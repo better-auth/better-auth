@@ -1,5 +1,13 @@
 # @better-auth/core
 
+## 1.7.0-beta.1
+
+## 1.7.0-beta.0
+
+### Minor Changes
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `private_key_jwt` (RFC 7523) client authentication across the stack. Servers verify JWT client assertions signed with asymmetric keys; clients sign them for authorization code, refresh, and client credentials flows.
+
 ## 1.6.3
 
 ## 1.6.2
