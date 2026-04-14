@@ -1,3 +1,4 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -2448,21 +2449,23 @@ describe("api-key", async () => {
 		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value, ttl) {
+				store.set(key, value as string);
+				if (ttl) expirationMap.set(key, ttl);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+				expirationMap.delete(key);
+			},
+		};
+
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						store.set(key, value);
-						if (ttl) expirationMap.set(key, ttl);
-					},
-					get(key) {
-						return store.get(key) || null;
-					},
-					delete(key) {
-						store.delete(key);
-						expirationMap.delete(key);
-					},
-				},
+				secondaryStorage,
 				plugins: [
 					apiKey({
 						storage: "secondary-storage",
@@ -2546,6 +2549,40 @@ describe("api-key", async () => {
 			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
 			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
 			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
+		});
+
+		it("should fetch keys from secondary storage in parallel, not sequentially", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const keyCount = 5;
+			for (let i = 0; i < keyCount; i++) {
+				await client.apiKey.create({}, { headers });
+			}
+
+			let concurrentGets = 0;
+			let maxConcurrentGets = 0;
+			const originalGet = secondaryStorage.get;
+			secondaryStorage.get = async (key: string) => {
+				if (key.startsWith("api-key:by-id:")) {
+					concurrentGets++;
+					maxConcurrentGets = Math.max(maxConcurrentGets, concurrentGets);
+					await new Promise((r) => setTimeout(r, 20));
+					const result = originalGet(key);
+					concurrentGets--;
+					return result;
+				}
+				return originalGet(key);
+			};
+
+			const { data: keys } = await client.apiKey.list({
+				fetchOptions: { headers },
+			});
+
+			secondaryStorage.get = originalGet;
+
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBe(keyCount);
+			expect(maxConcurrentGets).toBe(keyCount);
 		});
 
 		it("should update API key in secondary storage", async () => {
@@ -2802,21 +2839,23 @@ describe("api-key", async () => {
 		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
+		const fallbackStorage: SecondaryStorage = {
+			set(key, value, ttl) {
+				store.set(key, value as string);
+				if (ttl) expirationMap.set(key, ttl);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+				expirationMap.delete(key);
+			},
+		};
+
 		const { client, auth, signInWithTestUser } = await getTestInstance(
 			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						store.set(key, value);
-						if (ttl) expirationMap.set(key, ttl);
-					},
-					get(key) {
-						return store.get(key) || null;
-					},
-					delete(key) {
-						store.delete(key);
-						expirationMap.delete(key);
-					},
-				},
+				secondaryStorage: fallbackStorage,
 				plugins: [
 					apiKey({
 						storage: "secondary-storage",
@@ -3033,6 +3072,64 @@ describe("api-key", async () => {
 			expect(store.has(`api-key:${hashedKey2}`)).toBe(true);
 			// Verify user's key list is populated
 			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(true);
+		});
+
+		it("should populate storage in parallel when listing falls back to database", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const context = await auth.$context;
+			const keyCount = 5;
+			for (let i = 0; i < keyCount; i++) {
+				await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: "apikey",
+					data: {
+						configId: "default",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						name: `Parallel Key ${i}`,
+						prefix: "test",
+						start: "test_",
+						key: `hashed_parallel_${i}`,
+						enabled: true,
+						expiresAt: null,
+						referenceId: user.id,
+						lastRefillAt: null,
+						lastRequest: null,
+						metadata: null,
+						rateLimitMax: null,
+						rateLimitTimeWindow: null,
+						remaining: null,
+						refillAmount: null,
+						refillInterval: null,
+						rateLimitEnabled: false,
+						requestCount: 0,
+						permissions: null,
+					},
+				});
+			}
+
+			let concurrentSets = 0;
+			let maxConcurrentSets = 0;
+			const originalSet = fallbackStorage.set;
+			fallbackStorage.set = async (key: string, value: string) => {
+				if (key.startsWith("api-key:by-id:")) {
+					concurrentSets++;
+					maxConcurrentSets = Math.max(maxConcurrentSets, concurrentSets);
+					await new Promise((r) => setTimeout(r, 20));
+					originalSet(key, value);
+					concurrentSets--;
+					return;
+				}
+				originalSet(key, value);
+			};
+
+			const { data: keys } = await client.apiKey.list({}, { headers });
+
+			fallbackStorage.set = originalSet;
+
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
+			expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
 		});
 
 		it("should write to secondary storage only", async () => {

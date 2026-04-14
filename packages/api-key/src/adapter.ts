@@ -623,13 +623,12 @@ export async function listApiKeys(
 			}
 
 			if (keyIds.length > 0) {
-				const apiKeys: ApiKey[] = [];
-				for (const id of keyIds) {
-					const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
-					if (apiKey) {
-						apiKeys.push(apiKey);
-					}
-				}
+				const results = await Promise.all(
+					keyIds.map((id) => getApiKeyByIdFromStorage(ctx, id, storage)),
+				);
+				const apiKeys = results.filter(
+					(key): key is ApiKey => key !== null && key !== undefined,
+				);
 				// Apply sorting and pagination in memory for secondary storage
 				const sortedKeys = applySortingAndPagination(
 					apiKeys,
@@ -670,14 +669,13 @@ export async function listApiKeys(
 
 		// Populate secondary storage with fetched keys
 		if (storage && dbKeys.length > 0) {
-			const keyIds: string[] = [];
-			for (const apiKey of dbKeys) {
-				// Store each key in secondary storage
-				const ttl = calculateTTL(apiKey);
-				await setApiKeyInStorage(ctx, apiKey, storage, ttl);
-				keyIds.push(apiKey.id);
-			}
-			// Update reference's key list in secondary storage
+			await Promise.all(
+				dbKeys.map((apiKey) => {
+					const ttl = calculateTTL(apiKey);
+					return setApiKeyInStorage(ctx, apiKey, storage, ttl);
+				}),
+			);
+			const keyIds = dbKeys.map((apiKey) => apiKey.id);
 			await storage.set(refKey, JSON.stringify(keyIds));
 		}
 
@@ -706,13 +704,12 @@ export async function listApiKeys(
 			return { apiKeys: [], total: 0 };
 		}
 
-		const apiKeys: ApiKey[] = [];
-		for (const id of keyIds) {
-			const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
-			if (apiKey) {
-				apiKeys.push(apiKey);
-			}
-		}
+		const results = await Promise.all(
+			keyIds.map((id) => getApiKeyByIdFromStorage(ctx, id, storage)),
+		);
+		const apiKeys = results.filter(
+			(key): key is ApiKey => key !== null && key !== undefined,
+		);
 
 		// Apply sorting and pagination in memory for secondary storage
 		const sortedKeys = applySortingAndPagination(
