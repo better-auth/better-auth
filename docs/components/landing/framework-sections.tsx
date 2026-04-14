@@ -1250,6 +1250,12 @@ export function AiNativeSection() {
 		{ label: "done", text: "Google OAuth + 2FA configured" },
 	];
 
+	const mcpClients = [
+		{ name: "Claude Code", cmd: "claude mcp add better-auth" },
+		{ name: "Cursor", cmd: "cursor mcp add better-auth" },
+		{ name: "VS Code", cmd: "code --add-mcp better-auth" },
+	];
+
 	return (
 		<div className="mt-8">
 			<div className="flex items-center gap-3 mb-3">
