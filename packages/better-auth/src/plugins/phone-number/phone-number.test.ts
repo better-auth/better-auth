@@ -286,6 +286,7 @@ describe("phone-number send otp background handler failures", async () => {
 
 describe("phone auth flow", async () => {
 	let otp = "";
+	let changeEmailUrl = "";
 
 	const { client, sessionSetter, auth } = await getTestInstance(
 		{
@@ -305,7 +306,9 @@ describe("phone auth flow", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					async sendVerificationEmail() {},
+					async sendVerificationEmail({ url }) {
+						changeEmailUrl = url;
+					},
 				},
 			},
 		},
@@ -386,11 +389,18 @@ describe("phone auth flow", async () => {
 	});
 
 	it("should sign in with new email", async () => {
+		// Verify the email change first (native flow requires verification)
+		const verifyPath = changeEmailUrl.replace(/^.*\/api\/auth/, "");
+		await auth.handler(
+			new Request(`http://localhost:3000/api/auth${verifyPath}`, {
+				method: "GET",
+			}),
+		);
+
 		const res = await client.signIn.email({
 			email: newEmail,
 			password: "password",
 		});
-		console.log(res);
 		expect(res.error).toBe(null);
 	});
 });
