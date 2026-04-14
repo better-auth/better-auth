@@ -203,60 +203,123 @@ export function isDynamicBaseURLConfig(
 }
 
 /**
- * Extracts the host from the request headers.
- * Tries x-forwarded-host first (for proxy setups), then falls back to host header.
+ * Check if a value is a `Request`
+ * - `instanceof`: works for native Request instances
+ * - `toString`: handles where instanceof check fails but the object is still a
+ *   valid Request (e.g. cross-realm, polyfills). Paired with a shape check so
+ *   an object that only spoofs `Symbol.toStringTag` without the real shape is
+ *   rejected before downstream code tries to read `.headers` / `.url`.
  *
- * @param request The incoming request
- * @returns The host string or null if not found
+ * @param value The value to check
+ * @returns `true` if the value is a Request instance
  */
-export function getHostFromRequest(request: Request): string | null {
-	const forwardedHost = request.headers.get("x-forwarded-host");
-	if (forwardedHost && validateProxyHeader(forwardedHost, "host")) {
-		return forwardedHost;
+export function isRequestLike(value: unknown): value is Request {
+	if (value instanceof Request) return true;
+	if (
+		typeof value !== "object" ||
+		value === null ||
+		Object.prototype.toString.call(value) !== "[object Request]"
+	) {
+		return false;
+	}
+	const v = value as { url?: unknown; headers?: unknown };
+	return (
+		typeof v.url === "string" &&
+		typeof v.headers === "object" &&
+		v.headers !== null &&
+		typeof (v.headers as { get?: unknown }).get === "function"
+	);
+}
+
+/**
+ * Extracts the host from a `Request` or `Headers`.
+ * Honors `x-forwarded-host` only when `trustedProxyHeaders` is enabled,
+ * then falls back to the `host` header and finally the request URL.
+ */
+export function getHostFromSource(
+	source: Request | Headers,
+	trustedProxyHeaders?: boolean,
+): string | null {
+	const headers = isRequestLike(source) ? source.headers : source;
+
+	if (trustedProxyHeaders) {
+		const forwardedHost = headers.get("x-forwarded-host");
+		if (forwardedHost && validateProxyHeader(forwardedHost, "host")) {
+			return forwardedHost;
+		}
 	}
 
-	const host = request.headers.get("host");
+	const host = headers.get("host");
 	if (host && validateProxyHeader(host, "host")) {
 		return host;
 	}
 
-	try {
-		const url = new URL(request.url);
-		return url.host;
-	} catch {
-		return null;
+	if (isRequestLike(source)) {
+		try {
+			const url = new URL(source.url);
+			return url.host;
+		} catch {
+			return null;
+		}
 	}
+
+	return null;
 }
 
 /**
- * Extracts the protocol from the request headers.
- * Tries x-forwarded-proto first (for proxy setups), then infers from request URL.
- *
- * @param request The incoming request
- * @param configProtocol Protocol override from config
- * @returns The protocol ("http" or "https")
+ * Extracts the protocol from a `Request` or `Headers`.
+ * Honors `x-forwarded-proto` only when `trustedProxyHeaders` is enabled,
+ * then falls back to the request URL, then to "https".
  */
-export function getProtocolFromRequest(
-	request: Request,
+export function getProtocolFromSource(
+	source: Request | Headers,
 	configProtocol?: "http" | "https" | "auto" | undefined,
+	trustedProxyHeaders?: boolean,
 ): "http" | "https" {
 	if (configProtocol === "http" || configProtocol === "https") {
 		return configProtocol;
 	}
 
-	const forwardedProto = request.headers.get("x-forwarded-proto");
-	if (forwardedProto && validateProxyHeader(forwardedProto, "proto")) {
-		return forwardedProto as "http" | "https";
+	const headers = isRequestLike(source) ? source.headers : source;
+
+	if (trustedProxyHeaders) {
+		const forwardedProto = headers.get("x-forwarded-proto");
+		if (forwardedProto && validateProxyHeader(forwardedProto, "proto")) {
+			return forwardedProto as "http" | "https";
+		}
 	}
 
-	try {
-		const url = new URL(request.url);
-		if (url.protocol === "http:" || url.protocol === "https:") {
-			return url.protocol.slice(0, -1) as "http" | "https";
-		}
-	} catch {}
+	if (isRequestLike(source)) {
+		try {
+			const url = new URL(source.url);
+			if (url.protocol === "http:" || url.protocol === "https:") {
+				return url.protocol.slice(0, -1) as "http" | "https";
+			}
+		} catch {}
+	}
+
+	// Local dev: prefer `http` for loopback hosts so the headers-only path
+	// doesn't diverge from the HTTP handler's URL-derived scheme.
+	const host = getHostFromSource(source, trustedProxyHeaders);
+	if (host && isLoopbackHost(host)) {
+		return "http";
+	}
 
 	return "https";
+}
+
+function isLoopbackHost(host: string): boolean {
+	const h = host.toLowerCase();
+	return (
+		h === "localhost" ||
+		h.startsWith("localhost:") ||
+		h === "127.0.0.1" ||
+		h.startsWith("127.0.0.1:") ||
+		h === "[::1]" ||
+		h.startsWith("[::1]:") ||
+		h === "0.0.0.0" ||
+		h.startsWith("0.0.0.0:")
+	);
 }
 
 /**
@@ -314,10 +377,11 @@ export const matchesHostPattern = (host: string, pattern: string): boolean => {
  */
 export function resolveDynamicBaseURL(
 	config: DynamicBaseURLConfig,
-	request: Request,
+	source: Request | Headers,
 	basePath: string,
+	trustedProxyHeaders?: boolean,
 ): string {
-	const host = getHostFromRequest(request);
+	const host = getHostFromSource(source, trustedProxyHeaders);
 
 	if (!host) {
 		if (config.fallback) {
@@ -334,7 +398,11 @@ export function resolveDynamicBaseURL(
 	);
 
 	if (isAllowed) {
-		const protocol = getProtocolFromRequest(request, config.protocol);
+		const protocol = getProtocolFromSource(
+			source,
+			config.protocol,
+			trustedProxyHeaders,
+		);
 		return withPath(`${protocol}://${host}`, basePath);
 	}
 
@@ -363,13 +431,18 @@ export function resolveDynamicBaseURL(
 export function resolveBaseURL(
 	config: BaseURLConfig | undefined,
 	basePath: string,
-	request?: Request,
+	source?: Request | Headers,
 	loadEnv?: boolean,
 	trustedProxyHeaders?: boolean,
 ): string | undefined {
 	if (isDynamicBaseURLConfig(config)) {
-		if (request) {
-			return resolveDynamicBaseURL(config, request, basePath);
+		if (source) {
+			return resolveDynamicBaseURL(
+				config,
+				source,
+				basePath,
+				trustedProxyHeaders,
+			);
 		}
 		if (config.fallback) {
 			return withPath(config.fallback, basePath);
@@ -377,12 +450,14 @@ export function resolveBaseURL(
 		return getBaseURL(
 			undefined,
 			basePath,
-			request,
+			undefined,
 			loadEnv,
 			trustedProxyHeaders,
 		);
 	}
 
+	// Static config path -> getBaseURL needs a full Request for URL parsing.
+	const request = isRequestLike(source) ? source : undefined;
 	if (typeof config === "string") {
 		return getBaseURL(config, basePath, request, loadEnv, trustedProxyHeaders);
 	}

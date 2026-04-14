@@ -96,6 +96,16 @@ interface Field {
 	isForeignKey?: boolean;
 	isOptional?: boolean;
 	isUnique?: boolean;
+	references?: {
+		model: string;
+		field: string;
+		onDelete?:
+			| "no action"
+			| "restrict"
+			| "cascade"
+			| "set null"
+			| "set default";
+	};
 }
 
 const typeAliases: Record<string, string> = {
@@ -231,11 +241,11 @@ function fieldToDBField(field: Field): DBFieldAttribute {
 	const bigint = raw === "bigint";
 
 	let references: DBFieldAttribute["references"] | undefined;
-	if (field.isForeignKey && field.name.endsWith("Id")) {
+	if (field.isForeignKey && field.references) {
 		references = {
-			model: field.name.slice(0, -2),
-			field: "id",
-			onDelete: "cascade",
+			model: field.references.model,
+			field: field.references.field,
+			onDelete: field.references.onDelete ?? "cascade",
 		};
 	}
 
