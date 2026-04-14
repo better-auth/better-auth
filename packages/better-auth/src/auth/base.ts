@@ -5,6 +5,7 @@ import { getEndpoints, router } from "../api";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
+	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
 } from "../context/helpers";
 import type { Auth } from "../types";
@@ -35,17 +36,19 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			if (isDynamicBaseURLConfig(options.baseURL)) {
 				// Per-request clone avoids mutating shared ctx under concurrent
 				// requests that may resolve to different hosts.
-				handlerCtx = await resolveRequestContext(ctx, request);
+				handlerCtx = await resolveRequestContext(
+					ctx,
+					request,
+					resolveDynamicTrustedProxyHeaders(ctx.options),
+				);
 			} else {
 				handlerCtx = ctx;
-				// Static config: resolve once from the first request when no
-				// baseURL was provided. Mutates the shared ctx intentionally so
-				// subsequent requests reuse the cached value.
-				// NOTE: narrow race if the very first requests arrive concurrently —
-				// both will enter this block and write to ctx. This is harmless
-				// because they resolve the same value, and matches pre-existing
-				// behavior. Using Object.create(ctx) here would break downstream
-				// references that depend on ctx.options being mutated in-place.
+				// Static config with no baseURL: memoize on the shared ctx from
+				// the first request. A concurrent-first-requests race is
+				// harmless since both writes resolve to the same value. Cloning
+				// via `Object.create` (as the dynamic branch does) would break
+				// downstream references that depend on `ctx.options` being
+				// mutated in place.
 				if (!ctx.options.baseURL) {
 					const baseURL = getBaseURL(
 						undefined,
@@ -67,11 +70,11 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 					ctx.options,
 					request,
 				);
+				handlerCtx.trustedProviders = await getTrustedProviders(
+					ctx.options,
+					request,
+				);
 			}
-			handlerCtx.trustedProviders = await getTrustedProviders(
-				handlerCtx.options,
-				request,
-			);
 
 			const { handler } = router(handlerCtx, options);
 			return runWithAdapter(handlerCtx.adapter, () => handler(request));

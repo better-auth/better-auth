@@ -6,7 +6,7 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import {
 	ATTR_CONTEXT,
 	ATTR_HOOK_TYPE,
@@ -22,7 +22,11 @@ import type {
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
-import { resolveRequestContext } from "../context/helpers";
+import {
+	pickSource,
+	resolveDynamicTrustedProxyHeaders,
+	resolveRequestContext,
+} from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
@@ -68,33 +72,46 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
-function pickSource(
-	input: UserInputContext | undefined,
-): Request | Headers | undefined {
-	if (isRequestLike(input?.request)) return input.request;
-	if (!input?.headers) return undefined;
-
-	const headers = new Headers(input.headers);
-	const hasHost = headers.has("host") || headers.has("x-forwarded-host");
-	if (!hasHost) return undefined;
-
-	return headers;
-}
-
-// Direct `auth.api` calls bypass the HTTP handler's per-request resolution.
+/**
+ * Resolves the per-call `AuthContext` for endpoints with a dynamic `baseURL`.
+ *
+ * - `rawCtx.baseURL` already set: HTTP handler rehydrated upstream; return as-is.
+ * - Direct `auth.api` call with a source or a configured `fallback`: resolve here.
+ * - Neither: throw `APIError` with a helpful message. Leaving `baseURL = ""`
+ *   would let plugins build `new URL("")` and crash cryptically downstream.
+ */
 async function resolveDynamicContext(
 	rawCtx: AuthContext,
 	input: UserInputContext | undefined,
 ): Promise<AuthContext> {
+	if (rawCtx.baseURL) return rawCtx;
+
 	const source = pickSource(input);
 	const config = rawCtx.options.baseURL;
 	const hasFallback =
 		isDynamicBaseURLConfig(config) && Boolean(config.fallback);
 
-	const canResolve = source !== undefined || hasFallback;
-	if (!canResolve) return rawCtx;
+	if (source === undefined && !hasFallback) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message:
+				"Dynamic baseURL could not be resolved for this direct auth.api call. " +
+				"Pass `headers: request.headers` (or `request`) to the call, " +
+				"or add `fallback` to your baseURL config.",
+		});
+	}
 
-	return resolveRequestContext(rawCtx, source);
+	try {
+		return await resolveRequestContext(
+			rawCtx,
+			source,
+			resolveDynamicTrustedProxyHeaders(rawCtx.options),
+		);
+	} catch (err) {
+		if (err instanceof BetterAuthError) {
+			throw new APIError("INTERNAL_SERVER_ERROR", { message: err.message });
+		}
+		throw err;
+	}
 }
 
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
@@ -125,8 +142,6 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
 				const route = endpoint.path ?? "/:virtual";
 
-				// Direct API calls bypass the handler's per-request resolution.
-				// Rehydrate only when the dynamic branch actually applies so the static path stays zero-overhead.
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
@@ -142,7 +157,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
-				const hasRequest = context?.request instanceof Request;
+				const hasRequest = isRequestLike(context?.request);
 				const shouldReturnResponse = context?.asResponse ?? hasRequest;
 				return withSpan(
 					`${methodName} ${route}`,
