@@ -45,6 +45,7 @@ interface SecurityOptions {
   freeTrialAbuse?: FreeTrialAbuseConfig;
   compromisedPassword?: CompromisedPasswordConfig;
   emailValidation?: EmailValidationConfig;
+  emailNormalization?: { enabled?: boolean };
   staleUsers?: StaleUsersConfig;
   challengeDifficulty?: number;
 }
@@ -273,6 +274,26 @@ sentinel({
 * `low` - Block only known disposable domains
 * `medium` - Also check for valid MX records
 * `high` - Additional heuristic checks
+
+### Email normalization
+
+Sentinel can normalize email addresses before sign-up and sign-in so aliases and provider quirks do not create duplicate accounts or mismatched logins. Normalization includes lowercasing, stripping plus-address tags on common providers (for example `user+tag@gmail.com` → `user@gmail.com`), removing dots in Gmail-style addresses, and mapping `googlemail.com` to `gmail.com`.
+
+Use `security.emailNormalization` when you want to control this separately from disposable-domain validation (`emailValidation`):
+
+```ts
+sentinel({
+  apiKey: process.env.BETTER_AUTH_API_KEY,
+  security: {
+    emailValidation: {
+      enabled: false, // skip disposable / MX checks
+    },
+    emailNormalization: {
+      enabled: true, // still normalize for deduplication and consistent sign-in
+    },
+  },
+}),
+```
 
 ## Proof-of-Work Challenges
 
