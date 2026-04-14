@@ -89,6 +89,23 @@ Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecl
 * **SCIM base URL**: This should be the fully qualified URL to the SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
 * **SCIM bearer token**: See [generating a SCIM token](#generating-a-scim-token)
 
+### Self-Service Directory Sync
+
+If you're using [Better Auth Infrastructure](https://dash.better-auth.com/sign-in), you get self-service directory sync in the dashboard. Organization admins can create and manage SCIM directory connections and rotate bearer tokens without calling the SCIM APIs directly.
+
+The dashboard is available at:
+
+```
+https://dash.better-auth.com/[project]/organization/[orgId]/enterprise
+```
+
+From the dashboard you can:
+
+* **Create and remove directory connections** scoped to an organization
+* **Regenerate SCIM bearer tokens** when your identity provider requires rotation
+
+This eliminates the back-and-forth typically required when setting up SCIM, reducing onboarding time from days to minutes.
+
 ### Generating a SCIM token
 
 Before your identity provider can start syncing information to your SCIM server,
