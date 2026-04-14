@@ -835,6 +835,7 @@ const EMPTY_CONTRIBUTORS: ContributorInfo[] = [];
 
 type CommunityHeroStats = {
 	npmDownloads: number;
+	npmWeeklyHistory: number[];
 	githubStars: number;
 	contributors: number;
 };
@@ -950,6 +951,57 @@ function formatCount(num: number | null | undefined): string {
 	if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
 	if (num >= 1_000) return `${(num / 1_000).toFixed(num >= 10_000 ? 0 : 1)}k`;
 	return num.toString();
+}
+
+function NpmSparkline({ data: raw }: { data: number[] }) {
+	// Drop the last bucket — it's the incomplete current week
+	const data = raw.length > 2 ? raw.slice(0, -1) : raw;
+	const w = 120;
+	const h = 32;
+	const pad = 1;
+	const max = Math.max(...data);
+	const min = Math.min(...data);
+	const range = max - min || 1;
+	const points = data.map((v, i) => {
+		const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+		const y = h - pad - ((v - min) / range) * (h - pad * 2);
+		return `${x},${y}`;
+	});
+	const line = points.join(" ");
+	const areaPath = `M${points[0]} ${points.map((p) => `L${p}`).join(" ")} L${w - pad},${h} L${pad},${h} Z`;
+
+	return (
+		<svg
+			width={w}
+			height={h}
+			viewBox={`0 0 ${w} ${h}`}
+			className="shrink-0 ml-auto"
+		>
+			<defs>
+				<linearGradient id="npm-spark-fill" x1="0" y1="0" x2="0" y2="1">
+					<stop
+						offset="0%"
+						className="[stop-color:theme(colors.emerald.500)]"
+						stopOpacity="0.15"
+					/>
+					<stop
+						offset="100%"
+						className="[stop-color:theme(colors.emerald.500)]"
+						stopOpacity="0"
+					/>
+				</linearGradient>
+			</defs>
+			<path d={areaPath} fill="url(#npm-spark-fill)" />
+			<polyline
+				points={line}
+				fill="none"
+				className="stroke-emerald-500/50"
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+		</svg>
+	);
 }
 
 const footerLinks = [
@@ -1339,7 +1391,7 @@ export function HeroReadMe({
 											<div className="text-[11px] font-mono text-foreground/45 dark:text-foreground/30 tracking-wider transition-colors duration-200 group-hover/card:text-foreground/60 dark:group-hover/card:text-foreground/40">
 												{String(i + 1).padStart(2, "0")}
 											</div>
-											<div className="text-[13px] font-medium text-neutral-100 dark:text-neutral-100 transition-colors duration-200">
+											<div className="text-[13px] font-medium text-foreground/80 dark:text-neutral-100 transition-colors duration-200">
 												{feature.headline}
 											</div>
 										</div>
@@ -1947,6 +1999,53 @@ export function HeroReadMe({
 							<div className="mt-8">
 								<PluginEcosystem />
 							</div>
+
+							{/* NPM Downloads */}
+							{stats.npmDownloads > 0 && (
+								<a
+									href="https://www.npmjs.com/package/better-auth"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="group mt-6 flex items-center gap-4 px-5 py-4 border border-dashed border-foreground/[0.08] hover:border-foreground/[0.15] bg-foreground/[0.01] hover:bg-foreground/[0.02] transition-all"
+								>
+									<div className="flex items-center justify-center w-7 h-7 shrink-0">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 128 128"
+											width="22"
+											height="22"
+										>
+											<path
+												fill="currentColor"
+												className="text-red-600 dark:text-red-500"
+												d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"
+											/>
+											<path
+												fill="white"
+												className="dark:fill-neutral-900"
+												d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
+											/>
+										</svg>
+									</div>
+									<div className="flex flex-col min-w-0">
+										<span className="text-[13px] font-mono font-medium text-foreground/80 dark:text-foreground/70 tabular-nums">
+											{formatCount(stats.npmDownloads)}
+											<span className="text-foreground/40 dark:text-foreground/30 font-normal">
+												{" "}
+												downloads / week
+											</span>
+										</span>
+										<span className="text-[11px] text-foreground/40 dark:text-foreground/25">
+											better-auth on npm
+										</span>
+									</div>
+									{stats.npmWeeklyHistory.length > 2 && (
+										<div className="ml-auto shrink-0">
+											<NpmSparkline data={stats.npmWeeklyHistory} />
+										</div>
+									)}
+								</a>
+							)}
 						</div>
 
 						{/* Infrastructure */}
@@ -2089,9 +2188,23 @@ export function HeroReadMe({
 								].map((group) => (
 									<div
 										key={group.title}
-										className="border border-dashed border-foreground/[0.06] -mt-px -ml-px p-4"
+										className="relative overflow-hidden border-t border-r border-b border-dashed border-foreground/[0.06] first:border-l -mt-px p-4"
 									>
-										<h4 className="text-[11px] sm:text-xs font-mono uppercase tracking-widest text-foreground/55 dark:text-foreground/40 mb-3">
+										{group.title === "Dashboard" && (
+											<div
+												className="absolute inset-0 pointer-events-none"
+												style={{
+													backgroundImage:
+														"radial-gradient(circle, rgb(180 160 130 / 0.3) 1.2px, transparent 1.2px)",
+													backgroundSize: "6px 6px",
+													maskImage:
+														"linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 45%)",
+													WebkitMaskImage:
+														"linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 45%)",
+												}}
+											/>
+										)}
+										<h4 className="relative text-[11px] sm:text-xs font-mono font-semibold uppercase tracking-widest text-foreground/90 dark:text-foreground/75 mb-3">
 											{group.title}
 										</h4>
 										<ul className="space-y-1.5">
@@ -2107,6 +2220,143 @@ export function HeroReadMe({
 												</li>
 											))}
 										</ul>
+										{/* Enterprise half-circle with provider icons */}
+										{group.title === "Enterprise" && (
+											<div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-[160px] h-[160px] pointer-events-none">
+												{/* Half-circle arcs */}
+												<svg
+													className="absolute inset-0 w-full h-full"
+													viewBox="0 0 160 160"
+												>
+													<circle
+														cx="80"
+														cy="80"
+														r="68"
+														fill="none"
+														stroke="currentColor"
+														strokeWidth="0.75"
+														className="text-foreground/20"
+														strokeDasharray="3 3"
+													/>
+													<circle
+														cx="80"
+														cy="80"
+														r="44"
+														fill="none"
+														stroke="currentColor"
+														strokeWidth="0.75"
+														className="text-foreground/12"
+														strokeDasharray="2 4"
+													/>
+												</svg>
+												{/* Okta — 270° top of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[68px] top-0">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="15"
+														height="15"
+														viewBox="0 0 256 256"
+														className="text-foreground/60"
+													>
+														<path
+															fill="currentColor"
+															d="m140.844 1.778l-5.266 64.853a66 66 0 0 0-7.542-.427c-3.203 0-6.334.214-9.393.712l-2.99-31.432a1.72 1.72 0 0 1 1.709-1.848h5.337l-2.562-31.787C120.066.853 120.848 0 121.774 0h17.434c.996 0 1.779.853 1.636 1.849zm-43.976 3.2c-.285-.925-1.281-1.494-2.206-1.138L78.295 9.813c-.925.356-1.352 1.423-.925 2.276l13.307 29.013l-5.052 1.85c-.926.355-1.352 1.421-.926 2.275l13.592 28.515a61 61 0 0 1 15.868-6.044L96.94 4.978zM56.734 23.04l37.643 53.049c-4.768 3.129-9.108 6.827-12.809 11.093L59.011 64.996a1.72 1.72 0 0 1 .071-2.49l4.127-3.413L40.794 36.41c-.711-.711-.64-1.849.142-2.489l13.307-11.164c.783-.64 1.85-.498 2.42.284zM25.139 53.76c-.783-.569-1.921-.284-2.42.569l-8.68 15.075c-.499.854-.143 1.92.71 2.347L43.64 85.404l-2.704 4.623c-.498.853-.142 1.99.783 2.346l28.749 13.156a60.2 60.2 0 0 1 8.254-14.791zM3.862 94.72c.143-.996 1.139-1.564 2.064-1.351l62.976 16.427a62.3 62.3 0 0 0-2.704 16.782l-31.524-2.56a1.642 1.642 0 0 1-1.494-1.991l.925-5.263l-31.808-2.986c-.996-.071-1.637-.996-1.495-1.991l2.99-17.138zm-2.348 42.524c-.996.072-1.637.996-1.494 1.992l3.06 17.137c.142.996 1.138 1.565 2.063 1.351l30.883-8.035l.925 5.262c.143.996 1.139 1.565 2.064 1.351l30.456-8.39c-1.779-5.263-2.917-10.88-3.202-16.64l-64.826 5.972zM11.62 182.33c-.498-.853-.143-1.92.711-2.347l58.778-27.875c2.206 5.262 5.195 10.169 8.753 14.577L54.1 185.031c-.783.569-1.921.356-2.42-.498l-2.704-4.693l-26.257 18.133c-.783.57-1.922.285-2.42-.569l-8.752-15.075zm71.23-12.231L37.094 216.39c-.712.711-.64 1.849.142 2.489l13.378 11.164c.783.64 1.85.498 2.42-.284l18.501-26.027l4.127 3.485c.783.64 1.922.498 2.49-.356l17.933-26.026c-4.839-2.987-9.322-6.614-13.165-10.738zm-9.037 74.31c-.925-.355-1.352-1.421-.925-2.275L100 182.97c4.98 2.56 10.389 4.48 16.01 5.547l-7.97 30.577c-.213.925-1.28 1.494-2.205 1.138l-5.052-1.849l-8.468 30.791c-.285.925-1.281 1.494-2.206 1.138l-16.367-5.973zm46.68-55.11l-5.265 64.853c-.071.996.711 1.849 1.637 1.849h17.434c.996 0 1.779-.853 1.636-1.849l-2.561-31.787h5.336a1.72 1.72 0 0 0 1.708-1.848l-2.988-31.432c-3.06.498-6.191.712-9.393.712c-2.562 0-5.053-.143-7.543-.498m62.763-175.574c.427-.924 0-1.92-.925-2.275l-16.366-5.973c-.926-.356-1.922.213-2.206 1.137l-8.468 30.791l-5.053-1.848c-.925-.356-1.921.213-2.206 1.137l-7.97 30.578c5.693 1.138 11.03 3.058 16.011 5.547zm35.722 25.814L173.222 85.83a62 62 0 0 0-13.165-10.738l17.933-26.026c.569-.783 1.707-.996 2.49-.356l4.127 3.485l18.502-26.027c.57-.782 1.708-.925 2.42-.285l13.377 11.165c.783.64.783 1.778.143 2.489zm24.764 36.409c.925-.427 1.21-1.494.711-2.347L235.7 58.524c-.498-.853-1.637-1.066-2.42-.568l-26.257 18.133l-2.704-4.622c-.499-.854-1.637-1.138-2.42-.498l-25.76 18.347c3.558 4.408 6.476 9.315 8.753 14.577l58.778-27.875zm9.25 23.609l2.99 17.137c.142.996-.499 1.85-1.495 1.991l-64.826 6.045c-.285-5.831-1.424-11.378-3.203-16.64l30.457-8.391c.925-.285 1.921.355 2.063 1.35l.925 5.263l30.884-8.035c.925-.214 1.92.355 2.063 1.35zm-2.917 62.933c.925.213 1.921-.356 2.064-1.351L255.126 144c.143-.996-.498-1.849-1.494-1.991l-31.808-2.987l.925-5.262c.142-.996-.498-1.849-1.495-1.991l-31.523-2.56a62.3 62.3 0 0 1-2.704 16.782l62.976 16.427zM233.28 201.6c-.498.853-1.636 1.067-2.419.569l-53.583-36.978a60.2 60.2 0 0 0 8.254-14.791l28.749 13.156c.925.426 1.28 1.493.783 2.346l-2.704 4.622l28.89 13.654c.854.426 1.21 1.493.712 2.346zm-71.657-21.831l37.643 53.049c.57.782 1.708.924 2.42.284l13.306-11.164c.783-.64.783-1.778.143-2.49l-22.415-22.684l4.127-3.413c.783-.64.783-1.778.07-2.489l-22.557-22.186c-3.771 4.266-8.04 8.035-12.808 11.093zm-.356 72.249c-.925.355-1.921-.214-2.206-1.138l-17.22-62.72a61 61 0 0 0 15.868-6.044l13.592 28.515c.426.925 0 1.991-.926 2.276l-5.052 1.849l13.307 29.013c.427.924 0 1.92-.925 2.275l-16.367 5.974z"
+														/>
+													</svg>
+												</div>
+												{/* Microsoft — 225° upper-left of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[20px] top-[20px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="13"
+														height="13"
+														viewBox="0 0 256 256"
+													>
+														<path
+															fill="#F1511B"
+															d="M121.666 121.666H0V0h121.666z"
+														/>
+														<path
+															fill="#80CC28"
+															d="M256 121.666H134.335V0H256z"
+														/>
+														<path
+															fill="#00ADEF"
+															d="M121.663 256.002H0V134.336h121.663z"
+														/>
+														<path
+															fill="#FBBC09"
+															d="M256 256.002H134.335V134.336H256z"
+														/>
+													</svg>
+												</div>
+												{/* Google — 180° leftmost of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-0 top-[68px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="13"
+														height="13"
+														viewBox="0 0 16 16"
+													>
+														<g
+															fill="none"
+															fillRule="evenodd"
+															clipRule="evenodd"
+														>
+															<path
+																fill="#f44336"
+																d="M7.209 1.061c.725-.081 1.154-.081 1.933 0a6.57 6.57 0 0 1 3.65 1.82a100 100 0 0 0-1.986 1.93q-1.876-1.59-4.188-.734q-1.696.78-2.362 2.528a78 78 0 0 1-2.148-1.658a.26.26 0 0 0-.16-.027q1.683-3.245 5.26-3.86"
+																opacity=".987"
+															/>
+															<path
+																fill="#ffc107"
+																d="M1.946 4.92q.085-.013.161.027a78 78 0 0 0 2.148 1.658A7.6 7.6 0 0 0 4.04 7.99q.037.678.215 1.331L2 11.116Q.527 8.038 1.946 4.92"
+																opacity=".997"
+															/>
+															<path
+																fill="#448aff"
+																d="M12.685 13.29a26 26 0 0 0-2.202-1.74q1.15-.812 1.396-2.228H8.122V6.713q3.25-.027 6.497.055q.616 3.345-1.423 6.032a7 7 0 0 1-.51.49"
+																opacity=".999"
+															/>
+															<path
+																fill="#43a047"
+																d="M4.255 9.322q1.23 3.057 4.51 2.854a3.94 3.94 0 0 0 1.718-.626q1.148.812 2.202 1.74a6.62 6.62 0 0 1-4.027 1.684a6.4 6.4 0 0 1-1.02 0Q3.82 14.524 2 11.116z"
+																opacity=".993"
+															/>
+														</g>
+													</svg>
+												</div>
+												{/* Keycloak — 135° lower-left of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[20px] top-[116px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="13"
+														height="13"
+														viewBox="0 0 24 24"
+														className="text-foreground/60"
+													>
+														<path
+															fill="currentColor"
+															d="m18.742 1.182l-12.493.002C4.155 4.784 2.079 8.393 0 12.002c2.071 3.612 4.162 7.214 6.252 10.816l12.49-.004l3.089-5.404h2.158v-.002H24L23.996 6.59h-2.168zM8.327 4.792h2.081l1.04 1.8l-3.12 5.413l3.117 5.403l-1.035 1.81H8.327a2048 2048 0 0 0-4.168-7.204zm6.241 0l2.086.003q2.088 3.608 4.166 7.222l-4.167 7.2h-2.08c-.382-.562-1.038-1.808-1.038-1.808l3.123-5.405l-3.124-5.413z"
+														/>
+													</svg>
+												</div>
+												{/* Ping Identity — 90° bottom of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[68px] top-[136px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="12"
+														height="12"
+														viewBox="0 0 24 24"
+													>
+														<path
+															d="M23.7476 0H0V23.3473H23.7476V0Z"
+															fill="#D20E0F"
+														/>
+													</svg>
+												</div>
+											</div>
+										)}
 									</div>
 								))}
 							</div>
@@ -2126,15 +2376,15 @@ export function HeroReadMe({
 												strokeWidth="1.5"
 												strokeLinecap="round"
 												strokeLinejoin="round"
-												className="text-foreground/50"
+												className="text-foreground/70"
 											>
 												<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
 											</svg>
-											<h4 className="text-[11px] sm:text-xs font-mono uppercase tracking-widest text-foreground/55 dark:text-foreground/40">
+											<h4 className="text-[11px] sm:text-xs font-mono font-semibold uppercase tracking-widest text-foreground/90 dark:text-foreground/75">
 												Sentinel
 											</h4>
 										</div>
-										<p className="text-[13px] sm:text-[14px] text-foreground/45 dark:text-foreground/35 leading-relaxed">
+										<p className="text-[13px] sm:text-[14px] text-foreground/60 dark:text-foreground/50 leading-relaxed">
 											Real-time threat detection before it reaches your users.
 										</p>
 									</div>
@@ -2153,7 +2403,7 @@ export function HeroReadMe({
 										].map((tag) => (
 											<span
 												key={tag}
-												className="inline-flex items-center px-2 py-1 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/40 border border-foreground/[0.08] bg-foreground/[0.02] hover:bg-foreground/[0.05] hover:text-foreground/70 dark:hover:text-foreground/55 transition-colors"
+												className="inline-flex items-center px-2 py-1 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border border-foreground/[0.12] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/80 dark:hover:text-foreground/65 transition-colors"
 											>
 												{tag}
 											</span>

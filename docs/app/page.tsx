@@ -70,6 +70,7 @@ export default async function HomePage() {
 								contributors={contributors}
 								stats={{
 									npmDownloads: communityStats.npmDownloads,
+									npmWeeklyHistory: communityStats.npmWeeklyHistory,
 									githubStars: communityStats.githubStars,
 									contributors: communityStats.contributors,
 								}}
