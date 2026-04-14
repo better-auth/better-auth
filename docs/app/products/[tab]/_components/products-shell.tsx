@@ -87,13 +87,12 @@ function InfrastructureHero() {
 		{ label: "Users", value: "Unlimited" },
 		{ label: "Audit logs", value: "From 10k/mo" },
 		{ label: "Security", value: "$0.0001/event overage" },
-		{ label: "SSO", value: "Business+" },
+		{ label: "SSO", value: "Enterprise" },
 	];
 
 	const tiers = [
 		{ name: "Starter", price: "$0", note: "/mo" },
 		{ name: "Pro", price: "$20", note: "/mo", highlight: true },
-		{ name: "Business", price: "$299", note: "/mo" },
 		{ name: "Enterprise", price: "Custom", note: null },
 	];
 

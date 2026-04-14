@@ -32,10 +32,7 @@ const navFiles: NavFileItem[] = [
 	{ name: "docs", href: "/docs" },
 ];
 
-const productFiles: NavFileItem[] = [
-	{ name: "framework", href: "/products/framework" },
-	{ name: "infrastructure", href: "/products/infrastructure" },
-];
+const pricingFile: NavFileItem = { name: "pricing", href: "/pricing" };
 
 const resourceFiles: NavFileItem[] = [
 	{ name: "blog", href: "/blog" },
@@ -51,7 +48,7 @@ interface MobileMenuSection {
 }
 
 const mobileMenuSections: MobileMenuSection[] = [
-	{ name: "products", children: productFiles },
+	{ name: "pricing", href: "/pricing" },
 	{ name: "resources", children: resourceFiles },
 	{ name: "enterprise", href: "/enterprise" },
 ];
@@ -115,12 +112,10 @@ const logoAssets = {
 
 export function StaggeredNavFiles() {
 	const pathname = usePathname() || "/";
-	const [productsOpen, setProductsOpen] = useState(false);
 	const [resourcesOpen, setResourcesOpen] = useState(false);
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [mobileView, setMobileView] = useState<"docs" | "nav">("docs");
 	const [mobileDocSection, setMobileDocSection] = useState(-1);
-	const productsTimeout = useRef<NodeJS.Timeout>(undefined);
 	const resourcesTimeout = useRef<NodeJS.Timeout>(undefined);
 
 	useEffect(() => {
@@ -141,13 +136,6 @@ export function StaggeredNavFiles() {
 		return () => mql.removeEventListener("change", handler);
 	}, []);
 
-	const openProducts = () => {
-		clearTimeout(productsTimeout.current);
-		setProductsOpen(true);
-	};
-	const closeProducts = () => {
-		productsTimeout.current = setTimeout(() => setProductsOpen(false), 150);
-	};
 	const openResources = () => {
 		clearTimeout(resourcesTimeout.current);
 		setResourcesOpen(true);
@@ -161,8 +149,7 @@ export function StaggeredNavFiles() {
 		[pathname],
 	);
 	const isDocs = pathname.startsWith("/docs");
-	const isProductPage =
-		pathname === "/products" || pathname.startsWith("/products/");
+	const isPricingPage = pathname === "/pricing";
 	const isResourcePage = resourceFiles.some((r) => {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
@@ -170,13 +157,13 @@ export function StaggeredNavFiles() {
 	const isKnownPage =
 		isActive("/") ||
 		isDocs ||
-		isProductPage ||
+		isPricingPage ||
 		isResourcePage ||
 		isActive("/enterprise");
 	const isNarrowLeft = isDocs;
 	const leftPaneWidthClass = isNarrowLeft
 		? "w-[22vw] max-w-[300px]"
-		: isProductPage || isResourcePage
+		: isPricingPage || isResourcePage
 			? "w-[30%]"
 			: "w-[40%]";
 	const navBottomBorderClass = isNarrowLeft ? "border-foreground/5" : "";
@@ -384,78 +371,31 @@ export function StaggeredNavFiles() {
 						);
 					})}
 
-					{/* Products folder tab */}
+					{/* Pricing tab */}
 					<motion.div
 						initial={{ opacity: 0, y: -4 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.2, delay: 0.14, ease: "easeOut" }}
-						className="relative flex-1"
-						onMouseEnter={openProducts}
-						onMouseLeave={closeProducts}
+						className="flex-1"
 					>
-						<div
-							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} cursor-pointer transition-colors duration-150 ${
-								isProductPage
+						<Link
+							href={pricingFile.href}
+							className={`group/tab relative flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} transition-colors duration-150 ${
+								isPricingPage
 									? `bg-background border-b-2 ${activeTabBorderClass}`
-									: productsOpen
-										? "bg-foreground/[0.04]"
-										: "hover:bg-foreground/[0.03]"
+									: "bg-transparent hover:bg-foreground/[0.03]"
 							}`}
 						>
 							<span
 								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
-									isProductPage
+									isPricingPage
 										? "text-foreground"
-										: productsOpen
-											? "text-foreground/80"
-											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
 								}`}
 							>
-								products
+								{pricingFile.name}
 							</span>
-							<svg
-								className={`h-2 w-2 text-foreground/55 dark:text-foreground/40 transition-transform duration-200 ${
-									productsOpen ? "rotate-180" : ""
-								}`}
-								viewBox="0 0 10 6"
-								fill="none"
-							>
-								<path
-									d="M1 1L5 5L9 1"
-									stroke="currentColor"
-									strokeWidth="1.2"
-								/>
-							</svg>
-						</div>
-
-						<AnimatePresence>
-							{productsOpen && (
-								<motion.div
-									initial={{ opacity: 0, y: -4 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: -4 }}
-									transition={{ duration: 0.12, ease: "easeOut" }}
-									className={`absolute top-full left-0 z-50 w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
-								>
-									{productFiles.map((item, i) => (
-										<motion.div
-											key={item.name}
-											initial={{ opacity: 0 }}
-											animate={{ opacity: 1 }}
-											transition={{ duration: 0.1, delay: i * 0.02 }}
-										>
-											<Link
-												href={item.href}
-												onClick={() => setProductsOpen(false)}
-												className="block"
-											>
-												<DropdownItem item={item} />
-											</Link>
-										</motion.div>
-									))}
-								</motion.div>
-							)}
-						</AnimatePresence>
+						</Link>
 					</motion.div>
 
 					{/* Enterprise tab */}
@@ -928,7 +868,6 @@ export function StaggeredNavFiles() {
 										<Accordion
 											type="multiple"
 											defaultValue={[
-												"products",
 												...mobileMenuSections
 													.filter((s) =>
 														s.children?.some((item) =>

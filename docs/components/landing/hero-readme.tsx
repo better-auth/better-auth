@@ -14,8 +14,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import type { ContributorInfo } from "@/lib/community-stats";
 import { cn } from "@/lib/utils";
 import {
-	AiNativeSection,
 	DatabaseSection,
+	IntegrationsSection,
 	PluginEcosystem,
 	ServerClientTabs,
 	SocialProvidersSection,
@@ -831,402 +831,6 @@ function InstallBlock() {
 	);
 }
 
-const sentinelEvents = [
-	{
-		action: "Blocked",
-		color: "bg-red-400/80",
-		identifier: "akash.prish@dropmeon.com",
-		ip: "::1",
-		reason: "Disposable Email",
-		location: "Unknown",
-		path: "/sign-up/email",
-		time: "2 min ago",
-	},
-	{
-		action: "Blocked",
-		color: "bg-red-400/80",
-		identifier: "kamef69609@cucadas.com",
-		ip: "Unknown IP",
-		reason: "Disposable Email",
-		location: "Unknown",
-		path: "/sign-up/email",
-		time: "4 min ago",
-	},
-	{
-		action: "Challenged",
-		color: "bg-amber-400/80",
-		identifier: "195.142.xx.xx",
-		ip: "",
-		reason: "Suspicious IP",
-		location: "Moscow, RU",
-		path: "/sign-in",
-		time: "7 min ago",
-	},
-	{
-		action: "Blocked",
-		color: "bg-red-400/80",
-		identifier: "bot-crawler-7x",
-		ip: "52.14.xx.xx",
-		reason: "Bot Detected",
-		location: "US-East",
-		path: "/api/auth",
-		time: "12 min ago",
-	},
-	{
-		action: "Blocked",
-		color: "bg-red-400/80",
-		identifier: "admin@tempmail.ninja",
-		ip: "::1",
-		reason: "Breached Password",
-		location: "Unknown",
-		path: "/sign-up/email",
-		time: "18 min ago",
-	},
-];
-
-function SentinelSection() {
-	return (
-		<div className="mt-10 mb-4">
-			<div className="flex items-center gap-3 mb-6">
-				<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
-					Sentinel
-				</span>
-				<div className="flex-1 border-t border-foreground/[0.06]" />
-			</div>
-
-			<div className="mb-5">
-				<h3 className="text-base sm:text-lg  text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-					Security infrastructure for your app.
-				</h3>
-				<p className="text-[14px] text-foreground/70 dark:text-foreground/55 leading-relaxed max-w-2xl">
-					Bot detection, brute force protection, disposable email blocking, geo
-					restrictions, and more &mdash; all working in real time before threats
-					reach your users.
-				</p>
-			</div>
-
-			<div className="relative group/sentinel">
-				{/* Outer dashed border — top and sides only, sides fade out toward bottom */}
-				<div className="absolute -inset-2 sm:-inset-3 border-t border-dashed border-foreground/[0.08] pointer-events-none" />
-				<div
-					className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -left-2 sm:-left-3 w-px border-l border-dashed border-foreground/[0.08] pointer-events-none"
-					style={{
-						maskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-						WebkitMaskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-					}}
-				/>
-				<div
-					className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -right-2 sm:-right-3 w-px border-r border-dashed border-foreground/[0.08] pointer-events-none"
-					style={{
-						maskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-						WebkitMaskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-					}}
-				/>
-				{/* Top corner accents */}
-				<span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none -translate-x-0.5 -translate-y-0.5">
-					&#x250C;
-				</span>
-				<span className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none translate-x-0.5 -translate-y-0.5">
-					&#x2510;
-				</span>
-
-				<div
-					className="relative overflow-hidden border-t border-x border-foreground/[0.1]"
-					style={{
-						maskImage:
-							"linear-gradient(to bottom, black 60%, transparent 100%)",
-						WebkitMaskImage:
-							"linear-gradient(to bottom, black 60%, transparent 100%)",
-					}}
-				>
-					{/* Header bar */}
-					<div className="flex items-center justify-between px-4 py-2.5 bg-foreground/[0.02] border-b border-foreground/[0.08]">
-						<div className="flex items-center gap-2">
-							{/* Shield icon */}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="1.5"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								className="text-foreground/50"
-							>
-								<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-							</svg>
-							<span className="text-xs font-medium text-foreground/50">
-								Sentinel
-							</span>
-							<span className="ml-1 text-[10px] font-mono text-foreground/50">
-								Monitor and analyze security events
-							</span>
-						</div>
-						<div className="hidden sm:flex items-center gap-3">
-							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-red-400/80" />
-								<span className="text-foreground/50">Blocked</span>
-								<span className="text-foreground/50">847</span>
-							</span>
-							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-amber-400/80" />
-								<span className="text-foreground/50">Challenged</span>
-								<span className="text-foreground/50">124</span>
-							</span>
-							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-emerald-400/80" />
-								<span className="text-foreground/50">Allowed</span>
-								<span className="text-foreground/50">12.4k</span>
-							</span>
-						</div>
-					</div>
-
-					{/* Table header */}
-					<div className="hidden sm:grid sm:grid-cols-[96px_minmax(0,1fr)_110px_80px_70px_80px] gap-x-4 px-4 py-2 border-b border-foreground/6 bg-foreground/1 font-medium text-[9px] font-mono uppercase tracking-wider text-foreground/50">
-						<span>Action</span>
-						<span>Identifier</span>
-						<span>Reason</span>
-						<span className="hidden sm:block">Location</span>
-						<span>Path</span>
-						<span className="text-right">Time</span>
-					</div>
-
-					{/* Event rows */}
-					{sentinelEvents.map((event) => (
-						<div key={event.identifier}>
-							<div className="sm:hidden px-4 py-3 border-b border-dashed border-foreground/4 hover:bg-foreground/2 transition-colors">
-								<div className="flex items-center justify-between gap-3">
-									<span className="flex items-center gap-1.5 whitespace-nowrap">
-										<span
-											className={cn(
-												"size-1.5 rounded-full shrink-0",
-												event.color,
-											)}
-										/>
-										<span
-											className={cn(
-												"text-[10px] font-mono",
-												event.action === "Blocked"
-													? "text-red-500/80 dark:text-red-400/70"
-													: "text-yellow-500/80 dark:text-yellow-400/70",
-											)}
-										>
-											{event.action}
-										</span>
-									</span>
-									<span className="shrink-0 text-[9px] font-mono text-foreground/50">
-										{event.time}
-									</span>
-								</div>
-								<div className="mt-2 min-w-0">
-									<span className="block truncate text-[10px] font-mono text-foreground/60">
-										{event.identifier}
-									</span>
-									{event.ip && (
-										<span className="mt-0.5 block truncate text-[9px] font-mono text-foreground/50">
-											{event.ip}
-										</span>
-									)}
-								</div>
-								<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-mono text-foreground/50">
-									<span className="truncate">{event.reason}</span>
-									<span className="truncate">{event.path}</span>
-									<span className="truncate">{event.location}</span>
-								</div>
-							</div>
-							<div className="hidden sm:grid sm:grid-cols-[96px_minmax(0,1fr)_110px_80px_70px_80px] gap-x-4 px-4 py-2.5 border-b border-dashed border-foreground/[0.04] hover:bg-foreground/[0.02] transition-colors">
-								<span className="flex items-center gap-1.5 whitespace-nowrap">
-									<span
-										className={cn(
-											"size-1.5 rounded-full shrink-0",
-											event.color,
-										)}
-									/>
-									<span
-										className={cn(
-											"text-[10px] font-mono",
-											event.action === "Blocked"
-												? "text-red-500/80 dark:text-red-400/70"
-												: "text-yellow-500/80 dark:text-yellow-400/70",
-										)}
-									>
-										{event.action}
-									</span>
-								</span>
-								<div className="min-w-0 pr-2">
-									<span className="text-[10px] font-mono text-foreground/60 block truncate">
-										{event.identifier}
-									</span>
-									{event.ip && (
-										<span className="text-[9px] font-mono text-foreground/50 block truncate">
-											{event.ip}
-										</span>
-									)}
-								</div>
-								<span className="text-[10px] font-mono text-foreground/50 truncate">
-									{event.reason}
-								</span>
-								<span className="text-[10px] font-mono text-foreground/50 truncate">
-									{event.location}
-								</span>
-								<span className="text-[10px] font-mono text-foreground/50 truncate">
-									{event.path}
-								</span>
-								<span className="text-[10px] font-mono text-foreground/50 text-right">
-									{event.time}
-								</span>
-							</div>
-						</div>
-					))}
-				</div>
-			</div>
-
-			{/* Protection tags */}
-			<div className="flex flex-wrap gap-1.5 mt-4">
-				{(
-					[
-						{
-							tag: "Bot Detection",
-							icon: (
-								<>
-									<circle cx="12" cy="12" r="10" />
-									<path d="M2 12h20" />
-									<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-								</>
-							),
-						},
-						{
-							tag: "Brute Force",
-							icon: (
-								<>
-									<rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-									<path d="M7 11V7a5 5 0 0 1 10 0v4" />
-								</>
-							),
-						},
-						{
-							tag: "Breached Passwords",
-							icon: (
-								<>
-									<path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z" />
-									<circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
-								</>
-							),
-						},
-						{
-							tag: "Impossible Travel",
-							icon: (
-								<>
-									<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
-								</>
-							),
-						},
-						{
-							tag: "Rate Limiting",
-							icon: (
-								<>
-									<circle cx="12" cy="12" r="10" />
-									<polyline points="12 6 12 12 16 14" />
-								</>
-							),
-						},
-						{
-							tag: "Geo Blocking",
-							icon: (
-								<>
-									<circle cx="12" cy="12" r="10" />
-									<path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-									<path d="M2 12h20" />
-								</>
-							),
-						},
-						{
-							tag: "Suspicious IPs",
-							icon: (
-								<>
-									<path d="M6 18h8" />
-									<path d="M3 22h18" />
-									<path d="M14 22a7 7 0 1 0 0-14h-1" />
-									<path d="M9 14h2" />
-									<path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z" />
-									<path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3" />
-								</>
-							),
-						},
-						{
-							tag: "Disposable Emails",
-							icon: (
-								<>
-									<rect width="20" height="16" x="2" y="4" rx="2" />
-									<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-								</>
-							),
-						},
-						{
-							tag: "Email Abuse",
-							icon: (
-								<>
-									<path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.8 0L13 14" />
-									<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-									<path d="m17 21 5-5" />
-									<path d="m22 21-5-5" />
-								</>
-							),
-						},
-						{
-							tag: "Free Trial Abuse",
-							icon: (
-								<>
-									<path d="M6 3h12l4 6-10 13L2 9Z" />
-									<path d="M11 3 8 9l4 13 4-13-3-6" />
-									<path d="M2 9h20" />
-								</>
-							),
-						},
-						{
-							tag: "Stale Users",
-							icon: (
-								<>
-									<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-									<circle cx="9" cy="7" r="4" />
-									<line x1="17" x2="22" y1="11" y2="11" />
-								</>
-							),
-						},
-					] as const
-				).map(({ tag, icon }) => (
-					<span
-						key={tag}
-						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border border-foreground/[0.14] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/85 dark:hover:text-foreground/75 transition-colors"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="10"
-							height="10"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							className="opacity-80 shrink-0"
-						>
-							{icon}
-						</svg>
-						{tag}
-					</span>
-				))}
-			</div>
-		</div>
-	);
-}
-
 const EMPTY_CONTRIBUTORS: ContributorInfo[] = [];
 
 type CommunityHeroStats = {
@@ -1257,11 +861,11 @@ function ContributorsSection({
 
 	return (
 		<div className="mt-10 pt-8">
-			<div className="flex items-center gap-3 mb-2">
-				<span className="text-base text-foreground/85 dark:text-foreground/75">
+			<div className="flex items-center gap-4 mb-2">
+				<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 					Contributors
 				</span>
-				<div className="h-px flex-1 bg-foreground/[0.08]" />
+				<div className="flex-1 border-t border-foreground/10" />
 			</div>
 			<p className="text-[13px] text-foreground/50 dark:text-foreground/40 mb-5 leading-relaxed">
 				Built by a community of{" "}
@@ -1552,6 +1156,9 @@ export function HeroReadMe({
 	stats: CommunityHeroStats;
 }) {
 	const [socialHovered, setSocialHovered] = useState(false);
+	const [frameworkTab, setFrameworkTab] = useState<
+		"declarative" | "database" | "oauth" | "integrations"
+	>("declarative");
 
 	return (
 		<motion.div
@@ -1567,7 +1174,7 @@ export function HeroReadMe({
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						transition={{ duration: 0.4, delay: 0.3 }}
-						className="overflow-x-hidden no-scrollbar pb-0"
+						className="no-scrollbar pb-0"
 					>
 						<h1 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
 							README
@@ -1575,28 +1182,38 @@ export function HeroReadMe({
 						</h1>
 
 						<p className="text-sm sm:text-[15px] text-foreground/80 mb-6 sm:mb-8 leading-relaxed">
-							Better Auth is an authentication framework. It provides a
-							comprehensive set of features out of the box and includes a Plugin
-							ecosystem that simplifies adding advanced functionalities and
-							infrastructure to help own your auth at scale.
+							Auth that lives{" "}
+							<span className="font-medium text-foreground/90 dark:text-foreground/80">
+								inside your app
+							</span>
+							. Composable,{" "}
+							<span className="border-b border-dashed border-foreground/30">
+								plugin-based
+							</span>
+							, and built to scale — powering from weekend projects to the
+							biggest{" "}
+							<span className="font-medium text-foreground/90 dark:text-foreground/80">
+								consumer and enterprise apps
+							</span>{" "}
+							on the planet.
 						</p>
 
 						<InstallBlock />
 
 						<div className="flex items-center gap-3 my-4">
 							<div className="flex-1 border-t border-foreground/6"></div>
-							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[11px] sm:text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Trusted By
 							</span>
 						</div>
 
 						<TrustedBy />
 
-						<div className="flex items-center gap-3 my-4">
-							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+						<div className="flex items-center gap-4 my-4">
+							<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 								Features
 							</span>
-							<div className="flex-1 border-t border-foreground/10"></div>
+							<div className="flex-1 border-t border-foreground/10" />
 						</div>
 
 						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/[0.08] overflow-hidden">
@@ -1604,66 +1221,66 @@ export function HeroReadMe({
 								{
 									label: "Framework Agnostic",
 									headline: "Works with your stack.",
-									desc: "First-class support for Next.js, Nuxt, SvelteKit, Astro, Hono, Express, and 20+ more.",
+									desc: "Next.js, Nuxt, SvelteKit, Astro, Hono, and 20+ more.",
 									logos: true,
 									href: "/docs",
 								},
 								{
 									label: "Email & Password",
 									headline: "Built-in credential auth.",
-									desc: "Session management, email verification, and password reset out of the box.",
+									desc: "Sessions, email verification, and password reset included.",
 									credential: true,
 									href: "/docs",
 								},
 								{
 									label: "Social Sign-on",
-									headline: "40+ social providers.",
-									desc: "Google, GitHub, Apple, Discord, Microsoft, and more — each a few lines of config.",
+									headline: "Social sign-on.",
+									desc: "Google, GitHub, Apple, Discord, and more.",
 									social: true,
 									href: "/docs",
 								},
 								{
 									label: "Organizations",
 									headline: "Multi-tenancy built in.",
-									desc: "Teams, roles, invitations, and member management with fine-grained access control.",
+									desc: "Teams, roles, invitations, and access control.",
 									org: true,
 									href: "/docs",
 								},
 								{
 									label: "Enterprise",
-									headline: "SSO, SAML & SCIM.",
-									desc: "Enterprise SSO, SAML 2.0, SCIM provisioning, and directory sync for B2B products.",
+									headline: "Enterprise ready.",
+									desc: "SSO, SAML 2.0, SCIM, and directory sync.",
 									enterprise: true,
 									href: "/docs",
 								},
 								{
 									label: "Plugins",
 									headline: "50+ and growing.",
-									desc: "Passkeys, magic links, anonymous auth, API keys, JWTs, and a community ecosystem.",
+									desc: "Passkeys, magic links, API keys, JWTs, and more.",
 									plugins: true,
 									href: "/docs",
 								},
 								{
 									label: "Agent Auth",
 									headline: "Auth for AI agents.",
-									desc: "MCP server auth, async auth flows, token exchange, and agent-to-agent delegation.",
+									desc: "MCP auth, token exchange, and agent delegation.",
 									agent: true,
 									href: "/docs",
 								},
 								{
 									label: "Infrastructure",
 									headline: "Security & observability.",
-									desc: "Bot detection, real-time behavior analysis, IP blocking, email validation, and more.",
+									desc: "Bot detection, IP blocking, and email validation.",
 									security: true,
-									href: "/products/infrastructure",
+									href: "/pricing",
 									managed: true,
 								},
 								{
 									label: "Dashboard",
 									headline: "User management.",
-									desc: "Manage users, sessions, and organizations. Track sign-ups, active users, and growth.",
+									desc: "Manage users, sessions, and organizations.",
 									dashboard: true,
-									href: "/products/infrastructure",
+									href: "/pricing",
 									managed: true,
 								},
 							].map((feature, i) => (
@@ -1688,7 +1305,7 @@ export function HeroReadMe({
 											}
 										}}
 										className={cn(
-											"group/card relative p-4 lg:p-5 border-foreground/[0.08] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
+											"group/card relative p-4 lg:p-5 border-foreground/[0.08] min-h-[100px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
 											// Bottom border: all except last; 3-col last row starts at 6
 											i < 8 && "border-b",
 											i >= 6 && "md:border-b-0",
@@ -1718,21 +1335,15 @@ export function HeroReadMe({
 												<polyline points="7 7 17 7 17 17" />
 											</svg>
 										</span>
-										<div className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wider transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
-											<span className="text-foreground/45 dark:text-foreground/30 mr-1.5 transition-colors duration-200 group-hover/card:text-foreground/60 dark:group-hover/card:text-foreground/40">
+										<div className="mb-1">
+											<div className="text-[11px] font-mono text-foreground/45 dark:text-foreground/30 tracking-wider transition-colors duration-200 group-hover/card:text-foreground/60 dark:group-hover/card:text-foreground/40">
 												{String(i + 1).padStart(2, "0")}
-											</span>
-											{feature.label}
-											{"managed" in feature && feature.managed && (
-												<span className="ml-1.5 text-[8px] normal-case tracking-widest text-foreground/40 dark:text-foreground/30 border border-dashed border-foreground/10 px-1 py-px">
-													managed
-												</span>
-											)}
+											</div>
+											<div className="text-[13px] font-medium text-neutral-100 dark:text-neutral-100 transition-colors duration-200">
+												{feature.headline}
+											</div>
 										</div>
-										<div className="text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-snug mb-1.5 transition-colors duration-200 group-hover/card:text-neutral-950 dark:group-hover/card:text-white">
-											{feature.headline}
-										</div>
-										<div className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
+										<div className="text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
 											{feature.desc}
 										</div>
 										{"logos" in feature && feature.logos && (
@@ -1756,7 +1367,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 24 24"
-													className="text-[#00DC82] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.05s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.05s]"
 												>
 													<path
 														fill="currentColor"
@@ -1769,7 +1380,7 @@ export function HeroReadMe({
 													width="13"
 													height="15"
 													viewBox="0 0 426 512"
-													className="text-[#FF3E00] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.1s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.1s]"
 												>
 													<path
 														fill="currentColor"
@@ -1796,7 +1407,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 128 128"
-													className="text-[#4F88C6] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.2s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.2s]"
 												>
 													<path
 														fill="currentColor"
@@ -1809,7 +1420,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 32 32"
-													className="text-[#000020] dark:text-[#FAFAFA] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s]"
 												>
 													<path
 														fill="currentColor"
@@ -2241,313 +1852,333 @@ export function HeroReadMe({
 							</span>
 						</div>
 
-						<div className="my-6">
-							<div className="flex items-center gap-3 mb-5">
-								<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
-									Declarative Config
-								</span>
-								<div className="flex-1 border-t border-foreground/10" />
-							</div>
-							<ServerClientTabs />
-						</div>
-
-						{/* Database */}
-						<div className="my-8">
-							<DatabaseSection />
-						</div>
-
-						<AiNativeSection />
-
-						<div className="flex items-center gap-3 mt-8 mb-5">
-							<span className="text-base text-foreground/85 dark:text-foreground/75">
-								OAuth Providers
-							</span>
-							<div className="h-px flex-1 bg-foreground/[0.08]" />
-						</div>
-
-						<SocialProvidersSection />
-
-						<div className="mt-8">
-							<PluginEcosystem />
-						</div>
-
-						{/* Infrastructure transition */}
-						<div className="mt-16 mb-8">
+						<div className="my-4">
 							<div className="flex items-center gap-4">
-								<span className="text-lg sm:text-xl font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
-									Infrastructure
+								<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+									Framework
 								</span>
-								<div className="flex-1 border-t border-foreground/10" />
+								<div className="flex-1 border-t border-foreground/10"></div>
 							</div>
-							<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-xl">
-								Managed infrastructure on top of the open-source framework.
+							<p className="text-[15px] sm:text-base text-foreground/50 mt-1">
+								The most comprehensive authentication framework for TypeScript.
 							</p>
 						</div>
 
-						{/* Dashboard */}
-						<div className="mt-10 mb-4">
-							<div className="mb-5">
-								<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-									User management and monitoring platform.
-								</h3>
-								<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
-									Monitor sign-ups, manage users, track sessions, and surface
-									security insights — with an agentic Cmd+K to do it all in
-									natural language.
+						<div className="mt-8 mb-10">
+							<div className="border-r border-foreground/[0.1] bg-foreground/[0.01] overflow-hidden">
+								<div className="flex flex-col md:flex-row">
+									<div className="min-w-0 flex-1 h-[400px] overflow-hidden">
+										<AnimatePresence mode="wait" initial={false}>
+											<motion.div
+												key={frameworkTab}
+												initial={{ opacity: 0, y: 6 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: -4 }}
+												transition={{ duration: 0.2, ease: "easeOut" }}
+												className="pr-5 pb-5"
+											>
+												{frameworkTab === "declarative" && <ServerClientTabs />}
+												{frameworkTab === "database" && <DatabaseSection />}
+												{frameworkTab === "oauth" && <SocialProvidersSection />}
+												{frameworkTab === "integrations" && (
+													<IntegrationsSection />
+												)}
+											</motion.div>
+										</AnimatePresence>
+									</div>
+
+									<div className="hidden md:flex md:flex-col md:w-56 md:shrink-0 border-t md:border-t-0 md:border-l border-foreground/[0.1] bg-neutral-50 dark:bg-black">
+										{[
+											{ id: "declarative", label: "Declarative Config" },
+											{ id: "database", label: "Bring Your Own Database" },
+											{ id: "oauth", label: "OAuth Providers" },
+											{ id: "integrations", label: "Integrations" },
+										].map((tab) => (
+											<button
+												key={tab.id}
+												type="button"
+												onClick={() =>
+													setFrameworkTab(
+														tab.id as
+															| "declarative"
+															| "database"
+															| "oauth"
+															| "integrations",
+													)
+												}
+												className={cn(
+													"relative flex-1 md:flex-none text-left px-3 sm:px-4 py-3 text-[11px] sm:text-xs font-mono tracking-wider uppercase transition-colors border-r md:border-r-0 md:border-b last:border-r-0 md:last:border-b-0 border-foreground/[0.08]",
+													frameworkTab === tab.id
+														? "text-foreground/85 bg-foreground/[0.04]"
+														: "text-foreground/45 hover:text-foreground/70",
+												)}
+											>
+												{tab.id === "database" ? (
+													<>
+														Bring Your Own{" "}
+														<span className="text-amber-600 dark:text-amber-400">
+															Database
+														</span>
+													</>
+												) : (
+													tab.label
+												)}
+												{frameworkTab === tab.id && (
+													<span className="absolute inset-y-0 right-0 w-[1.5px] bg-foreground/65 hidden md:block" />
+												)}
+											</button>
+										))}
+										<div className="hidden md:flex flex-1 items-end p-4">
+											<p className="text-[13px] leading-relaxed text-foreground/60 dark:text-foreground/50">
+												{frameworkTab === "declarative" &&
+													"No dashboard clicks. Your auth lives in code — version controlled, type-safe, and reviewable in PRs."}
+												{frameworkTab === "database" &&
+													"Use any database. Connect with a connection string or your favorite ORM. Your data stays yours."}
+												{frameworkTab === "oauth" &&
+													"40+ preconfigured providers. Add Google, GitHub, Apple, and more in seconds."}
+												{frameworkTab === "integrations" &&
+													"Works with every major framework. First-class support for 20+ integrations."}
+											</p>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div className="mt-8">
+								<PluginEcosystem />
+							</div>
+						</div>
+
+						{/* Infrastructure */}
+						<div className="relative mt-8 pt-6 pb-2">
+							{/* Grain noise background — full bleed with fade edges */}
+							<div
+								className="absolute top-0 bottom-0 z-0 pointer-events-none"
+								style={{
+									left: "50%",
+									transform: "translateX(-50%)",
+									width: "100vw",
+									maskImage:
+										"linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)",
+									WebkitMaskImage:
+										"linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)",
+								}}
+							>
+								<div className="absolute inset-0 bg-neutral-200/20 dark:bg-black/30" />
+								<div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.07]">
+									<svg className="w-full h-full">
+										<filter id="infra-grain">
+											<feTurbulence
+												type="fractalNoise"
+												baseFrequency="0.85"
+												numOctaves="4"
+												stitchTiles="stitch"
+											/>
+											<feColorMatrix type="saturate" values="0" />
+										</filter>
+										<rect
+											width="100%"
+											height="100%"
+											filter="url(#infra-grain)"
+										/>
+									</svg>
+								</div>
+							</div>
+
+							<div className="relative z-10 mb-6">
+								<div className="flex items-center gap-4 mb-2">
+									<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+										Infrastructure
+									</span>
+									<div className="flex-1 border-t border-foreground/10" />
+								</div>
+								<p className="text-[15px] sm:text-base text-foreground/55 dark:text-foreground/45 leading-relaxed">
+									Connect to our infrastructure and power your self-hosted
+									Better Auth with a dashboard, audit logs, security detection,
+									enterprise features, and more.
 								</p>
 							</div>
 
-							<div className="relative group/dash">
-								{/* Outer dashed border — top and sides only, sides fade out toward bottom */}
-								<div className="absolute -inset-2 sm:-inset-3 border-t border-dashed border-foreground/[0.08] pointer-events-none" />
-								<div
-									className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -left-2 sm:-left-3 w-px border-l border-dashed border-foreground/[0.08] pointer-events-none"
-									style={{
-										maskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-										WebkitMaskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-									}}
-								>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1.5 bg-foreground/40 dark:bg-foreground/30 blur-[1px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite",
-										}}
-									/>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1 bg-foreground/25 dark:bg-foreground/20 blur-[2px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite 2s",
-										}}
-									/>
-								</div>
-								<div
-									className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -right-2 sm:-right-3 w-px border-r border-dashed border-foreground/[0.08] pointer-events-none"
-									style={{
-										maskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-										WebkitMaskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-									}}
-								>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1.5 bg-foreground/40 dark:bg-foreground/30 blur-[1px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite 1s",
-										}}
-									/>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1 bg-foreground/25 dark:bg-foreground/20 blur-[2px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite 3s",
-										}}
-									/>
-								</div>
-								{/* Top corner accents only */}
-								<span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none -translate-x-0.5 -translate-y-0.5">
-									&#x250C;
-								</span>
-								<span className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none translate-x-0.5 -translate-y-0.5">
-									&#x2510;
-								</span>
-
-								<div
-									className="relative overflow-hidden border-t border-x border-foreground/[0.1]"
-									style={{
-										maskImage:
-											"linear-gradient(to bottom, black 60%, transparent 100%)",
-										WebkitMaskImage:
-											"linear-gradient(to bottom, black 60%, transparent 100%)",
-									}}
-								>
-									{/* Terminal-style header bar */}
-									<div className="flex items-center justify-between px-4 py-2.5 bg-foreground/[0.02] border-b border-dashed border-foreground/[0.08]">
-										<div className="flex items-center gap-2">
-											<div className="flex items-center gap-1.5">
-												<span className="size-2 rounded-full bg-foreground/10" />
-												<span className="size-2 rounded-full bg-foreground/10" />
-												<span className="size-2 rounded-full bg-foreground/10" />
-											</div>
-											<span className="text-[10px] font-mono text-foreground/30 ml-2">
-												dash.better-auth.com/the-next-big-thing
+							{/* Dashboard video */}
+							<div
+								className="relative z-10 overflow-hidden border border-foreground/[0.08]"
+								style={{
+									maskImage:
+										"linear-gradient(to bottom, black 60%, transparent 100%)",
+									WebkitMaskImage:
+										"linear-gradient(to bottom, black 60%, transparent 100%)",
+								}}
+							>
+								<div className="flex items-center justify-between px-4 py-2 bg-foreground/[0.02] border-b border-foreground/[0.06]">
+									<div className="flex items-center gap-2">
+										<div className="flex items-center gap-1.5">
+											<span className="size-2 rounded-full bg-foreground/10" />
+											<span className="size-2 rounded-full bg-foreground/10" />
+											<span className="size-2 rounded-full bg-foreground/10" />
+										</div>
+										<span className="text-[10px] font-mono text-foreground/30 ml-2">
+											dash.better-auth.com
+										</span>
+									</div>
+									<div className="flex items-center gap-3">
+										{["Overview", "Users", "Orgs", "Events"].map((tab, i) => (
+											<span
+												key={tab}
+												className={cn(
+													"text-[9px] font-mono uppercase tracking-wider",
+													i === 0 ? "text-foreground/50" : "text-foreground/20",
+												)}
+											>
+												{tab}
 											</span>
-										</div>
-										<div className="flex items-center gap-3">
-											{["Overview", "Users", "Orgs", "Events"].map((tab, i) => (
-												<span
-													key={tab}
-													className={cn(
-														"text-[9px] font-mono uppercase tracking-wider",
-														i === 0
-															? "text-foreground/60 dark:text-foreground/45"
-															: "text-foreground/20 dark:text-foreground/12",
-													)}
-												>
-													{tab}
-												</span>
-											))}
-										</div>
+										))}
 									</div>
-
-									{/* Dashboard demo video — crop top border from video */}
-									<div className="overflow-hidden" suppressHydrationWarning>
-										<video
-											src={"/demo-dark.mp4"}
-											autoPlay
-											loop
-											muted
-											playsInline
-											className="w-full h-auto -mt-[2px] dark:block hidden"
-											suppressHydrationWarning
-										/>
-										<video
-											src={"/demo-light.mp4"}
-											autoPlay
-											loop
-											muted
-											playsInline
-											className="w-full h-auto -mt-[2px] dark:hidden"
-											suppressHydrationWarning
-										/>
-									</div>
+								</div>
+								<div className="overflow-hidden" suppressHydrationWarning>
+									<video
+										src={"/demo-dark.mp4"}
+										autoPlay
+										loop
+										muted
+										playsInline
+										className="w-full h-auto -mt-[2px] dark:block hidden"
+										suppressHydrationWarning
+									/>
+									<video
+										src={"/demo-light.mp4"}
+										autoPlay
+										loop
+										muted
+										playsInline
+										className="w-full h-auto -mt-[2px] dark:hidden"
+										suppressHydrationWarning
+									/>
 								</div>
 							</div>
 
-							{/* Feature callouts */}
-							<div className="grid grid-cols-2 sm:grid-cols-4 mt-3">
+							{/* Feature grid — 3 columns */}
+							<div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 mt-4 -mx-px">
 								{[
-									{ label: "User Management", desc: "CRUD, sessions, bans" },
-									{ label: "Live Events", desc: "Real-time auth feed" },
-									{ label: "Agent Dashboard", desc: "Cmd+K agentic UI" },
-									{ label: "Security Insights", desc: "Actionable alerts" },
-								].map((item, i) => (
+									{
+										title: "Dashboard",
+										features: [
+											"User management",
+											"Session monitoring",
+											"Organization oversight",
+											"User analytics",
+										],
+									},
+									{
+										title: "Audit Logs",
+										features: [
+											"Auto-captured events",
+											"Filter & search",
+											"Configurable retention",
+											"Log drain to SIEM",
+										],
+									},
+									{
+										title: "Enterprise",
+										features: [
+											"Self-service SSO",
+											"SCIM provisioning",
+											"Directory sync",
+											"Fine-grained RBAC",
+										],
+									},
+								].map((group) => (
 									<div
-										key={item.label}
-										className={cn(
-											"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
-											i > 0 && "-ml-px",
-										)}
+										key={group.title}
+										className="border border-dashed border-foreground/[0.06] -mt-px -ml-px p-4"
 									>
-										<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
-											{item.label}
-										</div>
-										<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
-											{item.desc}
-										</div>
+										<h4 className="text-[11px] sm:text-xs font-mono uppercase tracking-widest text-foreground/55 dark:text-foreground/40 mb-3">
+											{group.title}
+										</h4>
+										<ul className="space-y-1.5">
+											{group.features.map((f) => (
+												<li
+													key={f}
+													className="flex items-start gap-2 text-[13px] sm:text-[14px] text-foreground/70 dark:text-foreground/55"
+												>
+													<span className="text-foreground/35 mt-0.5 font-mono text-[11px] leading-none select-none shrink-0">
+														+
+													</span>
+													<span>{f}</span>
+												</li>
+											))}
+										</ul>
 									</div>
 								))}
 							</div>
 
-							{/* Audit Logs */}
-							<div className="mt-10">
-								<div className="mb-4">
-									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-										Audit Logs
-									</h3>
-									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
-										Every auth event captured automatically — sign-ins, password
-										resets, MFA challenges, session changes, and more. Filter,
-										search, and export with configurable retention and log drain
-										to your SIEM.
-									</p>
-								</div>
-								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
-									{[
-										{ label: "Auto Capture", desc: "Every auth event logged" },
-										{ label: "Log Explorer", desc: "Filter & search events" },
-										{ label: "Retention", desc: "1 day to custom" },
-										{ label: "Log Drain", desc: "Export to your SIEM" },
-									].map((item, i) => (
-										<div
-											key={item.label}
-											className={cn(
-												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
-												i > 0 && "-ml-px",
-											)}
-										>
-											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
-												{item.label}
-											</div>
-											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
-												{item.desc}
-											</div>
+							{/* Sentinel row */}
+							<div className="relative z-10 border border-dashed border-foreground/[0.06] -mt-px -mx-px p-4">
+								<div className="flex flex-col sm:flex-row sm:items-start gap-4">
+									<div className="sm:w-1/3">
+										<div className="flex items-center gap-2 mb-1">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="12"
+												height="12"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="1.5"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="text-foreground/50"
+											>
+												<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+											</svg>
+											<h4 className="text-[11px] sm:text-xs font-mono uppercase tracking-widest text-foreground/55 dark:text-foreground/40">
+												Sentinel
+											</h4>
 										</div>
-									))}
+										<p className="text-[13px] sm:text-[14px] text-foreground/45 dark:text-foreground/35 leading-relaxed">
+											Real-time threat detection before it reaches your users.
+										</p>
+									</div>
+									<div className="flex-1 flex flex-wrap gap-1.5">
+										{[
+											"Bot Detection",
+											"Brute Force",
+											"Breached Passwords",
+											"Impossible Travel",
+											"Rate Limiting",
+											"Geo Blocking",
+											"Suspicious IPs",
+											"Disposable Emails",
+											"Email Abuse",
+											"Free Trial Abuse",
+										].map((tag) => (
+											<span
+												key={tag}
+												className="inline-flex items-center px-2 py-1 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/40 border border-foreground/[0.08] bg-foreground/[0.02] hover:bg-foreground/[0.05] hover:text-foreground/70 dark:hover:text-foreground/55 transition-colors"
+											>
+												{tag}
+											</span>
+										))}
+									</div>
 								</div>
 							</div>
 
-							{/* Transactional Comms */}
-							<div className="mt-10">
-								<div className="mb-4">
-									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-										Transactional Comms
-									</h3>
-									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
-										Built-in email and SMS delivery for verification codes,
-										magic links, password resets, and MFA. Customizable
-										templates, abuse protection, and delivery tracking — no
-										third-party setup required.
-									</p>
-								</div>
-								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
-									{[
-										{ label: "Email & SMS", desc: "Built-in delivery" },
-										{ label: "Templates", desc: "Fully customizable" },
-										{
-											label: "Abuse Protection",
-											desc: "Rate limits & blocking",
-										},
-										{ label: "Delivery Tracking", desc: "Status & analytics" },
-									].map((item, i) => (
-										<div
-											key={item.label}
-											className={cn(
-												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
-												i > 0 && "-ml-px",
-											)}
-										>
-											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
-												{item.label}
-											</div>
-											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
-												{item.desc}
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-						</div>
-
-						{/* Sentinel */}
-						<SentinelSection />
-
-						{/* Infrastructure CTA */}
-						<div className="mt-8 mb-4">
-							<div className="border border-dashed border-foreground/[0.10] p-5 flex items-center justify-between">
-								<div>
-									<p className="text-[11px] font-mono uppercase tracking-widest text-foreground/80 dark:text-foreground/80 mb-1">
-										Explore plans
-									</p>
-									<p className="text-[12px] text-foreground/50 dark:text-foreground/40 leading-relaxed">
-										Dashboard, audit logs, security detection, transactional
-										comms, and more.
-									</p>
-								</div>
+							{/* CTA */}
+							<div className="relative z-10 flex items-center justify-between mt-4 px-6 py-5 border border-dashed border-foreground/[0.08] bg-foreground/[0.01]">
+								<span className="text-[13px] sm:text-[14px] text-foreground/60 dark:text-foreground/45">
+									Explore dashboard, audit logs, SSO, and more.
+								</span>
 								<Link
-									href="/products/infrastructure"
-									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2 border border-dashed border-foreground/[0.14] text-foreground dark:text-foreground/80 hover:text-foreground hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
+									href="/pricing"
+									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2.5 bg-foreground text-background hover:opacity-90 transition-all font-mono text-[11px] uppercase tracking-widest group"
 								>
-									<span className="font-mono text-[11px] uppercase tracking-widest">
-										View Plans
-									</span>
+									View Plans
 									<svg
-										className="h-2.5 w-2.5 opacity-50"
+										className="h-2.5 w-2.5 opacity-70 group-hover:translate-x-0.5 transition-transform"
 										viewBox="0 0 10 10"
 										fill="none"
 									>
 										<path
-											d="M1 9L9 1M9 1H3M9 1V7"
+											d="M1 5H9M9 5L5 1M9 5L5 9"
 											stroke="currentColor"
 											strokeWidth="1.2"
 										/>
