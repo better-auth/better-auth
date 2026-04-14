@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
+import type ipaddr from "ipaddr.js";
 
 /**
  * Options for the Client ID Metadata Document plugin.
@@ -28,6 +29,24 @@ export interface CimdOptions {
 	 * @default ["redirect_uris", "post_logout_redirect_uris", "client_uri"]
 	 */
 	originBoundFields?: string[];
+	/**
+	 * The set of ipaddr.js range names that are considered publicly routable
+	 * and therefore allowed as `client_id` URL hosts.
+	 *
+	 * Any resolved IP address whose range is **not** in this set is rejected
+	 * as a potential SSRF target. ipaddr.js range names include `"unicast"`,
+	 * `"private"`, `"loopback"`, `"linkLocal"`, `"multicast"`, etc.
+	 *
+	 * Override this only if you operate an internal deployment where
+	 * clients are expected to live on RFC 1918 addresses.
+	 *
+	 * For custom IPs and CIDR ranges, use `allowFetch`.
+	 *
+	 * @default new Set(["unicast"])
+	 */
+	allowedIpRanges?: Set<
+		ReturnType<ipaddr.IPv4["range"]> | ReturnType<ipaddr.IPv6["range"]>
+	>;
 	/**
 	 * Pre-fetch gate called before a metadata document is requested. Return
 	 * `false` to reject the `client_id` URL.

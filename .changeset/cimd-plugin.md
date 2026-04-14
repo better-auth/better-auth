@@ -26,7 +26,7 @@ betterAuth({
 
 Ships with §3/§4.1 validation, SSRF protection for private/reserved IPs and cloud metadata endpoints, a 5-second fetch timeout, a 5 KB response size limit (UTF-8 byte-counted), origin binding for redirect URIs, and lifecycle hooks (`onClientCreated`, `onClientRefreshed`). Advertises `client_id_metadata_document_supported` in OAuth/OIDC discovery metadata.
 
-The `allowFetch` pre-fetch gate lets operators add origin allowlists, per-host rate limits, or DNS-level defenses beyond the built-in IP-literal check.
+The `allowFetch` pre-fetch gate lets operators add origin allowlists, per-host rate limits, or DNS-level defenses beyond the built-in IP-literal check. Currently, allowed IP-literals are "unicast" ranges as defined by ipaddr.js but can be additionally configured in the plugin's configuration options via `allowedIpRanges`.
 
 Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes so admin decisions survive document updates.
 

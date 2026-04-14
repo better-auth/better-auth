@@ -2,8 +2,11 @@
 // Implements draft-ietf-oauth-client-id-metadata-document §3 and §4.1.
 import ipaddr from "ipaddr.js";
 
-const DOT_SEGMENT_RE = /\/\.\.?(?:\/|$|#|\?)/;
-
+const DOT_SEGMENT_RE =
+	/\/\.\.?(?:\/|$|#|\?)/; /** IP ranges considered publicly routable by default. */
+export const DEFAULT_ALLOWED_IP_RANGES: ReadonlySet<string> = new Set([
+	"unicast",
+]);
 const PROHIBITED_FIELDS = new Set([
 	"client_secret",
 	"client_secret_expires_at",
@@ -37,14 +40,16 @@ export function isLocalhost(hostname: string): boolean {
 }
 
 /**
- * Check whether a hostname is private/reserved per RFC 6890.
+ * Check whether a hostname falls outside the allowed IP ranges.
  *
- * Uses ipaddr.js to parse IP addresses and check their range.
- * `ipaddr.process()` automatically converts IPv4-mapped IPv6 addresses
- * to IPv4. Any range other than `'unicast'` is considered non-public.
- * Cloud metadata hostnames are also blocked by name.
+ * Uses ipaddr.js to parse IP literals; `process()` converts IPv4-mapped
+ * IPv6 addresses to IPv4 before range-checking. Cloud metadata hostnames
+ * are blocked by name regardless of `allowedRanges`.
  */
-function isPrivateHost(hostname: string): boolean {
+function isPrivateHost(
+	hostname: string,
+	allowedRanges: ReadonlySet<string>,
+): boolean {
 	const lower = hostname.toLowerCase();
 	if (lower === "metadata.google.internal") {
 		return true;
@@ -53,9 +58,10 @@ function isPrivateHost(hostname: string): boolean {
 		lower.startsWith("[") && lower.endsWith("]") ? lower.slice(1, -1) : lower;
 	try {
 		// process() converts IPv4-mapped IPv6 → IPv4 before range-checking.
-		return ipaddr.process(host).range() !== "unicast";
+		return !allowedRanges.has(ipaddr.process(host).range());
 	} catch {
-		// Not a parseable IP address (e.g. a regular domain name).
+		// Not a parseable IP address (e.g. a regular domain name). Domain
+		// names are not blocked here; use `allowFetch` for DNS-level checks.
 		return false;
 	}
 }
@@ -82,8 +88,14 @@ export function isUrlClientId(clientId: string): boolean {
 /**
  * Validate a client_id URL per IETF draft §3.
  * Returns null on success, error string on failure.
+ *
+ * @param allowedIpRanges - ipaddr.js range names that are considered
+ *   publicly routable. Defaults to `DEFAULT_ALLOWED_IP_RANGES`.
  */
-export function validateClientIdUrl(url: string): string | null {
+export function validateClientIdUrl(
+	url: string,
+	allowedIpRanges: ReadonlySet<string> = DEFAULT_ALLOWED_IP_RANGES,
+): string | null {
 	// §3: check the raw URL for dot segments before the URL class normalizes them
 	if (DOT_SEGMENT_RE.test(url)) {
 		return "client_id URL MUST NOT contain dot segments";
@@ -120,7 +132,10 @@ export function validateClientIdUrl(url: string): string | null {
 	}
 
 	// SSRF: block private/reserved hosts
-	if (!isLocalhost(parsed.hostname) && isPrivateHost(parsed.hostname)) {
+	if (
+		!isLocalhost(parsed.hostname) &&
+		isPrivateHost(parsed.hostname, allowedIpRanges)
+	) {
 		return "client_id URL must not resolve to a private or reserved address";
 	}
 
@@ -160,6 +175,7 @@ export function validateCimdMetadata(
 	fetchUrl: string,
 	raw: unknown,
 	originBoundFields?: string[],
+	allowedIpRanges: ReadonlySet<string> = DEFAULT_ALLOWED_IP_RANGES,
 ): ClientIdMetadataDocumentResult {
 	if (!raw || typeof raw !== "object") {
 		return { valid: false, error: "metadata document is not a JSON object" };
@@ -281,7 +297,10 @@ export function validateCimdMetadata(
 				if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
 					return { valid: false, error: `${field} must use HTTP(S)` };
 				}
-				if (!isLocalhost(parsed.hostname) && isPrivateHost(parsed.hostname)) {
+				if (
+					!isLocalhost(parsed.hostname) &&
+					isPrivateHost(parsed.hostname, allowedIpRanges)
+				) {
 					return {
 						valid: false,
 						error: `${field} must not point to a private or reserved address`,
