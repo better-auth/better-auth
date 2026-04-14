@@ -477,6 +477,7 @@ export const twoFactorTableFields = [
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		references: { model: "user", field: "id" },
 	},
 	{
 		name: "secret",

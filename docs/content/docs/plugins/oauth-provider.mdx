@@ -1029,6 +1029,24 @@ oauthProvider({
 })
 ```
 
+#### Custom Token Response Fields
+
+Unlike the claim callbacks above (which add data *inside* JWT payloads), `customTokenResponseFields` adds fields to the **token endpoint JSON response** alongside `access_token`, `token_type`, etc. Standard OAuth fields cannot be overridden.
+
+```ts title="auth.ts"
+oauthProvider({
+  customTokenResponseFields: ({ grantType, user, scopes, metadata, verificationValue }) => {
+    // Add tenant context for authorization_code grants
+    if (grantType === "authorization_code" && verificationValue?.referenceId) {
+      return { tenant_id: verificationValue.referenceId };
+    }
+    return {};
+  },
+})
+```
+
+The callback receives the grant type, user (undefined for `client_credentials`), scopes, parsed client metadata, and the verification value (only for `authorization_code` grants). It is called before any tokens are created, so throwing an error will not leave partially-applied state.
+
 ### Expirations
 
 Each token type and grant type can independently can set a default expiration.
@@ -1831,7 +1849,7 @@ export const oauthRefreshTokenTableFields = [
       "ID of the session used at issuance of the token (and still active)",
     isForeignKey: true,
     isOptional: true,
-    references: { model: "session", field: "id" },
+    references: { model: "session", field: "id", onDelete: "set null" },
   },
   {
     name: "userId",
@@ -1909,7 +1927,7 @@ export const oauthAccessTokenTableFields = [
       "ID of the session used at issuance of the token (and still active)",
     isForeignKey: true,
     isOptional: true,
-    references: { model: "session", field: "id" },
+    references: { model: "session", field: "id", onDelete: "set null" },
   },
   {
     name: "refreshId",

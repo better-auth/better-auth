@@ -834,7 +834,7 @@ function InstallBlock() {
 const sentinelEvents = [
 	{
 		action: "Blocked",
-		color: "bg-red-500",
+		color: "bg-red-400/80",
 		identifier: "akash.prish@dropmeon.com",
 		ip: "::1",
 		reason: "Disposable Email",
@@ -844,7 +844,7 @@ const sentinelEvents = [
 	},
 	{
 		action: "Blocked",
-		color: "bg-red-500",
+		color: "bg-red-400/80",
 		identifier: "kamef69609@cucadas.com",
 		ip: "Unknown IP",
 		reason: "Disposable Email",
@@ -854,7 +854,7 @@ const sentinelEvents = [
 	},
 	{
 		action: "Challenged",
-		color: "bg-yellow-500",
+		color: "bg-amber-400/80",
 		identifier: "195.142.xx.xx",
 		ip: "",
 		reason: "Suspicious IP",
@@ -864,7 +864,7 @@ const sentinelEvents = [
 	},
 	{
 		action: "Blocked",
-		color: "bg-red-500",
+		color: "bg-red-400/80",
 		identifier: "bot-crawler-7x",
 		ip: "52.14.xx.xx",
 		reason: "Bot Detected",
@@ -874,7 +874,7 @@ const sentinelEvents = [
 	},
 	{
 		action: "Blocked",
-		color: "bg-red-500",
+		color: "bg-red-400/80",
 		identifier: "admin@tempmail.ninja",
 		ip: "::1",
 		reason: "Breached Password",
@@ -957,113 +957,131 @@ function SentinelSection() {
 								strokeWidth="1.5"
 								strokeLinecap="round"
 								strokeLinejoin="round"
-								className="text-foreground/50 dark:text-foreground/35"
+								className="text-foreground/50"
 							>
 								<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
 							</svg>
-							<span className="text-[11px] font-medium text-foreground/60 dark:text-foreground/45">
+							<span className="text-xs font-medium text-foreground/50">
 								Sentinel
 							</span>
-							<span className="text-[10px] font-mono text-foreground/50  ml-1">
+							<span className="ml-1 text-[10px] font-mono text-foreground/50">
 								Monitor and analyze security events
 							</span>
 						</div>
 						<div className="hidden sm:flex items-center gap-3">
 							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-red-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Blocked
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									847
-								</span>
+								<span className="size-1.5 rounded-full bg-red-400/80" />
+								<span className="text-foreground/50">Blocked</span>
+								<span className="text-foreground/50">847</span>
 							</span>
 							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-yellow-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Challenged
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									124
-								</span>
+								<span className="size-1.5 rounded-full bg-amber-400/80" />
+								<span className="text-foreground/50">Challenged</span>
+								<span className="text-foreground/50">124</span>
 							</span>
 							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-green-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Allowed
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									12.4k
-								</span>
+								<span className="size-1.5 rounded-full bg-emerald-400/80" />
+								<span className="text-foreground/50">Allowed</span>
+								<span className="text-foreground/50">12.4k</span>
 							</span>
 						</div>
 					</div>
 
 					{/* Table header */}
-					<div className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2 border-b border-foreground/[0.06] bg-foreground/[0.01]">
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Action
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Identifier
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Reason
-						</span>
-						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Location
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Path
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50 text-right">
-							Time
-						</span>
+					<div className="hidden sm:grid sm:grid-cols-[96px_minmax(0,1fr)_110px_80px_70px_80px] gap-x-4 px-4 py-2 border-b border-foreground/6 bg-foreground/1 font-medium text-[9px] font-mono uppercase tracking-wider text-foreground/50">
+						<span>Action</span>
+						<span>Identifier</span>
+						<span>Reason</span>
+						<span className="hidden sm:block">Location</span>
+						<span>Path</span>
+						<span className="text-right">Time</span>
 					</div>
 
 					{/* Event rows */}
 					{sentinelEvents.map((event) => (
-						<div
-							key={event.identifier}
-							className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2.5 border-b border-dashed border-foreground/[0.04] hover:bg-foreground/[0.02] transition-colors"
-						>
-							<span className="flex items-center gap-1.5">
-								<span
-									className={cn("size-1.5 rounded-full shrink-0", event.color)}
-								/>
-								<span
-									className={cn(
-										"text-[10px] font-mono",
-										event.action === "Blocked"
-											? "text-red-500/80 dark:text-red-400/70"
-											: "text-yellow-500/80 dark:text-yellow-400/70",
-									)}
-								>
-									{event.action}
-								</span>
-							</span>
-							<div className="min-w-0 pr-2">
-								<span className="text-[10px] font-mono text-foreground/60 dark:text-foreground/45 block truncate">
-									{event.identifier}
-								</span>
-								{event.ip && (
-									<span className="text-[9px] font-mono text-foreground/50  block truncate">
-										{event.ip}
+						<div key={event.identifier}>
+							<div className="sm:hidden px-4 py-3 border-b border-dashed border-foreground/4 hover:bg-foreground/2 transition-colors">
+								<div className="flex items-center justify-between gap-3">
+									<span className="flex items-center gap-1.5 whitespace-nowrap">
+										<span
+											className={cn(
+												"size-1.5 rounded-full shrink-0",
+												event.color,
+											)}
+										/>
+										<span
+											className={cn(
+												"text-[10px] font-mono",
+												event.action === "Blocked"
+													? "text-red-500/80 dark:text-red-400/70"
+													: "text-yellow-500/80 dark:text-yellow-400/70",
+											)}
+										>
+											{event.action}
+										</span>
 									</span>
-								)}
+									<span className="shrink-0 text-[9px] font-mono text-foreground/50">
+										{event.time}
+									</span>
+								</div>
+								<div className="mt-2 min-w-0">
+									<span className="block truncate text-[10px] font-mono text-foreground/60">
+										{event.identifier}
+									</span>
+									{event.ip && (
+										<span className="mt-0.5 block truncate text-[9px] font-mono text-foreground/50">
+											{event.ip}
+										</span>
+									)}
+								</div>
+								<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-mono text-foreground/50">
+									<span className="truncate">{event.reason}</span>
+									<span className="truncate">{event.path}</span>
+									<span className="truncate">{event.location}</span>
+								</div>
 							</div>
-							<span className="text-[10px] font-mono text-foreground/40 dark:text-foreground/30 truncate">
-								{event.reason}
-							</span>
-							<span className="hidden sm:block text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
-								{event.location}
-							</span>
-							<span className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
-								{event.path}
-							</span>
-							<span className="text-[10px] font-mono text-foreground/30 dark:text-foreground/20 text-right">
-								{event.time}
-							</span>
+							<div className="hidden sm:grid sm:grid-cols-[96px_minmax(0,1fr)_110px_80px_70px_80px] gap-x-4 px-4 py-2.5 border-b border-dashed border-foreground/[0.04] hover:bg-foreground/[0.02] transition-colors">
+								<span className="flex items-center gap-1.5 whitespace-nowrap">
+									<span
+										className={cn(
+											"size-1.5 rounded-full shrink-0",
+											event.color,
+										)}
+									/>
+									<span
+										className={cn(
+											"text-[10px] font-mono",
+											event.action === "Blocked"
+												? "text-red-500/80 dark:text-red-400/70"
+												: "text-yellow-500/80 dark:text-yellow-400/70",
+										)}
+									>
+										{event.action}
+									</span>
+								</span>
+								<div className="min-w-0 pr-2">
+									<span className="text-[10px] font-mono text-foreground/60 block truncate">
+										{event.identifier}
+									</span>
+									{event.ip && (
+										<span className="text-[9px] font-mono text-foreground/50 block truncate">
+											{event.ip}
+										</span>
+									)}
+								</div>
+								<span className="text-[10px] font-mono text-foreground/50 truncate">
+									{event.reason}
+								</span>
+								<span className="text-[10px] font-mono text-foreground/50 truncate">
+									{event.location}
+								</span>
+								<span className="text-[10px] font-mono text-foreground/50 truncate">
+									{event.path}
+								</span>
+								<span className="text-[10px] font-mono text-foreground/50 text-right">
+									{event.time}
+								</span>
+							</div>
 						</div>
 					))}
 				</div>
