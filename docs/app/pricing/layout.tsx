@@ -18,23 +18,21 @@ export default function PricingLayout({
 								<div className="space-y-2">
 									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 										<span className="underline underline-offset-4 decoration-foreground/40">
-											Infrastructure
+											Pricing
 										</span>
 									</h1>
 									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
 										Connect to our infrastructure and power your self-hosted
-										Better Auth with a dashboard, audit logs, security
-										detection, enterprise features, and more.
+										Better Auth with a dashboard, audit logs, security, and
+										more.
 									</p>
 								</div>
 
 								<div className="border-t border-foreground/10 pt-4 space-y-0">
 									{[
-										{ label: "Framework", value: "Open source" },
-										{ label: "Users", value: "Unlimited" },
-										{ label: "Audit logs", value: "From 10k/mo" },
-										{ label: "Security", value: "$0.0001/event overage" },
-										{ label: "SSO", value: "Enterprise" },
+										{ label: "Starter", value: "Free" },
+										{ label: "Pro", value: "$20/mo" },
+										{ label: "Enterprise", value: "Custom" },
 									].map((item) => (
 										<div
 											key={item.label}
@@ -71,13 +69,13 @@ export default function PricingLayout({
 								<div className="relative space-y-2 py-16">
 									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 										<span className="underline underline-offset-4 decoration-foreground/40">
-											Infrastructure
+											Pricing
 										</span>
 									</h1>
 									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
 										Connect to our infrastructure and power your self-hosted
-										Better Auth with a dashboard, audit logs, security
-										detection, enterprise features, and more.
+										Better Auth with a dashboard, audit logs, security, and
+										more.
 									</p>
 								</div>
 							</div>

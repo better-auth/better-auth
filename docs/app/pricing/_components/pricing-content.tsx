@@ -335,14 +335,13 @@ export function PricingContent() {
 				transition={{ duration: 0.3, delay: 0.15 }}
 			>
 				<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
-					INFRASTRUCTURE
+					PRICING
 					<span className="flex-1 h-px bg-foreground/15" />
 				</h2>
 
 				<p className="text-sm sm:text-[15px] text-foreground/80 leading-relaxed max-w-lg mb-8">
 					Connect to our infrastructure and power your self-hosted Better Auth
-					with a dashboard, audit logs, security detection, enterprise features,
-					and more.
+					with a dashboard, audit logs, security, and more.
 				</p>
 			</motion.div>
 

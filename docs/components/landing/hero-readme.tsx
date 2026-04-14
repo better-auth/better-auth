@@ -2083,7 +2083,7 @@ export function HeroReadMe({
 											"Self-service SSO",
 											"SCIM provisioning",
 											"Directory sync",
-											"Fine-grained RBAC",
+											"RBAC",
 										],
 									},
 								].map((group) => (
@@ -2164,9 +2164,15 @@ export function HeroReadMe({
 
 							{/* CTA */}
 							<div className="relative z-10 flex items-center justify-between mt-4 px-6 py-5 border border-dashed border-foreground/[0.08] bg-foreground/[0.01]">
-								<span className="text-[13px] sm:text-[14px] text-foreground/60 dark:text-foreground/45">
-									Explore dashboard, audit logs, SSO, and more.
-								</span>
+								<div className="flex flex-col gap-0.5">
+									<span className="text-[13px] sm:text-[14px] font-medium text-foreground/90 dark:text-foreground/85">
+										Explore plans
+									</span>
+									<span className="text-[11px] sm:text-[12px] text-foreground/50 dark:text-foreground/35">
+										Dashboard, audit logs, security detection, transactional
+										comms, and more.
+									</span>
+								</div>
 								<Link
 									href="/pricing"
 									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2.5 bg-foreground text-background hover:opacity-90 transition-all font-mono text-[11px] uppercase tracking-widest group"
