@@ -30,26 +30,28 @@ description: 42 school provider setup and usage.
     })
     ```
   </Step>
+
+  <Step>
+    ### Sign In with 42
+
+    To sign in with 42, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
+    * `provider`: The provider to use. It should be set to `fortytwo`.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    const authClient =  createAuthClient()
+
+    const signIn = async () => {
+        const data = await authClient.signIn.social({
+            provider: "fortytwo"
+        })
+    }
+    ```
+  </Step>
 </Steps>
 
 ## Usage
-
-### Sign In with 42
-
-To sign in with 42, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
-
-* `provider`: The provider to use. It should be set to `fortytwo`.
-
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-const authClient =  createAuthClient()
-
-const signIn = async () => {
-    const data = await authClient.signIn.social({
-        provider: "fortytwo"
-    })
-}
-```
 
 ## Options
 
