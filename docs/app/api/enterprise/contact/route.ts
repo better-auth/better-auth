@@ -23,7 +23,10 @@ export async function POST(request: Request) {
 
 	try {
 		// honeypot - bots fill hidden fields
-		const raw = body as Record<string, unknown>;
+		const raw =
+			typeof body === "object" && body !== null
+				? (body as Record<string, unknown>)
+				: {};
 		if (typeof raw._hp === "string" && raw._hp) {
 			return NextResponse.json({});
 		}

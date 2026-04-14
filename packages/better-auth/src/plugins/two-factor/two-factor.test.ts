@@ -2385,10 +2385,9 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 
 		const url = new URL(magicLinkURL);
 		const token = url.searchParams.get("token")!;
-		const callbackURL = url.searchParams.get("callbackURL")!;
 
 		const verifyRes = await auth.api.magicLinkVerify({
-			query: { token, callbackURL },
+			query: { token },
 			headers: new Headers(),
 			asResponse: true,
 		});
