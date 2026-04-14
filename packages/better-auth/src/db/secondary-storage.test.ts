@@ -1,5 +1,7 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { beforeEach, describe, expect, it } from "vitest";
+import { admin } from "../plugins/admin/admin";
+import { adminClient } from "../plugins/admin/client";
 import { getTestInstance } from "../test-utils/test-instance";
 
 describe("secondary storage - get returns JSON string", async () => {
@@ -226,5 +228,88 @@ describe("secondary storage - storeSessionInDatabase", () => {
 			const after = await client.getSession({ fetchOptions: { headers } });
 			expect(after.data).toBeNull();
 		});
+	});
+});
+
+describe("secondary storage - admin removeUser cleans up sessions", async () => {
+	const store = new Map<string, string>();
+
+	const { client, signInWithUser, customFetchImpl } = await getTestInstance({
+		plugins: [admin()],
+		secondaryStorage: {
+			set(key, value, ttl) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (user) => {
+						if (user.email === "admin@test.com") {
+							return { data: { ...user, role: "admin" } };
+						}
+					},
+				},
+			},
+		},
+		rateLimit: {
+			enabled: false,
+		},
+	});
+
+	const { createAuthClient } = await import("../client");
+	const adminAuthClient = createAuthClient({
+		fetchOptions: { customFetchImpl },
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	it("should clear secondary storage sessions when removing a user via admin", async () => {
+		await client.signUp.email({
+			email: "admin@test.com",
+			password: "password",
+			name: "Admin",
+		});
+		const { headers: adminHeaders } = await signInWithUser(
+			"admin@test.com",
+			"password",
+		);
+
+		await client.signUp.email({
+			email: "victim@test.com",
+			password: "password",
+			name: "Victim",
+		});
+		const { headers: victimHeaders } = await signInWithUser(
+			"victim@test.com",
+			"password",
+		);
+
+		const victimSession = await client.getSession({
+			fetchOptions: { headers: victimHeaders },
+		});
+		expect(victimSession.data).not.toBeNull();
+
+		const victimId = victimSession.data!.user.id;
+		const victimToken = victimSession.data!.session.token;
+		expect(store.has(victimToken)).toBe(true);
+
+		await adminAuthClient.admin.removeUser(
+			{ userId: victimId },
+			{ headers: adminHeaders },
+		);
+
+		expect(store.has(victimToken)).toBe(false);
+
+		const after = await client.getSession({
+			fetchOptions: { headers: victimHeaders },
+		});
+		expect(after.data).toBeNull();
 	});
 });
