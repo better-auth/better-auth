@@ -6,6 +6,7 @@ import type {
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
 import { createCookieGetter, getCookies } from "../cookies";
 import { createInternalAdapter } from "../db";
@@ -155,16 +156,66 @@ export async function getTrustedOrigins(
 }
 
 /**
- * Per-request clone with `baseURL`, `trustedOrigins` and cookies rehydrated
- * for the resolved host. Throws when the URL cannot be resolved.
+ * Input shape accepted by every `auth.api.*` endpoint invocation.
+ */
+type EndpointInput = Partial<
+	InputContext<string, any> & EndpointContext<string, any>
+>;
+
+/**
+ * Picks a `Request`-like or `Headers` value from a direct `auth.api` call.
+ * Headers are only accepted when they carry a host: without one, host
+ * resolution would fall back to `null` and the caller should use `fallback`
+ * or pass a `Request` instead.
+ */
+export function pickSource(
+	input: EndpointInput | undefined,
+): Request | Headers | undefined {
+	if (isRequestLike(input?.request)) return input.request;
+	if (!input?.headers) return undefined;
+
+	const headers =
+		input.headers instanceof Headers
+			? input.headers
+			: new Headers(input.headers);
+	if (!headers.has("host") && !headers.has("x-forwarded-host")) {
+		return undefined;
+	}
+	return headers;
+}
+
+/**
+ * Returns the effective `trustedProxyHeaders` value for dynamic `baseURL`
+ * resolution. When the user hasn't set `advanced.trustedProxyHeaders`,
+ * proxy headers (`x-forwarded-host` / `x-forwarded-proto`) are trusted by
+ * default so deployments behind a reverse proxy work without extra config.
+ */
+export function resolveDynamicTrustedProxyHeaders(
+	options: BetterAuthOptions,
+): boolean {
+	return options.advanced?.trustedProxyHeaders ?? true;
+}
+
+/**
+ * Per-request clone with `baseURL`, `trustedOrigins`, `trustedProviders`
+ * and cookies rehydrated for the resolved host. Throws `BetterAuthError`
+ * when the URL cannot be resolved; callers on the direct-API path convert
+ * this to `APIError`.
  */
 export async function resolveRequestContext(
 	ctx: AuthContext,
 	source?: Request | Headers,
+	trustedProxyHeaders?: boolean,
 ): Promise<AuthContext> {
 	const dynamicBaseURLConfig = ctx.options.baseURL;
 	const basePath = ctx.options.basePath || "/api/auth";
-	const baseURL = resolveBaseURL(dynamicBaseURLConfig, basePath, source);
+	const baseURL = resolveBaseURL(
+		dynamicBaseURLConfig,
+		basePath,
+		source,
+		undefined,
+		trustedProxyHeaders,
+	);
 	if (!baseURL) {
 		throw new BetterAuthError(
 			"Could not resolve base URL from request. Check your allowedHosts config.",
@@ -186,11 +237,29 @@ export async function resolveRequestContext(
 		...resolved.options,
 		baseURL: dynamicBaseURLConfig,
 	};
-	// getTrustedOrigins user callback expects Request|undefined (public API).
-	const request = isRequestLike(source) ? source : undefined;
+	// Only synthesize a Request for the user-facing callbacks that need one.
+	const needsRequest =
+		typeof ctx.options.trustedOrigins === "function" ||
+		typeof ctx.options.account?.accountLinking?.trustedProviders === "function";
+	let callbackRequest: Request | undefined;
+	if (needsRequest) {
+		if (isRequestLike(source)) {
+			callbackRequest = source;
+		} else if (source) {
+			callbackRequest = new Request(baseURL, { headers: source });
+		} else {
+			callbackRequest = undefined;
+		}
+	} else {
+		callbackRequest = undefined;
+	}
 	resolved.trustedOrigins = await getTrustedOrigins(
 		trustedOriginOptions,
-		request,
+		callbackRequest,
+	);
+	resolved.trustedProviders = await getTrustedProviders(
+		resolved.options,
+		callbackRequest,
 	);
 
 	if (ctx.options.advanced?.crossSubDomainCookies?.enabled) {
