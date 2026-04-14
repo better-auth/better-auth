@@ -1767,6 +1767,53 @@ export const authClient = createAuthClient({
 });
 ```
 
+### Default Team
+
+When teams are enabled, a default team is automatically created alongside every new organization. You can configure this behavior using the `defaultTeam` option:
+
+```ts title="auth.ts"
+organization({
+  teams: {
+    enabled: true,
+    defaultTeam: {
+      enabled: true, // set to false to disable automatic default team creation
+      name: "General", // custom name for the default team (defaults to the org name)
+    },
+  },
+});
+```
+
+The `name` option also accepts a function if you need the team name to be derived from the organization:
+
+```ts title="auth.ts"
+organization({
+  teams: {
+    enabled: true,
+    defaultTeam: {
+      enabled: true,
+      name: (organization) => `${organization.name} - Default`,
+    },
+  },
+});
+```
+
+If you need full control over default team creation, use `customCreateDefaultTeam`:
+
+```ts title="auth.ts"
+organization({
+  teams: {
+    enabled: true,
+    defaultTeam: {
+      enabled: true,
+      customCreateDefaultTeam: async (organization, ctx) => {
+        // create the team however you like and return it
+        return createdTeam;
+      },
+    },
+  },
+});
+```
+
 ### Managing Teams
 
 #### Create Team

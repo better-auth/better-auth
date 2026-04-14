@@ -1014,3 +1014,115 @@ describe("multi team support", async () => {
 		expect(stillTeam2Member).toBeUndefined();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7408
+ */
+describe("defaultTeam.name", async () => {
+	it("should use a static string for the default team name", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: {
+							enabled: true,
+							defaultTeam: {
+								enabled: true,
+								name: "General",
+							},
+						},
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{ testWith: "sqlite" },
+		);
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "My Org", slug: "my-org" },
+		});
+		expect(org?.id).toBeDefined();
+
+		const fullOrg = await auth.api.getFullOrganization({
+			headers,
+			query: { organizationId: org!.id },
+		});
+		const teams = (fullOrg as any)?.teams;
+		expect(teams).toHaveLength(1);
+		expect(teams[0].name).toBe("General");
+	});
+
+	it("should use a function for the default team name", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: {
+							enabled: true,
+							defaultTeam: {
+								enabled: true,
+								name: (org) => `${org.name} - Default`,
+							},
+						},
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{ testWith: "sqlite" },
+		);
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "Acme Corp", slug: "acme-corp" },
+		});
+		expect(org?.id).toBeDefined();
+
+		const fullOrg = await auth.api.getFullOrganization({
+			headers,
+			query: { organizationId: org!.id },
+		});
+		const teams = (fullOrg as any)?.teams;
+		expect(teams).toHaveLength(1);
+		expect(teams[0].name).toBe("Acme Corp - Default");
+	});
+
+	it("should fall back to organization name when defaultTeam.name is not set", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: {
+							enabled: true,
+							defaultTeam: {
+								enabled: true,
+							},
+						},
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{ testWith: "sqlite" },
+		);
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "Fallback Org", slug: "fallback-org" },
+		});
+		expect(org?.id).toBeDefined();
+
+		const fullOrg = await auth.api.getFullOrganization({
+			headers,
+			query: { organizationId: org!.id },
+		});
+		const teams = (fullOrg as any)?.teams;
+		expect(teams).toHaveLength(1);
+		expect(teams[0].name).toBe("Fallback Org");
+	});
+});
