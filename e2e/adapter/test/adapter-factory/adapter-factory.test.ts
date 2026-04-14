@@ -232,6 +232,41 @@ describe("Create Adapter Helper", async () => {
 		expect(ids.size).toBe(10);
 	});
 
+	test("Should preserve a forced UUID when the adapter supports native UUIDs", async () => {
+		const existingId = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+		const adapter = await createTestAdapter({
+			config: {
+				supportsUUIDs: true,
+			},
+			options: {
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			},
+			adapter() {
+				return {
+					async create(data) {
+						expect(data.data.id).toBe(existingId);
+						return data.data;
+					},
+				};
+			},
+		});
+
+		const result = await adapter.create({
+			model: "user",
+			data: {
+				id: existingId,
+				name: "test-name",
+			},
+			forceAllowId: true,
+		});
+
+		expect(result.id).toBe(existingId);
+	});
+
 	describe("Checking for the results of an adapter call, as well as the parameters passed into the adapter call", () => {
 		describe("create", () => {
 			test("Should fill in the missing fields in the result", async () => {
