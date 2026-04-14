@@ -1,5 +1,27 @@
 # @better-auth/expo
 
+## 1.7.0-beta.1
+
+### Minor Changes
+
+- [#9069](https://github.com/better-auth/better-auth/pull/9069) [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Rewrite the generic OAuth plugin as a first-class social provider with OAuth 2.1 security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE required by default (OAuth 2.1), RFC 9207 issuer validation, OIDC auto-discovery with `openid` scope injection, and typed provider IDs.
+
+  **Breaking changes:**
+  - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
+  - `oauth2.link()` replaced by `linkSocial()`
+  - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+  - `genericOAuthClient()` deprecated (no longer needed)
+  - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+  - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+  - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+  - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
+
+### Patch Changes
+
+- Updated dependencies [[`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45), [`484ce6a`](https://github.com/better-auth/better-auth/commit/484ce6a262c39b9c1be91d37774a2a13de3a5a1f), [`f875897`](https://github.com/better-auth/better-auth/commit/f8758975ae475429d56b34aa6067e304ee973c8f), [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097), [`9a6d475`](https://github.com/better-auth/better-auth/commit/9a6d4759cd4451f0535d53f171bcfc8891c41db7), [`513dabb`](https://github.com/better-auth/better-auth/commit/513dabb132e2c08a5b6d3b7e88dd397fcd66c1af), [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87)]:
+  - better-auth@1.7.0-beta.1
+  - @better-auth/core@1.7.0-beta.1
+
 ## 1.7.0-beta.0
 
 ### Patch Changes
