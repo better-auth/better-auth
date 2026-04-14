@@ -60,7 +60,7 @@
     }
   },
   "dependencies": {
-    "defu": "^6.1.4",
+    "defu": "^6.1.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
