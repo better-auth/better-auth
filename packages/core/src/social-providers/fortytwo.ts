@@ -68,7 +68,7 @@ export const fortytwo = (options: FortyTwoOptions) => {
 					name: profile.displayname,
 					email: profile.email,
 					image: profile.image?.link,
-					emailVerified: true,
+					emailVerified: false,
 					...userMap,
 				},
 				data: profile,
