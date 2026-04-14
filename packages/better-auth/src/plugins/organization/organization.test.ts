@@ -436,7 +436,7 @@ describe("organization", async () => {
 				headers: headers2,
 			},
 		});
-		expect(invitation.data?.invitation.status).toBe("accepted");
+		expect(invitation.data?.invitation?.status).toBe("accepted");
 		const invitedUserSession = await client.getSession({
 			fetchOptions: {
 				headers: headers2,
@@ -445,6 +445,221 @@ describe("organization", async () => {
 		expect(invitedUserSession.data?.session.activeOrganizationId).toBe(
 			organizationId,
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9154
+	 */
+	it("should return the existing member when accepting an accepted invitation", async () => {
+		const rng = crypto.randomUUID();
+		const invitedUser = {
+			email: `${rng}@email.com`,
+			password: rng,
+			name: rng,
+		};
+		const { auth, client, signInWithTestUser, signInWithUser, db } =
+			await getTestInstance({
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+					}),
+				],
+				logger: {
+					level: "error",
+				},
+			});
+
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: `idempotent-${rng}`,
+				slug: `idempotent-${rng}`,
+			},
+			headers: ownerHeaders,
+		});
+		const invite = await auth.api.createInvitation({
+			body: {
+				organizationId: org.id,
+				email: invitedUser.email,
+				role: "member",
+			},
+			headers: ownerHeaders,
+		});
+
+		await client.signUp.email({
+			email: invitedUser.email,
+			password: invitedUser.password,
+			name: invitedUser.name,
+		});
+		const {
+			headers: invitedHeaders,
+			res: { user },
+		} = await signInWithUser(invitedUser.email, invitedUser.password);
+
+		const firstAccept = await auth.api.acceptInvitation({
+			body: {
+				invitationId: invite.id,
+			},
+			headers: invitedHeaders,
+		});
+		const secondAccept = await auth.api.acceptInvitation({
+			body: {
+				invitationId: invite.id,
+			},
+			headers: invitedHeaders,
+		});
+
+		expect(secondAccept.invitation).not.toBeNull();
+		if (!secondAccept.invitation) throw new Error("Invitation not found");
+		expect(secondAccept.invitation.status).toBe("accepted");
+		expect(secondAccept.member.id).toBe(firstAccept.member.id);
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{
+					field: "organizationId",
+					value: org.id,
+				},
+				{
+					field: "userId",
+					value: user.id,
+				},
+			],
+		});
+		expect(members).toHaveLength(1);
+
+		const invitationRows = await db.findMany<{
+			id: string;
+			status: InvitationStatus;
+		}>({
+			model: "invitation",
+			where: [
+				{
+					field: "id",
+					value: invite.id,
+				},
+			],
+		});
+		expect(invitationRows[0]?.status).toBe("accepted");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9154
+	 */
+	it("should not create duplicate members when accepting an invitation concurrently", async () => {
+		let barrierCount = 0;
+		let releaseBarrier: (() => void) | undefined;
+		const barrier = new Promise<void>((resolve) => {
+			releaseBarrier = resolve;
+		});
+
+		const { auth, client, signInWithTestUser, signInWithUser, db } =
+			await getTestInstance({
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						organizationHooks: {
+							beforeAcceptInvitation: async () => {
+								barrierCount += 1;
+								if (barrierCount === 2) {
+									releaseBarrier?.();
+								}
+								await barrier;
+							},
+						},
+					}),
+				],
+				logger: {
+					level: "error",
+				},
+			});
+
+		const rng = crypto.randomUUID();
+		const invitedUser = {
+			email: `${rng}@email.com`,
+			password: rng,
+			name: rng,
+		};
+		const { headers: ownerHeaders } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: {
+				name: `race-${rng}`,
+				slug: `race-${rng}`,
+			},
+			headers: ownerHeaders,
+		});
+		const invite = await auth.api.createInvitation({
+			body: {
+				organizationId: org.id,
+				email: invitedUser.email,
+				role: "member",
+			},
+			headers: ownerHeaders,
+		});
+
+		await client.signUp.email({
+			email: invitedUser.email,
+			password: invitedUser.password,
+			name: invitedUser.name,
+		});
+		const {
+			headers: invitedHeaders,
+			res: { user },
+		} = await signInWithUser(invitedUser.email, invitedUser.password);
+
+		const results = await Promise.allSettled([
+			auth.api.acceptInvitation({
+				body: {
+					invitationId: invite.id,
+				},
+				headers: invitedHeaders,
+			}),
+			auth.api.acceptInvitation({
+				body: {
+					invitationId: invite.id,
+				},
+				headers: invitedHeaders,
+			}),
+		]);
+
+		expect(barrierCount).toBe(2);
+
+		const members = await db.findMany({
+			model: "member",
+			where: [
+				{
+					field: "organizationId",
+					value: org.id,
+				},
+				{
+					field: "userId",
+					value: user.id,
+				},
+			],
+		});
+		expect(members).toHaveLength(1);
+
+		const invitationRows = await db.findMany<{
+			id: string;
+			status: InvitationStatus;
+		}>({
+			model: "invitation",
+			where: [
+				{
+					field: "id",
+					value: invite.id,
+				},
+			],
+		});
+		expect(invitationRows[0]?.status).toBe("accepted");
+
+		const successfulMemberIds = results.flatMap((result) =>
+			result.status === "fulfilled" ? [result.value.member.id] : [],
+		);
+		expect(successfulMemberIds.length).toBeGreaterThanOrEqual(1);
+		expect(new Set(successfulMemberIds).size).toBe(1);
 	});
 
 	it("should create invitation with multiple roles", async () => {
@@ -521,7 +736,7 @@ describe("organization", async () => {
 				headers: userHeaders,
 			},
 		});
-		expect(acceptRes.data?.invitation.status).toBe("accepted");
+		expect(acceptRes.data?.invitation?.status).toBe("accepted");
 
 		const inviteMemberAgain = await client.organization.inviteMember({
 			organizationId,
@@ -3138,14 +3353,14 @@ describe("Additional Fields", async () => {
 			};
 		};
 		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
+		expect(acceptedInvitation.invitation).not.toBeNull();
+		if (!acceptedInvitation.invitation) throw new Error("Invitation not found");
 		expect("memberRequiredField" in acceptedInvitation.member).toBeTruthy();
 		expect("memberOptionalField" in acceptedInvitation.member).toBeTruthy();
 		expect("memberHiddenField" in acceptedInvitation.member).toBeTruthy();
-		expect(
-			acceptedInvitation?.invitation.invitationHiddenField,
-		).toBeUndefined();
-		expect(acceptedInvitation?.invitation.invitationOptionalField).toBe("hey2");
-		expect(acceptedInvitation?.invitation.status).toBe("accepted");
+		expect(acceptedInvitation.invitation.invitationHiddenField).toBeUndefined();
+		expect(acceptedInvitation.invitation.invitationOptionalField).toBe("hey2");
+		expect(acceptedInvitation.invitation.status).toBe("accepted");
 	});
 	it("list invitations", async () => {
 		const invitations = await auth.api.listInvitations({

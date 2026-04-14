@@ -13,6 +13,7 @@ import type {
 	InferOrganization,
 	InferTeam,
 	InvitationInput,
+	InvitationStatus,
 	Member,
 	MemberInput,
 	OrganizationInput,
@@ -1044,6 +1045,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
+			expectedStatus?: InvitationStatus;
 			status: "accepted" | "canceled" | "rejected";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -1054,6 +1056,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						field: "id",
 						value: data.invitationId,
 					},
+					...(data.expectedStatus
+						? [
+								{
+									field: "status",
+									value: data.expectedStatus,
+								},
+							]
+						: []),
 				],
 				update: {
 					status: data.status,
