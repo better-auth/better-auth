@@ -2876,6 +2876,10 @@ describe("api-key", async () => {
 			expirationMap.clear();
 		});
 
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
 		it("should read from secondary storage first", async () => {
 			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
@@ -3130,6 +3134,114 @@ describe("api-key", async () => {
 			expect(keys).not.toBeNull();
 			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
 			expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
+		});
+
+		it("should not touch the ref list per key while populating", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const context = await auth.$context;
+			const keyCount = 5;
+			for (let i = 0; i < keyCount; i++) {
+				await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: "apikey",
+					data: {
+						configId: "default",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						name: `Ref List Key ${i}`,
+						prefix: "test",
+						start: "test_",
+						key: `hashed_ref_list_${i}`,
+						enabled: true,
+						expiresAt: null,
+						referenceId: user.id,
+						lastRefillAt: null,
+						lastRequest: null,
+						metadata: null,
+						rateLimitMax: null,
+						rateLimitTimeWindow: null,
+						remaining: null,
+						refillAmount: null,
+						refillInterval: null,
+						rateLimitEnabled: false,
+						requestCount: 0,
+						permissions: null,
+					},
+				});
+			}
+
+			const refKey = `api-key:by-ref:${user.id}`;
+			const getSpy = vi.spyOn(fallbackStorage, "get");
+			const setSpy = vi.spyOn(fallbackStorage, "set");
+
+			const { data: keys } = await client.apiKey.list({}, { headers });
+
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
+			expect(
+				getSpy.mock.calls.filter(([k]) => k === refKey).length,
+			).toBeLessThanOrEqual(1);
+			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
+		});
+
+		it("should invalidate (not mutate) the ref list on create", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const refKey = `api-key:by-ref:${user.id}`;
+			await client.apiKey.list({}, { headers });
+
+			const getSpy = vi.spyOn(fallbackStorage, "get");
+			const setSpy = vi.spyOn(fallbackStorage, "set");
+			const deleteSpy = vi.spyOn(fallbackStorage, "delete");
+
+			await client.apiKey.create({}, { headers });
+
+			expect(getSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(deleteSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
+		});
+
+		it("should invalidate (not mutate) the ref list on delete", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: created } = await client.apiKey.create({}, { headers });
+			await client.apiKey.list({}, { headers });
+
+			const refKey = `api-key:by-ref:${user.id}`;
+			const getSpy = vi.spyOn(fallbackStorage, "get");
+			const setSpy = vi.spyOn(fallbackStorage, "set");
+			const deleteSpy = vi.spyOn(fallbackStorage, "delete");
+
+			await client.apiKey.delete({ keyId: created!.id }, { headers });
+
+			expect(getSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
+			expect(deleteSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
+		});
+
+		it("should not lose ids when two creates race on the ref list", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Widen the RMW window so both writers would observe the same
+			// empty ref list before either wrote back. The fix avoids get entirely.
+			const originalGet = fallbackStorage.get.bind(fallbackStorage);
+			vi.spyOn(fallbackStorage, "get").mockImplementation(
+				async (key: string) => {
+					const value = await originalGet(key);
+					if (key.startsWith("api-key:by-ref:")) {
+						await new Promise((r) => setTimeout(r, 30));
+					}
+					return value;
+				},
+			);
+
+			const [a, b] = await Promise.all([
+				client.apiKey.create({ name: "race-a" }, { headers }),
+				client.apiKey.create({ name: "race-b" }, { headers }),
+			]);
+
+			const { data: keys } = await client.apiKey.list({}, { headers });
+			const ids = keys!.apiKeys!.map((k) => k.id);
+			expect(ids).toContain(a.data!.id);
+			expect(ids).toContain(b.data!.id);
 		});
 
 		it("should write to secondary storage only", async () => {

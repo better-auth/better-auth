@@ -232,29 +232,16 @@ async function getApiKeyByIdFromStorage(
 }
 
 /**
- * Store API key in secondary storage
+ * Read-modify-write the ref list:
+ * used only when the list is the source of truth.
  */
-async function setApiKeyInStorage(
-	ctx: GenericEndpointContext,
-	apiKey: ApiKey,
+async function modifyRefList(
 	storage: SecondaryStorage,
-	ttl?: number | undefined,
+	refKey: string,
+	modify: (ids: string[]) => string[],
 ): Promise<void> {
-	const serialized = serializeApiKey(apiKey);
-	const hashedKey = apiKey.key;
-	const id = apiKey.id;
-
-	// Store by hashed key (primary lookup)
-	await storage.set(getStorageKeyByHashedKey(hashedKey), serialized, ttl);
-
-	// Store by ID (for ID-based lookups)
-	await storage.set(getStorageKeyById(id), serialized, ttl);
-
-	// Update reference's API key list (user or org)
-	const refKey = getStorageKeyByReferenceId(apiKey.referenceId);
 	const refListData = await storage.get(refKey);
 	let keyIds: string[] = [];
-
 	if (refListData && typeof refListData === "string") {
 		try {
 			keyIds = JSON.parse(refListData);
@@ -264,11 +251,43 @@ async function setApiKeyInStorage(
 	} else if (Array.isArray(refListData)) {
 		keyIds = refListData;
 	}
-
-	if (!keyIds.includes(id)) {
-		keyIds.push(id);
-		await storage.set(refKey, JSON.stringify(keyIds));
+	const next = modify(keyIds);
+	if (next.length === 0) {
+		await storage.delete(refKey);
+	} else {
+		await storage.set(refKey, JSON.stringify(next));
 	}
+}
+
+async function setApiKeyInStorage(
+	_ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+	storage: SecondaryStorage,
+	ttl: number | undefined,
+	opts: PredefinedApiKeyOptions,
+): Promise<void> {
+	const serialized = serializeApiKey(apiKey);
+	const refKey = getStorageKeyByReferenceId(apiKey.referenceId);
+
+	// Fallback mode:
+	// the ref list is a cache,
+	// so invalidate instead of RMW to avoid concurrent-writer races.
+	if (opts.fallbackToDatabase) {
+		await Promise.all([
+			storage.set(getStorageKeyByHashedKey(apiKey.key), serialized, ttl),
+			storage.set(getStorageKeyById(apiKey.id), serialized, ttl),
+			storage.delete(refKey),
+		]);
+		return;
+	}
+
+	await Promise.all([
+		storage.set(getStorageKeyByHashedKey(apiKey.key), serialized, ttl),
+		storage.set(getStorageKeyById(apiKey.id), serialized, ttl),
+		modifyRefList(storage, refKey, (ids) =>
+			ids.includes(apiKey.id) ? ids : [...ids, apiKey.id],
+		),
+	]);
 }
 
 /**
@@ -278,38 +297,28 @@ async function deleteApiKeyFromStorage(
 	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
 	storage: SecondaryStorage,
+	opts: PredefinedApiKeyOptions,
 ): Promise<void> {
-	const hashedKey = apiKey.key;
-	const id = apiKey.id;
-	const referenceId = apiKey.referenceId;
+	const refKey = getStorageKeyByReferenceId(apiKey.referenceId);
 
-	// Delete by hashed key
-	await storage.delete(getStorageKeyByHashedKey(hashedKey));
-
-	// Delete by ID
-	await storage.delete(getStorageKeyById(id));
-
-	// Update reference's API key list
-	const refKey = getStorageKeyByReferenceId(referenceId);
-	const refListData = await storage.get(refKey);
-	let keyIds: string[] = [];
-
-	if (refListData && typeof refListData === "string") {
-		try {
-			keyIds = JSON.parse(refListData);
-		} catch {
-			keyIds = [];
-		}
-	} else if (Array.isArray(refListData)) {
-		keyIds = refListData;
+	// Mirror setApiKeyInStorage:
+	// invalidate in fallback mode, RMW otherwise.
+	if (opts.fallbackToDatabase) {
+		await Promise.all([
+			storage.delete(getStorageKeyByHashedKey(apiKey.key)),
+			storage.delete(getStorageKeyById(apiKey.id)),
+			storage.delete(refKey),
+		]);
+		return;
 	}
 
-	const filteredIds = keyIds.filter((keyId) => keyId !== id);
-	if (filteredIds.length === 0) {
-		await storage.delete(refKey);
-	} else {
-		await storage.set(refKey, JSON.stringify(filteredIds));
-	}
+	await Promise.all([
+		storage.delete(getStorageKeyByHashedKey(apiKey.key)),
+		storage.delete(getStorageKeyById(apiKey.id)),
+		modifyRefList(storage, refKey, (ids) =>
+			ids.filter((keyId) => keyId !== apiKey.id),
+		),
+	]);
 }
 
 /**
@@ -356,7 +365,7 @@ export async function getApiKey(
 		if (dbKey && storage) {
 			// Populate secondary storage for future reads
 			const ttl = calculateTTL(dbKey);
-			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
+			await setApiKeyInStorage(ctx, dbKey, storage, ttl, opts);
 		}
 
 		return dbKey;
@@ -426,7 +435,7 @@ export async function getApiKeyById(
 		if (dbKey && storage) {
 			// Populate secondary storage for future reads
 			const ttl = calculateTTL(dbKey);
-			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
+			await setApiKeyInStorage(ctx, dbKey, storage, ttl, opts);
 		}
 
 		return dbKey;
@@ -475,7 +484,7 @@ export async function setApiKey(
 				"Secondary storage is required when storage mode is 'secondary-storage'",
 			);
 		}
-		await setApiKeyInStorage(ctx, apiKey, storage, ttl);
+		await setApiKeyInStorage(ctx, apiKey, storage, ttl, opts);
 		return;
 	}
 }
@@ -502,7 +511,7 @@ export async function deleteApiKey(
 				"Secondary storage is required when storage mode is 'secondary-storage'",
 			);
 		}
-		await deleteApiKeyFromStorage(ctx, apiKey, storage);
+		await deleteApiKeyFromStorage(ctx, apiKey, storage, opts);
 		return;
 	}
 }
@@ -667,13 +676,14 @@ export async function listApiKeys(
 			}),
 		]);
 
-		// Populate secondary storage with fetched keys
+		// Rebuild from DB truth:
+		// per-key entries fan out,
+		// ref list is written last with the full id set.
 		if (storage && dbKeys.length > 0) {
 			await Promise.all(
-				dbKeys.map((apiKey) => {
-					const ttl = calculateTTL(apiKey);
-					return setApiKeyInStorage(ctx, apiKey, storage, ttl);
-				}),
+				dbKeys.map((apiKey) =>
+					setApiKeyInStorage(ctx, apiKey, storage, calculateTTL(apiKey), opts),
+				),
 			);
 			const keyIds = dbKeys.map((apiKey) => apiKey.id);
 			await storage.set(refKey, JSON.stringify(keyIds));
