@@ -22,7 +22,9 @@ import type {
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
+import { resolveRequestContext } from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
+import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -66,6 +68,35 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
+function pickSource(
+	input: UserInputContext | undefined,
+): Request | Headers | undefined {
+	if (isRequestLike(input?.request)) return input.request;
+	if (!input?.headers) return undefined;
+
+	const headers = new Headers(input.headers);
+	const hasHost = headers.has("host") || headers.has("x-forwarded-host");
+	if (!hasHost) return undefined;
+
+	return headers;
+}
+
+// Direct `auth.api` calls bypass the HTTP handler's per-request resolution.
+async function resolveDynamicContext(
+	rawCtx: AuthContext,
+	input: UserInputContext | undefined,
+): Promise<AuthContext> {
+	const source = pickSource(input);
+	const config = rawCtx.options.baseURL;
+	const hasFallback =
+		isDynamicBaseURLConfig(config) && Boolean(config.fallback);
+
+	const canResolve = source !== undefined || hasFallback;
+	if (!canResolve) return rawCtx;
+
+	return resolveRequestContext(rawCtx, source);
+}
+
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
 	ctx: AuthContext | Promise<AuthContext>,
@@ -89,10 +120,16 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				: endpointMethod;
 
 			const run = async () => {
-				const authContext = await ctx;
+				const rawContext = await ctx;
 				const methodName =
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
 				const route = endpoint.path ?? "/:virtual";
+
+				// Direct API calls bypass the handler's per-request resolution.
+				// Rehydrate only when the dynamic branch actually applies so the static path stays zero-overhead.
+				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
+					? await resolveDynamicContext(rawContext, context)
+					: rawContext;
 
 				let internalContext: InternalContext = {
 					...context,

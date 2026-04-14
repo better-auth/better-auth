@@ -2,8 +2,8 @@ import type { DynamicBaseURLConfig } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import {
 	getBaseURL,
-	getHostFromRequest,
-	getProtocolFromRequest,
+	getHostFromSource,
+	getProtocolFromSource,
 	isDynamicBaseURLConfig,
 	matchesHostPattern,
 	resolveBaseURL,
@@ -361,7 +361,7 @@ describe("matchesHostPattern", () => {
 	});
 });
 
-describe("getHostFromRequest", () => {
+describe("getHostFromSource", () => {
 	it("should prefer x-forwarded-host over host header", () => {
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
@@ -370,7 +370,7 @@ describe("getHostFromRequest", () => {
 			},
 		});
 
-		expect(getHostFromRequest(request)).toBe("myapp.vercel.app");
+		expect(getHostFromSource(request)).toBe("myapp.vercel.app");
 	});
 
 	it("should fall back to host header if x-forwarded-host is not set", () => {
@@ -380,13 +380,13 @@ describe("getHostFromRequest", () => {
 			},
 		});
 
-		expect(getHostFromRequest(request)).toBe("localhost:3000");
+		expect(getHostFromSource(request)).toBe("localhost:3000");
 	});
 
 	it("should fall back to request URL if no headers", () => {
 		const request = new Request("http://example.com:8080/test");
 
-		expect(getHostFromRequest(request)).toBe("example.com:8080");
+		expect(getHostFromSource(request)).toBe("example.com:8080");
 	});
 
 	it("should reject malicious x-forwarded-host and fall back", () => {
@@ -397,16 +397,16 @@ describe("getHostFromRequest", () => {
 			},
 		});
 
-		expect(getHostFromRequest(request)).toBe("localhost:3000");
+		expect(getHostFromSource(request)).toBe("localhost:3000");
 	});
 });
 
-describe("getProtocolFromRequest", () => {
+describe("getProtocolFromSource", () => {
 	it("should use explicit protocol config", () => {
 		const request = new Request("http://localhost:3000/test");
 
-		expect(getProtocolFromRequest(request, "https")).toBe("https");
-		expect(getProtocolFromRequest(request, "http")).toBe("http");
+		expect(getProtocolFromSource(request, "https")).toBe("https");
+		expect(getProtocolFromSource(request, "http")).toBe("http");
 	});
 
 	it("should use x-forwarded-proto when set to auto", () => {
@@ -416,19 +416,19 @@ describe("getProtocolFromRequest", () => {
 			},
 		});
 
-		expect(getProtocolFromRequest(request, "auto")).toBe("https");
+		expect(getProtocolFromSource(request, "auto")).toBe("https");
 	});
 
 	it("should fall back to request URL protocol", () => {
 		const request = new Request("https://example.com/test");
 
-		expect(getProtocolFromRequest(request, "auto")).toBe("https");
+		expect(getProtocolFromSource(request, "auto")).toBe("https");
 	});
 
 	it("should use request URL protocol as fallback", () => {
 		const request = new Request("http://localhost:3000/test");
 
-		expect(getProtocolFromRequest(request, "auto")).toBe("http");
+		expect(getProtocolFromSource(request, "auto")).toBe("http");
 	});
 });
 
