@@ -133,6 +133,7 @@ class NodeSqliteConnection implements DatabaseConnection {
 		const stmt = this.#db.prepare(sql);
 		const normalizedSql = sql.trim().toLowerCase();
 		const isMutation = /^(insert|update|delete|replace)\b/.test(normalizedSql);
+		const isInsert = /^(insert|replace)\b/.test(normalizedSql);
 		const hasReturningClause = /\breturning\b/.test(normalizedSql);
 
 		if (isMutation && !hasReturningClause) {
@@ -151,11 +152,13 @@ class NodeSqliteConnection implements DatabaseConnection {
 							? changes
 							: undefined,
 				insertId:
-					typeof lastInsertRowid === "number"
-						? BigInt(lastInsertRowid)
-						: typeof lastInsertRowid === "bigint"
-							? lastInsertRowid
-							: undefined,
+					isInsert && lastInsertRowid !== undefined && lastInsertRowid !== null
+						? typeof lastInsertRowid === "number"
+							? BigInt(lastInsertRowid)
+							: typeof lastInsertRowid === "bigint"
+								? lastInsertRowid
+								: undefined
+						: undefined,
 				rows: [],
 			});
 		}
