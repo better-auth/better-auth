@@ -68,6 +68,14 @@
   - Extracted shared `validateInResponseTo()` and `validateAudience()` into `packages/sso/src/saml/response-validation.ts`, eliminating ~160 lines of duplicated validation logic between the two ACS handlers.
   - Fixed `SAMLAssertionExtract` type to match samlify's actual extractor output shape.
 
+## 1.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`9aed910`](https://github.com/better-auth/better-auth/commit/9aed910499eb4cbc3dd0c395ff5534893daab7a4), [`acbd6ef`](https://github.com/better-auth/better-auth/commit/acbd6ef69f88ea54174446ac0465a426bad7ca09), [`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9)]:
+  - better-auth@1.6.4
+  - @better-auth/core@1.6.4
+
 ## 1.6.3
 
 ### Patch Changes
