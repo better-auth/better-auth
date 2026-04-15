@@ -87,7 +87,7 @@ cimd({
 ```
 
 <Callout type="info">
-  In most cases, it is recommended to remove the oauth-provider configuration `allowUnauthenticatedClientRegistration` when using the CIMD plugin. CIMD provides additional identity behavior and deduplicates multiple registrations for the same `client_id` URL.
+  For [MCP auth](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-registration-approaches) only deployments, we recommend disabling the `allowUnauthenticatedClientRegistration` option in `oauth-provider`. CIMD handles client identity and prevents duplicate registrations for the same `client_id` URL. Keep `allowUnauthenticatedClientRegistration` only if you need registration fallback — be aware this can create duplicate client records.
 </Callout>
 
 ### Options

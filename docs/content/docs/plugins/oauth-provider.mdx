@@ -1146,7 +1146,7 @@ oauthProvider({
 })
 ```
 
-Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header (i.e. without a session). This is especially useful for an MCP to dynamically register themselves as a public client without an active session. For MCP support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of the public client.
+Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header. This is especially useful for an MCP to dynamically register themselves as a public client without an active session. For MCP auth support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of the public client.
 
 ```ts title="auth.ts"
 oauthProvider({
