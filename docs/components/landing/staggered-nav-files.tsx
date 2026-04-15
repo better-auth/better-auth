@@ -195,8 +195,8 @@ export function StaggeredNavFiles() {
 							<LogoContextMenu
 								logo={
 									<div className="flex items-center gap-1">
-										<Logo className="h-4 w-auto shrink-0" />
-										<p className="select-none font-mono text-lg uppercase leading-none">
+										<Logo className="h-3 w-auto shrink-0" />
+										<p className="select-none font-mono text-base uppercase leading-none">
 											BETTER-AUTH.
 										</p>
 									</div>
@@ -218,8 +218,8 @@ export function StaggeredNavFiles() {
 						href="/"
 						className="flex h-full items-center gap-1 px-4 transition-colors duration-150"
 					>
-						<Logo className="h-3.5 w-auto shrink-0" />
-						<p className="select-none font-mono text-base uppercase leading-none">
+						<Logo className="h-3 w-auto shrink-0" />
+						<p className="select-none font-mono text-sm uppercase leading-none">
 							BETTER-AUTH.
 						</p>
 					</Link>
@@ -320,8 +320,8 @@ export function StaggeredNavFiles() {
 							<LogoContextMenu
 								logo={
 									<div className="flex items-center gap-1">
-										<Logo className="h-4 w-auto shrink-0" />
-										<p className="select-none font-mono text-lg uppercase leading-none">
+										<Logo className="h-3 w-auto shrink-0" />
+										<p className="select-none font-mono text-base uppercase leading-none">
 											BETTER-AUTH.
 										</p>
 									</div>
