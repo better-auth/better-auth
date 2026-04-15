@@ -380,14 +380,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					matcher(context) {
 						if (context.context.newSession == null) return false;
 						const path = context.path;
-						if (!path) return false;
-						if (path.startsWith("/two-factor/")) return false;
-						if (
-							SESSION_TRANSITION_PATH_PREFIXES.some((prefix) =>
-								path.startsWith(prefix),
-							)
-						) {
-							return false;
+						if (path) {
+							if (path.startsWith("/two-factor/")) return false;
+							if (
+								SESSION_TRANSITION_PATH_PREFIXES.some((prefix) =>
+									path.startsWith(prefix),
+								)
+							) {
+								return false;
+							}
 						}
 						return true;
 					},

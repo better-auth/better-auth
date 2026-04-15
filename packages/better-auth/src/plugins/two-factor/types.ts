@@ -66,29 +66,17 @@ export interface TwoFactorOptions {
 	 */
 	trustDeviceMaxAge?: number | undefined;
 	/**
-	 * Decides whether to challenge 2FA on a given sign-in.
+	 * Decides whether to challenge 2FA on a given sign-in. Return `true`
+	 * to challenge, `false` to skip. Setting this option replaces the
+	 * built-in decision, including the passkey UV exemption.
 	 *
-	 * Return `true` to challenge 2FA for this request; return `false` to
-	 * skip. Setting this option replaces the built-in enforcement
-	 * decision (including the passkey user-verification exemption).
+	 * Same-user session rewrites (session refresh, `updateUser`) and
+	 * session-transition endpoints (admin impersonation, multi-session
+	 * switching) are never matched and cannot be overridden.
 	 *
-	 * When omitted, 2FA is challenged on every sign-in that creates a
-	 * new session, with one built-in exception: passkey sign-ins whose
-	 * assertion confirmed user verification (UV) are not challenged,
-	 * since a UV-verified passkey already satisfies MFA.
+	 * The authenticating user is available at `ctx.context.newSession.user`.
 	 *
-	 * Two guards run before this callback and cannot be overridden:
-	 * same-user session rewrites (session refresh, `updateUser`) are
-	 * never challenged, and session-transition endpoints (admin
-	 * impersonation, multi-session switching) are never matched.
-	 *
-	 * The callback receives the endpoint context. The authenticating
-	 * user is available at `ctx.context.newSession.user`.
-	 *
-	 * Use this option to skip 2FA on flows where the upstream provider
-	 * is trusted to enforce it (for example, OAuth callbacks where the
-	 * provider already required MFA), or to force a challenge on flows
-	 * that the built-in logic would otherwise skip.
+	 * @see {@link https://better-auth.com/docs/plugins/2fa#enforcement-scope}
 	 */
 	shouldEnforce?:
 		| ((ctx: GenericEndpointContext) => boolean | Promise<boolean>)
