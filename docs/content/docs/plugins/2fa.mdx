@@ -511,6 +511,83 @@ export const twoFactorTableFields = [
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
+**shouldEnforce**: Decides whether to challenge 2FA on a given sign-in. Return `true` to challenge, `false` to skip. Setting this option replaces the built-in enforcement decision, including the passkey user-verification exemption. See [Enforcement scope](#enforcement-scope) below.
+
+### Enforcement scope
+
+When a user has 2FA enabled, the plugin challenges the second factor on every sign-in that creates a new session. One exception applies: passkey sign-ins whose assertion confirmed user verification (UV) are not challenged. Passkey sign-ins without UV are still challenged.
+
+A password, magic link, or email OTP is a single primary authenticator and establishes AAL1 per [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b/). Challenging a second factor raises the session to AAL2.
+
+A UV-verified passkey already qualifies as AAL2 phishing-resistant authentication under NIST SP 800-63B-4 and the [FIDO Alliance](https://fidoalliance.org/passkeys/). It proves possession of the authenticator plus inherence (biometric) or knowledge (on-device PIN) in one step. Requiring a manually-entered second factor would reintroduce a phishable step.
+
+Federated sign-ins (OAuth, SSO) are challenged by default because the plugin does not yet read the provider's `amr` or `acr` claims. Without those signals, the plugin cannot tell which federated sessions already carry provider MFA. Applications that trust their provider opt out via `shouldEnforce`.
+
+Two guards run before `shouldEnforce` and cannot be overridden:
+
+* **Same-user session rewrites** (session refresh, `updateUser`, and similar) are never challenged; those are not sign-in events.
+* **Session-transition endpoints** (admin impersonation, multi-session switching) are never matched, because they operate on already-authenticated identities rather than establishing a new one.
+
+A pre-existing `ctx.context.session` for a different user does not suppress the challenge.
+
+Applications override the default by providing `shouldEnforce`. The callback receives the endpoint context and returns `true` to challenge or `false` to skip.
+
+Trust the upstream provider on OAuth and SSO (skip the challenge on those callbacks) while keeping the passkey-UV exemption in place:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { twoFactor } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        twoFactor({
+            shouldEnforce: (ctx) => {
+                if (ctx.path?.startsWith("/callback/")) return false
+                if (ctx.path?.startsWith("/sso/callback/")) return false
+                if (ctx.path?.startsWith("/sso/saml2/sp/acs/")) return false
+                if (
+                    ctx.path === "/passkey/verify-authentication" &&
+                    (ctx.context as { passkeyUserVerified?: boolean })
+                        .passkeyUserVerified === true
+                ) {
+                    return false
+                }
+                return true
+            },
+        }),
+    ],
+})
+```
+
+Trust the upstream provider without preserving the passkey-UV exemption (simpler, but a UV-verified passkey will still be challenged):
+
+```ts title="auth.ts"
+twoFactor({
+    shouldEnforce: (ctx) =>
+        !ctx.path?.startsWith("/callback/") &&
+        !ctx.path?.startsWith("/sso/callback/") &&
+        !ctx.path?.startsWith("/sso/saml2/sp/acs/"),
+})
+```
+
+Challenge every sign-in unconditionally (including UV-verified passkey):
+
+```ts title="auth.ts"
+twoFactor({
+    shouldEnforce: () => true,
+})
+```
+
+Skip 2FA entirely (not recommended outside specific testing or migration scenarios):
+
+```ts title="auth.ts"
+twoFactor({
+    shouldEnforce: () => false,
+})
+```
+
+The callback receives the endpoint context, so predicates can branch on the request path, headers, or the session being minted (`ctx.context.newSession`).
+
 **TOTP options**
 
 these are options for TOTP.

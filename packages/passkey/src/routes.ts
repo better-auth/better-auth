@@ -827,6 +827,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 						message: "User not found",
 					});
 				}
+				// Expose UV to downstream hooks via request-scoped context, not
+				// the session object, so it cannot leak into the response body
+				// or the session cookie cache.
+				(ctx.context as { passkeyUserVerified?: boolean }).passkeyUserVerified =
+					verification.authenticationInfo.userVerified === true;
 				await setSessionCookie(ctx, {
 					session: s,
 					user,

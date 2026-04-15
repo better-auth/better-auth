@@ -1,4 +1,8 @@
-import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+	LiteralString,
+} from "@better-auth/core";
 import type { InferOptionSchema, User } from "../../types";
 import type { BackupCodeOptions } from "./backup-codes";
 import type { OTPOptions } from "./otp";
@@ -61,6 +65,34 @@ export interface TwoFactorOptions {
 	 * @default 2592000 (30 days)
 	 */
 	trustDeviceMaxAge?: number | undefined;
+	/**
+	 * Decides whether to challenge 2FA on a given sign-in.
+	 *
+	 * Return `true` to challenge 2FA for this request; return `false` to
+	 * skip. Setting this option replaces the built-in enforcement
+	 * decision (including the passkey user-verification exemption).
+	 *
+	 * When omitted, 2FA is challenged on every sign-in that creates a
+	 * new session, with one built-in exception: passkey sign-ins whose
+	 * assertion confirmed user verification (UV) are not challenged,
+	 * since a UV-verified passkey already satisfies MFA.
+	 *
+	 * Two guards run before this callback and cannot be overridden:
+	 * same-user session rewrites (session refresh, `updateUser`) are
+	 * never challenged, and session-transition endpoints (admin
+	 * impersonation, multi-session switching) are never matched.
+	 *
+	 * The callback receives the endpoint context. The authenticating
+	 * user is available at `ctx.context.newSession.user`.
+	 *
+	 * Use this option to skip 2FA on flows where the upstream provider
+	 * is trusted to enforce it (for example, OAuth callbacks where the
+	 * provider already required MFA), or to force a challenge on flows
+	 * that the built-in logic would otherwise skip.
+	 */
+	shouldEnforce?:
+		| ((ctx: GenericEndpointContext) => boolean | Promise<boolean>)
+		| undefined;
 }
 
 export interface UserWithTwoFactor extends User {

@@ -1,12 +1,16 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
+import * as z from "zod";
+import { createAuthEndpoint, createAuthMiddleware } from "../../api";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { admin } from "../admin";
 import { anonymous } from "../anonymous";
 import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
@@ -2350,8 +2354,15 @@ describe("twoFactorMethods in sign-in response", () => {
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/8627
+ * @see https://github.com/better-auth/better-auth/pull/9122
+ *
+ * 2FA is challenged on every sign-in that creates a new session for a
+ * 2FA-enabled user. The built-in logic has one exception: passkey
+ * sign-ins whose assertion confirmed user verification are skipped
+ * (covered in a dedicated block below). Applications override the
+ * default via the `shouldEnforce` option.
  */
-describe("2FA enforcement on non-credential sign-in paths", async () => {
+describe("2FA default enforcement scope", async () => {
 	let magicLinkURL = "";
 	const { auth, signInWithTestUser, testUser } = await getTestInstance({
 		secret: DEFAULT_SECRET,
@@ -2370,7 +2381,7 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 		],
 	});
 
-	it("should enforce 2FA on magic-link sign-in", async () => {
+	it("should challenge 2FA on magic-link sign-in by default", async () => {
 		const { headers } = await signInWithTestUser();
 		await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
@@ -2396,11 +2407,14 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 		expect(json.twoFactorRedirect).toBe(true);
 	});
 
-	it("should not enforce 2FA on authenticated non-sign-in endpoints", async () => {
+	it("should not challenge 2FA when same-user session rewrites itself (updateUser)", async () => {
+		// Uses a dedicated instance because the preceding test enables 2FA
+		// on the shared testUser, which would otherwise gate the sign-in
+		// with a 2FA challenge.
 		const {
-			auth: a,
+			auth: instance,
 			signInWithTestUser: signIn,
-			testUser: tu,
+			testUser: user,
 		} = await getTestInstance({
 			secret: DEFAULT_SECRET,
 			plugins: [
@@ -2410,25 +2424,461 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 				}),
 			],
 		});
-		let { headers: h } = await signIn();
-		const enableRes = await a.api.enableTwoFactor({
-			body: { password: tu.password },
-			headers: h,
+		let { headers } = await signIn();
+		const enableRes = await instance.api.enableTwoFactor({
+			body: { password: user.password },
+			headers,
 			asResponse: true,
 		});
-		h = convertSetCookieToCookie(enableRes.headers);
+		headers = convertSetCookieToCookie(enableRes.headers);
 
-		const session = await a.api.getSession({ headers: h });
+		const session = await instance.api.getSession({ headers });
 		expect(session?.user.twoFactorEnabled).toBe(true);
 
-		const updateRes = await a.api.updateUser({
+		const updateRes = await instance.api.updateUser({
 			body: { name: "updated-name" },
-			headers: h,
+			headers,
 			asResponse: true,
 		});
 
 		expect(updateRes.ok).toBe(true);
 		const json = await updateRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9122
+ *
+ * When `autoSignInAfterVerification` is enabled and the verified user
+ * has 2FA enabled, the resulting session creation must go through the
+ * 2FA challenge before the session cookie becomes usable.
+ */
+describe("2FA enforcement on email-verification auto-sign-in", async () => {
+	let verificationToken = "";
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		emailVerification: {
+			async sendVerificationEmail({ token }) {
+				verificationToken = token;
+			},
+			autoSignInAfterVerification: true,
+		},
+		plugins: [
+			twoFactor({
+				otpOptions: { sendOTP() {} },
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	it("should challenge 2FA when /verify-email auto-signs-in a 2FA-enabled user", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		// Mark the user unverified so sendVerificationEmail issues a fresh
+		// token, mirroring the change-email / re-verification flow.
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+			update: { emailVerified: false },
+		});
+
+		await auth.api.sendVerificationEmail({
+			body: { email: testUser.email },
+		});
+		expect(verificationToken).toBeTruthy();
+
+		// autoSignInAfterVerification mints a new session without any
+		// existing cookies; the 2FA challenge must fire before that
+		// session is usable.
+		const verifyRes = await auth.api.verifyEmail({
+			query: { token: verificationToken },
+			headers: new Headers(),
+			asResponse: true,
+		});
+		const json = await verifyRes.json();
+		expect(json.twoFactorRedirect).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9122
+ *
+ * The 2FA challenge must fire when a before-hook populates
+ * `ctx.context.session` with a session that belongs to a different
+ * user than the one being authenticated. Only same-user rewrites
+ * (session refresh, `updateUser`) skip the challenge.
+ */
+describe("2FA identity-aware session guard", async () => {
+	const injectedUserId = "injected-user-id";
+
+	const sessionInjector: BetterAuthPlugin = {
+		id: "test-session-injector",
+		hooks: {
+			before: [
+				{
+					matcher: (ctx) => ctx.headers?.get?.("x-inject-session") === "1",
+					handler: createAuthMiddleware(async (ctx) => {
+						ctx.context.session = {
+							user: { id: injectedUserId } as never,
+							session: { userId: injectedUserId } as never,
+						};
+					}),
+				},
+			],
+		},
+	};
+
+	it("should still challenge 2FA when a cross-user session is injected before the sign-in handler", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+				}),
+				sessionInjector,
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		const injectedHeaders = new Headers({ "x-inject-session": "1" });
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			headers: injectedHeaders,
+			asResponse: true,
+		});
+		const json = await res.json();
+		expect(json.twoFactorRedirect).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9122
+ *
+ * A user-verified passkey assertion satisfies MFA on its own, so the 2FA
+ * challenge must skip when the passkey plugin reports
+ * `passkeyUserVerified: true` on `ctx.context`. Assertions without UV
+ * still trigger the challenge.
+ *
+ * These tests use a minimal test plugin that registers the same path as
+ * the passkey plugin (`/passkey/verify-authentication`) and sets the same
+ * context flag, so the 2FA hook sees the exact shape it would see in a
+ * real passkey sign-in.
+ */
+describe("2FA passkey user-verified carve-out", async () => {
+	// Faithful simulator of the real passkey plugin's signal: it registers
+	// the same path and writes `passkeyUserVerified` on `ctx.context`.
+	// The real plugin lives at packages/passkey/src/routes.ts; keep this
+	// in sync with that handler.
+	const passkeyPathPlugin = (opts: { userVerified: boolean }) =>
+		({
+			id: "test-passkey-path",
+			endpoints: {
+				testPasskeyVerify: createAuthEndpoint(
+					"/passkey/verify-authentication",
+					{
+						method: "POST",
+						body: z.object({ email: z.string() }),
+					},
+					async (ctx) => {
+						const user = await ctx.context.internalAdapter.findUserByEmail(
+							ctx.body.email,
+						);
+						if (!user) throw new Error("user not found");
+						const session = await ctx.context.internalAdapter.createSession(
+							user.user.id,
+						);
+						(
+							ctx.context as { passkeyUserVerified?: boolean }
+						).passkeyUserVerified = opts.userVerified;
+						await setSessionCookie(ctx, {
+							session,
+							user: user.user,
+						});
+						return ctx.json({ ok: true });
+					},
+				),
+			},
+		}) satisfies BetterAuthPlugin;
+
+	it("should skip 2FA when passkey assertion had user verification", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+				}),
+				passkeyPathPlugin({ userVerified: true }),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		const res = await auth.api.testPasskeyVerify({
+			body: { email: testUser.email },
+			headers: new Headers(),
+			asResponse: true,
+		});
+		const json = await res.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+		expect(json.ok).toBe(true);
+	});
+
+	it("should challenge 2FA when passkey assertion did not perform user verification", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+				}),
+				passkeyPathPlugin({ userVerified: false }),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		const res = await auth.api.testPasskeyVerify({
+			body: { email: testUser.email },
+			headers: new Headers(),
+			asResponse: true,
+		});
+		const json = await res.json();
+		expect(json.twoFactorRedirect).toBe(true);
+	});
+
+	it("should honor shouldEnforce even when passkey assertion was user-verified", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+					shouldEnforce: () => true,
+				}),
+				passkeyPathPlugin({ userVerified: true }),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		const res = await auth.api.testPasskeyVerify({
+			body: { email: testUser.email },
+			headers: new Headers(),
+			asResponse: true,
+		});
+		const json = await res.json();
+		expect(json.twoFactorRedirect).toBe(true);
+	});
+});
+
+/**
+ * Session-transition endpoints (admin impersonation, multi-session
+ * switching) mint a session for an identity that was already
+ * authenticated elsewhere. Challenging 2FA on those transitions is a
+ * regression: the operator driving the transition cannot produce the
+ * target's second factor.
+ */
+describe("2FA skips session-transition endpoints", async () => {
+	it("should not challenge 2FA on admin impersonation of a 2FA-enabled user", async () => {
+		const { auth, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+				}),
+				admin(),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.email === "admin@test.com") {
+								return { data: { ...user, role: "admin" } };
+							}
+						},
+					},
+				},
+			},
+		});
+
+		const adminUser = await auth.api.signUpEmail({
+			body: {
+				email: "admin@test.com",
+				password: "admin-password",
+				name: "Admin",
+			},
+			asResponse: true,
+		});
+		const adminHeaders = convertSetCookieToCookie(adminUser.headers);
+
+		const target = await auth.api.signUpEmail({
+			body: {
+				email: "target@test.com",
+				password: "target-password",
+				name: "Target",
+			},
+			asResponse: true,
+		});
+		let targetHeaders = convertSetCookieToCookie(target.headers);
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: "target-password" },
+			headers: targetHeaders,
+			asResponse: true,
+		});
+		targetHeaders = convertSetCookieToCookie(enableRes.headers);
+
+		const targetSession = await auth.api.getSession({ headers: targetHeaders });
+		const targetUserId = targetSession?.user.id;
+		expect(targetUserId).toBeDefined();
+		expect(targetSession?.user.twoFactorEnabled).toBe(true);
+
+		const impersonateRes = await auth.api.impersonateUser({
+			body: { userId: targetUserId! },
+			headers: adminHeaders,
+			asResponse: true,
+		});
+		expect(impersonateRes.ok).toBe(true);
+		const json = await impersonateRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+		expect(json.session).toBeDefined();
+		expect(json.user?.id).toBe(targetUserId);
+
+		// Confirm the impersonation session exists and was not torn down.
+		const sessions = await db.findMany<{ id: string; userId: string }>({
+			model: "session",
+			where: [{ field: "userId", value: targetUserId! }],
+		});
+		expect(sessions.length).toBeGreaterThan(0);
+	});
+});
+
+describe("2FA shouldEnforce option", async () => {
+	it("should skip 2FA when shouldEnforce returns false", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+					shouldEnforce: () => false,
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const json = await res.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+		expect(json.token).toBeDefined();
+	});
+
+	it("should skip 2FA selectively when shouldEnforce returns false for a path", async () => {
+		let magicLinkURL = "";
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+					shouldEnforce: (ctx) => ctx.path !== "/magic-link/verify",
+				}),
+				magicLink({
+					sendMagicLink({ url }) {
+						magicLinkURL = url;
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		await auth.api.signInMagicLink({
+			body: { email: testUser.email },
+			headers: new Headers(),
+		});
+		const token = new URL(magicLinkURL).searchParams.get("token")!;
+
+		const verifyRes = await auth.api.magicLinkVerify({
+			query: { token },
+			headers: new Headers(),
+			asResponse: true,
+		});
+		const json = await verifyRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+		expect(json.session?.token).toBeDefined();
+	});
+
+	it("should accept an async shouldEnforce predicate", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+					shouldEnforce: async () => {
+						await new Promise((resolve) => setTimeout(resolve, 1));
+						return false;
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const json = await res.json();
 		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 });

@@ -21,6 +21,7 @@ import { PACKAGE_VERSION } from "../../version";
 import type { BackupCodeOptions } from "./backup-codes";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
+	SESSION_TRANSITION_PATH_PREFIXES,
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
@@ -377,10 +378,18 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return (
-							context.context.newSession != null &&
-							!context.path?.startsWith("/two-factor/")
-						);
+						if (context.context.newSession == null) return false;
+						const path = context.path;
+						if (!path) return false;
+						if (path.startsWith("/two-factor/")) return false;
+						if (
+							SESSION_TRANSITION_PATH_PREFIXES.some((prefix) =>
+								path.startsWith(prefix),
+							)
+						) {
+							return false;
+						}
+						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const data = ctx.context.newSession;
@@ -392,9 +401,30 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							return;
 						}
 
-						// Skip if the request already had an authenticated session
-						// (session refresh, updateUser, etc. are not sign-in flows)
-						if (ctx.context.session) {
+						// A different user's pre-existing session must not suppress
+						// enforcement; only same-user rewrites (session refresh,
+						// updateUser) are safe to skip.
+						if (
+							ctx.context.session &&
+							ctx.context.session.user?.id === data.user.id
+						) {
+							return;
+						}
+
+						// UV-verified passkey already proves possession + inherence.
+						// The flag is request-scoped and cannot be set by a client.
+						//
+						// TODO: extend this carve-out to federated sign-ins (OAuth,
+						// SSO) once the plugin reads `amr` / `acr` claims from the
+						// upstream provider.
+						const passkeyCompletedMfa =
+							(ctx.context as { passkeyUserVerified?: boolean })
+								.passkeyUserVerified === true;
+
+						const enforce = options?.shouldEnforce
+							? await options.shouldEnforce(ctx)
+							: !passkeyCompletedMfa;
+						if (!enforce) {
 							return;
 						}
 
