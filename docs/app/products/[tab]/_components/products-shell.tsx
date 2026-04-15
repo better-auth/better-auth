@@ -86,7 +86,7 @@ function InfrastructureHero() {
 		{ label: "Framework", value: "Open source" },
 		{ label: "Users", value: "Unlimited" },
 		{ label: "Audit logs", value: "From 10k/mo" },
-		{ label: "Security", value: "$0.0001/event overage" },
+		{ label: "Security", value: "$0.001/event overage" },
 		{ label: "SSO", value: "Enterprise" },
 	];
 

@@ -18,7 +18,6 @@ const pricingTiers = [
 			"Unlimited users",
 			"All auth features",
 			"User management",
-			"Security detection (1k/mo)",
 			"Audit log retention (1 day)",
 			"1 dashboard seat",
 			"10k audit logs/mo included",
@@ -39,7 +38,7 @@ const pricingTiers = [
 		featuresPrefix: "Everything in Starter +",
 		features: [
 			"Unlimited seats",
-			"100k audit logs/mo included",
+			"20k audit logs/mo included",
 			"Security detection (10k/mo)",
 			"Audit log retention (7 days)",
 			"Transactional email & SMS",
@@ -106,7 +105,7 @@ const comparisonRows = [
 	{
 		label: "Audit logs included",
 		starter: "10k/mo",
-		pro: "100k/mo",
+		pro: "20k/mo",
 		enterprise: "Custom",
 	},
 	{
@@ -130,7 +129,7 @@ const comparisonRows = [
 	{
 		label: "Additional security detection",
 		starter: false,
-		pro: "$0.0001/event",
+		pro: "$0.001/event",
 		enterprise: "Custom",
 	},
 	{
