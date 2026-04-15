@@ -169,6 +169,20 @@ const authClient = createAuthClient({
 });
 ```
 
+Using an OAuth provider:
+
+You need to manually set the callback url and redirect to your 2fa verify page.
+```ts title="sign-in.ts"
+import { authClient } from "@/lib/auth-client"
+
+await authClient.signIn.social({ 'google', callbackURL: ' /verify-2fa' });
+```
+```ts title="verify-2fa.ts"
+import { authClient } from "@/lib/auth-client"
+
+await authClient.twoFactor.verifyTotp({ code: code.trim() })
+```
+
 <Callout type="warn">
   Using the `twoFactorPage` option will cause a full page reload when redirecting users to the two-factor authentication page. If you want to avoid page reloads, consider using the `onTwoFactorRedirect` callback instead to handle the redirect programmatically within your application.
 </Callout>
