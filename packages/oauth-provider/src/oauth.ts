@@ -30,6 +30,8 @@ import { userInfoEndpoint } from "./userinfo";
 import {
 	deleteFromPrompt,
 	getJwtPlugin,
+	mergeDiscoveryMetadata,
+	toClientDiscoveryArray,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -248,11 +250,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							query: queryParams.toString(),
 						});
 
-						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
-						if (
-							ctx.path === "/sign-in/social" ||
-							ctx.path === "/sign-in/oauth2"
-						) {
+						// If path is social sign-in, add to additional data body
+						if (ctx.path === "/sign-in/social") {
 							if (ctx.body.additionalData?.query) return;
 							if (!ctx.body.additionalData) ctx.body.additionalData = {};
 							ctx.body.additionalData.query = queryParams.toString();
@@ -336,11 +335,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 							public_client_supported:
-								opts.allowUnauthenticatedClientRegistration,
+								opts.allowUnauthenticatedClientRegistration ||
+								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
 							grant_types_supported: opts.grantTypes,
 							jwt_disabled: opts.disableJwtPlugin,
 						});
-						return authMetadata;
+						return {
+							...authMetadata,
+							...mergeDiscoveryMetadata(opts.clientDiscovery),
+						};
 					}
 				},
 			),

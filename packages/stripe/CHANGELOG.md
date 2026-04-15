@@ -1,5 +1,17 @@
 # @better-auth/stripe
 
+## 1.7.0-beta.1
+
+### Patch Changes
+
+- [#9164](https://github.com/better-auth/better-auth/pull/9164) [`390a031`](https://github.com/better-auth/better-auth/commit/390a03190c988776e53c5e64cf6c2f60db1c5415) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(stripe): drop unsafe keys when merging user-supplied metadata
+
+  The Stripe plugin previously merged `ctx.body.metadata` through `defu`, which was vulnerable to prototype pollution when attacker-controlled `__proto__` keys reached the second argument. Since Stripe metadata is a flat `Record<string, string>`, the deep-merge was never exercised on that path. The merge now ignores `__proto__`, `constructor`, and `prototype`, so the user-controlled surface no longer depends on `defu`. The remaining `defu` call sites (deep-merging developer-supplied `CustomerCreateParams`) also receive the patched range.
+
+- Updated dependencies [[`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45), [`484ce6a`](https://github.com/better-auth/better-auth/commit/484ce6a262c39b9c1be91d37774a2a13de3a5a1f), [`f875897`](https://github.com/better-auth/better-auth/commit/f8758975ae475429d56b34aa6067e304ee973c8f), [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097), [`9a6d475`](https://github.com/better-auth/better-auth/commit/9a6d4759cd4451f0535d53f171bcfc8891c41db7), [`513dabb`](https://github.com/better-auth/better-auth/commit/513dabb132e2c08a5b6d3b7e88dd397fcd66c1af), [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87)]:
+  - better-auth@1.7.0-beta.1
+  - @better-auth/core@1.7.0-beta.1
+
 ## 1.7.0-beta.0
 
 ### Patch Changes
@@ -7,6 +19,18 @@
 - Updated dependencies [[`6ce30cf`](https://github.com/better-auth/better-auth/commit/6ce30cf13853619b9022e93bd6ecb956bc32482d), [`f6428d0`](https://github.com/better-auth/better-auth/commit/f6428d02fcabc2e628f39b0e402f1a6eb0602649), [`c5066fe`](https://github.com/better-auth/better-auth/commit/c5066fe5d68babf2376cfc63d813de5542eca463), [`5f84335`](https://github.com/better-auth/better-auth/commit/5f84335815d75410320bdfa665a6712d3416b04f), [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656), [`544f1c6`](https://github.com/better-auth/better-auth/commit/544f1c63c9826831d96a126fbe568d8a8a8fde68)]:
   - better-auth@1.7.0-beta.0
   - @better-auth/core@1.7.0-beta.0
+
+## 1.6.3
+
+### Patch Changes
+
+- [#9164](https://github.com/better-auth/better-auth/pull/9164) [`390a031`](https://github.com/better-auth/better-auth/commit/390a03190c988776e53c5e64cf6c2f60db1c5415) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(stripe): drop unsafe keys when merging user-supplied metadata
+
+  The Stripe plugin previously merged `ctx.body.metadata` through `defu`, which was vulnerable to prototype pollution when attacker-controlled `__proto__` keys reached the second argument. Since Stripe metadata is a flat `Record<string, string>`, the deep-merge was never exercised on that path. The merge now ignores `__proto__`, `constructor`, and `prototype`, so the user-controlled surface no longer depends on `defu`. The remaining `defu` call sites (deep-merging developer-supplied `CustomerCreateParams`) also receive the patched range.
+
+- Updated dependencies [[`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45), [`484ce6a`](https://github.com/better-auth/better-auth/commit/484ce6a262c39b9c1be91d37774a2a13de3a5a1f), [`f875897`](https://github.com/better-auth/better-auth/commit/f8758975ae475429d56b34aa6067e304ee973c8f), [`6ce30cf`](https://github.com/better-auth/better-auth/commit/6ce30cf13853619b9022e93bd6ecb956bc32482d), [`f6428d0`](https://github.com/better-auth/better-auth/commit/f6428d02fcabc2e628f39b0e402f1a6eb0602649), [`9a6d475`](https://github.com/better-auth/better-auth/commit/9a6d4759cd4451f0535d53f171bcfc8891c41db7), [`513dabb`](https://github.com/better-auth/better-auth/commit/513dabb132e2c08a5b6d3b7e88dd397fcd66c1af), [`c5066fe`](https://github.com/better-auth/better-auth/commit/c5066fe5d68babf2376cfc63d813de5542eca463), [`5f84335`](https://github.com/better-auth/better-auth/commit/5f84335815d75410320bdfa665a6712d3416b04f)]:
+  - better-auth@1.6.3
+  - @better-auth/core@1.6.3
 
 ## 1.6.2
 

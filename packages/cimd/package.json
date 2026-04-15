@@ -1,0 +1,70 @@
+{
+  "name": "@better-auth/cimd",
+  "version": "1.7.0-beta.1",
+  "description": "Client ID Metadata Document plugin for Better Auth",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/cimd",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/cimd"
+  },
+  "keywords": [
+    "auth",
+    "cimd",
+    "client-id-metadata-document",
+    "mcp",
+    "oauth",
+    "oauth2",
+    "oidc",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
+    "better-auth": "workspace:*",
+    "listhen": "^1.9.0",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:^",
+    "@better-auth/oauth-provider": "workspace:^",
+    "better-auth": "workspace:^",
+    "better-call": "catalog:"
+  }
+}

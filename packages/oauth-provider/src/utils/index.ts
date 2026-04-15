@@ -12,6 +12,7 @@ import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
 import type {
+	ClientDiscovery,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -165,16 +166,56 @@ export async function getClient(
 		return Object.assign({}, trustedClient);
 	}
 
-	const dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
+	let dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
 		model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 		where: [{ field: "clientId", value: clientId }],
 	});
+
+	const discoveries = toClientDiscoveryArray(options.clientDiscovery);
+	for (const discovery of discoveries) {
+		if (!discovery.matches(clientId)) continue;
+		const resolved = await discovery.resolve(ctx, clientId, dbClient);
+		if (resolved) {
+			dbClient = resolved;
+			break;
+		}
+	}
 
 	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
 		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
 	}
 
 	return dbClient;
+}
+
+/**
+ * Normalize the `clientDiscovery` option into an array. Accepts a single
+ * {@link ClientDiscovery}, an array of them, or `undefined`.
+ *
+ * @internal
+ */
+export function toClientDiscoveryArray(
+	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+): ClientDiscovery<Scope[]>[] {
+	if (!discovery) return [];
+	return Array.isArray(discovery) ? discovery : [discovery];
+}
+
+/**
+ * Merge `discoveryMetadata` from every configured {@link ClientDiscovery}
+ * into a single object. Entries are spread in order; later entries override
+ * earlier ones on key collisions.
+ *
+ * @internal
+ */
+export function mergeDiscoveryMetadata(
+	discovery: OAuthOptions<Scope[]>["clientDiscovery"],
+): Record<string, unknown> {
+	const discoveries = toClientDiscoveryArray(discovery);
+	return discoveries.reduce<Record<string, unknown>>(
+		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
+		{},
+	);
 }
 
 /**

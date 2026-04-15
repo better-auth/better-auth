@@ -379,6 +379,7 @@ export const sessionTableFields = [
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
 	},
 	{
 		name: "token",
@@ -433,6 +434,7 @@ export const accountTableFields = [
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
 	},
 	{
 		name: "accountId",

@@ -29,6 +29,53 @@ export type AuthorizePrompt =
 	| "login consent"
 	| "select_account consent";
 
+/**
+ * Describes how to resolve a `client_id` from an external source (a URL-based
+ * metadata document, a federated registry, an attestation header, etc.) and
+ * what fields that source contributes to discovery metadata.
+ *
+ * Plugins install one of these onto {@link OAuthOptions.clientDiscovery}.
+ * The host walks the configured entries in order and returns the first
+ * non-null `resolve()` result.
+ */
+export interface ClientDiscovery<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * Stable identifier used in error messages and diagnostics. Convention
+	 * is to match the plugin id (for example `"cimd"`).
+	 */
+	readonly id: string;
+	/**
+	 * Return `true` if this discovery handles the given `client_id`. Called
+	 * on every `getClient()` lookup for every configured discovery, so keep
+	 * it cheap and synchronous.
+	 */
+	matches: (clientId: string) => boolean;
+	/**
+	 * Resolve a client when this discovery matches. Receives the existing DB
+	 * record (or `null`) so an implementation can decide between creating,
+	 * refreshing, or passing through to the database result.
+	 *
+	 * Return:
+	 * - a client record: `getClient()` returns it (creation / refresh / takeover).
+	 * - `null`: `getClient()` falls through to the next matching discovery
+	 *   or to the database record (if any).
+	 */
+	resolve: (
+		ctx: GenericEndpointContext,
+		clientId: string,
+		existing: SchemaClient<Scopes> | null,
+	) => Awaitable<SchemaClient<Scopes> | null>;
+	/**
+	 * Fields merged into `/.well-known/oauth-authorization-server` and
+	 * `/.well-known/openid-configuration` responses. Useful for advertising
+	 * RFC-registered discovery flags like
+	 * `client_id_metadata_document_supported`.
+	 */
+	discoveryMetadata?: Record<string, unknown>;
+}
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -130,10 +177,13 @@ export interface OAuthOptions<
 	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
-	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
-	 * when the MCP protocol standardizes unauthenticated dynamic client registration.
-	 * As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991)
-	 * and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+	 * When enabled, the `/oauth2/register` endpoint accepts requests
+	 * without a session, but only for public clients
+	 * (`token_endpoint_auth_method: "none"`).
+	 *
+	 * For verified client discovery (MCP), consider installing the
+	 * `@better-auth/cimd` plugin, which verifies client identity through
+	 * domain ownership via Client ID Metadata Documents.
 	 *
 	 * @default false
 	 */
@@ -144,6 +194,21 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
+	/**
+	 * Discovery implementations consulted by `getClient()` when resolving
+	 * a `client_id`. Each entry decides whether it handles the `client_id`
+	 * via {@link ClientDiscovery.matches}, then creates, refreshes, or
+	 * passes on a client record. Entries run in order; the first one to
+	 * return a client wins.
+	 *
+	 * Each entry also contributes {@link ClientDiscovery.discoveryMetadata}
+	 * into the `/.well-known/oauth-authorization-server` and
+	 * `/.well-known/openid-configuration` responses.
+	 *
+	 * Plugins such as `@better-auth/cimd` install an entry here at init
+	 * time; users can also pass discovery implementations directly.
+	 */
+	clientDiscovery?: ClientDiscovery<Scopes> | ClientDiscovery<Scopes>[];
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.
@@ -502,6 +567,37 @@ export interface OAuthOptions<
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
 	}) => Awaitable<Record<string, any>>;
+	/**
+	 * Custom fields to include in the token response body.
+	 *
+	 * Unlike `customAccessTokenClaims` (which adds claims inside the JWT payload),
+	 * this adds fields to the JSON response envelope alongside `access_token`,
+	 * `token_type`, etc. Standard OAuth fields (`access_token`, `token_type`,
+	 * `expires_in`, `expires_at`, `refresh_token`, `scope`, `id_token`) cannot
+	 * be overridden.
+	 *
+	 * @param info - context that may be useful when creating custom fields
+	 */
+	customTokenResponseFields?: (info: {
+		/** The grant type being processed */
+		grantType: GrantType;
+		/**
+		 * The user, if applicable.
+		 * Undefined for `client_credentials` (M2M, no user).
+		 * Always present for `authorization_code` and `refresh_token`.
+		 */
+		user?: (User & Record<string, unknown>) | null;
+		/** Scopes granted for this token */
+		scopes: Scopes;
+		/** oAuthClient metadata */
+		metadata?: Record<string, any>;
+		/**
+		 * The authorization code verification value.
+		 * Only present for `authorization_code` grant. Contains the original
+		 * authorization request parameters (`query`), `referenceId`, `sessionId`, etc.
+		 */
+		verificationValue?: VerificationValue;
+	}) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Overwrite specific /.well-known/openid-configuration
 	 * values so they are not available publically.
