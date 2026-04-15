@@ -64,10 +64,10 @@ Breaking changes:
 
 - Do NOT add or remove entries
 - Do NOT modify PR links `([#NNNN](url))`
-- Do NOT modify `## \`package-name\`` headings or their order
+- Do NOT modify package headings (including any new-package markers like `✨`) or their order
 - Do NOT modify `### ❗ Breaking Changes`, `### Features`, or
   `### Bug Fixes` sub-headings or their order
-- Do NOT modify the `CHANGELOG` links at the end of each package section
+- Do NOT modify the reference links at the end of each package section
 - Do NOT add author attributions (`by @username`)
 - Do NOT use em dashes (—); use commas, colons, or parentheses
   (exception: the " — " separator after breaking change titles is allowed)
