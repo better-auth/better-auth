@@ -2,7 +2,6 @@ import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -195,13 +194,6 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			},
 		},
 		async (ctx) => {
-			const isSocialProvider = SocialProviderListEnum.safeParse(
-				ctx.query.provider,
-			);
-			if (!isSocialProvider && !ctx.context.getPlugin("generic-oauth")) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
-			}
-
 			const headers = new Headers(ctx.request?.headers);
 			headers.set("origin", new URL(ctx.context.baseURL).origin);
 			let setCookie: string | null = null;
@@ -218,21 +210,18 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 				redirect: boolean;
 				user?: User & Record<string, any>;
 				token?: string;
-			}>(
-				`${isSocialProvider ? "/sign-in/social" : "/sign-in/oauth2"}?${searchParams.toString()}`,
-				{
-					baseURL: ctx.context.baseURL,
-					method: "POST",
-					body: {
-						provider: ctx.query.provider,
-					},
-					onResponse: (ctx) => {
-						const headers = ctx.response.headers;
-						setCookie = headers.get("set-cookie") ?? null;
-					},
-					headers,
+			}>(`/sign-in/social?${searchParams.toString()}`, {
+				baseURL: ctx.context.baseURL,
+				method: "POST",
+				body: {
+					provider: ctx.query.provider,
 				},
-			);
+				onResponse: (ctx) => {
+					const headers = ctx.response.headers;
+					setCookie = headers.get("set-cookie") ?? null;
+				},
+				headers,
+			});
 
 			if (res.error) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {

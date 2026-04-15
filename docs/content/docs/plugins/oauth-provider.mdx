@@ -449,8 +449,7 @@ For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.iet
 
 Note the following parameters are not yet supported:
 
-* `jwks`
-* `jwks_uri`
+* `sector_identifier_uri`
 
 ### Authorize Endpoint
 
@@ -485,6 +484,72 @@ By default, the token endpoint supports providing tokens for the following grant
 * "authorization\_code"
 * "client\_credentials"
 * "refresh\_token"
+
+#### Client Authentication Methods
+
+The token endpoint supports the following client authentication methods:
+
+* **`client_secret_basic`** — Client credentials sent via HTTP Basic Auth header (default)
+* **`client_secret_post`** — Client credentials sent in the request body
+* **`private_key_jwt`** — Client authenticates with a signed JWT assertion ([RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523))
+* **`none`** — Public client (PKCE required)
+
+#### Private Key JWT Authentication
+
+With `private_key_jwt`, clients authenticate by signing a JWT with their private key instead of using a shared secret. The server verifies the signature using the client's registered public key (JWKS).
+
+To register a `private_key_jwt` client, provide the client's public keys via `jwks` or `jwks_uri`:
+
+```ts
+const response = await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    token_endpoint_auth_method: "private_key_jwt",
+    jwks: [
+      {
+        kty: "RSA",
+        kid: "my-key-1",
+        alg: "RS256",
+        use: "sig",
+        n: "...",
+        e: "...",
+      },
+    ],
+  },
+});
+```
+
+<Callout type="info">
+  `jwks` and `jwks_uri` are mutually exclusive. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host.
+</Callout>
+
+When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
+
+```
+POST /api/auth/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+&code=AUTH_CODE
+&redirect_uri=https://app.example.com/callback
+&client_id=CLIENT_ID
+&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+&client_assertion=eyJhbGciOiJSUzI1NiIs...
+```
+
+The assertion JWT must contain:
+
+| Claim | Requirement                                                            |
+| ----- | ---------------------------------------------------------------------- |
+| `iss` | Must be the `client_id`                                                |
+| `sub` | Must be the `client_id`                                                |
+| `aud` | Must be the token endpoint URL                                         |
+| `exp` | Required, must not exceed `assertionMaxLifetime` from now              |
+| `jti` | Required, must be unique (single-use)                                  |
+| `iat` | Optional, but if present must not be older than `assertionMaxLifetime` |
+
+Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
 
 #### Authorization code grant
 
@@ -1056,6 +1121,7 @@ Each token type and grant type can independently can set a default expiration.
 * `idTokenExpiresIn` defaults 10 hours
 * `refreshTokenExpiresIn` defaults 30 days
 * `codeExpiresIn` defaults 10 minutes
+* `assertionMaxLifetime` defaults 5 minutes — maximum allowed lifetime for `private_key_jwt` client assertions
 
 Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privilege scopes that require shorter expiration times. The earliest expiration will take precedence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
 
@@ -1196,6 +1262,13 @@ PKCE prevents authorization code interception attacks. Even for confidential cli
 * **Future-proof**: Aligns with OAuth 2.1 best practices
 
 Only disable PKCE for confidential clients when absolutely necessary for legacy compatibility.
+
+### Unauthenticated client discovery
+
+Some clients (notably MCP clients) need to connect to your authorization server without being registered in advance. The OAuth Provider plugin supports this through two mechanisms:
+
+* **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a public client at request time.
+* **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP calls [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
 
 ### Organizations
 
@@ -1509,7 +1582,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
   </Step>
 
   <Step>
-    If you use `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
+    If you use the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
 
     ```ts
     await auth.api.createOAuthClient({
@@ -1523,7 +1596,7 @@ You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/s
     These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
 
     <Callout type="info">
-      If you choose to not support `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
+      If you choose not to support the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
     </Callout>
   </Step>
 
@@ -1774,7 +1847,7 @@ export const oauthClientTableFields = [
     name: "tokenEndpointAuthMethod",
     type: "string",
     description:
-      "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post']",
+      "Indicator of requested authentication method for the token endpoint. Supports: ['none', 'client_secret_basic', 'client_secret_post', 'private_key_jwt']",
     isOptional: true,
   },
   {
