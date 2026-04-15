@@ -672,6 +672,9 @@ async function handleAuthorizationCodeGrant(
 		client_id,
 		redirect_uri,
 	);
+	if (!ctx.body.resource && verificationValue.query.resource) {
+		ctx.body.resource = verificationValue.query.resource;
+	}
 	const scopes = verificationValue.query.scope?.split(" ");
 	if (!scopes) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -375,6 +375,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						response_type: z.enum(["code"]).optional(),
 						client_id: z.string(),
 						redirect_uri: SafeUrlSchema.optional(),
+						resource: z.string().optional(),
 						scope: z.string().optional(),
 						state: z.string().optional(),
 						request_uri: z.string().optional(),
@@ -417,6 +418,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string", format: "uri" },
 									description: "OAuth2 redirect URI",
+								},
+								{
+									name: "resource",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"Requested token resource (audience) that can be persisted with the authorization code",
 								},
 								{
 									name: "scope",

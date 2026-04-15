@@ -20,6 +20,7 @@ const oauthAuthorizationQuerySchema = z
 		response_type: z.literal("code").optional(),
 		request_uri: z.string().optional(),
 		redirect_uri: z.string(),
+		resource: z.string().optional(),
 		scope: z.string().optional(),
 		state: z.string(),
 		client_id: z.string(),

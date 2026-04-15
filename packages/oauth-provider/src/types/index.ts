@@ -739,6 +739,12 @@ export interface OAuthAuthorizationQuery {
 	 */
 	redirect_uri: string;
 	/**
+	 * Requested token resource (audience) to persist through authorization_code exchange.
+	 *
+	 * @see RFC 8707 Resource Indicators for OAuth 2.0
+	 */
+	resource?: string;
+	/**
 	 * The scope of the request. Must be a space-separated list of case sensitive strings.
 	 *
 	 * - "openid" is required for most requests to obtain user id (ie sub)

@@ -360,6 +360,50 @@ describe("oauth token - authorization_code", async () => {
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
+
+	it("resource sent in authorize request should persist for token exchange", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "offline_access"];
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+		});
+		authUrl.searchParams.set("resource", validAudience);
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain(`code=`);
+		expect(callbackRedirectUrl).toContain(`state=123`);
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await validateAuthCode({
+			code: url.searchParams.get("code")!,
+			codeVerifier,
+		});
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+		expect(tokens.data?.scope).toBe(scopes.join(" "));
+
+		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
+			audience: validAudience,
+			issuer: authServerBaseUrl,
+		});
+		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
+		expect(accessToken.payload.sub).toBeDefined();
+		expect(accessToken.payload.iat).toBeDefined();
+		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
+		expect(accessToken.payload.scope).toBe(scopes.join(" "));
+	});
 });
 
 describe("oauth token - refresh_token", async () => {
