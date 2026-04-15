@@ -131,7 +131,6 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
-						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
 					organizationId,
@@ -545,7 +544,6 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
-						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
 				},
@@ -590,7 +588,6 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
-						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
 				},

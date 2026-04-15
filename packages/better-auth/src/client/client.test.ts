@@ -11,7 +11,6 @@ import {
 	adminClient,
 	deviceAuthorizationClient,
 	emailOTPClient,
-	genericOAuthClient,
 	magicLinkClient,
 	multiSessionClient,
 	oidcClient,
@@ -610,7 +609,6 @@ describe("type", () => {
 				adminClient(),
 				multiSessionClient(),
 				oidcClient(),
-				genericOAuthClient(),
 				deviceAuthorizationClient(),
 				testClientPlugin(),
 				testClientPlugin2(),
@@ -641,11 +639,6 @@ describe("type", () => {
 		expectTypeOf(
 			client.$ERROR_CODES.INVALID_SESSION_TOKEN.code,
 		).toEqualTypeOf<"INVALID_SESSION_TOKEN">();
-
-		// Should have generic-oauth error codes
-		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND.code,
-		).toEqualTypeOf<"PROVIDER_NOT_FOUND">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(

@@ -42,7 +42,7 @@ interface SlackProfile {
  * });
  * ```
  */
-export function slack(options: SlackOptions): GenericOAuthConfig {
+export function slack(options: SlackOptions): GenericOAuthConfig<"slack"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	const getUserInfo = async (

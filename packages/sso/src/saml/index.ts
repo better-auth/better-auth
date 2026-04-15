@@ -11,3 +11,5 @@ export {
 } from "./algorithms";
 
 export { validateSingleAssertion } from "./assertions";
+
+export { validateAudience, validateInResponseTo } from "./response-validation";

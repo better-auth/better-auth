@@ -240,7 +240,6 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							ctx.path?.startsWith("/sign-in") ||
 							ctx.path?.startsWith("/sign-up") ||
 							ctx.path?.startsWith("/callback") ||
-							ctx.path?.startsWith("/oauth2/callback") ||
 							ctx.path?.startsWith("/magic-link/verify") ||
 							ctx.path?.startsWith("/email-otp/verify-email") ||
 							ctx.path?.startsWith("/one-tap/callback") ||

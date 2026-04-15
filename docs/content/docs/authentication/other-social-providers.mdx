@@ -38,19 +38,12 @@ Better Auth provides support for any social provider that implements the OAuth2 
   </Step>
 
   <Step>
-    ### Add the client plugin
-
-    Include the Generic OAuth client plugin in your authentication client instance.
+    ### Create your auth client
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { genericOAuthClient } from "better-auth/client/plugins"
 
-    const authClient = createAuthClient({
-        plugins: [
-            genericOAuthClient()
-        ]
-    })
+    const authClient = createAuthClient()
     ```
   </Step>
 </Steps>
@@ -107,8 +100,8 @@ export const auth = betterAuth({
 ```
 
 ```ts title="sign-in.ts"
-const response = await authClient.signIn.oauth2({
-  providerId: "slack",
+const response = await authClient.signIn.social({
+  provider: "slack",
   callbackURL: "/dashboard",
 })
 ```
@@ -145,9 +138,9 @@ export const auth = betterAuth({
 ```
 
 ```ts title="sign-in.ts"
-const response = await authClient.signIn.oauth2({
-  providerId: "instagram",
-  callbackURL: "/dashboard", // the path to redirect to after the user is authenticated
+const response = await authClient.signIn.social({
+  provider: "instagram",
+  callbackURL: "/dashboard",
 });
 ```
 
@@ -177,8 +170,8 @@ export const auth = betterAuth({
 ```
 
 ```ts title="sign-in.ts"
-const response = await authClient.signIn.oauth2({
-  providerId: "coinbase",
-  callbackURL: "/dashboard", // the path to redirect to after the user is authenticated
+const response = await authClient.signIn.social({
+  provider: "coinbase",
+  callbackURL: "/dashboard",
 });
 ```

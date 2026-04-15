@@ -1,5 +1,73 @@
 # @better-auth/sso
 
+## 1.7.0-beta.1
+
+### Minor Changes
+
+- [#9117](https://github.com/better-auth/better-auth/pull/9117) [`b70f025`](https://github.com/better-auth/better-auth/commit/b70f025bfaad38c229305a25e87e08bc176f9503) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ### Breaking: SAML configuration changes
+
+  **`callbackUrl` removed from `samlConfig`.**
+  The ACS URL is now always derived from your `baseURL` and `providerId`. Remove `callbackUrl` from your SAML provider configuration. The post-login redirect destination is set per sign-in via `callbackURL` in `signIn.sso()`:
+
+  ```ts
+  await authClient.signIn.sso({
+    providerId: "my-provider",
+    callbackURL: "/dashboard",
+  });
+  ```
+
+  **`/sso/saml2/callback/:providerId` endpoint removed.**
+  Update your IdP's ACS URL to `/sso/saml2/sp/acs/:providerId`. This endpoint handles both GET and POST requests.
+
+  **`spMetadata` is now optional.**
+  You no longer need to pass `spMetadata: {}` when registering a provider. SP metadata is auto-generated from your configuration.
+
+  **Removed unused fields from `SAMLConfig`:**
+  `decryptionPvk`, `additionalParams`, `idpMetadata.entityURL`, `idpMetadata.redirectURL`. These were stored but never read. Remove them from your configuration if present.
+
+  ### Bug fixes
+  - Fix SLO SessionIndex matching: LogoutRequests with a SessionIndex were silently failing to delete the correct session.
+  - Audience validation now defaults to the SP entity ID when `audience` is not configured, per SAML Core section 2.5.1.
+  - Restore `AllowCreate` in AuthnRequests, required by IdPs that use JIT provisioning.
+  - SP metadata endpoint now reflects actual SP capabilities (encryption, signing, SLO).
+
+### Patch Changes
+
+- [#9121](https://github.com/better-auth/better-auth/pull/9121) [`9603043`](https://github.com/better-auth/better-auth/commit/960304354aebab2f03c0fadd0d7bfd02febfd246) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ### Security: upgrade samlify to 2.12.0
+
+  Upgrades the SAML XML processing library from 2.10.2 to 2.12.0:
+  - **XPath injection protection**: all XPath expressions now use value escaping instead of string interpolation
+  - **XXE prevention**: the XML parser defaults to strict mode that rejects entity references
+  - **Dependency reduction**: removes `node-forge`, `pako`, `uuid`, and `camelcase` in favor of Node built-ins
+
+  PEM keys and certificates with leading whitespace are now normalized automatically before being passed to samlify. This prevents `DECODER routines::unsupported` errors when keys are copied from indented config files or environment variables.
+
+  Requires Node 20+.
+
+- Updated dependencies [[`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45), [`484ce6a`](https://github.com/better-auth/better-auth/commit/484ce6a262c39b9c1be91d37774a2a13de3a5a1f), [`f875897`](https://github.com/better-auth/better-auth/commit/f8758975ae475429d56b34aa6067e304ee973c8f), [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097), [`9a6d475`](https://github.com/better-auth/better-auth/commit/9a6d4759cd4451f0535d53f171bcfc8891c41db7), [`513dabb`](https://github.com/better-auth/better-auth/commit/513dabb132e2c08a5b6d3b7e88dd397fcd66c1af), [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87)]:
+  - better-auth@1.7.0-beta.1
+  - @better-auth/core@1.7.0-beta.1
+
+## 1.7.0-beta.0
+
+### Minor Changes
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `private_key_jwt` (RFC 7523) client authentication across the stack. Servers verify JWT client assertions signed with asymmetric keys; clients sign them for authorization code, refresh, and client credentials flows.
+
+- [#9055](https://github.com/better-auth/better-auth/pull/9055) [`b790144`](https://github.com/better-auth/better-auth/commit/b790144a2e969f1f423c1226147edfb4e69664d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(sso)!: harden SAML response validation (InResponseTo, Audience, SessionIndex)
+
+  ### Breaking Changes
+  - **`allowIdpInitiated` now defaults to `false`** — IdP-initiated SSO (unsolicited SAML responses) is disabled by default. Set `saml.allowIdpInitiated: true` to restore the previous behavior. This aligns with the SAML2Int interoperability profile which recommends against IdP-initiated SSO due to its susceptibility to injection attacks.
+
+  ### Bug Fixes
+  - **InResponseTo validation was completely non-functional** — The code read `extract.inResponseTo` (always `undefined`) instead of samlify's actual path `extract.response.inResponseTo`. SP-initiated InResponseTo validation now works as intended in both ACS handlers.
+  - **Audience Restriction was never validated** — SAML assertions issued for a different service provider were accepted without checking the `<AudienceRestriction>` element. Audience is now validated against the configured `samlConfig.audience` value per SAML 2.0 Core §2.5.1.
+  - **SessionIndex stored as object instead of string** — samlify returns `sessionIndex` from login responses as `{ authnInstant, sessionNotOnOrAfter, sessionIndex }`, but the code stored the whole object. SLO session-index comparisons always failed silently. The correct inner `sessionIndex` string is now extracted.
+
+  ### Improvements
+  - Extracted shared `validateInResponseTo()` and `validateAudience()` into `packages/sso/src/saml/response-validation.ts`, eliminating ~160 lines of duplicated validation logic between the two ACS handlers.
+  - Fixed `SAMLAssertionExtract` type to match samlify's actual extractor output shape.
+
 ## 1.6.4
 
 ### Patch Changes
@@ -31,6 +99,9 @@
   - Extract shared `processSAMLResponse` pipeline to eliminate ~500 lines of duplicated logic between `callbackSSOSAML` and `acsEndpoint`
   - Move `validateSAMLTimestamp` to `saml/timestamp.ts` (re-exported from original location for compatibility)
 
+- Updated dependencies [[`6ce30cf`](https://github.com/better-auth/better-auth/commit/6ce30cf13853619b9022e93bd6ecb956bc32482d), [`f6428d0`](https://github.com/better-auth/better-auth/commit/f6428d02fcabc2e628f39b0e402f1a6eb0602649), [`c5066fe`](https://github.com/better-auth/better-auth/commit/c5066fe5d68babf2376cfc63d813de5542eca463), [`5f84335`](https://github.com/better-auth/better-auth/commit/5f84335815d75410320bdfa665a6712d3416b04f), [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656), [`544f1c6`](https://github.com/better-auth/better-auth/commit/544f1c63c9826831d96a126fbe568d8a8a8fde68)]:
+  - better-auth@1.7.0-beta.0
+  - @better-auth/core@1.7.0-beta.0
 - Updated dependencies [[`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45), [`484ce6a`](https://github.com/better-auth/better-auth/commit/484ce6a262c39b9c1be91d37774a2a13de3a5a1f), [`f875897`](https://github.com/better-auth/better-auth/commit/f8758975ae475429d56b34aa6067e304ee973c8f), [`6ce30cf`](https://github.com/better-auth/better-auth/commit/6ce30cf13853619b9022e93bd6ecb956bc32482d), [`f6428d0`](https://github.com/better-auth/better-auth/commit/f6428d02fcabc2e628f39b0e402f1a6eb0602649), [`9a6d475`](https://github.com/better-auth/better-auth/commit/9a6d4759cd4451f0535d53f171bcfc8891c41db7), [`513dabb`](https://github.com/better-auth/better-auth/commit/513dabb132e2c08a5b6d3b7e88dd397fcd66c1af), [`c5066fe`](https://github.com/better-auth/better-auth/commit/c5066fe5d68babf2376cfc63d813de5542eca463), [`5f84335`](https://github.com/better-auth/better-auth/commit/5f84335815d75410320bdfa665a6712d3416b04f)]:
   - better-auth@1.6.3
   - @better-auth/core@1.6.3

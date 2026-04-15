@@ -49,7 +49,9 @@ interface HubSpotProfile extends Record<string, any> {
  * });
  * ```
  */
-export function hubspot(options: HubSpotOptions): GenericOAuthConfig {
+export function hubspot(
+	options: HubSpotOptions,
+): GenericOAuthConfig<"hubspot"> {
 	const defaultScopes = ["oauth"];
 
 	const getUserInfo = async (

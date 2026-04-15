@@ -1,3 +1,4 @@
+import type { AssertionSigningAlgorithm } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { Prompt } from ".";
 
@@ -16,8 +17,8 @@ export type GrantType =
 
 export type AuthMethod =
 	| "client_secret_basic" // Basic header
-	| "client_secret_post"; // POST
-// | "private_key_jwt" // must also add alg_values_supported for that endpoint
+	| "client_secret_post" // POST
+	| "private_key_jwt"; // JWT signed with client's private key (RFC 7523)
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
 export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
 export type BearerMethodsSupported = "header" | "body";
@@ -96,7 +97,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field token_endpoint_auth_methods_supported).
 	 */
-	token_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	token_endpoint_auth_signing_alg_values_supported?: AssertionSigningAlgorithm[];
 	/**
 	 * URL of a page containing human-readable information
 	 * that developers might want or need to know when using the
@@ -142,7 +143,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field revocation_endpoint_auth_methods_supported).
 	 */
-	revocation_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	revocation_endpoint_auth_signing_alg_values_supported?: AssertionSigningAlgorithm[];
 	/**
 	 * URL of the authorization server's OAuth 2.0
 	 * introspection endpoint [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)
@@ -163,7 +164,7 @@ export interface AuthServerMetadata {
 	 * the "private_key_jwt" and "client_secret_jwt" authentication methods
 	 * (see field introspection_endpoint_auth_methods_supported).
 	 */
-	introspection_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	introspection_endpoint_auth_signing_alg_values_supported?: AssertionSigningAlgorithm[];
 	/**
 	 * Supported code challenge methods.
 	 *
@@ -178,6 +179,17 @@ export interface AuthServerMetadata {
 	 * @default true
 	 */
 	authorization_response_iss_parameter_supported?: boolean;
+	/**
+	 * Whether the authorization server supports discovering clients via
+	 * [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 * (an HTTPS URL as `client_id`).
+	 *
+	 * Set at runtime by the `@better-auth/cimd` plugin (or any other
+	 * `ClientDiscovery` that contributes this field via
+	 * {@link ClientDiscovery.discoveryMetadata}). oauth-provider never sets
+	 * it on its own.
+	 */
+	client_id_metadata_document_supported?: boolean;
 }
 
 /**
@@ -275,7 +287,8 @@ export interface OAuthClient {
 	tos_uri?: string;
 	policy_uri?: string;
 	//---- Jwks (only one can be used) ----//
-	jwks?: string[];
+	/** JWK Set — accepts either a bare key array or an RFC 7517 JWKS object `{"keys":[...]}` */
+	jwks?: Record<string, unknown>[] | { keys: Record<string, unknown>[] };
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;
@@ -287,7 +300,8 @@ export interface OAuthClient {
 	token_endpoint_auth_method?:
 		| "none"
 		| "client_secret_basic"
-		| "client_secret_post";
+		| "client_secret_post"
+		| "private_key_jwt";
 	grant_types?: GrantType[];
 	response_types?: "code"[];
 	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1

@@ -80,6 +80,12 @@ export interface OAuthProvider<
 		| ((token: string, nonce?: string) => Promise<boolean>)
 		| undefined;
 	/**
+	 * The expected issuer identifier for this provider (RFC 9207).
+	 * When set, the callback handler validates the `iss` query parameter
+	 * against this value to prevent authorization server mix-up attacks.
+	 */
+	issuer?: string | undefined;
+	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */

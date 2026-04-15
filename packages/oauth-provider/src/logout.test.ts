@@ -52,8 +52,8 @@ describe("oauth logout", async () => {
 	let server: Listener;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-	const logoutRedirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/logout`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const logoutRedirectUri = `${rpBaseUrl}/api/auth/callback/logout`;
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
@@ -415,8 +415,8 @@ describe("oauth logout - disableJwtPlugin", async () => {
 	let server: Listener;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-	const logoutRedirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/logout`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const logoutRedirectUri = `${rpBaseUrl}/api/auth/callback/logout`;
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {

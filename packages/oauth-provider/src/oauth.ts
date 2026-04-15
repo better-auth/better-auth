@@ -30,6 +30,8 @@ import { userInfoEndpoint } from "./userinfo";
 import {
 	deleteFromPrompt,
 	getJwtPlugin,
+	mergeDiscoveryMetadata,
+	toClientDiscoveryArray,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -248,11 +250,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							query: queryParams.toString(),
 						});
 
-						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
-						if (
-							ctx.path === "/sign-in/social" ||
-							ctx.path === "/sign-in/oauth2"
-						) {
+						// If path is social sign-in, add to additional data body
+						if (ctx.path === "/sign-in/social") {
 							if (ctx.body.additionalData?.query) return;
 							if (!ctx.body.additionalData) ctx.body.additionalData = {};
 							ctx.body.additionalData.query = queryParams.toString();
@@ -336,11 +335,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 							public_client_supported:
-								opts.allowUnauthenticatedClientRegistration,
+								opts.allowUnauthenticatedClientRegistration ||
+								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
 							grant_types_supported: opts.grantTypes,
 							jwt_disabled: opts.disableJwtPlugin,
 						});
-						return authMetadata;
+						return {
+							...authMetadata,
+							...mergeDiscoveryMetadata(opts.clientDiscovery),
+						};
 					}
 				},
 			),
@@ -616,6 +619,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						]),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						code: z.string().optional(),
 						code_verifier: z.string().optional(),
 						redirect_uri: SafeUrlSchema.optional(),
@@ -760,6 +765,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
@@ -901,6 +908,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
@@ -1158,9 +1167,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_statement: z.string().optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.enum([
+								"none",
+								"client_secret_basic",
+								"client_secret_post",
+								"private_key_jwt",
+							])
 							.default("client_secret_basic")
 							.optional(),
+						jwks: z
+							.union([
+								z.array(z.record(z.string(), z.unknown())),
+								z.object({
+									keys: z.array(z.record(z.string(), z.unknown())),
+								}),
+							])
+							.optional(),
+						jwks_uri: z.string().optional(),
 						grant_types: z
 							.array(
 								z.enum([
@@ -1290,6 +1313,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															"none",
 															"client_secret_basic",
 															"client_secret_post",
+															"private_key_jwt",
 														],
 													},
 													grant_types: {

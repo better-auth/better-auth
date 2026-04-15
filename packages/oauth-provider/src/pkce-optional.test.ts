@@ -54,7 +54,7 @@ describe("PKCE optional - default behavior", async () => {
 	let confidentialClient: OAuthClient;
 	let publicClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		// Create confidential client
@@ -181,7 +181,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 	let confidentialClient: OAuthClient;
 	let publicClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		// Create confidential client with PKCE disabled
@@ -308,7 +308,7 @@ describe("PKCE optional - offline_access scope", async () => {
 
 	let confidentialClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		const confResponse = await auth.api.adminCreateOAuthClient({
@@ -431,7 +431,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 	let confidentialClient: OAuthClient;
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	beforeAll(async () => {
 		const confResponse = await auth.api.adminCreateOAuthClient({
@@ -637,7 +637,7 @@ describe("PKCE optional - registration restrictions", async () => {
 	});
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	it("admin create endpoint should persist require_pkce", async () => {
 		const pkceDisabledClient = await auth.api.adminCreateOAuthClient({
