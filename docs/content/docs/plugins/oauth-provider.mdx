@@ -420,8 +420,8 @@ oauthProvider({
 
 To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config.
 
-<Callout type="warn">
-  Support for `allowUnauthenticatedClientRegistration` **will be deprecated** when the MCP protocol standardizes unauthenticated dynamic client registration. As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+<Callout type="info">
+  For MCP, [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) are [available](/docs/plugins/cimd). [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
 </Callout>
 
 ```ts title="auth.ts"
@@ -1146,7 +1146,7 @@ oauthProvider({
 })
 ```
 
-Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header. This is especially useful for an MCP to dynamically register themselves as a public client.
+Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header. This is especially useful for an MCP to dynamically register themselves as a public client without an active session. For MCP auth support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of the public client.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1155,8 +1155,8 @@ oauthProvider({
 })
 ```
 
-<Callout type="warn">
-  Support for `allowUnauthenticatedClientRegistration` **will be deprecated** when the MCP protocol standardizes unauthenticated dynamic client registration. As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+<Callout type="info">
+  For MCP, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
 </Callout>
 
 #### Dynamic Client Registration Expiration

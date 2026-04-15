@@ -86,40 +86,44 @@ cimd({
 });
 ```
 
+<Callout type="info">
+  For [MCP auth](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-registration-approaches) only deployments, we recommend disabling the `allowUnauthenticatedClientRegistration` option in `oauth-provider`. CIMD handles client identity and prevents duplicate registrations for the same `client_id` URL. Keep `allowUnauthenticatedClientRegistration` only if you need registration fallback — be aware this can create duplicate client records.
+</Callout>
+
 ### Options
 
-<TypeTable
-  type={{
-refreshRate: {
-  type: "number | string",
-  default: '"60m"',
-  description:
-    "How frequently to re-fetch a client's metadata document. Number values are seconds; strings are duration expressions (e.g. `\"60m\"`, `\"1d\"`). A value of `0` makes every request stale (useful for tests).",
-},
-originBoundFields: {
-  type: "string[]",
-  default: '["redirect_uris", "post_logout_redirect_uris", "client_uri"]',
-  description:
-    "Metadata fields whose URL values must share the same origin as the `client_id` URL. Localhost is accepted for redirect URI fields (for native and desktop flows) but never for `client_uri` or custom fields. Pass an empty array to disable origin binding.",
-},
-allowFetch: {
-  type: "(url, ctx) => boolean | Promise<boolean>",
-  default: "always allow",
-  description:
-    "Pre-fetch gate: return `false` to reject a `client_id` URL before the metadata document is requested. Use this for origin allowlists, per-host rate limiting, or DNS-level defenses beyond the built-in IP-literal SSRF check.",
-},
-onClientCreated: {
-  type: "(data: { client, metadata, ctx }) => void | Promise<void>",
-  description:
-    "Called once, after a new client has been persisted. The `metadata` argument is the raw JSON body of the metadata document.",
-},
-onClientRefreshed: {
-  type: "(data: { client, metadata, ctx }) => void | Promise<void>",
-  description:
-    "Called each time an existing client record is re-fetched and updated. Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes; use this hook to detect document changes or sync derived data.",
-},
-}}
-/>
+export const cimdOptionsType = {
+	refreshRate: {
+		type: "number | string",
+		default: '"60m"',
+		description:
+			"How frequently to re-fetch a client's metadata document. Number values are seconds; strings are duration expressions (e.g. `\"60m\"`, `\"1d\"`). A value of `0` makes every request stale (useful for tests).",
+	},
+	originBoundFields: {
+		type: "string[]",
+		default: '["redirect_uris", "post_logout_redirect_uris", "client_uri"]',
+		description:
+			"Metadata fields whose URL values must share the same origin as the `client_id` URL. Localhost is accepted for redirect URI fields (for native and desktop flows) but never for `client_uri` or custom fields. Pass an empty array to disable origin binding.",
+	},
+	allowFetch: {
+		type: "(url, ctx) => boolean | Promise<boolean>",
+		default: "always allow",
+		description:
+			"Pre-fetch gate: return `false` to reject a `client_id` URL before the metadata document is requested. Use this for origin allowlists, per-host rate limiting, or DNS-level defenses beyond the built-in IP-literal SSRF check.",
+	},
+	onClientCreated: {
+		type: "(data: { client, metadata, ctx }) => void | Promise<void>",
+		description:
+			"Called once, after a new client has been persisted. The `metadata` argument is the raw JSON body of the metadata document.",
+	},
+	onClientRefreshed: {
+		type: "(data: { client, metadata, ctx }) => void | Promise<void>",
+		description:
+			"Called each time an existing client record is re-fetched and updated. Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes; use this hook to detect document changes or sync derived data.",
+	},
+};
+
+<TypeTable type={cimdOptionsType} />
 
 ## Metadata document requirements
 
