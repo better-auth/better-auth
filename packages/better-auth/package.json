@@ -541,7 +541,7 @@
     "@tanstack/solid-start": "^1.0.0",
     "better-sqlite3": "^12.0.0",
     "drizzle-kit": ">=0.31.4",
-    "drizzle-orm": ">=0.41.0",
+    "drizzle-orm": "^0.45.2",
     "mongodb": "^6.0.0 || ^7.0.0",
     "mysql2": "^3.0.0",
     "next": "^14.0.0 || ^15.0.0 || ^16.0.0",
