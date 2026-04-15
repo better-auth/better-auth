@@ -5,142 +5,147 @@ description: Chargebee plugin for Better Auth to manage subscriptions and paymen
 
 The Chargebee plugin integrates [Chargebee's](https://www.chargebee.com) subscription management and billing functionality with Better Auth. Since payment and authentication are often tightly coupled, this plugin simplifies the integration of Chargebee into your application, handling customer creation, subscription management, and webhook processing.
 
-
 <Callout>
   This plugin is maintained by the Chargebee team. For bugs, issues or feature requests,
   please visit the [Chargebee GitHub repo](https://github.com/chargebee/js-framework-adapters).
 </Callout>
 
-<Card
-  href="https://discord.com/invite/gpsNqnhDm2"
-  title="Get support on Chargebee Discord"
->
+<Card href="https://discord.com/invite/gpsNqnhDm2" title="Get support on Chargebee Discord">
   Have questions? Our team is available on Discord to assist you anytime.
 </Card>
 
-
 ## Features
 
-- Create Chargebee customers automatically when users sign up
-- Manage subscription plans and pricing (item-based: plans, addons, charges)
-- Process subscription lifecycle events (creation, updates, cancellations)
-- Handle Chargebee webhooks securely with Basic Auth verification
-- Expose subscription data to your application
-- Support for trial periods and multi-item subscriptions
-- Automatic trial abuse prevention - Users can only get one trial per account across all plans
-- Flexible reference system to associate subscriptions with users or organizations
-- Team subscription support with seats management
-- Hosted checkout and portal via Chargebee Hosted Pages
-- Self-service billing portal for managing payment methods, invoices, and subscriptions
+* Create Chargebee customers automatically when users sign up
+* Manage subscription plans and pricing (item-based: plans, addons, charges)
+* Process subscription lifecycle events (creation, updates, cancellations)
+* Handle Chargebee webhooks securely with Basic Auth verification
+* Expose subscription data to your application
+* Support for trial periods and multi-item subscriptions
+* Automatic trial abuse prevention - Users can only get one trial per account across all plans
+* Flexible reference system to associate subscriptions with users or organizations
+* Team subscription support with seats management
+* Hosted checkout and portal via Chargebee Hosted Pages
+* Self-service billing portal for managing payment methods, invoices, and subscriptions
 
 ## Installation
 
 <Steps>
-    <Step>
-        ### Install the plugin
+  <Step>
+    ### Install the plugin
 
-        First, install the plugin:
+    First, install the plugin:
 
-        ```package-install
-        @chargebee/better-auth
+    ```package-install
+    @chargebee/better-auth
+    ```
+
+    <Callout>
+      If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Install the Chargebee SDK
+
+    Next, install the Chargebee SDK on your server:
+
+    ```package-install
+    chargebee
+    ```
+  </Step>
+
+  <Step>
+    ### Add the plugin to your auth config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { chargebee } from "@chargebee/better-auth"
+    import Chargebee from "chargebee"
+
+    const chargebeeClient = new Chargebee({
+        apiKey: process.env.CHARGEBEE_API_KEY!,
+        site: process.env.CHARGEBEE_SITE!,
+    })
+
+    export const auth = betterAuth({
+        // ... your existing config
+        plugins: [
+            chargebee({
+                chargebeeClient,
+                createCustomerOnSignUp: true,
+                webhookUsername: process.env.CHARGEBEE_WEBHOOK_USERNAME,
+                webhookPassword: process.env.CHARGEBEE_WEBHOOK_PASSWORD,
+            })
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { chargebeeClient } from "@chargebee/better-auth/client"
+
+    export const authClient = createAuthClient({
+        // ... your existing config
+        plugins: [
+            chargebeeClient({
+                subscription: true //if you want to enable subscription management
+            })
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```bash
+        npx auth migrate
         ```
-        <Callout>
-        If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
-        </Callout>
-    </Step>
-    <Step>
-        ### Install the Chargebee SDK
+      </Tab>
 
-        Next, install the Chargebee SDK on your server:
-
-        ```package-install
-        chargebee
+      <Tab value="generate">
+        ```bash
+        npx auth generate
         ```
-    </Step>
-    <Step>
-        ### Add the plugin to your auth config
+      </Tab>
+    </Tabs>
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { chargebee } from "@chargebee/better-auth"
-        import Chargebee from "chargebee"
+    See the [Schema](#schema) section to add the tables manually.
+  </Step>
 
-        const chargebeeClient = new Chargebee({
-            apiKey: process.env.CHARGEBEE_API_KEY!,
-            site: process.env.CHARGEBEE_SITE!,
-        })
+  <Step>
+    ### Set up Chargebee webhooks
 
-        export const auth = betterAuth({
-            // ... your existing config
-            plugins: [
-                chargebee({
-                    chargebeeClient,
-                    createCustomerOnSignUp: true,
-                    webhookUsername: process.env.CHARGEBEE_WEBHOOK_USERNAME,
-                    webhookPassword: process.env.CHARGEBEE_WEBHOOK_PASSWORD,
-                })
-            ]
-        })
-        ```
-    </Step>
-    <Step>
-        ### Add the client plugin
+    Create a webhook endpoint in your Chargebee dashboard pointing to:
 
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        import { chargebeeClient } from "@chargebee/better-auth/client"
+    ```
+    https://your-domain.com/api/auth/chargebee/webhook
+    ```
 
-        export const authClient = createAuthClient({
-            // ... your existing config
-            plugins: [
-                chargebeeClient({
-                    subscription: true //if you want to enable subscription management
-                })
-            ]
-        })
-        ```
-    </Step>
-    <Step>
-        ### Migrate the database
+    `/api/auth` is the default path for the auth server.
 
-        Run the migration or generate the schema to add the necessary tables to the database.
+    Make sure to select at least these events:
 
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```bash
-            npx auth migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```bash
-            npx auth generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the tables manually.
-    </Step>
-    <Step>
-        ### Set up Chargebee webhooks
+    * `subscription_created`
+    * `subscription_activated`
+    * `subscription_changed`
+    * `subscription_renewed`
+    * `subscription_started`
+    * `subscription_cancelled`
+    * `subscription_cancellation_scheduled`
+    * `customer_deleted`
 
-        Create a webhook endpoint in your Chargebee dashboard pointing to:
-
-        ```
-        https://your-domain.com/api/auth/chargebee/webhook
-        ```
-        `/api/auth` is the default path for the auth server.
-        
-        Make sure to select at least these events:
-        - `subscription_created`
-        - `subscription_activated`
-        - `subscription_changed`
-        - `subscription_renewed`
-        - `subscription_started`
-        - `subscription_cancelled`
-        - `subscription_cancellation_scheduled`
-        - `customer_deleted`
-
-        If you set `webhookUsername` and `webhookPassword`, configure the same Basic Authentication credentials in the Chargebee webhook settings.
-    </Step>
+    If you set `webhookUsername` and `webhookPassword`, configure the same Basic Authentication credentials in the Chargebee webhook settings.
+  </Step>
 </Steps>
 
 ## Usage
@@ -186,7 +191,7 @@ chargebee({
 The callback receives the `user` object and an optional `ctx` (request context — only available when the customer is created on-demand at subscription time, not during sign-up).
 
 <Callout type="info">
-`getCustomerCreateParams` applies to both `createCustomerOnSignUp` and on-demand customer creation (e.g. when a user subscribes for the first time without prior sign-up creation). For organizations, use `organization.getCustomerCreateParams` instead.
+  `getCustomerCreateParams` applies to both `createCustomerOnSignUp` and on-demand customer creation (e.g. when a user subscribes for the first time without prior sign-up creation). For organizations, use `organization.getCustomerCreateParams` instead.
 </Callout>
 
 ### Subscription Management
@@ -251,51 +256,47 @@ see [plan configuration](#plan-configuration) for more.
 
 To create a new subscription, use the `subscription.create` method:
 
-<APIMethod
-  path="/subscription/create"
-  method="POST"
-  requireSession
->
-```ts
-type createSubscription = {
-    /**
-     * The item price ID(s) from Chargebee. Single string or array for multi-item subscriptions.
-     */
-    itemPriceId: string | string[] = "pro-USD-Monthly"
-    /**
-     * Reference id of the subscription. Defaults based on customerType.
-     */
-    referenceId?: string = "123"
-    /**
-     * Additional metadata to store with the subscription.
-     */
-    metadata?: Record<string, any>
-    /**
-     * The type of customer for billing. (Default: "user")
-     */
-    customerType?: "user" | "organization"
-    /**
-     * Number of seats (if applicable).
-     */
-    seats?: number = 1
-    /**
-     * The URL to which the user is sent when payment or setup is complete.
-     */
-    successUrl: string
-    /**
-     * If set, customers are directed here if they cancel.
-     */
-    cancelUrl: string
-    /**
-     * Disable redirect after successful subscription.
-     */
-    disableRedirect: boolean = false
-    /**
-     * Unix timestamp for when the trial should end.
-     */
-    trialEnd?: number
-}
-```
+<APIMethod path="/subscription/create" method="POST" requireSession>
+  ```ts
+  type createSubscription = {
+      /**
+       * The item price ID(s) from Chargebee. Single string or array for multi-item subscriptions.
+       */
+      itemPriceId: string | string[] = "pro-USD-Monthly"
+      /**
+       * Reference id of the subscription. Defaults based on customerType.
+       */
+      referenceId?: string = "123"
+      /**
+       * Additional metadata to store with the subscription.
+       */
+      metadata?: Record<string, any>
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * Number of seats (if applicable).
+       */
+      seats?: number = 1
+      /**
+       * The URL to which the user is sent when payment or setup is complete.
+       */
+      successUrl: string
+      /**
+       * If set, customers are directed here if they cancel.
+       */
+      cancelUrl: string
+      /**
+       * Disable redirect after successful subscription.
+       */
+      disableRedirect: boolean = false
+      /**
+       * Unix timestamp for when the trial should end.
+       */
+      trialEnd?: number
+  }
+  ```
 </APIMethod>
 
 **Simple Example:**
@@ -311,70 +312,66 @@ await authClient.subscription.create({
 ```
 
 <Callout type="info">
-**How the checkout redirect works**
+  **How the checkout redirect works**
 
-The plugin does **not** redirect straight to your `successUrl`. Instead it sets Chargebee's `redirect_url` to an internally registered endpoint:
+  The plugin does **not** redirect straight to your `successUrl`. Instead it sets Chargebee's `redirect_url` to an internally registered endpoint:
 
-```
-GET {baseURL}/subscription/success?callbackURL=<your-successUrl>&subscriptionId=<id>
-```
+  ```
+  GET {baseURL}/subscription/success?callbackURL=<your-successUrl>&subscriptionId=<id>
+  ```
 
-Chargebee lands on that endpoint after a successful checkout, and the plugin immediately forwards the user to your original `successUrl`. This gives the plugin a hook point between Chargebee's hosted-page redirect and your application so that future middleware (e.g. session refresh, subscription sync) can be inserted without changing your call-site code.
+  Chargebee lands on that endpoint after a successful checkout, and the plugin immediately forwards the user to your original `successUrl`. This gives the plugin a hook point between Chargebee's hosted-page redirect and your application so that future middleware (e.g. session refresh, subscription sync) can be inserted without changing your call-site code.
 </Callout>
 
 #### Switching Plans
 
 To switch an existing subscription to a different plan, use the `subscription.update` method. This ensures that the user only pays for the new plan, and not both:
 
-<APIMethod
-  path="/subscription/update"
-  method="POST"
-  requireSession
->
-```ts
-type updateSubscription = {
-    /**
-     * The item price ID(s) from Chargebee. Single string or array for multi-item subscriptions.
-     */
-    itemPriceId: string | string[] = "pro-USD-Monthly"
-    /**
-     * Reference id of the subscription. Defaults based on customerType.
-     */
-    referenceId?: string = "123"
-    /**
-     * The id of the subscription to update.
-     */
-    subscriptionId?: string = "sub_123"
-    /**
-     * Additional metadata to store with the subscription.
-     */
-    metadata?: Record<string, any>
-    /**
-     * The type of customer for billing. (Default: "user")
-     */
-    customerType?: "user" | "organization"
-    /**
-     * Number of seats to update to (if applicable).
-     */
-    seats?: number = 1
-    /**
-     * The URL to which the user is sent when payment or setup is complete.
-     */
-    successUrl: string
-    /**
-     * If set, customers are directed here if they cancel.
-     */
-    cancelUrl: string
-    /**
-     * The URL to return to from the portal.
-     */
-    returnUrl?: string
-    /**
-     * Disable redirect after successful update.
-     */
-    disableRedirect: boolean = false
-}
-```
+<APIMethod path="/subscription/update" method="POST" requireSession>
+  ```ts
+  type updateSubscription = {
+      /**
+       * The item price ID(s) from Chargebee. Single string or array for multi-item subscriptions.
+       */
+      itemPriceId: string | string[] = "pro-USD-Monthly"
+      /**
+       * Reference id of the subscription. Defaults based on customerType.
+       */
+      referenceId?: string = "123"
+      /**
+       * The id of the subscription to update.
+       */
+      subscriptionId?: string = "sub_123"
+      /**
+       * Additional metadata to store with the subscription.
+       */
+      metadata?: Record<string, any>
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * Number of seats to update to (if applicable).
+       */
+      seats?: number = 1
+      /**
+       * The URL to which the user is sent when payment or setup is complete.
+       */
+      successUrl: string
+      /**
+       * If set, customers are directed here if they cancel.
+       */
+      cancelUrl: string
+      /**
+       * The URL to return to from the portal.
+       */
+      returnUrl?: string
+      /**
+       * Disable redirect after successful update.
+       */
+      disableRedirect: boolean = false
+  }
+  ```
 </APIMethod>
 
 ```ts title="client.ts"
@@ -386,32 +383,28 @@ await authClient.subscription.update({
 ```
 
 <Callout type="info">
-The plugin only supports one active or trialing subscription per reference ID (user or organization) at a time. Use `subscription.update` when the user already has an active subscription and wants to switch plans. Use `subscription.create` when the user has no active subscription.
+  The plugin only supports one active or trialing subscription per reference ID (user or organization) at a time. Use `subscription.update` when the user already has an active subscription and wants to switch plans. Use `subscription.create` when the user has no active subscription.
 
-If the user already has an active subscription, you **must** use `subscription.update` and provide the `subscriptionId` parameter when needed. Otherwise, attempting to create a new subscription via `subscription.create` will fail with an `ALREADY_SUBSCRIBED` error.
+  If the user already has an active subscription, you **must** use `subscription.update` and provide the `subscriptionId` parameter when needed. Otherwise, attempting to create a new subscription via `subscription.create` will fail with an `ALREADY_SUBSCRIBED` error.
 </Callout>
 
 #### Listing Active Subscriptions
 
 To retrieve the active subscriptions for the current user or organization, use the `subscription.list` method:
 
-<APIMethod
-  path="/subscription/list"
-  method="GET"
-  requireSession
->
-```ts
-type listActiveSubscriptions = {
-    /**
-     * Reference id of the subscription. Defaults based on customerType.
-     */
-    referenceId?: string
-    /**
-     * The type of customer for billing. (Default: "user")
-     */
-    customerType?: "user" | "organization"
-}
-```
+<APIMethod path="/subscription/list" method="GET" requireSession>
+  ```ts
+  type listActiveSubscriptions = {
+      /**
+       * Reference id of the subscription. Defaults based on customerType.
+       */
+      referenceId?: string
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+  }
+  ```
 </APIMethod>
 
 ```ts title="client.ts"
@@ -431,73 +424,65 @@ const { data: orgSubscriptions } = await authClient.subscription.list({
 
 To cancel a subscription, use the `subscription.cancel` method. This redirects the user to the Chargebee Portal where they can cancel their subscription. When a subscription is canceled at the end of the current billing period, Chargebee marks it as `non_renewing`. The subscription status changes to `cancelled` only when the period ends.
 
-<APIMethod
-  path="/subscription/cancel"
-  method="POST"
-  requireSession
->
-```ts
-type cancelSubscription = {
-    /**
-     * Reference id of the subscription to cancel. Defaults based on customerType.
-     */
-    referenceId?: string = 'org_123'
-    /**
-     * The type of customer for billing. (Default: "user")
-     */
-    customerType?: "user" | "organization"
-    /**
-     * The id of the subscription to cancel.
-     */
-    subscriptionId?: string = 'sub_123'
-    /**
-     * URL to take customers to when they click on the billing portal's link to return to your website.
-     */
-    returnUrl: string = '/account'
-}
-```
+<APIMethod path="/subscription/cancel" method="POST" requireSession>
+  ```ts
+  type cancelSubscription = {
+      /**
+       * Reference id of the subscription to cancel. Defaults based on customerType.
+       */
+      referenceId?: string = 'org_123'
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * The id of the subscription to cancel.
+       */
+      subscriptionId?: string = 'sub_123'
+      /**
+       * URL to take customers to when they click on the billing portal's link to return to your website.
+       */
+      returnUrl: string = '/account'
+  }
+  ```
 </APIMethod>
 
 <Callout type="info">
-**Understanding Cancellation States**
+  **Understanding Cancellation States**
 
-Chargebee supports different cancellation behaviors:
+  Chargebee supports different cancellation behaviors:
 
-| Field        | Description                                                       |
-|--------------|-------------------------------------------------------------------|
-| `canceledAt` | The time when the subscription was canceled.                      |
-| `status`     | Changes to "cancelled" when the subscription has ended.           |
+  | Field        | Description                                             |
+  | ------------ | ------------------------------------------------------- |
+  | `canceledAt` | The time when the subscription was canceled.            |
+  | `status`     | Changes to "cancelled" when the subscription has ended. |
 </Callout>
 
 #### Billing Portal Session
 
 For a complete self-service billing experience, you can open the Chargebee customer portal where users can manage all aspects of their billing:
 
-<APIMethod
-  path="/subscription/portal"
-  method="POST"
-  requireSession
->
-```ts
-type createPortalSession = {
-    /**
-     * Reference id of the customer. Defaults based on customerType.
-     */
-    referenceId?: string = 'org_123'
-    /**
-     * The type of customer for billing. (Default: "user")
-     */
-    customerType?: "user" | "organization"
-    /**
-     * URL to redirect customers to after they complete their portal session.
-     */
-    returnUrl: string = '/account'
-    /**
-     * Disable redirect after opening portal.
-     */
-    disableRedirect?: boolean = false
-}
-```
+<APIMethod path="/subscription/portal" method="POST" requireSession>
+  ```ts
+  type createPortalSession = {
+      /**
+       * Reference id of the customer. Defaults based on customerType.
+       */
+      referenceId?: string = 'org_123'
+      /**
+       * The type of customer for billing. (Default: "user")
+       */
+      customerType?: "user" | "organization"
+      /**
+       * URL to redirect customers to after they complete their portal session.
+       */
+      returnUrl: string = '/account'
+      /**
+       * Disable redirect after opening portal.
+       */
+      disableRedirect?: boolean = false
+  }
+  ```
 </APIMethod>
 
 **Example:**
@@ -525,15 +510,16 @@ await authClient.subscription.portal({
 ```
 
 The portal allows users to:
-- Update payment methods (credit cards, bank accounts)
-- View and download invoices
-- Manage subscriptions (upgrade, downgrade, cancel)
-- Update billing address and contact information
-- View subscription history
-- Apply promotional codes
+
+* Update payment methods (credit cards, bank accounts)
+* View and download invoices
+* Manage subscriptions (upgrade, downgrade, cancel)
+* Update billing address and contact information
+* View subscription history
+* Apply promotional codes
 
 <Callout type="info">
-The portal session provides a complete self-service experience and is recommended over individual operations like cancellation when you want to give users full control over their billing.
+  The portal session provides a complete self-service experience and is recommended over individual operations like cancellation when you want to give users full control over their billing.
 </Callout>
 
 ### Reference System
@@ -610,7 +596,6 @@ The plugin automatically processes common webhook events from Chargebee:
 * **`subscription_cancelled`** – Marks the subscription as canceled.
 * **`subscription_cancellation_scheduled`** – Updates the subscription with the scheduled cancellation details.
 * **`customer_deleted`** – Removes the customer and any associated subscriptions.
-
 
 You can also handle custom events using `webhookHandler`, which gives you direct access to the typed handler instance:
 
@@ -724,175 +709,173 @@ await authClient.subscription.create({
 ```
 
 <Callout type="info">
-Trials only work for **new subscriptions**. Updates to existing subscriptions cannot have trials (Chargebee limitation).
+  Trials only work for **new subscriptions**. Updates to existing subscriptions cannot have trials (Chargebee limitation).
 </Callout>
 
 ## Schema
 
 The Chargebee plugin adds the following tables to your database:
 
-
 ### User
 
 Table Name: `user`
 
-<DatabaseTable
-  name="user"
-  fields={[
-    { 
-      name: "chargebeeCustomerId", 
-      type: "string", 
-      description: "The Chargebee customer ID",
-      isOptional: true
-    },
-  ]}
-/>
+export const chargebeeUserTableFields = [
+	{
+		name: "chargebeeCustomerId",
+		type: "string",
+		description: "The Chargebee customer ID",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={chargebeeUserTableFields} />
 
 ### Organization
 
-Table Name: `organization` <small className='text-xs'>(only when `organization.enabled` is `true`)</small>
+Table Name: `organization` <small className="text-xs">(only when `organization.enabled` is `true`)</small>
 
-<DatabaseTable
-  name="organization"
-  fields={[
-    {
-      name: "chargebeeCustomerId",
-      type: "string",
-      description: "The Chargebee customer ID for the organization",
-      isOptional: true
-    },
-  ]}
-/>
+export const chargebeeOrganizationTableFields = [
+	{
+		name: "chargebeeCustomerId",
+		type: "string",
+		description: "The Chargebee customer ID for the organization",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="organization" fields={chargebeeOrganizationTableFields} />
 
 ### Subscription
 
 Table Name: `subscription`
 
-<DatabaseTable
-  name="subscription"
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Unique identifier for each subscription",
-      isPrimaryKey: true
-    },
-    { 
-      name: "referenceId", 
-      type: "string", 
-      description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
-      isUnique: false
-    },
-    { 
-      name: "chargebeeCustomerId", 
-      type: "string", 
-      description: "The Chargebee customer ID",
-      isOptional: true
-    },
-    { 
-      name: "chargebeeSubscriptionId", 
-      type: "string", 
-      description: "The Chargebee subscription ID",
-      isOptional: true
-    },
-    { 
-      name: "status", 
-      type: "string", 
-      description: "The status of the subscription (future, in_trial, active, non_renewing, paused, cancelled, transferred)",
-      defaultValue: "future"
-    },
-    { 
-      name: "periodStart", 
-      type: "Date", 
-      description: "Start date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "periodEnd", 
-      type: "Date", 
-      description: "End date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "trialStart", 
-      type: "Date", 
-      description: "Start date of the trial period",
-      isOptional: true
-    },
-    { 
-      name: "trialEnd", 
-      type: "Date", 
-      description: "End date of the trial period",
-      isOptional: true
-    },
-    { 
-      name: "canceledAt", 
-      type: "Date", 
-      description: "If the subscription has been canceled, this is the time when it was canceled",
-      isOptional: true
-    },
-    { 
-      name: "seats", 
-      type: "number", 
-      description: "Number of seats for team plans",
-      isOptional: true
-    },
-    { 
-      name: "metadata", 
-      type: "string", 
-      description: "JSON string of additional metadata",
-      isOptional: true
-    }
-  ]}
-/>
+export const chargebeeSubscriptionTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each subscription",
+		isPrimaryKey: true,
+	},
+	{
+		name: "referenceId",
+		type: "string",
+		description:
+			"The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
+		isUnique: false,
+	},
+	{
+		name: "chargebeeCustomerId",
+		type: "string",
+		description: "The Chargebee customer ID",
+		isOptional: true,
+	},
+	{
+		name: "chargebeeSubscriptionId",
+		type: "string",
+		description: "The Chargebee subscription ID",
+		isOptional: true,
+	},
+	{
+		name: "status",
+		type: "string",
+		description:
+			"The status of the subscription (future, in_trial, active, non_renewing, paused, cancelled, transferred)",
+		defaultValue: "future",
+	},
+	{
+		name: "periodStart",
+		type: "Date",
+		description: "Start date of the current billing period",
+		isOptional: true,
+	},
+	{
+		name: "periodEnd",
+		type: "Date",
+		description: "End date of the current billing period",
+		isOptional: true,
+	},
+	{
+		name: "trialStart",
+		type: "Date",
+		description: "Start date of the trial period",
+		isOptional: true,
+	},
+	{
+		name: "trialEnd",
+		type: "Date",
+		description: "End date of the trial period",
+		isOptional: true,
+	},
+	{
+		name: "canceledAt",
+		type: "Date",
+		description:
+			"If the subscription has been canceled, this is the time when it was canceled",
+		isOptional: true,
+	},
+	{
+		name: "seats",
+		type: "number",
+		description: "Number of seats for team plans",
+		isOptional: true,
+	},
+	{
+		name: "metadata",
+		type: "string",
+		description: "JSON string of additional metadata",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="subscription" fields={chargebeeSubscriptionTableFields} />
 
 ### Subscription Item
 
 Table Name: `subscriptionItem`
 
-<DatabaseTable
-  name="subscriptionItem"
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Unique identifier",
-      isPrimaryKey: true
-    },
-    { 
-      name: "subscriptionId", 
-      type: "string", 
-      description: "Foreign key to subscription"
-    },
-    { 
-      name: "itemPriceId", 
-      type: "string", 
-      description: "Chargebee item price ID"
-    },
-    { 
-      name: "itemType", 
-      type: "string", 
-      description: "Type: plan, addon, or charge"
-    },
-    { 
-      name: "quantity", 
-      type: "number", 
-      description: "Quantity of this item"
-    },
-    { 
-      name: "unitPrice", 
-      type: "number", 
-      description: "Unit price",
-      isOptional: true
-    },
-    { 
-      name: "amount", 
-      type: "number", 
-      description: "Total amount for this item",
-      isOptional: true
-    }
-  ]}
-/>
+export const chargebeeSubscriptionItemTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier",
+		isPrimaryKey: true,
+	},
+	{
+		name: "subscriptionId",
+		type: "string",
+		description: "Foreign key to subscription",
+	},
+	{
+		name: "itemPriceId",
+		type: "string",
+		description: "Chargebee item price ID",
+	},
+	{
+		name: "itemType",
+		type: "string",
+		description: "Type: plan, addon, or charge",
+	},
+	{
+		name: "quantity",
+		type: "number",
+		description: "Quantity of this item",
+	},
+	{
+		name: "unitPrice",
+		type: "number",
+		description: "Unit price",
+		isOptional: true,
+	},
+	{
+		name: "amount",
+		type: "number",
+		description: "Total amount for this item",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="subscriptionItem" fields={chargebeeSubscriptionItemTableFields} />
 
 ### Customizing the Schema
 
@@ -914,63 +897,63 @@ chargebee({
 
 ## Options
 
-| Option                    | Type       | Description                                                                                   |
-| ------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
-| `chargebeeClient`         | `Chargebee`| The Chargebee client instance. **Required.**                                                  |
-| `webhookUsername`         | `string`   | Username for Basic Auth on the webhook endpoint. Recommended in production.                   |
-| `webhookPassword`         | `string`   | Password for Basic Auth on the webhook endpoint. Recommended in production.                   |
-| `createCustomerOnSignUp`  | `boolean`  | Whether to automatically create a Chargebee customer when a user signs up. Default: `false`.  |
-| `getCustomerCreateParams` | `function` | Return additional params passed to `cb.customer.create` for user customers (e.g. `first_name`, `last_name`). Receives `user` and an optional `ctx`. |
-| `onCustomerCreate`        | `function` | Callback called after a customer is created. Receives `{ chargebeeCustomer, user }`.          |
-| `webhookHandler`          | `function` | Callback receiving the webhook handler instance. Call `handler.on(EventType, fn)` to register typed event listeners. |
-| `subscription`            | `object`   | Subscription configuration. See [below](#subscription-options).                               |
-| `organization`            | `object`   | Enable Organization Customer support. See [below](#organization-options).                     |
+| Option                    | Type        | Description                                                                                                                                         |
+| ------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chargebeeClient`         | `Chargebee` | The Chargebee client instance. **Required.**                                                                                                        |
+| `webhookUsername`         | `string`    | Username for Basic Auth on the webhook endpoint. Recommended in production.                                                                         |
+| `webhookPassword`         | `string`    | Password for Basic Auth on the webhook endpoint. Recommended in production.                                                                         |
+| `createCustomerOnSignUp`  | `boolean`   | Whether to automatically create a Chargebee customer when a user signs up. Default: `false`.                                                        |
+| `getCustomerCreateParams` | `function`  | Return additional params passed to `cb.customer.create` for user customers (e.g. `first_name`, `last_name`). Receives `user` and an optional `ctx`. |
+| `onCustomerCreate`        | `function`  | Callback called after a customer is created. Receives `{ chargebeeCustomer, user }`.                                                                |
+| `webhookHandler`          | `function`  | Callback receiving the webhook handler instance. Call `handler.on(EventType, fn)` to register typed event listeners.                                |
+| `subscription`            | `object`    | Subscription configuration. See [below](#subscription-options).                                                                                     |
+| `organization`            | `object`    | Enable Organization Customer support. See [below](#organization-options).                                                                           |
 
 ### Subscription Options
 
-| Option                     | Type                         | Description                                                                                                            |
-| -------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                            |
+| Option                     | Type                            | Description                                                                                                         |
+| -------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | `boolean`                       | Whether to enable subscription functionality. **Required.**                                                         |
 | `plans`                    | `ChargebeePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                    |
-| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription creation. Default: `false`.                         |
-| `preventDuplicateTrials`   | `boolean`                    | Prevent users from getting multiple trials. Default: `false`.                                                          |
-| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                |
-| `getHostedPageParams`      | `function`                   | Customize Chargebee Hosted Page parameters. Receives `{ user, session, plan, subscription }`, request, and context.   |
-| `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via hosted page. Receives `{ subscription, chargebeeSubscription, plan }`.       |
-| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created. Receives `{ subscription, chargebeeSubscription, plan }`.                       |
-| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ subscription }`.                                                    |
-| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ subscription, chargebeeSubscription }`.                             |
-| `onTrialStart`             | `function`                   | Called when a trial starts. Receives `{ subscription }`.                                                               |
-| `onTrialEnd`               | `function`                   | Called when a trial ends. Receives `{ subscription }`.                                                                 |
+| `requireEmailVerification` | `boolean`                       | Whether to require email verification before allowing subscription creation. Default: `false`.                      |
+| `preventDuplicateTrials`   | `boolean`                       | Prevent users from getting multiple trials. Default: `false`.                                                       |
+| `authorizeReference`       | `function`                      | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                             |
+| `getHostedPageParams`      | `function`                      | Customize Chargebee Hosted Page parameters. Receives `{ user, session, plan, subscription }`, request, and context. |
+| `onSubscriptionComplete`   | `function`                      | Called when a subscription is created via hosted page. Receives `{ subscription, chargebeeSubscription, plan }`.    |
+| `onSubscriptionCreated`    | `function`                      | Called when a subscription is created. Receives `{ subscription, chargebeeSubscription, plan }`.                    |
+| `onSubscriptionUpdate`     | `function`                      | Called when a subscription is updated. Receives `{ subscription }`.                                                 |
+| `onSubscriptionDeleted`    | `function`                      | Called when a subscription is deleted. Receives `{ subscription, chargebeeSubscription }`.                          |
+| `onTrialStart`             | `function`                      | Called when a trial starts. Receives `{ subscription }`.                                                            |
+| `onTrialEnd`               | `function`                      | Called when a trial ends. Receives `{ subscription }`.                                                              |
 
 #### Plan Configuration
 
-| Option                    | Type       | Description                                                  |
-| ------------------------- | ---------- | ------------------------------------------------------------ |
-| `name`                    | `string`   | The name of the plan. **Required.**                          |
-| `itemPriceId`             | `string`   | The Chargebee item price ID. **Required.**                   |
-| `itemId`                  | `string`   | The Chargebee item ID. Optional.                             |
-| `itemFamilyId`            | `string`   | The Chargebee item family ID. Optional.                      |
-| `type`                    | `string`   | Type: `"plan"`, `"addon"`, or `"charge"`. **Required.**     |
-| `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
-| `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |
-| `trialPeriod`             | `number`   | Trial period length. Optional.                               |
-| `trialPeriodUnit`         | `string`   | `"day"` or `"month"`. Optional.                              |
-| `billingCycles`           | `number`   | Number of billing cycles. Optional.                          |
+| Option            | Type     | Description                                                  |
+| ----------------- | -------- | ------------------------------------------------------------ |
+| `name`            | `string` | The name of the plan. **Required.**                          |
+| `itemPriceId`     | `string` | The Chargebee item price ID. **Required.**                   |
+| `itemId`          | `string` | The Chargebee item ID. Optional.                             |
+| `itemFamilyId`    | `string` | The Chargebee item family ID. Optional.                      |
+| `type`            | `string` | Type: `"plan"`, `"addon"`, or `"charge"`. **Required.**      |
+| `limits`          | `object` | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
+| `freeTrial`       | `object` | Trial configuration. See [below](#free-trial-configuration). |
+| `trialPeriod`     | `number` | Trial period length. Optional.                               |
+| `trialPeriodUnit` | `string` | `"day"` or `"month"`. Optional.                              |
+| `billingCycles`   | `number` | Number of billing cycles. Optional.                          |
 
 #### Free Trial Configuration
 
-| Option           | Type       | Description                                                                              |
-| ---------------- | ---------- | ---------------------------------------------------------------------------------------- |
-| `days`           | `number`   | Number of trial days. **Required.**                                                      |
+| Option | Type     | Description                         |
+| ------ | -------- | ----------------------------------- |
+| `days` | `number` | Number of trial days. **Required.** |
 
 ### Organization Options
 
-| Option                    | Type       | Description                                                                                                              |
-| ------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `enabled`                 | `boolean`  | Enable Organization Customer support. **Required.**                                                                      |
-| `getCustomerCreateParams` | `function` | Customize Chargebee customer creation parameters for organizations. Receives `organization` and context.                 |
-| `onCustomerCreate`        | `function` | Called after an organization customer is created. Receives `{ chargebeeCustomer, organization }` and context.            |
+| Option                    | Type       | Description                                                                                                   |
+| ------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `enabled`                 | `boolean`  | Enable Organization Customer support. **Required.**                                                           |
+| `getCustomerCreateParams` | `function` | Customize Chargebee customer creation parameters for organizations. Receives `organization` and context.      |
+| `onCustomerCreate`        | `function` | Called after an organization customer is created. Receives `{ chargebeeCustomer, organization }` and context. |
 
 ## Advanced Usage
 
@@ -979,11 +962,11 @@ chargebee({
 The Chargebee plugin integrates with the [organization plugin](/docs/plugins/organization) to enable organizations as Chargebee Customers. Instead of individual users, organizations become the billing entity for subscriptions. This is useful for B2B services where billing is tied to the organization rather than individual user.
 
 <Callout type="info">
-**When Organization Customer is enabled:**
+  **When Organization Customer is enabled:**
 
-- A Chargebee Customer is automatically created when an organization first subscribes
-- Organization name changes are synced to the Chargebee Customer
-- Organizations with active subscriptions cannot be deleted
+  * A Chargebee Customer is automatically created when an organization first subscribes
+  * Organization name changes are synced to the Chargebee Customer
+  * Organizations with active subscriptions cannot be deleted
 </Callout>
 
 #### Enabling Organization Customer
@@ -1007,7 +990,7 @@ plugins: [
 ```
 
 <Callout type="info">
-When `organization.enabled: true`, the plugin automatically omits `chargebeeCustomerId` from the `user` table and disables user-level billing hooks. You do not need to add that column to your database schema when using exclusively org-scoped billing.
+  When `organization.enabled: true`, the plugin automatically omits `chargebeeCustomerId` from the `user` table and disables user-level billing hooks. You do not need to add that column to your database schema when using exclusively org-scoped billing.
 </Callout>
 
 #### Creating Organization Subscriptions
@@ -1080,12 +1063,14 @@ getHostedPageParams: async ({ user, session, plan, subscription }, request, ctx)
 The Chargebee plugin automatically prevents users from getting multiple free trials. Once a user has used a trial period (regardless of which plan), they will not be eligible for additional trials on any plan.
 
 **How it works:**
-- The system tracks trial usage across all plans for each user
-- When a user subscribes to a plan with a trial, the system checks their subscription history
-- If the user has ever had a trial (indicated by `trialStart`/`trialEnd` fields or `in_trial` status), no new trial will be offered
-- This prevents abuse where users cancel subscriptions and resubscribe to get multiple free trials
+
+* The system tracks trial usage across all plans for each user
+* When a user subscribes to a plan with a trial, the system checks their subscription history
+* If the user has ever had a trial (indicated by `trialStart`/`trialEnd` fields or `in_trial` status), no new trial will be offered
+* This prevents abuse where users cancel subscriptions and resubscribe to get multiple free trials
 
 **Example scenario:**
+
 1. User subscribes to "Starter" plan with 7-day trial
 2. User cancels the subscription after the trial
 3. User tries to subscribe to "Premium" plan - no trial will be offered
@@ -1143,5 +1128,5 @@ Make sure to use the same Basic Auth credentials in Chargebee and in your local 
 
 ## Resources
 
-- [Chargebee Documentation](https://www.chargebee.com/docs/)
-- [Better Auth Documentation](https://www.better-auth.com/)
+* [Chargebee Documentation](https://www.chargebee.com/docs/)
+* [Better Auth Documentation](https://www.better-auth.com/)

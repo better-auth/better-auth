@@ -24,28 +24,29 @@ The Admin plugin provides a set of administrative functions for user management 
         ]
     })
     ```
-
   </Step>
 
-    <Step>
-        ### Migrate the database
+  <Step>
+    ### Migrate the database
 
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx auth migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx auth generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
 
   <Step>
     ### Add the client plugin
@@ -62,7 +63,6 @@ The Admin plugin provides a set of administrative functions for user management 
         ]
     })
     ```
-
   </Step>
 </Steps>
 
@@ -74,94 +74,83 @@ Before performing any admin operations, the user must be authenticated with an a
 
 Allows an admin to create a new user.
 
-<APIMethod
-  path="/admin/create-user"
-  method="POST"
-  resultVariable="newUser"
->
-```ts
-type createUser = {
-    /**
-     * The email of the user. 
-     */
-    email: string = "user@example.com"
-    /**
-     * The password of the user. 
-     */
-    password: string = "some-secure-password"
-    /**
-     * The name of the user. 
-     */
-    name: string = "James Smith"
-    /**
-     * A string or array of strings representing the roles to apply to the new user. 
-     */
-    role?: string | string[] = "user"
-    /**
-     * Extra fields for the user. Including custom additional fields. 
-     */
-    data?: Record<string, any> = { customField: "customValue" }
-}
-```
+<APIMethod path="/admin/create-user" method="POST" resultVariable="newUser">
+  ```ts
+  type createUser = {
+      /**
+       * The email of the user. 
+       */
+      email: string = "user@example.com"
+      /**
+       * The password of the user. 
+       */
+      password: string = "some-secure-password"
+      /**
+       * The name of the user. 
+       */
+      name: string = "James Smith"
+      /**
+       * A string or array of strings representing the roles to apply to the new user. 
+       */
+      role?: string | string[] = "user"
+      /**
+       * Extra fields for the user. Including custom additional fields. 
+       */
+      data?: Record<string, any> = { customField: "customValue" }
+  }
+  ```
 </APIMethod>
 
 ### List Users
 
 Allows an admin to list all users in the database.
 
-<APIMethod
-  path="/admin/list-users"
-  method="GET"
-  requireSession
-  note={"All properties are optional to configure. By default, 100 rows are returned, you can configure this by the `limit` property."}
-  resultVariable={"users"}
->
-```ts
-type listUsers = {
-  /**
-   * The value to search for. 
-   */
-  searchValue?: string = "some name"
-  /**
-   * The field to search in, defaults to email. Can be `email` or `name`. 
-   */
-  searchField?: "email" | "name" = "name"
-  /**
-   * The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. 
-   */
-  searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
-  /**
-   * The number of users to return. Defaults to 100.
-   */
-  limit?: string | number = 100
-  /**
-   * The offset to start from. 
-   */
-  offset?: string | number = 100
-  /**
-   * The field to sort by. 
-   */
-  sortBy?: string = "name"
-  /**
-   * The direction to sort by. 
-   */
-  sortDirection?: "asc" | "desc" = "desc"
-  /**
-   * The field to filter by. 
-   */
-  filterField?: string = "email"
-  /**
-   * The value to filter by. 
-   */
-  filterValue?: string | number | boolean | string[] | number[] = "hello@example.com"
-  /**
-   * The operator to use for the filter.
-   */
-  filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
-}
-```
+<APIMethod path="/admin/list-users" method="GET" requireSession note={"All properties are optional to configure. By default, 100 rows are returned, you can configure this by the `limit` property."} resultVariable={"users"}>
+  ```ts
+  type listUsers = {
+    /**
+     * The value to search for. 
+     */
+    searchValue?: string = "some name"
+    /**
+     * The field to search in, defaults to email. Can be `email` or `name`. 
+     */
+    searchField?: "email" | "name" = "name"
+    /**
+     * The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. 
+     */
+    searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
+    /**
+     * The number of users to return. Defaults to 100.
+     */
+    limit?: string | number = 100
+    /**
+     * The offset to start from. 
+     */
+    offset?: string | number = 100
+    /**
+     * The field to sort by. 
+     */
+    sortBy?: string = "name"
+    /**
+     * The direction to sort by. 
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * The field to filter by. 
+     */
+    filterField?: string = "email"
+    /**
+     * The value to filter by. 
+     */
+    filterValue?: string | number | boolean | string[] | number[] = "hello@example.com"
+    /**
+     * The operator to use for the filter.
+     */
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
+  }
+  ```
 </APIMethod>
-
 
 #### Query Filtering
 
@@ -184,10 +173,10 @@ The `listUsers` function supports pagination by returning metadata alongside the
 
 To paginate results, use the `total`, `limit`, and `offset` values to calculate:
 
-- **Total pages:** `Math.ceil(total / limit)`
-- **Current page:** `(offset / limit) + 1`
-- **Next page offset:** `Math.min(offset + limit, (total - 1))` – The value to use as `offset` for the next page, ensuring it does not exceed the total number of pages.
-- **Previous page offset:** `Math.max(0, offset - limit)` – The value to use as `offset` for the previous page (ensuring it doesn’t go below zero).
+* **Total pages:** `Math.ceil(total / limit)`
+* **Current page:** `(offset / limit) + 1`
+* **Next page offset:** `Math.min(offset + limit, (total - 1))` – The value to use as `offset` for the next page, ensuring it does not exceed the total number of pages.
+* **Previous page offset:** `Math.max(0, offset - limit)` – The value to use as `offset` for the previous page (ensuring it doesn’t go below zero).
 
 ##### Example Usage
 
@@ -214,23 +203,21 @@ const totalPages = Math.ceil(totalUsers / pageSize)
 
 Fetches a user's information using an id.
 
-<APIMethod
-  path="/admin/get-user"
-  method="GET"
-  requireSession
->
-```ts
-type getUser = {
-  /**
-  * The id of the user you want to fetch.
-  */
-  id: string = "user-id"
-}
-```
+<APIMethod path="/admin/get-user" method="GET" requireSession>
+  ```ts
+  type getUser = {
+    /**
+    * The id of the user you want to fetch.
+    */
+    id: string = "user-id"
+  }
+  ```
 </APIMethod>
 
 #### Returns
+
 On success, `data` contains the user object. On failure, `error` is populated by `code`, `message`, `status`, and `statusText`.
+
 ```ts
 type GetUserResponse = {
   data: User | null;
@@ -246,195 +233,155 @@ type GetUserResponse = {
 
 Changes the role of a user.
 
-<APIMethod
-  path="/admin/set-role"
-  method="POST"
-  requireSession
->
-```ts
-type setRole = {
-    /**
-     * The user id which you want to set the role for.
-     */
-    userId?: string = "user-id"
-    /**
-     * The role to set, this can be a string or an array of strings. 
-     */
-    role: string | string[] = "admin"
-}
-```
+<APIMethod path="/admin/set-role" method="POST" requireSession>
+  ```ts
+  type setRole = {
+      /**
+       * The user id which you want to set the role for.
+       */
+      userId?: string = "user-id"
+      /**
+       * The role to set, this can be a string or an array of strings. 
+       */
+      role: string | string[] = "admin"
+  }
+  ```
 </APIMethod>
 
 ### Set User Password
 
 Changes the password of a user.
 
-<APIMethod
-  path="/admin/set-user-password"
-  method="POST"
-  requireSession
->
-```ts
-type setUserPassword = {
-    /**
-     * The new password. 
-     */
-    newPassword: string = 'new-password'
-    /**
-     * The user id which you want to set the password for.
-     */
-    userId: string = 'user-id'
-}
-```
+<APIMethod path="/admin/set-user-password" method="POST" requireSession>
+  ```ts
+  type setUserPassword = {
+      /**
+       * The new password. 
+       */
+      newPassword: string = 'new-password'
+      /**
+       * The user id which you want to set the password for.
+       */
+      userId: string = 'user-id'
+  }
+  ```
 </APIMethod>
 
 ### Update user
 
 Update a user's details.
 
-<APIMethod
-  path="/admin/update-user"
-  method="POST"
-  requireSession
->
-```ts
-type adminUpdateUser = {
-    /**
-     * The user id which you want to update.
-     */
-    userId: string = "user-id"
-    /**
-     * The data to update.
-     */
-    data: Record<string, any> = { name: "John Doe" }
-}
-```
+<APIMethod path="/admin/update-user" method="POST" requireSession>
+  ```ts
+  type adminUpdateUser = {
+      /**
+       * The user id which you want to update.
+       */
+      userId: string = "user-id"
+      /**
+       * The data to update.
+       */
+      data: Record<string, any> = { name: "John Doe" }
+  }
+  ```
 </APIMethod>
 
 ### Ban User
 
 Bans a user, preventing them from signing in and revokes all of their existing sessions.
 
-
-<APIMethod
-  path="/admin/ban-user"
-  method="POST"
-  requireSession
-  noResult
->
-```ts
-type banUser = {
-    /**
-     * The user id which you want to ban.
-     */
-    userId: string = "user-id"
-    /**
-     * The reason for the ban. 
-     */
-    banReason?: string = "Spamming"
-    /**
-     * The number of seconds until the ban expires. If not provided, the ban will never expire. 
-     */
-    banExpiresIn?: number = 60 * 60 * 24 * 7
-}
-```
+<APIMethod path="/admin/ban-user" method="POST" requireSession noResult>
+  ```ts
+  type banUser = {
+      /**
+       * The user id which you want to ban.
+       */
+      userId: string = "user-id"
+      /**
+       * The reason for the ban. 
+       */
+      banReason?: string = "Spamming"
+      /**
+       * The number of seconds until the ban expires. If not provided, the ban will never expire. 
+       */
+      banExpiresIn?: number = 60 * 60 * 24 * 7
+  }
+  ```
 </APIMethod>
 
 ### Unban User
 
 Removes the ban from a user, allowing them to sign in again.
 
-<APIMethod
-  path="/admin/unban-user"
-  method="POST"
-  requireSession
-  noResult
->
-```ts
-type unbanUser = {
-    /**
-     * The user id which you want to unban.
-     */
-    userId: string = "user-id"
-}
-```
+<APIMethod path="/admin/unban-user" method="POST" requireSession noResult>
+  ```ts
+  type unbanUser = {
+      /**
+       * The user id which you want to unban.
+       */
+      userId: string = "user-id"
+  }
+  ```
 </APIMethod>
 
 ### List User Sessions
 
 Lists all sessions for a user.
 
-<APIMethod
-  path="/admin/list-user-sessions"
-  method="POST"
-  requireSession
->
-```ts
-type listUserSessions = {
-    /**
-     * The user id. 
-     */
-    userId: string = "user-id"
-}
-```
+<APIMethod path="/admin/list-user-sessions" method="POST" requireSession>
+  ```ts
+  type listUserSessions = {
+      /**
+       * The user id. 
+       */
+      userId: string = "user-id"
+  }
+  ```
 </APIMethod>
 
 ### Revoke User Session
 
 Revokes a specific session for a user.
 
-
-<APIMethod
-  path="/admin/revoke-user-session"
-  method="POST"
-  requireSession
->
-```ts
-type revokeUserSession = {
-    /**
-     * The session token which you want to revoke. 
-     */
-    sessionToken: string = "session_token_here"
-}
-```
+<APIMethod path="/admin/revoke-user-session" method="POST" requireSession>
+  ```ts
+  type revokeUserSession = {
+      /**
+       * The session token which you want to revoke. 
+       */
+      sessionToken: string = "session_token_here"
+  }
+  ```
 </APIMethod>
 
 ### Revoke All Sessions for a User
 
 Revokes all sessions for a user.
 
-<APIMethod
-  path="/admin/revoke-user-sessions"
-  method="POST"
-  requireSession
->
-```ts
-type revokeUserSessions = {
-    /**
-     * The user id which you want to revoke all sessions for. 
-     */
-    userId: string = "user-id"
-}
-```
+<APIMethod path="/admin/revoke-user-sessions" method="POST" requireSession>
+  ```ts
+  type revokeUserSessions = {
+      /**
+       * The user id which you want to revoke all sessions for. 
+       */
+      userId: string = "user-id"
+  }
+  ```
 </APIMethod>
 
 ### Impersonate User
 
 This feature allows an admin to create a session that mimics the specified user. The session will remain active until either the browser session ends or it reaches 1 hour. You can change this duration by setting the `impersonationSessionDuration` option.
 
-<APIMethod
-  path="/admin/impersonate-user"
-  method="POST"
-  requireSession
->
-```ts
-type impersonateUser = {
-    /**
-     * The user id which you want to impersonate. 
-     */
-    userId: string = "user-id"
-}
-```
+<APIMethod path="/admin/impersonate-user" method="POST" requireSession>
+  ```ts
+  type impersonateUser = {
+      /**
+       * The user id which you want to impersonate. 
+       */
+      userId: string = "user-id"
+  }
+  ```
 </APIMethod>
 
 By default, admins cannot impersonate other admin users. To allow this, grant the `impersonate-admins` permission to a role:
@@ -455,30 +402,25 @@ const superAdmin = ac.newRole({
 To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
 
 <APIMethod path="/admin/stop-impersonating" method="POST" noResult requireSession>
-```ts
-type stopImpersonating = {
-}
-```
+  ```ts
+  type stopImpersonating = {
+  }
+  ```
 </APIMethod>
 
 ### Remove User
 
 Hard deletes a user from the database.
 
-<APIMethod
-  path="/admin/remove-user"
-  method="POST"
-  requireSession
-  resultVariable="deletedUser"
->
-```ts
-type removeUser = {
-    /**
-     * The user id which you want to remove. 
-     */
-    userId: string = "user-id"
-}
-```
+<APIMethod path="/admin/remove-user" method="POST" requireSession resultVariable="deletedUser">
+  ```ts
+  type removeUser = {
+      /**
+       * The user id which you want to remove. 
+       */
+      userId: string = "user-id"
+  }
+  ```
 </APIMethod>
 
 ## Access Control
@@ -502,10 +444,10 @@ By default, there are two roles:
 By default, there are two resources with up to six permissions.
 
 **user**:
-  `create` `list` `set-role` `ban` `impersonate` `impersonate-admins` `delete` `set-password`
+`create` `list` `set-role` `ban` `impersonate` `impersonate-admins` `delete` `set-password`
 
 **session**:
-  `list` `revoke` `delete`
+`list` `revoke` `delete`
 
 Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
@@ -514,10 +456,11 @@ Users with the admin role have full control over all the resources and actions. 
 The plugin provides an easy way to define your own set of permissions for each role.
 
 <Steps>
-    <Step>
+  <Step>
     #### Create Access Control
 
     You first need to create an access controller by calling the `createAccessControl` function and passing the statement object. The statement object should have the resource name as the key and the array of actions as the value.
+
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
 
@@ -530,13 +473,13 @@ The plugin provides an easy way to define your own set of permissions for each r
 
     const ac = createAccessControl(statement); // [!code highlight]
     ```
-    
+
     <Callout type="warning">
       To keep bundle sizes small, make sure to import from `better-auth/plugins/access` instead of `better-auth/plugins`.
     </Callout>
-    </Step>
+  </Step>
 
-    <Step>
+  <Step>
     #### Create Roles
 
     Once you have created the access controller you can create roles with the permissions you have defined.
@@ -554,7 +497,7 @@ The plugin provides an easy way to define your own set of permissions for each r
         project: ["create"], // [!code highlight]
     }); // [!code highlight]
 
-   export const admin = ac.newRole({ // [!code highlight]
+    export const admin = ac.newRole({ // [!code highlight]
         project: ["create", "update"], // [!code highlight]
     }); // [!code highlight]
 
@@ -564,7 +507,7 @@ The plugin provides an easy way to define your own set of permissions for each r
     }); // [!code highlight]
     ```
 
-      When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
+    When you create custom roles for existing roles, the predefined permissions for those roles will be overridden. To add the existing permissions to the custom role, you need to import `defaultStatements` and merge it with your new statement, plus merge the roles' permissions set with the default roles.
 
     ```ts title="permissions.ts"
     import { createAccessControl } from "better-auth/plugins/access";
@@ -582,55 +525,53 @@ The plugin provides an easy way to define your own set of permissions for each r
         ...adminAc.statements, // [!code highlight]
     });
     ```
+  </Step>
 
-    </Step>
+  <Step>
+    #### Pass Roles to the Plugin
 
-    <Step>
-        #### Pass Roles to the Plugin
+    Once you have created the roles you can pass them to the admin plugin both on the client and the server.
 
-        Once you have created the roles you can pass them to the admin plugin both on the client and the server.
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { admin as adminPlugin } from "better-auth/plugins"
+    import { ac, admin, user } from "@/auth/permissions"
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { admin as adminPlugin } from "better-auth/plugins"
-        import { ac, admin, user } from "@/auth/permissions"
+    export const auth = betterAuth({
+        plugins: [
+            adminPlugin({
+                ac,
+                roles: {
+                    admin,
+                    user,
+                    myCustomRole
+                }
+            }),
+        ],
+    });
+    ```
 
-        export const auth = betterAuth({
-            plugins: [
-                adminPlugin({
-                    ac,
-                    roles: {
-                        admin,
-                        user,
-                        myCustomRole
-                    }
-                }),
-            ],
-        });
-        ```
+    You also need to pass the access controller and the roles to the client plugin.
 
-        You also need to pass the access controller and the roles to the client plugin.
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { adminClient } from "better-auth/client/plugins"
+    import { ac, admin, user, myCustomRole } from "@/auth/permissions"
 
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        import { adminClient } from "better-auth/client/plugins"
-        import { ac, admin, user, myCustomRole } from "@/auth/permissions"
-
-        export const client = createAuthClient({
-            plugins: [
-                adminClient({
-                    ac,
-                    roles: {
-                        admin,
-                        user,
-                        myCustomRole
-                    }
-                })
-            ]
-        })
-        ```
-    </Step>
-
+    export const client = createAuthClient({
+        plugins: [
+            adminClient({
+                ac,
+                roles: {
+                    admin,
+                    user,
+                    myCustomRole
+                }
+            })
+        ]
+    })
+    ```
+  </Step>
 </Steps>
 
 ### Access Control Usage
@@ -639,29 +580,28 @@ The plugin provides an easy way to define your own set of permissions for each r
 
 To check a user's permissions, you can use the `hasPermission` function provided by the client.
 
-
 <APIMethod path="/admin/has-permission" method="POST">
-```ts
-type userHasPermission = {
-    /**
-     * The user id which you want to check the permissions for. 
-     */
-    userId?: string = "user-id"
-    /**
-     * Check role permissions.
-     * @serverOnly
-     */
-    role?: string = "admin"
-    /**
-     * Optionally check if a single permission is granted. Must use this, or permissions. 
-     */
-    permission?: Record<string, string[]> = { "project": ["create", "update"] } /* Must use this, or permissions */,
-    /**
-     * Optionally check if multiple permissions are granted. Must use this, or permission. 
-     */
-    permissions?: Record<string, string[]>
-}
-```
+  ```ts
+  type userHasPermission = {
+      /**
+       * The user id which you want to check the permissions for. 
+       */
+      userId?: string = "user-id"
+      /**
+       * Check role permissions.
+       * @serverOnly
+       */
+      role?: string = "admin"
+      /**
+       * Optionally check if a single permission is granted. Must use this, or permissions. 
+       */
+      permission?: Record<string, string[]> = { "project": ["create", "update"] } /* Must use this, or permissions */,
+      /**
+       * Optionally check if multiple permissions are granted. Must use this, or permission. 
+       */
+      permissions?: Record<string, string[]>
+  }
+  ```
 </APIMethod>
 
 Example usage:
@@ -685,8 +625,6 @@ const canCreateProjectAndCreateSale = await authClient.admin.hasPermission({
 ```
 
 If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
-
-
 
 ```ts title="permission.ts"
 import { auth } from "@/lib/auth"
@@ -722,7 +660,6 @@ await auth.api.userHasPermission({
 });
 ```
 
-
 **Check Role Permission**:
 
 Use the `checkRolePermission` function on the client side to verify whether a given **role** has a specific **permission**. This is helpful after defining roles and their permissions, as it allows you to perform permission checks without needing to contact the server.
@@ -753,50 +690,48 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
 
 This plugin adds the following fields to the `user` table:
 
-<DatabaseTable
-  name="user"
-  fields={[
-    {
-      name: "role",
-      type: "string",
-      description:
-        "The user's role. Defaults to `user`. Admins will have the `admin` role.",
-      isOptional: true,
-    },
-    {
-      name: "banned",
-      type: "boolean",
-      description: "Indicates whether the user is banned.",
-      isOptional: true,
-    },
-    {
-      name: "banReason",
-      type: "string",
-      description: "The reason for the user's ban.",
-      isOptional: true,
-    },
-    {
-      name: "banExpires",
-      type: "date",
-      description: "The date when the user's ban will expire.",
-      isOptional: true,
-    },
-  ]}
-/>
+export const adminUserTableFields = [
+	{
+		name: "role",
+		type: "string",
+		description:
+			"The user's role. Defaults to `user`. Admins will have the `admin` role.",
+		isOptional: true,
+	},
+	{
+		name: "banned",
+		type: "boolean",
+		description: "Indicates whether the user is banned.",
+		isOptional: true,
+	},
+	{
+		name: "banReason",
+		type: "string",
+		description: "The reason for the user's ban.",
+		isOptional: true,
+	},
+	{
+		name: "banExpires",
+		type: "date",
+		description: "The date when the user's ban will expire.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={adminUserTableFields} />
 
 And adds one field in the `session` table:
 
-<DatabaseTable
-  name="session"
-  fields={[
-    {
-      name: "impersonatedBy",
-      type: "string",
-      description: "The ID of the admin that is impersonating this session.",
-      isOptional: true,
-    },
-  ]}
-/>
+export const adminSessionTableFields = [
+	{
+		name: "impersonatedBy",
+		type: "string",
+		description: "The ID of the admin that is impersonating this session.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="session" fields={adminSessionTableFields} />
 
 ### Email Enumeration Protection
 
@@ -833,6 +768,7 @@ admin({
   defaultRole: "regular",
 });
 ```
+
 ### Admin Roles
 
 Specifies which roles are considered admin roles. Defaults to `["admin"]`. Custom roles (for example, `superadmin`) must be defined in custom access control.
@@ -845,11 +781,9 @@ admin({
 ```
 
 <Callout type="warning">
-  **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.  
-  
-  
-  **Warning:** When **not** using custom access control, only `admin` and `user` exist as valid roles. Any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
+  **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.
 
+  **Warning:** When **not** using custom access control, only `admin` and `user` exist as valid roles. Any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
 </Callout>
 
 ### Admin userIds

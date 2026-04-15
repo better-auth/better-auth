@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
+import type { User } from "../types";
 
 describe("db", async () => {
 	it("should work with custom model names", async () => {
@@ -71,6 +72,56 @@ describe("db", async () => {
 		});
 		expect(session?.user?.image).toBe("test-image");
 		expect(callback).toBe(true);
+	});
+
+	it("db hooks should preserve a forced UUID on postgres when generateId is uuid", async () => {
+		const existingId = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+		const email = `forced-id-${crypto.randomUUID()}@test.com`;
+		const { auth, db } = await getTestInstance(
+			{
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							async before(user) {
+								return {
+									data: {
+										...user,
+										id: existingId,
+									},
+								};
+							},
+						},
+					},
+				},
+			},
+			{
+				testWith: "postgres",
+				disableTestUser: true,
+			},
+		);
+
+		const result = await auth.api.signUpEmail({
+			body: {
+				email,
+				name: "forced-id-user",
+				password: "password",
+			},
+		});
+
+		expect(result.user.id).toBe(existingId);
+
+		const createdUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: existingId }],
+		});
+
+		expect(createdUser?.id).toBe(existingId);
+		expect(createdUser?.email).toBe(email);
 	});
 
 	it("should work with custom field names", async () => {

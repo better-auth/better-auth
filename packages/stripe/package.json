@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/stripe",
-  "version": "1.6.2",
+  "version": "1.6.4",
   "description": "Stripe plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -60,20 +60,20 @@
     }
   },
   "dependencies": {
-    "defu": "^6.1.4",
+    "defu": "^6.1.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^20.4.0",
+    "stripe": "^22.0.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "better-auth": "workspace:^",
     "better-call": "catalog:",
-    "stripe": "^18 || ^19 || ^20"
+    "stripe": "^18 || ^19 || ^20 || ^21 || ^22"
   }
 }

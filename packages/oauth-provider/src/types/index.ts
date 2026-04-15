@@ -496,6 +496,37 @@ export interface OAuthOptions<
 		metadata?: Record<string, any>;
 	}) => Awaitable<Record<string, any>>;
 	/**
+	 * Custom fields to include in the token response body.
+	 *
+	 * Unlike `customAccessTokenClaims` (which adds claims inside the JWT payload),
+	 * this adds fields to the JSON response envelope alongside `access_token`,
+	 * `token_type`, etc. Standard OAuth fields (`access_token`, `token_type`,
+	 * `expires_in`, `expires_at`, `refresh_token`, `scope`, `id_token`) cannot
+	 * be overridden.
+	 *
+	 * @param info - context that may be useful when creating custom fields
+	 */
+	customTokenResponseFields?: (info: {
+		/** The grant type being processed */
+		grantType: GrantType;
+		/**
+		 * The user, if applicable.
+		 * Undefined for `client_credentials` (M2M, no user).
+		 * Always present for `authorization_code` and `refresh_token`.
+		 */
+		user?: (User & Record<string, unknown>) | null;
+		/** Scopes granted for this token */
+		scopes: Scopes;
+		/** oAuthClient metadata */
+		metadata?: Record<string, any>;
+		/**
+		 * The authorization code verification value.
+		 * Only present for `authorization_code` grant. Contains the original
+		 * authorization request parameters (`query`), `referenceId`, `sessionId`, etc.
+		 */
+		verificationValue?: VerificationValue;
+	}) => Awaitable<Record<string, unknown>>;
+	/**
 	 * Overwrite specific /.well-known/openid-configuration
 	 * values so they are not available publically.
 	 * This may be important if not all clients need specific scopes.
