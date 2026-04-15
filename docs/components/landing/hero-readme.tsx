@@ -2009,7 +2009,7 @@ export function HeroReadMe({
 									href="https://www.npmjs.com/package/better-auth"
 									target="_blank"
 									rel="noopener noreferrer"
-									className="group mt-6 flex items-center gap-4 px-5 py-4 border border-dashed border-foreground/[0.08] hover:border-foreground/[0.15] bg-foreground/[0.01] hover:bg-foreground/[0.02] transition-all"
+									className="npm-download-card group relative mt-6 flex items-center gap-4 px-5 py-4 bg-foreground/[0.01] hover:bg-foreground/[0.03] transition-all duration-500"
 								>
 									<div className="flex items-center justify-center w-7 h-7 shrink-0">
 										<svg

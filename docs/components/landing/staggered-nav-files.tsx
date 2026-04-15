@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { getVersionFromPathname, versionedDocsHref } from "@/lib/docs-versions";
 import { cn } from "@/lib/utils";
 import DarkPng from "../../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../../public/branding/better-auth-logo-light.png";
@@ -112,6 +113,8 @@ const logoAssets = {
 
 export function StaggeredNavFiles() {
 	const pathname = usePathname() || "/";
+	const currentVersion = getVersionFromPathname(pathname);
+	const prefixHref = (href: string) => versionedDocsHref(href, currentVersion);
 	const [resourcesOpen, setResourcesOpen] = useState(false);
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [mobileView, setMobileView] = useState<"docs" | "nav">("docs");
@@ -707,7 +710,7 @@ export function StaggeredNavFiles() {
 															<div className="text-sm pt-0 pb-1">
 																{section.href && (
 																	<Link
-																		href={section.href}
+																		href={prefixHref(section.href)}
 																		onClick={() => setMobileMenuOpen(false)}
 																		data-active={
 																			pathname === section.href || undefined
@@ -774,7 +777,7 @@ export function StaggeredNavFiles() {
 																	return (
 																		<Link
 																			key={item.href}
-																			href={item.href}
+																			href={prefixHref(item.href)}
 																			onClick={() => setMobileMenuOpen(false)}
 																			data-active={active || undefined}
 																			className={cn(
