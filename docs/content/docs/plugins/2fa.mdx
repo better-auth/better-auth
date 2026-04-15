@@ -176,7 +176,7 @@ This is different from the OAuth provider callback URL.
 ```ts title="sign-in.ts"
 import { authClient } from "@/lib/auth-client"
 
-await authClient.signIn.social({ provider: 'google', callbackURL: '/verify-2fa' });
+await authClient.signIn.social({ provider: "google", callbackURL: "/verify-2fa" });
 ```
 ```ts title="verify-2fa.ts"
 import { authClient } from "@/lib/auth-client"
