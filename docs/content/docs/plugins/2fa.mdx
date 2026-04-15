@@ -517,7 +517,7 @@ export const twoFactorTableFields = [
 
 When a user has 2FA enabled, the plugin challenges the second factor on every sign-in that creates a new session. One exception applies: passkey sign-ins whose assertion confirmed user verification (UV) are not challenged. Passkey sign-ins without UV are still challenged.
 
-A password, magic link, or email OTP is a single primary authenticator and establishes AAL1 per [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b/). Challenging a second factor raises the session to AAL2.
+A password, magic link, or email OTP is a single primary authenticator and establishes AAL1 per [NIST SP 800-63B-4](https://csrc.nist.gov/pubs/sp/800/63/b/4/final). Challenging a second factor raises the session to AAL2.
 
 A UV-verified passkey already qualifies as AAL2 phishing-resistant authentication under NIST SP 800-63B-4 and the [FIDO Alliance](https://fidoalliance.org/passkeys/). It proves possession of the authenticator plus inherence (biometric) or knowledge (on-device PIN) in one step. Requiring a manually-entered second factor would reintroduce a phishable step.
 
