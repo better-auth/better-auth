@@ -231,23 +231,39 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 									 * API Errors from response are caught
 									 * and returned to hooks.
 									 *
-									 * `kAPIErrorHeaderSymbol` carries headers accumulated
-									 * on ctx.responseHeaders before the throw (e.g.
-									 * Set-Cookie from deleteSessionCookie). Fall back to
-									 * `e.headers` for explicit APIError headers. Mirrors
-									 * the after-hooks catch.
+									 * Headers come from two sources that must both
+									 * survive:
+									 * - `kAPIErrorHeaderSymbol`: ctx.responseHeaders
+									 *   accumulated via c.setCookie / c.setHeader
+									 *   before the throw.
+									 * - `e.headers`: explicit headers on the APIError
+									 *   (e.g. `location` from c.redirect).
 									 *
-									 * Note: if both are populated (handler called
-									 * c.setCookie AND threw `new APIError(status, body,
-									 * explicitHeaders)`), the accumulated ctx headers win
-									 * and `e.headers` is dropped. This matches the
-									 * after-hooks behavior below; reconcile both sites if
-									 * explicit APIError headers need to be merged.
+									 * Start from the accumulated ctx headers, then
+									 * apply e.headers on top — appending `set-cookie`
+									 * and setting others — so explicit APIError
+									 * headers override while cookies accumulate.
 									 */
-									const headers: Headers | null =
-										(e as { [kAPIErrorHeaderSymbol]?: Headers })[
-											kAPIErrorHeaderSymbol
-										] ?? (e.headers ? new Headers(e.headers) : null);
+									const ctxHeaders = (
+										e as {
+											[kAPIErrorHeaderSymbol]?: Headers;
+										}
+									)[kAPIErrorHeaderSymbol];
+									const errHeaders = e.headers ? new Headers(e.headers) : null;
+									let headers: Headers | null = null;
+									if (ctxHeaders || errHeaders) {
+										headers = new Headers();
+										ctxHeaders?.forEach((value, key) => {
+											headers!.append(key, value);
+										});
+										errHeaders?.forEach((value, key) => {
+											if (key.toLowerCase() === "set-cookie") {
+												headers!.append(key, value);
+											} else {
+												headers!.set(key, value);
+											}
+										});
+									}
 									return {
 										response: e,
 										status: e.statusCode,

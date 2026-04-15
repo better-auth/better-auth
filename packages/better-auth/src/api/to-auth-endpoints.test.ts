@@ -1245,6 +1245,20 @@ describe("response headers on APIError", async () => {
 				throw c.error("UNAUTHORIZED", { message: "cleared" });
 			},
 		),
+		setCookieThenThrowWithExplicitHeaders: createAuthEndpoint(
+			"/set-cookie-then-throw-with-explicit-headers",
+			{
+				method: "POST",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				throw new APIError(
+					"FOUND",
+					{ message: "redirect" },
+					{ location: "/login" },
+				);
+			},
+		),
 	};
 
 	const authContext = init({});
@@ -1261,5 +1275,15 @@ describe("response headers on APIError", async () => {
 		expect(setCookie).toContain("session=");
 		expect(setCookie).toContain("session_data=");
 		expect(setCookie.toLowerCase()).toMatch(/max-age=0/);
+	});
+
+	it("merges ctx.responseHeaders with explicit APIError headers so both survive", async () => {
+		const response = await authEndpoints.setCookieThenThrowWithExplicitHeaders({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe("/login");
+		expect(response.headers.get("set-cookie") ?? "").toContain("session=");
 	});
 });
