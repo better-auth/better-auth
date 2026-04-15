@@ -457,27 +457,43 @@ describe("organization", async () => {
 			password: rng,
 			name: rng,
 		};
-		const { auth, client, signInWithTestUser, signInWithUser, db } =
-			await getTestInstance({
-				plugins: [
-					organization({
-						async sendInvitationEmail() {},
-					}),
-				],
-				logger: {
-					level: "error",
+		const {
+			auth,
+			client: baseClient,
+			signInWithTestUser,
+			signInWithUser,
+			db,
+			sessionSetter,
+		} = await getTestInstance({
+			plugins: [
+				organization({
+					async sendInvitationEmail() {},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
 				},
-			});
+			},
+		});
+		const orgApi = auth.api as any;
 
 		const { headers: ownerHeaders } = await signInWithTestUser();
-		const org = await auth.api.createOrganization({
+		const org = await orgApi.createOrganization({
 			body: {
 				name: `idempotent-${rng}`,
 				slug: `idempotent-${rng}`,
 			},
 			headers: ownerHeaders,
 		});
-		const invite = await auth.api.createInvitation({
+		const invite = await orgApi.createInvitation({
 			body: {
 				organizationId: org.id,
 				email: invitedUser.email,
@@ -486,7 +502,7 @@ describe("organization", async () => {
 			headers: ownerHeaders,
 		});
 
-		await client.signUp.email({
+		await baseClient.signUp.email({
 			email: invitedUser.email,
 			password: invitedUser.password,
 			name: invitedUser.name,
@@ -496,23 +512,42 @@ describe("organization", async () => {
 			res: { user },
 		} = await signInWithUser(invitedUser.email, invitedUser.password);
 
-		const firstAccept = await auth.api.acceptInvitation({
-			body: {
-				invitationId: invite.id,
+		const firstAccept = await client.organization.acceptInvitation({
+			invitationId: invite.id,
+			fetchOptions: {
+				headers: invitedHeaders,
+				onSuccess: sessionSetter(invitedHeaders),
 			},
-			headers: invitedHeaders,
 		});
-		const secondAccept = await auth.api.acceptInvitation({
-			body: {
-				invitationId: invite.id,
+		expect(firstAccept.data).not.toBeNull();
+		if (!firstAccept.data) throw new Error("First accept failed");
+		const membersAfterFirstAccept = await db.findMany({
+			model: "member",
+			where: [
+				{
+					field: "organizationId",
+					value: org.id,
+				},
+				{
+					field: "userId",
+					value: user.id,
+				},
+			],
+		});
+		expect(membersAfterFirstAccept).toHaveLength(1);
+		const secondAccept = await client.organization.acceptInvitation({
+			invitationId: invite.id,
+			fetchOptions: {
+				headers: invitedHeaders,
+				onSuccess: sessionSetter(invitedHeaders),
 			},
-			headers: invitedHeaders,
 		});
+		expect(secondAccept.data).not.toBeNull();
+		if (!secondAccept.data) throw new Error("Second accept failed");
 
-		expect(secondAccept.invitation).not.toBeNull();
-		if (!secondAccept.invitation) throw new Error("Invitation not found");
-		expect(secondAccept.invitation.status).toBe("accepted");
-		expect(secondAccept.member.id).toBe(firstAccept.member.id);
+		expect(secondAccept.data.invitation).not.toBeNull();
+		expect(secondAccept.data.invitation.status).toBe("accepted");
+		expect(secondAccept.data.member.id).toBe(firstAccept.data.member.id);
 
 		const members = await db.findMany({
 			model: "member",
@@ -550,30 +585,57 @@ describe("organization", async () => {
 	it("should not create duplicate members when accepting an invitation concurrently", async () => {
 		let barrierCount = 0;
 		let releaseBarrier: (() => void) | undefined;
+		let delayedMemberUserId: string | null = null;
 		const barrier = new Promise<void>((resolve) => {
 			releaseBarrier = resolve;
 		});
 
-		const { auth, client, signInWithTestUser, signInWithUser, db } =
-			await getTestInstance({
-				plugins: [
-					organization({
-						async sendInvitationEmail() {},
-						organizationHooks: {
-							beforeAcceptInvitation: async () => {
-								barrierCount += 1;
-								if (barrierCount === 2) {
-									releaseBarrier?.();
-								}
-								await barrier;
-							},
+		const {
+			auth,
+			client: baseClient,
+			signInWithTestUser,
+			signInWithUser,
+			db,
+		} = await getTestInstance({
+			plugins: [
+				organization({
+					async sendInvitationEmail() {},
+					organizationHooks: {
+						beforeAcceptInvitation: async () => {
+							barrierCount += 1;
+							if (barrierCount === 2) {
+								releaseBarrier?.();
+							}
+							await barrier;
 						},
-					}),
-				],
-				logger: {
-					level: "error",
+					},
+				}),
+			],
+			databaseHooks: {
+				member: {
+					create: {
+						before: async (data: any) => {
+							if (data.userId === delayedMemberUserId) {
+								await new Promise((resolve) => setTimeout(resolve, 75));
+							}
+						},
+					},
 				},
-			});
+			} as any,
+			logger: {
+				level: "error",
+			},
+		});
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+		const orgApi = auth.api as any;
 
 		const rng = crypto.randomUUID();
 		const invitedUser = {
@@ -583,14 +645,14 @@ describe("organization", async () => {
 		};
 		const { headers: ownerHeaders } = await signInWithTestUser();
 
-		const org = await auth.api.createOrganization({
+		const org = await orgApi.createOrganization({
 			body: {
 				name: `race-${rng}`,
 				slug: `race-${rng}`,
 			},
 			headers: ownerHeaders,
 		});
-		const invite = await auth.api.createInvitation({
+		const invite = await orgApi.createInvitation({
 			body: {
 				organizationId: org.id,
 				email: invitedUser.email,
@@ -599,7 +661,7 @@ describe("organization", async () => {
 			headers: ownerHeaders,
 		});
 
-		await client.signUp.email({
+		await baseClient.signUp.email({
 			email: invitedUser.email,
 			password: invitedUser.password,
 			name: invitedUser.name,
@@ -608,23 +670,36 @@ describe("organization", async () => {
 			headers: invitedHeaders,
 			res: { user },
 		} = await signInWithUser(invitedUser.email, invitedUser.password);
+		delayedMemberUserId = user.id;
 
 		const results = await Promise.allSettled([
-			auth.api.acceptInvitation({
-				body: {
-					invitationId: invite.id,
+			client.organization.acceptInvitation({
+				invitationId: invite.id,
+				fetchOptions: {
+					headers: invitedHeaders,
 				},
-				headers: invitedHeaders,
 			}),
-			auth.api.acceptInvitation({
-				body: {
-					invitationId: invite.id,
+			client.organization.acceptInvitation({
+				invitationId: invite.id,
+				fetchOptions: {
+					headers: invitedHeaders,
 				},
-				headers: invitedHeaders,
 			}),
 		]);
+		type AcceptInvitationResult = Awaited<
+			ReturnType<typeof client.organization.acceptInvitation>
+		>;
 
 		expect(barrierCount).toBe(2);
+		const fulfilledResults = results.filter(
+			(result): result is PromiseFulfilledResult<AcceptInvitationResult> =>
+				result.status === "fulfilled",
+		);
+		expect(fulfilledResults).toHaveLength(2);
+		const successfulResults = fulfilledResults.filter(
+			(result) => !result.value.error,
+		);
+		expect(successfulResults).toHaveLength(2);
 
 		const members = await db.findMany({
 			model: "member",
@@ -655,10 +730,10 @@ describe("organization", async () => {
 		});
 		expect(invitationRows[0]?.status).toBe("accepted");
 
-		const successfulMemberIds = results.flatMap((result) =>
-			result.status === "fulfilled" ? [result.value.member.id] : [],
+		const successfulMemberIds = successfulResults.flatMap((result) =>
+			result.value.data?.member.id ? [result.value.data.member.id] : [],
 		);
-		expect(successfulMemberIds.length).toBeGreaterThanOrEqual(1);
+		expect(successfulMemberIds).toHaveLength(2);
 		expect(new Set(successfulMemberIds).size).toBe(1);
 	});
 

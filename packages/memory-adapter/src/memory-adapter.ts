@@ -386,12 +386,12 @@ export const memoryAdapter = (
 					});
 					return count;
 				},
-				updateMany({ model, where, update }) {
+				async updateMany({ model, where, update }) {
 					const res = convertWhereClause(where, model);
 					res.forEach((record) => {
 						Object.assign(record, update);
 					});
-					return res[0] || null;
+					return res.length;
 				},
 			};
 		},
