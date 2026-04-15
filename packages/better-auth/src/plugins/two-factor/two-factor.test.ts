@@ -8,6 +8,7 @@ import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { anonymous } from "../anonymous";
+import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
@@ -2344,6 +2345,96 @@ describe("twoFactorMethods in sign-in response", () => {
 			expect((signInRes as any).twoFactorRedirect).toBe(true);
 			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9205
+ *
+ * 2FA enforcement is intentionally scoped to credential sign-in paths
+ * only. These tests lock that scope in so a future refactor does not
+ * accidentally broaden enforcement to non-credential sign-in flows
+ * without a dedicated release.
+ */
+describe("2FA enforcement scope", async () => {
+	let magicLinkURL = "";
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP() {},
+				},
+				skipVerificationOnEnable: true,
+			}),
+			magicLink({
+				sendMagicLink({ url }) {
+					magicLinkURL = url;
+				},
+			}),
+		],
+	});
+
+	it("should not challenge 2FA on magic-link sign-in", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		await auth.api.signInMagicLink({
+			body: { email: testUser.email },
+			headers: new Headers(),
+		});
+
+		const url = new URL(magicLinkURL);
+		const token = url.searchParams.get("token")!;
+
+		const verifyRes = await auth.api.magicLinkVerify({
+			query: { token },
+			headers: new Headers(),
+			asResponse: true,
+		});
+
+		const json = await verifyRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+	});
+
+	it("should not challenge 2FA on authenticated non-sign-in endpoints", async () => {
+		const {
+			auth: instance,
+			signInWithTestUser: signIn,
+			testUser: user,
+		} = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+		let { headers } = await signIn();
+		const enableRes = await instance.api.enableTwoFactor({
+			body: { password: user.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const session = await instance.api.getSession({ headers });
+		expect(session?.user.twoFactorEnabled).toBe(true);
+
+		const updateRes = await instance.api.updateUser({
+			body: { name: "updated-name" },
+			headers,
+			asResponse: true,
+		});
+
+		expect(updateRes.ok).toBe(true);
+		const json = await updateRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 });
 
