@@ -3,9 +3,41 @@ import type {
 	EndpointOptions,
 	StrictEndpoint,
 } from "better-call";
-import { createEndpoint, createMiddleware } from "better-call";
+import {
+	APIError,
+	createEndpoint,
+	createMiddleware,
+	kAPIErrorHeaderSymbol,
+} from "better-call";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
+
+function isAPIError(error: unknown): error is APIError {
+	return (
+		error instanceof APIError ||
+		(error as { name?: string } | null)?.name === "APIError"
+	);
+}
+
+/**
+ * Better-call's createEndpoint re-throws APIError without exposing the headers
+ * accumulated on ctx.responseHeaders (e.g. Set-Cookie from deleteSessionCookie
+ * before throw). Attach them to the error via kAPIErrorHeaderSymbol — matching
+ * better-call's createMiddleware contract so the outer pipeline can merge them
+ * into the response.
+ */
+function attachResponseHeadersToAPIError(
+	responseHeaders: Headers | undefined,
+	e: unknown,
+): void {
+	if (!isAPIError(e) || !responseHeaders) return;
+	Object.defineProperty(e, kAPIErrorHeaderSymbol, {
+		enumerable: false,
+		configurable: true,
+		value: responseHeaders,
+		writable: false,
+	});
+}
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**
@@ -76,6 +108,17 @@ export function createAuthEndpoint<
 	const handler: EndpointHandler<Path, Opts, R> =
 		typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
 
+	// todo: prettify the code, we want to call `runWithEndpointContext` to top level
+	const wrapped: EndpointHandler<Path, Opts, R> = async (ctx) => {
+		const runtimeCtx = ctx as unknown as { responseHeaders?: Headers };
+		try {
+			return await runWithEndpointContext(ctx as any, () => handler(ctx));
+		} catch (e) {
+			attachResponseHeadersToAPIError(runtimeCtx.responseHeaders, e);
+			throw e;
+		}
+	};
+
 	if (path) {
 		return createEndpoint(
 			path,
@@ -83,8 +126,7 @@ export function createAuthEndpoint<
 				...options,
 				use: [...(options?.use || []), ...use],
 			},
-			// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-			async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+			wrapped,
 		);
 	}
 
@@ -93,8 +135,7 @@ export function createAuthEndpoint<
 			...options,
 			use: [...(options?.use || []), ...use],
 		},
-		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+		wrapped,
 	);
 }
 

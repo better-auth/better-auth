@@ -1228,3 +1228,38 @@ describe("custom response code", () => {
 		expect(response.response).toEqual({ success: true });
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8576
+ */
+describe("response headers on APIError", async () => {
+	const endpoints = {
+		setCookieThenThrow: createAuthEndpoint(
+			"/set-cookie-then-throw",
+			{
+				method: "POST",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				c.setCookie("session_data", "", { maxAge: 0 });
+				throw c.error("UNAUTHORIZED", { message: "cleared" });
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("preserves Set-Cookie headers accumulated via c.setCookie when the endpoint throws APIError", async () => {
+		const response = await authEndpoints.setCookieThenThrow({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(401);
+
+		const setCookie = response.headers.get("set-cookie") ?? "";
+		expect(setCookie).toContain("session=");
+		expect(setCookie).toContain("session_data=");
+		expect(setCookie.toLowerCase()).toMatch(/max-age=0/);
+	});
+});

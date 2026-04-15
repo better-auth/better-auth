@@ -229,12 +229,29 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								if (isAPIError(e)) {
 									/**
 									 * API Errors from response are caught
-									 * and returned to hooks
+									 * and returned to hooks.
+									 *
+									 * `kAPIErrorHeaderSymbol` carries headers accumulated
+									 * on ctx.responseHeaders before the throw (e.g.
+									 * Set-Cookie from deleteSessionCookie). Fall back to
+									 * `e.headers` for explicit APIError headers. Mirrors
+									 * the after-hooks catch.
+									 *
+									 * Note: if both are populated (handler called
+									 * c.setCookie AND threw `new APIError(status, body,
+									 * explicitHeaders)`), the accumulated ctx headers win
+									 * and `e.headers` is dropped. This matches the
+									 * after-hooks behavior below; reconcile both sites if
+									 * explicit APIError headers need to be merged.
 									 */
+									const headers: Headers | null =
+										(e as { [kAPIErrorHeaderSymbol]?: Headers })[
+											kAPIErrorHeaderSymbol
+										] ?? (e.headers ? new Headers(e.headers) : null);
 									return {
 										response: e,
 										status: e.statusCode,
-										headers: e.headers ? new Headers(e.headers) : null,
+										headers,
 									};
 								}
 								throw e;
