@@ -1,3 +1,5 @@
+export type IsAny<T> = 0 extends 1 & T ? true : false;
+
 export type Prettify<T> = Omit<T, never>;
 
 export type PrettifyDeep<T> = {
@@ -29,7 +31,57 @@ export type RequiredKeysOf<BaseType extends object> = Exclude<
 	undefined
 >;
 
-export type HasRequiredKeys<BaseType extends object> =
-	RequiredKeysOf<BaseType> extends never ? false : true;
+export type HasRequiredKeys<BaseType> =
+	IsAny<BaseType> extends true
+		? false
+		: [BaseType] extends [object]
+			? RequiredKeysOf<BaseType & object> extends never
+				? false
+				: true
+			: false;
 
 export type StripEmptyObjects<T extends object> = { [K in keyof T]: T[K] };
+
+/**
+ * Object merge replacing `Base`'s keys with `Override`'s.
+ * The naive `Omit<Base, keyof Override> & Override` form breaks under generics.
+ *
+ * @see https://github.com/microsoft/TypeScript/issues/57466#issuecomment-1957988380
+ */
+export type OverrideMerge<Base, Override> = Base extends unknown
+	? Override extends unknown
+		? Prettify<
+				{
+					[K in keyof Base as K extends keyof Override ? never : K]: Base[K];
+				} & Override
+			>
+		: never
+	: never;
+
+/**
+ * Extracts a Record-typed field from a plugin, guarding against `any`.
+ */
+export type ExtractPluginField<T, Field extends string> =
+	IsAny<T> extends true
+		? {}
+		: T extends { [K in Field]?: Record<string, any> }
+			? T[Field] extends Record<string, any>
+				? T[Field]
+				: {}
+			: {};
+
+/**
+ * Walks a plugin tuple with tail-recursive accumulator (TS 4.5+),
+ * extracting and intersecting the given field from each element.
+ */
+export type InferPluginFieldFromTuple<
+	T extends readonly unknown[],
+	Field extends string,
+	Acc = {},
+> = T extends readonly [infer Head, ...infer Tail]
+	? InferPluginFieldFromTuple<
+			Tail,
+			Field,
+			Acc & ExtractPluginField<Head, Field>
+		>
+	: Acc;

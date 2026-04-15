@@ -1,0 +1,80 @@
+# cSpell:words amannn marocchino
+name: Semantic Pull Request
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Check PR title
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+        id: lint_pr_title
+        with:
+          subjectPattern: ^(?![A-Z]).+$ # Ensure the subject doesn't start with an uppercase character
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            didn't match the configured pattern. Please ensure that the subject
+            doesn't start with an uppercase character.
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      # Block breaking changes (feat!, fix!, etc.) on PRs targeting main
+      - name: Block breaking changes on main
+        if: >
+          github.event.pull_request.base.ref == 'main' &&
+          steps.lint_pr_title.outputs.error_message == null
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if echo "$PR_TITLE" | grep -qE '^[a-z]+(\(.+\))?!:'; then
+            echo "::error::Breaking changes (indicated by '!' in the PR title) are not allowed on main."
+            echo "::error::Please target the 'next' branch for breaking changes."
+            exit 1
+          fi
+
+      - name: Comment on invalid PR title
+        uses: marocchino/sticky-pull-request-comment@70d2764d1a7d5d9560b100cbea0077fc8f633987 # v3
+        # NOTE: null comparison is intentional per official README
+        if: always() && (steps.lint_pr_title.outputs.error_message != null)
+        with:
+          header: pr-title-lint-error
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          message: |
+            Thanks for your contribution!
+
+            PR titles need to follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format. It looks like your title needs a small adjustment.
+
+            *Hint:*
+
+            ```
+            ${{ steps.lint_pr_title.outputs.error_message }}
+            ```
+
+      - name: Remove comment on valid PR title
+        uses: marocchino/sticky-pull-request-comment@70d2764d1a7d5d9560b100cbea0077fc8f633987 # v3
+        # NOTE: null comparison is intentional per official README
+        if: ${{ steps.lint_pr_title.outputs.error_message == null }}
+        with:
+          header: pr-title-lint-error
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          delete: true

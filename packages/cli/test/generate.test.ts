@@ -264,6 +264,117 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should treat fields with omitted required as notNull (default true)", async () => {
+		const pluginWithOmittedRequired = (): BetterAuthPlugin => ({
+			id: "omitted-required-test",
+			schema: {
+				testTable: {
+					fields: {
+						requiredField: {
+							type: "string",
+							// required is omitted — should default to true
+						},
+						explicitRequired: {
+							type: "string",
+							required: true,
+						},
+						explicitOptional: {
+							type: "string",
+							required: false,
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithOmittedRequired()],
+			} as BetterAuthOptions,
+		});
+
+		// Fields with omitted `required` should have .notNull()
+		expect(schema.code).toContain(
+			'requiredField: text("required_field").notNull()',
+		);
+		// Fields with explicit `required: true` should have .notNull()
+		expect(schema.code).toContain(
+			'explicitRequired: text("explicit_required").notNull()',
+		);
+		// Fields with explicit `required: false` should NOT have .notNull()
+		expect(schema.code).not.toMatch(/explicitOptional:.*\.notNull\(\)/);
+	});
+
+	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
+		const originalCwd = process.cwd();
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-required-test-"),
+		);
+
+		try {
+			fs.writeFileSync(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify({
+					dependencies: { prisma: "^7.0.0" },
+				}),
+			);
+			process.chdir(tmpDir);
+
+			const pluginWithOmittedRequired = (): BetterAuthPlugin => ({
+				id: "omitted-required-test",
+				schema: {
+					testTable: {
+						fields: {
+							requiredField: {
+								type: "string",
+								// required is omitted — should default to true
+							},
+							explicitRequired: {
+								type: "string",
+								required: true,
+							},
+							explicitOptional: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+				},
+			});
+
+			const schema = await generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{ provider: "postgresql" },
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter({}, { provider: "postgresql" }),
+					plugins: [pluginWithOmittedRequired()],
+				},
+			});
+
+			// Fields with omitted `required` should NOT have "?" (= required)
+			expect(schema.code).toMatch(/requiredField\s+String(?!\?)/);
+			// Fields with explicit `required: true` should NOT have "?"
+			expect(schema.code).toMatch(/explicitRequired\s+String(?!\?)/);
+			// Fields with explicit `required: false` should have "?"
+			expect(schema.code).toMatch(/explicitOptional\s+String\?/);
+		} finally {
+			process.chdir(originalCwd);
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	});
+
 	// Minimal plugin that reproduces the bug: two fields referencing the same model
 	const testPlugin = (): BetterAuthPlugin => {
 		return {
@@ -500,7 +611,8 @@ describe("JSON field support in CLI generators", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("preferences   Json?");
+		// required omitted → defaults to true → non-nullable
+		expect(schema.code).toMatch(/preferences\s+Json(?!\?)/);
 	});
 
 	it("should generate Prisma schema with JSON default values of arrays and objects", async () => {
@@ -534,8 +646,8 @@ describe("JSON field support in CLI generators", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("preferences   Json?");
-		// expect(schema.code).toContain(JSON.stringify(`@default("{\"premiumuser\":true}")`).slice(1,-1));
+		// required omitted → defaults to true → non-nullable
+		expect(schema.code).toMatch(/preferences\s+Json(?!\?)/);
 		expect(schema.code).toContain('@default("{\\"premiumuser\\":true}")');
 		expect(schema.code).toContain(
 			'@default("[{\\"name\\":\\"john\\",\\"subscribed\\":false},{\\"name\\":\\"doe\\",\\"subscribed\\":true}]")',

@@ -1,0 +1,404 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import { useRef } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import type * as z from "zod";
+import Footer from "@/components/landing/footer";
+import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { Button } from "@/components/ui/button";
+import {
+	Form,
+	FormControl,
+	FormField,
+	FormItem,
+	FormLabel,
+	FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { contactSchema } from "@/lib/enterprise-contact";
+
+const included = [
+	"Self-service SSO",
+	"Dashboard RBAC",
+	"Unlimited seats",
+	"Custom audit logs",
+	"Implementation assistance",
+	"Advanced support",
+	"Custom events & security",
+	"Log drain",
+];
+
+function EnterpriseHero() {
+	return (
+		<motion.div
+			initial={{ opacity: 0, y: 12 }}
+			animate={{ opacity: 1, y: 0 }}
+			transition={{ duration: 0.5, ease: "easeOut" }}
+			className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full"
+		>
+			<div className="space-y-6">
+				<div className="space-y-2">
+					<div className="flex items-center gap-1.5">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="0.9em"
+							height="0.9em"
+							viewBox="0 0 24 24"
+							className="text-foreground/60"
+							aria-hidden="true"
+						>
+							<path
+								fill="currentColor"
+								d="M12 7V3H2v18h20V7zM6 19H4v-2h2zm0-4H4v-2h2zm0-4H4V9h2zm0-4H4V5h2zm4 12H8v-2h2zm0-4H8v-2h2zm0-4H8V9h2zm0-4H8V5h2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8zm-2-8h-2v2h2zm0 4h-2v2h2z"
+							/>
+						</svg>
+						<span className="text-sm text-foreground/60">Enterprise</span>
+					</div>
+					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+						Enterprise-grade
+						<br />
+						<span className="text-neutral-500 dark:text-neutral-400">
+							auth at scale.
+						</span>
+					</h1>
+					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
+						Custom plans, unlimited seats, SSO, RBAC, and advanced support for
+						teams that need more.
+					</p>
+				</div>
+
+				<div className="border-t border-foreground/10 pt-4 space-y-0">
+					{included.map((item, i) => (
+						<motion.div
+							key={item}
+							initial={{ opacity: 0, x: -8 }}
+							animate={{ opacity: 1, x: 0 }}
+							transition={{
+								duration: 0.25,
+								delay: 0.3 + i * 0.05,
+								ease: "easeOut",
+							}}
+							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/6 last:border-0"
+						>
+							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-xs leading-none select-none shrink-0">
+								+
+							</span>
+							<span className="text-xs text-foreground/70 dark:text-foreground/50 font-mono tracking-wide">
+								{item}
+							</span>
+						</motion.div>
+					))}
+				</div>
+
+				{/* CTA */}
+				<div className="flex items-center gap-3 pt-1">
+					<Link
+						href="/products/infrastructure"
+						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/60 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
+					>
+						View Products
+						<svg
+							className="h-2.5 w-2.5 opacity-50"
+							viewBox="0 0 10 10"
+							fill="none"
+						>
+							<path
+								d="M1 9L9 1M9 1H3M9 1V7"
+								stroke="currentColor"
+								strokeWidth="1.2"
+							/>
+						</svg>
+					</Link>
+				</div>
+			</div>
+		</motion.div>
+	);
+}
+
+export function EnterprisePageClient() {
+	const hpRef = useRef<HTMLInputElement>(null);
+	const form = useForm<z.infer<typeof contactSchema>>({
+		resolver: zodResolver(contactSchema),
+		defaultValues: {
+			fullName: "",
+			company: "",
+			email: "",
+			companySize: "",
+			description: "",
+		},
+	});
+
+	const onSubmit = async (data: z.infer<typeof contactSchema>) => {
+		try {
+			const response = await fetch("/api/enterprise/contact", {
+				method: "POST",
+				body: JSON.stringify({
+					...data,
+					_hp: hpRef.current?.value,
+				}),
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+			if (!response.ok) {
+				const { message } = await response.json();
+				if (response.status === 422) {
+					form.setError("email", { message });
+					return;
+				}
+				toast.error(message || "Something went wrong. Please try again.");
+				return;
+			}
+			toast.success("Thank you for your interest! We'll be in touch soon.");
+			form.reset();
+		} catch {
+			toast.error("Something went wrong. Please try again.");
+		}
+	};
+
+	return (
+		<div className="relative min-h-dvh pt-14 lg:pt-0">
+			<div className="relative text-foreground">
+				<div className="flex flex-col lg:flex-row">
+					{/* Left side — Enterprise hero */}
+					<div className="hidden lg:block relative w-full shrink-0 lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/6 overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
+						<div className="hidden lg:block">
+							<HalftoneBackground />
+						</div>
+						<EnterpriseHero />
+					</div>
+
+					{/* Right side — Contact form */}
+					<div className="relative w-full lg:w-[60%] overflow-x-hidden no-scrollbar">
+						<div className="px-5 lg:p-8 lg:pt-20 space-y-8">
+							{/* Mobile header */}
+							<div className="lg:hidden relative border-b border-foreground/6 overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
+								<HalftoneBackground />
+								<div className="relative space-y-2 py-16">
+									<div className="flex items-center gap-1.5">
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="0.9em"
+											height="0.9em"
+											viewBox="0 0 24 24"
+											className="text-foreground/60"
+											aria-hidden="true"
+										>
+											<path
+												fill="currentColor"
+												d="M12 7V3H2v18h20V7zM6 19H4v-2h2zm0-4H4v-2h2zm0-4H4V9h2zm0-4H4V5h2zm4 12H8v-2h2zm0-4H8v-2h2zm0-4H8V9h2zm0-4H8V5h2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8zm-2-8h-2v2h2zm0 4h-2v2h2z"
+											/>
+										</svg>
+										<span className="text-sm text-foreground/60">
+											Enterprise
+										</span>
+									</div>
+									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
+										Enterprise-grade
+										<br />
+										<span className="text-neutral-500 dark:text-neutral-400">
+											auth at scale.
+										</span>
+									</h1>
+									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+										Custom plans, unlimited seats, SSO, RBAC, and advanced
+										support for teams that need more.
+									</p>
+								</div>
+							</div>
+
+							<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
+								ENTERPRISE
+								<span className="flex-1 h-px bg-foreground/15" />
+							</h2>
+
+							{/* Contact form */}
+							<motion.div
+								initial={{ opacity: 0, y: 6 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.3, delay: 0.05 }}
+							>
+								<div className="relative border overflow-hidden max-w-xl lg:mt-8 bg-card">
+									<div className="px-4 py-4 sm:px-5 sm:py-5">
+										<div className="space-y-1.5 mb-5">
+											<h2 className="text-lg text-foreground font-medium">
+												Get in touch
+											</h2>
+											<p className="text-sm text-foreground/50">
+												Fill out the form and we&apos;ll be in touch soon.
+											</p>
+										</div>
+
+										<Form {...form}>
+											<form
+												onSubmit={form.handleSubmit(onSubmit)}
+												className="space-y-3.5"
+											>
+												{/* honeypot */}
+												<div
+													aria-hidden="true"
+													className="absolute opacity-0 pointer-events-none h-0 overflow-hidden"
+												>
+													<input
+														ref={hpRef}
+														type="text"
+														tabIndex={-1}
+														autoComplete="off"
+													/>
+												</div>
+
+												<FormField
+													control={form.control}
+													name="fullName"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Full Name
+															</FormLabel>
+															<FormControl>
+																<Input {...field} placeholder="Your name" />
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="company"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Company
+															</FormLabel>
+															<FormControl>
+																<Input {...field} placeholder="Company name" />
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="email"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Company Email
+															</FormLabel>
+															<FormControl>
+																<Input
+																	{...field}
+																	type="email"
+																	placeholder="name@company.com"
+																/>
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="companySize"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																Company Size
+															</FormLabel>
+															<Select
+																value={field.value}
+																onValueChange={field.onChange}
+															>
+																<FormControl>
+																	<SelectTrigger>
+																		<SelectValue placeholder="Select" />
+																	</SelectTrigger>
+																</FormControl>
+																<SelectContent>
+																	<SelectItem value="1-10">1-10</SelectItem>
+																	<SelectItem value="11-50">11-50</SelectItem>
+																	<SelectItem value="51-200">51-200</SelectItem>
+																	<SelectItem value="201-500">
+																		201-500
+																	</SelectItem>
+																	<SelectItem value="501+">501+</SelectItem>
+																</SelectContent>
+															</Select>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<FormField
+													control={form.control}
+													name="description"
+													render={({ field }) => (
+														<FormItem>
+															<FormLabel className="text-xs tracking-wider text-foreground/50 font-mono">
+																What do you need help with?
+															</FormLabel>
+															<FormControl>
+																<Textarea
+																	{...field}
+																	rows={4}
+																	placeholder="Tell us about your project and requirements..."
+																	className="min-h-[100px]"
+																/>
+															</FormControl>
+															<FormMessage />
+														</FormItem>
+													)}
+												/>
+
+												<Button
+													disabled={form.formState.isSubmitting}
+													type="submit"
+													className="w-full font-mono uppercase tracking-widest"
+												>
+													{form.formState.isSubmitting ? "Sending..." : "Send"}
+												</Button>
+											</form>
+										</Form>
+
+										<p className="mt-4 text-foreground/50 text-xs leading-relaxed">
+											By submitting, you agree to our{" "}
+											<Link
+												href="/legal/terms"
+												className="underline hover:text-foreground/55"
+											>
+												Terms of Service
+											</Link>{" "}
+											and{" "}
+											<Link
+												href="/legal/privacy"
+												className="underline hover:text-foreground/55"
+											>
+												Privacy Policy
+											</Link>
+											.
+										</p>
+									</div>
+								</div>
+							</motion.div>
+						</div>
+						<Footer />
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}

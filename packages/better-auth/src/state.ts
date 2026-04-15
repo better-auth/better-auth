@@ -14,6 +14,11 @@ const stateDataSchema = z.looseObject({
 	errorURL: z.string().optional(),
 	newUserURL: z.string().optional(),
 	expiresAt: z.number(),
+	/**
+	 * CSRF nonce returned to the OAuth provider. When using cookie state storage,
+	 * this must match the callback `state` query parameter.
+	 */
+	oauthState: z.string().optional(),
 	link: z
 		.object({
 			email: z.string(),
@@ -56,12 +61,15 @@ export async function generateGenericState(
 	const state = generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
+	// Cookie strategy:
+	//
+	// State data is encrypted into the cookie
+	// no verification record created
 	if (storeStateStrategy === "cookie") {
-		// Store state data in an encrypted cookie
-
+		const payload: StateData = { ...stateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
 			key: c.context.secretConfig,
-			data: JSON.stringify(stateData),
+			data: JSON.stringify(payload),
 		});
 
 		const stateCookie = c.context.createAuthCookie(
@@ -79,8 +87,10 @@ export async function generateGenericState(
 		};
 	}
 
-	// Default: database strategy
-
+	// Database strategy:
+	//
+	// state is stored in a signed cookie and sent via OAuth URL
+	// the adapter hashes it at rest when storeIdentifier is set
 	const stateCookie = c.context.createAuthCookie(
 		settings?.cookieName ?? "state",
 		{
@@ -99,7 +109,10 @@ export async function generateGenericState(
 	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify(stateData),
+		value: JSON.stringify({
+			...stateData,
+			oauthState: state,
+		} satisfies StateData),
 		identifier: state,
 		expiresAt,
 	});
@@ -113,8 +126,11 @@ export async function generateGenericState(
 		);
 	}
 
+	// Return the plain state, not verification.identifier.
+	// The adapter hashes it for DB storage when storeIdentifier is "hashed",
+	// so returning verification.identifier would cause double-hashing on lookup.
 	return {
-		state: verification.identifier,
+		state,
 		codeVerifier: stateData.codeVerifier,
 	};
 }
@@ -122,7 +138,7 @@ export async function generateGenericState(
 export async function parseGenericState(
 	c: GenericEndpointContext,
 	state: string,
-	settings?: { cookieName: string },
+	settings?: { cookieName: string; skipStateCookieCheck?: boolean },
 ) {
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
@@ -159,6 +175,16 @@ export async function parseGenericState(
 			);
 		}
 
+		if (!parsedData.oauthState || parsedData.oauthState !== state) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+				},
+			);
+		}
+
 		// Clear the cookie after successful parsing
 		expireCookie(c, stateCookie);
 	} else {
@@ -173,6 +199,19 @@ export async function parseGenericState(
 
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
 
+		if (
+			parsedData.oauthState !== undefined &&
+			parsedData.oauthState !== state
+		) {
+			throw new StateError(
+				"State mismatch: OAuth state parameter does not match stored state",
+				{
+					code: "state_security_mismatch",
+					details: { state },
+				},
+			);
+		}
+
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "state",
 		);
@@ -186,8 +225,14 @@ export async function parseGenericState(
 		 * This is generally cause security issue and should only be used in
 		 * dev or staging environments. It's currently used by the oauth-proxy
 		 * plugin
+		 *
+		 * Also used by SAML relay state parsing via settings.skipStateCookieCheck,
+		 * where the IdP POST is typically cross-origin and SameSite=Lax cookies
+		 * are not sent.
 		 */
-		const skipStateCookieCheck = c.context.oauthConfig.skipStateCookieCheck;
+		const skipStateCookieCheck =
+			settings?.skipStateCookieCheck ??
+			c.context.oauthConfig.skipStateCookieCheck;
 		if (
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)

@@ -1,7 +1,9 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
+import { inferAdditionalFields } from "../additional-fields/client";
 import { admin } from "../admin";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
@@ -79,6 +81,37 @@ describe("Custom Session Plugin Tests", async () => {
 				},
 			},
 		});
+	});
+
+	it("should not double-encode session cookie during get-session refresh", async () => {
+		const { headers } = await signInWithTestUser();
+		const signedInCookie = headers.get("cookie");
+		const signedInSessionToken = signedInCookie?.match(
+			/better-auth\.session_token=([^;]+)/,
+		)?.[1];
+		expect(signedInSessionToken).toBeDefined();
+
+		let refreshedSessionToken: string | undefined;
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const setCookies = context.response.headers.getSetCookie();
+					for (const cookieStr of setCookies) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						const token = parsed.get("better-auth.session_token")?.value;
+						if (token) {
+							refreshedSessionToken = token;
+							break;
+						}
+					}
+				},
+			},
+		});
+
+		expect(refreshedSessionToken).toBeDefined();
+		expect(refreshedSessionToken).toBe(signedInSessionToken);
+		expect(refreshedSessionToken).not.toContain("%25");
 	});
 
 	it("should return the custom session for multi-session", async () => {
@@ -266,6 +299,83 @@ describe("Custom Session Plugin Tests", async () => {
 			custom: {
 				field: string;
 			};
+		}>();
+	});
+
+	it("should not add user/session to client getSession type when custom session omits them", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				customSession(async () => {
+					return {
+						custom: {
+							field: "field",
+						},
+					};
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [customSessionClient<typeof auth>()],
+		});
+
+		type SessionData = typeof client.$Infer.Session;
+
+		// When custom session omits user/session, the client type must not claim they exist
+		expectTypeOf<SessionData>().toEqualTypeOf<{
+			custom: {
+				field: string;
+			};
+		}>();
+
+		// Verify user and session are not in the type
+		expectTypeOf<keyof SessionData>().toEqualTypeOf<"custom">();
+	});
+
+	it("should infer both customSessionClient and inferAdditionalFields when combined", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					role: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return {
+						user: {
+							firstName: user.name.split(" ")[0],
+							lastName: user.name.split(" ")[1],
+						},
+						session,
+						customData: { message: "hello" },
+					};
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [
+				customSessionClient<typeof auth>(),
+				inferAdditionalFields<typeof auth>(),
+			],
+		});
+
+		type SessionData = typeof client.$Infer.Session;
+		type User = SessionData["user"];
+
+		expectTypeOf<User>().toMatchObjectType<{
+			id: string;
+			firstName: string | undefined;
+			lastName: string | undefined;
+			role?: string | undefined | null;
+		}>();
+
+		type CustomData = SessionData["customData"];
+		expectTypeOf<CustomData>().toMatchObjectType<{
+			message: string;
 		}>();
 	});
 });

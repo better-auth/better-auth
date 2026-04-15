@@ -2,9 +2,14 @@ import type { Organization } from "@better-auth/organization";
 import { organization } from "@better-auth/organization";
 import { organizationClient } from "@better-auth/organization/client";
 import { createAuthClient } from "better-auth/client";
+import { generateRandomString } from "better-auth/crypto";
+import {
+	createAuthorizationCodeRequest,
+	createAuthorizationURL,
+} from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
@@ -211,6 +216,21 @@ describe("oauth register", async () => {
 		expect(response.data?.disabled).toBeFalsy();
 	});
 
+	it("should preserve confidential method and type for authenticated registration", async () => {
+		const response = await serverClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_post",
+			type: "web",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeDefined();
+		expect(response.data?.token_endpoint_auth_method).toBe(
+			"client_secret_post",
+		);
+		expect(response.data?.type).toBe("web");
+		expect(response.data?.public).toBeFalsy();
+	});
+
 	it("should register client with metadata field", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -287,11 +307,209 @@ describe("oauth register - unauthenticated", async () => {
 		expect(response.data?.client_secret).toBeUndefined();
 	});
 
-	it("should not create confidential clients without authentication", async () => {
+	/**
+	 * RFC 7591 §2: when token_endpoint_auth_method is omitted, the default
+	 * is "client_secret_basic". Unauthenticated DCR overrides this to "none"
+	 * per RFC 7591 §3.2.1 ("the server MAY reject or replace any of the
+	 * client's requested metadata values").
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should override omitted auth method (RFC 7591 default) to public", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
 			redirect_uris: [redirectUri],
 		});
-		expect(response.error?.status).toBe(401);
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.public).toBe(true);
+	});
+
+	/**
+	 * Real-world MCP clients (Claude, Codex, Factory Droid) send
+	 * token_endpoint_auth_method: "client_secret_post" in their DCR payload.
+	 * The server overrides this to "none" and communicates the actual method
+	 * in the registration response so compliant clients can adjust.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should override client_secret_post to public for unauthenticated DCR", async () => {
+		const response = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_post",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.public).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should override client_secret_basic to public for unauthenticated DCR", async () => {
+		const response = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_basic",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.public).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should clear type 'web' when overriding confidential to public", async () => {
+		const response = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_post",
+			type: "web",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data?.token_endpoint_auth_method).toBe("none");
+		expect(response.data?.type).toBeUndefined();
+	});
+
+	/**
+	 * client_credentials requires a secret, which public clients never get.
+	 * Reject the combination at registration rather than creating an unusable client.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8588
+	 */
+	it("should reject client_credentials grant for unauthenticated DCR", async () => {
+		const response = await unauthenticatedClient.oauth2.register({
+			grant_types: ["client_credentials"],
+			redirect_uris: [redirectUri],
+		});
+		expect(response.error?.status).toBe(400);
+	});
+});
+
+/**
+ * Verifies the overridden public client is actually usable end-to-end:
+ * DCR with client_secret_post (overridden to "none") -> authorize -> PKCE token exchange.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/8588
+ */
+describe("oauth register - unauthenticated DCR full flow", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const authenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+	const unauthenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "e2e-test-state";
+
+	it("should complete authorize + PKCE token exchange after override from client_secret_post", async () => {
+		// 1. Register via unauthenticated DCR with client_secret_post (gets overridden to "none")
+		const reg = await unauthenticatedClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_post",
+			redirect_uris: [redirectUri],
+		});
+		expect(reg.data?.client_id).toBeDefined();
+		expect(reg.data?.client_secret).toBeUndefined();
+		expect(reg.data?.token_endpoint_auth_method).toBe("none");
+
+		const clientId = reg.data!.client_id;
+
+		// 2. Build authorization URL with PKCE (no client secret)
+		const codeVerifier = generateRandomString(64);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		// 3. Hit authorize endpoint (with user session) -> consent redirect
+		let consentRedirectUrl = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(ctx) {
+				consentRedirectUrl = ctx.response.headers.get("Location") || "";
+			},
+		});
+		expect(consentRedirectUrl).toContain("/consent");
+
+		// 4. Accept consent -> get authorization code
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await authenticatedClient.oauth2.consent(
+			{ accept: true },
+			{ headers, throw: true },
+		);
+		expect(consentRes.url).toContain("code=");
+
+		const code = new URL(consentRes.url).searchParams.get("code")!;
+
+		// 5. Exchange code at token endpoint with PKCE (no client_secret)
+		const { body: tokenBody, headers: tokenHeaders } =
+			createAuthorizationCodeRequest({
+				code,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options: {
+					clientId,
+					redirectURI: redirectUri,
+				},
+			});
+
+		const tokenRes = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{
+				method: "POST",
+				body: tokenBody.toString(),
+				headers: tokenHeaders,
+			},
+		);
+		const tokens = await tokenRes.json();
+
+		expect(tokens.access_token).toBeDefined();
+		expect(tokens.id_token).toBeDefined();
+		expect(tokens.token_type.toLowerCase()).toBe("bearer");
+		expect(tokens.scope).toBe("openid");
 	});
 });
 
@@ -360,5 +578,46 @@ describe("oauth register - organization", async () => {
 		});
 		expect(client.data?.user_id).toBeUndefined();
 		expect(client.data?.reference_id).toBe(org.id);
+	});
+});
+
+describe("oauth register - skip_consent blocked", async () => {
+	const baseUrl = "http://localhost:3000";
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	it("should reject skip_consent during dynamic registration", async () => {
+		const res = await serverClient.oauth2.register({
+			redirect_uris: ["http://localhost:5000/callback"],
+			// @ts-expect-error testing skip consent mimicing client incorrectly sending parameter
+			skip_consent: true,
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should allow registration without skip_consent", async () => {
+		const res = await serverClient.oauth2.register({
+			redirect_uris: ["http://localhost:5000/callback"],
+		});
+		expect(res.data?.client_id).toBeDefined();
 	});
 });

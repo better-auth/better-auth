@@ -5,7 +5,7 @@ import { Command } from "commander";
 import prompts from "prompts";
 import * as semver from "semver";
 import yoctoSpinner from "yocto-spinner";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { detectPackageManager } from "../utils/check-package-managers";
 import { fetchLatestVersion } from "../utils/fetch-latest-version";
 import { getPackageInfo } from "../utils/get-package-info";
@@ -22,7 +22,7 @@ interface UpgradeEntry {
 	depType: "prod" | "dev";
 }
 
-export async function upgradeAction(opts: unknown) {
+async function upgradeAction(opts: unknown) {
 	const options = z
 		.object({
 			cwd: z.string(),

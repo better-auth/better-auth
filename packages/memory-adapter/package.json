@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/memory-adapter",
-  "version": "1.5.1-beta.1",
+  "version": "1.6.3",
   "description": "Memory adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -20,10 +20,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
@@ -42,12 +43,12 @@
     }
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0"
+    "@better-auth/core": "workspace:^",
+    "@better-auth/utils": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.1",
+    "@better-auth/utils": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

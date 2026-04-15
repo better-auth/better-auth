@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.5.1-beta.1",
+  "version": "1.6.3",
   "description": "Passkey plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -19,10 +19,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
@@ -67,10 +68,10 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "better-auth": "workspace:*",
+    "better-auth": "workspace:^",
     "better-call": "catalog:",
     "nanostores": "^1.0.1"
   }

@@ -63,7 +63,6 @@ export default defineConfig({
 		"./src/plugins/mcp/client/adapters.ts",
 		"./src/test-utils/index.ts",
 	],
-	sourcemap: true,
 	treeshake: true,
 	clean: true,
 	unbundle: true,

@@ -805,6 +805,7 @@ describe("signin", async () => {
 			redirect: true,
 		});
 		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expect(state).toBeTruthy();
 
 		await client.$fetch("/callback/google", {
 			query: {
@@ -823,6 +824,7 @@ describe("signin", async () => {
 			expiresAt: expect.any(Number),
 			invitedBy: "user-123",
 			errorURL: "http://localhost:3000/api/auth/error",
+			oauthState: state,
 		});
 	});
 
@@ -1157,6 +1159,109 @@ describe("Apple Provider", async () => {
 		});
 
 		expect(session.data?.user.name).toBe("Better Auth");
+	});
+
+	it("should pass user name via idToken body for Apple sign-in", async () => {
+		const appleProfile = {
+			sub: "001341.example.idtoken",
+			email: "idtoken-user@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+			/**
+			 * Apple id_token JWT does not include the user's name.
+			 * Name is available via the `user` field in the response.
+			 * @see https://developer.apple.com/documentation/signinwithapplejs/authorizationi/id_token
+			 * @see https://developer.apple.com/documentation/signinwithapple/incorporating-sign-in-with-apple-into-other-platforms#Handle-the-response
+			 */
+		};
+
+		const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+				user: {
+					name: {
+						firstName: "First",
+						lastName: "Last",
+					},
+					email: "idtoken-user@privaterelay.appleid.com",
+				},
+			},
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as {
+			token: string;
+			user: { email: string; name: string };
+		};
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("idtoken-user@privaterelay.appleid.com");
+		expect(data.user.name).toBe("First Last");
+	});
+
+	it("should result in empty name when idToken body has no user field for Apple", async () => {
+		const appleProfile = {
+			sub: "001341.example.idtoken-noname",
+			email: "noname-user@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+		};
+
+		const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as {
+			token: string;
+			user: { email: string; name: string };
+		};
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("noname-user@privaterelay.appleid.com");
+		expect(data.user.name).toBe("");
 	});
 });
 

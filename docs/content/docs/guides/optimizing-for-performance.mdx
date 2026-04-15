@@ -47,15 +47,15 @@ Here are examples of how you can do caching in different frameworks and environm
     ```
 
     Learn more about NextJS use cache directive <Link href="https://nextjs.org/docs/app/api-reference/directives/use-cache">here</Link>.
-
   </Tab>
-    <Tab value="react-router">
+
+  <Tab value="react-router">
     In React Router v7, you use HTTP `Cache-Control` headers in the loader function to cache responses. You must also export a headers function to send these headers. Here's an example:
 
     ```ts
     import { data } from 'react-router';
     import type { Route } from './+types/your-route-name';
-    
+
     export const loader = async ({ request }: Route.LoaderArgs) => {
       const { users } = await auth.api.listUsers();
       
@@ -65,14 +65,11 @@ Here are examples of how you can do caching in different frameworks and environm
         },
       });
     };
-    
+
     export function headers({ loaderHeaders }: Route.HeadersArgs) {
       return loaderHeaders;
     }
     ```
-
-
-
   </Tab>
 
   <Tab value="SolidStart">
@@ -86,8 +83,8 @@ Here are examples of how you can do caching in different frameworks and environm
     ```
 
     Learn more about SolidStart `query` function <Link href="https://docs.solidjs.com/solid-router/reference/data-apis/query">here</Link>.
-
   </Tab>
+
   <Tab value="TanStack Query">
     With TanStack Query you can use the `useQuery` hook to cache data. Here’s an example:
 
@@ -117,9 +114,33 @@ Here are examples of how you can do caching in different frameworks and environm
     ```
 
     Learn more about TanStack Query <Link href="https://tanstack.com/query">here</Link>.
-
   </Tab>
 </Tabs>
+
+## Background Tasks
+
+On serverless platforms (Vercel, Cloudflare Workers), you can improve response times by deferring non-critical work—cleanup, analytics, rate limit updates, email sending—to run after the response is sent. Configure [`advanced.backgroundTasks`](/docs/reference/options#backgroundtasks) and use `ctx.context.runInBackground` or `ctx.context.runInBackgroundOrAwait` in hooks.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+import { waitUntil } from "@vercel/functions";
+
+export const auth = betterAuth({
+  advanced: {
+    backgroundTasks: { handler: waitUntil },
+  },
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/sign-up/email") {
+        ctx.context.runInBackground(logSignUp(ctx.context.newSession?.user.id));
+      }
+    }),
+  },
+});
+```
+
+See the [Context documentation](/docs/concepts/hooks#runinbackground) for more examples.
 
 ## SSR Optimizations
 
@@ -211,6 +232,7 @@ Simply import from `better-auth/minimal` instead of `better-auth`:
 
 <Callout type="warning">
   **Limitations:**
-  - Direct database connections are not supported (you must use an adapter)
-  - Built-in migrations are not supported. Use external migration tools (or use `better-auth` if you need built-in migration support)
+
+  * Direct database connections are not supported (you must use an adapter)
+  * Built-in migrations are not supported. Use external migration tools (or use `better-auth` if you need built-in migration support)
 </Callout>

@@ -6,6 +6,7 @@ import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -55,6 +56,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		caseInsensitiveTestSuite(),
 		schemaRefTestSuite(),
 		schemaRefJoinTestSuite(),
 	],

@@ -12,6 +12,7 @@ import {
 	deviceAuthorizationClient,
 	emailOTPClient,
 	genericOAuthClient,
+	magicLinkClient,
 	multiSessionClient,
 	oidcClient,
 	twoFactorClient,
@@ -267,6 +268,36 @@ describe("type", () => {
 		});
 		expectTypeOf(client.setTestAtom).toEqualTypeOf<(value: boolean) => void>();
 		expectTypeOf(client.test.signOut).toEqualTypeOf<() => Promise<void>>();
+	});
+
+	it("should infer magic link metadata in sign-in request", () => {
+		const client = createReactClient({
+			plugins: [magicLinkClient()],
+		});
+
+		type SignInMagicLinkInput = NonNullable<
+			Parameters<typeof client.signIn.magicLink>[0]
+		>;
+
+		expectTypeOf<SignInMagicLinkInput>().toMatchTypeOf<{
+			email: string;
+			name?: string | undefined;
+			callbackURL?: string | undefined;
+			newUserCallbackURL?: string | undefined;
+			errorCallbackURL?: string | undefined;
+			metadata?: Record<string, any> | undefined;
+		}>();
+
+		const request: SignInMagicLinkInput = {
+			email: "test@email.com",
+			metadata: {
+				inviteId: "123",
+			},
+		};
+
+		expectTypeOf(request.metadata).toEqualTypeOf<
+			Record<string, any> | undefined
+		>();
 	});
 
 	it("should infer session", () => {

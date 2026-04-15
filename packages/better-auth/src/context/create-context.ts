@@ -102,6 +102,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 					enabled: true,
 					strategy: "jwe" as const,
 					refreshCache: true,
+					maxAge: options.session?.expiresIn || 60 * 60 * 24 * 7, // match session expiresIn, default 7 days
 				},
 			},
 			account: {
@@ -353,7 +354,9 @@ Most of the features of Better Auth will not work correctly.`,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			logger,
-			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			hooks: options.databaseHooks
+				? [{ source: "user", hooks: options.databaseHooks }]
+				: [],
 			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),

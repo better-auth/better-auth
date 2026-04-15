@@ -1,5 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 
+type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
+
+export type RequiredEmailOTPOptions = WithRequired<
+	EmailOTPOptions,
+	"expiresIn" | "generateOTP" | "storeOTP"
+>;
+
 export interface EmailOTPOptions {
 	/**
 	 * Function to send email verification.
@@ -81,6 +88,18 @@ export interface EmailOTPOptions {
 				  }
 		  )
 		| undefined;
+	/**
+	 * Strategy for handling OTP when the user requests a new OTP
+	 * while an existing one is still valid.
+	 *
+	 * - `"rotate"`: Always generates a new OTP (default behavior).
+	 * - `"reuse"`: Resends the same OTP and extends its expiry.
+	 *   Only works when the OTP is recoverable (plain, encrypted, or custom encrypt/decrypt).
+	 *   Falls back to `"rotate"` when OTP is hashed.
+	 *
+	 * @default "rotate"
+	 */
+	resendStrategy?: "rotate" | "reuse" | undefined;
 	/**
 	 * Change email configuration for the change email with OTP flow
 	 *

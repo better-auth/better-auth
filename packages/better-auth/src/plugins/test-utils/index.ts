@@ -22,6 +22,8 @@ export type {
 	TestUtilsOptions,
 } from "./types";
 
+import { PACKAGE_VERSION } from "../../version";
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"test-utils": {
@@ -62,6 +64,7 @@ declare module "@better-auth/core" {
 export const testUtils = (options: TestUtilsOptions = {}) => {
 	return {
 		id: "test-utils",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			// Check if organization plugin is present
 			const hasOrgPlugin = ctx.hasPlugin("organization");
