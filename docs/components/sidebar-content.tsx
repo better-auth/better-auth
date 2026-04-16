@@ -2789,6 +2789,10 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						href: "/docs/reference/errors/state_not_found",
 					},
 					{
+						title: "state_invalid",
+						href: "/docs/reference/errors/state_invalid",
+					},
+					{
 						title: "state_mismatch",
 						href: "/docs/reference/errors/state_mismatch",
 					},
