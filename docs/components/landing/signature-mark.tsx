@@ -43,7 +43,7 @@ export function SignatureMark() {
 					<Icons.gitHub className="h-3.5 w-3.5" />
 				</Link>
 				<div className="flex items-center">
-					<span className="h-5 w-px bg-foreground/15 mr-1" />
+					<span className="h-3 w-px bg-foreground/15 mr-1" />
 					<div className="-mx-2">
 						<ThemeToggle />
 					</div>

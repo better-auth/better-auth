@@ -62,7 +62,7 @@ export default async function HomePage() {
 							</div>
 						</div>
 						<HeroTitle />
-						<div className="hidden lg:block absolute left-5 right-5 lg:left-7 lg:right-7 bottom-4 z-[3]">
+						<div className="hidden lg:block absolute left-5 right-5 lg:left-7 lg:right-3 bottom-4 z-[3]">
 							<SignatureMark />
 						</div>
 					</div>
