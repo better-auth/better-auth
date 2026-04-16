@@ -338,11 +338,13 @@ async function deleteApiKeyFromStorage(
 		return;
 	}
 
-	await storage.delete(getStorageKeyByHashedKey(apiKey.key));
-	await storage.delete(getStorageKeyById(apiKey.id));
-	await modifyRefList(storage, refKey, (ids) =>
-		ids.filter((keyId) => keyId !== apiKey.id),
-	);
+	await Promise.all([
+		storage.delete(getStorageKeyByHashedKey(apiKey.key)),
+		storage.delete(getStorageKeyById(apiKey.id)),
+		modifyRefList(storage, refKey, (ids) =>
+			ids.filter((keyId) => keyId !== apiKey.id),
+		),
+	]);
 }
 
 /**
