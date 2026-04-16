@@ -2021,6 +2021,7 @@ export const teamsFeatureTeamTableFields = [
 		type: "string",
 		description: "The ID of the organization",
 		isForeignKey: true,
+		references: { model: "organization", field: "id" },
 	},
 	{
 		name: "createdAt",
@@ -2051,12 +2052,14 @@ export const teamsFeatureTeamMemberTableFields = [
 		type: "string",
 		description: "Unique identifier for each team",
 		isForeignKey: true,
+		references: { model: "team", field: "id" },
 	},
 	{
 		name: "userId",
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		references: { model: "user", field: "id" },
 	},
 	{
 		name: "createdAt",
@@ -2131,12 +2134,14 @@ export const memberTableFields = [
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		references: { model: "user", field: "id" },
 	},
 	{
 		name: "organizationId",
 		type: "string",
 		description: "The ID of the organization",
 		isForeignKey: true,
+		references: { model: "organization", field: "id" },
 	},
 	{
 		name: "role",
@@ -2173,12 +2178,14 @@ export const invitationTableFields = [
 		type: "string",
 		description: "The ID of the inviter",
 		isForeignKey: true,
+		references: { model: "user", field: "id" },
 	},
 	{
 		name: "organizationId",
 		type: "string",
 		description: "The ID of the organization",
 		isForeignKey: true,
+		references: { model: "organization", field: "id" },
 	},
 	{
 		name: "role",
@@ -2256,6 +2263,7 @@ export const organizationRoleTableFields = [
 		type: "string",
 		description: "The ID of the organization",
 		isForeignKey: true,
+		references: { model: "organization", field: "id" },
 	},
 	{
 		name: "role",
@@ -2303,6 +2311,7 @@ export const optionalTeamTableFields = [
 		type: "string",
 		description: "The ID of the organization",
 		isForeignKey: true,
+		references: { model: "organization", field: "id" },
 	},
 	{
 		name: "createdAt",
@@ -2333,12 +2342,14 @@ export const teamsFeatureTeamTableFields0 = [
 		type: "string",
 		description: "Unique identifier for each team",
 		isForeignKey: true,
+		references: { model: "team", field: "id" },
 	},
 	{
 		name: "userId",
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		references: { model: "user", field: "id" },
 	},
 	{
 		name: "createdAt",
