@@ -31,6 +31,7 @@ import { contactSchema } from "@/lib/enterprise-contact";
 
 const included = [
 	"Self-service SSO",
+	"Self-service Directory Sync",
 	"Dashboard RBAC",
 	"Unlimited seats",
 	"Custom audit logs",
@@ -74,8 +75,8 @@ function EnterpriseHero() {
 						</span>
 					</h1>
 					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
-						Custom plans, unlimited seats, SSO, RBAC, and advanced support for
-						teams that need more.
+						Custom plans, unlimited seats, SSO, directory sync, RBAC, and
+						advanced support for teams that need more.
 					</p>
 				</div>
 
@@ -213,8 +214,8 @@ export function EnterprisePageClient() {
 										</span>
 									</h1>
 									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
-										Custom plans, unlimited seats, SSO, RBAC, and advanced
-										support for teams that need more.
+										Custom plans, unlimited seats, SSO, directory sync, RBAC,
+										and advanced support for teams that need more.
 									</p>
 								</div>
 							</div>
