@@ -2574,15 +2574,17 @@ describe("api-key", async () => {
 				return originalGet(key);
 			};
 
-			const { data: keys } = await client.apiKey.list({
-				fetchOptions: { headers },
-			});
+			try {
+				const { data: keys } = await client.apiKey.list({
+					fetchOptions: { headers },
+				});
 
-			secondaryStorage.get = originalGet;
-
-			expect(keys).not.toBeNull();
-			expect(keys!.apiKeys!.length).toBe(keyCount);
-			expect(maxConcurrentGets).toBe(keyCount);
+				expect(keys).not.toBeNull();
+				expect(keys!.apiKeys!.length).toBe(keyCount);
+				expect(maxConcurrentGets).toBe(keyCount);
+			} finally {
+				secondaryStorage.get = originalGet;
+			}
 		});
 
 		it("should update API key in secondary storage", async () => {
