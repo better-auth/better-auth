@@ -10,7 +10,7 @@ data into a cookie. During the callback, this cookie is decrypted and parsed. Th
 exists but could not be decrypted or the decrypted content could not be parsed as valid JSON.
 
 This error only occurs with the cookie strategy. If you are using the default database strategy, you will see
-`state_mismatch` or `state_security_mismatch` instead.
+`state_mismatch` instead.
 
 ## Common Causes
 
@@ -45,7 +45,7 @@ decryption:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-	oauth: {
+	account: {
 		storeStateStrategy: "database",
 	},
 });

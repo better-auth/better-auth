@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/9215
@@ -15,9 +15,10 @@ import { describe, expect, it, vi } from "vitest";
 
 let errorToThrow: Error | null = null;
 
-vi.mock("../state", async () => {
-	const { StateError } = await import("../state");
+vi.mock("../state", async (importOriginal) => {
+	const actual = (await importOriginal()) as typeof import("../state");
 	return {
+		...actual,
 		parseGenericState: vi.fn().mockImplementation(() => {
 			if (errorToThrow) {
 				throw errorToThrow;
@@ -25,7 +26,6 @@ vi.mock("../state", async () => {
 			return {};
 		}),
 		generateGenericState: vi.fn(),
-		StateError,
 	};
 });
 
@@ -64,6 +64,10 @@ function createMockContext(overrides?: {
 	return { ctx, redirectCalls };
 }
 
+afterEach(() => {
+	errorToThrow = null;
+});
+
 describe("parseState error mapping", () => {
 	it("should redirect to ?error=state_mismatch when StateError code is state_security_mismatch", async () => {
 		const { StateError } = await import("../state");
@@ -81,8 +85,6 @@ describe("parseState error mapping", () => {
 
 		expect(redirectCalls[0]).toContain("state_mismatch");
 		expect(redirectCalls[0]).not.toContain("please_restart_the_process");
-
-		errorToThrow = null;
 	});
 
 	it("should redirect to ?error=state_invalid when StateError code is state_invalid", async () => {
@@ -100,8 +102,6 @@ describe("parseState error mapping", () => {
 
 		expect(redirectCalls[0]).toContain("state_invalid");
 		expect(redirectCalls[0]).not.toContain("please_restart_the_process");
-
-		errorToThrow = null;
 	});
 
 	it("should redirect to ?error=state_mismatch when StateError code is state_mismatch", async () => {
@@ -119,8 +119,6 @@ describe("parseState error mapping", () => {
 
 		expect(redirectCalls[0]).toContain("state_mismatch");
 		expect(redirectCalls[0]).not.toContain("please_restart_the_process");
-
-		errorToThrow = null;
 	});
 
 	it("should redirect to ?error=internal_server_error when a non-StateError is thrown", async () => {
@@ -135,8 +133,6 @@ describe("parseState error mapping", () => {
 
 		expect(redirectCalls[0]).toContain("internal_server_error");
 		expect(redirectCalls[0]).not.toContain("please_restart_the_process");
-
-		errorToThrow = null;
 	});
 
 	it("should use custom errorURL when onAPIError.errorURL is set", async () => {
@@ -157,7 +153,25 @@ describe("parseState error mapping", () => {
 		expect(redirectCalls[0]).toBe(
 			"https://example.com/custom-error?error=state_mismatch",
 		);
+	});
 
-		errorToThrow = null;
+	it("should use & separator when errorURL already has query params", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("State invalid", {
+			code: "state_invalid",
+		});
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext({
+			errorURL: "https://example.com/error?foo=bar",
+		});
+
+		try {
+			await parseState(ctx as unknown as GenericEndpointContext);
+		} catch {}
+
+		expect(redirectCalls[0]).toBe(
+			"https://example.com/error?foo=bar&error=state_invalid",
+		);
 	});
 });

@@ -63,10 +63,14 @@ export async function parseState(c: GenericEndpointContext) {
 				error.code === "state_security_mismatch"
 					? "state_mismatch"
 					: error.code;
-			throw c.redirect(`${errorURL}?error=${errorCode}`);
+			const sep = errorURL.includes("?") ? "&" : "?";
+			throw c.redirect(
+				`${errorURL}${sep}error=${encodeURIComponent(errorCode)}`,
+			);
 		}
 
-		throw c.redirect(`${errorURL}?error=internal_server_error`);
+		const sep = errorURL.includes("?") ? "&" : "?";
+		throw c.redirect(`${errorURL}${sep}error=internal_server_error`);
 	}
 
 	if (!parsedData.errorURL) {
