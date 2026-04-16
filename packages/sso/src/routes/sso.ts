@@ -50,6 +50,7 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { isOrgAdmin } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 
 /**
@@ -646,6 +647,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
 					});
+				}
+				if (ctx.context.hasPlugin("organization")) {
+					const hasAdminAccess = await isOrgAdmin(
+						ctx,
+						user.id,
+						ctx.body.organizationId,
+					);
+					if (!hasAdminAccess) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								"You must be an organization owner or admin to register SSO providers",
+						});
+					}
 				}
 			}
 

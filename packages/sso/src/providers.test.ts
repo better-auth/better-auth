@@ -1317,4 +1317,104 @@ describe("SSO provider read endpoints", () => {
 			expect(data.account.length).toBe(accountCountBefore);
 		});
 	});
+
+	describe("POST /sso/register", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9133
+		 */
+		it("should reject registration from non-admin org members", async () => {
+			const { auth, getAuthHeaders, createOrganization, addMember, data } =
+				createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+
+			const memberHeaders = await getAuthHeaders({
+				email: "member@example.com",
+				password: "password123",
+				name: "Member",
+			});
+
+			const memberUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "member@example.com",
+			);
+
+			await addMember(memberUser!.id, org!.id, "member", ownerHeaders);
+
+			const response = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "org-saml-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						audience: "my-audience",
+						wantAssertionsSigned: true,
+						spMetadata: {},
+					},
+					organizationId: org!.id,
+				},
+				headers: memberHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(403);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9133
+		 */
+		it("should allow registration from org admins", async () => {
+			const { auth, getAuthHeaders, createOrganization, addMember, data } =
+				createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+
+			const adminHeaders = await getAuthHeaders({
+				email: "admin@example.com",
+				password: "password123",
+				name: "Admin",
+			});
+
+			const adminUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "admin@example.com",
+			);
+
+			await addMember(adminUser!.id, org!.id, "admin", ownerHeaders);
+
+			const response = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "org-saml-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						audience: "my-audience",
+						wantAssertionsSigned: true,
+						spMetadata: {},
+					},
+					organizationId: org!.id,
+				},
+				headers: adminHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(200);
+		});
+	});
 });

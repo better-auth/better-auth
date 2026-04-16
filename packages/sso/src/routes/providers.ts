@@ -25,7 +25,7 @@ interface SSOProviderRecord {
 
 const ADMIN_ROLES = ["owner", "admin"];
 
-async function isOrgAdmin(
+export async function isOrgAdmin(
 	ctx: {
 		context: {
 			adapter: {
