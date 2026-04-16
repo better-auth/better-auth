@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/stripe",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "description": "Stripe plugin for Better Auth",
   "type": "module",
   "license": "MIT",
