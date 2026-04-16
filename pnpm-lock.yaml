@@ -1577,6 +1577,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
