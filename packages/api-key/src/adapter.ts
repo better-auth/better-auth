@@ -4,6 +4,32 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 
+const STORAGE_CONCURRENCY = 10;
+
+/**
+ * Run an async mapper over items with bounded concurrency (worker-pool pattern).
+ */
+async function mapConcurrent<T, R>(
+	items: T[],
+	fn: (item: T) => Promise<R>,
+	concurrency: number = STORAGE_CONCURRENCY,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let idx = 0;
+
+	async function worker() {
+		while (idx < items.length) {
+			const i = idx++;
+			results[i] = await fn(items[i] as T);
+		}
+	}
+
+	await Promise.all(
+		Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+	);
+	return results;
+}
+
 /**
  * Parses double-stringified metadata synchronously without updating the database.
  * Use this for reading metadata, then call migrateLegacyMetadataInBackground for DB updates.
@@ -630,8 +656,8 @@ export async function listApiKeys(
 			}
 
 			if (keyIds.length > 0) {
-				const results = await Promise.all(
-					keyIds.map((id) => getApiKeyByIdFromStorage(ctx, id, storage)),
+				const results = await mapConcurrent(keyIds, (id) =>
+					getApiKeyByIdFromStorage(ctx, id, storage),
 				);
 				const apiKeys = results.filter(
 					(key): key is ApiKey => key !== null && key !== undefined,
@@ -678,10 +704,8 @@ export async function listApiKeys(
 		// per-key entries fan out,
 		// ref list is written last with the full id set.
 		if (storage && dbKeys.length > 0) {
-			await Promise.all(
-				dbKeys.map((apiKey) =>
-					setApiKeyInStorage(ctx, apiKey, storage, calculateTTL(apiKey), opts),
-				),
+			await mapConcurrent(dbKeys, (apiKey) =>
+				setApiKeyInStorage(ctx, apiKey, storage, calculateTTL(apiKey), opts),
 			);
 			const keyIds = dbKeys.map((apiKey) => apiKey.id);
 			await storage.set(refKey, JSON.stringify(keyIds));
@@ -712,8 +736,8 @@ export async function listApiKeys(
 			return { apiKeys: [], total: 0 };
 		}
 
-		const results = await Promise.all(
-			keyIds.map((id) => getApiKeyByIdFromStorage(ctx, id, storage)),
+		const results = await mapConcurrent(keyIds, (id) =>
+			getApiKeyByIdFromStorage(ctx, id, storage),
 		);
 		const apiKeys = results.filter(
 			(key): key is ApiKey => key !== null && key !== undefined,
