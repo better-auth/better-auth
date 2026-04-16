@@ -1,3 +1,4 @@
+// cSpell:ignore SVGE SVGMFHN Galf
 "use client";
 
 import Link from "next/link";
@@ -656,7 +657,6 @@ const dbDrivers = [
 				width="14"
 				height="14"
 				viewBox="0 0 128 128"
-				className="grayscale opacity-70"
 			>
 				<path d="M93.809 92.112c.785-6.533.55-7.492 5.416-6.433l1.235.108c3.742.17 8.637-.602 11.513-1.938c6.191-2.873 9.861-7.668 3.758-6.409c-13.924 2.873-14.881-1.842-14.881-1.842c14.703-21.815 20.849-49.508 15.543-56.287c-14.47-18.489-39.517-9.746-39.936-9.52l-.134.025c-2.751-.571-5.83-.912-9.289-.968c-6.301-.104-11.082 1.652-14.709 4.402c0 0-44.683-18.409-42.604 23.151c.442 8.841 12.672 66.898 27.26 49.362c5.332-6.412 10.484-11.834 10.484-11.834c2.558 1.699 5.622 2.567 8.834 2.255l.249-.212c-.078.796-.044 1.575.099 2.497c-3.757 4.199-2.653 4.936-10.166 6.482c-7.602 1.566-3.136 4.355-.221 5.084c3.535.884 11.712 2.136 17.238-5.598l-.22.882c1.474 1.18 1.375 8.477 1.583 13.69c.209 5.214.558 10.079 1.621 12.948s2.317 10.256 12.191 8.14c8.252-1.764 14.561-4.309 15.136-27.985" />
 				<path d="M75.458 125.256c-4.367 0-7.211-1.689-8.938-3.32c-2.607-2.46-3.641-5.629-4.259-7.522l-.267-.79c-1.244-3.358-1.666-8.193-1.916-14.419c-.038-.935-.064-1.898-.093-2.919c-.021-.747-.047-1.684-.085-2.664a18.8 18.8 0 0 1-4.962 1.568c-3.079.526-6.389.356-9.84-.507c-2.435-.609-4.965-1.871-6.407-3.82c-4.203 3.681-8.212 3.182-10.396 2.453c-3.853-1.285-7.301-4.896-10.542-11.037c-2.309-4.375-4.542-10.075-6.638-16.943c-3.65-11.96-5.969-24.557-6.175-28.693C4.292 23.698 7.777 14.44 15.296 9.129C27.157.751 45.128 5.678 51.68 7.915c4.402-2.653 9.581-3.944 15.433-3.851c3.143.051 6.136.327 8.916.823c2.9-.912 8.628-2.221 15.185-2.139c12.081.144 22.092 4.852 28.949 13.615c4.894 6.252 2.474 19.381.597 26.651c-2.642 10.226-7.271 21.102-12.957 30.57c1.544.011 3.781-.174 6.961-.831c6.274-1.295 8.109 2.069 8.607 3.575c1.995 6.042-6.677 10.608-9.382 11.864c-3.466 1.609-9.117 2.589-13.745 2.377l-.202-.013l-1.216-.107l-.12 1.014l-.116.991c-.311 11.999-2.025 19.598-5.552 24.619c-3.697 5.264-8.835 6.739-13.361 7.709c-1.544.33-2.947.474-4.219.474m-9.19-43.671c2.819 2.256 3.066 6.501 3.287 14.434c.028.99.054 1.927.089 2.802c.106 2.65.355 8.855 1.327 11.477c.137.371.26.747.39 1.146c1.083 3.316 1.626 4.979 6.309 3.978c3.931-.843 5.952-1.599 7.534-3.851c2.299-3.274 3.585-9.86 3.821-19.575l4.783.116l-4.75-.57l.14-1.186c.455-3.91.783-6.734 3.396-8.602c2.097-1.498 4.486-1.353 6.389-1.01c-2.091-1.58-2.669-3.433-2.823-4.193l-.399-1.965l1.121-1.663c6.457-9.58 11.781-21.354 14.609-32.304c2.906-11.251 2.02-17.226 1.134-18.356c-11.729-14.987-32.068-8.799-34.192-8.097l-.359.194l-1.8.335l-.922-.191c-2.542-.528-5.366-.82-8.393-.869c-4.756-.08-8.593 1.044-11.739 3.431l-2.183 1.655l-2.533-1.043c-5.412-2.213-21.308-6.662-29.696-.721c-4.656 3.298-6.777 9.76-6.305 19.207c.156 3.119 2.275 14.926 5.771 26.377c4.831 15.825 9.221 21.082 11.054 21.693c.32.108 1.15-.537 1.976-1.529a271 271 0 0 1 10.694-12.07l2.77-2.915l3.349 2.225c1.35.897 2.839 1.406 4.368 1.502l7.987-6.812l-1.157 11.808c-.026.265-.039.626.065 1.296l.348 2.238l-1.51 1.688l-.174.196l4.388 2.025z" />
@@ -902,12 +902,12 @@ export function DatabaseSection() {
 			<div className="w-full max-w-[920px] mx-auto">
 				<div className="grid grid-cols-4 sm:grid-cols-6 gap-0">
 					{/* PostgreSQL — intentionally larger feature tile */}
-					<div className="col-span-2 sm:col-span-3 row-span-2 relative border-b border-r border-dashed border-foreground/[0.06] p-4 min-h-[240px] cursor-default hover:bg-foreground/[0.02] transition-colors overflow-hidden">
+					<div className="col-span-2 sm:col-span-3 row-span-2 relative border-b border-r border-dashed border-foreground/[0.06] p-3 sm:p-4 min-h-[200px] sm:min-h-[240px] cursor-default hover:bg-foreground/[0.02] transition-colors overflow-hidden">
 						<div className="flex items-center gap-2 mb-2">
-							<span className="text-foreground/60 dark:text-foreground/45 [&_svg]:w-5 [&_svg]:h-5">
+							<span className="text-foreground/80 dark:text-foreground/70 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:grayscale-0 [&_svg]:opacity-100">
 								{pg.icon()}
 							</span>
-							<span className="text-[13px] font-mono text-foreground/80 dark:text-foreground/65">
+							<span className="text-[13px] font-mono text-foreground/85 dark:text-foreground/75">
 								{pg.name}
 							</span>
 						</div>
@@ -928,12 +928,12 @@ export function DatabaseSection() {
 					{others.map((db) => (
 						<div
 							key={db.name}
-							className="flex flex-col items-center justify-center gap-2 py-5 border-b border-r border-dashed border-foreground/[0.06] cursor-default hover:bg-foreground/[0.02] transition-colors"
+							className="flex flex-col items-center justify-center gap-2 py-4 sm:py-5 border-b border-r border-dashed border-foreground/[0.06] cursor-default hover:bg-foreground/[0.02] transition-colors"
 						>
-							<span className="text-foreground/50 dark:text-foreground/35 [&_svg]:w-5 [&_svg]:h-5">
+							<span className="text-foreground/80 dark:text-foreground/70 [&_svg]:w-6 [&_svg]:h-6">
 								{db.icon()}
 							</span>
-							<span className="text-[10px] font-mono text-foreground/40 dark:text-foreground/30">
+							<span className="text-[10px] font-mono text-foreground/70 dark:text-foreground/60">
 								{db.name}
 							</span>
 						</div>
@@ -971,19 +971,19 @@ export function SocialProvidersSection() {
 							return (
 								<span
 									key={provider}
-									className="group inline-flex flex-col items-center justify-center gap-1.5 py-2 text-foreground/65 dark:text-foreground/50 border-b border-dashed border-foreground/[0.06] cursor-default bg-transparent hover:bg-foreground/[0.03] transition-colors"
+									className="group inline-flex flex-col items-center justify-center gap-1.5 py-2 text-foreground/80 dark:text-foreground/70 border-b border-dashed border-foreground/[0.06] cursor-default bg-transparent hover:bg-foreground/[0.03] transition-colors"
 								>
-									<span className="inline-flex size-7 items-center justify-center shrink-0 text-foreground/60 dark:text-foreground/45 [&_svg]:w-5 [&_svg]:h-5">
+									<span className="inline-flex size-7 items-center justify-center shrink-0 text-foreground/85 dark:text-foreground/75 [&_svg]:w-5 [&_svg]:h-5">
 										{Icon ? (
 											Icon()
 										) : (
-											<span className="inline-flex size-6 items-center justify-center rounded-full border border-foreground/15 text-[9px] font-semibold tracking-wide">
+											<span className="inline-flex size-6 items-center justify-center rounded-full border border-foreground/25 text-[9px] font-semibold tracking-wide">
 												{providerBadges[provider] ??
 													provider.slice(0, 2).toUpperCase()}
 											</span>
 										)}
 									</span>
-									<span className="text-[9px] font-mono text-foreground/40 dark:text-foreground/30 truncate max-w-[72px]">
+									<span className="text-[9px] font-mono text-foreground/75 dark:text-foreground/65 truncate max-w-[72px]">
 										{provider}
 									</span>
 								</span>
@@ -1004,40 +1004,45 @@ const featuredIcons: Record<string, () => ReactNode> = {
 			xmlns="http://www.w3.org/2000/svg"
 			width="20"
 			height="20"
-			viewBox="0 0 128 128"
+			viewBox="0 0 256 256"
 		>
-			<circle cx="64" cy="64" r="64" fill="currentColor" />
-			<path
-				fill="url(#SVGnextA)"
-				d="M106.317 112.014L49.167 38.4H38.4v51.179h8.614v-40.24l52.54 67.884a64 64 0 0 0 6.763-5.209"
-			/>
-			<path fill="url(#SVGnextB)" d="M81.778 38.4h8.533v51.2h-8.533z" />
 			<defs>
 				<linearGradient
-					id="SVGnextA"
-					x1="109"
-					x2="144.5"
-					y1="116.5"
-					y2="160.5"
-					gradientTransform="scale(.71111)"
-					gradientUnits="userSpaceOnUse"
+					id="SVGkw9x5bVJ"
+					x1="55.633%"
+					x2="83.228%"
+					y1="56.385%"
+					y2="96.08%"
 				>
-					<stop stopColor="var(--bg, #fff)" />
-					<stop offset="1" stopColor="var(--bg, #fff)" stopOpacity="0" />
+					<stop offset="0%" stopColor="#FFF" />
+					<stop offset="100%" stopColor="#FFF" stopOpacity="0" />
 				</linearGradient>
 				<linearGradient
-					id="SVGnextB"
-					x1="121"
-					x2="120.799"
-					y1="54"
-					y2="106.875"
-					gradientTransform="scale(.71111)"
-					gradientUnits="userSpaceOnUse"
+					id="SVGE3ljGbCT"
+					x1="50%"
+					x2="49.953%"
+					y1="0%"
+					y2="73.438%"
 				>
-					<stop stopColor="var(--bg, #fff)" />
-					<stop offset="1" stopColor="var(--bg, #fff)" stopOpacity="0" />
+					<stop offset="0%" stopColor="#FFF" />
+					<stop offset="100%" stopColor="#FFF" stopOpacity="0" />
 				</linearGradient>
+				<circle id="SVGMFHNZdYm" cx="128" cy="128" r="128" />
 			</defs>
+			<mask id="SVGalfYF1HT" fill="#fff">
+				<use href="#SVGMFHNZdYm" />
+			</mask>
+			<g mask="url(#SVGalfYF1HT)">
+				<circle cx="128" cy="128" r="128" fill="currentColor" />
+				<path
+					fill="url(#SVGkw9x5bVJ)"
+					d="M212.634 224.028L98.335 76.8H76.8v102.357h17.228V98.68L199.11 234.446a128 128 0 0 0 13.524-10.418"
+				/>
+				<path
+					fill="url(#SVGE3ljGbCT)"
+					d="M163.556 76.8h17.067v102.4h-17.067z"
+				/>
+			</g>
 		</svg>
 	),
 	TanStack: () => (
@@ -1130,13 +1135,13 @@ export function IntegrationsSection() {
 							href={fw.href}
 							className="group flex items-center gap-3 py-2.5 border-b border-dashed border-foreground/[0.06] last:border-b-0 hover:bg-foreground/[0.02] -mx-2 px-2 transition-colors"
 						>
-							<span className="text-foreground/50 dark:text-foreground/35 group-hover:text-foreground/70 transition-colors [&_svg]:w-5 [&_svg]:h-5 shrink-0">
+							<span className="text-foreground/80 dark:text-foreground/70 group-hover:text-foreground/95 transition-colors [&_svg]:w-5 [&_svg]:h-5 shrink-0">
 								{renderIcon?.()}
 							</span>
-							<span className="text-[13px] font-medium text-foreground/75 dark:text-foreground/60 group-hover:text-foreground/90 transition-colors shrink-0 w-20">
+							<span className="text-[13px] font-medium text-foreground/90 dark:text-foreground/80 group-hover:text-foreground transition-colors shrink-0 w-20">
 								{fw.name}
 							</span>
-							<span className="text-[11px] font-mono text-foreground/30 dark:text-foreground/20 group-hover:text-foreground/45 transition-colors truncate">
+							<span className="text-[11px] font-mono text-foreground/60 dark:text-foreground/50 group-hover:text-foreground/75 transition-colors truncate">
 								{fw.snippet}
 							</span>
 							<svg
@@ -1157,7 +1162,7 @@ export function IntegrationsSection() {
 
 			{/* More frameworks */}
 			<div className="mt-4">
-				<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/30 dark:text-foreground/20 mb-2">
+				<p className="text-[9px] font-mono uppercase tracking-widest text-foreground/55 dark:text-foreground/45 mb-2">
 					+ {moreFrameworks.length} more
 				</p>
 				<div className="flex flex-wrap gap-1.5">
@@ -1168,12 +1173,12 @@ export function IntegrationsSection() {
 							<Link
 								key={fw.name}
 								href={fw.href}
-								className="group inline-flex items-center gap-1.5 px-2 py-1 border border-foreground/[0.06] hover:border-foreground/[0.12] hover:bg-foreground/[0.03] transition-colors"
+								className="group inline-flex items-center gap-1.5 px-2 py-1 border border-foreground/[0.1] hover:border-foreground/[0.2] hover:bg-foreground/[0.03] transition-colors"
 							>
-								<span className="text-foreground/40 dark:text-foreground/25 group-hover:text-foreground/60 transition-colors [&_svg]:w-3 [&_svg]:h-3">
+								<span className="text-foreground/75 dark:text-foreground/65 group-hover:text-foreground transition-colors [&_svg]:w-3 [&_svg]:h-3">
 									{iconFn?.()}
 								</span>
-								<span className="text-[9px] font-mono text-foreground/40 dark:text-foreground/30 group-hover:text-foreground/60 transition-colors">
+								<span className="text-[9px] font-mono text-foreground/75 dark:text-foreground/65 group-hover:text-foreground transition-colors">
 									{fw.name}
 								</span>
 							</Link>

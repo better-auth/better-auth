@@ -9,8 +9,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Icons } from "@/components/icons";
-import { ThemeToggle } from "@/components/theme-toggle";
 import type { ContributorInfo } from "@/lib/community-stats";
 import { cn } from "@/lib/utils";
 import {
@@ -953,7 +951,7 @@ function formatCount(num: number | null | undefined): string {
 	return num.toString();
 }
 
-function NpmSparkline({ data: raw }: { data: number[] }) {
+function _NpmSparkline({ data: raw }: { data: number[] }) {
 	// Drop the last bucket — it's the incomplete current week
 	const data = raw.length > 2 ? raw.slice(0, -1) : raw;
 	const w = 120;
@@ -1004,17 +1002,9 @@ function NpmSparkline({ data: raw }: { data: number[] }) {
 	);
 }
 
-const footerLinks = [
-	{ label: "Terms", href: "/legal/terms" },
-	{ label: "Privacy", href: "/legal/privacy" },
-	{ label: "Blog", href: "/blog" },
-	{ label: "Community", href: "/community" },
-	{ label: "Changelog", href: "/changelog" },
-];
-
 function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 	return (
-		<div className="relative mt-10 pt-8 pb-0 overflow-hidden">
+		<div className="relative mt-10 pt-8 pb-16 overflow-hidden">
 			{/* Watermark logo */}
 			<div
 				className="absolute -right-10 top-1/2 -translate-y-1/2 pointer-events-none select-none opacity-[0.03] dark:opacity-[0.04]"
@@ -1143,60 +1133,6 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 						</span>
 						<span className="relative">Sign In </span>
 					</Link>
-				</div>
-			</div>
-
-			{/* Footer */}
-			<div className="relative mt-10 pt-14">
-				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-					<div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
-						{footerLinks.map((link, i) => (
-							<span key={link.label} className="flex items-center">
-								<Link
-									href={link.href}
-									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/50 hover:text-foreground/80 transition-colors"
-								>
-									{link.label}
-								</Link>
-								{i < footerLinks.length - 1 && (
-									<span className="text-foreground/10 mx-1 text-[10px] select-none">
-										/
-									</span>
-								)}
-							</span>
-						))}
-					</div>
-
-					<div className="flex items-center justify-between w-full sm:w-auto sm:gap-4 shrink-0">
-						<span className="text-[10px] text-foreground/50 font-mono">
-							© {new Date().getFullYear()} Better Auth Inc.
-						</span>
-						<div className="flex items-center gap-3 sm:gap-4">
-							<span className="text-foreground/10 select-none hidden sm:inline">
-								·
-							</span>
-							<Link
-								href="https://x.com/better_auth"
-								aria-label="Twitter/X"
-								className="text-foreground/50 hover:text-foreground/80 transition-colors"
-							>
-								<Icons.XIcon className="h-3.5 w-3.5" />
-							</Link>
-							<Link
-								href="https://github.com/better-auth"
-								aria-label="GitHub"
-								className="text-foreground/50 hover:text-foreground/80 transition-colors"
-							>
-								<Icons.gitHub className="h-3.5 w-3.5" />
-							</Link>
-							<div className="h-4 w-4 flex text-foreground/15 items-center justify-center select-none">
-								|
-							</div>
-							<div className="-ml-4 sm:-ml-5">
-								<ThemeToggle />
-							</div>
-						</div>
-					</div>
 				</div>
 			</div>
 		</div>
@@ -1409,7 +1345,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 24 24"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0s]"
 												>
 													<path
 														fill="currentColor"
@@ -1422,7 +1358,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 24 24"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.05s]"
+													className="text-[#00DC82] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.05s]"
 												>
 													<path
 														fill="currentColor"
@@ -1435,7 +1371,7 @@ export function HeroReadMe({
 													width="13"
 													height="15"
 													viewBox="0 0 426 512"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.1s]"
+													className="text-[#FF3E00] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.1s]"
 												>
 													<path
 														fill="currentColor"
@@ -1447,7 +1383,7 @@ export function HeroReadMe({
 													height="13"
 													viewBox="0 0 663 660"
 													width="13"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.15s]"
+													className="text-[#EF4444] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.15s]"
 													xmlns="http://www.w3.org/2000/svg"
 												>
 													<path
@@ -1462,7 +1398,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 128 128"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.2s]"
+													className="text-[#2C4F7C] dark:text-[#66AAEE] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.2s]"
 												>
 													<path
 														fill="currentColor"
@@ -1475,7 +1411,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 32 32"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s]"
 												>
 													<path
 														fill="currentColor"
@@ -1921,8 +1857,8 @@ export function HeroReadMe({
 
 						<div className="mt-8 mb-10">
 							<div className="border-r border-foreground/[0.1] bg-foreground/[0.01] overflow-hidden">
-								<div className="flex flex-col md:flex-row">
-									<div className="min-w-0 flex-1 h-[400px] overflow-hidden">
+								<div className="flex flex-col lg:flex-row">
+									<div className="min-w-0 flex-1 min-h-[320px] sm:min-h-[360px] lg:h-[400px] overflow-hidden">
 										<AnimatePresence mode="wait" initial={false}>
 											<motion.div
 												key={frameworkTab}
@@ -1930,7 +1866,7 @@ export function HeroReadMe({
 												animate={{ opacity: 1, y: 0 }}
 												exit={{ opacity: 0, y: -4 }}
 												transition={{ duration: 0.2, ease: "easeOut" }}
-												className="pr-5 pb-5"
+												className="pr-3 sm:pr-5 pb-5 h-full"
 											>
 												{frameworkTab === "declarative" && <ServerClientTabs />}
 												{frameworkTab === "database" && <DatabaseSection />}
@@ -1942,7 +1878,7 @@ export function HeroReadMe({
 										</AnimatePresence>
 									</div>
 
-									<div className="hidden md:flex md:flex-col md:w-56 md:shrink-0 border-t md:border-t-0 md:border-l border-foreground/[0.1] bg-neutral-50 dark:bg-black">
+									<div className="flex flex-row lg:flex-col lg:w-56 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-foreground/[0.1] bg-neutral-50 dark:bg-black overflow-x-auto lg:overflow-visible">
 										{[
 											{ id: "declarative", label: "Declarative Config" },
 											{ id: "database", label: "Bring Your Own Database" },
@@ -1962,7 +1898,7 @@ export function HeroReadMe({
 													)
 												}
 												className={cn(
-													"relative flex-1 md:flex-none text-left px-3 sm:px-4 py-3 text-[11px] sm:text-xs font-mono tracking-wider uppercase transition-colors border-r md:border-r-0 md:border-b last:border-r-0 md:last:border-b-0 border-foreground/[0.08]",
+													"relative flex-1 lg:flex-none text-left px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-[11px] lg:text-xs font-mono tracking-wider uppercase transition-colors border-r lg:border-r-0 lg:border-b last:border-r-0 lg:last:border-b-0 border-foreground/[0.08] whitespace-nowrap lg:whitespace-normal",
 													frameworkTab === tab.id
 														? "text-foreground/85 bg-foreground/[0.04]"
 														: "text-foreground/45 hover:text-foreground/70",
@@ -1979,11 +1915,11 @@ export function HeroReadMe({
 													tab.label
 												)}
 												{frameworkTab === tab.id && (
-													<span className="absolute inset-y-0 right-0 w-[1.5px] bg-foreground/65 hidden md:block" />
+													<span className="absolute inset-y-0 right-0 w-[1.5px] bg-foreground/65 hidden lg:block" />
 												)}
 											</button>
 										))}
-										<div className="hidden md:flex flex-1 items-end p-4">
+										<div className="hidden lg:flex flex-1 items-end p-4">
 											<p className="text-[13px] leading-relaxed text-foreground/60 dark:text-foreground/50">
 												{frameworkTab === "declarative" &&
 													"No dashboard clicks. Your auth lives in code — version controlled, type-safe, and reviewable in PRs."}
@@ -2002,51 +1938,6 @@ export function HeroReadMe({
 							<div className="mt-8">
 								<PluginEcosystem />
 							</div>
-
-							{/* NPM Downloads */}
-							{stats.npmDownloads > 0 && (
-								<a
-									href="https://www.npmjs.com/package/better-auth"
-									target="_blank"
-									rel="noopener noreferrer"
-									className="npm-download-card group relative mt-6 flex items-center gap-4 px-5 py-4 bg-foreground/[0.01] hover:bg-foreground/[0.03] transition-all duration-500"
-								>
-									<div className="flex items-center justify-center w-7 h-7 shrink-0">
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											viewBox="0 0 128 128"
-											width="22"
-											height="22"
-										>
-											<path
-												fill="#cb3837"
-												d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"
-											/>
-											<path
-												fill="#fff"
-												d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
-											/>
-										</svg>
-									</div>
-									<div className="flex flex-col min-w-0">
-										<span className="text-[13px] font-mono font-medium text-foreground/80 dark:text-foreground/70 tabular-nums">
-											{formatCount(stats.npmDownloads)}
-											<span className="text-foreground/40 dark:text-foreground/30 font-normal">
-												{" "}
-												downloads / week
-											</span>
-										</span>
-										<span className="text-[11px] text-foreground/40 dark:text-foreground/25">
-											better-auth on npm
-										</span>
-									</div>
-									{stats.npmWeeklyHistory.length > 2 && (
-										<div className="ml-auto shrink-0">
-											<NpmSparkline data={stats.npmWeeklyHistory} />
-										</div>
-									)}
-								</a>
-							)}
 						</div>
 
 						{/* Infrastructure */}
@@ -2092,7 +1983,7 @@ export function HeroReadMe({
 									</span>
 									<div className="flex-1 border-t border-foreground/10" />
 								</div>
-								<p className="text-[15px] sm:text-base text-foreground/55 dark:text-foreground/45 leading-relaxed">
+								<p className="text-[15px] sm:text-base text-foreground/75 dark:text-foreground/65 leading-relaxed">
 									Connect to our infrastructure and power your self-hosted
 									Better Auth with a dashboard, audit logs, security detection,
 									enterprise features, and more.
@@ -2419,7 +2310,7 @@ export function HeroReadMe({
 									<span className="text-[13px] sm:text-[14px] font-medium text-foreground/90 dark:text-foreground/85">
 										Explore plans
 									</span>
-									<span className="text-[11px] sm:text-[12px] text-foreground/50 dark:text-foreground/35">
+									<span className="text-[11px] sm:text-[12px] text-foreground/75 dark:text-foreground/60">
 										Dashboard, audit logs, security detection, transactional
 										comms, and more.
 									</span>

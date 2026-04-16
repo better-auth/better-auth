@@ -18,7 +18,7 @@ export default function PricingLayout({
 								<div className="space-y-2">
 									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 										<span className="underline underline-offset-4 decoration-foreground/40">
-											Pricing
+											Infrastructure
 										</span>
 									</h1>
 									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
@@ -69,7 +69,7 @@ export default function PricingLayout({
 								<div className="relative space-y-2 py-16">
 									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 										<span className="underline underline-offset-4 decoration-foreground/40">
-											Pricing
+											Infrastructure
 										</span>
 									</h1>
 									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">

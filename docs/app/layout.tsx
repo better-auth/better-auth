@@ -1,5 +1,5 @@
 import { GeistPixelSquare } from "geist/font/pixel";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Homemade_Apple } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
@@ -17,6 +17,12 @@ const fontSans = Geist({
 const fontMono = Geist_Mono({
 	subsets: ["latin"],
 	variable: "--font-mono",
+});
+
+const fontSignature = Homemade_Apple({
+	subsets: ["latin"],
+	variable: "--font-signature",
+	weight: ["400"],
 });
 
 export const metadata: Metadata = createMetadata({
@@ -63,7 +69,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				)}
 			</head>
 			<body
-				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased`}
+				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} ${fontSignature.variable} font-sans antialiased`}
 				suppressHydrationWarning
 			>
 				<Providers>

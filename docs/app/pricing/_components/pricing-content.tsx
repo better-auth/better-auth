@@ -319,11 +319,25 @@ export function PricingContent() {
 				</div>
 				<a
 					href="/docs"
-					className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 border border-foreground/[0.12] text-foreground/70 dark:text-foreground/50 hover:text-foreground/80 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
+					className="group shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 border border-foreground/15 text-foreground hover:border-foreground/30 hover:bg-foreground/[0.04] transition-all"
 				>
 					<span className="font-mono text-[11px] uppercase tracking-widest">
 						Docs
 					</span>
+					<svg
+						className="h-3 w-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+						viewBox="0 0 10 10"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="M1 9L9 1M9 1H3M9 1V7"
+							stroke="currentColor"
+							strokeWidth="1.3"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						/>
+					</svg>
 				</a>
 			</motion.div>
 
