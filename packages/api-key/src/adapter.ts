@@ -310,10 +310,11 @@ async function setApiKeyInStorage(
 	await Promise.all([
 		storage.set(getStorageKeyByHashedKey(apiKey.key), serialized, ttl),
 		storage.set(getStorageKeyById(apiKey.id), serialized, ttl),
-		modifyRefList(storage, refKey, (ids) =>
-			ids.includes(apiKey.id) ? ids : [...ids, apiKey.id],
-		),
 	]);
+
+	await modifyRefList(storage, refKey, (ids) =>
+		ids.includes(apiKey.id) ? ids : [...ids, apiKey.id],
+	);
 }
 
 /**
