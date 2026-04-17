@@ -208,7 +208,7 @@ describe("Host Classification", () => {
 
 		describe("Tunnel / Translation Forms", () => {
 			it("should flag 6to4 (2002::/16) encoding a non-public IPv4", () => {
-				// 2002:WWXX:YYZZ::/48 routes to IPv4 W.X.Y.Z via a 6to4 gateway
+				// 6to4 embeds the IPv4 destination in bytes 2-5 of the address
 				expect(classifyHost("2002:7f00:0001::").kind).toBe("reserved"); // 127.0.0.1
 				expect(classifyHost("2002:a9fe:a9fe::").kind).toBe("reserved"); // 169.254.169.254
 				expect(classifyHost("2002:0a00:0001::").kind).toBe("reserved"); // 10.0.0.1
