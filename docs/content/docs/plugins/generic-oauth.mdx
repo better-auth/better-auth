@@ -221,9 +221,7 @@ interface GenericOAuthConfig {
   pkce?: boolean;
   accessType?: string;
   getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
-  refreshTokenUrlParams?:
-    | Record<string, string>
-    | ((ctx: GenericEndpointContext) => Record<string, string>);
+  refreshTokenUrlParams?: Record<string, string>;
 }
 ```
 
@@ -267,7 +265,7 @@ interface GenericOAuthConfig {
 
 **tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. These can override default parameters.
 
-**refreshTokenUrlParams**: (Optional) Additional query parameters to include in refresh token requests. You can provide a static object or a function that receives `GenericEndpointContext`.
+**refreshTokenUrlParams**: (Optional) Additional query parameters to include in refresh token requests.
 
 **disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
 

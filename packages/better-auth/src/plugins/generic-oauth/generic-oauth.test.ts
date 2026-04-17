@@ -1141,61 +1141,6 @@ describe("oauth2", async () => {
 		expect(capturedParams.get("audience")).toBe("my-audience");
 	});
 
-	it("should support function refreshTokenUrlParams with endpoint context", async () => {
-		let capturedParams = new URLSearchParams();
-		server.service.once("beforeResponse", (_response, req) => {
-			const body = req.body;
-			if (typeof body === "string") {
-				capturedParams = new URLSearchParams(body);
-				return;
-			}
-			if (body && typeof body === "object") {
-				capturedParams = new URLSearchParams(
-					Object.entries(body as Record<string, string>).map(([key, value]) => [
-						key,
-						String(value),
-					]),
-				);
-			}
-		});
-
-		const { auth } = await getTestInstance({
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "refresh-params-function",
-							clientId: clientId,
-							clientSecret: clientSecret,
-							tokenUrl: `http://localhost:${port}/token`,
-							refreshTokenUrlParams: (ctx) => ({
-								requestMethod: ctx.request?.method || "unknown",
-							}),
-						},
-					],
-				}),
-			],
-		});
-
-		const endpointContext = {
-			context: await auth.$context,
-			request: new Request("http://localhost:3000/api/auth/refresh-token", {
-				method: "POST",
-			}),
-		} as unknown as GenericEndpointContext;
-
-		await runWithEndpointContext(endpointContext, async () => {
-			const provider = endpointContext.context.socialProviders.find(
-				(p) => p.id === "refresh-params-function",
-			);
-			expect(provider).toBeDefined();
-			expect(provider!.refreshAccessToken).toBeDefined();
-			await provider!.refreshAccessToken!("refresh-token");
-		});
-
-		expect(capturedParams.get("requestMethod")).toBe("POST");
-	});
-
 	describe("Okta Provider Helper", () => {
 		it("should return correct GenericOAuthConfig", () => {
 			const oktaConfig = okta({

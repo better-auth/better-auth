@@ -1,4 +1,3 @@
-import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type {
 	ClientAssertionConfig,
@@ -139,6 +138,10 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	tokenUrlParams?: Record<string, string> | undefined;
 	/**
+	 * Additional params to include during refresh token requests.
+	 */
+	refreshTokenUrlParams?: Record<string, string> | undefined;
+	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
@@ -176,13 +179,4 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	overrideUserInfo?: boolean | undefined;
 
-	/**
-	 * Additional params to include during refresh token requests.
-	 */
-	refreshTokenUrlParams?:
-		| (
-				| Record<string, string>
-				| ((ctx: GenericEndpointContext) => Record<string, string>)
-		  )
-		| undefined;
 }

@@ -1,9 +1,4 @@
-import type {
-	AuthContext,
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
-import { getCurrentAuthContext } from "@better-auth/core/context";
+import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
@@ -329,23 +324,6 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						const endpointContext = await getCurrentAuthContext().catch(
-							() => null,
-						);
-						let refreshTokenUrlParams: Record<string, string> | undefined;
-						if (typeof c.refreshTokenUrlParams === "function") {
-							if (endpointContext) {
-								refreshTokenUrlParams = c.refreshTokenUrlParams(
-									endpointContext as GenericEndpointContext,
-								);
-							} else {
-								ctx.logger.warn(
-									"refreshTokenUrlParams is a function but no endpoint context is available. The params will be skipped. This can happen when refreshAccessToken is called outside a request context (e.g., background jobs).",
-								);
-							}
-						} else {
-							refreshTokenUrlParams = c.refreshTokenUrlParams;
-						}
 						return refreshAccessToken({
 							refreshToken,
 							options: {
@@ -353,7 +331,7 @@ export const genericOAuth = <const ID extends string>(
 								clientSecret: c.clientSecret,
 							},
 							authentication: c.authentication,
-							extraParams: refreshTokenUrlParams,
+							extraParams: c.refreshTokenUrlParams,
 							clientAssertion: buildClientAssertion(c, tokenUrl),
 							tokenEndpoint: tokenUrl,
 						});
