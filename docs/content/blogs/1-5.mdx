@@ -390,7 +390,7 @@ hooks: {
 
 Better Auth can now resolve the base URL dynamically from incoming requests, making it work seamlessly with Vercel preview deployments, multi-domain setups, and reverse proxies.
 
-[👉 Read more about dynamic base URL](https://www.better-auth.com/docs/concepts/dynamic-base-url)
+[👉 Read more about dynamic base URL](https://www.better-auth.com/docs/guides/dynamic-base-url)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -538,13 +538,15 @@ A new `testUtils` plugin provides factories, database helpers, and auth utilitie
 import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
 
-export const auth = betterAuth({
+export const testAuth = betterAuth({
     plugins: [testUtils({ captureOTP: true })],
 });
 ```
 
+Prefer adding `testUtils` in a test-only auth instance such as `auth.test.ts`. It does not expose public routes, but it does add privileged helpers on `ctx.test`, and conditional plugin arrays can weaken type inference.
+
 ```tsx
-const ctx = await auth.$context;
+const ctx = await testAuth.$context;
 const test = ctx.test;
 
 // Create and save a test user
