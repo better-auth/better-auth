@@ -4,13 +4,11 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
 import { init } from "../context/init";
-import { twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Session,
-	SignInAttempt,
 	User,
 } from "../types";
 import { getMigrations } from "./get-migration";
@@ -284,46 +282,6 @@ describe("internal adapter test", async () => {
 		);
 		expect(verificationDeleteCalls.length).toBe(0);
 		deleteSpy.mockRestore();
-	});
-
-	it("should opportunistically clean expired sign-in transactions on create", async () => {
-		const { auth } = await getTestInstance(
-			{
-				plugins: [twoFactor()],
-			},
-			{
-				disableTestUser: true,
-			},
-		);
-		const twoFactorContext = await auth.$context;
-		const twoFactorAdapter = twoFactorContext.internalAdapter;
-		const user = await twoFactorAdapter.createUser({
-			email: "signin-transaction-cleanup@example.com",
-			name: "SignIn Transaction Cleanup",
-		});
-
-		const expiredAttempt = await twoFactorAdapter.createSignInAttempt({
-			userId: user.id,
-			expiresAt: new Date(Date.now() - 60_000),
-			dontRememberMe: false,
-		});
-
-		const activeAttempt = await twoFactorAdapter.createSignInAttempt({
-			userId: user.id,
-			expiresAt: new Date(Date.now() + 60_000),
-			dontRememberMe: false,
-		});
-
-		const foundAttempt = await twoFactorAdapter.findSignInAttempt(
-			activeAttempt.id,
-		);
-		expect(foundAttempt?.id).toBe(activeAttempt.id);
-
-		const expiredRows = await twoFactorContext.adapter.findMany<SignInAttempt>({
-			model: "signInAttempt",
-			where: [{ field: "id", value: expiredAttempt.id }],
-		});
-		expect(expiredRows).toHaveLength(0);
 	});
 
 	describe("verification token storage", () => {

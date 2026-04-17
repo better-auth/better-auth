@@ -1,4 +1,5 @@
 export type { StandardSchemaV1 } from "@standard-schema/spec";
+export type { SignInAttempt } from "../db";
 export type {
 	AuthContext,
 	BetterAuthPluginRegistry,

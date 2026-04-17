@@ -131,11 +131,28 @@ class NodeSqliteConnection implements DatabaseConnection {
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
+		const isRead = /^(\s*--[^\n]*\n)*\s*(select|with|pragma)\b/i.test(sql);
+		const hasReturning = /\breturning\b/i.test(sql);
 
-		const rows = stmt.all(...(parameters as any[])) as O[];
+		if (isRead || hasReturning) {
+			const rows = stmt.all(...(parameters as any[])) as O[];
+			return Promise.resolve({
+				rows,
+				numAffectedRows: BigInt(rows.length),
+			});
+		}
 
+		const { changes, lastInsertRowid } = stmt.run(...(parameters as any[])) as {
+			changes: number | bigint;
+			lastInsertRowid: number | bigint;
+		};
 		return Promise.resolve({
-			rows,
+			rows: [] as O[],
+			numAffectedRows: BigInt(changes),
+			insertId:
+				typeof lastInsertRowid === "bigint"
+					? lastInsertRowid
+					: BigInt(lastInsertRowid ?? 0),
 		});
 	}
 

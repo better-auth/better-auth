@@ -61,6 +61,16 @@ export interface TwoFactorOptions {
 	 * @default 2592000 (30 days)
 	 */
 	trustDeviceMaxAge?: number | undefined;
+	/**
+	 * Maximum number of failed verification attempts allowed against a single
+	 * sign-in attempt before it is locked. Further verifications return
+	 * `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE` and the caller must start a new
+	 * sign-in. Guards against brute-forcing a single paused attempt
+	 * (NIST SP 800-63B-4 §5.2.2).
+	 *
+	 * @default 5
+	 */
+	maxVerificationAttempts?: number | undefined;
 }
 
 export type TwoFactorMethod = "totp" | "otp" | "backup-code";

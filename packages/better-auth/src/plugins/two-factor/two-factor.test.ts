@@ -2803,3 +2803,253 @@ describe("backup codes storage configurations", () => {
 		});
 	}
 });
+
+describe("two-factor verify attempt hardening", async () => {
+	async function enrollTotp(params: {
+		auth: Awaited<ReturnType<typeof getTestInstance>>["auth"];
+		client: ReturnType<
+			typeof createAuthClient<{ plugins: [ReturnType<typeof twoFactorClient>] }>
+		>;
+		db: Awaited<ReturnType<typeof getTestInstance>>["db"];
+		email: string;
+		password: string;
+		sessionSetter: Awaited<ReturnType<typeof getTestInstance>>["sessionSetter"];
+	}) {
+		const enrolledHeaders = new Headers();
+		const signIn = await params.client.signIn.email({
+			email: params.email,
+			password: params.password,
+			fetchOptions: { onSuccess: params.sessionSetter(enrolledHeaders) },
+		});
+		expectNoTwoFactorChallenge(signIn.data);
+		await params.client.twoFactor.enable({
+			password: params.password,
+			fetchOptions: { headers: enrolledHeaders },
+		});
+		const row = await params.db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: signIn.data.user.id }],
+		});
+		if (!row) {
+			throw new Error("twoFactor row missing after enable");
+		}
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: row.secret,
+		});
+		const code = await createOTP(decrypted).totp();
+		await params.client.twoFactor.verifyTotp({
+			code,
+			fetchOptions: {
+				headers: enrolledHeaders,
+				onSuccess: params.sessionSetter(enrolledHeaders),
+			},
+		});
+		return { userId: signIn.data.user.id, secret: decrypted };
+	}
+
+	async function startPausedSignIn(params: {
+		client: ReturnType<
+			typeof createAuthClient<{ plugins: [ReturnType<typeof twoFactorClient>] }>
+		>;
+		email: string;
+		password: string;
+	}) {
+		const challengeHeaders = new Headers();
+		const res = await params.client.signIn.email({
+			email: params.email,
+			password: params.password,
+			fetchOptions: {
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					const cookie = parsed.get("better-auth.two_factor")?.value;
+					if (cookie) {
+						challengeHeaders.append(
+							"cookie",
+							`better-auth.two_factor=${cookie}`,
+						);
+					}
+				},
+			},
+		});
+		expectTwoFactorChallenge(res.data);
+		return {
+			attemptId: res.data.challenge.attemptId,
+			challengeHeaders,
+		};
+	}
+
+	it("rejects cross-user attemptId with INVALID_TWO_FACTOR_COOKIE", async () => {
+		const { testUser, customFetchImpl, sessionSetter, db, auth } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		await enrollTotp({
+			auth: auth as unknown as Awaited<
+				ReturnType<typeof getTestInstance>
+			>["auth"],
+			client,
+			db,
+			email: testUser.email,
+			password: testUser.password,
+			sessionSetter,
+		});
+		const { attemptId: victimAttemptId } = await startPausedSignIn({
+			client,
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		const attackerEmail = "rfc6-s1-attacker@test.com";
+		const attackerPassword = "attacker-password-123";
+		await auth.api.signUpEmail({
+			body: {
+				email: attackerEmail,
+				password: attackerPassword,
+				name: "Attacker",
+			},
+		});
+		const attackerHeaders = new Headers();
+		const attackerSignIn = await client.signIn.email({
+			email: attackerEmail,
+			password: attackerPassword,
+			fetchOptions: { onSuccess: sessionSetter(attackerHeaders) },
+		});
+		expectNoTwoFactorChallenge(attackerSignIn.data);
+
+		const res = await client.twoFactor.verifyTotp({
+			code: "000000",
+			attemptId: victimAttemptId,
+			fetchOptions: { headers: attackerHeaders },
+		} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
+
+		expect(res.data?.token).toBeUndefined();
+		expect(res.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		);
+	});
+
+	it("atomically consumes the sign-in attempt under concurrent verify", async () => {
+		const { testUser, customFetchImpl, sessionSetter, db, auth } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		const { secret } = await enrollTotp({
+			auth: auth as unknown as Awaited<
+				ReturnType<typeof getTestInstance>
+			>["auth"],
+			client,
+			db,
+			email: testUser.email,
+			password: testUser.password,
+			sessionSetter,
+		});
+		const { attemptId, challengeHeaders } = await startPausedSignIn({
+			client,
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		const code = await createOTP(secret).totp();
+
+		const [resA, resB] = await Promise.all([
+			client.twoFactor.verifyTotp({
+				code,
+				attemptId,
+				fetchOptions: { headers: challengeHeaders },
+			} as Parameters<typeof client.twoFactor.verifyTotp>[0]),
+			client.twoFactor.verifyTotp({
+				code,
+				attemptId,
+				fetchOptions: { headers: challengeHeaders },
+			} as Parameters<typeof client.twoFactor.verifyTotp>[0]),
+		]);
+
+		const successes = [resA, resB].filter((r) => !!r.data?.token).length;
+		const failures = [resA, resB].filter(
+			(r) =>
+				r.error?.message ===
+				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		).length;
+		expect(successes).toBe(1);
+		expect(failures).toBe(1);
+	});
+
+	it("locks the attempt after too many failed verifications", async () => {
+		const { testUser, customFetchImpl, sessionSetter, db, auth } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						maxVerificationAttempts: 5,
+					} as Parameters<typeof twoFactor>[0]),
+				],
+			});
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		const { secret } = await enrollTotp({
+			auth: auth as unknown as Awaited<
+				ReturnType<typeof getTestInstance>
+			>["auth"],
+			client,
+			db,
+			email: testUser.email,
+			password: testUser.password,
+			sessionSetter,
+		});
+		const { attemptId, challengeHeaders } = await startPausedSignIn({
+			client,
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		for (let i = 0; i < 5; i++) {
+			const bad = await client.twoFactor.verifyTotp({
+				code: "000000",
+				attemptId,
+				fetchOptions: { headers: challengeHeaders },
+			} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
+			expect(bad.error?.message).toBe(
+				TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+			);
+		}
+
+		const validCode = await createOTP(secret).totp();
+		const afterLock = await client.twoFactor.verifyTotp({
+			code: validCode,
+			attemptId,
+			fetchOptions: { headers: challengeHeaders },
+		} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
+
+		expect(afterLock.data?.token).toBeUndefined();
+		expect(afterLock.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE.message,
+		);
+	});
+});

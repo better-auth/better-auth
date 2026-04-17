@@ -282,7 +282,10 @@ export interface InternalAdapter<
 	): Promise<Verification>;
 
 	createSignInAttempt(
-		data: Omit<SignInAttempt, "createdAt" | "id" | "updatedAt"> &
+		data: Omit<
+			SignInAttempt,
+			"createdAt" | "failedVerifications" | "id" | "updatedAt"
+		> &
 			Partial<SignInAttempt>,
 	): Promise<SignInAttempt>;
 
@@ -294,6 +297,24 @@ export interface InternalAdapter<
 	): Promise<SignInAttempt | null>;
 
 	deleteSignInAttempt(id: string): Promise<void>;
+
+	/**
+	 * Atomically delete a sign-in attempt and return the deleted row. Uses
+	 * `deleteMany` row-count as a concurrency fence: under concurrent callers,
+	 * exactly one observes a delete count of 1 and receives the row; all
+	 * others receive null. Returns null if the attempt does not exist.
+	 */
+	consumeSignInAttempt(id: string): Promise<SignInAttempt | null>;
+
+	/**
+	 * Increment the attempt's `failedVerifications` counter and, when the
+	 * threshold is reached, set `lockedAt`. Returns the updated row or null
+	 * if the attempt no longer exists.
+	 */
+	recordSignInAttemptFailure(
+		id: string,
+		options: { maxAttempts: number },
+	): Promise<SignInAttempt | null>;
 }
 
 type CreateCookieGetterFn = (

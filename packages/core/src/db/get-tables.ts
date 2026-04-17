@@ -184,6 +184,17 @@ export const getAuthTables = (
 					required: false,
 					fieldName: "loginMethod",
 				},
+				failedVerifications: {
+					type: "number",
+					required: true,
+					defaultValue: 0,
+					fieldName: "failedVerifications",
+				},
+				lockedAt: {
+					type: "date",
+					required: false,
+					fieldName: "lockedAt",
+				},
 				createdAt: {
 					type: "date",
 					required: true,

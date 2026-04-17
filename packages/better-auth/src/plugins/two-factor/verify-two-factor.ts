@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { GenericEndpointContext, SignInAttempt } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { getSessionFromCtx } from "../../api";
@@ -9,20 +9,27 @@ import {
 import { expireCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
-import { getPendingSignInAttempt, getTwoFactorAttemptId } from "./check";
+import { getTwoFactorAttemptId } from "./check";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import type { UserWithTwoFactor } from "./types";
+import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
+
+const DEFAULT_MAX_VERIFICATION_ATTEMPTS = 5;
+
+function getMaxVerificationAttempts(ctx: GenericEndpointContext): number {
+	const plugin = ctx.context.getPlugin("two-factor");
+	const options = (plugin?.options ?? {}) as TwoFactorOptions;
+	const value = options.maxVerificationAttempts;
+	return typeof value === "number" && value > 0
+		? value
+		: DEFAULT_MAX_VERIFICATION_ATTEMPTS;
+}
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
-	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
-		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
-	};
-
 	const session = await getSessionFromCtx(ctx);
 	const requestedAttemptId =
 		typeof ctx.body?.attemptId === "string"
@@ -32,19 +39,41 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				: null;
 	const twoFactorCookie = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
 
-	const resolveAttempt = async (
+	const rejectCookie = (clearCookieOnFailure: boolean): never => {
+		if (clearCookieOnFailure) {
+			expireCookie(ctx, twoFactorCookie);
+		}
+		throw APIError.from(
+			"UNAUTHORIZED",
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+		);
+	};
+
+	const loadAttempt = async (
 		attemptId: string,
 		clearCookieOnFailure: boolean,
 	) => {
-		const attempt = await getPendingSignInAttempt(ctx, attemptId);
+		const attempt =
+			await ctx.context.internalAdapter.findSignInAttempt(attemptId);
 		if (!attempt) {
-			if (clearCookieOnFailure) {
-				expireCookie(ctx, twoFactorCookie);
+			return rejectCookie(clearCookieOnFailure);
+		}
+		if (attempt.expiresAt <= new Date()) {
+			await ctx.context.internalAdapter
+				.deleteSignInAttempt(attemptId)
+				.catch(() => {});
+			return rejectCookie(clearCookieOnFailure);
+		}
+		// When the caller has a session for a different user than the attempt,
+		// require proof that this same caller started the attempt: the signed
+		// two-factor cookie set at attempt creation must match. Without that
+		// binding, a signed-in user could complete another user's paused sign-in
+		// by presenting an observed attemptId.
+		if (session && session.user.id !== attempt.userId) {
+			const cookieAttemptId = await getTwoFactorAttemptId(ctx);
+			if (cookieAttemptId !== attemptId) {
+				return rejectCookie(clearCookieOnFailure);
 			}
-			throw APIError.from(
-				"UNAUTHORIZED",
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			);
 		}
 		const user = (await ctx.context.internalAdapter.findUserById(
 			attempt.userId,
@@ -53,24 +82,44 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			await ctx.context.internalAdapter
 				.deleteSignInAttempt(attemptId)
 				.catch(() => {});
-			if (clearCookieOnFailure) {
-				expireCookie(ctx, twoFactorCookie);
-			}
-			throw APIError.from(
-				"UNAUTHORIZED",
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			);
+			return rejectCookie(clearCookieOnFailure);
 		}
+		return { attempt, user };
+	};
 
+	const invalid = async (
+		errorKey: keyof typeof TWO_FACTOR_ERROR_CODES,
+		attemptId?: string,
+	): Promise<never> => {
+		if (attemptId) {
+			const maxAttempts = getMaxVerificationAttempts(ctx);
+			await ctx.context.internalAdapter
+				.recordSignInAttemptFailure(attemptId, { maxAttempts })
+				.catch(() => null);
+		}
+		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
+	};
+
+	const buildResolver = (
+		attempt: SignInAttempt,
+		user: UserWithTwoFactor,
+		clearCookieOnFailure: boolean,
+	) => {
+		const attemptId = attempt.id;
 		return {
 			valid: async (ctx: GenericEndpointContext) => {
+				const consumed =
+					await ctx.context.internalAdapter.consumeSignInAttempt(attemptId);
+				if (!consumed) {
+					return rejectCookie(clearCookieOnFailure);
+				}
 				ctx.context.setSignInAttempt({
-					...attempt,
+					...consumed,
 					user,
 				});
 				const finalizedSession = await finalizeSignIn(ctx, {
 					user,
-					dontRememberMe: attempt.dontRememberMe ?? undefined,
+					dontRememberMe: consumed.dontRememberMe ?? undefined,
 					attemptId,
 				});
 				ctx.context.addSuccessFinalizer?.(async () => {
@@ -102,28 +151,43 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						);
 						expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 					}
-					await ctx.context.internalAdapter
-						.deleteSignInAttempt(attemptId)
-						.catch(() => {});
 					expireCookie(ctx, twoFactorCookie);
 				});
 				scheduleSessionCommit(
 					ctx,
 					finalizedSession,
-					attempt.dontRememberMe ?? undefined,
+					consumed.dontRememberMe ?? undefined,
 				);
 				return ctx.json({
 					token: finalizedSession.session.token,
 					user: parseUserOutput(ctx.context.options, finalizedSession.user),
 				});
 			},
-			invalid,
+			invalid: (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) =>
+				invalid(errorKey, attemptId),
 			session: {
 				session: null,
 				user,
 			},
 			key: attemptId,
 		};
+	};
+
+	const resolveAttempt = async (
+		attemptId: string,
+		clearCookieOnFailure: boolean,
+	) => {
+		const { attempt, user } = await loadAttempt(
+			attemptId,
+			clearCookieOnFailure,
+		);
+		if (attempt.lockedAt) {
+			throw APIError.from(
+				"UNAUTHORIZED",
+				TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
+			);
+		}
+		return buildResolver(attempt, user, clearCookieOnFailure);
 	};
 
 	if (requestedAttemptId) {
@@ -141,6 +205,9 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	 * only for browser flows that do not already have a live session.
 	 */
 	if (session) {
+		const invalidSession = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
+			throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
+		};
 		return {
 			valid: async (ctx: GenericEndpointContext) => {
 				return ctx.json({
@@ -148,7 +215,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					user: parseUserOutput(ctx.context.options, session.user),
 				});
 			},
-			invalid,
+			invalid: invalidSession,
 			session,
 			key: `${session.user.id}!${session.session.id}`,
 		};

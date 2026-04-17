@@ -169,21 +169,3 @@ export async function getTwoFactorAttemptId(
 	);
 	return typeof attemptId === "string" ? attemptId : null;
 }
-
-export async function getPendingSignInAttempt(
-	ctx: GenericEndpointContext,
-	attemptId: string,
-) {
-	const attempt =
-		await ctx.context.internalAdapter.findSignInAttempt(attemptId);
-	if (!attempt) {
-		return null;
-	}
-	if (attempt.expiresAt <= new Date()) {
-		await ctx.context.internalAdapter
-			.deleteSignInAttempt(attemptId)
-			.catch(() => {});
-		return null;
-	}
-	return attempt;
-}

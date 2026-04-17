@@ -1239,22 +1239,13 @@ export const createInternalAdapter = (
 				Partial<SignInAttempt>,
 		) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
-			await currentAdapter.deleteMany({
-				model: "signInAttempt",
-				where: [
-					{
-						field: "expiresAt",
-						value: new Date(),
-						operator: "lt",
-					},
-				],
-			});
 			const attempt = await currentAdapter.create<SignInAttempt>({
 				model: "signInAttempt",
 				data: {
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...data,
+					failedVerifications: data.failedVerifications ?? 0,
 				},
 			});
 			return attempt;
@@ -1298,6 +1289,58 @@ export const createInternalAdapter = (
 				model: "signInAttempt",
 				where: [{ field: "id", value: id }],
 			});
+		},
+		consumeSignInAttempt: async (id: string) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const attempt = await currentAdapter.findOne<SignInAttempt>({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
+			if (!attempt) {
+				return null;
+			}
+			const deleted = await currentAdapter.deleteMany({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
+			if (deleted !== 1) {
+				return null;
+			}
+			return {
+				...attempt,
+				dontRememberMe: attempt.dontRememberMe ?? undefined,
+			};
+		},
+		recordSignInAttemptFailure: async (
+			id: string,
+			options: { maxAttempts: number },
+		) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const attempt = await currentAdapter.findOne<SignInAttempt>({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
+			if (!attempt) {
+				return null;
+			}
+			const nextCount = (attempt.failedVerifications ?? 0) + 1;
+			const shouldLock = nextCount >= options.maxAttempts && !attempt.lockedAt;
+			const updated = await currentAdapter.update<SignInAttempt>({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+				update: {
+					failedVerifications: nextCount,
+					...(shouldLock ? { lockedAt: new Date() } : {}),
+					updatedAt: new Date(),
+				},
+			});
+			if (!updated) {
+				return null;
+			}
+			return {
+				...updated,
+				dontRememberMe: updated.dontRememberMe ?? undefined,
+			};
 		},
 	};
 };
