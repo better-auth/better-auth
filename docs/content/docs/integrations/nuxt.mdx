@@ -5,120 +5,157 @@ description: Integrate Better Auth with Nuxt.
 
 Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
-### Create API Route
+## Mount the handler
 
-We need to mount the handler to an API route. Create a file inside `/server/api/auth` called `[...all].ts` and add the following code:
+Mount the Better Auth handler to a catch-all Nitro route. Create a file at `server/api/auth/[...all].ts`:
 
 ```ts title="server/api/auth/[...all].ts"
-import { auth } from "~/lib/auth"; // import your auth config
+import { auth } from "~~/lib/auth" // import your auth config
 
 export default defineEventHandler((event) => {
-	return auth.handler(toWebRequest(event));
-});
+	return auth.handler(toWebRequest(event))
+})
 ```
 
 <Callout type="info">
-  You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
+  You can change the mount path in your Better Auth configuration, but keeping it as `/api/auth/[...all]` is recommended.
 </Callout>
 
 ## Create a client
 
-Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
+Create an auth client using `better-auth/vue` so `useSession` returns Vue refs:
 
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/vue" // make sure to import from better-auth/vue
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/vue"
 
-export const authClient = createAuthClient({
-    //you can pass client configuration here
+export const authClient = createAuthClient()
+export const { signIn, signUp, signOut, useSession } = authClient
+```
+
+## Use the session
+
+Use `authClient.useSession(useFetch)` inside a page `setup()` to load the session on the server and hydrate it on the client. Pass Nuxt's `useFetch` so the request is made with the incoming cookies and the payload is reused during hydration:
+
+```vue title="pages/index.vue"
+<script setup lang="ts">
+import { authClient } from "~~/lib/auth-client"
+
+const { data: session } = await authClient.useSession(useFetch)
+</script>
+
+<template>
+	<div v-if="session">
+		<p>Welcome, {{ session.user.name }}</p>
+		<button @click="authClient.signOut()">Sign out</button>
+	</div>
+	<button v-else @click="authClient.signIn.social({ provider: 'github' })">
+		Continue with GitHub
+	</button>
+</template>
+```
+
+For client-only widgets like popovers or menus, call `authClient.useSession()` without an argument. It returns a reactive ref that updates on sign-in and sign-out.
+
+## Protect pages
+
+Create a named route middleware and opt pages into it with `definePageMeta`:
+
+```ts title="app/middleware/auth.ts"
+import { authClient } from "~~/lib/auth-client"
+
+export default defineNuxtRouteMiddleware(async (to) => {
+	const { data: session } = await authClient.useSession(useFetch)
+	if (!session.value) {
+		return navigateTo({ path: "/login", query: { redirect: to.fullPath } })
+	}
 })
 ```
 
-Once you have created the client, you can use it to sign up, sign in, and perform other actions.
-Some of the actions are reactive.
-
-### Example usage
-
-```vue title="index.vue"
+```vue title="pages/dashboard.vue"
 <script setup lang="ts">
-import { authClient } from "~/lib/client"
-const session = authClient.useSession()
+definePageMeta({ middleware: "auth" })
 </script>
-
-<template>
-    <div>
-        <button v-if="!session?.data" @click="() => authClient.signIn.social({
-            provider: 'github'
-        })">
-            Continue with GitHub
-        </button>
-        <div>
-            <pre>{{ session.data }}</pre>
-            <button v-if="session.data" @click="authClient.signOut()">
-                Sign out
-            </button>
-        </div>
-    </div>
-</template>
 ```
 
-### Server Usage
+Rename the file to `app/middleware/auth.global.ts` to run it on every route. Always `return` the `navigateTo(...)` call, since calling it without `return` is a no-op.
 
-The `api` object exported from the auth instance contains all the actions that you can perform on the server. Every endpoint made inside Better Auth is invocable as a function. Including plugins endpoints.
+## Protect server routes
 
-**Example: Getting Session on a server API route**
+Call `auth.api.getSession` with the incoming `event.headers` and guard the route with `createError`:
 
-```tsx title="server/api/example.ts"
-import { auth } from "~/lib/auth";
+```ts title="server/api/me.get.ts"
+import { auth } from "~~/lib/auth"
 
-export default defineEventHandler((event) => {
-    const session = await auth.api.getSession({
-      headers: event.headers
-    });
-
-   if(session) {
-     // access the session.session && session.user
-   }
-});
-```
-
-### SSR Usage
-
-If you are using Nuxt with SSR, you can use the `useSession` function in the `setup` function of your page component and pass `useFetch` to make it work with SSR.
-
-```vue title="index.vue"
-<script setup lang="ts">
-import { authClient } from "~/lib/auth-client";
-
-const { data: session } = await authClient.useSession(useFetch);
-</script>
-
-<template>
-    <p>
-        {{ session }}
-    </p>
-</template>
-```
-
-### Middleware
-
-To add middleware to your Nuxt project, you can use the `useSession` method from the client.
-
-```ts title="middleware/auth.global.ts"
-import { authClient } from "~/lib/auth-client";
-export default defineNuxtRouteMiddleware(async (to, from) => {
-	const { data: session } = await authClient.useSession(useFetch); 
-	if (!session.value) {
-		if (to.path === "/dashboard") {
-			return navigateTo("/");
-		}
+export default defineEventHandler(async (event) => {
+	const session = await auth.api.getSession({ headers: event.headers })
+	if (!session?.user) {
+		throw createError({ statusCode: 401, statusMessage: "Unauthorized" })
 	}
-});
+	return { user: session.user }
+})
 ```
 
-### Resources & Examples
+If you need to reuse this across many routes, factor the check into your own `server/utils/` helper.
 
-* [Nuxt and Nuxt Hub example](https://github.com/atinux/nuxthub-better-auth) on GitHub.
-* [NuxtZzle is Nuxt,Drizzle ORM example](https://github.com/leamsigc/nuxt-better-auth-drizzle) on GitHub [preview](https://nuxt-better-auth.giessen.dev/)
-* [Nuxt example](https://stackblitz.com/github/better-auth/examples/tree/main/nuxt-example) on StackBlitz.
-* [NuxSaaS (Github)](https://github.com/NuxSaaS/NuxSaaS) is a full-stack SaaS Starter Kit that leverages Better Auth for secure and efficient user authentication. [Demo](https://nuxsaas.com/)
-* [NuxtOne (Github)](https://github.com/nuxtone/nuxt-one) is a Nuxt-based starter template for building AIaaS (AI-as-a-Service) applications.
+## Use the client during SSR
+
+Aside from `useSession(useFetch)`, `authClient` actions don't forward cookies during SSR by default, so they return as unauthenticated. Two ways to handle this:
+
+**Approach A: call them on the client only.** Wrap the consumer in `<ClientOnly>` or guard with `import.meta.client`:
+
+```vue
+<script setup lang="ts">
+import { authClient } from "~~/lib/auth-client"
+
+const accounts = ref<Awaited<ReturnType<typeof authClient.listAccounts>>["data"]>()
+
+onMounted(async () => {
+	const { data } = await authClient.listAccounts()
+	accounts.value = data
+})
+</script>
+```
+
+**Approach B: create a request-scoped client that forwards cookies during SSR.** Add a `useAuth` composable and combine it with `useAsyncData`:
+
+```ts title="app/composables/useAuth.ts"
+import { createAuthClient } from "better-auth/vue"
+
+export function useAuth() {
+	const url = useRequestURL()
+	const headers = import.meta.server ? useRequestHeaders(["cookie"]) : undefined
+	return createAuthClient({
+		baseURL: url.origin,
+		fetchOptions: { headers },
+	})
+}
+```
+
+```vue title="pages/settings.vue"
+<script setup lang="ts">
+const { data: accounts } = await useAsyncData("accounts", () =>
+	useAuth().listAccounts().then((res) => res.data),
+)
+</script>
+```
+
+## Reuse with a Nuxt layer
+
+When you want to reuse the same auth setup across multiple Nuxt apps (for example a marketing site and a dashboard), extract `lib/auth.ts`, `server/`, `app/middleware/`, and `app/composables/` into a [Nuxt layer](https://nuxt.com/docs/4.x/getting-started/layers) and extend it from each app:
+
+```ts title="nuxt.config.ts"
+export default defineNuxtConfig({
+	extends: ["./layers/auth"],
+})
+```
+
+## Resources & examples
+
+{/* cspell:disable */}
+
+* [`atinux/nuxthub-better-auth`](https://github.com/atinux/nuxthub-better-auth)
+* [`leamsigc/nuxt-better-auth-drizzle`](https://github.com/leamsigc/nuxt-better-auth-drizzle)
+* [`NuxSaaS/NuxSaaS`](https://github.com/NuxSaaS/NuxSaaS)
+* [`nuxtone/nuxt-one`](https://github.com/nuxtone/nuxt-one)
+
+{/* cspell:enable */}
