@@ -39,6 +39,19 @@ describe("Host Classification", () => {
 			expect(classifyHost("[fe80::1%en0]:443").kind).toBe("linkLocal");
 		});
 
+		it("should strip trailing dot (RFC 1034 absolute DNS form)", () => {
+			expect(classifyHost("localhost.").kind).toBe("localhost");
+			expect(classifyHost("tenant.localhost.").kind).toBe("localhost");
+			expect(classifyHost("metadata.google.internal.").kind).toBe(
+				"cloudMetadata",
+			);
+			expect(classifyHost("instance-data.ec2.internal.").kind).toBe(
+				"cloudMetadata",
+			);
+			expect(classifyHost("127.0.0.1.").kind).toBe("loopback");
+			expect(classifyHost("example.com.").canonical).toBe("example.com");
+		});
+
 		it("should be case-insensitive", () => {
 			expect(classifyHost("LOCALHOST").kind).toBe("localhost");
 			expect(classifyHost("Example.COM").canonical).toBe("example.com");
@@ -391,6 +404,17 @@ describe("Host Classification", () => {
 		it("should prevent zone-id smuggling", () => {
 			// Naive parsers might treat fe80::1%evil.com as FQDN "evil.com"
 			expect(classifyHost("fe80::1%evil.com").kind).toBe("linkLocal");
+		});
+
+		it("should prevent absolute-DNS-form SSRF bypass", () => {
+			// WHATWG URL parsing preserves trailing dots in `.hostname`, so
+			// `metadata.google.internal.` would default to `public` without
+			// normalization — a working cloud-metadata bypass.
+			expect(isPublicRoutableHost("metadata.google.internal.")).toBe(false);
+			expect(isPublicRoutableHost("instance-data.ec2.internal.")).toBe(false);
+			expect(isLoopbackHost("localhost.")).toBe(true);
+			expect(isLoopbackHost("tenant.localhost.")).toBe(true);
+			expect(isLoopbackIP("127.0.0.1.")).toBe(true);
 		});
 
 		it("should canonicalize to defeat representation attacks", () => {

@@ -129,6 +129,16 @@ function stripZoneId(host: string): string {
 	return host.slice(0, zone);
 }
 
+/**
+ * Strip trailing dots (RFC 1034 absolute DNS form): `localhost.` → `localhost`.
+ * Without this, `metadata.google.internal.` would fall through to `public` and
+ * bypass the cloud-metadata / `.localhost` checks, since WHATWG URL parsing
+ * preserves the trailing dot in `url.hostname`.
+ */
+function stripTrailingDot(host: string): string {
+	return host.replace(/\.+$/, "");
+}
+
 /** Fast dotted-decimal shape check. Does NOT validate octet bounds. */
 function looksLikeIPv4(host: string): boolean {
 	return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
@@ -235,7 +245,9 @@ function classifyIPv6(expanded: string): HostKind {
  * // { kind: "localhost", literal: "fqdn", canonical: "tenant-a.localhost" }
  */
 export function classifyHost(host: string): HostClassification {
-	const stripped = stripZoneId(stripBrackets(stripPort(host.trim())));
+	const stripped = stripTrailingDot(
+		stripZoneId(stripBrackets(stripPort(host.trim()))),
+	);
 	const lowered = stripped.toLowerCase();
 
 	if (!isValidIP(lowered)) {
