@@ -1069,7 +1069,7 @@ describe("expo deep link injection for two-factor challenges", async () => {
 
 					const url = new URL(location!);
 					expect(url.searchParams.get("challenge")).toBe("two-factor");
-					expect(url.searchParams.get("attemptId")).toBeTruthy();
+					expect(url.searchParams.get("attemptId")).toBeNull();
 					expect(url.searchParams.get("methods")).toBe("otp");
 
 					const injectedCookie = url.searchParams.get("cookie");
@@ -1150,7 +1150,7 @@ describe("expo deep link injection for two-factor challenges", async () => {
 
 					const url = new URL(location!);
 					expect(url.searchParams.get("challenge")).toBe("two-factor");
-					expect(url.searchParams.get("attemptId")).toBeTruthy();
+					expect(url.searchParams.get("attemptId")).toBeNull();
 					expect(url.searchParams.get("methods")).toBe("otp");
 
 					const injectedCookie = url.searchParams.get("cookie");

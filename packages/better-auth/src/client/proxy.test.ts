@@ -141,9 +141,9 @@ describe("createDynamicPathProxy", () => {
 	it("should not toggle $sessionSignal for paused two-factor challenges", async () => {
 		const client = vi.fn(async (path, options) => {
 			const challengeData = {
-				type: "challenge",
+				kind: "challenge",
 				challenge: {
-					type: "two-factor",
+					kind: "two-factor",
 					attemptId: "attempt-id",
 					availableMethods: ["otp"],
 				},

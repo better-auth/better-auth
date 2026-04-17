@@ -241,7 +241,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						 * `resolveSignIn` and therefore never populate `finalizedSignIn`.
 						 */
 						const committed =
-							ctx.context.finalizedSignIn ?? ctx.context.newSession;
+							ctx.context.getFinalizedSignIn() ?? ctx.context.getNewSession();
 						if (!committed) {
 							return;
 						}

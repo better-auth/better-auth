@@ -738,7 +738,7 @@ describe("oauth-proxy", async () => {
 			const redirectURL = new URL(redirectLocation, "http://localhost:3000");
 			expect(redirectURL.pathname).toBe("/dashboard");
 			expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-			expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+			expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 			expect(redirectURL.searchParams.get("methods")).toBe("otp");
 
 			const cookies = parseSetCookieHeader(setCookieHeader);

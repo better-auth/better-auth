@@ -8,9 +8,9 @@ type JsonResponse = {
 };
 
 type TwoFactorChallengeEnvelope = {
-	type: "challenge";
+	kind: "challenge";
 	challenge: {
-		type: "two-factor";
+		kind: "two-factor";
 		attemptId: string;
 		availableMethods: string[];
 	};
@@ -31,10 +31,10 @@ function expectTwoFactorChallengeData(
 ): asserts value is TwoFactorChallengeEnvelope {
 	expect(isRecord(value)).toBe(true);
 	const envelope = value as Record<string, unknown>;
-	expect(envelope.type).toBe("challenge");
+	expect(envelope.kind).toBe("challenge");
 	expect(isRecord(envelope.challenge)).toBe(true);
 	const challenge = envelope.challenge as Record<string, unknown>;
-	expect(challenge.type).toBe("two-factor");
+	expect(challenge.kind).toBe("two-factor");
 	expect(typeof challenge.attemptId).toBe("string");
 	expect(Array.isArray(challenge.availableMethods)).toBe(true);
 }
@@ -216,7 +216,7 @@ test.describe("vanilla-node two factor", async () => {
 		expect(secondSignInResult.error).toBeNull();
 		expect(
 			isRecord(secondSignInResult.data) &&
-				secondSignInResult.data.type === "challenge",
+				secondSignInResult.data.kind === "challenge",
 		).toBe(false);
 
 		cookies = await page.context().cookies();
@@ -430,7 +430,7 @@ test.describe("vanilla-node two factor", async () => {
 		expect(secondSignInResult.error).toBeNull();
 		expect(
 			isRecord(secondSignInResult.data) &&
-				secondSignInResult.data.type === "challenge",
+				secondSignInResult.data.kind === "challenge",
 		).toBe(false);
 	});
 });

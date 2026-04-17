@@ -453,7 +453,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						}
 						throw error;
 					}
-					if (result?.type === "challenge") {
+					if (result?.kind === "challenge") {
 						return ctx.json(result);
 					}
 					return ctx.json({

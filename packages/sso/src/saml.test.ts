@@ -3273,7 +3273,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(redirectLocation).not.toContain(callbackRouteUrl);
 		expect(redirectLocation).toContain("http://localhost:3000");
 		expect(redirectLocation).toContain("challenge=two-factor");
-		expect(redirectLocation).toContain("attemptId=");
+		expect(redirectLocation).not.toContain("attemptId=");
 		expect(otp).toBe("");
 	});
 
@@ -5449,11 +5449,12 @@ describe("SAML Single Logout (SLO)", () => {
 			expect(callbackResponse.headers.get("location")).toContain(
 				"challenge=two-factor",
 			);
-			const attemptId = new URL(
-				callbackResponse.headers.get("location")!,
-				"http://localhost:3000",
-			).searchParams.get("attemptId");
-			expect(attemptId).toBeTruthy();
+			expect(
+				new URL(
+					callbackResponse.headers.get("location")!,
+					"http://localhost:3000",
+				).searchParams.get("attemptId"),
+			).toBeNull();
 			const challengeCookies = parseSetCookieHeader(
 				callbackResponse.headers.get("set-cookie") ?? "",
 			);
@@ -5595,11 +5596,12 @@ describe("SAML Single Logout (SLO)", () => {
 			expect(callbackResponse.headers.get("location")).toContain(
 				"challenge=two-factor",
 			);
-			const attemptId = new URL(
-				callbackResponse.headers.get("location")!,
-				"http://localhost:3000",
-			).searchParams.get("attemptId");
-			expect(attemptId).toBeTruthy();
+			expect(
+				new URL(
+					callbackResponse.headers.get("location")!,
+					"http://localhost:3000",
+				).searchParams.get("attemptId"),
+			).toBeNull();
 
 			const pendingOrg = await auth.api.getFullOrganization({
 				query: {
@@ -5617,16 +5619,13 @@ describe("SAML Single Logout (SLO)", () => {
 			setCookieToHeader(challengeHeaders)({ response: callbackResponse });
 			await auth.api.sendTwoFactorOTP({
 				headers: challengeHeaders,
-				body: {
-					attemptId: attemptId!,
-				},
+				body: {},
 			});
 			expect(otp).toHaveLength(6);
 
 			const verifyResponse = await auth.api.verifyTwoFactorOTP({
 				headers: challengeHeaders,
 				body: {
-					attemptId: attemptId!,
 					code: otp,
 				},
 				asResponse: true,
@@ -5747,14 +5746,22 @@ describe("SAML Single Logout (SLO)", () => {
 			);
 			expect(capturedBody).toBeNull();
 
-			const attemptId = new URL(
-				callbackResponse.headers.get("location")!,
-				"http://localhost:3000",
-			).searchParams.get("attemptId");
-			expect(attemptId).toBeTruthy();
-			const pendingAttempt = await context.internalAdapter.findSignInAttempt(
-				attemptId!,
+			expect(
+				new URL(
+					callbackResponse.headers.get("location")!,
+					"http://localhost:3000",
+				).searchParams.get("attemptId"),
+			).toBeNull();
+			const signedTwoFactorCookie = parseSetCookieHeader(
+				callbackResponse.headers.get("set-cookie") ?? "",
+			).get("better-auth.two_factor")?.value;
+			expect(signedTwoFactorCookie).toBeTruthy();
+			const attemptId = signedTwoFactorCookie!.slice(
+				0,
+				signedTwoFactorCookie!.lastIndexOf("."),
 			);
+			const pendingAttempt =
+				await context.internalAdapter.findSignInAttempt(attemptId);
 			expect(pendingAttempt).toBeTruthy();
 
 			const challengeHeaders = new Headers();
@@ -5762,23 +5769,19 @@ describe("SAML Single Logout (SLO)", () => {
 
 			await auth.api.sendTwoFactorOTP({
 				headers: challengeHeaders,
-				body: {
-					attemptId: attemptId!,
-				},
+				body: {},
 			});
 			expect(otp).toHaveLength(6);
 
 			const verifyResponse = await auth.api.verifyTwoFactorOTP({
 				headers: challengeHeaders,
 				body: {
-					attemptId: attemptId!,
 					code: otp,
 				},
 				asResponse: true,
 			});
 			expect(verifyResponse.status).toBe(200);
 			expect(capturedBody).toMatchObject({
-				attemptId: attemptId!,
 				code: otp,
 			});
 		});

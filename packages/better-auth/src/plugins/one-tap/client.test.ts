@@ -68,9 +68,9 @@ describe("oneTapClient", () => {
 		const googleWindow = installGoogleWindow();
 		const fetch = vi.fn().mockResolvedValue({
 			data: {
-				type: "challenge",
+				kind: "challenge",
 				challenge: {
-					type: "two-factor",
+					kind: "two-factor",
 					attemptId: "attempt-id",
 					availableMethods: ["otp"],
 				},
@@ -97,7 +97,7 @@ describe("oneTapClient", () => {
 			},
 		});
 		expect(googleWindow.windowObject.location.href).toBe(
-			"http://localhost/dashboard?challenge=two-factor&attemptId=attempt-id&methods=otp",
+			"http://localhost/dashboard?challenge=two-factor&methods=otp",
 		);
 	});
 
@@ -106,9 +106,9 @@ describe("oneTapClient", () => {
 		const onTwoFactorRedirect = vi.fn();
 		const fetch = vi.fn().mockResolvedValue({
 			data: {
-				type: "challenge",
+				kind: "challenge",
 				challenge: {
-					type: "two-factor",
+					kind: "two-factor",
 					attemptId: "attempt-id",
 					availableMethods: ["totp", "otp"],
 				},
@@ -142,9 +142,9 @@ describe("oneTapClient", () => {
 		const googleWindow = installGoogleWindow();
 		const fetch = vi.fn().mockResolvedValue({
 			data: {
-				type: "challenge",
+				kind: "challenge",
 				challenge: {
-					type: "two-factor",
+					kind: "two-factor",
 					attemptId: "prompt-attempt",
 					availableMethods: ["otp"],
 				},
@@ -170,7 +170,7 @@ describe("oneTapClient", () => {
 			},
 		});
 		expect(googleWindow.windowObject.location.href).toBe(
-			"http://localhost/dashboard?challenge=two-factor&attemptId=prompt-attempt&methods=otp",
+			"http://localhost/dashboard?challenge=two-factor&methods=otp",
 		);
 	});
 });

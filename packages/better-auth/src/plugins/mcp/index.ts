@@ -225,7 +225,7 @@ export const mcp = (options: MCPOptions) => {
 						}
 						const session =
 							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
-							ctx.context.newSession;
+							ctx.context.getNewSession();
 						if (!session) {
 							return;
 						}

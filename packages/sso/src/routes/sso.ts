@@ -1721,12 +1721,13 @@ async function handleOIDCCallback(
 			);
 		},
 		onChallenge: async (challenge) => {
-			if (challenge.type !== "two-factor" || !provider.organizationId) {
+			if (challenge.kind !== "two-factor" || !provider.organizationId) {
 				return;
 			}
+			const attempt = ctx.context.getSignInAttempt();
 			const expiresAt =
-				ctx.context.signInAttempt?.id === challenge.attemptId
-					? ctx.context.signInAttempt.expiresAt
+				attempt?.id === challenge.attemptId
+					? attempt.expiresAt
 					: new Date(Date.now() + 10 * 60 * 1000);
 			await ctx.context.internalAdapter.createVerificationValue({
 				identifier: `${constants.SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${challenge.attemptId}`,

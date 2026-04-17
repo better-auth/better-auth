@@ -717,6 +717,8 @@ describe("lastLoginMethod", async () => {
 							attributes: {},
 						},
 					},
+					getFinalizedSignIn: () => null,
+					getSignInAttempt: () => null,
 				},
 			} as any),
 		).resolves.toBeUndefined();
@@ -1024,7 +1026,7 @@ describe("lastLoginMethod", async () => {
 							return true;
 						},
 						handler: createAuthMiddleware(async (ctx) => {
-							if (ctx.context.finalizedSignIn) {
+							if (ctx.context.getFinalizedSignIn()) {
 								ctx.setCookie("additional-test-cookie", "test-value", {
 									maxAge: 60 * 60 * 24 * 30,
 									httpOnly: false,

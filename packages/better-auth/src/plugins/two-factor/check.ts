@@ -9,10 +9,7 @@ import {
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import type { TrustedDeviceRotation } from "./trust-device";
-import {
-	resolveTrustedDeviceRotation,
-	rotateTrustedDevice,
-} from "./trust-device";
+import { resolveTrustedDeviceRotation } from "./trust-device";
 import type {
 	TwoFactorMethod,
 	TwoFactorOptions,
@@ -33,11 +30,11 @@ export type TwoFactorCheckInput = {
 
 export type TwoFactorCheckResult =
 	| {
-			type: "challenge";
-			challenge: Extract<SignInChallenge, { type: "two-factor" }>;
+			kind: "challenge";
+			challenge: Extract<SignInChallenge, { kind: "two-factor" }>;
 	  }
 	| {
-			type: "trusted-device";
+			kind: "trusted-device";
 			rotation: TrustedDeviceRotation;
 	  }
 	| null;
@@ -113,7 +110,7 @@ export async function checkTwoFactor(
 		trustDeviceMaxAge,
 	);
 	if (rotation) {
-		return { type: "trusted-device", rotation };
+		return { kind: "trusted-device", rotation };
 	}
 
 	const maxAge = options.twoFactorCookieMaxAge ?? 10 * 60;
@@ -140,23 +137,13 @@ export async function checkTwoFactor(
 
 	const methods = await getAvailableTwoFactorMethods(ctx, user.id, options);
 	return {
-		type: "challenge",
+		kind: "challenge",
 		challenge: {
-			type: "two-factor",
+			kind: "two-factor",
 			attemptId: attempt.id,
 			availableMethods: methods,
 		},
 	};
-}
-
-export function scheduleTrustedDeviceCommit(
-	ctx: GenericEndpointContext,
-	rotation: TrustedDeviceRotation,
-	userId: string,
-): void {
-	ctx.context.addSuccessFinalizer?.(async () => {
-		await rotateTrustedDevice(ctx, rotation, userId);
-	});
 }
 
 export async function getTwoFactorAttemptId(

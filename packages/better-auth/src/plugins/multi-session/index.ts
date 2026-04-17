@@ -315,7 +315,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const newSession = ctx.context.newSession;
+						const newSession = ctx.context.getNewSession();
 						if (!newSession) return;
 
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;

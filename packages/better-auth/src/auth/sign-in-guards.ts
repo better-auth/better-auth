@@ -4,17 +4,17 @@ import type {
 	SignInResolution,
 } from "@better-auth/core";
 
-type ChallengeBranch = Extract<SignInResolution, { type: "challenge" }>;
+type ChallengeBranch = Extract<SignInResolution, { kind: "challenge" }>;
 
 function isChallengeShape(value: unknown): value is {
-	type: "challenge";
-	challenge: { type: string };
+	kind: "challenge";
+	challenge: { kind: string };
 } {
 	if (!value || typeof value !== "object") return false;
-	const envelope = value as { type?: unknown; challenge?: { type?: unknown } };
+	const envelope = value as { kind?: unknown; challenge?: { kind?: unknown } };
 	return (
-		envelope.type === "challenge" &&
-		typeof envelope.challenge?.type === "string"
+		envelope.kind === "challenge" &&
+		typeof envelope.challenge?.kind === "string"
 	);
 }
 
@@ -25,7 +25,7 @@ function isChallengeShape(value: unknown): value is {
  * ```ts
  * const res = await authClient.signIn.email({ email, password });
  * if (isSignInChallenge(res.data)) {
- *   router.push(`/2fa?attemptId=${res.data.challenge.attemptId}`);
+ *   router.push(`/2fa?kind=${res.data.challenge.kind}`);
  * }
  * ```
  */
@@ -39,19 +39,19 @@ export function isSignInChallenge(value: unknown): value is ChallengeBranch {
  *
  * @example
  * ```ts
- * if (isSignInChallengeOfType(res.data, "two-factor")) {
+ * if (isSignInChallengeOfKind(res.data, "two-factor")) {
  *   await sendOTP({ attemptId: res.data.challenge.attemptId });
  * }
  * ```
  */
-export function isSignInChallengeOfType<
+export function isSignInChallengeOfKind<
 	K extends keyof BetterAuthSignInChallengeRegistry,
 >(
 	value: unknown,
-	type: K,
+	kind: K,
 ): value is {
-	type: "challenge";
-	challenge: Extract<SignInChallenge, { type: K }>;
+	kind: "challenge";
+	challenge: Extract<SignInChallenge, { kind: K }>;
 } {
-	return isChallengeShape(value) && value.challenge.type === type;
+	return isChallengeShape(value) && value.challenge.kind === kind;
 }

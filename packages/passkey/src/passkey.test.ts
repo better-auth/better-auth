@@ -77,16 +77,16 @@ function expectPasskeyAuthenticationSuccess(value: unknown): asserts value is {
 }
 
 function isTwoFactorChallengeResponse(value: unknown): value is {
-	type: "challenge";
+	kind: "challenge";
 	challenge: {
-		type: "two-factor";
+		kind: "two-factor";
 		attemptId: string;
 		availableMethods: string[];
 	};
 } {
 	if (!value || typeof value !== "object") return false;
-	const record = value as { type?: unknown; challenge?: { type?: unknown } };
-	return record.type === "challenge" && record.challenge?.type === "two-factor";
+	const record = value as { kind?: unknown; challenge?: { kind?: unknown } };
+	return record.kind === "challenge" && record.challenge?.kind === "two-factor";
 }
 
 describe("passkey", async () => {
@@ -442,7 +442,7 @@ describe("passkey", async () => {
 		expect(challengeCookies.get("better-auth.two_factor")?.value).toBeDefined();
 		const challengeJson: unknown = await challengeResponse.json();
 		assert(isTwoFactorChallengeResponse(challengeJson));
-		expect(challengeJson.challenge.type).toBe("two-factor");
+		expect(challengeJson.challenge.kind).toBe("two-factor");
 		expect(challengeJson.challenge.attemptId).toBeTruthy();
 		expect(challengeJson.challenge.availableMethods).toEqual(["otp"]);
 

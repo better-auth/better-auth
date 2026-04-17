@@ -12,6 +12,7 @@ export type {
 	PendingSignInAttempt,
 	PluginContext,
 	SignInChallenge,
+	SignInCommit,
 	SignInResolution,
 } from "./context";
 export type {

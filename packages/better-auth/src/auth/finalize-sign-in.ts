@@ -7,19 +7,31 @@ import { setSessionCookie } from "../cookies";
 import type { User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 
-export type FinalizedSession = Extract<SignInResolution, { type: "session" }>;
+export type FinalizedSession = Extract<SignInResolution, { kind: "session" }>;
 
 export type FinalizeSignInOptions = {
 	user: User;
 	dontRememberMe?: boolean;
 	attemptId?: string;
+	/**
+	 * Sibling-cookie rotations the dispatcher should perform atomically with
+	 * the session cookie (e.g. trusted-device rotation from two-factor). Runs
+	 * after the session cookie is written, only on a successful request.
+	 */
+	afterCommit?: (() => Promise<void> | void) | undefined;
+	/**
+	 * Undoes handler-side writes the dispatcher cannot roll back on its own
+	 * (e.g. an atomically-consumed `signInAttempt`). Runs when a post-handler
+	 * step turns the response into a failure, after the session row is dropped.
+	 */
+	rollback?: (() => Promise<void> | void) | undefined;
 };
 
 /**
- * Creates a session for the signed-in user, wires it onto the request-scoped
- * auth context, and returns the `session` envelope. The session cookie is not
- * written here: call `scheduleSessionCommit` so the cookie is published only
- * after the rest of the request succeeds.
+ * Creates the session row, wires it onto the request-scoped auth context, and
+ * returns the `session` envelope. The session cookie is not written here: the
+ * dispatcher publishes it after the handler returns, reading the commit
+ * metadata from `getFinalizedSignIn()`.
  */
 export async function finalizeSignIn(
 	ctx: GenericEndpointContext,
@@ -37,7 +49,7 @@ export async function finalizeSignIn(
 	}
 
 	const finalized: FinalizedSession = {
-		type: "session",
+		kind: "session",
 		session,
 		user: options.user as User & Record<string, any>,
 	};
@@ -46,23 +58,13 @@ export async function finalizeSignIn(
 		session: finalized.session,
 		user: finalized.user,
 		attemptId: options.attemptId,
+		commit: async () => {
+			await setSessionCookie(ctx, finalized, options.dontRememberMe);
+			await options.afterCommit?.();
+		},
+		rollback: options.rollback,
 	});
 	return finalized;
-}
-
-/**
- * Defers session-cookie publication until the request's success finalizers
- * run. Keeps the browser from ever receiving a session cookie for a sign-in
- * that ends up failing later in the pipeline.
- */
-export function scheduleSessionCommit(
-	ctx: GenericEndpointContext,
-	session: FinalizedSession,
-	dontRememberMe?: boolean,
-): void {
-	ctx.context.addSuccessFinalizer?.(() =>
-		setSessionCookie(ctx, session, dontRememberMe),
-	);
 }
 
 export function isFailedToCreateSessionError(error: unknown): boolean {

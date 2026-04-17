@@ -89,10 +89,29 @@ export type PendingSignInAttempt = SignInAttempt & {
 	user?: User & Record<string, any>;
 };
 
+/**
+ * A pre-bound closure that emits the session cookie (and any sign-in-scoped
+ * siblings, e.g. a trusted-device rotation cookie) on the outgoing response.
+ * `finalizeSignIn` builds it from the handler context so that cookie writes
+ * have access to `getSignedCookie`/`setSignedCookie`; the dispatcher only
+ * awaits it after the handler returns so the browser never receives a cookie
+ * for a sign-in that fails later in the request pipeline.
+ */
+export type SignInCommit = () => Promise<void> | void;
+
+/**
+ * Undoes handler-side state the finalize path cannot roll back on its own
+ * (e.g. an atomically-consumed `signInAttempt` row). Invoked by the request
+ * dispatcher when a post-handler step converts the response into a failure.
+ */
+export type SignInRollback = () => Promise<void> | void;
+
 export type FinalizedSignIn = {
 	session: Session & Record<string, any>;
 	user: User & Record<string, any>;
 	attemptId?: string | undefined;
+	commit?: SignInCommit | undefined;
+	rollback?: SignInRollback | undefined;
 };
 
 /**
@@ -129,23 +148,24 @@ export interface BetterAuthSignInChallengeRegistry {}
 
 export type SignInChallenge = {
 	[K in keyof BetterAuthSignInChallengeRegistry]: {
-		type: K;
+		kind: K;
 	} & BetterAuthSignInChallengeRegistry[K];
 }[keyof BetterAuthSignInChallengeRegistry];
 
 /**
  * Discriminated envelope returned by the sign-in resolver.
- * `session` means a session was issued (commit-on-success scheduled).
+ * `session` means a session was issued; the dispatcher publishes the cookie
+ * after the request body and before after-hooks run.
  * `challenge` means sign-in is paused pending another step.
  */
 export type SignInResolution<TUser extends User = User> =
 	| {
-			type: "session";
+			kind: "session";
 			session: Session & Record<string, any>;
 			user: TUser & Record<string, any>;
 	  }
 	| {
-			type: "challenge";
+			kind: "challenge";
 			challenge: SignInChallenge;
 	  };
 
@@ -403,6 +423,30 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};
+			/** @internal backing slot for `getNewSession`; written by session publishers. */
+			newSession: {
+				session: Session & Record<string, any>;
+				user: User & Record<string, any>;
+			} | null;
+			/** @internal backing slot for `getFinalizedSignIn`; written by `finalizeSignIn`. */
+			finalizedSignIn: FinalizedSignIn | null;
+			/** @internal backing slot for `getSignInAttempt`; written by challenge resolvers. */
+			signInAttempt: PendingSignInAttempt | null;
+			session: {
+				session: Session & Record<string, any>;
+				user: User & Record<string, any>;
+			} | null;
+			/** @internal writer for `getNewSession`; do not call from plugin code. */
+			setNewSession: (
+				session: {
+					session: Session & Record<string, any>;
+					user: User & Record<string, any>;
+				} | null,
+			) => void;
+			/** @internal writer for `getFinalizedSignIn`; do not call from plugin code. */
+			setFinalizedSignIn: (signIn: FinalizedSignIn | null) => void;
+			/** @internal writer for `getSignInAttempt`; do not call from plugin code. */
+			setSignInAttempt: (attempt: PendingSignInAttempt | null) => void;
 			/**
 			 * Any session created during the current request, regardless of origin
 			 * (sign-in, sign-up, anonymous upgrade, device-authorization, etc.).
@@ -410,37 +454,23 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * Consumers that care only about "a session exists" (bearer, jwt, mcp,
 			 * multi-session, one-time-token, oidc-provider) read this.
 			 */
-			newSession: {
+			getNewSession: () => {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
 			/**
 			 * Set when a sign-in flow committed in this request. Narrower than
-			 * `newSession`: sign-up, anonymous upgrades, and device-auth do not
+			 * `getNewSession`: sign-up, anonymous upgrades, and device-auth do not
 			 * populate it. Consumers that care about "a sign-in completed" (e.g.
 			 * last-login-method, anonymous linking) read this.
 			 */
-			finalizedSignIn: FinalizedSignIn | null;
+			getFinalizedSignIn: () => FinalizedSignIn | null;
 			/**
 			 * Request-scoped paused sign-in state. Not published auth state;
 			 * exists only so the current request can finalize or replay work for
 			 * the attempt that actually completed.
 			 */
-			signInAttempt: PendingSignInAttempt | null;
-			session: {
-				session: Session & Record<string, any>;
-				user: User & Record<string, any>;
-			} | null;
-			setNewSession: (
-				session: {
-					session: Session & Record<string, any>;
-					user: User & Record<string, any>;
-				} | null,
-			) => void;
-			setFinalizedSignIn: (signIn: FinalizedSignIn | null) => void;
-			setSignInAttempt: (attempt: PendingSignInAttempt | null) => void;
-			successFinalizers?: Array<() => Promise<void> | void>;
-			addSuccessFinalizer?: (finalizer: () => Promise<void> | void) => void;
+			getSignInAttempt: () => PendingSignInAttempt | null;
 			socialProviders: OAuthProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;

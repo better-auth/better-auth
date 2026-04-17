@@ -21,16 +21,7 @@ export const authFlowTestSuite = createTestSuite(
 			},
 		},
 	},
-	(
-		{
-			generate,
-			getAuth,
-			modifyBetterAuthOptions,
-			tryCatch,
-			getBetterAuthOptions,
-		},
-		debug?: { showDB?: () => Promise<void> } | undefined,
-	) => ({
+	({ generate, getAuth, modifyBetterAuthOptions, tryCatch }) => ({
 		"should successfully sign up": async () => {
 			const auth = await getAuth();
 			const user = await generate("user");
@@ -74,8 +65,8 @@ export const authFlowTestSuite = createTestSuite(
 			if (
 				result &&
 				typeof result === "object" &&
-				"type" in result &&
-				result.type === "challenge"
+				"kind" in result &&
+				result.kind === "challenge"
 			) {
 				throw new Error("unexpected 2FA challenge");
 			}
@@ -150,8 +141,8 @@ export const authFlowTestSuite = createTestSuite(
 					if (
 						userSignIn &&
 						typeof userSignIn === "object" &&
-						"type" in userSignIn &&
-						userSignIn.type === "challenge"
+						"kind" in userSignIn &&
+						userSignIn.kind === "challenge"
 					) {
 						throw new Error("unexpected 2FA challenge");
 					}

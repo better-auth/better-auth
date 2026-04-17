@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import {
 	isSignInChallenge,
-	isSignInChallengeOfType,
+	isSignInChallengeOfKind,
 } from "../auth/sign-in-guards";
 import type { InferCtx } from "../client/path-to-object";
 import { organization, twoFactor } from "../plugins";
@@ -20,9 +20,9 @@ type HasTwoFactorChallengeBranch<T> =
 	Extract<
 		T,
 		{
-			type: "challenge";
+			kind: "challenge";
 			challenge: {
-				type: "two-factor";
+				kind: "two-factor";
 				attemptId: string;
 				availableMethods: readonly string[];
 			};
@@ -239,10 +239,10 @@ describe("general types", async () => {
 
 		const value = {} as SignInEmailReturn;
 		if (isSignInChallenge(value)) {
-			expectTypeOf(value.type).toEqualTypeOf<"challenge">();
-			expectTypeOf(value.challenge.type).toEqualTypeOf<"two-factor">();
+			expectTypeOf(value.kind).toEqualTypeOf<"challenge">();
+			expectTypeOf(value.challenge.kind).toEqualTypeOf<"two-factor">();
 		}
-		if (isSignInChallengeOfType(value, "two-factor")) {
+		if (isSignInChallengeOfKind(value, "two-factor")) {
 			expectTypeOf(value.challenge.attemptId).toEqualTypeOf<string>();
 			expectTypeOf(value.challenge.availableMethods).toEqualTypeOf<
 				("totp" | "otp" | "backup-code")[]

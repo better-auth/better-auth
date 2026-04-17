@@ -73,7 +73,7 @@ import type {
 import { safeJsonParse } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
-export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+export type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider };
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -122,7 +122,7 @@ function isDomainAssignmentCallbackPath(path?: string | null): boolean {
 }
 
 function getSignInAttemptExpiry(ctx: GenericEndpointContext): Date | undefined {
-	return ctx.context.signInAttempt?.expiresAt;
+	return ctx.context.getSignInAttempt()?.expiresAt;
 }
 
 async function storePendingDomainAssignment(
@@ -397,7 +397,7 @@ export function sso<O extends SSOOptions>(
 						if (!ctx.context.hasPlugin("organization")) {
 							return;
 						}
-						const finalizedSignIn = ctx.context.finalizedSignIn;
+						const finalizedSignIn = ctx.context.getFinalizedSignIn();
 						if (finalizedSignIn?.user) {
 							await assignOrganizationByDomain(ctx, {
 								user: finalizedSignIn.user,
@@ -406,7 +406,7 @@ export function sso<O extends SSOOptions>(
 							});
 							return;
 						}
-						const signInAttempt = ctx.context.signInAttempt;
+						const signInAttempt = ctx.context.getSignInAttempt();
 						if (!signInAttempt?.user) {
 							return;
 						}
@@ -422,7 +422,7 @@ export function sso<O extends SSOOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const finalizedSignIn = ctx.context.finalizedSignIn;
+						const finalizedSignIn = ctx.context.getFinalizedSignIn();
 						if (!finalizedSignIn?.user || !finalizedSignIn.attemptId) {
 							return;
 						}

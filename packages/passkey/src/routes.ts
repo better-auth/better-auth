@@ -720,7 +720,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 								session: Session;
 								user: User;
 						  }
-						| { type: "challenge"; challenge: SignInChallenge },
+						| { kind: "challenge"; challenge: SignInChallenge },
 				},
 			},
 		},
@@ -838,7 +838,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					verificationToken,
 				);
-				if (result.type === "challenge") {
+				if (result.kind === "challenge") {
 					return ctx.json(result, {
 						status: 200,
 					});

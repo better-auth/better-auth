@@ -537,7 +537,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				const result = await resolveSignIn(ctx, {
 					user: updatedUser,
 				});
-				if (result.type === "challenge") {
+				if (result.kind === "challenge") {
 					return ctx.json(result);
 				}
 				return ctx.json({
@@ -676,7 +676,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				const result = await resolveSignIn(ctx, {
 					user: newUser,
 				});
-				if (result.type === "challenge") {
+				if (result.kind === "challenge") {
 					return ctx.json(result);
 				}
 				return ctx.json({
@@ -694,7 +694,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const result = await resolveSignIn(ctx, {
 				user: user.user,
 			});
-			if (result.type === "challenge") {
+			if (result.kind === "challenge") {
 				return ctx.json(result);
 			}
 			return ctx.json({

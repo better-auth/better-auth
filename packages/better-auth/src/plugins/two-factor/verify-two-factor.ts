@@ -2,10 +2,7 @@ import type { GenericEndpointContext, SignInAttempt } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { getSessionFromCtx } from "../../api";
-import {
-	finalizeSignIn,
-	scheduleSessionCommit,
-} from "../../auth/finalize-sign-in";
+import { finalizeSignIn } from "../../auth/finalize-sign-in";
 import { expireCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
@@ -31,12 +28,12 @@ function getMaxVerificationAttempts(ctx: GenericEndpointContext): number {
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const session = await getSessionFromCtx(ctx);
+	// Attempt-id carrier: JSON/native callers send it on the body; browser
+	// redirect flows rely on the signed `better-auth.two_factor` cookie written
+	// at attempt creation. The query string is deliberately not read: query
+	// params leak through Referer headers and proxy logs (#S5).
 	const requestedAttemptId =
-		typeof ctx.body?.attemptId === "string"
-			? ctx.body.attemptId
-			: typeof ctx.query?.attemptId === "string"
-				? ctx.query.attemptId
-				: null;
+		typeof ctx.body?.attemptId === "string" ? ctx.body.attemptId : null;
 	const twoFactorCookie = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
 
 	const rejectCookie = (clearCookieOnFailure: boolean): never => {
@@ -121,43 +118,48 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					user,
 					dontRememberMe: consumed.dontRememberMe ?? undefined,
 					attemptId,
+					rollback: async () => {
+						// After-hooks may convert a successful verify into a failure
+						// (e.g. SSO organization provisioning throws). The atomic
+						// consume already deleted the row; restore it here so the
+						// caller can retry with the same attemptId instead of losing
+						// their paused sign-in to a transient upstream error.
+						await ctx.context.internalAdapter
+							.createSignInAttempt(consumed)
+							.catch(() => {});
+					},
+					afterCommit: async () => {
+						if (ctx.body.trustDevice) {
+							const plugin = ctx.context.getPlugin("two-factor");
+							const trustDeviceMaxAge = plugin!.options?.trustDeviceMaxAge;
+							const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+							const trustDeviceCookie = ctx.context.createAuthCookie(
+								TRUST_DEVICE_COOKIE_NAME,
+								{
+									maxAge,
+								},
+							);
+							const trustIdentifier = `trust-device-${generateRandomString(32)}`;
+							const token = await createHMAC("SHA-256", "base64urlnopad").sign(
+								ctx.context.secret,
+								`${user.id}!${trustIdentifier}`,
+							);
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: user.id,
+								identifier: trustIdentifier,
+								expiresAt: new Date(Date.now() + maxAge * 1000),
+							});
+							await ctx.setSignedCookie(
+								trustDeviceCookie.name,
+								`${token}!${trustIdentifier}`,
+								ctx.context.secret,
+								trustDeviceCookie.attributes,
+							);
+							expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+						}
+						expireCookie(ctx, twoFactorCookie);
+					},
 				});
-				ctx.context.addSuccessFinalizer?.(async () => {
-					if (ctx.body.trustDevice) {
-						const plugin = ctx.context.getPlugin("two-factor");
-						const trustDeviceMaxAge = plugin!.options?.trustDeviceMaxAge;
-						const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
-						const trustDeviceCookie = ctx.context.createAuthCookie(
-							TRUST_DEVICE_COOKIE_NAME,
-							{
-								maxAge,
-							},
-						);
-						const trustIdentifier = `trust-device-${generateRandomString(32)}`;
-						const token = await createHMAC("SHA-256", "base64urlnopad").sign(
-							ctx.context.secret,
-							`${user.id}!${trustIdentifier}`,
-						);
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: user.id,
-							identifier: trustIdentifier,
-							expiresAt: new Date(Date.now() + maxAge * 1000),
-						});
-						await ctx.setSignedCookie(
-							trustDeviceCookie.name,
-							`${token}!${trustIdentifier}`,
-							ctx.context.secret,
-							trustDeviceCookie.attributes,
-						);
-						expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
-					}
-					expireCookie(ctx, twoFactorCookie);
-				});
-				scheduleSessionCommit(
-					ctx,
-					finalizedSession,
-					consumed.dontRememberMe ?? undefined,
-				);
 				return ctx.json({
 					token: finalizedSession.session.token,
 					user: parseUserOutput(ctx.context.options, finalizedSession.user),

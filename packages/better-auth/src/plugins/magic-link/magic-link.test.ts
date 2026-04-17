@@ -928,7 +928,7 @@ describe("magic link two-factor challenge", async () => {
 				const redirectURL = new URL(location!, "http://localhost:3000");
 				expect(redirectURL.pathname).toBe("/");
 				expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-				expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+				expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 				expect(redirectURL.searchParams.get("methods")).toBe("otp");
 
 				const cookies = parseSetCookieHeader(

@@ -1195,6 +1195,78 @@ describe("dynamic baseURL resolution", () => {
 	});
 });
 
+describe("finalized sign-in lifecycle", () => {
+	it("commits the finalized sign-in after the handler, rolls it back when an after-hook rejects with a non-redirect APIError", async () => {
+		const commitCalls: string[] = [];
+		const deletedSessions: string[] = [];
+		const afterHookShouldReject = { value: false };
+
+		const endpoints = {
+			fakeSignIn: createAuthEndpoint(
+				"/fake-sign-in",
+				{ method: "POST" },
+				async (c) => {
+					c.context.setFinalizedSignIn({
+						session: {
+							token: "session-token",
+						} as any,
+						user: { id: "user-id" } as any,
+						commit: async () => {
+							commitCalls.push("commit");
+						},
+					});
+					return { ok: true };
+				},
+			),
+		};
+
+		const authContext = init({});
+		const resolved = await authContext;
+		resolved.internalAdapter = {
+			...resolved.internalAdapter,
+			deleteSession: async (token: string) => {
+				deletedSessions.push(token);
+			},
+		} as typeof resolved.internalAdapter;
+		resolved.options.plugins = [
+			{
+				id: "rejecting-plugin",
+				hooks: {
+					after: [
+						{
+							matcher: () => true,
+							handler: createAuthMiddleware(async (c) => {
+								if (afterHookShouldReject.value) {
+									throw c.error("BAD_REQUEST", {
+										message: "rejected after finalize",
+									});
+								}
+							}),
+						},
+					],
+				},
+			},
+		];
+
+		const api = toAuthEndpoints(endpoints, Promise.resolve(resolved));
+
+		// Happy path: commit runs once, no rollback.
+		afterHookShouldReject.value = false;
+		await api.fakeSignIn();
+		expect(commitCalls).toEqual(["commit"]);
+		expect(deletedSessions).toEqual([]);
+
+		// Rejection path: commit still runs (cookies already on the outgoing
+		// response), and the dispatcher deletes the orphaned session row.
+		afterHookShouldReject.value = true;
+		commitCalls.length = 0;
+		const response = await api.fakeSignIn({ asResponse: true });
+		expect(response.status).toBe(400);
+		expect(commitCalls).toEqual(["commit"]);
+		expect(deletedSessions).toEqual(["session-token"]);
+	});
+});
+
 describe("custom response code", () => {
 	const endpoints = {
 		responseWithStatus: createAuthEndpoint(

@@ -29,7 +29,7 @@ import type { Passkey } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
 type SignInChallengeEnvelope = {
-	type: "challenge";
+	kind: "challenge";
 	challenge: SignInChallenge;
 };
 
@@ -40,11 +40,11 @@ function isSignInChallengeEnvelope(
 		return false;
 	}
 	const record = value as {
-		type?: unknown;
-		challenge?: { type?: unknown };
+		kind?: unknown;
+		challenge?: { kind?: unknown };
 	};
 	return (
-		record.type === "challenge" && typeof record.challenge?.type === "string"
+		record.kind === "challenge" && typeof record.challenge?.kind === "string"
 	);
 }
 

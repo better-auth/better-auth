@@ -399,7 +399,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						user,
 						dontRememberMe: ctx.body.rememberMe === false,
 					});
-					if (result.type === "challenge") {
+					if (result.kind === "challenge") {
 						return ctx.json(result);
 					}
 					return ctx.json({

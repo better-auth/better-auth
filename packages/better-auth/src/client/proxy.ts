@@ -34,16 +34,16 @@ function getMethod(
 
 function isPausedSignInChallenge(
 	value: unknown,
-): value is { type: "challenge"; challenge: { type: string } } {
+): value is { kind: "challenge"; challenge: { kind: string } } {
 	if (!value || typeof value !== "object") {
 		return false;
 	}
 	const record = value as {
-		type?: unknown;
-		challenge?: { type?: unknown };
+		kind?: unknown;
+		challenge?: { kind?: unknown };
 	};
 	return (
-		record.type === "challenge" && typeof record.challenge?.type === "string"
+		record.kind === "challenge" && typeof record.challenge?.kind === "string"
 	);
 }
 

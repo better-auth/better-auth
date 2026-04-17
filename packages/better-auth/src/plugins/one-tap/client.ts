@@ -7,13 +7,13 @@ import { PACKAGE_VERSION } from "../../version";
 import type { TwoFactorMethod } from "../two-factor/types";
 
 type TwoFactorChallenge = {
-	type: "two-factor";
+	kind: "two-factor";
 	attemptId: string;
 	availableMethods: TwoFactorMethod[];
 };
 
 type SignInChallengeResponse = {
-	type: "challenge";
+	kind: "challenge";
 	challenge: TwoFactorChallenge;
 };
 
@@ -24,10 +24,10 @@ function isTwoFactorChallenge(
 		return false;
 	}
 	const record = value as {
-		type?: unknown;
-		challenge?: { type?: unknown };
+		kind?: unknown;
+		challenge?: { kind?: unknown };
 	};
-	return record.type === "challenge" && record.challenge?.type === "two-factor";
+	return record.kind === "challenge" && record.challenge?.kind === "two-factor";
 }
 
 function getTwoFactorChallengeFromResponse(
@@ -250,9 +250,10 @@ function buildTwoFactorRedirectURL(
 	currentURL: string,
 	challenge: TwoFactorChallenge,
 ) {
+	// The server's signed two-factor cookie carries the attemptId; omit it from
+	// the URL to avoid Referer / proxy-log leakage (#S5).
 	const redirectURL = new URL(callbackURL ?? "/", currentURL);
 	redirectURL.searchParams.set("challenge", "two-factor");
-	redirectURL.searchParams.set("attemptId", challenge.attemptId);
 	redirectURL.searchParams.set("methods", challenge.availableMethods.join(","));
 	return redirectURL.toString();
 }

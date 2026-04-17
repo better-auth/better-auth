@@ -270,10 +270,12 @@ test.describe("two factor regression paths", () => {
 			expect(verifyResponse.status).toBe(302);
 
 			// Redirect-exit flows must hand the caller a 2FA challenge without
-			// ever leaving behind an authenticated session cookie.
+			// ever leaving behind an authenticated session cookie. The attemptId
+			// travels only in the signed `better-auth.two_factor` cookie: query
+			// parameters leak through Referer headers and proxy logs.
 			const location = verifyResponse.headers.get("location");
 			expect(location).toContain("challenge=two-factor");
-			expect(location).toContain("attemptId=");
+			expect(location).not.toContain("attemptId=");
 			expect(location).toContain("methods=");
 			expect(hasCookie(freshJar, "better-auth.two_factor")).toBe(true);
 			expect(hasCookie(freshJar, "better-auth.session_token")).toBe(false);
@@ -342,15 +344,15 @@ test.describe("two factor regression paths", () => {
 			expect(hasCookie(sessionJar, "two_factor")).toBe(true);
 
 			const challengeBody = (await challengeResponse.json()) as {
-				type: "challenge";
+				kind: "challenge";
 				challenge: {
-					type: "two-factor";
+					kind: "two-factor";
 					attemptId: string;
 					availableMethods: string[];
 				};
 			};
-			expect(challengeBody.type).toBe("challenge");
-			expect(challengeBody.challenge.type).toBe("two-factor");
+			expect(challengeBody.kind).toBe("challenge");
+			expect(challengeBody.challenge.kind).toBe("two-factor");
 			expect(challengeBody.challenge.attemptId).toBeTruthy();
 			expect(challengeBody.challenge.availableMethods).toContain("otp");
 
@@ -471,7 +473,7 @@ test.describe("two factor regression paths", () => {
 
 			const location = verifyResponse.headers.get("location");
 			expect(location).toContain("challenge=two-factor");
-			expect(location).toContain("attemptId=");
+			expect(location).not.toContain("attemptId=");
 			expect(location).toContain("methods=");
 			expect(hasCookie(freshJar, "better-auth.two_factor")).toBe(true);
 			expect(hasCookie(freshJar, "better-auth.session_token")).toBe(false);
@@ -1296,8 +1298,7 @@ test.describe("two factor regression paths", () => {
 				const redirectLocation = callbackResponse.headers.get("location");
 				const redirectURL = new URL(redirectLocation!, "http://localhost:3000");
 				expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-				const attemptId = redirectURL.searchParams.get("attemptId");
-				expect(attemptId).toBeTruthy();
+				expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 				expect(hasCookie(oauthJar, "better-auth.two_factor")).toBe(true);
 				expect(hasCookie(oauthJar, "better-auth.session_token")).toBe(false);
 
@@ -1312,9 +1313,7 @@ test.describe("two factor regression paths", () => {
 					oauthJar,
 					{
 						method: "POST",
-						body: {
-							attemptId: attemptId!,
-						},
+						body: {},
 					},
 				);
 				expect(sendOtpResponse.status).toBe(200);
@@ -1326,7 +1325,6 @@ test.describe("two factor regression paths", () => {
 					{
 						method: "POST",
 						body: {
-							attemptId: attemptId!,
 							code: otp,
 						},
 					},
@@ -1636,15 +1634,15 @@ test.describe("two factor regression paths", () => {
 			expect(challengeResponse.status).toBe(200);
 
 			const challengePayload = (await challengeResponse.json()) as {
-				type?: "challenge";
+				kind?: "challenge";
 				challenge?: {
-					type: "two-factor";
+					kind: "two-factor";
 					attemptId: string;
 					availableMethods: string[];
 				};
 			};
-			expect(challengePayload.type).toBe("challenge");
-			expect(challengePayload.challenge?.type).toBe("two-factor");
+			expect(challengePayload.kind).toBe("challenge");
+			expect(challengePayload.challenge?.kind).toBe("two-factor");
 			expect(challengePayload.challenge?.attemptId).toBeTruthy();
 			expect(challengePayload.challenge?.availableMethods).toContain("otp");
 			expect(hasCookie(challengeJar, "better-auth.two_factor")).toBe(true);

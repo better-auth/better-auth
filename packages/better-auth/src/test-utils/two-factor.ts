@@ -1,15 +1,15 @@
 import type { SignInChallenge } from "@better-auth/core";
 import { expect } from "vitest";
 
-type TwoFactorChallenge = Extract<SignInChallenge, { type: "two-factor" }>;
+type TwoFactorChallenge = Extract<SignInChallenge, { kind: "two-factor" }>;
 
 type SignInChallengeEnvelope = {
-	type: "challenge";
+	kind: "challenge";
 	challenge: SignInChallenge;
 };
 
 type TwoFactorChallengeEnvelope = {
-	type: "challenge";
+	kind: "challenge";
 	challenge: TwoFactorChallenge;
 };
 
@@ -20,11 +20,11 @@ function isSignInChallengeEnvelope(
 		return false;
 	}
 	const record = value as {
-		type?: unknown;
-		challenge?: { type?: unknown };
+		kind?: unknown;
+		challenge?: { kind?: unknown };
 	};
 	return (
-		record.type === "challenge" && typeof record.challenge?.type === "string"
+		record.kind === "challenge" && typeof record.challenge?.kind === "string"
 	);
 }
 
@@ -35,12 +35,12 @@ function isTwoFactorChallengeEnvelope(
 		return false;
 	}
 	const challenge = value.challenge as {
-		type?: unknown;
+		kind?: unknown;
 		attemptId?: unknown;
 		availableMethods?: unknown;
 	};
 	return (
-		challenge.type === "two-factor" &&
+		challenge.kind === "two-factor" &&
 		typeof challenge.attemptId === "string" &&
 		Array.isArray(challenge.availableMethods)
 	);

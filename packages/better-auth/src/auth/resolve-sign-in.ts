@@ -4,15 +4,12 @@ import type {
 	SignInChallenge,
 	SignInResolution,
 } from "@better-auth/core";
-import {
-	checkTwoFactor,
-	scheduleTrustedDeviceCommit,
-} from "../plugins/two-factor/check";
+import { checkTwoFactor } from "../plugins/two-factor/check";
+import { rotateTrustedDevice } from "../plugins/two-factor/trust-device";
 import type { User } from "../types";
 import {
 	finalizeSignIn,
 	isFailedToCreateSessionError,
-	scheduleSessionCommit,
 } from "./finalize-sign-in";
 import { appendSignInChallengeToURL } from "./sign-in-challenge-url";
 
@@ -45,19 +42,19 @@ export async function resolveSignIn(
 		skipChallenges: options.skipChallenges,
 	});
 
-	if (twoFactor?.type === "challenge") {
-		return { type: "challenge", challenge: twoFactor.challenge };
+	if (twoFactor?.kind === "challenge") {
+		return { kind: "challenge", challenge: twoFactor.challenge };
 	}
 
-	const finalized = await finalizeSignIn(ctx, {
+	const rotation =
+		twoFactor?.kind === "trusted-device" ? twoFactor.rotation : null;
+	return finalizeSignIn(ctx, {
 		user: options.user,
 		dontRememberMe: options.dontRememberMe,
+		afterCommit: rotation
+			? () => rotateTrustedDevice(ctx, rotation, options.user.id)
+			: undefined,
 	});
-	if (twoFactor?.type === "trusted-device") {
-		scheduleTrustedDeviceCommit(ctx, twoFactor.rotation, options.user.id);
-	}
-	scheduleSessionCommit(ctx, finalized, options.dontRememberMe);
-	return finalized;
 }
 
 export type ResolveSignInRedirectOptions = {
@@ -78,7 +75,7 @@ export type ResolveSignInRedirectOptions = {
  * redirect. On a paused challenge it throws `ctx.redirect(...)` with the
  * challenge encoded in the URL query. On a session it resolves to `void` so
  * the caller can `throw ctx.redirect(redirectTarget)` themselves. The session
- * itself is accessible via `ctx.context.newSession` if needed.
+ * itself is accessible via `ctx.context.getNewSession()` if needed.
  */
 export async function resolveSignInWithRedirect(
 	ctx: GenericEndpointContext,
@@ -86,7 +83,7 @@ export async function resolveSignInWithRedirect(
 ): Promise<void> {
 	try {
 		const result = await resolveSignIn(ctx, options.signIn);
-		if (result.type === "challenge") {
+		if (result.kind === "challenge") {
 			await options.onChallenge?.(result.challenge);
 			throw ctx.redirect(
 				appendSignInChallengeToURL(options.redirectTarget, result.challenge),

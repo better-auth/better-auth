@@ -160,9 +160,9 @@ describe("passkey client", () => {
 			if (path === "/passkey/verify-authentication") {
 				return {
 					data: {
-						type: "challenge",
+						kind: "challenge",
 						challenge: {
-							type: "two-factor",
+							kind: "two-factor",
 							attemptId: "attempt-id",
 							availableMethods: ["otp"],
 						},
@@ -185,9 +185,9 @@ describe("passkey client", () => {
 		const result = await actions.signIn.passkey();
 
 		expect(result.data).toMatchObject({
-			type: "challenge",
+			kind: "challenge",
 			challenge: {
-				type: "two-factor",
+				kind: "two-factor",
 				attemptId: "attempt-id",
 				availableMethods: ["otp"],
 			},

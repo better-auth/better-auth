@@ -1761,7 +1761,7 @@ describe("Vercel Provider", async () => {
 					);
 					expect(redirectURL.pathname).toBe("/dashboard");
 					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-					expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+					expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 					expect(redirectURL.searchParams.get("methods")).toBe("otp");
 
 					const cookies = parseSetCookieHeader(

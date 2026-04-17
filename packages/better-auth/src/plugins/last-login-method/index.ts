@@ -93,8 +93,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		);
 	};
 	const resolveAfterHookMethod = (ctx: GenericEndpointContext) => {
-		if (ctx.context.finalizedSignIn?.attemptId) {
-			return ctx.context.signInAttempt?.loginMethod ?? resolveMethod(ctx);
+		if (ctx.context.getFinalizedSignIn()?.attemptId) {
+			return ctx.context.getSignInAttempt()?.loginMethod ?? resolveMethod(ctx);
 		}
 		return resolveMethod(ctx);
 	};
@@ -164,21 +164,22 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						const lastUsedLoginMethod = resolveAfterHookMethod(ctx);
 						if (!lastUsedLoginMethod) return;
 
-						if (ctx.context.finalizedSignIn) {
+						const finalized = ctx.context.getFinalizedSignIn();
+						if (finalized) {
 							ctx.setCookie(config.cookieName, lastUsedLoginMethod, {
 								...ctx.context.authCookies.sessionToken.attributes,
 								maxAge: config.maxAge,
 								httpOnly: false,
 							});
 							await persistLastLoginMethod(
-								ctx.context.finalizedSignIn.user.id,
+								finalized.user.id,
 								lastUsedLoginMethod,
 								ctx.context,
 							);
 							return;
 						}
 
-						const attempt = ctx.context.signInAttempt;
+						const attempt = ctx.context.getSignInAttempt();
 						if (!attempt?.id) return;
 						if (attempt.loginMethod === lastUsedLoginMethod) return;
 						await ctx.context.internalAdapter.updateSignInAttempt(attempt.id, {

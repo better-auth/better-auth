@@ -69,10 +69,15 @@ function normalizeHeaders(
 	return new Headers(headers ?? undefined);
 }
 
+async function commitFinalizedSignIn(context: InternalContext): Promise<void> {
+	const finalizedSignIn = context.context.getFinalizedSignIn();
+	await finalizedSignIn?.commit?.();
+}
+
 async function rollBackFinalizedSignIn(
 	context: InternalContext,
 ): Promise<void> {
-	const finalizedSignIn = context.context.finalizedSignIn;
+	const finalizedSignIn = context.context.getFinalizedSignIn();
 	if (!finalizedSignIn) {
 		return;
 	}
@@ -83,6 +88,17 @@ async function rollBackFinalizedSignIn(
 	} catch (error) {
 		context.context.logger.error(
 			"Failed to roll back finalized sign-in after request failure",
+			error,
+		);
+	}
+	// Undo handler-side state the dispatcher cannot reach on its own (e.g. an
+	// atomically-consumed sign-in attempt), so a retry can complete instead of
+	// failing with INVALID_TWO_FACTOR_COOKIE.
+	try {
+		await finalizedSignIn.rollback?.();
+	} catch (error) {
+		context.context.logger.error(
+			"Failed to run sign-in rollback after request failure",
 			error,
 		);
 	}
@@ -101,7 +117,7 @@ function isSuccessfulAuthFinalization(
 	response: unknown,
 	context: InternalContext,
 ): boolean {
-	if (!context.context.finalizedSignIn) {
+	if (!context.context.getFinalizedSignIn()) {
 		return false;
 	}
 	if (!isAPIError(response)) {
@@ -202,7 +218,6 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
 
-				const successFinalizers: Array<() => Promise<void> | void> = [];
 				let internalContext: InternalContext = {
 					...context,
 					context: {
@@ -210,10 +225,6 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 						returned: undefined,
 						responseHeaders: undefined,
 						session: null,
-						successFinalizers,
-						addSuccessFinalizer(finalizer) {
-							successFinalizers.push(finalizer);
-						},
 					},
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
@@ -319,22 +330,20 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 							internalContext.context.responseHeaders = result.headers;
 							try {
 								/**
-								 * Commit session cookies BEFORE after-hooks run so plugins
-								 * that read `set-cookie` from `responseHeaders` (bearer,
-								 * oidc-provider, mcp) observe the freshly issued session.
-								 * If an after-hook converts the response into an error, the
-								 * DB row is rolled back below; the emitted cookie then
-								 * references a dead session and is rejected on next use.
+								 * Commit the session cookie (and any sibling rotations) BEFORE
+								 * after-hooks run so plugins that read `set-cookie` from
+								 * `responseHeaders` (bearer, oidc-provider, mcp) observe the
+								 * freshly issued session. If an after-hook converts the response
+								 * into an error, the DB row is rolled back below; the emitted
+								 * cookie then references a dead session and is rejected on next
+								 * use.
 								 */
 								const finalizationWasSuccessful = isSuccessfulAuthFinalization(
 									result.response,
 									internalContext,
 								);
 								if (finalizationWasSuccessful) {
-									for (const finalizer of internalContext.context
-										.successFinalizers ?? []) {
-										await finalizer();
-									}
+									await commitFinalizedSignIn(internalContext);
 								}
 
 								const preHookResponse = result.response;

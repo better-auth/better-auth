@@ -560,13 +560,14 @@ export async function processSAMLResponse(
 			);
 		},
 		onChallenge: async (challenge) => {
-			if (challenge.type !== "two-factor") {
+			if (challenge.kind !== "two-factor") {
 				return;
 			}
 			const attemptId = challenge.attemptId;
+			const attempt = ctx.context.getSignInAttempt();
 			const expiresAt =
-				ctx.context.signInAttempt?.id === attemptId
-					? ctx.context.signInAttempt.expiresAt
+				attempt?.id === attemptId
+					? attempt.expiresAt
 					: new Date(Date.now() + 10 * 60 * 1000);
 			if (provider.organizationId) {
 				await ctx.context.internalAdapter.createVerificationValue({
@@ -599,7 +600,7 @@ export async function processSAMLResponse(
 		},
 	});
 	await assignOrganizationFromProvider(ctx, providerOrganizationAssignment);
-	const finalizedSession = ctx.context.newSession;
+	const finalizedSession = ctx.context.getNewSession();
 	if (!finalizedSession) {
 		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 			message: "Failed to create session",

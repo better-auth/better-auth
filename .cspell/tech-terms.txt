@@ -58,3 +58,6 @@ GHEOF
 denoland
 zizmor
 zizmorcore
+Referer
+Finalizer
+Finalizers

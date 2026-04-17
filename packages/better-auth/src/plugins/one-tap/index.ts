@@ -140,7 +140,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						const result = await resolveSignIn(ctx, {
 							user: newUser.user,
 						});
-						if (result.type === "challenge") {
+						if (result.kind === "challenge") {
 							return ctx.json(result);
 						}
 						return ctx.json({
@@ -172,7 +172,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					const result = await resolveSignIn(ctx, {
 						user: user.user,
 					});
-					if (result.type === "challenge") {
+					if (result.kind === "challenge") {
 						return ctx.json(result);
 					}
 					return ctx.json({

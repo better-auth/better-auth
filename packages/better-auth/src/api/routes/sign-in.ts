@@ -185,7 +185,7 @@ type MaybeSignInChallenge<T> = [
 	keyof BetterAuthSignInChallengeRegistry,
 ] extends [never]
 	? T
-	: T | { type: "challenge"; challenge: SignInChallenge };
+	: T | { kind: "challenge"; challenge: SignInChallenge };
 
 export const signInSocial = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -344,7 +344,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				const result = await resolveSignIn(c, {
 					user: data.data!,
 				});
-				if (result.type === "challenge") {
+				if (result.kind === "challenge") {
 					return result as MaybeSignInChallenge<
 						| {
 								redirect: boolean;
@@ -605,7 +605,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				user: user.user,
 				dontRememberMe: ctx.body.rememberMe === false,
 			});
-			if (result.type === "challenge") {
+			if (result.kind === "challenge") {
 				return result as MaybeSignInChallenge<{
 					redirect: boolean;
 					token: string;

@@ -179,7 +179,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				user,
 				dontRememberMe: ctx.body.rememberMe === false,
 			});
-			if (result.type === "challenge") {
+			if (result.kind === "challenge") {
 				return ctx.json(result);
 			}
 			return ctx.json({
@@ -631,7 +631,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				const result = await resolveSignIn(ctx, {
 					user,
 				});
-				if (result.type === "challenge") {
+				if (result.kind === "challenge") {
 					return ctx.json(result);
 				}
 				return ctx.json({

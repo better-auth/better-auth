@@ -1247,6 +1247,10 @@ export const createInternalAdapter = (
 					...data,
 					failedVerifications: data.failedVerifications ?? 0,
 				},
+				// Restoration after a rolled-back sign-in re-inserts the previously
+				// consumed row so retries keep working; that path passes the
+				// original id, which the adapter would otherwise strip.
+				forceAllowId: true,
 			});
 			return attempt;
 		},

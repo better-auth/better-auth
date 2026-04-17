@@ -130,7 +130,7 @@ describe("two factor", async () => {
 
 	it("should preserve raw relative callback targets in two-factor redirects", () => {
 		const challenge = {
-			type: "two-factor" as const,
+			kind: "two-factor" as const,
 			attemptId: "attempt-123",
 			availableMethods: ["otp"] as TwoFactorMethod[],
 		};
@@ -140,7 +140,7 @@ describe("two factor", async () => {
 		);
 
 		expect(redirectURL).toBe(
-			"../done?tab=1&challenge=two-factor&attemptId=attempt-123&methods=otp#finish",
+			"../done?tab=1&challenge=two-factor&methods=otp#finish",
 		);
 	});
 
@@ -1195,11 +1195,11 @@ describe("trust device server-side validation", async () => {
 		});
 
 		const signIn2Json = (await signIn2Res.json()) as {
-			type?: string;
-			challenge?: { type?: string };
+			kind?: string;
+			challenge?: { kind?: string };
 		};
-		expect(signIn2Json.type).toBe("challenge");
-		expect(signIn2Json.challenge?.type).toBe("two-factor");
+		expect(signIn2Json.kind).toBe("challenge");
+		expect(signIn2Json.challenge?.kind).toBe("two-factor");
 
 		// The expired trust cookie should have been cleared
 		const signIn2Parsed = parseSetCookieHeader(
@@ -2639,8 +2639,8 @@ describe("2FA enforcement scope", async () => {
 		});
 
 		const json = await verifyRes.json();
-		expect(json.type).toBe("challenge");
-		expect(json.challenge.type).toBe("two-factor");
+		expect(json.kind).toBe("challenge");
+		expect(json.challenge.kind).toBe("two-factor");
 		expect(json.challenge.availableMethods).toEqual(["totp", "otp"]);
 	});
 
@@ -3051,5 +3051,84 @@ describe("two-factor verify attempt hardening", async () => {
 		expect(afterLock.error?.message).toBe(
 			TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE.message,
 		);
+	});
+
+	it("finalizes with the signed cookie alone when the body omits attemptId", async () => {
+		const { testUser, customFetchImpl, sessionSetter, db, auth } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+		const { secret } = await enrollTotp({
+			auth: auth as unknown as Awaited<
+				ReturnType<typeof getTestInstance>
+			>["auth"],
+			client,
+			db,
+			email: testUser.email,
+			password: testUser.password,
+			sessionSetter,
+		});
+		const { challengeHeaders } = await startPausedSignIn({
+			client,
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		const code = await createOTP(secret).totp();
+		const res = await client.twoFactor.verifyTotp({
+			code,
+			fetchOptions: { headers: challengeHeaders },
+		} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
+
+		expect(res.data?.token).toBeTruthy();
+		expect(res.data?.user?.email).toBe(testUser.email);
+	});
+
+	it("finalizes with body attemptId alone when the two_factor cookie is absent", async () => {
+		const { testUser, customFetchImpl, sessionSetter, db, auth } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+		const { secret } = await enrollTotp({
+			auth: auth as unknown as Awaited<
+				ReturnType<typeof getTestInstance>
+			>["auth"],
+			client,
+			db,
+			email: testUser.email,
+			password: testUser.password,
+			sessionSetter,
+		});
+		const { attemptId } = await startPausedSignIn({
+			client,
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		const code = await createOTP(secret).totp();
+		const res = await client.twoFactor.verifyTotp({
+			code,
+			attemptId,
+			fetchOptions: { headers: new Headers() },
+		} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
+
+		expect(res.data?.token).toBeTruthy();
+		expect(res.data?.user?.email).toBe(testUser.email);
 	});
 });

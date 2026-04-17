@@ -1348,7 +1348,7 @@ describe("SSO shared redirectURI", async () => {
 		const redirectURL = new URL(callbackURL, "http://localhost:3000");
 		expect(redirectURL.pathname).toBe("/dashboard");
 		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-		expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 		expect(redirectURL.searchParams.get("methods")).toBe("otp");
 
 		const cookies = parseSetCookieHeader(setCookieHeader);
@@ -1515,11 +1515,18 @@ describe("SSO shared redirectURI", async () => {
 
 		const redirectURL = new URL(callbackURL, "http://localhost:3000");
 		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-		const attemptId = redirectURL.searchParams.get("attemptId");
-		expect(attemptId).toBeTruthy();
+		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
+		const signedTwoFactorCookie = parseSetCookieHeader(setCookieHeader).get(
+			"better-auth.two_factor",
+		)?.value;
+		expect(signedTwoFactorCookie).toBeTruthy();
+		const attemptId = signedTwoFactorCookie!.slice(
+			0,
+			signedTwoFactorCookie!.lastIndexOf("."),
+		);
 		const pendingAssignment =
 			await context.internalAdapter.findVerificationValue(
-				`${SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId!}`,
+				`${SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId}`,
 			);
 		expect(pendingAssignment?.value).toBeDefined();
 		expect(pendingAssignment?.value).not.toContain("shared-test-secret");
@@ -1734,11 +1741,19 @@ describe("SSO shared redirectURI", async () => {
 			},
 		});
 
-		const attemptId = new URL(
-			callbackURL,
-			"http://localhost:3000",
-		).searchParams.get("attemptId");
-		expect(attemptId).toBeTruthy();
+		expect(
+			new URL(callbackURL, "http://localhost:3000").searchParams.get(
+				"attemptId",
+			),
+		).toBeNull();
+		const signedTwoFactorCookie = parseSetCookieHeader(setCookieHeader).get(
+			"better-auth.two_factor",
+		)?.value;
+		expect(signedTwoFactorCookie).toBeTruthy();
+		const attemptId = signedTwoFactorCookie!.slice(
+			0,
+			signedTwoFactorCookie!.lastIndexOf("."),
+		);
 
 		const challengeHeaders = new Headers();
 		setCookieToHeader(challengeHeaders)({
@@ -1766,9 +1781,8 @@ describe("SSO shared redirectURI", async () => {
 			}),
 		).rejects.toThrow("role resolution failed");
 
-		const pendingAttempt = await context.internalAdapter.findSignInAttempt(
-			attemptId!,
-		);
+		const pendingAttempt =
+			await context.internalAdapter.findSignInAttempt(attemptId);
 		expect(pendingAttempt?.id).toBe(attemptId);
 		const sessionsAfterFailedVerify =
 			await context.internalAdapter.listSessions(existingUser.user.id);
@@ -1777,7 +1791,7 @@ describe("SSO shared redirectURI", async () => {
 		);
 		const pendingAssignment =
 			await context.internalAdapter.findVerificationValue(
-				`${SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId!}`,
+				`${SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId}`,
 			);
 		expect(pendingAssignment?.value).toBeDefined();
 

@@ -118,16 +118,16 @@ When a user with 2FA enabled reaches a sign-in flow that would create a new sess
 
 ```ts
 {
-    type: "challenge",
+    kind: "challenge",
     challenge: {
-        type: "two-factor",
+        kind: "two-factor",
         attemptId: string,            // opaque identifier for the paused sign-in
         availableMethods: string[],   // e.g. ["totp"], ["totp", "otp"]
     },
 }
 ```
 
-A finalized sign-in instead returns `{ type: "session", session, user }`. Branch on `result.type` to decide whether to render a verification UI or proceed to your app. Use `challenge.availableMethods` to pick which 2FA screen to show, and pass `challenge.attemptId` back to `/two-factor/*` verification calls to complete the paused sign-in.
+A finalized sign-in instead returns `{ kind: "session", session, user }`. Branch on `result.kind` to decide whether to render a verification UI or proceed to your app. Use `challenge.availableMethods` to pick which 2FA screen to show, and pass `challenge.attemptId` back to `/two-factor/*` verification calls to complete the paused sign-in.
 
 <Callout type="warn">
   If the browser already has another authenticated session, `attemptId` is the way to target the paused sign-in explicitly. Without it, `/two-factor/*` acts on the current session-scoped 2FA state instead of switching to another account's paused challenge.
@@ -162,7 +162,7 @@ await authClient.signIn.email({
     },
     {
         async onSuccess(context) {
-            if (context.data.type === "challenge" && context.data.challenge.type === "two-factor") {
+            if (context.data.kind === "challenge" && context.data.challenge.kind === "two-factor") {
                 const { attemptId, availableMethods } = context.data.challenge
                 // Show the appropriate 2FA verification UI based on availableMethods
                 // and pass `attemptId` to your verification action.
@@ -212,19 +212,19 @@ const authClient = createAuthClient({
 
 #### Redirect-based flows
 
-Redirect-based flows such as magic-link verification, email-verification auto sign-in, OAuth/social callbacks, generic OAuth, OAuth proxy, and SSO redirect back to your callback URL with `challenge=two-factor`, `attemptId=...`, and `methods=...` in the query string.
+Redirect-based flows such as magic-link verification, email-verification auto sign-in, OAuth/social callbacks, generic OAuth, OAuth proxy, and SSO redirect back to your callback URL with `challenge=two-factor` and `methods=...` in the query string. The `attemptId` is **not** in the URL: query parameters leak through `Referer` headers and reverse-proxy logs, so Better Auth carries the attempt on the signed `better-auth.two_factor` cookie instead. You do not need to read it on the client; your `/two-factor/*` verification call will pick it up from the cookie automatically.
 
 ```ts
 const search = new URLSearchParams(window.location.search);
 
 if (search.get("challenge") === "two-factor") {
-	const attemptId = search.get("attemptId");
 	const availableMethods = (search.get("methods") ?? "")
 		.split(",")
 		.filter(Boolean);
 
-	// Show your 2FA verification UI here and pass `attemptId`
-	// to the follow-up `/two-factor/*` request.
+	// Show your 2FA verification UI here. The signed `better-auth.two_factor`
+	// cookie identifies the paused sign-in; your `/two-factor/*` call will
+	// resolve it without an explicit `attemptId`.
 }
 ```
 
@@ -239,7 +239,7 @@ if (search.get("challenge") === "two-factor") {
 <Callout type="warn">
   **With `auth.api`**
 
-  When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it returns a challenge envelope (`{ type: "challenge", challenge: { type: "two-factor", ... } }`). The same is true for other server-side sign-in completion endpoints such as `verifyEmail`, passkey authentication, and redirect callback handlers. Narrow that branch by checking `response.type === "challenge"`.
+  When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it returns a challenge envelope (`{ kind: "challenge", challenge: { kind: "two-factor", ... } }`). The same is true for other server-side sign-in completion endpoints such as `verifyEmail`, passkey authentication, and redirect callback handlers. Narrow that branch by checking `response.kind === "challenge"`.
 
   `authClient.twoFactor.*` handles cookies automatically in the browser, but you should still pass the returned `attemptId` when you are finishing a paused sign-in. This becomes important if the browser already has another live session, because `attemptId` is what tells Better Auth to finalize the paused sign-in instead of operating on the current session. If you continue the 2FA flow with `auth.api.*` on the server, you should also forward the relevant headers so Better Auth can read and set the resulting 2FA/session cookies. The generated examples below use `await headers()` for this, but in other frameworks you should pass the equivalent incoming request headers.
 
@@ -256,7 +256,7 @@ if (search.get("challenge") === "two-factor") {
   	},
   });
 
-  if (response.type === "challenge" && response.challenge.type === "two-factor") {
+  if (response.kind === "challenge" && response.challenge.kind === "two-factor") {
   	// response.challenge.attemptId identifies the paused sign-in
   	// response.challenge.availableMethods is e.g. ["totp", "otp"]
   	// Forward the cookies from responseHeaders into the next auth.api 2FA call.

@@ -173,9 +173,9 @@ describe("anonymous", async () => {
 			asResponse: true,
 		});
 		const challengeBody = (await signInRes.clone().json()) as {
-			type: "challenge";
+			kind: "challenge";
 			challenge: {
-				type: "two-factor";
+				kind: "two-factor";
 				attemptId: string;
 			};
 		};
@@ -184,8 +184,8 @@ describe("anonymous", async () => {
 				"better-auth.two_factor",
 			),
 		).toBeDefined();
-		expect(challengeBody.type).toBe("challenge");
-		expect(challengeBody.challenge.type).toBe("two-factor");
+		expect(challengeBody.kind).toBe("challenge");
+		expect(challengeBody.challenge.kind).toBe("two-factor");
 		expect(challengeBody.challenge.attemptId).toBeTruthy();
 		expect(onLinkAccount).not.toHaveBeenCalled();
 
@@ -280,14 +280,14 @@ describe("anonymous", async () => {
 			asResponse: true,
 		});
 		const challengeBody = (await signInRes.clone().json()) as {
-			type: "challenge";
+			kind: "challenge";
 			challenge: {
-				type: "two-factor";
+				kind: "two-factor";
 				attemptId: string;
 			};
 		};
-		expect(challengeBody.type).toBe("challenge");
-		expect(challengeBody.challenge.type).toBe("two-factor");
+		expect(challengeBody.kind).toBe("challenge");
+		expect(challengeBody.challenge.kind).toBe("two-factor");
 		expect(challengeBody.challenge.attemptId).toBeTruthy();
 		expect(onLinkAccount).not.toHaveBeenCalled();
 
@@ -643,22 +643,26 @@ describe("anonymous", async () => {
 		}) {
 			return {
 				path: "/sign-in/anonymous",
-				context: {
-					responseHeaders: new Headers(),
-					finalizedSignIn: {
+				context: (() => {
+					const finalized = {
 						user: newSessionUser,
 						session: {
 							token: "new-token",
 						},
-					},
-					internalAdapter: {
-						deleteUser,
-					},
-					options: {},
-					secret: "secret",
-					setNewSession: vi.fn(),
-					setFinalizedSignIn: vi.fn(),
-				},
+					};
+					return {
+						responseHeaders: new Headers(),
+						getFinalizedSignIn: () => finalized,
+						getNewSession: () => null,
+						internalAdapter: {
+							deleteUser,
+						},
+						options: {},
+						secret: "secret",
+						setNewSession: vi.fn(),
+						setFinalizedSignIn: vi.fn(),
+					};
+				})(),
 				headers: new Headers(),
 				query: {},
 				error: vi.fn(),

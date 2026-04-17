@@ -15,13 +15,13 @@ const SESSION_CHANGING_TWO_FACTOR_PATHS = new Set([
 ]);
 
 type TwoFactorSignInChallenge = {
-	type: "two-factor";
+	kind: "two-factor";
 	attemptId: string;
 	availableMethods: TwoFactorMethod[];
 };
 
 type SignInChallengeResponse = {
-	type: "challenge";
+	kind: "challenge";
 	challenge: TwoFactorSignInChallenge;
 };
 
@@ -32,10 +32,10 @@ function isTwoFactorChallenge(
 		return false;
 	}
 	const record = value as {
-		type?: unknown;
-		challenge?: { type?: unknown };
+		kind?: unknown;
+		challenge?: { kind?: unknown };
 	};
-	return record.type === "challenge" && record.challenge?.type === "two-factor";
+	return record.kind === "challenge" && record.challenge?.kind === "two-factor";
 }
 
 export const twoFactorClient = (
@@ -105,12 +105,13 @@ export const twoFactorClient = (
 							return;
 						}
 						if (options?.twoFactorPage && typeof window !== "undefined") {
+							// The server's signed two-factor cookie carries the attemptId.
+							// Omit it from the URL to avoid Referer / proxy-log leakage (#S5).
 							const redirectURL = new URL(
 								options.twoFactorPage,
 								window.location.href,
 							);
 							redirectURL.searchParams.set("challenge", "two-factor");
-							redirectURL.searchParams.set("attemptId", attemptId);
 							redirectURL.searchParams.set(
 								"methods",
 								availableMethods.join(","),

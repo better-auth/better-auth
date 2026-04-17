@@ -14,7 +14,7 @@ export { betterAuth } from "./auth/full";
 export { appendSignInChallengeToURL } from "./auth/sign-in-challenge-url";
 export {
 	isSignInChallenge,
-	isSignInChallengeOfType,
+	isSignInChallengeOfKind,
 } from "./auth/sign-in-guards";
 // @ts-expect-error
 export * from "./types";

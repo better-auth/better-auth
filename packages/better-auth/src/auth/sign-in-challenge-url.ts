@@ -5,8 +5,8 @@ const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
 function kindSpecificParams(
 	challenge: SignInChallenge,
 ): Array<[string, string]> {
-	const entries: Array<[string, string]> = [["attemptId", challenge.attemptId]];
-	if (challenge.type === "two-factor") {
+	const entries: Array<[string, string]> = [];
+	if (challenge.kind === "two-factor") {
 		entries.push(["methods", challenge.availableMethods.join(",")]);
 	}
 	return entries;
@@ -16,16 +16,19 @@ function kindSpecificParams(
  * Appends a paused sign-in challenge to a redirect target so the landing page
  * can resume the flow. Preserves relative targets and fragments.
  *
- * Writes `?challenge=<type>&attemptId=<id>&<kind-specific>` where kind-specific
- * params are determined by the challenge type (e.g. `methods=<list>` for
- * `two-factor`).
+ * Writes `?challenge=<kind>&<kind-specific>` where kind-specific params are
+ * determined by the challenge kind (e.g. `methods=<list>` for `two-factor`).
+ * The `attemptId` is intentionally omitted: query params leak through Referer
+ * headers and reverse-proxy access logs. Browsers read it from the signed
+ * `better-auth.two_factor` cookie; native callers read it from the response
+ * body and send it back as `body.attemptId`.
  */
 export function appendSignInChallengeToURL(
 	target: string,
 	challenge: SignInChallenge,
 ): string {
 	const params: Array<[string, string]> = [
-		["challenge", challenge.type],
+		["challenge", challenge.kind],
 		...kindSpecificParams(challenge),
 	];
 

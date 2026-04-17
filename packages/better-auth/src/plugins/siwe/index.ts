@@ -274,7 +274,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 						const result = await resolveSignIn(ctx, {
 							user,
 						});
-						if (result.type === "challenge") {
+						if (result.kind === "challenge") {
 							return ctx.json(result);
 						}
 

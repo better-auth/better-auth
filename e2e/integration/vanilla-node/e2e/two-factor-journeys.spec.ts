@@ -6,9 +6,9 @@ import { setupServer } from "./utils";
 type CookieJar = Map<string, string>;
 
 type ChallengeResponse = {
-	type: "challenge";
+	kind: "challenge";
 	challenge: {
-		type: "two-factor";
+		kind: "two-factor";
 		attemptId: string;
 		availableMethods: string[];
 	};
@@ -100,6 +100,15 @@ function hasCookie(jar: CookieJar, baseName: string) {
 	return Array.from(jar.keys()).some(
 		(name) => name === baseName || name.endsWith(baseName),
 	);
+}
+
+function getCookieValue(jar: CookieJar, baseName: string) {
+	for (const [name, value] of jar.entries()) {
+		if (name === baseName || name.endsWith(baseName)) {
+			return value;
+		}
+	}
+	return undefined;
 }
 
 function resolveServerURL(url: string, port: number) {
@@ -234,10 +243,10 @@ function expectChallengeResponse(
 	expect(typeof value).toBe("object");
 	expect(value).not.toBeNull();
 	const envelope = value as Record<string, unknown>;
-	expect(envelope.type).toBe("challenge");
+	expect(envelope.kind).toBe("challenge");
 	expect(envelope.challenge).toBeTruthy();
 	const challenge = envelope.challenge as Record<string, unknown>;
-	expect(challenge.type).toBe("two-factor");
+	expect(challenge.kind).toBe("two-factor");
 	expect(typeof challenge.attemptId).toBe("string");
 	expect(Array.isArray(challenge.availableMethods)).toBe(true);
 }
@@ -323,16 +332,11 @@ test.describe("two factor user journeys", () => {
 			expect(location).toBeTruthy();
 			const redirectURL = new URL(location!, "http://localhost:3000");
 			expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-			const attemptId = redirectURL.searchParams.get("attemptId");
-			expect(attemptId).toBeTruthy();
+			expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 			expect(hasCookie(freshJar, "better-auth.session_token")).toBe(false);
 			expect(hasCookie(freshJar, "better-auth.two_factor")).toBe(true);
 
-			const sendOtpResponse = await sendTwoFactorOtp(
-				baseURL,
-				freshJar,
-				attemptId!,
-			);
+			const sendOtpResponse = await sendTwoFactorOtp(baseURL, freshJar);
 			expect(sendOtpResponse.status).toBe(200);
 			expect(otpCode).toHaveLength(6);
 
@@ -340,7 +344,6 @@ test.describe("two factor user journeys", () => {
 				baseURL,
 				freshJar,
 				otpCode,
-				attemptId!,
 			);
 			expect(verifyOtpResponse.status).toBe(200);
 			expect(hasCookie(freshJar, "better-auth.session_token")).toBe(true);
@@ -534,6 +537,12 @@ test.describe("two factor user journeys", () => {
 			);
 			expect(magicLinkStart.status).toBe(200);
 
+			const firstTwoFactorCookie = getCookieValue(
+				browserJar,
+				"better-auth.two_factor",
+			);
+			expect(firstTwoFactorCookie).toBeTruthy();
+
 			const secondChallengeRedirect = await authRequest(
 				resolveServerURL(magicLinkURL, port),
 				browserJar,
@@ -545,12 +554,20 @@ test.describe("two factor user journeys", () => {
 			expect(secondChallengeRedirect.status).toBe(302);
 			const secondLocation = secondChallengeRedirect.headers.get("location");
 			expect(secondLocation).toBeTruthy();
-			const secondAttemptId = new URL(
-				secondLocation!,
-				"http://localhost:3000",
-			).searchParams.get("attemptId");
-			expect(secondAttemptId).toBeTruthy();
-			expect(secondAttemptId).not.toBe(firstChallenge.challenge.attemptId);
+			expect(
+				new URL(secondLocation!, "http://localhost:3000").searchParams.get(
+					"attemptId",
+				),
+			).toBeNull();
+			// A fresh challenge rotates the signed `better-auth.two_factor` cookie;
+			// comparing the cookie value is how we assert the magic-link flow
+			// issued a new attempt instead of reusing the paused password one.
+			const secondTwoFactorCookie = getCookieValue(
+				browserJar,
+				"better-auth.two_factor",
+			);
+			expect(secondTwoFactorCookie).toBeTruthy();
+			expect(secondTwoFactorCookie).not.toBe(firstTwoFactorCookie);
 
 			const verifyResponse = await verifyTwoFactorOtp(
 				baseURL,

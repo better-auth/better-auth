@@ -377,7 +377,7 @@ export const verifyEmail = createAuthEndpoint(
 						const result = await resolveSignIn(ctx, {
 							user: updatedUser,
 						});
-						if (result.type === "challenge") {
+						if (result.kind === "challenge") {
 							if (ctx.query.callbackURL) {
 								throw ctx.redirect(
 									appendSignInChallengeToURL(
@@ -441,7 +441,7 @@ export const verifyEmail = createAuthEndpoint(
 						const result = await resolveSignIn(ctx, {
 							user: updatedUser,
 						});
-						if (result.type === "challenge") {
+						if (result.kind === "challenge") {
 							if (ctx.query.callbackURL) {
 								throw ctx.redirect(
 									appendSignInChallengeToURL(
@@ -499,7 +499,7 @@ export const verifyEmail = createAuthEndpoint(
 						emailVerified: true,
 					},
 				});
-				if (result.type === "challenge") {
+				if (result.kind === "challenge") {
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(
 							appendSignInChallengeToURL(

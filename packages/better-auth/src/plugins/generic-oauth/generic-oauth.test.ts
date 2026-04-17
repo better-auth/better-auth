@@ -246,7 +246,7 @@ describe("oauth2", async () => {
 		const redirectURL = new URL(callbackURL);
 		expect(redirectURL.pathname).toBe("/dashboard");
 		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-		expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 		expect(redirectURL.searchParams.get("methods")).toBe("otp");
 
 		const cookies = parseSetCookieHeader(setCookieHeader);
@@ -354,26 +354,30 @@ describe("oauth2", async () => {
 				onSuccess: localCookieSetter(headers),
 			},
 		});
-		const { callbackURL, headers: challengeHeaders } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
-			headers,
-			localFetch,
-		);
+		const {
+			callbackURL,
+			headers: challengeHeaders,
+			setCookieHeader,
+		} = await simulateOAuthFlow(signInRes.data?.url || "", headers, localFetch);
 
 		const redirectURL = new URL(callbackURL, "http://localhost:3000");
-		const attemptId = redirectURL.searchParams.get("attemptId");
-		expect(attemptId).toBeTruthy();
-		const pendingAttempt = await context.internalAdapter.findSignInAttempt(
-			attemptId!,
+		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
+		const signedTwoFactorCookie = parseSetCookieHeader(setCookieHeader).get(
+			"better-auth.two_factor",
+		)?.value;
+		expect(signedTwoFactorCookie).toBeTruthy();
+		const attemptId = signedTwoFactorCookie!.slice(
+			0,
+			signedTwoFactorCookie!.lastIndexOf("."),
 		);
+		const pendingAttempt =
+			await context.internalAdapter.findSignInAttempt(attemptId);
 		expect(pendingAttempt).toBeTruthy();
 		expect(observedCallbackContext).toBeUndefined();
 
 		await localAuth.api.sendTwoFactorOTP({
 			headers: challengeHeaders,
-			body: {
-				attemptId: attemptId!,
-			},
+			body: {},
 		});
 		expect(otp).toHaveLength(6);
 
@@ -381,7 +385,6 @@ describe("oauth2", async () => {
 			headers: challengeHeaders,
 			body: {
 				code: otp,
-				attemptId: attemptId!,
 			},
 			asResponse: true,
 		});
