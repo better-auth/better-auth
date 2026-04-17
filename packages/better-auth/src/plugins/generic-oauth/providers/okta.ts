@@ -30,7 +30,7 @@ export interface OktaOptions extends BaseOAuthProviderOptions {
  * });
  * ```
  */
-export function okta(options: OktaOptions): GenericOAuthConfig {
+export function okta(options: OktaOptions): GenericOAuthConfig<"okta"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	// Ensure issuer ends without trailing slash for proper discovery URL construction

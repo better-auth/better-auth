@@ -260,7 +260,36 @@ export async function updateClientEndpoint(
 			...updates,
 		},
 		opts,
+		{
+			ctx,
+		},
 	);
+
+	// Clear obsolete auth material when switching auth methods
+	const schemaUpdates: Record<string, unknown> = {
+		...oauthToSchema(updates),
+	};
+	if (updates.token_endpoint_auth_method) {
+		if (updates.token_endpoint_auth_method === "private_key_jwt") {
+			schemaUpdates.clientSecret = null;
+		} else {
+			schemaUpdates.jwks = null;
+			schemaUpdates.jwksUri = null;
+			// Generate a new secret when switching away from private_key_jwt
+			// to prevent clients from being stuck without credentials
+			if (!schemaUpdates.clientSecret) {
+				const rawSecret =
+					opts.generateClientSecret?.() ||
+					generateRandomString(32, "a-z", "A-Z");
+				schemaUpdates.clientSecret = await storeClientSecret(
+					ctx,
+					opts,
+					rawSecret,
+				);
+			}
+		}
+	}
+
 	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
 		{
 			model: "oauthClient",
@@ -271,7 +300,7 @@ export async function updateClientEndpoint(
 				},
 			],
 			update: {
-				...oauthToSchema(updates),
+				...schemaUpdates,
 				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
 			},
 		},
@@ -335,7 +364,8 @@ export async function rotateClientSecretEndpoint(
 
 	if (client.public || !client.clientSecret) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "public clients cannot be updated",
+			error_description:
+				"secret rotation is only available for clients using client_secret authentication",
 			error: "invalid_client",
 		});
 	}

@@ -51,7 +51,7 @@ describe("oauth revoke", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	async function createAuthUrl(
@@ -331,7 +331,7 @@ describe("oauth revoke - config", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
 		"openid",
 		"email",
