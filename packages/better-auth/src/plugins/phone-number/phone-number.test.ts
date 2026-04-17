@@ -819,6 +819,91 @@ describe("updateUser phone number update prevention", async () => {
 	});
 });
 
+describe("updateUser phone number disassociation", async () => {
+	let otp = "";
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const originalHeaders = new Headers();
+	const reclaimerHeaders = new Headers();
+	const sharedPhoneNumber = "+251911121314";
+
+	it("should null phone number and reset verified flag atomically", async () => {
+		await client.phoneNumber.sendOtp({ phoneNumber: sharedPhoneNumber });
+		const verifyRes = await client.phoneNumber.verify(
+			{ phoneNumber: sharedPhoneNumber, code: otp },
+			{ onSuccess: sessionSetter(originalHeaders) },
+		);
+		expect(verifyRes.error).toBe(null);
+
+		const updateRes = await client.updateUser({
+			phoneNumber: null,
+			fetchOptions: { headers: originalHeaders },
+		});
+		expect(updateRes.error).toBe(null);
+
+		const session = await client.getSession({
+			fetchOptions: { headers: originalHeaders },
+		});
+		expect(session.data?.user.phoneNumber).toBe(null);
+		expect(session.data?.user.phoneNumberVerified).toBe(false);
+	});
+
+	it("should let another user claim the released number via verify", async () => {
+		await client.signUp.email(
+			{
+				email: "reclaimer@test.com",
+				password: "password123",
+				name: "reclaimer",
+			},
+			{ onSuccess: sessionSetter(reclaimerHeaders) },
+		);
+
+		await client.phoneNumber.sendOtp({
+			phoneNumber: sharedPhoneNumber,
+			fetchOptions: { headers: reclaimerHeaders },
+		});
+		const verifyRes = await client.phoneNumber.verify({
+			phoneNumber: sharedPhoneNumber,
+			code: otp,
+			updatePhoneNumber: true,
+			fetchOptions: { headers: reclaimerHeaders },
+		});
+		expect(verifyRes.error).toBe(null);
+
+		const reclaimerSession = await client.getSession({
+			fetchOptions: { headers: reclaimerHeaders },
+		});
+		expect(reclaimerSession.data?.user.phoneNumber).toBe(sharedPhoneNumber);
+		expect(reclaimerSession.data?.user.phoneNumberVerified).toBe(true);
+
+		const originalSession = await client.getSession({
+			fetchOptions: { headers: originalHeaders },
+		});
+		expect(originalSession.data?.user.phoneNumber).toBe(null);
+	});
+});
+
 describe("signUpOnVerification with additionalFields", async () => {
 	let otp = "";
 
