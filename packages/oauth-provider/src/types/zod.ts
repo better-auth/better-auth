@@ -1,15 +1,7 @@
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import * as z from "zod";
 
 const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
-
-function isLocalhost(hostname: string): boolean {
-	return (
-		hostname === "localhost" ||
-		hostname === "127.0.0.1" ||
-		hostname === "[::1]" ||
-		hostname.endsWith(".localhost")
-	);
-}
 
 /**
  * Runtime schema for OAuthAuthorizationQuery.
@@ -78,13 +70,11 @@ export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
 		return;
 	}
 
-	if (u.protocol === "http:" || u.protocol === "https:") {
-		if (u.protocol === "http:" && !isLocalhost(u.hostname)) {
-			ctx.addIssue({
-				code: "custom",
-				message:
-					"Redirect URI must use HTTPS (HTTP allowed only for localhost)",
-			});
-		}
+	if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
+		ctx.addIssue({
+			code: "custom",
+			message:
+				"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
+		});
 	}
 });

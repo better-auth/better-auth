@@ -1,6 +1,7 @@
 import type { BaseURLConfig, DynamicBaseURLConfig } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { wildcardMatch } from "./wildcard";
 
 function checkHasPath(url: string): boolean {
@@ -306,20 +307,6 @@ export function getProtocolFromSource(
 	}
 
 	return "https";
-}
-
-function isLoopbackHost(host: string): boolean {
-	const h = host.toLowerCase();
-	return (
-		h === "localhost" ||
-		h.startsWith("localhost:") ||
-		h === "127.0.0.1" ||
-		h.startsWith("127.0.0.1:") ||
-		h === "[::1]" ||
-		h.startsWith("[::1]:") ||
-		h === "0.0.0.0" ||
-		h.startsWith("0.0.0.0:")
-	);
 }
 
 /**
