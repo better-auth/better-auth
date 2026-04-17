@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type {
 	ClientAssertionConfig,
