@@ -1,5 +1,5 @@
 ---
-"@better-auth/core": minor
+"@better-auth/core": patch
 "better-auth": patch
 "@better-auth/electron": patch
 "@better-auth/oauth-provider": patch
