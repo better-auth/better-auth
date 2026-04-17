@@ -2562,29 +2562,23 @@ describe("api-key", async () => {
 			let concurrentGets = 0;
 			let maxConcurrentGets = 0;
 			const originalGet = secondaryStorage.get;
-			secondaryStorage.get = async (key: string) => {
-				if (key.startsWith("api-key:by-id:")) {
-					concurrentGets++;
-					maxConcurrentGets = Math.max(maxConcurrentGets, concurrentGets);
-					await new Promise((r) => setTimeout(r, 20));
-					const result = originalGet(key);
-					concurrentGets--;
-					return result;
-				}
-				return originalGet(key);
-			};
+			vi.spyOn(secondaryStorage, "get").mockImplementation(async (key) => {
+				if (!key.startsWith("api-key:by-id:")) return originalGet(key);
+				concurrentGets++;
+				maxConcurrentGets = Math.max(maxConcurrentGets, concurrentGets);
+				await new Promise((r) => setTimeout(r, 20));
+				const result = await originalGet(key);
+				concurrentGets--;
+				return result;
+			});
 
-			try {
-				const { data: keys } = await client.apiKey.list({
-					fetchOptions: { headers },
-				});
+			const { data: keys } = await client.apiKey.list({
+				fetchOptions: { headers },
+			});
 
-				expect(keys).not.toBeNull();
-				expect(keys!.apiKeys!.length).toBe(keyCount);
-				expect(maxConcurrentGets).toBe(keyCount);
-			} finally {
-				secondaryStorage.get = originalGet;
-			}
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBe(keyCount);
+			expect(maxConcurrentGets).toBe(keyCount);
 		});
 
 		it("should update API key in secondary storage", async () => {
@@ -3117,27 +3111,25 @@ describe("api-key", async () => {
 			let concurrentSets = 0;
 			let maxConcurrentSets = 0;
 			const originalSet = fallbackStorage.set;
-			fallbackStorage.set = async (key: string, value: string) => {
-				if (key.startsWith("api-key:by-id:")) {
+			vi.spyOn(fallbackStorage, "set").mockImplementation(
+				async (key, value) => {
+					if (!key.startsWith("api-key:by-id:")) {
+						originalSet(key, value);
+						return;
+					}
 					concurrentSets++;
 					maxConcurrentSets = Math.max(maxConcurrentSets, concurrentSets);
 					await new Promise((r) => setTimeout(r, 20));
 					originalSet(key, value);
 					concurrentSets--;
-					return;
-				}
-				originalSet(key, value);
-			};
+				},
+			);
 
-			try {
-				const { data: keys } = await client.apiKey.list({}, { headers });
+			const { data: keys } = await client.apiKey.list({}, { headers });
 
-				expect(keys).not.toBeNull();
-				expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
-				expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
-			} finally {
-				fallbackStorage.set = originalSet;
-			}
+			expect(keys).not.toBeNull();
+			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
+			expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
 		});
 
 		it("should not touch the ref list per key while populating", async () => {
