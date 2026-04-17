@@ -47,7 +47,7 @@ export const verificationValueSchema = z
 /**
  * Reusable URL validation for OAuth redirect URIs.
  * - Blocks dangerous schemes (javascript:, data:, vbscript:)
- * - For http/https: requires HTTPS (HTTP allowed only for localhost)
+ * - For http/https: requires HTTPS (HTTP allowed only for loopback hosts: 127.0.0.0/8, [::1], *.localhost per RFC 6761)
  * - Allows custom schemes for mobile apps (e.g., myapp://callback)
  */
 export const SafeUrlSchema = z.url().superRefine((val, ctx) => {

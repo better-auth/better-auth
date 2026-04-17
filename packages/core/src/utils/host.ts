@@ -369,7 +369,7 @@ export function isLoopbackHost(host: string): boolean {
 }
 
 /**
- * SSRF gate: returns true ONLY for hosts that classify as `public`.
+ * First-line SSRF gate: returns true ONLY for hosts that classify as `public`.
  *
  * Every RFC 6890 special-purpose range (loopback, private, link-local,
  * unspecified, documentation, multicast, broadcast, reserved, shared address
@@ -378,6 +378,15 @@ export function isLoopbackHost(host: string): boolean {
  * Use this BEFORE issuing a server-side fetch to a user-supplied URL, e.g.
  * OAuth introspection endpoints, webhook targets, or metadata-document
  * fetches (CIMD).
+ *
+ * Limitations (this is a syntactic check, not a complete SSRF mitigation):
+ * - No DNS resolution: a public-looking FQDN that resolves to a private IP
+ *   passes this check. Re-verify the resolved address before connecting, or
+ *   pin the socket to the resolved IP.
+ * - No DNS-rebinding defense: attackers can return a public IP on the first
+ *   lookup and a private IP on the second. Resolve once and reuse the IP.
+ * - No redirect following: HTTP 3xx responses can redirect to private hosts.
+ *   Re-run this check on every redirect target, or disable auto-follow.
  *
  * @example
  * isPublicRoutableHost("example.com")            // true
