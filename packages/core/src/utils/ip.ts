@@ -1,5 +1,3 @@
-import * as z from "zod";
-
 /**
  * Normalizes an IP address for consistent rate limiting.
  *
@@ -8,6 +6,10 @@ import * as z from "zod";
  * - Converts IPv4-mapped IPv6 to IPv4
  * - Supports IPv6 subnet extraction
  * - Handles all edge cases (::1, ::, etc.)
+ *
+ * Validation is regex-based rather than zod-powered so this module can be
+ * imported from client-reachable code paths (e.g. via `utils/host`) without
+ * pulling zod into the browser bundle.
  */
 
 interface NormalizeIPOptions {
@@ -20,18 +22,85 @@ interface NormalizeIPOptions {
 	ipv6Subnet?: 128 | 64 | 48 | 32;
 }
 
+const IPV4_REGEX =
+	/^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+/** Per-group IPv6 hex check (1-4 hex chars). */
+const IPV6_GROUP_REGEX = /^[0-9a-fA-F]{1,4}$/;
+
+function isValidIPv4(ip: string): boolean {
+	return IPV4_REGEX.test(ip);
+}
+
+/**
+ * Validate IPv6 by splitting on `:`/`::` and checking each group.
+ *
+ * Accepts full form, zero-compressed form (`::`), and IPv4-embedded form
+ * (e.g. `::ffff:192.0.2.1`, `64:ff9b::192.0.2.1`). Rejects zone-ID suffixes
+ * (`%eth0`), multiple `::`, and out-of-range octets or non-hex groups.
+ */
+function isValidIPv6(ip: string): boolean {
+	if (ip.length === 0 || ip.length > 45) return false;
+	if (ip.includes("%")) return false;
+
+	const doubleColonCount = ip.split("::").length - 1;
+	if (doubleColonCount > 1) return false;
+
+	if (doubleColonCount === 1) {
+		const [leftPart = "", rightPart = ""] = ip.split("::");
+		const left = leftPart === "" ? [] : leftPart.split(":");
+		const right = rightPart === "" ? [] : rightPart.split(":");
+
+		let ipv4Tail = false;
+		const lastRight = right[right.length - 1];
+		if (lastRight !== undefined && lastRight.includes(".")) {
+			if (!isValidIPv4(lastRight)) return false;
+			ipv4Tail = true;
+		}
+		const lastLeft = left[left.length - 1];
+		if (lastLeft !== undefined && lastLeft.includes(".")) return false;
+
+		const hexGroups = ipv4Tail
+			? [...left, ...right.slice(0, -1)]
+			: [...left, ...right];
+		for (const group of hexGroups) {
+			if (!IPV6_GROUP_REGEX.test(group)) return false;
+		}
+
+		const occupied = hexGroups.length + (ipv4Tail ? 2 : 0);
+		return occupied < 8;
+	}
+
+	const groups = ip.split(":");
+	const lastGroup = groups[groups.length - 1];
+	if (lastGroup !== undefined && lastGroup.includes(".")) {
+		if (groups.length !== 7) return false;
+		if (!isValidIPv4(lastGroup)) return false;
+		for (const group of groups.slice(0, -1)) {
+			if (!IPV6_GROUP_REGEX.test(group)) return false;
+		}
+		return true;
+	}
+
+	if (groups.length !== 8) return false;
+	for (const group of groups) {
+		if (!IPV6_GROUP_REGEX.test(group)) return false;
+	}
+	return true;
+}
+
 /**
  * Checks if an IP is valid IPv4 or IPv6
  */
 export function isValidIP(ip: string): boolean {
-	return z.ipv4().safeParse(ip).success || z.ipv6().safeParse(ip).success;
+	return isValidIPv4(ip) || isValidIPv6(ip);
 }
 
 /**
  * Checks if an IP is IPv6
  */
 function isIPv6(ip: string): boolean {
-	return z.ipv6().safeParse(ip).success;
+	return isValidIPv6(ip);
 }
 
 /**
@@ -44,8 +113,7 @@ function extractIPv4FromMapped(ipv6: string): string | null {
 	// Handle ::ffff:192.0.2.1 format
 	if (lower.startsWith("::ffff:")) {
 		const ipv4Part = lower.substring(7);
-		// Check if it's a valid IPv4
-		if (z.ipv4().safeParse(ipv4Part).success) {
+		if (isValidIPv4(ipv4Part)) {
 			return ipv4Part;
 		}
 	}
@@ -54,7 +122,7 @@ function extractIPv4FromMapped(ipv6: string): string | null {
 	const parts = ipv6.split(":");
 	if (parts.length === 7 && parts[5]?.toLowerCase() === "ffff") {
 		const ipv4Part = parts[6];
-		if (ipv4Part && z.ipv4().safeParse(ipv4Part).success) {
+		if (ipv4Part && isValidIPv4(ipv4Part)) {
 			return ipv4Part;
 		}
 	}
@@ -175,7 +243,7 @@ export function normalizeIP(
 	options: NormalizeIPOptions = {},
 ): string {
 	// IPv4 addresses are already normalized
-	if (z.ipv4().safeParse(ip).success) {
+	if (isValidIPv4(ip)) {
 		return ip.toLowerCase();
 	}
 
