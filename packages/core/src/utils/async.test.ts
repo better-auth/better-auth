@@ -115,6 +115,31 @@ describe("mapConcurrent", () => {
 		expect(calls).toContain(2);
 	});
 
+	it("stops scheduling new mappers after the first rejection", async () => {
+		let scheduled = 0;
+		await expect(
+			mapConcurrent(
+				Array.from({ length: 50 }, (_, i) => i),
+				async (x) => {
+					scheduled++;
+					if (x === 2) throw new Error("boom");
+					await wait(20);
+					return x;
+				},
+				{ concurrency: 4 },
+			),
+		).rejects.toThrow("boom");
+		await wait(100);
+		expect(scheduled).toBeLessThan(50);
+	});
+
+	it("accepts sync mappers (Awaitable)", async () => {
+		const result = await mapConcurrent([1, 2, 3], (x) => x * 2, {
+			concurrency: 2,
+		});
+		expect(result).toEqual([2, 4, 6]);
+	});
+
 	it("rejects immediately when the signal is already aborted", async () => {
 		const controller = new AbortController();
 		controller.abort(new Error("pre-aborted"));

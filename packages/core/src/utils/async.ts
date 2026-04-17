@@ -1,3 +1,5 @@
+import type { Awaitable } from "../types/helper";
+
 export interface MapConcurrentOptions {
 	/**
 	 * Max in-flight mappers. Non-integer values are floored, then clamped
@@ -5,8 +7,8 @@ export interface MapConcurrentOptions {
 	 */
 	concurrency: number;
 	/**
-	 * Aborts the run at the next iteration boundary. In-flight mappers
-	 * finish but their results are discarded.
+	 * Rejects with `signal.reason` when aborted. In-flight mappers keep
+	 * running but their results are not returned.
 	 */
 	signal?: AbortSignal;
 }
@@ -17,7 +19,7 @@ export interface MapConcurrentOptions {
  */
 export async function mapConcurrent<T, R>(
 	items: readonly T[],
-	fn: (item: T, index: number) => Promise<R>,
+	fn: (item: T, index: number) => Awaitable<R>,
 	options: MapConcurrentOptions,
 ): Promise<R[]> {
 	const n = items.length;
@@ -31,12 +33,18 @@ export async function mapConcurrent<T, R>(
 
 	const results = new Array<R>(n);
 	let idx = 0;
+	let failed = false;
 
 	const worker = async (): Promise<void> => {
-		while (idx < n) {
+		while (!failed && idx < n) {
 			if (signal?.aborted) throw signal.reason;
 			const i = idx++;
-			results[i] = await fn(items[i] as T, i);
+			try {
+				results[i] = await fn(items[i] as T, i);
+			} catch (error) {
+				failed = true;
+				throw error;
+			}
 		}
 	};
 
