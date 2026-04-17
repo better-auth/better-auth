@@ -1,11 +1,9 @@
 import type { Span } from "@opentelemetry/api";
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { getOpenTelemetryAPI } from "./api";
 import { ATTR_HTTP_RESPONSE_STATUS_CODE } from "./attributes";
 
 const INSTRUMENTATION_SCOPE = "better-auth";
 const INSTRUMENTATION_VERSION = import.meta.env?.BETTER_AUTH_VERSION ?? "1.0.0";
-
-const tracer = trace.getTracer(INSTRUMENTATION_SCOPE, INSTRUMENTATION_VERSION);
 
 /**
  * Better-auth uses `throw ctx.redirect(url)` for flow control (e.g. OAuth
@@ -27,6 +25,7 @@ function isRedirectError(err: unknown): boolean {
 }
 
 function endSpanWithError(span: Span, err: unknown) {
+	const { SpanStatusCode } = getOpenTelemetryAPI();
 	if (isRedirectError(err)) {
 		span.setAttribute(
 			ATTR_HTTP_RESPONSE_STATUS_CODE,
@@ -66,6 +65,12 @@ export function withSpan<T>(
 	attributes: Record<string, string | number | boolean>,
 	fn: () => T | Promise<T>,
 ): T | Promise<T> {
+	const { trace } = getOpenTelemetryAPI();
+	const tracer = trace.getTracer(
+		INSTRUMENTATION_SCOPE,
+		INSTRUMENTATION_VERSION,
+	);
+
 	return tracer.startActiveSpan(name, { attributes }, (span) => {
 		try {
 			const result = fn();
