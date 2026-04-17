@@ -7,6 +7,7 @@ import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { twoFactor } from "../two-factor";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
 import { auth0 } from "./providers/auth0";
@@ -152,6 +153,240 @@ describe("oauth2", async () => {
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+	});
+
+	it("should redirect generic oauth callback into two-factor challenge for enabled users", async () => {
+		const {
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			auth: localAuth,
+			db,
+		} = await getTestInstance(
+			{
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+					genericOAuth({
+						config: [
+							{
+								providerId,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const context = await localAuth.$context;
+		const existingUser = await context.internalAdapter.createUser({
+			email: "oauth2@test.com",
+			name: "OAuth2 Test",
+			emailVerified: true,
+		});
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "id", value: existingUser.id }],
+		});
+
+		const localClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: localCookieSetter(headers),
+			},
+		});
+
+		let location: string | null = null;
+		await betterFetch(signInRes.data?.url || "", {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) {
+			throw new Error("No redirect location found");
+		}
+
+		let callbackURL = "";
+		let setCookieHeader = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				setCookieHeader = context.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		const redirectURL = new URL(callbackURL);
+		expect(redirectURL.pathname).toBe("/dashboard");
+		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+		expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+		expect(redirectURL.searchParams.get("methods")).toBe("otp");
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+
+		const sessions = await context.internalAdapter.listSessions(
+			existingUser.id,
+		);
+		expect(sessions).toHaveLength(0);
+	});
+
+	it("should finalize paused OAuth sign-ins without persisting callback request snapshots", async () => {
+		let otp = "";
+		let observedCallbackContext:
+			| {
+					path?: string;
+					providerId?: string;
+					state?: string;
+					url?: string;
+			  }
+			| undefined;
+		const {
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			auth: localAuth,
+			db,
+		} = await getTestInstance(
+			{
+				databaseHooks: {
+					session: {
+						create: {
+							before: async (_session, ctx) => {
+								if (!ctx?.path.startsWith("/oauth2/callback/")) {
+									return;
+								}
+								observedCallbackContext = {
+									path: ctx.path,
+									providerId:
+										typeof ctx.params?.providerId === "string"
+											? ctx.params.providerId
+											: undefined,
+									state:
+										typeof ctx.query?.state === "string"
+											? ctx.query.state
+											: undefined,
+									url: ctx.request?.url,
+								};
+							},
+						},
+					},
+				},
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp: nextOtp }) {
+								otp = nextOtp;
+							},
+						},
+					}),
+					genericOAuth({
+						config: [
+							{
+								providerId,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const context = await localAuth.$context;
+		const existingUser = await context.internalAdapter.createUser({
+			email: "oauth2@test.com",
+			name: "OAuth2 Test",
+			emailVerified: true,
+		});
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "id", value: existingUser.id }],
+		});
+
+		const localClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await localClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: localCookieSetter(headers),
+			},
+		});
+		const { callbackURL, headers: challengeHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			localFetch,
+		);
+
+		const redirectURL = new URL(callbackURL, "http://localhost:3000");
+		const attemptId = redirectURL.searchParams.get("attemptId");
+		expect(attemptId).toBeTruthy();
+		const pendingAttempt = await context.internalAdapter.findSignInAttempt(
+			attemptId!,
+		);
+		expect(pendingAttempt).toBeTruthy();
+		expect(observedCallbackContext).toBeUndefined();
+
+		await localAuth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				attemptId: attemptId!,
+			},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyResponse = await localAuth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				code: otp,
+				attemptId: attemptId!,
+			},
+			asResponse: true,
+		});
+		expect(verifyResponse.status).toBe(200);
+		expect(observedCallbackContext).toBeUndefined();
 	});
 
 	it("should redirect to the provider and handle the response for a new user", async () => {
@@ -1611,6 +1846,35 @@ describe("oauth2", async () => {
 
 		expect(callbackURL).toContain("http://localhost:3000/error");
 		expect(callbackURL).toContain("error=");
+	});
+
+	it("should redirect callback failures when final session creation fails", async () => {
+		const context = await auth.$context;
+		const originalCreateSession = context.internalAdapter.createSession;
+		context.internalAdapter.createSession = vi.fn().mockResolvedValue(null);
+
+		try {
+			const headers = new Headers();
+			const res = await authClient.signIn.oauth2({
+				providerId,
+				callbackURL: "http://localhost:3000/dashboard",
+				errorCallbackURL: "http://localhost:3000/error",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("http://localhost:3000/error");
+			expect(callbackURL).toContain("error=failed_to_create_session");
+		} finally {
+			context.internalAdapter.createSession = originalCreateSession;
+		}
 	});
 
 	it("should support GET-based token endpoints for non-standard providers", async () => {

@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import type { Account } from "../../types";
 
 describe("forgot password", async () => {
@@ -174,7 +174,8 @@ describe("forgot password", async () => {
 			email: "test-reset-updated@email.com",
 			password: "newResetPassword123",
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.user).toBeDefined();
 	});
 
 	it("should sign-in with the new password", async () => {
@@ -187,7 +188,8 @@ describe("forgot password", async () => {
 			email: testUser.email,
 			password: "new-password",
 		});
-		expect(newCred.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(newCred.data);
+		expect(newCred.data.user).toBeDefined();
 	});
 
 	it("shouldn't allow the token to be used twice", async () => {

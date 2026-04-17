@@ -71,6 +71,12 @@ export type ExtractPluginField<T, Field extends string> =
 			: {};
 
 /**
+ * Extracts a plugin ID while guarding against `any`.
+ */
+export type ExtractPluginID<T> =
+	IsAny<T> extends true ? never : T extends { id: infer ID } ? ID : never;
+
+/**
  * Walks a plugin tuple with tail-recursive accumulator (TS 4.5+),
  * extracting and intersecting the given field from each element.
  */
@@ -84,4 +90,14 @@ export type InferPluginFieldFromTuple<
 			Field,
 			Acc & ExtractPluginField<Head, Field>
 		>
+	: Acc;
+
+/**
+ * Walks a plugin tuple and collects plugin IDs as a union.
+ */
+export type InferPluginIDsFromTuple<
+	T extends readonly unknown[],
+	Acc = never,
+> = T extends readonly [infer Head, ...infer Tail]
+	? InferPluginIDsFromTuple<Tail, Acc | ExtractPluginID<Head>>
 	: Acc;

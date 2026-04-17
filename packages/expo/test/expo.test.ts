@@ -1,10 +1,14 @@
 import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
-import { magicLink, oAuthProxy } from "better-auth/plugins";
-import { getTestInstance } from "better-auth/test";
+import { magicLink, oAuthProxy, twoFactor } from "better-auth/plugins";
+import { expectNoTwoFactorChallenge, getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";
-import { expoClient, storageAdapter } from "../src/client";
+import {
+	expoClient,
+	parseSetCookieHeader,
+	storageAdapter,
+} from "../src/client";
 
 vi.mock("expo-web-browser", async () => {
 	return {
@@ -113,7 +117,8 @@ describe("expo", async () => {
 			provider: "google",
 			callbackURL: "/dashboard",
 		});
-		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
+		expectNoTwoFactorChallenge(res);
+		const stateId = res.url?.split("state=")[1]!.split("&")[0];
 		const ctx = await auth.$context;
 		if (!stateId) {
 			throw new Error("State ID not found");
@@ -987,6 +992,178 @@ describe("expo deep link cookie injection", async () => {
 				},
 			},
 		});
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
+	});
+});
+
+describe("expo deep link injection for two-factor challenges", async () => {
+	it("should preserve challenge params for magic-link verification", async () => {
+		let magicLinkToken = "";
+		const storage = new Map<string, string>();
+
+		const { client, auth, db } = await getTestInstance(
+			{
+				plugins: [
+					expo(),
+					magicLink({
+						async sendMagicLink({ token }) {
+							magicLinkToken = token;
+						},
+					}),
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+				],
+				trustedOrigins: ["myapp://"],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+						magicLinkClient(),
+					],
+				},
+			},
+		);
+
+		const context = await auth.$context;
+		const user = await context.internalAdapter.createUser({
+			email: "expo-magic-link-2fa@test.com",
+			name: "Expo Magic Link",
+			emailVerified: true,
+		});
+		await db.update({
+			model: "user",
+			update: { twoFactorEnabled: true },
+			where: [{ field: "id", value: user.id }],
+		});
+
+		await client.signIn.magicLink({
+			email: user.email,
+			callbackURL: "myapp:///dashboard",
+		});
+
+		let redirectHandled = false;
+		const { error } = await client.magicLink.verify(
+			{
+				query: {
+					token: magicLinkToken,
+					callbackURL: "myapp:///dashboard",
+				},
+			},
+			{
+				onError(context) {
+					redirectHandled = true;
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("myapp://");
+
+					const url = new URL(location!);
+					expect(url.searchParams.get("challenge")).toBe("two-factor");
+					expect(url.searchParams.get("attemptId")).toBeTruthy();
+					expect(url.searchParams.get("methods")).toBe("otp");
+
+					const injectedCookie = url.searchParams.get("cookie");
+					expect(injectedCookie).toBeDefined();
+					const cookies = parseSetCookieHeader(injectedCookie!);
+					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(cookies.get("better-auth.session_token")?.value ?? "").toBe(
+						"",
+					);
+				},
+			},
+		);
+
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
+	});
+
+	it("should preserve challenge params for verify-email auto sign-in", async () => {
+		let verificationToken = "";
+		const storage = new Map<string, string>();
+
+		const { client, db, testUser } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					autoSignInAfterVerification: true,
+					async sendVerificationEmail({ token }: { token: string }) {
+						verificationToken = token;
+					},
+				},
+				plugins: [
+					expo(),
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+				],
+				trustedOrigins: ["myapp://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		await db.update({
+			model: "user",
+			update: { twoFactorEnabled: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		let redirectHandled = false;
+		const { error } = await client.verifyEmail(
+			{
+				query: {
+					token: verificationToken,
+					callbackURL: "myapp:///verified",
+				},
+			},
+			{
+				onError(context) {
+					redirectHandled = true;
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("myapp://");
+
+					const url = new URL(location!);
+					expect(url.searchParams.get("challenge")).toBe("two-factor");
+					expect(url.searchParams.get("attemptId")).toBeTruthy();
+					expect(url.searchParams.get("methods")).toBe("otp");
+
+					const injectedCookie = url.searchParams.get("cookie");
+					expect(injectedCookie).toBeDefined();
+					const cookies = parseSetCookieHeader(injectedCookie!);
+					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(cookies.get("better-auth.session_token")?.value ?? "").toBe(
+						"",
+					);
+				},
+			},
+		);
+
 		expect(redirectHandled).toBe(true);
 		expect(error?.status).toBe(302);
 	});

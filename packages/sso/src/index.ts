@@ -1,9 +1,23 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type {
+	BetterAuthPlugin,
+	FinalizedSignIn,
+	GenericEndpointContext,
+	User,
+} from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { symmetricDecrypt } from "better-auth/crypto";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
-import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
-import { assignOrganizationByDomain } from "./linking";
+import {
+	SAML_PENDING_SESSION_KEY_PREFIX,
+	SAML_SESSION_BY_ID_PREFIX,
+	SSO_PENDING_DOMAIN_ASSIGNMENT_KEY_PREFIX,
+	SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX,
+} from "./constants";
+import {
+	assignOrganizationByDomain,
+	assignOrganizationFromProvider,
+} from "./linking";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -14,6 +28,7 @@ import {
 	listSSOProviders,
 	updateSSOProvider,
 } from "./routes/providers";
+import { persistSamlSessionRecord } from "./routes/saml-pipeline";
 import {
 	acsEndpoint,
 	callbackSSO,
@@ -47,7 +62,15 @@ export {
 	SignatureAlgorithm,
 } from "./saml";
 
-import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
+import type {
+	OIDCConfig,
+	PendingProviderOrganizationAssignmentRecord,
+	PendingSAMLSessionRecord,
+	SAMLConfig,
+	SSOOptions,
+	SSOProvider,
+} from "./types";
+import { safeJsonParse } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
@@ -90,6 +113,138 @@ const fastValidator = {
 };
 
 saml.setSchemaValidator(fastValidator);
+
+function isDomainAssignmentCallbackPath(path?: string | null): boolean {
+	if (!path) {
+		return false;
+	}
+	return path.startsWith("/callback/") || path.startsWith("/oauth2/callback/");
+}
+
+function getSignInAttemptExpiry(ctx: GenericEndpointContext): Date | undefined {
+	return ctx.context.signInAttempt?.expiresAt;
+}
+
+async function storePendingDomainAssignment(
+	ctx: GenericEndpointContext,
+	attemptId: string,
+	userId: string,
+) {
+	const expiresAt = getSignInAttemptExpiry(ctx);
+	if (!expiresAt) {
+		return;
+	}
+	await ctx.context.internalAdapter.createVerificationValue({
+		identifier: `${SSO_PENDING_DOMAIN_ASSIGNMENT_KEY_PREFIX}${attemptId}`,
+		value: userId,
+		expiresAt,
+	});
+}
+
+async function finalizePendingDomainAssignment(
+	ctx: GenericEndpointContext,
+	attemptId: string,
+	user: User,
+	options?: SSOOptions,
+) {
+	const pendingKey = `${SSO_PENDING_DOMAIN_ASSIGNMENT_KEY_PREFIX}${attemptId}`;
+	const pendingAssignment =
+		await ctx.context.internalAdapter.findVerificationValue(pendingKey);
+	if (!pendingAssignment) {
+		return;
+	}
+	if (pendingAssignment.value !== user.id) {
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			pendingKey,
+		);
+		return;
+	}
+	await assignOrganizationByDomain(ctx, {
+		user,
+		provisioningOptions: options?.organizationProvisioning,
+		domainVerification: options?.domainVerification,
+	});
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(pendingKey);
+}
+
+async function finalizePendingProviderOrganizationAssignment(
+	ctx: GenericEndpointContext,
+	attemptId: string,
+	user: User,
+	options?: SSOOptions,
+) {
+	const pendingKey = `${SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId}`;
+	const pendingAssignment =
+		await ctx.context.internalAdapter.findVerificationValue(pendingKey);
+	if (!pendingAssignment) {
+		return;
+	}
+	const decryptedRecord = await symmetricDecrypt({
+		key: ctx.context.secretConfig,
+		data: pendingAssignment.value,
+	}).catch(() => null);
+	const record = decryptedRecord
+		? safeJsonParse<PendingProviderOrganizationAssignmentRecord>(
+				decryptedRecord,
+			)
+		: null;
+	if (!record || record.userId !== user.id) {
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			pendingKey,
+		);
+		return;
+	}
+	const provider = await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
+		model: "ssoProvider",
+		where: [{ field: "providerId", value: record.providerId }],
+	});
+	if (!provider) {
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			pendingKey,
+		);
+		return;
+	}
+	await assignOrganizationFromProvider(ctx, {
+		user,
+		profile: record.profile,
+		provider,
+		token: record.token,
+		provisioningOptions: options?.organizationProvisioning,
+	});
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(pendingKey);
+}
+
+async function finalizePendingSamlSession(
+	ctx: GenericEndpointContext,
+	attemptId: string,
+	user: User,
+	finalizedSignIn: FinalizedSignIn,
+) {
+	const pendingKey = `${SAML_PENDING_SESSION_KEY_PREFIX}${attemptId}`;
+	const pendingSession =
+		await ctx.context.internalAdapter.findVerificationValue(pendingKey);
+	if (!pendingSession) {
+		return;
+	}
+	const record = safeJsonParse<PendingSAMLSessionRecord>(pendingSession.value);
+	if (!record || record.userId !== user.id || !finalizedSignIn.session.id) {
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			pendingKey,
+		);
+		return;
+	}
+	await persistSamlSessionRecord(
+		ctx,
+		{
+			sessionId: finalizedSignIn.session.id,
+			providerId: record.providerId,
+			nameID: record.nameID,
+			sessionIndex: record.sessionIndex,
+		},
+		finalizedSignIn.session.expiresAt,
+	);
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(pendingKey);
+}
 
 type DomainVerificationEndpoints = {
 	requestDomainVerification: ReturnType<typeof requestDomainVerification>;
@@ -236,23 +391,63 @@ export function sso<O extends SSOOptions>(
 			after: [
 				{
 					matcher(context) {
-						return context.path?.startsWith("/callback/") ?? false;
+						return isDomainAssignmentCallbackPath(context.path);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const newSession = ctx.context.newSession;
-						if (!newSession?.user) {
-							return;
-						}
-
 						if (!ctx.context.hasPlugin("organization")) {
 							return;
 						}
-
-						await assignOrganizationByDomain(ctx, {
-							user: newSession.user,
-							provisioningOptions: options?.organizationProvisioning,
-							domainVerification: options?.domainVerification,
-						});
+						const finalizedSignIn = ctx.context.finalizedSignIn;
+						if (finalizedSignIn?.user) {
+							await assignOrganizationByDomain(ctx, {
+								user: finalizedSignIn.user,
+								provisioningOptions: options?.organizationProvisioning,
+								domainVerification: options?.domainVerification,
+							});
+							return;
+						}
+						const signInAttempt = ctx.context.signInAttempt;
+						if (!signInAttempt?.user) {
+							return;
+						}
+						await storePendingDomainAssignment(
+							ctx,
+							signInAttempt.id,
+							signInAttempt.user.id,
+						);
+					}),
+				},
+				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const finalizedSignIn = ctx.context.finalizedSignIn;
+						if (!finalizedSignIn?.user || !finalizedSignIn.attemptId) {
+							return;
+						}
+						const attemptId = finalizedSignIn.attemptId;
+						await finalizePendingSamlSession(
+							ctx,
+							attemptId,
+							finalizedSignIn.user,
+							finalizedSignIn,
+						);
+						await finalizePendingProviderOrganizationAssignment(
+							ctx,
+							attemptId,
+							finalizedSignIn.user,
+							options,
+						);
+						if (!ctx.context.hasPlugin("organization")) {
+							return;
+						}
+						await finalizePendingDomainAssignment(
+							ctx,
+							attemptId,
+							finalizedSignIn.user,
+							options,
+						);
 					}),
 				},
 			],

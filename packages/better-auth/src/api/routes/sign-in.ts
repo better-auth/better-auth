@@ -1,11 +1,15 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	BetterAuthSignInChallengeRegistry,
+	SignInChallenge,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { getAwaitableValue } from "../../context/helpers";
-import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
@@ -172,6 +176,17 @@ const socialSignInBodySchema = z.object({
 	}),
 });
 
+/**
+ * Widens the return envelope with a `"challenge"` branch whenever any plugin
+ * has registered a challenge kind via `BetterAuthSignInChallengeRegistry`.
+ * The check is registry-wide because declaration merging is a global concern.
+ */
+type MaybeSignInChallenge<T> = [
+	keyof BetterAuthSignInChallengeRegistry,
+] extends [never]
+	? T
+	: T | { type: "challenge"; challenge: SignInChallenge };
+
 export const signInSocial = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-in/social",
@@ -182,12 +197,15 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			metadata: {
 				$Infer: {
 					body: {} as z.infer<typeof socialSignInBodySchema>,
-					returned: {} as {
-						redirect: boolean;
-						token?: string | undefined;
-						url?: string | undefined;
-						user?: User<O["user"], O["plugins"]> | undefined;
-					},
+					returned: {} as MaybeSignInChallenge<
+						| { redirect: boolean; url: string }
+						| {
+								redirect: boolean;
+								token: string;
+								url: undefined;
+								user: User<O["user"], O["plugins"]>;
+						  }
+					>,
 				},
 				openapi: {
 					description: "Sign in with a social provider",
@@ -230,13 +248,15 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 		async (
 			c,
 		): Promise<
-			| { redirect: boolean; url: string }
-			| {
-					redirect: boolean;
-					token: string;
-					url: undefined;
-					user: User<O["user"], O["plugins"]>;
-			  }
+			MaybeSignInChallenge<
+				| { redirect: boolean; url: string }
+				| {
+						redirect: boolean;
+						token: string;
+						url: undefined;
+						user: User<O["user"], O["plugins"]>;
+				  }
+			>
 		> => {
 			const provider = await getAwaitableValue(c.context.socialProviders, {
 				value: c.body.provider,
@@ -321,12 +341,28 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						code: "OAUTH_LINK_ERROR",
 					});
 				}
-				await setSessionCookie(c, data.data!);
+				const result = await resolveSignIn(c, {
+					user: data.data!,
+				});
+				if (result.type === "challenge") {
+					return result as MaybeSignInChallenge<
+						| {
+								redirect: boolean;
+								url: string;
+						  }
+						| {
+								redirect: boolean;
+								token: string;
+								url: undefined;
+								user: User<O["user"], O["plugins"]>;
+						  }
+					>;
+				}
 				return c.json({
 					redirect: false,
-					token: data.data!.session.token,
+					token: result.session.token,
 					url: undefined,
-					user: parseUserOutput(c.context.options, data.data!.user) as User<
+					user: parseUserOutput(c.context.options, result.user) as User<
 						O["user"],
 						O["plugins"]
 					>,
@@ -413,12 +449,12 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
 					},
-					returned: {} as {
+					returned: {} as MaybeSignInChallenge<{
 						redirect: boolean;
 						token: string;
 						url?: string | undefined;
 						user: User<O["user"], O["plugins"]>;
-					},
+					}>,
 				},
 				openapi: {
 					operationId: "signInEmail",
@@ -462,12 +498,14 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 		},
 		async (
 			ctx,
-		): Promise<{
-			redirect: boolean;
-			token: string;
-			url?: string | undefined;
-			user: User<O["user"], O["plugins"]>;
-		}> => {
+		): Promise<
+			MaybeSignInChallenge<{
+				redirect: boolean;
+				token: string;
+				url?: string | undefined;
+				user: User<O["user"], O["plugins"]>;
+			}>
+		> => {
 			if (!ctx.context.options?.emailAndPassword?.enabled) {
 				ctx.context.logger.error(
 					"Email and password is not enabled. Make sure to enable it in the options on you `auth.ts` file. Check `https://better-auth.com/docs/authentication/email-password` for more!",
@@ -563,27 +601,18 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
 			}
 
-			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
-				ctx.body.rememberMe === false,
-			);
-
-			if (!session) {
-				ctx.context.logger.error("Failed to create session");
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-				);
+			const result = await resolveSignIn(ctx, {
+				user: user.user,
+				dontRememberMe: ctx.body.rememberMe === false,
+			});
+			if (result.type === "challenge") {
+				return result as MaybeSignInChallenge<{
+					redirect: boolean;
+					token: string;
+					url?: string | undefined;
+					user: User<O["user"], O["plugins"]>;
+				}>;
 			}
-
-			await setSessionCookie(
-				ctx,
-				{
-					session,
-					user: user.user,
-				},
-				ctx.body.rememberMe === false,
-			);
 
 			if (ctx.body.callbackURL) {
 				ctx.setHeader("Location", ctx.body.callbackURL);
@@ -591,9 +620,9 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 
 			return ctx.json({
 				redirect: !!ctx.body.callbackURL,
-				token: session.token,
+				token: result.session.token,
 				url: ctx.body.callbackURL,
-				user: parseUserOutput(ctx.context.options, user.user) as User<
+				user: parseUserOutput(ctx.context.options, result.user) as User<
 					O["user"],
 					O["plugins"]
 				>,

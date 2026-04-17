@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader } from "../../cookies";
+import {
+	expectNoTwoFactorChallenge,
+	expectTwoFactorChallenge,
+	getTestInstance,
+} from "../../test-utils";
 import { bearer } from "../bearer";
+import { twoFactor } from "../two-factor";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
 import { splitAtLastColon } from "./utils";
@@ -52,7 +58,8 @@ describe("email-otp", async () => {
 			email: testUser.email,
 			otp,
 		});
-		expect(verifiedUser.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(verifiedUser.data);
+		expect(verifiedUser.data.status).toBe(true);
 	});
 
 	it("should sign-in with otp", async () => {
@@ -75,7 +82,9 @@ describe("email-otp", async () => {
 				},
 			},
 		);
-		expect(verifiedUser.data?.token).toBeDefined();
+		const verifiedUserData = verifiedUser.data;
+		expectNoTwoFactorChallenge(verifiedUserData);
+		expect(verifiedUserData.token).toBeDefined();
 	});
 
 	it("should sign-up with otp", async () => {
@@ -98,7 +107,9 @@ describe("email-otp", async () => {
 				},
 			},
 		);
-		expect(newUser.data?.token).toBeDefined();
+		const newUserData = newUser.data;
+		expectNoTwoFactorChallenge(newUserData);
+		expect(newUserData.token).toBeDefined();
 	});
 
 	it("should sign-up with otp and set name and image", async () => {
@@ -115,9 +126,11 @@ describe("email-otp", async () => {
 			name: "Test User",
 			image: "https://example.com/avatar.png",
 		});
-		expect(newUser.data?.token).toBeDefined();
-		expect(newUser.data?.user.name).toBe("Test User");
-		expect(newUser.data?.user.image).toBe("https://example.com/avatar.png");
+		const newUserData = newUser.data;
+		expectNoTwoFactorChallenge(newUserData);
+		expect(newUserData.token).toBeDefined();
+		expect(newUserData.user.name).toBe("Test User");
+		expect(newUserData.user.image).toBe("https://example.com/avatar.png");
 	});
 
 	it("should sign-up with uppercase email", async () => {
@@ -133,7 +146,9 @@ describe("email-otp", async () => {
 			email: testUser2.email,
 			otp,
 		});
-		expect(verifiedUser.data?.token).toBeDefined();
+		const verifiedUserData = verifiedUser.data;
+		expectNoTwoFactorChallenge(verifiedUserData);
+		expect(verifiedUserData.token).toBeDefined();
 	});
 
 	it("should sign-up with varying case email", async () => {
@@ -149,7 +164,9 @@ describe("email-otp", async () => {
 			email: testUser2.email.toUpperCase(),
 			otp,
 		});
-		expect(verifiedUser.data?.token).toBeDefined();
+		const verifiedUserData = verifiedUser.data;
+		expectNoTwoFactorChallenge(verifiedUserData);
+		expect(verifiedUserData.token).toBeDefined();
 	});
 
 	it("should send verification otp on sign-up", async () => {
@@ -180,7 +197,8 @@ describe("email-otp", async () => {
 			email: testUser.email,
 			password: "changed-password",
 		});
-		expect(data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(data);
+		expect(data.user).toBeDefined();
 	});
 
 	it("should reset password using deprecated forgetPassword endpoint (backward compatibility)", async () => {
@@ -197,7 +215,8 @@ describe("email-otp", async () => {
 			email: testUser.email,
 			password: "changed-password-2",
 		});
-		expect(data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(data);
+		expect(data.user).toBeDefined();
 	});
 
 	it("should call onPasswordReset callback when resetting password", async () => {
@@ -276,7 +295,8 @@ describe("email-otp", async () => {
 			email: testUser2.email,
 			password: "password",
 		});
-		expect(res.data?.token).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.token).toBeDefined();
 	});
 
 	it("should fail on invalid email", async () => {
@@ -323,14 +343,15 @@ describe("email-otp", async () => {
 			email: testUser.email,
 			otp,
 		});
+		expectNoTwoFactorChallenge(res.data);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {
-					Authorization: `Bearer ${res.data?.token}`,
+					Authorization: `Bearer ${res.data.token}`,
 				},
 			},
 		});
-		expect(res.data?.status).toBe(true);
+		expect(res.data.status).toBe(true);
 		expect(session.data?.user.emailVerified).toBe(true);
 	});
 
@@ -396,6 +417,166 @@ describe("email-otp", async () => {
 			otp,
 		});
 		expect(verifyRes.error?.code).toBe("OTP_EXPIRED");
+	});
+});
+
+describe("email-otp two-factor challenge", async () => {
+	let signInOtp = "";
+	const email = "two-factor-email-otp@example.com";
+	const { client, db } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ email: targetEmail, otp, type }) {
+						if (targetEmail === email && type === "sign-in") {
+							signInOtp = otp;
+						}
+					},
+				}),
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	const signUp = await client.signUp.email({
+		email,
+		password: "password",
+		name: "Two Factor Email OTP",
+	});
+
+	if (!signUp.data) {
+		throw new Error("sign up failed");
+	}
+
+	await db.update({
+		model: "user",
+		where: [{ field: "id", value: signUp.data.user.id }],
+		update: { twoFactorEnabled: true },
+	});
+
+	it("should return a challenge and clear the session cookies", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+
+		let setCookieHeader = "";
+		const res = await client.signIn.emailOtp(
+			{
+				email,
+				otp: signInOtp,
+			},
+			{
+				onSuccess(ctx) {
+					setCookieHeader = ctx.response.headers.get("set-cookie") || "";
+					expect(ctx.response.headers.get("set-auth-token")).toBeNull();
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.session_token")).toBeUndefined();
+		expect(cookies.get("better-auth.session_data")).toBeUndefined();
+		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expectTwoFactorChallenge(res.data);
+		expect(res.data.challenge.attemptId).toBeTruthy();
+		expect(res.data.challenge.availableMethods).toEqual(["otp"]);
+	});
+});
+
+describe("email-otp verify-email two-factor challenge", async () => {
+	let verificationOtp = "";
+	const email = "two-factor-email-verify@example.com";
+	const { client, db, auth } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ email: targetEmail, otp, type }) {
+						if (targetEmail === email && type === "email-verification") {
+							verificationOtp = otp;
+						}
+					},
+					sendVerificationOnSignUp: true,
+				}),
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+			emailVerification: {
+				autoSignInAfterVerification: true,
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	const signUp = await client.signUp.email({
+		email,
+		password: "password",
+		name: "Two Factor Email Verify",
+	});
+
+	if (!signUp.data) {
+		throw new Error("sign up failed");
+	}
+
+	await db.update({
+		model: "user",
+		where: [{ field: "id", value: signUp.data.user.id }],
+		update: { twoFactorEnabled: true },
+	});
+
+	it("should challenge email verification auto sign-in before issuing a session", async () => {
+		const context = await auth.$context;
+		const beforeSessions = await context.internalAdapter.listSessions(
+			signUp.data.user.id,
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "email-verification",
+		});
+
+		let setCookieHeader = "";
+		const res = await client.emailOtp.verifyEmail(
+			{
+				email,
+				otp: verificationOtp,
+			},
+			{
+				onSuccess(ctx) {
+					setCookieHeader = ctx.response.headers.get("set-cookie") || "";
+					expect(ctx.response.headers.get("set-auth-token")).toBeNull();
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.session_token")).toBeUndefined();
+		expect(cookies.get("better-auth.session_data")).toBeUndefined();
+		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expectTwoFactorChallenge(res.data);
+		expect(res.data.challenge.attemptId).toBeTruthy();
+		expect(res.data.challenge.availableMethods).toEqual(["otp"]);
+
+		const afterSessions = await context.internalAdapter.listSessions(
+			signUp.data.user.id,
+		);
+		expect(afterSessions).toHaveLength(beforeSessions.length);
 	});
 });
 
@@ -1239,7 +1420,8 @@ describe("custom generate otpFn", async () => {
 			email: testUser.email,
 			otp: "123456",
 		});
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 	});
 });
 
@@ -1339,8 +1521,10 @@ describe("custom storeOTP", async () => {
 				email: userEmail1,
 				otp: validOTP,
 			});
-			expect(res.data?.user.email).toBe(userEmail1);
-			expect(res.data?.token).toBeDefined();
+			const signInData = res.data;
+			expectNoTwoFactorChallenge(signInData);
+			expect(signInData.user.email).toBe(userEmail1);
+			expect(signInData.token).toBeDefined();
 		});
 	});
 
@@ -1427,8 +1611,10 @@ describe("custom storeOTP", async () => {
 				email: userEmail1,
 				otp: validOTP,
 			});
-			expect(res.data?.user.email).toBe(userEmail1);
-			expect(res.data?.token).toBeDefined();
+			const signInData = res.data;
+			expectNoTwoFactorChallenge(signInData);
+			expect(signInData.user.email).toBe(userEmail1);
+			expect(signInData.token).toBeDefined();
 		});
 	});
 
@@ -1520,8 +1706,10 @@ describe("custom storeOTP", async () => {
 				email: userEmail1,
 				otp: validOTP,
 			});
-			expect(res.data?.user.email).toBe(userEmail1);
-			expect(res.data?.token).toBeDefined();
+			const signInData = res.data;
+			expectNoTwoFactorChallenge(signInData);
+			expect(signInData.user.email).toBe(userEmail1);
+			expect(signInData.token).toBeDefined();
 		});
 	});
 
@@ -1616,8 +1804,10 @@ describe("custom storeOTP", async () => {
 				email: userEmail1,
 				otp: validOTP,
 			});
-			expect(res.data?.user.email).toBe(userEmail1);
-			expect(res.data?.token).toBeDefined();
+			const signInData = res.data;
+			expectNoTwoFactorChallenge(signInData);
+			expect(signInData.user.email).toBe(userEmail1);
+			expect(signInData.token).toBeDefined();
 		});
 	});
 });
@@ -1669,8 +1859,9 @@ describe("override default email verification", async () => {
 			email: "test-otp-override@email.com",
 			otp,
 		});
-		expect(res.data?.status).toBe(true);
-		expect(res.data?.user.emailVerified).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
+		expect(res.data.user.emailVerified).toBe(true);
 	});
 
 	it("should by default not override default email verification", async () => {
@@ -1789,7 +1980,8 @@ describe("override default email verification", async () => {
 			otp,
 		});
 
-		expect(res.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.status).toBe(true);
 		expect(afterEmailVerification).toHaveBeenCalledTimes(1);
 		expect(afterEmailVerification).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -1852,8 +2044,10 @@ describe("sign-up with additional fields via email-otp", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		expect(res.data?.token).toBeDefined();
-		expect(res.data?.user.name).toBe("AF User");
+		const signInData = res.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.token).toBeDefined();
+		expect(signInData.user.name).toBe("AF User");
 		const session = await auth.api.getSession({ headers });
 		if (!session) {
 			throw new Error("session not found");
@@ -1880,7 +2074,9 @@ describe("sign-up with additional fields via email-otp", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		expect(res.data?.token).toBeDefined();
+		const signInData = res.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.token).toBeDefined();
 		const session = await auth.api.getSession({ headers });
 		if (!session) {
 			throw new Error("session not found");
@@ -1914,7 +2110,9 @@ describe("race condition protection", async () => {
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 
 		const res1 = await client.signIn.emailOtp({ email, otp });
-		expect(res1.data?.token).toBeDefined();
+		const signInData = res1.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.token).toBeDefined();
 
 		const verificationValue =
 			await authCtx.internalAdapter.findVerificationValue(
@@ -1937,7 +2135,8 @@ describe("race condition protection", async () => {
 		});
 
 		const res1 = await client.emailOtp.verifyEmail({ email, otp });
-		expect(res1.data?.status).toBe(true);
+		expectNoTwoFactorChallenge(res1.data);
+		expect(res1.data.status).toBe(true);
 
 		const verificationValue =
 			await authCtx.internalAdapter.findVerificationValue(

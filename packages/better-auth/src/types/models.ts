@@ -28,6 +28,7 @@ export type {
 	Account,
 	RateLimit,
 	Session,
+	SignInAttempt,
 	User,
 	Verification,
 } from "@better-auth/core/db";

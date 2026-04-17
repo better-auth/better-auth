@@ -114,7 +114,42 @@ Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their 
 
 ### Sign In with 2FA
 
-When a user with 2FA enabled tries to sign in via email, the response object will contain `twoFactorRedirect` set to `true` and `twoFactorMethods` — an array of the 2FA methods available for the user (e.g. `["totp"]`, `["totp", "otp"]`). Use `twoFactorMethods` to decide which verification UI to show.
+When a user with 2FA enabled reaches a sign-in flow that would create a new session, Better Auth pauses sign-in before issuing the session cookie. For fetch-based flows, the response resolves to a challenge envelope:
+
+```ts
+{
+    type: "challenge",
+    challenge: {
+        type: "two-factor",
+        attemptId: string,            // opaque identifier for the paused sign-in
+        availableMethods: string[],   // e.g. ["totp"], ["totp", "otp"]
+    },
+}
+```
+
+A finalized sign-in instead returns `{ type: "session", session, user }`. Branch on `result.type` to decide whether to render a verification UI or proceed to your app. Use `challenge.availableMethods` to pick which 2FA screen to show, and pass `challenge.attemptId` back to `/two-factor/*` verification calls to complete the paused sign-in.
+
+<Callout type="warn">
+  If the browser already has another authenticated session, `attemptId` is the way to target the paused sign-in explicitly. Without it, `/two-factor/*` acts on the current session-scoped 2FA state instead of switching to another account's paused challenge.
+</Callout>
+
+This applies to credential sign-in (`email`, `username`, `phone number`), email OTP sign-in, social `idToken`/One Tap/SIWE sign-in, magic-link verification, email-verification auto sign-in, OAuth/social callbacks, generic OAuth, OAuth proxy, and SSO callbacks.
+
+<Callout>
+  No primary session cookie is issued until the user successfully completes `verifyTotp`, `verifyOtp`, or `verifyBackupCode`.
+</Callout>
+
+<Callout>
+  Better Auth persists paused sign-ins in a temporary `signInAttempt` record that expires with the challenge window. If you manage adapter schemas manually, regenerate and apply your schema after upgrading so the new table exists.
+</Callout>
+
+<Callout>
+  Passkey sign-in also participates in this flow when the user has 2FA enabled. If the passkey assertion is user-verified, Better Auth treats it as complete authentication and sign-in finishes immediately. Otherwise, the sign-in returns the standard 2FA challenge response.
+</Callout>
+
+<Callout>
+  Session transfer flows such as `oneTimeToken.verify()` and device authorization are not treated as fresh sign-ins. They continue or transfer an already approved session, so they do not open a new 2FA challenge on their own.
+</Callout>
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
@@ -127,9 +162,10 @@ await authClient.signIn.email({
     },
     {
         async onSuccess(context) {
-            if (context.data.twoFactorRedirect) {
-                const methods = context.data.twoFactorMethods // e.g. ["totp", "otp"]
-                // Show the appropriate 2FA verification UI based on available methods
+            if (context.data.type === "challenge" && context.data.challenge.type === "two-factor") {
+                const { attemptId, availableMethods } = context.data.challenge
+                // Show the appropriate 2FA verification UI based on availableMethods
+                // and pass `attemptId` to your verification action.
             }
         },
     }
@@ -145,8 +181,9 @@ import { twoFactorClient } from "better-auth/client/plugins";
 const authClient = createAuthClient({
     plugins: [
         twoFactorClient({
-            onTwoFactorRedirect({ twoFactorMethods }){
-                // twoFactorMethods is e.g. ["totp", "otp"]
+            onTwoFactorRedirect({ attemptId, availableMethods }){
+                // attemptId identifies the paused sign-in attempt
+                // availableMethods is e.g. ["totp", "otp"]
                 // Handle the 2FA verification globally
             },
         }),
@@ -173,12 +210,38 @@ const authClient = createAuthClient({
   Using the `twoFactorPage` option will cause a full page reload when redirecting users to the two-factor authentication page. If you want to avoid page reloads, consider using the `onTwoFactorRedirect` callback instead to handle the redirect programmatically within your application.
 </Callout>
 
+#### Redirect-based flows
+
+Redirect-based flows such as magic-link verification, email-verification auto sign-in, OAuth/social callbacks, generic OAuth, OAuth proxy, and SSO redirect back to your callback URL with `challenge=two-factor`, `attemptId=...`, and `methods=...` in the query string.
+
+```ts
+const search = new URLSearchParams(window.location.search);
+
+if (search.get("challenge") === "two-factor") {
+	const attemptId = search.get("attemptId");
+	const availableMethods = (search.get("methods") ?? "")
+		.split(",")
+		.filter(Boolean);
+
+	// Show your 2FA verification UI here and pass `attemptId`
+	// to the follow-up `/two-factor/*` request.
+}
+```
+
+<Callout type="warn">
+  `twoFactorClient({ onTwoFactorRedirect, twoFactorPage })` only handles responses that go through the client fetch pipeline. Top-level browser redirects still need to read the callback URL query parameters themselves.
+</Callout>
+
+<Callout type="warn">
+  The [Electron integration](/docs/integrations/electron) does not yet continue a browser 2FA challenge back into the native Electron authorization-code handoff. For Electron, complete the 2FA challenge in the browser first, then transfer the authenticated user into Electron.
+</Callout>
+
 <Callout type="warn">
   **With `auth.api`**
 
-  When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will return an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. You can check using `in` instead to check if `twoFactorRedirect` is set to `true`.
+  When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it returns a challenge envelope (`{ type: "challenge", challenge: { type: "two-factor", ... } }`). The same is true for other server-side sign-in completion endpoints such as `verifyEmail`, passkey authentication, and redirect callback handlers. Narrow that branch by checking `response.type === "challenge"`.
 
-  `authClient.twoFactor.*` handles cookies automatically in the browser. If you continue the 2FA flow with `auth.api.*` on the server, you must pass the relevant headers so Better Auth can read the current 2FA state and set the resulting 2FA/session cookies. The generated examples below use `await headers()` for this, but in other frameworks you should pass the equivalent incoming request headers.
+  `authClient.twoFactor.*` handles cookies automatically in the browser, but you should still pass the returned `attemptId` when you are finishing a paused sign-in. This becomes important if the browser already has another live session, because `attemptId` is what tells Better Auth to finalize the paused sign-in instead of operating on the current session. If you continue the 2FA flow with `auth.api.*` on the server, you should also forward the relevant headers so Better Auth can read and set the resulting 2FA/session cookies. The generated examples below use `await headers()` for this, but in other frameworks you should pass the equivalent incoming request headers.
 
   If you chain multiple `auth.api.*` calls in the same server flow, make sure you forward the cookies from the previous auth response into the next call.
 
@@ -193,8 +256,9 @@ const authClient = createAuthClient({
   	},
   });
 
-  if ("twoFactorRedirect" in response) {
-  	// response.twoFactorMethods is e.g. ["totp", "otp"]
+  if (response.type === "challenge" && response.challenge.type === "two-factor") {
+  	// response.challenge.attemptId identifies the paused sign-in
+  	// response.challenge.availableMethods is e.g. ["totp", "otp"]
   	// Forward the cookies from responseHeaders into the next auth.api 2FA call.
   	// Handle the 2FA verification in place
   }
@@ -273,6 +337,12 @@ After the user has entered their 2FA code, you can verify it using `twoFactor.ve
   ```ts
   type verifyTOTP = {
       /**
+       * The paused sign-in attempt to complete. Pass this when verifying
+       * a sign-in challenge explicitly instead of relying on the signed
+       * `two_factor` cookie.
+       */
+      attemptId?: string
+      /**
        * The otp code to verify. 
        */
       code: string = "012345"
@@ -315,6 +385,12 @@ Sending an OTP is done by calling the `authClient.twoFactor.sendOtp` function on
   ```ts
   type sendTwoFactorOTP = {
       /**
+       * The paused sign-in attempt to continue. Pass this when sending an
+       * OTP for a sign-in challenge explicitly instead of relying on the
+       * signed `two_factor` cookie.
+       */
+      attemptId?: string
+      /**
        * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
        */
       trustDevice?: boolean = true
@@ -333,6 +409,12 @@ After the user has entered their OTP code, you can verify it using `authClient.t
 <APIMethod path="/two-factor/verify-otp" method="POST" requireHeaders headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies.">
   ```ts
   type verifyTwoFactorOTP = {
+      /**
+       * The paused sign-in attempt to complete. Pass this when verifying
+       * a sign-in challenge explicitly instead of relying on the signed
+       * `two_factor` cookie.
+       */
+      attemptId?: string
       /**
        * The otp code to verify. 
        */
@@ -379,6 +461,12 @@ You can now allow users to provide a backup code as an account recovery method.
 <APIMethod path="/two-factor/verify-backup-code" method="POST" requireHeaders headersComment="Pass the current request headers so Better Auth can read and set the 2FA/session cookies.">
   ```ts
   type verifyBackupCode = {
+      /**
+       * The paused sign-in attempt to complete. Pass this when verifying
+       * a sign-in challenge explicitly instead of relying on the signed
+       * `two_factor` cookie.
+       */
+      attemptId?: string
       /**
        * A backup code to verify. 
        */
@@ -594,8 +682,9 @@ import { twoFactorClient } from "better-auth/client/plugins"
 const authClient =  createAuthClient({
     plugins: [
         twoFactorClient({ // [!code highlight]
-            onTwoFactorRedirect({ twoFactorMethods }){ // [!code highlight]
-                // twoFactorMethods is e.g. ["totp", "otp"] // [!code highlight]
+            onTwoFactorRedirect({ attemptId, availableMethods }){ // [!code highlight]
+                // attemptId identifies the paused sign-in // [!code highlight]
+                // availableMethods is e.g. ["totp", "otp"] // [!code highlight]
                 window.location.href = "/2fa" // Handle the 2FA verification redirect // [!code highlight]
             } // [!code highlight]
         }) // [!code highlight]
@@ -605,4 +694,9 @@ const authClient =  createAuthClient({
 
 **Options**
 
-`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. Receives a context object with `twoFactorMethods` — an array of enabled 2FA methods (e.g. `["totp", "otp"]`). This can be used to redirect the user to the appropriate 2FA page.
+`onTwoFactorRedirect`: A callback that will be called when the user needs to verify their 2FA code. Receives a context object with:
+
+* `attemptId`: the opaque identifier for the paused sign-in attempt
+* `availableMethods`: an array of enabled 2FA methods (e.g. `["totp", "otp"]`)
+
+Use this to route the user to the appropriate 2FA page and pass `attemptId` into the follow-up verification call.

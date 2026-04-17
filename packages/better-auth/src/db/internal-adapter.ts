@@ -12,7 +12,13 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import type { Account, Session, User, Verification } from "../types";
+import type {
+	Account,
+	Session,
+	SignInAttempt,
+	User,
+	Verification,
+} from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import {
@@ -1227,6 +1233,71 @@ export const createInternalAdapter = (
 				return verification;
 			}
 			return data as Verification;
+		},
+		createSignInAttempt: async (
+			data: Omit<SignInAttempt, "createdAt" | "id" | "updatedAt"> &
+				Partial<SignInAttempt>,
+		) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			await currentAdapter.deleteMany({
+				model: "signInAttempt",
+				where: [
+					{
+						field: "expiresAt",
+						value: new Date(),
+						operator: "lt",
+					},
+				],
+			});
+			const attempt = await currentAdapter.create<SignInAttempt>({
+				model: "signInAttempt",
+				data: {
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...data,
+				},
+			});
+			return attempt;
+		},
+		findSignInAttempt: async (id: string) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const attempt = await currentAdapter.findOne<SignInAttempt>({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
+			if (!attempt) {
+				return null;
+			}
+			return {
+				...attempt,
+				dontRememberMe: attempt.dontRememberMe ?? undefined,
+			};
+		},
+		updateSignInAttempt: async (
+			id: string,
+			data: Partial<Pick<SignInAttempt, "loginMethod">>,
+		) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const updated = await currentAdapter.update<SignInAttempt>({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+				update: {
+					...data,
+					updatedAt: new Date(),
+				},
+			});
+			if (!updated) return null;
+			return {
+				...updated,
+				dontRememberMe: updated.dontRememberMe ?? undefined,
+			};
+		},
+		deleteSignInAttempt: async (id: string) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			await currentAdapter.delete({
+				model: "signInAttempt",
+				where: [{ field: "id", value: id }],
+			});
 		},
 	};
 };

@@ -1,4 +1,5 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { createOTP } from "@better-auth/utils/otp";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -11,9 +12,12 @@ import {
 	vi,
 } from "vitest";
 import * as apiModule from "../../api";
-import { signJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader, setCookieToHeader } from "../../cookies";
+import { signJWT, symmetricDecrypt } from "../../crypto";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { twoFactor } from "../two-factor";
+import type { TwoFactorTable } from "../two-factor/types";
 import { anonymous } from ".";
 import { anonymousClient } from "./client";
 
@@ -122,6 +126,260 @@ describe("anonymous", async () => {
 		linkAccountFn.mockClear();
 	});
 
+	it("defers anonymous account linking cleanup until two-factor verification completes", async () => {
+		let otp = "";
+		const onLinkAccount = vi.fn();
+		const { auth, db, testUser } = await getTestInstance({
+			plugins: [
+				anonymous({
+					async onLinkAccount(data) {
+						onLinkAccount(data);
+					},
+				}),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		const anonymousSignIn = await auth.api.signInAnonymous({
+			asResponse: true,
+		});
+		const headers = new Headers();
+		setCookieToHeader(headers)({ response: anonymousSignIn });
+		const anonymousSession = await auth.api.getSession({ headers });
+		if (!anonymousSession) {
+			throw new Error("Expected anonymous session");
+		}
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			headers,
+			asResponse: true,
+		});
+		const challengeBody = (await signInRes.clone().json()) as {
+			type: "challenge";
+			challenge: {
+				type: "two-factor";
+				attemptId: string;
+			};
+		};
+		expect(
+			parseSetCookieHeader(signInRes.headers.get("set-cookie") || "").get(
+				"better-auth.two_factor",
+			),
+		).toBeDefined();
+		expect(challengeBody.type).toBe("challenge");
+		expect(challengeBody.challenge.type).toBe("two-factor");
+		expect(challengeBody.challenge.attemptId).toBeTruthy();
+		expect(onLinkAccount).not.toHaveBeenCalled();
+
+		const challengeHeaders = new Headers(headers);
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+			},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+				code: otp,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		expect(onLinkAccount).toHaveBeenCalledTimes(1);
+		expect(onLinkAccount).toHaveBeenCalledWith(
+			expect.objectContaining({
+				anonymousUser: expect.objectContaining({
+					user: expect.objectContaining({
+						id: anonymousSession.user.id,
+						isAnonymous: true,
+					}),
+				}),
+				newUser: expect.objectContaining({
+					user: expect.objectContaining({
+						email: testUser.email,
+					}),
+				}),
+			}),
+		);
+
+		const context = await auth.$context;
+		const deletedAnonymousUser = await context.internalAdapter.findUserById(
+			anonymousSession.user.id,
+		);
+		expect(deletedAnonymousUser).toBeNull();
+	});
+
+	it("still calls onLinkAccount when anonymous deletion is disabled", async () => {
+		let otp = "";
+		const onLinkAccount = vi.fn();
+		const { auth, db, testUser } = await getTestInstance({
+			plugins: [
+				anonymous({
+					disableDeleteAnonymousUser: true,
+					async onLinkAccount(data) {
+						onLinkAccount(data);
+					},
+				}),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		const anonymousSignIn = await auth.api.signInAnonymous({
+			asResponse: true,
+		});
+		const headers = new Headers();
+		setCookieToHeader(headers)({ response: anonymousSignIn });
+		const anonymousSession = await auth.api.getSession({ headers });
+		if (!anonymousSession) {
+			throw new Error("Expected anonymous session");
+		}
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			headers,
+			asResponse: true,
+		});
+		const challengeBody = (await signInRes.clone().json()) as {
+			type: "challenge";
+			challenge: {
+				type: "two-factor";
+				attemptId: string;
+			};
+		};
+		expect(challengeBody.type).toBe("challenge");
+		expect(challengeBody.challenge.type).toBe("two-factor");
+		expect(challengeBody.challenge.attemptId).toBeTruthy();
+		expect(onLinkAccount).not.toHaveBeenCalled();
+
+		const challengeHeaders = new Headers(headers);
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+			},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				attemptId: challengeBody.challenge.attemptId,
+				code: otp,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		expect(onLinkAccount).toHaveBeenCalledTimes(1);
+
+		const preservedAnonymousUser = await db.findOne<{
+			id: string;
+			isAnonymous: boolean | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: anonymousSession.user.id }],
+		});
+		expect(preservedAnonymousUser).not.toBeNull();
+		expect(preservedAnonymousUser?.isAnonymous).toBe(true);
+	});
+
+	it("does not treat session-scoped two-factor verification as anonymous linking", async () => {
+		const onLinkAccount = vi.fn();
+		const { auth, db } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [
+					anonymous({
+						async onLinkAccount(data) {
+							onLinkAccount(data);
+						},
+					}),
+					twoFactor({
+						allowPasswordless: true,
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const anonymousSignIn = await auth.api.signInAnonymous({
+			asResponse: true,
+		});
+		const headers = new Headers();
+		setCookieToHeader(headers)({ response: anonymousSignIn });
+		const session = await auth.api.getSession({ headers });
+		if (!session) {
+			throw new Error("Expected anonymous session");
+		}
+
+		await auth.api.enableTwoFactor({
+			headers,
+			body: {},
+		});
+		const twoFactorRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session.user.id }],
+		});
+		if (!twoFactorRecord) {
+			throw new Error("Expected two factor row");
+		}
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorRecord.secret,
+		});
+		const code = await createOTP(secret).totp();
+
+		const verifyRes = await auth.api.verifyTOTP({
+			headers,
+			body: {
+				code,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		expect(onLinkAccount).not.toHaveBeenCalled();
+	});
+
 	it("should link in social sign on", async () => {
 		const headers = new Headers();
 		await client.signIn.anonymous({
@@ -143,7 +401,8 @@ describe("anonymous", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const state = new URL(singInRes.data?.url || "").searchParams.get("state");
+		expectNoTwoFactorChallenge(singInRes.data);
+		const state = new URL(singInRes.data.url || "").searchParams.get("state");
 		await client.$fetch("/callback/google", {
 			query: {
 				state,
@@ -385,25 +644,8 @@ describe("anonymous", async () => {
 			return {
 				path: "/sign-in/anonymous",
 				context: {
-					responseHeaders: new Headers({
-						"set-cookie":
-							"better-auth.session_token=new-token.value; Path=/; HttpOnly",
-					}),
-					authCookies: {
-						sessionToken: {
-							name: "better-auth.session_token",
-							options: {},
-						},
-						sessionData: {
-							name: "better-auth.session_data",
-							options: {},
-						},
-						dontRememberToken: {
-							name: "better-auth.dont_remember",
-							options: {},
-						},
-					},
-					newSession: {
+					responseHeaders: new Headers(),
+					finalizedSignIn: {
 						user: newSessionUser,
 						session: {
 							token: "new-token",
@@ -415,6 +657,7 @@ describe("anonymous", async () => {
 					options: {},
 					secret: "secret",
 					setNewSession: vi.fn(),
+					setFinalizedSignIn: vi.fn(),
 				},
 				headers: new Headers(),
 				query: {},

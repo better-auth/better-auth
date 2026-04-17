@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
+import { twoFactor } from "../../plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge } from "../../test-utils/two-factor";
+import { createEmailVerificationToken } from "./email-verification";
 
 describe("Email Verification", async () => {
 	const mockSendEmail = vi.fn();
@@ -48,7 +52,12 @@ describe("Email Verification", async () => {
 				token,
 			},
 		});
-		expect(res.data?.status).toBe(true);
+		const data = res.data;
+		if (!data) {
+			throw new Error("Expected verification response");
+		}
+		expectNoTwoFactorChallenge(data);
+		expect(data.status).toBe(true);
 	});
 
 	it("should redirect to callback", async () => {
@@ -174,8 +183,12 @@ describe("Email Verification", async () => {
 				token,
 			},
 		});
-
-		expect(res.data?.status).toBe(true);
+		const data = res.data;
+		if (!data) {
+			throw new Error("Expected verification response");
+		}
+		expectNoTwoFactorChallenge(data);
+		expect(data.status).toBe(true);
 		expect(afterEmailVerificationMock).toHaveBeenCalledWith(
 			expect.objectContaining({ email: testUser.email }),
 			expect.any(Object),
@@ -209,8 +222,12 @@ describe("Email Verification", async () => {
 				token,
 			},
 		});
-
-		expect(res.data?.status).toBe(true);
+		const data = res.data;
+		if (!data) {
+			throw new Error("Expected verification response");
+		}
+		expectNoTwoFactorChallenge(data);
+		expect(data.status).toBe(true);
 		expect(beforeEmailVerificationMock).toHaveBeenCalledWith(
 			expect.objectContaining({ email: testUser.email }),
 			expect.any(Object),
@@ -244,8 +261,12 @@ describe("Email Verification", async () => {
 				token,
 			},
 		});
-
-		expect(res.data?.status).toBe(true);
+		const data = res.data;
+		if (!data) {
+			throw new Error("Expected verification response");
+		}
+		expectNoTwoFactorChallenge(data);
+		expect(data.status).toBe(true);
 		expect(afterEmailVerificationMock).toHaveBeenCalledWith(
 			expect.objectContaining({ email: testUser.email, emailVerified: true }),
 			expect.any(Object),
@@ -347,6 +368,231 @@ describe("Email Verification", async () => {
 
 		expect(res.data?.status).toBe(true);
 		expect(mockSendEmailLocal).not.toHaveBeenCalled();
+	});
+});
+
+describe("Email Verification two-factor challenge", async () => {
+	it("should redirect auto sign-in through two-factor for enabled users", async () => {
+		let verificationToken = "";
+		const { client, auth, db, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				autoSignInAfterVerification: true,
+				async sendVerificationEmail({ token }) {
+					verificationToken = token;
+				},
+			},
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		await client.verifyEmail(
+			{
+				query: {
+					token: verificationToken,
+					callbackURL: "/dashboard",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					expect(context.response.headers.get("set-auth-token")).toBeNull();
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					const redirectURL = new URL(location!, "http://localhost:3000");
+					expect(redirectURL.pathname).toBe("/dashboard");
+					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+					expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+					expect(redirectURL.searchParams.get("methods")).toBe("otp");
+
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+				},
+			},
+		);
+
+		const context = await auth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		expect(user?.user.id).toBeDefined();
+		const sessions = await context.internalAdapter.listSessions(user!.user.id);
+		expect(sessions).toHaveLength(0);
+	});
+
+	it("should challenge change-email verification links before reopening a session", async () => {
+		const newEmail = "challenge-change-email@example.com";
+		const { client, auth, db, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		const context = await auth.$context;
+		const originalUser = await context.internalAdapter.findUserByEmail(
+			testUser.email,
+		);
+		if (!originalUser) {
+			throw new Error("Expected test user");
+		}
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const verificationToken = await createEmailVerificationToken(
+			context.secret,
+			testUser.email,
+			newEmail,
+			undefined,
+			{ requestType: "change-email-verification" },
+		);
+		const beforeSessions = await context.internalAdapter.listSessions(
+			originalUser.user.id,
+		);
+
+		await client.verifyEmail(
+			{
+				query: {
+					token: verificationToken,
+					callbackURL: "/settings",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					expect(context.response.headers.get("set-auth-token")).toBeNull();
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					const redirectURL = new URL(location!, "http://localhost:3000");
+					expect(redirectURL.pathname).toBe("/settings");
+					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+					expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+					expect(redirectURL.searchParams.get("methods")).toBe("otp");
+
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(cookies.get("better-auth.session_token")).toBeUndefined();
+					expect(cookies.get("better-auth.session_data")).toBeUndefined();
+				},
+			},
+		);
+
+		const afterSessions = await context.internalAdapter.listSessions(
+			originalUser.user.id,
+		);
+		expect(afterSessions).toHaveLength(beforeSessions.length);
+	});
+
+	it("should challenge legacy change-email verification links before reopening a session", async () => {
+		let followUpVerificationToken = "";
+		const newEmail = "legacy-change-email@example.com";
+		const { client, auth, db, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ token }) {
+					followUpVerificationToken = token;
+				},
+			},
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const context = await auth.$context;
+		const originalUser = await context.internalAdapter.findUserByEmail(
+			testUser.email,
+		);
+		if (!originalUser) {
+			throw new Error("Expected test user");
+		}
+
+		const legacyToken = await createEmailVerificationToken(
+			context.secret,
+			testUser.email,
+			newEmail,
+		);
+		const beforeSessions = await context.internalAdapter.listSessions(
+			originalUser.user.id,
+		);
+
+		await client.verifyEmail(
+			{
+				query: {
+					token: legacyToken,
+					callbackURL: "/settings",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					expect(context.response.headers.get("set-auth-token")).toBeNull();
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+					const redirectURL = new URL(location!, "http://localhost:3000");
+					expect(redirectURL.pathname).toBe("/settings");
+					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+					expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+					expect(redirectURL.searchParams.get("methods")).toBe("otp");
+
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(cookies.get("better-auth.session_token")).toBeUndefined();
+					expect(cookies.get("better-auth.session_data")).toBeUndefined();
+				},
+			},
+		);
+
+		expect(followUpVerificationToken).toBeTruthy();
+		const afterSessions = await context.internalAdapter.listSessions(
+			originalUser.user.id,
+		);
+		expect(afterSessions).toHaveLength(beforeSessions.length);
 	});
 });
 

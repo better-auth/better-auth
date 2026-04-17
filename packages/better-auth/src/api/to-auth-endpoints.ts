@@ -27,6 +27,7 @@ import {
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
 } from "../context/helpers";
+import { expireSessionCookiesInHeaders } from "../cookies";
 import { isAPIError } from "../utils/is-api-error";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
@@ -53,6 +54,61 @@ type Hook = {
 	matcher: (context: HookEndpointContext) => boolean;
 	handler: AuthMiddleware;
 };
+
+function normalizeHeaders(
+	headers:
+		| Headers
+		| Record<string, string>
+		| [string, string][]
+		| null
+		| undefined,
+): Headers {
+	if (headers instanceof Headers) {
+		return headers;
+	}
+	return new Headers(headers ?? undefined);
+}
+
+async function rollBackFinalizedSignIn(
+	context: InternalContext,
+): Promise<void> {
+	const finalizedSignIn = context.context.finalizedSignIn;
+	if (!finalizedSignIn) {
+		return;
+	}
+	try {
+		await context.context.internalAdapter.deleteSession(
+			finalizedSignIn.session.token,
+		);
+	} catch (error) {
+		context.context.logger.error(
+			"Failed to roll back finalized sign-in after request failure",
+			error,
+		);
+	}
+	// Finalizers ran before after-hooks, so the session `Set-Cookie` is
+	// already on the outgoing response. Append an expired cookie so the
+	// browser discards the now-orphaned token instead of 401-ing on it.
+	const responseHeaders = context.context.responseHeaders;
+	if (responseHeaders) {
+		expireSessionCookiesInHeaders(responseHeaders, context.context.authCookies);
+	}
+	context.context.setNewSession(null);
+	context.context.setFinalizedSignIn(null);
+}
+
+function isSuccessfulAuthFinalization(
+	response: unknown,
+	context: InternalContext,
+): boolean {
+	if (!context.context.finalizedSignIn) {
+		return false;
+	}
+	if (!isAPIError(response)) {
+		return true;
+	}
+	return response.statusCode >= 300 && response.statusCode < 400;
+}
 
 const hooksSourceWeakMap = new WeakMap<
 	AuthMiddleware,
@@ -146,6 +202,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
 
+				const successFinalizers: Array<() => Promise<void> | void> = [];
 				let internalContext: InternalContext = {
 					...context,
 					context: {
@@ -153,6 +210,10 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 						returned: undefined,
 						responseHeaders: undefined,
 						session: null,
+						successFinalizers,
+						addSuccessFinalizer(finalizer) {
+							successFinalizers.push(finalizer);
+						},
 					},
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
@@ -225,7 +286,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 										},
 										() => (endpoint as any)(internalContext as any),
 									),
-							).catch((e: any) => {
+							).catch(async (e: any) => {
 								if (isAPIError(e)) {
 									/**
 									 * API Errors from response are caught
@@ -234,9 +295,13 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 									return {
 										response: e,
 										status: e.statusCode,
-										headers: e.headers ? new Headers(e.headers) : null,
+										headers: normalizeHeaders(e.headers),
 									};
 								}
+								// Non-APIError throw escapes the handler path before
+								// after-hooks get a chance to run; clean up any session
+								// row `finalizeSignIn` may have already persisted.
+								await rollBackFinalizedSignIn(internalContext);
 								throw e;
 							})) as {
 								headers: Headers;
@@ -250,51 +315,100 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 							}
 
 							internalContext.context.returned = result.response;
+							result.headers = normalizeHeaders(result.headers);
 							internalContext.context.responseHeaders = result.headers;
+							try {
+								/**
+								 * Commit session cookies BEFORE after-hooks run so plugins
+								 * that read `set-cookie` from `responseHeaders` (bearer,
+								 * oidc-provider, mcp) observe the freshly issued session.
+								 * If an after-hook converts the response into an error, the
+								 * DB row is rolled back below; the emitted cookie then
+								 * references a dead session and is rejected on next use.
+								 */
+								const finalizationWasSuccessful = isSuccessfulAuthFinalization(
+									result.response,
+									internalContext,
+								);
+								if (finalizationWasSuccessful) {
+									for (const finalizer of internalContext.context
+										.successFinalizers ?? []) {
+										await finalizer();
+									}
+								}
 
-							const after = await runAfterHooks(
-								internalContext,
-								afterHooks,
-								endpoint,
-								operationId,
-							);
+								const preHookResponse = result.response;
+								const after = await runAfterHooks(
+									internalContext,
+									afterHooks,
+									endpoint,
+									operationId,
+								);
 
-							if (after.response) {
-								result.response = after.response;
-							}
+								if (after.response) {
+									result.response = after.response;
+								}
 
-							if (
-								isAPIError(result.response) &&
-								shouldPublishLog(authContext.logger.level, "debug")
-							) {
-								// inherit stack from errorStack if debug mode is enabled
-								result.response.stack = result.response.errorStack;
-							}
+								/**
+								 * Only roll back when the response actually represents a
+								 * failed sign-in. A successful finalization whose response
+								 * happens to be an APIError (e.g. a 3xx redirect) is kept as-is.
+								 * If an after-hook swapped the response for something else,
+								 * rollback if that new value is an error.
+								 */
+								const afterHooksReplacedResponse =
+									result.response !== preHookResponse;
+								const shouldRollback =
+									isAPIError(result.response) &&
+									(!finalizationWasSuccessful || afterHooksReplacedResponse);
+								if (shouldRollback) {
+									await rollBackFinalizedSignIn(internalContext);
+								}
 
-							if (isAPIError(result.response) && !shouldReturnResponse) {
-								throw result.response;
-							}
+								if (
+									isAPIError(result.response) &&
+									shouldPublishLog(authContext.logger.level, "debug")
+								) {
+									// inherit stack from errorStack if debug mode is enabled
+									result.response.stack = result.response.errorStack;
+								}
 
-							const response = shouldReturnResponse
-								? toResponse(result.response, {
+								if (isAPIError(result.response) && !shouldReturnResponse) {
+									throw result.response;
+								}
+
+								let response: unknown;
+								if (shouldReturnResponse) {
+									response = toResponse(result.response, {
 										headers: result.headers,
 										status: result.status,
-									})
-								: context?.returnHeaders
-									? context?.returnStatus
-										? {
-												headers: result.headers,
-												response: result.response,
-												status: result.status,
-											}
-										: {
-												headers: result.headers,
-												response: result.response,
-											}
-									: context?.returnStatus
-										? { response: result.response, status: result.status }
-										: result.response;
-							return response;
+									});
+								} else if (context?.returnHeaders) {
+									if (context?.returnStatus) {
+										response = {
+											headers: result.headers,
+											response: result.response,
+											status: result.status,
+										};
+									} else {
+										response = {
+											headers: result.headers,
+											response: result.response,
+										};
+									}
+								} else if (context?.returnStatus) {
+									response = {
+										response: result.response,
+										status: result.status,
+									};
+								} else {
+									response = result.response;
+								}
+								return response;
+							} catch (error) {
+								await rollBackFinalizedSignIn(internalContext);
+								throw error;
+							}
 						}),
 				);
 			};

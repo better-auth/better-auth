@@ -350,6 +350,14 @@ Most of the features of Better Auth will not work correctly.`,
 			this.newSession = session;
 		},
 		newSession: null,
+		setFinalizedSignIn(signIn) {
+			this.finalizedSignIn = signIn;
+		},
+		finalizedSignIn: null,
+		setSignInAttempt(attempt) {
+			this.signInAttempt = attempt;
+		},
+		signInAttempt: null,
 		adapter: adapter,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,

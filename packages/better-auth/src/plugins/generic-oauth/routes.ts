@@ -10,7 +10,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { resolveSignInWithRedirect } from "../../auth/resolve-sign-in";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
@@ -510,7 +510,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw ctx.redirect(toRedirectTo);
 			}
 
-			const result = await handleOAuthUserInfo(ctx, {
+			const oauthResult = await handleOAuthUserInfo(ctx, {
 				userInfo,
 				account: {
 					providerId: providerConfig.providerId,
@@ -525,24 +525,32 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				overrideUserInfo: providerConfig.overrideUserInfo,
 			});
 
-			if (result.error) {
-				return redirectOnError(result.error.split(" ").join("_"));
+			if (oauthResult.error) {
+				return redirectOnError(oauthResult.error.split(" ").join("_"));
 			}
-			const { session, user } = result.data!;
-			await setSessionCookie(ctx, {
-				session,
-				user,
+			const user = oauthResult.data!;
+			const redirectTarget = (() => {
+				try {
+					const url = oauthResult.isRegister
+						? newUserURL || callbackURL
+						: callbackURL;
+					return url.toString();
+				} catch {
+					return oauthResult.isRegister
+						? newUserURL || callbackURL
+						: callbackURL;
+				}
+			})();
+			await resolveSignInWithRedirect(ctx, {
+				signIn: {
+					user,
+				},
+				redirectTarget,
+				onFailedToCreateSession() {
+					return redirectOnError("failed_to_create_session");
+				},
 			});
-			let toRedirectTo: string;
-			try {
-				const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
-				toRedirectTo = url.toString();
-			} catch {
-				toRedirectTo = result.isRegister
-					? newUserURL || callbackURL
-					: callbackURL;
-			}
-			throw ctx.redirect(toRedirectTo);
+			throw ctx.redirect(redirectTarget);
 		},
 	);
 

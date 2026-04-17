@@ -8,6 +8,7 @@ import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 } from "../../api";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
@@ -518,17 +519,31 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			);
 
 			if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
-				const session = await ctx.context.internalAdapter.createSession(
-					updatedUser.id,
-				);
-				await setSessionCookie(ctx, {
-					session,
+				const currentSession = await getSessionFromCtx(ctx);
+				if (currentSession?.user.id === updatedUser.id) {
+					await setSessionCookie(ctx, {
+						session: currentSession.session,
+						user: {
+							...currentSession.user,
+							emailVerified: true,
+						},
+					});
+					return ctx.json({
+						status: true,
+						token: currentSession.session.token,
+						user: parseUserOutput(ctx.context.options, updatedUser),
+					});
+				}
+				const result = await resolveSignIn(ctx, {
 					user: updatedUser,
 				});
+				if (result.type === "challenge") {
+					return ctx.json(result);
+				}
 				return ctx.json({
 					status: true,
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, updatedUser),
+					token: result.session.token,
+					user: parseUserOutput(ctx.context.options, result.user),
 				});
 			}
 			const currentSession = await getSessionFromCtx(ctx);
@@ -658,16 +673,15 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					name: name || "",
 					image,
 				});
-				const session = await ctx.context.internalAdapter.createSession(
-					newUser.id,
-				);
-				await setSessionCookie(ctx, {
-					session,
+				const result = await resolveSignIn(ctx, {
 					user: newUser,
 				});
+				if (result.type === "challenge") {
+					return ctx.json(result);
+				}
 				return ctx.json({
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, newUser),
+					token: result.session.token,
+					user: parseUserOutput(ctx.context.options, result.user),
 				});
 			}
 
@@ -677,16 +691,15 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
-			);
-			await setSessionCookie(ctx, {
-				session,
+			const result = await resolveSignIn(ctx, {
 				user: user.user,
 			});
+			if (result.type === "challenge") {
+				return ctx.json(result);
+			}
 			return ctx.json({
-				token: session.token,
-				user: parseUserOutput(ctx.context.options, user.user),
+				token: result.session.token,
+				user: parseUserOutput(ctx.context.options, result.user),
 			});
 		},
 	);

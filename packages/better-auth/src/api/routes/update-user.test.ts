@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import type { Account, Session } from "../../types";
 
 describe("updateUser", async () => {
@@ -97,7 +97,12 @@ describe("updateUser", async () => {
 					token: token,
 				},
 			});
-			expect(res.data?.status).toBe(true);
+			const data = res.data;
+			if (!data) {
+				throw new Error("Expected verification response");
+			}
+			expectNoTwoFactorChallenge(data);
+			expect(data.status).toBe(true);
 
 			// This should trigger sending verification to the NEW email.
 			// emailVerification.sendVerificationEmail should have been called.
@@ -114,7 +119,12 @@ describe("updateUser", async () => {
 					token: emailVerificationToken,
 				},
 			});
-			expect(res2.data?.status).toBe(true);
+			const data2 = res2.data;
+			if (!data2) {
+				throw new Error("Expected verification response");
+			}
+			expectNoTwoFactorChallenge(data2);
+			expect(data2.status).toBe(true);
 
 			// NOW user email should be updated
 			const sessionRes2 = await client.getSession();
@@ -137,7 +147,8 @@ describe("updateUser", async () => {
 			email: newEmail,
 			password: "newPassword",
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.user).toBeDefined();
 		const signInCurrentPassword = await client.signIn.email({
 			email: testUser.email, // Old email
 			password: testUser.password,

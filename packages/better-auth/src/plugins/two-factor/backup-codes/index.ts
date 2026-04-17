@@ -136,6 +136,10 @@ export async function getBackupCodes(
 }
 
 const verifyBackupCodeBodySchema = z.object({
+	attemptId: z.string().optional().meta({
+		description:
+			"Opaque identifier for a paused sign-in attempt. Required when verifying a sign-in attempt without relying on the two-factor cookie.",
+	}),
 	code: z.string().meta({
 		description: `A backup code to verify. Eg: "123456"`,
 	}),

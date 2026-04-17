@@ -4,6 +4,50 @@ import type {
 	ClientFetchOption,
 } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
+import type { TwoFactorMethod } from "../two-factor/types";
+
+type TwoFactorChallenge = {
+	type: "two-factor";
+	attemptId: string;
+	availableMethods: TwoFactorMethod[];
+};
+
+type SignInChallengeResponse = {
+	type: "challenge";
+	challenge: TwoFactorChallenge;
+};
+
+function isTwoFactorChallenge(
+	value: unknown,
+): value is SignInChallengeResponse {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const record = value as {
+		type?: unknown;
+		challenge?: { type?: unknown };
+	};
+	return record.type === "challenge" && record.challenge?.type === "two-factor";
+}
+
+function getTwoFactorChallengeFromResponse(
+	response: unknown,
+): TwoFactorChallenge | null {
+	if (isTwoFactorChallenge(response)) {
+		return response.challenge;
+	}
+
+	if (
+		response &&
+		typeof response === "object" &&
+		"data" in response &&
+		isTwoFactorChallenge((response as { data?: unknown }).data)
+	) {
+		return (response as { data: SignInChallengeResponse }).data.challenge;
+	}
+
+	return null;
+}
 
 declare global {
 	interface Window {
@@ -151,6 +195,17 @@ export interface GoogleOneTapActionOptions
 	 */
 	callbackURL?: string | undefined;
 	/**
+	 * Called when the server pauses sign-in behind a 2FA challenge.
+	 * Use this to render a custom verification screen instead of relying on the
+	 * fallback redirect to `callbackURL`.
+	 */
+	onTwoFactorRedirect?:
+		| ((context: {
+				attemptId: string;
+				availableMethods: TwoFactorMethod[];
+		  }) => void | Promise<void>)
+		| undefined;
+	/**
 	 * Optional callback that receives the prompt notification if (or when) the prompt is dismissed or skipped.
 	 * This lets you render an alternative UI (e.g. a Google Sign-In button) to restart the process.
 	 */
@@ -189,6 +244,18 @@ const noRetryReasons = {
 	dismissed: ["credential_returned", "cancel_called"],
 	skipped: ["user_cancel", "tap_outside"],
 } as const;
+
+function buildTwoFactorRedirectURL(
+	callbackURL: string | undefined,
+	currentURL: string,
+	challenge: TwoFactorChallenge,
+) {
+	const redirectURL = new URL(callbackURL ?? "/", currentURL);
+	redirectURL.searchParams.set("challenge", "two-factor");
+	redirectURL.searchParams.set("attemptId", challenge.attemptId);
+	redirectURL.searchParams.set("methods", challenge.availableMethods.join(","));
+	return redirectURL.toString();
+}
 
 export const oneTapClient = (options: GoogleOneTapOptions) => {
 	return {
@@ -249,12 +316,38 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						}
 
 						async function callback(idToken: string) {
-							await $fetch("/one-tap/callback", {
+							const currentURL = window.location.href;
+							const response = await $fetch("/one-tap/callback", {
 								method: "POST",
 								body: { idToken },
 								...opts?.fetchOptions,
 								...fetchOptions,
 							});
+							const challenge = getTwoFactorChallengeFromResponse(response);
+
+							if (challenge) {
+								if (opts?.onTwoFactorRedirect) {
+									await opts.onTwoFactorRedirect({
+										attemptId: challenge.attemptId,
+										availableMethods: challenge.availableMethods,
+									});
+									return;
+								}
+
+								/**
+								 * Another client plugin may already have handled the paused
+								 * sign-in. Only apply the built-in redirect fallback if the
+								 * current location is unchanged.
+								 */
+								if (window.location.href === currentURL) {
+									window.location.href = buildTwoFactorRedirectURL(
+										opts?.callbackURL,
+										currentURL,
+										challenge,
+									);
+								}
+								return;
+							}
 
 							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
 								window.location.href = opts?.callbackURL ?? "/";
@@ -295,12 +388,33 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					}
 
 					async function callback(idToken: string) {
-						await $fetch("/one-tap/callback", {
+						const currentURL = window.location.href;
+						const response = await $fetch("/one-tap/callback", {
 							method: "POST",
 							body: { idToken },
 							...opts?.fetchOptions,
 							...fetchOptions,
 						});
+						const challenge = getTwoFactorChallengeFromResponse(response);
+
+						if (challenge) {
+							if (opts?.onTwoFactorRedirect) {
+								await opts.onTwoFactorRedirect({
+									attemptId: challenge.attemptId,
+									availableMethods: challenge.availableMethods,
+								});
+								return;
+							}
+
+							if (window.location.href === currentURL) {
+								window.location.href = buildTwoFactorRedirectURL(
+									opts?.callbackURL,
+									currentURL,
+									challenge,
+								);
+							}
+							return;
+						}
 
 						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
 							window.location.href = opts?.callbackURL ?? "/";

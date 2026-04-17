@@ -321,6 +321,12 @@ function SignIn({
 
 To handle already signed-in users, you can use the `electron.transferUser` method on the client and `electronTransferUser` on the server to transfer the user to the Electron app. [See Example](https://github.com/better-auth/better-auth/blob/main/demo/nextjs/app/\(auth\)/sign-in/_components/electron.tsx)
 
+<Callout type="warn">
+  The Electron browser-auth handoff currently requires sign-in to be fully completed before the authorization code is minted. If your app uses the [2FA plugin](/docs/plugins/2fa), the native Electron handoff does not yet continue `/two-factor/verify-*` back into Electron.
+
+  Complete the 2FA challenge in the browser first, then use `electron.transferUser()` from an already authenticated web session to hand the user off to Electron.
+</Callout>
+
 ### Handling Authentication in Electron
 
 In your Electron renderer process, you can use the IPC bridges exposed by the preload script.
@@ -443,6 +449,10 @@ if (data?.electron_authorization_code) {
   // Display the code to the user
 }
 ```
+
+<Callout type="warn">
+  `electron_authorization_code` is only available after the browser flow has an authenticated session. If the browser flow stops on a 2FA challenge, no authorization code is generated yet.
+</Callout>
 
 **Electron:**
 

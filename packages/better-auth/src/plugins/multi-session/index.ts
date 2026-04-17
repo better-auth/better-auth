@@ -9,7 +9,6 @@ import {
 	deleteSessionCookie,
 	expireCookie,
 	parseCookies,
-	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	setSessionCookie,
 } from "../../cookies";
@@ -316,8 +315,6 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookieString = ctx.context.responseHeaders?.get("set-cookie");
-						if (!cookieString) return;
 						const newSession = ctx.context.newSession;
 						if (!newSession) return;
 
@@ -325,9 +322,8 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						const sessionToken = newSession.session.token;
 						const cookieName = `${sessionCookieConfig.name}_multi-${sessionToken.toLowerCase()}`;
 
-						const setCookies = parseSetCookieHeader(cookieString);
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
-						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
+						if (cookies.get(cookieName)) return;
 
 						const multiSessionKeys = Object.keys(
 							Object.fromEntries(cookies),
@@ -352,9 +348,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						}
 
 						const currentCount =
-							multiSessionKeys.length -
-							tokensToDelete.length +
-							(cookieString.includes(sessionCookieConfig.name) ? 1 : 0);
+							multiSessionKeys.length - tokensToDelete.length + 1;
 
 						if (currentCount > opts.maximumSessions) return;
 

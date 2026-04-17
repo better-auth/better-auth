@@ -1,11 +1,14 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
+import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
 import { organization } from "better-auth/plugins";
+import { twoFactor } from "better-auth/plugins/two-factor";
 import { getTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import { SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX } from "./constants";
 
 const server = new OAuth2Server();
 
@@ -1202,6 +1205,702 @@ describe("SSO shared redirectURI", async () => {
 			},
 		});
 		expect(session.data?.user.email).toBe("shared-redirect@test.com");
+	});
+
+	it("should redirect shared OIDC callback into two-factor challenge for enabled users", async () => {
+		const {
+			auth: twoFactorAuth,
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			db,
+			signInWithTestUser,
+		} = await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					redirectURI: "/sso/callback",
+				}),
+				organization(),
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		const { headers: adminHeaders } = await signInWithTestUser();
+		await twoFactorAuth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "shared-redirect.com",
+				oidcConfig: {
+					clientId: "shared-test",
+					clientSecret: "shared-test-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "shared-test",
+			},
+			headers: adminHeaders,
+		});
+
+		const localClient = createAuthClient({
+			plugins: [ssoClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const linkHeaders = new Headers();
+		const initialSignIn = await localClient.signIn.sso({
+			email: "user@shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: localCookieSetter(linkHeaders),
+			},
+		});
+
+		let initialLocation: string | null = null;
+		await betterFetch(initialSignIn.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				initialLocation = context.response.headers.get("location");
+			},
+		});
+		if (!initialLocation) {
+			throw new Error("No initial redirect location found");
+		}
+
+		await betterFetch(initialLocation, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers: linkHeaders,
+			onError(context) {
+				localCookieSetter(linkHeaders)(context);
+			},
+		});
+
+		const context = await twoFactorAuth.$context;
+		const existingUser = await context.internalAdapter.findUserByEmail(
+			"shared-redirect@test.com",
+		);
+		if (!existingUser) {
+			throw new Error("Expected linked SSO user");
+		}
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "id", value: existingUser.user.id }],
+		});
+		const beforeSessions = await context.internalAdapter.listSessions(
+			existingUser.user.id,
+		);
+
+		const headers = new Headers();
+		const res = await localClient.signIn.sso({
+			email: "user@shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: localCookieSetter(headers),
+			},
+		});
+
+		let location: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+		if (!location) {
+			throw new Error("No redirect location found");
+		}
+
+		let callbackURL = "";
+		let setCookieHeader = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				setCookieHeader = context.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		const redirectURL = new URL(callbackURL, "http://localhost:3000");
+		expect(redirectURL.pathname).toBe("/dashboard");
+		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+		expect(redirectURL.searchParams.get("attemptId")).toBeTruthy();
+		expect(redirectURL.searchParams.get("methods")).toBe("otp");
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+
+		const sessions = await context.internalAdapter.listSessions(
+			existingUser.user.id,
+		);
+		expect(sessions).toHaveLength(beforeSessions.length);
+	});
+
+	it("should defer provider org assignment until two-factor verification completes", async () => {
+		let otp = "";
+		const {
+			auth: twoFactorAuth,
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			db,
+			signInWithTestUser,
+		} = await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					redirectURI: "/sso/callback",
+				}),
+				organization(),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const organizationRecord = await twoFactorAuth.api.createOrganization({
+			body: {
+				name: "Shared Redirect Org",
+				slug: "shared-redirect-org",
+			},
+			headers: adminHeaders,
+		});
+		await twoFactorAuth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "shared-redirect.com",
+				oidcConfig: {
+					clientId: "shared-test",
+					clientSecret: "shared-test-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "shared-test",
+				organizationId: organizationRecord.id,
+			},
+			headers: adminHeaders,
+		});
+
+		const localClient = createAuthClient({
+			plugins: [ssoClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const linkHeaders = new Headers();
+		const initialSignIn = await localClient.signIn.sso({
+			email: "user@shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: localCookieSetter(linkHeaders),
+			},
+		});
+
+		let initialLocation: string | null = null;
+		await betterFetch(initialSignIn.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				initialLocation = context.response.headers.get("location");
+			},
+		});
+		if (!initialLocation) {
+			throw new Error("No initial redirect location found");
+		}
+
+		await betterFetch(initialLocation, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers: linkHeaders,
+			onError(context) {
+				localCookieSetter(linkHeaders)(context);
+			},
+		});
+
+		const context = await twoFactorAuth.$context;
+		const existingUser = await context.internalAdapter.findUserByEmail(
+			"shared-redirect@test.com",
+		);
+		if (!existingUser) {
+			throw new Error("Expected linked SSO user");
+		}
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "id", value: existingUser.user.id }],
+		});
+		await db.delete({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: organizationRecord.id },
+				{ field: "userId", value: existingUser.user.id },
+			],
+		});
+
+		const headers = new Headers();
+		const res = await localClient.signIn.sso({
+			email: "user@shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: localCookieSetter(headers),
+			},
+		});
+
+		let location: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+		if (!location) {
+			throw new Error("No redirect location found");
+		}
+
+		let callbackURL = "";
+		let setCookieHeader = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				setCookieHeader = context.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		const redirectURL = new URL(callbackURL, "http://localhost:3000");
+		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
+		const attemptId = redirectURL.searchParams.get("attemptId");
+		expect(attemptId).toBeTruthy();
+		const pendingAssignment =
+			await context.internalAdapter.findVerificationValue(
+				`${SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId!}`,
+			);
+		expect(pendingAssignment?.value).toBeDefined();
+		expect(pendingAssignment?.value).not.toContain("shared-test-secret");
+		expect(pendingAssignment?.value).not.toContain("clientSecret");
+		expect(pendingAssignment?.value).not.toContain("access_token");
+
+		const pendingOrg = await twoFactorAuth.api.getFullOrganization({
+			query: {
+				organizationId: organizationRecord.id,
+			},
+			headers: adminHeaders,
+		});
+		expect(
+			pendingOrg?.members.find(
+				(member) => member.user.id === existingUser.user.id,
+			),
+		).toBeUndefined();
+
+		const challengeHeaders = new Headers();
+		setCookieToHeader(challengeHeaders)({
+			response: new Response(null, {
+				headers: {
+					"Set-Cookie": setCookieHeader,
+				},
+			}),
+		});
+
+		await twoFactorAuth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyResponse = await twoFactorAuth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				code: otp,
+			},
+			asResponse: true,
+		});
+		expect(verifyResponse.status).toBe(200);
+
+		const finalizedOrg = await twoFactorAuth.api.getFullOrganization({
+			query: {
+				organizationId: organizationRecord.id,
+			},
+			headers: adminHeaders,
+		});
+		expect(
+			finalizedOrg?.members.find(
+				(member) => member.user.id === existingUser.user.id,
+			),
+		).toMatchObject({
+			role: "member",
+		});
+	});
+
+	it("should keep pending provider org assignment when replay fails after two-factor verification", async () => {
+		let otp = "";
+		const getRole = vi.fn().mockResolvedValue("member");
+		const {
+			auth: twoFactorAuth,
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			db,
+			signInWithTestUser,
+		} = await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					redirectURI: "/sso/callback",
+					organizationProvisioning: {
+						getRole,
+					},
+				}),
+				organization(),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const organizationRecord = await twoFactorAuth.api.createOrganization({
+			body: {
+				name: "Shared Retry Org",
+				slug: "shared-retry-org",
+			},
+			headers: adminHeaders,
+		});
+		await twoFactorAuth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "retry-shared-redirect.com",
+				oidcConfig: {
+					clientId: "shared-test",
+					clientSecret: "shared-test-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "shared-retry-test",
+				organizationId: organizationRecord.id,
+			},
+			headers: adminHeaders,
+		});
+
+		const localClient = createAuthClient({
+			plugins: [ssoClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const linkHeaders = new Headers();
+		const initialSignIn = await localClient.signIn.sso({
+			email: "user@retry-shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: localCookieSetter(linkHeaders),
+			},
+		});
+
+		let initialLocation: string | null = null;
+		await betterFetch(initialSignIn.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				initialLocation = context.response.headers.get("location");
+			},
+		});
+		if (!initialLocation) {
+			throw new Error("No initial redirect location found");
+		}
+
+		await betterFetch(initialLocation, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers: linkHeaders,
+			onError(context) {
+				localCookieSetter(linkHeaders)(context);
+			},
+		});
+
+		const context = await twoFactorAuth.$context;
+		const existingUser = await context.internalAdapter.findUserByEmail(
+			"shared-redirect@test.com",
+		);
+		if (!existingUser) {
+			throw new Error("Expected linked SSO user");
+		}
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "id", value: existingUser.user.id }],
+		});
+		await db.delete({
+			model: "member",
+			where: [
+				{ field: "organizationId", value: organizationRecord.id },
+				{ field: "userId", value: existingUser.user.id },
+			],
+		});
+
+		const headers = new Headers();
+		const res = await localClient.signIn.sso({
+			email: "user@retry-shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: localCookieSetter(headers),
+			},
+		});
+
+		let location: string | null = null;
+		let setCookieHeader = "";
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+		if (!location) {
+			throw new Error("No redirect location found");
+		}
+
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl: localFetch,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				setCookieHeader = context.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		const attemptId = new URL(
+			callbackURL,
+			"http://localhost:3000",
+		).searchParams.get("attemptId");
+		expect(attemptId).toBeTruthy();
+
+		const challengeHeaders = new Headers();
+		setCookieToHeader(challengeHeaders)({
+			response: new Response(null, {
+				headers: {
+					"Set-Cookie": setCookieHeader,
+				},
+			}),
+		});
+		await twoFactorAuth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+		expect(otp).toHaveLength(6);
+		const sessionsBeforeFailedVerify =
+			await context.internalAdapter.listSessions(existingUser.user.id);
+		getRole.mockRejectedValueOnce(new Error("role resolution failed"));
+
+		await expect(
+			twoFactorAuth.api.verifyTwoFactorOTP({
+				headers: challengeHeaders,
+				body: {
+					code: otp,
+				},
+			}),
+		).rejects.toThrow("role resolution failed");
+
+		const pendingAttempt = await context.internalAdapter.findSignInAttempt(
+			attemptId!,
+		);
+		expect(pendingAttempt?.id).toBe(attemptId);
+		const sessionsAfterFailedVerify =
+			await context.internalAdapter.listSessions(existingUser.user.id);
+		expect(sessionsAfterFailedVerify).toHaveLength(
+			sessionsBeforeFailedVerify.length,
+		);
+		const pendingAssignment =
+			await context.internalAdapter.findVerificationValue(
+				`${SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${attemptId!}`,
+			);
+		expect(pendingAssignment?.value).toBeDefined();
+
+		getRole.mockResolvedValueOnce("member");
+		const retryResponse = await twoFactorAuth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				code: otp,
+			},
+		});
+		expect(retryResponse.user.id).toBe(existingUser.user.id);
+
+		const finalizedOrg = await twoFactorAuth.api.getFullOrganization({
+			query: {
+				organizationId: organizationRecord.id,
+			},
+			headers: adminHeaders,
+		});
+		expect(
+			finalizedOrg?.members.find(
+				(member) => member.user.id === existingUser.user.id,
+			),
+		).toMatchObject({
+			role: "member",
+		});
+	});
+
+	it("should redirect shared OIDC callback failures when final session creation fails", async () => {
+		const {
+			auth: localAuth,
+			customFetchImpl: localFetch,
+			cookieSetter: localCookieSetter,
+			signInWithTestUser,
+		} = await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					redirectURI: "/sso/callback",
+				}),
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		const { headers: adminHeaders } = await signInWithTestUser();
+		await localAuth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "shared-redirect.com",
+				oidcConfig: {
+					clientId: "shared-test",
+					clientSecret: "shared-test-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "shared-test",
+			},
+			headers: adminHeaders,
+		});
+
+		const localClient = createAuthClient({
+			plugins: [ssoClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: localFetch,
+			},
+		});
+
+		const context = await localAuth.$context;
+		const originalCreateSession = context.internalAdapter.createSession;
+		context.internalAdapter.createSession = vi.fn().mockResolvedValue(null);
+
+		try {
+			const headers = new Headers();
+			const res = await localClient.signIn.sso({
+				email: "user@shared-redirect.com",
+				callbackURL: "http://localhost:3000/dashboard",
+				errorCallbackURL: "http://localhost:3000/error",
+				fetchOptions: {
+					throw: true,
+					onSuccess: localCookieSetter(headers),
+				},
+			});
+
+			let location: string | null = null;
+			await betterFetch(res.url, {
+				method: "GET",
+				redirect: "manual",
+				onError(requestContext) {
+					location = requestContext.response.headers.get("location");
+				},
+			});
+			if (!location) {
+				throw new Error("No redirect location found");
+			}
+
+			let callbackURL = "";
+			await betterFetch(location, {
+				method: "GET",
+				customFetchImpl: localFetch,
+				headers,
+				onError(requestContext) {
+					callbackURL = requestContext.response.headers.get("location") || "";
+				},
+			});
+
+			expect(callbackURL).toContain("http://localhost:3000/error");
+			expect(callbackURL).toContain("error=failed_to_create_session");
+		} finally {
+			context.internalAdapter.createSession = originalCreateSession;
+		}
 	});
 });
 

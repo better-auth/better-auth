@@ -56,6 +56,10 @@ const generateTOTPBodySchema = z.object({
 });
 
 const verifyTOTPBodySchema = z.object({
+	attemptId: z.string().optional().meta({
+		description:
+			"Opaque identifier for a paused sign-in attempt. Required when verifying a sign-in attempt without relying on the two-factor cookie.",
+	}),
 	code: z.string().meta({
 		description: 'The otp code to verify. Eg: "012345"',
 	}),

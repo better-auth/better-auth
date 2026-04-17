@@ -1,7 +1,7 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { describe, expect, it, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 
 /**
  * More test can be found in `session.test.ts`
@@ -286,6 +286,7 @@ describe("sign-in with additionalFields", async () => {
 		});
 
 		// additionalFields should be returned in API response
+		expectNoTwoFactorChallenge(res);
 		expect(res.user).toBeDefined();
 		expect(res.user.newField).toBe("signin-value");
 		expect(res.user.isAdmin).toBe(true);

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import {
+	expectNoTwoFactorChallenge,
+	expectTwoFactorChallenge,
+} from "../../test-utils/two-factor";
+import { twoFactor } from "../two-factor";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
 
@@ -51,7 +57,9 @@ describe("username", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		expect(res.data?.token).toBeDefined();
+		const signInData = res.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.token).toBeDefined();
 	});
 	it("should update username", async () => {
 		await client.updateUser({
@@ -319,8 +327,10 @@ describe("username", async () => {
 			username: "Custom_User",
 			password: "test-password",
 		});
-		expect(res2.data?.user.username).toBe("custom_user");
-		expect(res2.data?.user.displayUsername).toBe("Custom_User");
+		const signInData = res2.data;
+		expectNoTwoFactorChallenge(signInData);
+		expect(signInData.user.username).toBe("custom_user");
+		expect(signInData.user.displayUsername).toBe("Custom_User");
 	});
 });
 
@@ -629,5 +639,67 @@ describe("username email verification flow (no info leak)", async () => {
 
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
+	});
+});
+
+describe("username two-factor challenge", async () => {
+	const email = "two-factor-username@example.com";
+	const password = "correct-password";
+	const { client, db } = await getTestInstance(
+		{
+			plugins: [
+				username(),
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	const signUp = await client.signUp.email({
+		email,
+		username: "two_factor_user",
+		password,
+		name: "Two Factor User",
+	});
+
+	if (!signUp.data) {
+		throw new Error("sign up failed");
+	}
+
+	await db.update({
+		model: "user",
+		where: [{ field: "id", value: signUp.data.user.id }],
+		update: { twoFactorEnabled: true },
+	});
+
+	it("should return a challenge and clear the session cookies", async () => {
+		let setCookieHeader = "";
+		const res = await client.signIn.username(
+			{
+				username: "two_factor_user",
+				password,
+			},
+			{
+				onSuccess(ctx) {
+					setCookieHeader = ctx.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.session_token")).toBeUndefined();
+		expect(cookies.get("better-auth.session_data")).toBeUndefined();
+		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expectTwoFactorChallenge(res.data);
+		expect(res.data.challenge.attemptId).toBeTruthy();
+		expect(res.data.challenge.availableMethods).toEqual(["otp"]);
 	});
 });

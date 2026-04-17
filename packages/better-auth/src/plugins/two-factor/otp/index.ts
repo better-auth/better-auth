@@ -76,6 +76,10 @@ export interface OTPOptions {
 }
 
 const verifyOTPBodySchema = z.object({
+	attemptId: z.string().optional().meta({
+		description:
+			"Opaque identifier for a paused sign-in attempt. Required when verifying a sign-in attempt without relying on the two-factor cookie.",
+	}),
 	code: z.string().meta({
 		description: 'The otp code to verify. Eg: "012345"',
 	}),
@@ -92,6 +96,10 @@ const verifyOTPBodySchema = z.object({
 
 const send2FaOTPBodySchema = z
 	.object({
+		attemptId: z.string().optional().meta({
+			description:
+				"Opaque identifier for a paused sign-in attempt. Required when sending an OTP for a sign-in attempt without relying on the two-factor cookie.",
+		}),
 		/**
 		 * if true, the device will be trusted
 		 * for 30 days. It'll be refreshed on

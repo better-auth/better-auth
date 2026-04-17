@@ -103,6 +103,17 @@ export interface SAMLSessionRecord {
 	sessionIndex?: string;
 }
 
+/**
+ * SAML logout metadata that must survive a paused sign-in while two-factor
+ * verification waits to create the final session.
+ */
+export interface PendingSAMLSessionRecord {
+	userId: string;
+	providerId: string;
+	nameID: string;
+	sessionIndex?: string;
+}
+
 /** Parsed SAML assertion extract from samlify */
 export interface SAMLAssertionExtract {
 	nameID?: string;
@@ -130,6 +141,25 @@ export type SSOProvider<O extends SSOOptions> =
 				domainVerified: boolean;
 			} & BaseSSOProvider
 		: BaseSSOProvider;
+
+/**
+ * Provider-linked organization provisioning must be deferred when a callback
+ * pauses behind 2FA, because `getRole` may depend on the upstream profile or
+ * OAuth tokens that only exist during the callback request.
+ */
+export interface PendingProviderOrganizationAssignmentRecord {
+	userId: string;
+	providerId: string;
+	profile: {
+		providerType: "oidc" | "saml";
+		providerId: string;
+		accountId: string;
+		email: string;
+		emailVerified: boolean;
+		rawAttributes?: Record<string, any>;
+	};
+	token?: OAuth2Tokens;
+}
 
 export interface SSOOptions {
 	/**

@@ -155,6 +155,23 @@ await authClient.oneTap({
 });
 ```
 
+If the server pauses sign-in behind 2FA, the One Tap client redirects to that callback URL with `challenge=two-factor`, `attemptId=...`, and `methods=...` instead of navigating as if login had already finished.
+
+#### Handling 2FA Challenges Explicitly
+
+If you want to intercept that paused-sign-in branch yourself, use `onTwoFactorRedirect`:
+
+```ts
+await authClient.oneTap({
+  callbackURL: "/dashboard",
+  onTwoFactorRedirect: ({ attemptId, availableMethods }) => {
+    console.log(attemptId);
+    // Show your own 2FA UI or route to a dedicated verification page.
+    console.log(availableMethods);
+  }
+});
+```
+
 #### Handling Prompt Dismissals with Exponential Backoff
 
 If the user dismisses or skips the prompt, the plugin will retry showing the One Tap prompt using exponential backoff based on your configured promptOptions.
@@ -180,6 +197,7 @@ await authClient.oneTap({
 * `uxMode`: The mode to use for the Google One Tap flow. Can be "popup" or "redirect". Default is "popup".
 * `context`: The context in which the One Tap API should be used. Can be "signin", "signup", or "use". Default is "signin".
 * `additionalOptions`: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt).
+* `onTwoFactorRedirect`: Called when the server pauses the One Tap sign-in behind a 2FA challenge. Receives `attemptId` plus `availableMethods`. If omitted, the client falls back to redirecting to `callbackURL` (or `/`) with `challenge=two-factor`, `attemptId`, and `methods` query params.
 * `promptOptions`: Configuration for the prompt behavior and exponential backoff:
   * `baseDelay`: Base delay in milliseconds for retries. Default is 1000.
   * `maxAttempts`: Maximum number of prompt attempts before invoking the `onPromptNotification` callback. Default is 5.

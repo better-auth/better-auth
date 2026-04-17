@@ -3,10 +3,15 @@ export type {
 	AuthContext,
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
+	BetterAuthSignInChallengeRegistry,
+	FinalizedSignIn,
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,
+	PendingSignInAttempt,
 	PluginContext,
+	SignInChallenge,
+	SignInResolution,
 } from "./context";
 export type {
 	BetterAuthCookie,

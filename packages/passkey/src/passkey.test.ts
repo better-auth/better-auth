@@ -1,6 +1,9 @@
 import { APIError } from "@better-auth/core/error";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
+import { parseSetCookieHeader } from "better-auth/cookies";
+import { twoFactor } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import {
 	afterEach,
@@ -17,6 +20,7 @@ import { passkeyClient } from "./client";
 
 const serverMocks = vi.hoisted(() => ({
 	verifyRegistrationResponse: vi.fn(),
+	verifyAuthenticationResponse: vi.fn(),
 }));
 
 vi.mock("@simplewebauthn/server", async () => {
@@ -26,6 +30,7 @@ vi.mock("@simplewebauthn/server", async () => {
 	return {
 		...actual,
 		verifyRegistrationResponse: serverMocks.verifyRegistrationResponse,
+		verifyAuthenticationResponse: serverMocks.verifyAuthenticationResponse,
 	};
 });
 
@@ -35,6 +40,18 @@ const mockRegistrationResponse = {
 		transports: ["internal"],
 	},
 };
+
+const mockAuthenticationResponse = {
+	id: "credential-id",
+	rawId: "credential-id",
+	type: "public-key",
+	clientExtensionResults: {},
+	response: {
+		clientDataJSON: "client-data-json",
+		authenticatorData: "authenticator-data",
+		signature: "signature",
+	},
+} satisfies AuthenticationResponseJSON;
 
 const mockRegistrationVerification = {
 	verified: true,
@@ -50,6 +67,28 @@ const mockRegistrationVerification = {
 	},
 };
 
+function expectPasskeyAuthenticationSuccess(value: unknown): asserts value is {
+	session: { token: string };
+	user: { email: string };
+} {
+	assert(typeof value === "object" && value !== null);
+	assert("session" in value);
+	assert("user" in value);
+}
+
+function isTwoFactorChallengeResponse(value: unknown): value is {
+	type: "challenge";
+	challenge: {
+		type: "two-factor";
+		attemptId: string;
+		availableMethods: string[];
+	};
+} {
+	if (!value || typeof value !== "object") return false;
+	const record = value as { type?: unknown; challenge?: { type?: unknown } };
+	return record.type === "challenge" && record.challenge?.type === "two-factor";
+}
+
 describe("passkey", async () => {
 	const { auth, client, signInWithTestUser, sessionSetter, customFetchImpl } =
 		await getTestInstance({
@@ -58,6 +97,7 @@ describe("passkey", async () => {
 
 	afterEach(() => {
 		serverMocks.verifyRegistrationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockReset();
 	});
 
 	it("should generate register options", async () => {
@@ -314,6 +354,183 @@ describe("passkey", async () => {
 		expect(options).toHaveProperty("challenge");
 		expect(options).toHaveProperty("rpId");
 		expect(options).toHaveProperty("userVerification");
+	});
+
+	it("should challenge passkey sign-in when user verification is not performed", async () => {
+		const {
+			auth: twoFactorAuth,
+			client,
+			cookieSetter,
+			testUser,
+		} = await getTestInstance({
+			user: {
+				additionalFields: {
+					internalNote: {
+						type: "string",
+						defaultValue: "server-only",
+						returned: false,
+					},
+				},
+			},
+			plugins: [
+				passkey(),
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		const context = await twoFactorAuth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		if (!user) {
+			throw new Error("Expected test user");
+		}
+		await context.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: user.user.id }],
+			update: {
+				twoFactorEnabled: true,
+			},
+		});
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "credential-id",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValue({
+			verified: true,
+			authenticationInfo: {
+				newCounter: 1,
+				userVerified: false,
+			},
+		});
+
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			onResponse: cookieSetter(headers),
+		});
+		const beforeSessions = await context.internalAdapter.listSessions(
+			user.user.id,
+		);
+
+		const challengeResponse =
+			await twoFactorAuth.api.verifyPasskeyAuthentication({
+				headers,
+				body: {
+					response: mockAuthenticationResponse,
+				},
+				asResponse: true,
+			});
+		expect(challengeResponse.headers.get("set-auth-token")).toBeNull();
+		const challengeCookies = parseSetCookieHeader(
+			challengeResponse.headers.get("set-cookie") || "",
+		);
+		expect(challengeCookies.get("better-auth.two_factor")?.value).toBeDefined();
+		const challengeJson: unknown = await challengeResponse.json();
+		assert(isTwoFactorChallengeResponse(challengeJson));
+		expect(challengeJson.challenge.type).toBe("two-factor");
+		expect(challengeJson.challenge.attemptId).toBeTruthy();
+		expect(challengeJson.challenge.availableMethods).toEqual(["otp"]);
+
+		const sessions = await context.internalAdapter.listSessions(user.user.id);
+		expect(sessions).toHaveLength(beforeSessions.length);
+	});
+
+	it("should finalize passkey sign-in when user verification is performed", async () => {
+		const {
+			auth: twoFactorAuth,
+			client,
+			cookieSetter,
+			testUser,
+		} = await getTestInstance({
+			plugins: [
+				passkey(),
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		const context = await twoFactorAuth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		if (!user) {
+			throw new Error("Expected test user");
+		}
+		await context.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: user.user.id }],
+			update: {
+				twoFactorEnabled: true,
+			},
+		});
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "credential-id",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValue({
+			verified: true,
+			authenticationInfo: {
+				newCounter: 2,
+				userVerified: true,
+			},
+		});
+
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			onResponse: cookieSetter(headers),
+		});
+		const beforeSessions = await context.internalAdapter.listSessions(
+			user.user.id,
+		);
+
+		const authResponse = await twoFactorAuth.api.verifyPasskeyAuthentication({
+			headers,
+			body: {
+				response: mockAuthenticationResponse,
+			},
+			asResponse: true,
+		});
+		cookieSetter(headers)({
+			response: authResponse,
+		});
+		const authJson: unknown = await authResponse.json();
+		expect(isTwoFactorChallengeResponse(authJson)).toBe(false);
+		expectPasskeyAuthenticationSuccess(authJson);
+		expect(authJson.session).toBeDefined();
+		expect(authJson.user.email).toBe(testUser.email);
+		expect(authJson.user).not.toHaveProperty("internalNote");
+
+		const sessions = await context.internalAdapter.listSessions(user.user.id);
+		expect(sessions).toHaveLength(beforeSessions.length + 1);
 	});
 
 	it("should list user passkeys", async () => {

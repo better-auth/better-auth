@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge } from "../../test-utils/two-factor";
 import { siweClient } from "./client";
 import { siwe } from "./index";
 
@@ -301,7 +302,8 @@ describe("siwe", async () => {
 			email: "user@example.com",
 		});
 		expect(error).toBeNull();
-		expect(data?.success).toBe(true);
+		expectNoTwoFactorChallenge(data);
+		expect(data.success).toBe(true);
 	});
 
 	it("should reject invalid email format when anonymous is false", async () => {
@@ -373,7 +375,8 @@ describe("siwe", async () => {
 			chainId,
 		});
 		expect(error).toBeNull();
-		expect(data?.success).toBe(true);
+		expectNoTwoFactorChallenge(data);
+		expect(data.success).toBe(true);
 	});
 
 	it("should not allow nonce reuse", async () => {
@@ -406,7 +409,8 @@ describe("siwe", async () => {
 			chainId,
 		});
 		expect(first.error).toBeNull();
-		expect(first.data?.success).toBe(true);
+		expectNoTwoFactorChallenge(first.data);
+		expect(first.data.success).toBe(true);
 
 		// Try to verify again with the same nonce
 		const second = await client.siwe.verify({
@@ -491,7 +495,8 @@ describe("siwe", async () => {
 			walletAddress: walletAddress.toLowerCase(),
 			chainId,
 		});
-		expect(data?.success).toBe(true);
+		expectNoTwoFactorChallenge(data);
+		expect(data.success).toBe(true);
 
 		// Fetch wallet address from the adapter
 		const walletAddresses: any[] = await (await auth.$context).adapter.findMany(
@@ -514,7 +519,8 @@ describe("siwe", async () => {
 			walletAddress: walletAddress.toUpperCase(),
 			chainId,
 		});
-		expect(data2?.success).toBe(true); // Should succeed with existing address
+		expectNoTwoFactorChallenge(data2);
+		expect(data2.success).toBe(true); // Should succeed with existing address
 
 		const walletAddressesAfter = await (await auth.$context).adapter.findMany({
 			model: "walletAddress",
@@ -558,7 +564,8 @@ describe("siwe", async () => {
 			chainId: testChainId,
 		});
 		expect(firstUser.error).toBeNull();
-		expect(firstUser.data?.success).toBe(true);
+		expectNoTwoFactorChallenge(firstUser.data);
+		expect(firstUser.data.success).toBe(true);
 
 		// Verify wallet address record was created
 		const walletAddresses: any[] = await (await auth.$context).adapter.findMany(
@@ -587,8 +594,9 @@ describe("siwe", async () => {
 			chainId: testChainId,
 		});
 		expect(secondUser.error).toBeNull();
-		expect(secondUser.data?.success).toBe(true);
-		expect(secondUser.data?.user.id).toBe(firstUser.data?.user.id); // Same user ID
+		expectNoTwoFactorChallenge(secondUser.data);
+		expect(secondUser.data.success).toBe(true);
+		expect(secondUser.data.user.id).toBe(firstUser.data.user.id); // Same user ID
 
 		// Verify no duplicate wallet address records were created
 		const walletAddressesAfter: any[] = await (
@@ -662,7 +670,8 @@ describe("siwe", async () => {
 			chainId: testChainId,
 		});
 		expect(result.error).toBeNull();
-		expect(result.data?.success).toBe(true);
+		expectNoTwoFactorChallenge(result.data);
+		expect(result.data.success).toBe(true);
 		const context = await auth.$context;
 
 		const walletAddresses: any[] = await context.adapter.findMany({
@@ -713,7 +722,8 @@ describe("siwe", async () => {
 			chainId: chainId1,
 		});
 		expect(ethereumAuth.error).toBeNull();
-		expect(ethereumAuth.data?.success).toBe(true);
+		expectNoTwoFactorChallenge(ethereumAuth.data);
+		expect(ethereumAuth.data.success).toBe(true);
 
 		// Second authentication on Polygon with same address
 		await client.siwe.nonce({ walletAddress: testAddress, chainId: chainId2 });
@@ -724,8 +734,9 @@ describe("siwe", async () => {
 			chainId: chainId2,
 		});
 		expect(polygonAuth.error).toBeNull();
-		expect(polygonAuth.data?.success).toBe(true);
-		expect(polygonAuth.data?.user.id).toBe(ethereumAuth.data?.user.id); // Same user
+		expectNoTwoFactorChallenge(polygonAuth.data);
+		expect(polygonAuth.data.success).toBe(true);
+		expect(polygonAuth.data.user.id).toBe(ethereumAuth.data.user.id); // Same user
 
 		// Verify both wallet address records exist
 		const allWalletAddresses: any[] = await (

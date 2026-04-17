@@ -1,16 +1,26 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
+import { appendSignInChallengeToURL } from "../../auth/sign-in-challenge-url";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
+import { setCookieToHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt } from "../../crypto";
+import {
+	expectNoTwoFactorChallenge,
+	expectTwoFactorChallenge,
+	getTestInstance,
+} from "../../test-utils";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { anonymous } from "../anonymous";
 import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
+import type {
+	TwoFactorMethod,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "./types";
 
 describe("two factor", async () => {
 	let OTP = "";
@@ -52,6 +62,8 @@ describe("two factor", async () => {
 	if (!session) {
 		throw new Error("No session");
 	}
+	const sessionData = session.data;
+	expectNoTwoFactorChallenge(sessionData);
 
 	it("should return uri and backup codes and shouldn't enable twoFactor yet", async () => {
 		const res = await client.twoFactor.enable({
@@ -67,7 +79,7 @@ describe("two factor", async () => {
 			where: [
 				{
 					field: "id",
-					value: session.data?.user.id as string,
+					value: sessionData.user.id,
 				},
 			],
 		});
@@ -76,7 +88,7 @@ describe("two factor", async () => {
 			where: [
 				{
 					field: "userId",
-					value: session.data?.user.id as string,
+					value: sessionData.user.id,
 				},
 			],
 		});
@@ -116,13 +128,29 @@ describe("two factor", async () => {
 		expect(totpURI).toContain("&issuer=Better+Auth&");
 	});
 
+	it("should preserve raw relative callback targets in two-factor redirects", () => {
+		const challenge = {
+			type: "two-factor" as const,
+			attemptId: "attempt-123",
+			availableMethods: ["otp"] as TwoFactorMethod[],
+		};
+		const redirectURL = appendSignInChallengeToURL(
+			"../done?tab=1#finish",
+			challenge,
+		);
+
+		expect(redirectURL).toBe(
+			"../done?tab=1&challenge=two-factor&attemptId=attempt-123&methods=otp#finish",
+		);
+	});
+
 	it("should enable twoFactor", async () => {
 		const twoFactor = await db.findOne<TwoFactorTable>({
 			model: "twoFactor",
 			where: [
 				{
 					field: "userId",
-					value: session.data?.user.id as string,
+					value: sessionData.user.id,
 				},
 			],
 		});
@@ -147,6 +175,10 @@ describe("two factor", async () => {
 	});
 
 	it("should require two factor", async () => {
+		const context = await auth.$context;
+		const beforeSessions = await context.internalAdapter.listSessions(
+			sessionData.user.id,
+		);
 		const headers = new Headers();
 		const res = await client.signIn.email({
 			email: testUser.email,
@@ -157,27 +189,24 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
-					expect(parsed.get("better-auth.session_token")?.value).toBe("");
-					expect(parsed.get("better-auth.session_data")?.value).toBe("");
+					expect(parsed.get("better-auth.session_token")?.value).toBeFalsy();
+					expect(parsed.get("better-auth.session_data")?.value).toBeFalsy();
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
-					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
 						"cookie",
 						`better-auth.two_factor=${
 							parsed.get("better-auth.two_factor")?.value
 						}`,
 					);
-					headers.append(
-						"cookie",
-						`better-auth.dont_remember=${
-							parsed.get("better-auth.dont_remember")?.value
-						}`,
-					);
 				},
 			},
 		});
-		expect((res.data as any)?.twoFactorRedirect).toBe(true);
-		expect((res.data as any)?.twoFactorMethods).toEqual(["totp", "otp"]);
+		expectTwoFactorChallenge(res.data);
+		expect(res.data.challenge.availableMethods).toEqual(["totp", "otp"]);
+		const afterChallengeSessions = await context.internalAdapter.listSessions(
+			sessionData.user.id,
+		);
+		expect(afterChallengeSessions).toHaveLength(beforeSessions.length);
 		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
@@ -214,20 +243,13 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
-					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					expect(parsed.get("better-auth.session_token")?.value).toBeFalsy();
 					// 2FA Cookie is in response, but we are not setting it in headers
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
-					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
-					headers.append(
-						"cookie",
-						`better-auth.dont_remember=${
-							parsed.get("better-auth.dont_remember")?.value
-						}`,
-					);
 				},
 			},
 		});
-		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		expectTwoFactorChallenge(res.data);
 		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
@@ -252,6 +274,94 @@ describe("two factor", async () => {
 		expect(verifyRes.error?.message).toBe(
 			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
 		);
+	});
+
+	it("should reject expired pending sign-in challenges", async () => {
+		const challengeHeaders = new Headers();
+		let attemptId = "";
+		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					const challengeCookie = parsed.get("better-auth.two_factor")?.value;
+					expect(challengeCookie).toBeDefined();
+					challengeHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${challengeCookie}`,
+					);
+				},
+			},
+		});
+		expectTwoFactorChallenge(signInRes.data);
+		attemptId = signInRes.data.challenge.attemptId;
+
+		await db.update({
+			model: "signInAttempt",
+			update: {
+				expiresAt: new Date(Date.now() - 60_000),
+			},
+			where: [{ field: "id", value: attemptId }],
+		});
+
+		const sendOtpRes = await client.twoFactor.sendOtp({
+			fetchOptions: {
+				headers: challengeHeaders,
+			},
+		});
+
+		expect(sendOtpRes.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		);
+	});
+
+	it("should not set dont_remember while a sign-in is paused behind two factor", async () => {
+		const activeSessionHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(activeSessionHeaders),
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "remember-me-2fa@test.com",
+				password: "password123",
+				name: "Remember Me 2FA",
+			},
+		});
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: "remember-me-2fa@test.com" }],
+		});
+
+		const pausedHeaders = new Headers(activeSessionHeaders);
+		const pausedSignInRes = await client.signIn.email({
+			email: "remember-me-2fa@test.com",
+			password: "password123",
+			rememberMe: false,
+			fetchOptions: {
+				headers: pausedHeaders,
+			},
+		});
+		expectTwoFactorChallenge(pausedSignInRes.data);
+
+		const sessionResponse = await auth.api.getSession({
+			headers: pausedHeaders,
+			asResponse: true,
+		});
+		const parsed = parseSetCookieHeader(
+			sessionResponse.headers.get("Set-Cookie") || "",
+		);
+		expect(parsed.get("better-auth.dont_remember")?.value).not.toBeDefined();
 	});
 
 	it("should fail when passing invalid TOTP code with expected error code", async () => {
@@ -289,7 +399,7 @@ describe("two factor", async () => {
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					const token = parsed.get("better-auth.session_token")?.value;
-					expect(token).toBe("");
+					expect(token).toBeFalsy();
 					headers.append(
 						"cookie",
 						`better-auth.two_factor=${
@@ -317,7 +427,7 @@ describe("two factor", async () => {
 		expect(token?.length).toBeGreaterThan(0);
 		const currentBackupCodes = await auth.api.viewBackupCodes({
 			body: {
-				userId: session.data?.user.id!,
+				userId: sessionData.user.id,
 			},
 		});
 		expect(currentBackupCodes.backupCodes).toBeDefined();
@@ -378,7 +488,7 @@ describe("two factor", async () => {
 				},
 			},
 		});
-		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		expectTwoFactorChallenge(res.data);
 		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
@@ -436,7 +546,8 @@ describe("two factor", async () => {
 				},
 			},
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.user).toBeDefined();
 
 		// Old trust device cookie should no longer work because the
 		// server-side record was rotated on sign-in
@@ -447,7 +558,7 @@ describe("two factor", async () => {
 				headers: newHeaders,
 			},
 		});
-		expect((signIn2Res.data as any)?.twoFactorRedirect).toBe(true);
+		expectTwoFactorChallenge(signIn2Res.data);
 
 		// Should work with the refreshed (rotated) headers
 		const signIn3Res = await client.signIn.email({
@@ -457,7 +568,8 @@ describe("two factor", async () => {
 				headers: updatedHeaders,
 			},
 		});
-		expect(signIn3Res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(signIn3Res.data);
+		expect(signIn3Res.data.user).toBeDefined();
 	});
 
 	it("should limit OTP verification attempts", async () => {
@@ -521,7 +633,7 @@ describe("two factor", async () => {
 			where: [
 				{
 					field: "id",
-					value: session.data?.user.id as string,
+					value: sessionData.user.id,
 				},
 			],
 		});
@@ -531,7 +643,8 @@ describe("two factor", async () => {
 			email: testUser.email,
 			password: testUser.password,
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(signInRes.data);
+		expect(signInRes.data.user).toBeDefined();
 	});
 });
 
@@ -543,9 +656,9 @@ describe("two factor auth API", async () => {
 		plugins: [
 			twoFactor({
 				otpOptions: {
-					sendOTP({ otp }) {
+					sendOTP({ otp, user }) {
 						OTP = otp;
-						sendOTP(otp);
+						sendOTP(otp, user.email);
 					},
 				},
 				skipVerificationOnEnable: true,
@@ -617,7 +730,7 @@ describe("two factor auth API", async () => {
 			},
 		});
 		expect(OTP.length).toBe(6);
-		expect(sendOTP).toHaveBeenCalledWith(OTP);
+		expect(sendOTP).toHaveBeenCalledWith(OTP, testUser.email);
 	});
 
 	it("should verify otp", async () => {
@@ -631,6 +744,132 @@ describe("two factor auth API", async () => {
 		expect(res.status).toBe(200);
 		expect(res.headers.get("Set-Cookie")).toBeDefined();
 		headers = convertSetCookieToCookie(res.headers);
+	});
+
+	it("should preserve the active session while a second sign-in is paused behind 2FA", async () => {
+		const activeHeaders = new Headers(headers);
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			headers: activeHeaders,
+			asResponse: true,
+		});
+		expect(signInRes.status).toBe(200);
+
+		const challengeHeaders = new Headers(activeHeaders);
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		expect(parsed.get("better-auth.two_factor")).toBeDefined();
+
+		const currentSession = await auth.api.getSession({
+			headers: challengeHeaders,
+		});
+		expect(currentSession?.user.email).toBe(testUser.email);
+
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+		expect(OTP.length).toBe(6);
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				code: OTP,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+
+		const verifiedHeaders = new Headers(challengeHeaders);
+		setCookieToHeader(verifiedHeaders)({ response: verifyRes });
+		const verifiedSession = await auth.api.getSession({
+			headers: verifiedHeaders,
+		});
+		expect(verifiedSession?.user.email).toBe(testUser.email);
+	});
+
+	it("should ignore stale ambient two factor cookies for active session actions", async () => {
+		OTP = "";
+		sendOTP.mockClear();
+		const otherUser = {
+			email: "stale-two-factor@example.com",
+			password: "password123",
+			name: "Stale Two Factor",
+		};
+		await auth.api.signUpEmail({
+			body: otherUser,
+		});
+		const activeHeaders = new Headers(headers);
+		const context = await auth.$context;
+		const activeUser = await context.internalAdapter.findUserByEmail(
+			testUser.email,
+		);
+		const challengedUser = await context.internalAdapter.findUserByEmail(
+			otherUser.email,
+		);
+		if (!activeUser || !challengedUser) {
+			throw new Error("Expected both users to exist");
+		}
+		await context.internalAdapter.updateUser(activeUser.user.id, {
+			twoFactorEnabled: true,
+		});
+		await context.internalAdapter.updateUser(challengedUser.user.id, {
+			twoFactorEnabled: true,
+		});
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: otherUser.email,
+				password: otherUser.password,
+			},
+			headers: activeHeaders,
+			asResponse: true,
+		});
+		expect(signInRes.status).toBe(200);
+
+		const challengeHeaders = new Headers(activeHeaders);
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const signedTwoFactorCookie = parsed.get("better-auth.two_factor")?.value;
+		expect(signedTwoFactorCookie).toBeDefined();
+		if (!signedTwoFactorCookie) {
+			throw new Error("Expected signed two factor cookie");
+		}
+
+		/**
+		 * The cookie stores `<identifier>.<signature>`, while the verification row
+		 * is keyed by the unsigned identifier.
+		 */
+		const attemptId = signedTwoFactorCookie.slice(
+			0,
+			signedTwoFactorCookie.lastIndexOf("."),
+		);
+		await context.internalAdapter.deleteSignInAttempt(attemptId);
+		const sendOtpResponse = await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+			asResponse: true,
+		});
+		expect(sendOtpResponse.status).toBe(200);
+		expect(OTP.length).toBe(6);
+		expect(sendOTP).toHaveBeenCalledTimes(1);
+
+		const explicitChallengeResponse = await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				attemptId,
+			},
+			asResponse: true,
+		});
+		expect(explicitChallengeResponse.status).toBe(401);
 	});
 
 	it("should disable two factor", async () => {
@@ -956,9 +1195,11 @@ describe("trust device server-side validation", async () => {
 		});
 
 		const signIn2Json = (await signIn2Res.json()) as {
-			twoFactorRedirect?: boolean;
+			type?: string;
+			challenge?: { type?: string };
 		};
-		expect(signIn2Json.twoFactorRedirect).toBe(true);
+		expect(signIn2Json.type).toBe("challenge");
+		expect(signIn2Json.challenge?.type).toBe("two-factor");
 
 		// The expired trust cookie should have been cleared
 		const signIn2Parsed = parseSetCookieHeader(
@@ -2117,7 +2358,7 @@ describe("checkPassword must not leak credential presence via error codes", asyn
 /**
  * @see https://github.com/better-auth/better-auth/issues/4101
  */
-describe("twoFactorMethods in sign-in response", () => {
+describe("availableMethods in sign-in response", () => {
 	describe("totp enabled in config, otp disabled", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 			secret: DEFAULT_SECRET,
@@ -2132,11 +2373,11 @@ describe("twoFactorMethods in sign-in response", () => {
 					password: testUser.password,
 				},
 			});
+			expectNoTwoFactorChallenge(signInRes);
 			expect(signInRes.user).toBeDefined();
-			expect((signInRes as any).twoFactorRedirect).toBeUndefined();
 		});
 
-		it("should return twoFactorMethods: ['totp'] when user has verified totp", async () => {
+		it("should return availableMethods: ['totp'] when user has verified totp", async () => {
 			const { headers } = await auth.api
 				.signInEmail({
 					body: {
@@ -2175,8 +2416,8 @@ describe("twoFactorMethods in sign-in response", () => {
 					password: testUser.password,
 				},
 			});
-			expect((signInRes as any).twoFactorRedirect).toBe(true);
-			expect((signInRes as any).twoFactorMethods).toEqual(["totp"]);
+			expectTwoFactorChallenge(signInRes);
+			expect(signInRes.challenge.availableMethods).toEqual(["totp"]);
 		});
 	});
 
@@ -2193,7 +2434,7 @@ describe("twoFactorMethods in sign-in response", () => {
 		});
 		const { user } = await signInWithTestUser();
 
-		it("should return twoFactorMethods: ['otp'] when user has 2fa enabled but no totp row", async () => {
+		it("should return availableMethods: ['otp'] when user has 2fa enabled but no totp row", async () => {
 			await db.update({
 				model: "user",
 				where: [{ field: "id", value: user.id }],
@@ -2206,11 +2447,11 @@ describe("twoFactorMethods in sign-in response", () => {
 					password: testUser.password,
 				},
 			});
-			expect((signInRes as any).twoFactorRedirect).toBe(true);
-			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
+			expectTwoFactorChallenge(signInRes);
+			expect(signInRes.challenge.availableMethods).toEqual(["otp"]);
 		});
 
-		it("should exclude unverified totp from twoFactorMethods", async () => {
+		it("should exclude unverified totp from availableMethods", async () => {
 			// Create an unverified TOTP row (abandoned enrollment)
 			await db.update({
 				model: "user",
@@ -2247,11 +2488,11 @@ describe("twoFactorMethods in sign-in response", () => {
 					password: testUser.password,
 				},
 			});
-			expect((signInRes as any).twoFactorRedirect).toBe(true);
-			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
+			expectTwoFactorChallenge(signInRes);
+			expect(signInRes.challenge.availableMethods).toEqual(["otp"]);
 		});
 
-		it("should return twoFactorMethods: ['totp', 'otp'] when user has verified totp", async () => {
+		it("should return availableMethods: ['totp', 'otp'] when user has verified totp", async () => {
 			// reset twoFactorEnabled so we can sign in normally
 			await db.update({
 				model: "user",
@@ -2297,8 +2538,8 @@ describe("twoFactorMethods in sign-in response", () => {
 					password: testUser.password,
 				},
 			});
-			expect((signInRes as any).twoFactorRedirect).toBe(true);
-			expect((signInRes as any).twoFactorMethods).toEqual(["totp", "otp"]);
+			expectTwoFactorChallenge(signInRes);
+			expect(signInRes.challenge.availableMethods).toEqual(["totp", "otp"]);
 		});
 	});
 
@@ -2317,7 +2558,7 @@ describe("twoFactorMethods in sign-in response", () => {
 		});
 		await signInWithTestUser();
 
-		it("should return twoFactorMethods: ['otp'] even when user has a totp row", async () => {
+		it("should return availableMethods: ['otp'] even when user has a totp row", async () => {
 			const { headers } = await auth.api
 				.signInEmail({
 					body: {
@@ -2342,8 +2583,8 @@ describe("twoFactorMethods in sign-in response", () => {
 					password: testUser.password,
 				},
 			});
-			expect((signInRes as any).twoFactorRedirect).toBe(true);
-			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
+			expectTwoFactorChallenge(signInRes);
+			expect(signInRes.challenge.availableMethods).toEqual(["otp"]);
 		});
 	});
 });
@@ -2375,7 +2616,7 @@ describe("2FA enforcement scope", async () => {
 		],
 	});
 
-	it("should not challenge 2FA on magic-link sign-in", async () => {
+	it("should challenge 2FA on magic-link sign-in", async () => {
 		const { headers } = await signInWithTestUser();
 		await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
@@ -2398,7 +2639,9 @@ describe("2FA enforcement scope", async () => {
 		});
 
 		const json = await verifyRes.json();
-		expect(json.twoFactorRedirect).toBeUndefined();
+		expect(json.type).toBe("challenge");
+		expect(json.challenge.type).toBe("two-factor");
+		expect(json.challenge.availableMethods).toEqual(["totp", "otp"]);
 	});
 
 	it("should not challenge 2FA on authenticated non-sign-in endpoints", async () => {
@@ -2434,7 +2677,7 @@ describe("2FA enforcement scope", async () => {
 
 		expect(updateRes.ok).toBe(true);
 		const json = await updateRes.json();
-		expect(json.twoFactorRedirect).toBeUndefined();
+		expect(json.type).not.toBe("challenge");
 	});
 });
 
@@ -2499,6 +2742,8 @@ describe("backup codes storage configurations", () => {
 				password: testUser.password,
 				fetchOptions: { onSuccess: sessionSetter(headers) },
 			});
+			const sessionData = session.data;
+			expectNoTwoFactorChallenge(sessionData);
 
 			const enableRes = await client.twoFactor.enable({
 				password: testUser.password,
@@ -2511,7 +2756,7 @@ describe("backup codes storage configurations", () => {
 			// Verify initial storage format
 			const twoFactorBefore = await db.findOne<TwoFactorTable>({
 				model: "twoFactor",
-				where: [{ field: "userId", value: session.data?.user.id as string }],
+				where: [{ field: "userId", value: sessionData.user.id }],
 			});
 			mode.verifyFormat(twoFactorBefore!.backupCodes);
 			const storedCodes = await mode.decodeStored(twoFactorBefore!.backupCodes);
@@ -2544,7 +2789,7 @@ describe("backup codes storage configurations", () => {
 			// Verify storage format is preserved and used code is removed
 			const twoFactorAfter = await db.findOne<TwoFactorTable>({
 				model: "twoFactor",
-				where: [{ field: "userId", value: session.data?.user.id as string }],
+				where: [{ field: "userId", value: sessionData.user.id }],
 			});
 			mode.verifyFormat(twoFactorAfter!.backupCodes);
 			const remainingCodes = await mode.decodeStored(

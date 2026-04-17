@@ -653,6 +653,12 @@ importers:
       '@better-auth-test/test-utils':
         specifier: workspace:*
         version: link:../test-utils
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../../packages/sso
+      oauth2-mock-server:
+        specifier: ^8.2.2
+        version: 8.2.2
       vite:
         specifier: ^7.3.2
         version: 7.3.2(@types/node@25.6.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3)

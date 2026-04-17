@@ -32,6 +32,21 @@ function getMethod(
 	return "GET";
 }
 
+function isPausedSignInChallenge(
+	value: unknown,
+): value is { type: "challenge"; challenge: { type: string } } {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const record = value as {
+		type?: unknown;
+		challenge?: { type?: unknown };
+	};
+	return (
+		record.type === "challenge" && typeof record.challenge?.type === "string"
+	);
+}
+
 export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,
 	client: BetterFetch,
@@ -101,9 +116,13 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						 */
 						const matches = atomListeners.filter((s) => s.matcher(routePath));
 						if (!matches.length) return;
+						const pausedChallenge = isPausedSignInChallenge(context.data);
 
 						const visited = new Set<ClientAtomListener["signal"]>();
 						for (const match of matches) {
+							if (pausedChallenge && match.signal === "$sessionSignal") {
+								continue;
+							}
 							const signal = atoms[match.signal as any];
 							if (!signal) return;
 							if (visited.has(match.signal)) {

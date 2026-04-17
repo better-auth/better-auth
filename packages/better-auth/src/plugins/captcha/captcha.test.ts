@@ -1,6 +1,6 @@
 import * as betterFetchModule from "@better-fetch/fetch";
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import { captcha } from ".";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
@@ -42,7 +42,8 @@ describe("captcha", async () => {
 			},
 		});
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("Should return a 500 when missing secret key", async () => {
@@ -148,7 +149,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
 		});
@@ -218,7 +220,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
@@ -318,7 +321,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();
@@ -396,7 +400,8 @@ describe("captcha", async () => {
 				},
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 
 			// Verify the auto-detected IP was sent to the provider
 			expect(mockBetterFetch).toHaveBeenCalled();

@@ -58,6 +58,11 @@ export interface LastLoginMethodOptions {
 export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	userConfig?: O | undefined,
 ) => {
+	const config = {
+		cookieName: "better-auth.last_used_login_method",
+		maxAge: 60 * 60 * 24 * 30,
+		...userConfig,
+	} satisfies LastLoginMethodOptions;
 	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
 		const path = ctx.path;
 		if (!path) {
@@ -87,12 +92,39 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 			defaultResolveMethod(resolveContext)
 		);
 	};
+	const resolveAfterHookMethod = (ctx: GenericEndpointContext) => {
+		if (ctx.context.finalizedSignIn?.attemptId) {
+			return ctx.context.signInAttempt?.loginMethod ?? resolveMethod(ctx);
+		}
+		return resolveMethod(ctx);
+	};
+	const persistLastLoginMethod = async (
+		userId: string | undefined,
+		lastUsedLoginMethod: string,
+		ctx: {
+			internalAdapter: {
+				updateUser: (
+					userId: string,
+					data: { lastLoginMethod: string },
+				) => Promise<unknown>;
+			};
+			logger: {
+				error: (message: string, error: unknown) => void;
+			};
+		},
+	) => {
+		if (!config.storeInDatabase || !userId) {
+			return;
+		}
 
-	const config = {
-		cookieName: "better-auth.last_used_login_method",
-		maxAge: 60 * 60 * 24 * 30,
-		...userConfig,
-	} satisfies LastLoginMethodOptions;
+		try {
+			await ctx.internalAdapter.updateUser(userId, {
+				lastLoginMethod: lastUsedLoginMethod,
+			});
+		} catch (error) {
+			ctx.logger.error("Failed to update lastLoginMethod", error);
+		}
+	};
 
 	return {
 		id: "last-login-method",
@@ -118,27 +150,6 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								},
 							},
 						},
-						session: {
-							create: {
-								async after(session, context) {
-									if (!config.storeInDatabase) return;
-									if (!context) return;
-									const lastUsedLoginMethod = resolveMethod(context);
-									if (lastUsedLoginMethod && session?.userId) {
-										try {
-											await ctx.internalAdapter.updateUser(session.userId, {
-												lastLoginMethod: lastUsedLoginMethod,
-											});
-										} catch (error) {
-											ctx.logger.error(
-												"Failed to update lastLoginMethod",
-												error,
-											);
-										}
-									}
-								},
-							},
-						},
 					},
 				},
 			};
@@ -150,31 +161,29 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const lastUsedLoginMethod = resolveMethod(ctx);
-						if (lastUsedLoginMethod) {
-							const setCookieHeaders =
-								ctx.context.responseHeaders?.getSetCookie?.() || [];
-							const sessionTokenName =
-								ctx.context.authCookies.sessionToken.name;
-							const hasSessionToken = setCookieHeaders.some((cookie) =>
-								cookie.includes(sessionTokenName),
-							);
-							if (hasSessionToken) {
-								// Inherit cookie attributes from Better Auth's centralized cookie system
-								// This ensures consistency with cross-origin, cross-subdomain, and security settings
-								const cookieAttributes = {
-									...ctx.context.authCookies.sessionToken.attributes,
-									maxAge: config.maxAge,
-									httpOnly: false, // Override: plugin cookies are not httpOnly
-								};
+						const lastUsedLoginMethod = resolveAfterHookMethod(ctx);
+						if (!lastUsedLoginMethod) return;
 
-								ctx.setCookie(
-									config.cookieName,
-									lastUsedLoginMethod,
-									cookieAttributes,
-								);
-							}
+						if (ctx.context.finalizedSignIn) {
+							ctx.setCookie(config.cookieName, lastUsedLoginMethod, {
+								...ctx.context.authCookies.sessionToken.attributes,
+								maxAge: config.maxAge,
+								httpOnly: false,
+							});
+							await persistLastLoginMethod(
+								ctx.context.finalizedSignIn.user.id,
+								lastUsedLoginMethod,
+								ctx.context,
+							);
+							return;
 						}
+
+						const attempt = ctx.context.signInAttempt;
+						if (!attempt?.id) return;
+						if (attempt.loginMethod === lastUsedLoginMethod) return;
+						await ctx.context.internalAdapter.updateSignInAttempt(attempt.id, {
+							loginMethod: lastUsedLoginMethod,
+						});
 					}),
 				},
 			],

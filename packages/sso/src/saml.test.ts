@@ -11,7 +11,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { bearer, organization, twoFactor } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
 import type {
@@ -33,7 +33,9 @@ import {
 } from "vitest";
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
-import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { DEFAULT_CLOCK_SKEW_MS, SAML_SESSION_BY_ID_PREFIX } from "./constants";
+import type { SAMLSessionRecord } from "./types";
+import { safeJsonParse } from "./utils";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -2795,8 +2797,6 @@ describe("SAML SSO with custom fields", () => {
 	});
 });
 
-import { safeJsonParse } from "./utils";
-
 describe("safeJsonParse", () => {
 	it("returns object as-is when value is already an object", () => {
 		const obj = { a: 1, nested: { b: 2 } };
@@ -3174,6 +3174,191 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		const redirectLocation = postResponse.headers.get("location");
 		expect(redirectLocation).not.toBe(callbackRouteUrl);
 		expect(redirectLocation).toBe("http://localhost:3000");
+	});
+
+	it("should use the safe redirect target when SAML sign-in pauses behind two-factor", async () => {
+		let otp = "";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso(),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const callbackRouteUrl =
+			"http://localhost:3000/api/auth/sso/saml2/callback/loop-2fa-provider";
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "loop-2fa-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
+					cert: certificate,
+					callbackUrl: callbackRouteUrl,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const context = await auth.$context;
+		const existingUser = await context.internalAdapter.createUser({
+			email: "test@email.com",
+			name: "Test User",
+			emailVerified: true,
+		});
+		await context.internalAdapter.createAccount({
+			userId: existingUser.id,
+			providerId: "loop-2fa-provider",
+			accountId: "test@email.com",
+		});
+		await context.internalAdapter.updateUser(existingUser.id, {
+			twoFactorEnabled: true,
+		});
+
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
+			},
+		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		const postResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+			},
+			params: {
+				providerId: "loop-2fa-provider",
+			},
+			asResponse: true,
+		});
+
+		expect(postResponse).toBeInstanceOf(Response);
+		expect(postResponse.status).toBe(302);
+		const redirectLocation = postResponse.headers.get("location");
+		expect(redirectLocation).toBeDefined();
+		expect(redirectLocation).not.toContain(callbackRouteUrl);
+		expect(redirectLocation).toContain("http://localhost:3000");
+		expect(redirectLocation).toContain("challenge=two-factor");
+		expect(redirectLocation).toContain("attemptId=");
+		expect(otp).toBe("");
+	});
+
+	it("should redirect SAML callback failures when final session creation fails", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso(),
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-failed-session-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const context = await auth.$context;
+		const originalCreateSession = context.internalAdapter.createSession;
+		context.internalAdapter.createSession = vi.fn().mockResolvedValue(null);
+
+		try {
+			let samlResponse:
+				| { samlResponse: string; entityEndpoint?: string }
+				| undefined;
+			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+				onSuccess: async (requestContext) => {
+					samlResponse = requestContext.data as {
+						samlResponse: string;
+						entityEndpoint?: string;
+					};
+				},
+			});
+
+			if (!samlResponse?.samlResponse) {
+				throw new Error("Failed to get SAML response from mock IdP");
+			}
+
+			const callbackResponse = await auth.api.callbackSSOSAML({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "saml-failed-session-provider",
+				},
+				asResponse: true,
+			});
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectLocation = callbackResponse.headers.get("location");
+			expect(redirectLocation).toContain("http://localhost:3000/dashboard");
+			expect(redirectLocation).toContain("error=failed_to_create_session");
+		} finally {
+			context.internalAdapter.createSession = originalCreateSession;
+		}
 	});
 
 	it("should handle GET request with RelayState in query", async () => {
@@ -5052,6 +5237,12 @@ describe("SAML Single Logout (SLO)", () => {
 
 		it("should allow SLO POST from external IdP origin (CSRF bypass)", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
+				account: {
+					accountLinking: {
+						enabled: true,
+						trustedProviders: ["slo-2fa-test"],
+					},
+				},
 				plugins: [
 					sso({
 						saml: {
@@ -5174,6 +5365,422 @@ describe("SAML Single Logout (SLO)", () => {
 
 			const metadataXml = await metadataRes.text();
 			expect(metadataXml).not.toContain("SingleLogoutService");
+		});
+
+		it("should restore SAML logout lookups after a two-factor challenge completes", async () => {
+			let otp = "";
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp: nextOtp }) {
+								otp = nextOtp;
+							},
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-2fa-test",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "slo-2fa.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:3000/dashboard",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: idpMetadata,
+						},
+						identifierFormat:
+							"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					},
+				},
+				headers,
+			});
+
+			const context = await auth.$context;
+			const existingUser = await context.internalAdapter.createUser({
+				email: "test@email.com",
+				name: "Test User",
+				emailVerified: true,
+			});
+			await context.internalAdapter.createAccount({
+				userId: existingUser.id,
+				providerId: "slo-2fa-test",
+				accountId: "test@email.com",
+			});
+			await context.internalAdapter.updateUser(existingUser.id, {
+				twoFactorEnabled: true,
+			});
+
+			let samlResponse: { samlResponse: string } | undefined;
+			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+				onSuccess: async (requestContext) => {
+					samlResponse = requestContext.data as { samlResponse: string };
+				},
+			});
+			const callbackResponse = await auth.api.callbackSSOSAML({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse!.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "slo-2fa-test",
+				},
+				asResponse: true,
+			});
+
+			expect(callbackResponse.status).toBe(302);
+			expect(callbackResponse.headers.get("location")).toContain(
+				"challenge=two-factor",
+			);
+			const attemptId = new URL(
+				callbackResponse.headers.get("location")!,
+				"http://localhost:3000",
+			).searchParams.get("attemptId");
+			expect(attemptId).toBeTruthy();
+			const challengeCookies = parseSetCookieHeader(
+				callbackResponse.headers.get("set-cookie") ?? "",
+			);
+			expect(
+				challengeCookies.get("better-auth.two_factor")?.value,
+			).toBeDefined();
+
+			const challengeHeaders = new Headers();
+			setCookieToHeader(challengeHeaders)({ response: callbackResponse });
+			await auth.api.sendTwoFactorOTP({
+				headers: challengeHeaders,
+				body: {},
+			});
+			expect(otp).toHaveLength(6);
+
+			const verifyResponse = await auth.api.verifyTwoFactorOTP({
+				headers: challengeHeaders,
+				body: {
+					code: otp,
+				},
+				asResponse: true,
+			});
+			expect(verifyResponse.status).toBe(200);
+
+			const sessions = await context.internalAdapter.listSessions(
+				existingUser.id,
+			);
+			expect(sessions).toHaveLength(1);
+
+			const sessionLookup = await context.internalAdapter.findVerificationValue(
+				`${SAML_SESSION_BY_ID_PREFIX}${sessions[0]!.id}`,
+			);
+			expect(sessionLookup?.value).toBeDefined();
+
+			const samlSession = await context.internalAdapter.findVerificationValue(
+				sessionLookup!.value,
+			);
+			const samlSessionData = safeJsonParse<SAMLSessionRecord>(
+				samlSession?.value,
+			);
+			expect(samlSessionData).toMatchObject({
+				sessionId: sessions[0]!.id,
+				providerId: "slo-2fa-test",
+				nameID: "test@email.com",
+			});
+			if (samlSessionData?.sessionIndex != null) {
+				expect(samlSessionData.sessionIndex).toEqual(expect.any(String));
+			}
+		});
+
+		it("should defer provider org assignment until two-factor verification completes", async () => {
+			let otp = "";
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+					organization(),
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp: nextOtp }) {
+								otp = nextOtp;
+							},
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+			const organizationRecord = await auth.api.createOrganization({
+				body: {
+					name: "SAML 2FA Org",
+					slug: "saml-2fa-org",
+				},
+				headers,
+			});
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-org-2fa-test",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "slo-org-2fa.com",
+					organizationId: organizationRecord.id,
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:3000/dashboard",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: idpMetadata,
+						},
+						identifierFormat:
+							"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					},
+				},
+				headers,
+			});
+
+			const context = await auth.$context;
+			const existingUser = await context.internalAdapter.createUser({
+				email: "test@email.com",
+				name: "Test User",
+				emailVerified: true,
+			});
+			await context.internalAdapter.createAccount({
+				userId: existingUser.id,
+				providerId: "slo-org-2fa-test",
+				accountId: "test@email.com",
+			});
+			await context.internalAdapter.updateUser(existingUser.id, {
+				twoFactorEnabled: true,
+			});
+
+			let samlResponse: { samlResponse: string } | undefined;
+			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+				onSuccess: async (requestContext) => {
+					samlResponse = requestContext.data as { samlResponse: string };
+				},
+			});
+			const callbackResponse = await auth.api.callbackSSOSAML({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse!.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "slo-org-2fa-test",
+				},
+				asResponse: true,
+			});
+
+			expect(callbackResponse.status).toBe(302);
+			expect(callbackResponse.headers.get("location")).toContain(
+				"challenge=two-factor",
+			);
+			const attemptId = new URL(
+				callbackResponse.headers.get("location")!,
+				"http://localhost:3000",
+			).searchParams.get("attemptId");
+			expect(attemptId).toBeTruthy();
+
+			const pendingOrg = await auth.api.getFullOrganization({
+				query: {
+					organizationId: organizationRecord.id,
+				},
+				headers,
+			});
+			expect(
+				pendingOrg?.members.find(
+					(member) => member.user.id === existingUser.id,
+				),
+			).toBeUndefined();
+
+			const challengeHeaders = new Headers();
+			setCookieToHeader(challengeHeaders)({ response: callbackResponse });
+			await auth.api.sendTwoFactorOTP({
+				headers: challengeHeaders,
+				body: {
+					attemptId: attemptId!,
+				},
+			});
+			expect(otp).toHaveLength(6);
+
+			const verifyResponse = await auth.api.verifyTwoFactorOTP({
+				headers: challengeHeaders,
+				body: {
+					attemptId: attemptId!,
+					code: otp,
+				},
+				asResponse: true,
+			});
+			expect(verifyResponse.status).toBe(200);
+
+			const finalizedOrg = await auth.api.getFullOrganization({
+				query: {
+					organizationId: organizationRecord.id,
+				},
+				headers,
+			});
+			expect(
+				finalizedOrg?.members.find(
+					(member) => member.user.id === existingUser.id,
+				),
+			).toMatchObject({
+				role: "member",
+			});
+		});
+
+		it("should finalize paused SAML sign-ins without persisting callback request bodies", async () => {
+			let otp = "";
+			let capturedBody: Record<string, unknown> | null = null;
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso(),
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp: nextOtp }) {
+								otp = nextOtp;
+							},
+						},
+					}),
+				],
+				databaseHooks: {
+					session: {
+						create: {
+							async before(_, ctx) {
+								capturedBody =
+									typeof ctx?.body === "object" && ctx.body !== null
+										? (ctx.body as Record<string, unknown>)
+										: null;
+							},
+						},
+					},
+				},
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "saml-post-body-2fa",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "saml-post-body-2fa.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:3000/dashboard",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: idpMetadata,
+						},
+						identifierFormat:
+							"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					},
+				},
+				headers,
+			});
+
+			const context = await auth.$context;
+			const existingUser = await context.internalAdapter.createUser({
+				email: "test@email.com",
+				name: "Test User",
+				emailVerified: true,
+			});
+			await context.internalAdapter.createAccount({
+				userId: existingUser.id,
+				providerId: "saml-post-body-2fa",
+				accountId: "test@email.com",
+			});
+			await context.internalAdapter.updateUser(existingUser.id, {
+				twoFactorEnabled: true,
+			});
+
+			let samlResponse: { samlResponse: string } | undefined;
+			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+				onSuccess: async (requestContext) => {
+					samlResponse = requestContext.data as { samlResponse: string };
+				},
+			});
+			capturedBody = null;
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-post-body-2fa",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse!.samlResponse,
+							RelayState: "http://localhost:3000/dashboard",
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			expect(callbackResponse.headers.get("location")).toContain(
+				"challenge=two-factor",
+			);
+			expect(capturedBody).toBeNull();
+
+			const attemptId = new URL(
+				callbackResponse.headers.get("location")!,
+				"http://localhost:3000",
+			).searchParams.get("attemptId");
+			expect(attemptId).toBeTruthy();
+			const pendingAttempt = await context.internalAdapter.findSignInAttempt(
+				attemptId!,
+			);
+			expect(pendingAttempt).toBeTruthy();
+
+			const challengeHeaders = new Headers();
+			setCookieToHeader(challengeHeaders)({ response: callbackResponse });
+
+			await auth.api.sendTwoFactorOTP({
+				headers: challengeHeaders,
+				body: {
+					attemptId: attemptId!,
+				},
+			});
+			expect(otp).toHaveLength(6);
+
+			const verifyResponse = await auth.api.verifyTwoFactorOTP({
+				headers: challengeHeaders,
+				body: {
+					attemptId: attemptId!,
+					code: otp,
+				},
+				asResponse: true,
+			});
+			expect(verifyResponse.status).toBe(200);
+			expect(capturedBody).toMatchObject({
+				attemptId: attemptId!,
+				code: otp,
+			});
 		});
 	});
 

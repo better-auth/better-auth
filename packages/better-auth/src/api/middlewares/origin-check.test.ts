@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import { originCheck } from "./origin-check";
 
 describe("Origin Check", async () => {
@@ -38,7 +38,8 @@ describe("Origin Check", async () => {
 			password: testUser.password,
 			callbackURL: "http://localhost:3000/callback",
 		});
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("should not allow untrusted origins", async (ctx) => {
@@ -89,7 +90,8 @@ describe("Origin Check", async () => {
 			email: testUser.email,
 			password: testUser.password,
 		});
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("should reject untrusted redirectTo", async (ctx) => {
@@ -132,7 +134,8 @@ describe("Origin Check", async () => {
 				},
 			},
 		});
-		expect(res2.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res2.data);
+		expect(res2.data.user).toBeDefined();
 	});
 
 	it("should work with wildcard trusted origins", async (ctx) => {
@@ -150,7 +153,8 @@ describe("Origin Check", async () => {
 			password: testUser.password,
 			callbackURL: "https://sub-domain.my-site.com/callback",
 		});
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("should work with GET requests", async (ctx) => {
@@ -184,7 +188,8 @@ describe("Origin Check", async () => {
 			email: testUser.email,
 			password: testUser.password,
 		});
-		expect(validRes.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(validRes.data);
+		expect(validRes.data.user).toBeDefined();
 
 		// Test with invalid origin
 		const invalidClient = createAuthClient({
@@ -241,7 +246,8 @@ describe("Origin Check", async () => {
 		});
 
 		// Should succeed because valid-origin.com is in the list and null values are filtered out
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 });
 
@@ -625,7 +631,8 @@ describe("trusted origins with baseURL inferred from request", async () => {
 			callbackURL: "http://my-frontend.com/dashboard",
 		});
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("should reject untrusted origins even when baseURL is inferred", async () => {
@@ -692,7 +699,8 @@ describe("trusted origins with baseURL inferred from request", async () => {
 				callbackURL: "http://env-frontend.com/dashboard",
 			});
 
-			expect(res.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res.data);
+			expect(res.data.user).toBeDefined();
 		} finally {
 			vi.unstubAllEnvs();
 		}
@@ -727,7 +735,8 @@ describe("trusted origins with baseURL inferred from request", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 		});
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("should support both config array and env var together when baseURL is inferred", async () => {
@@ -762,7 +771,8 @@ describe("trusted origins with baseURL inferred from request", async () => {
 				password: testUser.password,
 				callbackURL: "http://config-origin.com/dashboard",
 			});
-			expect(res1.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res1.data);
+			expect(res1.data.user).toBeDefined();
 
 			const client2 = createAuthClient({
 				baseURL: "http://localhost:3000",
@@ -780,7 +790,8 @@ describe("trusted origins with baseURL inferred from request", async () => {
 				password: testUser.password,
 				callbackURL: "http://env-origin.com/dashboard",
 			});
-			expect(res2.data?.user).toBeDefined();
+			expectNoTwoFactorChallenge(res2.data);
+			expect(res2.data.user).toBeDefined();
 		} finally {
 			vi.unstubAllEnvs();
 		}
@@ -819,7 +830,8 @@ describe("disableCSRFCheck and disableOriginCheck separation", async () => {
 			callbackURL: "http://localhost:3000/dashboard",
 		});
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("disableCSRFCheck should still validate callbackURL (origin check still active)", async () => {
@@ -886,7 +898,8 @@ describe("disableCSRFCheck and disableOriginCheck separation", async () => {
 			callbackURL: "http://any-site.com/redirect",
 		});
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("disableOriginCheck also disables CSRF for backward compatibility", async () => {
@@ -927,7 +940,8 @@ describe("disableCSRFCheck and disableOriginCheck separation", async () => {
 			expect.stringMatching(/^\[Deprecation]/),
 		);
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 		{
 			await client.signIn.email({
 				email: testUser.email,
@@ -1004,6 +1018,7 @@ describe("disableCSRFCheck and disableOriginCheck separation", async () => {
 			callbackURL: "http://malicious-site.com/steal",
 		});
 
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 });

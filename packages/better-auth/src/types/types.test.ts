@@ -1,8 +1,13 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
+import {
+	isSignInChallenge,
+	isSignInChallengeOfType,
+} from "../auth/sign-in-guards";
 import type { InferCtx } from "../client/path-to-object";
 import { organization, twoFactor } from "../plugins";
+import { username } from "../plugins/username";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
@@ -10,6 +15,21 @@ import type { HasRequiredKeys } from "./helper";
 type TestTypeOptions = {
 	test: boolean;
 };
+
+type HasTwoFactorChallengeBranch<T> =
+	Extract<
+		T,
+		{
+			type: "challenge";
+			challenge: {
+				type: "two-factor";
+				attemptId: string;
+				availableMethods: readonly string[];
+			};
+		}
+	> extends never
+		? false
+		: true;
 
 const pingEndpoint = createAuthEndpoint(
 	"/test-type-ping",
@@ -195,6 +215,39 @@ describe("general types", async () => {
 			? B
 			: "no-body";
 		expectTypeOf<Body>().toEqualTypeOf<"no-body">();
+	});
+
+	it("should preserve the two-factor challenge branch for sign-in APIs in multi-plugin configs", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [twoFactor(), username()],
+		});
+
+		type SignInEmailReturn = Awaited<ReturnType<typeof auth.api.signInEmail>>;
+		type SignInSocialReturn = Awaited<ReturnType<typeof auth.api.signInSocial>>;
+
+		expectTypeOf<
+			HasTwoFactorChallengeBranch<SignInEmailReturn>
+		>().toEqualTypeOf<true>();
+		expectTypeOf<
+			HasTwoFactorChallengeBranch<SignInSocialReturn>
+		>().toEqualTypeOf<true>();
+	});
+
+	it("narrows sign-in responses via exported guards", async () => {
+		const { auth } = await getTestInstance({ plugins: [twoFactor()] });
+		type SignInEmailReturn = Awaited<ReturnType<typeof auth.api.signInEmail>>;
+
+		const value = {} as SignInEmailReturn;
+		if (isSignInChallenge(value)) {
+			expectTypeOf(value.type).toEqualTypeOf<"challenge">();
+			expectTypeOf(value.challenge.type).toEqualTypeOf<"two-factor">();
+		}
+		if (isSignInChallengeOfType(value, "two-factor")) {
+			expectTypeOf(value.challenge.attemptId).toEqualTypeOf<string>();
+			expectTypeOf(value.challenge.availableMethods).toEqualTypeOf<
+				("totp" | "otp" | "backup-code")[]
+			>();
+		}
 	});
 
 	it("should infer additional fields from plugins", async () => {

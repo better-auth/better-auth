@@ -5,6 +5,7 @@ import type {
 	ModelNames,
 	SecondaryStorage,
 	Session,
+	SignInAttempt,
 	User,
 	Verification,
 } from "../db";
@@ -83,6 +84,70 @@ export type GenericEndpointContext<
 > = EndpointContext<string, any> & {
 	context: AuthContext<Options>;
 };
+
+export type PendingSignInAttempt = SignInAttempt & {
+	user?: User & Record<string, any>;
+};
+
+export type FinalizedSignIn = {
+	session: Session & Record<string, any>;
+	user: User & Record<string, any>;
+	attemptId?: string | undefined;
+};
+
+/**
+ * Registry of sign-in challenge kinds. Plugins that pause sign-in before a
+ * session is issued augment this interface with their own discriminant key so
+ * the `SignInChallenge` union widens accordingly.
+ *
+ * ## Contract for challenge authors
+ *
+ * 1. Pick a unique string discriminant (e.g. `"two-factor"`) and declare it
+ *    via module augmentation. The value type becomes the shape carried on the
+ *    resume URL and returned to clients.
+ * 2. Include an `attemptId: string` field. The resolver persists the pending
+ *    attempt under this id (`internalAdapter.createSignInAttempt`), and your
+ *    resume endpoint looks it up via `findSignInAttempt`.
+ * 3. Any per-request context needed at resume time goes on the opaque
+ *    `SignInAttempt.payload` bag, not in a cookie.
+ * 4. A primary factor may request that your challenge be skipped by passing
+ *    its discriminant in `resolveSignIn({ skipChallenges: [...] })`.
+ *
+ * @example
+ * ```ts
+ * declare module "@better-auth/core" {
+ *   interface BetterAuthSignInChallengeRegistry {
+ *     "two-factor": {
+ *       attemptId: string;
+ *       availableMethods: TwoFactorMethod[];
+ *     };
+ *   }
+ * }
+ * ```
+ */
+export interface BetterAuthSignInChallengeRegistry {}
+
+export type SignInChallenge = {
+	[K in keyof BetterAuthSignInChallengeRegistry]: {
+		type: K;
+	} & BetterAuthSignInChallengeRegistry[K];
+}[keyof BetterAuthSignInChallengeRegistry];
+
+/**
+ * Discriminated envelope returned by the sign-in resolver.
+ * `session` means a session was issued (commit-on-success scheduled).
+ * `challenge` means sign-in is paused pending another step.
+ */
+export type SignInResolution<TUser extends User = User> =
+	| {
+			type: "session";
+			session: Session & Record<string, any>;
+			user: TUser & Record<string, any>;
+	  }
+	| {
+			type: "challenge";
+			challenge: SignInChallenge;
+	  };
 
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
@@ -215,6 +280,20 @@ export interface InternalAdapter<
 		identifier: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
+
+	createSignInAttempt(
+		data: Omit<SignInAttempt, "createdAt" | "id" | "updatedAt"> &
+			Partial<SignInAttempt>,
+	): Promise<SignInAttempt>;
+
+	findSignInAttempt(id: string): Promise<SignInAttempt | null>;
+
+	updateSignInAttempt(
+		id: string,
+		data: Partial<Pick<SignInAttempt, "loginMethod">>,
+	): Promise<SignInAttempt | null>;
+
+	deleteSignInAttempt(id: string): Promise<void>;
 }
 
 type CreateCookieGetterFn = (
@@ -304,15 +383,29 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				storeStateStrategy: "database" | "cookie";
 			};
 			/**
-			 * New session that will be set after the request
-			 * meaning: there is a `set-cookie` header that will set
-			 * the session cookie. This is the fetched session. And it's set
-			 * by `setNewSession` method.
+			 * Any session created during the current request, regardless of origin
+			 * (sign-in, sign-up, anonymous upgrade, device-authorization, etc.).
+			 * Cookie publication happens later during request finalization.
+			 * Consumers that care only about "a session exists" (bearer, jwt, mcp,
+			 * multi-session, one-time-token, oidc-provider) read this.
 			 */
 			newSession: {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
+			/**
+			 * Set when a sign-in flow committed in this request. Narrower than
+			 * `newSession`: sign-up, anonymous upgrades, and device-auth do not
+			 * populate it. Consumers that care about "a sign-in completed" (e.g.
+			 * last-login-method, anonymous linking) read this.
+			 */
+			finalizedSignIn: FinalizedSignIn | null;
+			/**
+			 * Request-scoped paused sign-in state. Not published auth state;
+			 * exists only so the current request can finalize or replay work for
+			 * the attempt that actually completed.
+			 */
+			signInAttempt: PendingSignInAttempt | null;
 			session: {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
@@ -323,6 +416,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 					user: User & Record<string, any>;
 				} | null,
 			) => void;
+			setFinalizedSignIn: (signIn: FinalizedSignIn | null) => void;
+			setSignInAttempt: (attempt: PendingSignInAttempt | null) => void;
+			successFinalizers?: Array<() => Promise<void> | void>;
+			addSuccessFinalizer?: (finalizer: () => Promise<void> | void) => void;
 			socialProviders: OAuthProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;

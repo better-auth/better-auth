@@ -146,7 +146,9 @@
       "!**/.output",
       "!**/.tmp",
       "!**/tmp-docs-fetch",
-      "!**/.claude/worktrees/**"
+      "!**/.claude/worktrees/**",
+      "!**/.notes/**",
+      "!**/e2e/integration/test-results/**"
     ]
   }
 }

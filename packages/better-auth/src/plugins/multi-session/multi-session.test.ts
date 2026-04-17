@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { twoFactor } from "../two-factor";
 import { multiSession } from ".";
 import { multiSessionClient } from "./client";
 
@@ -294,5 +295,57 @@ describe("multi-session", async () => {
 			fetchOptions: { headers: attackerHeaders },
 		});
 		expect(attackerSessionAfter.data).toBeNull();
+	});
+});
+
+describe("multi-session with two-factor challenges", async () => {
+	const testInstance = await getTestInstance(
+		{
+			plugins: [
+				multiSession({
+					maximumSessions: 2,
+				}),
+				twoFactor({
+					otpOptions: {
+						async sendOTP() {},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [multiSessionClient()],
+			},
+		},
+	);
+
+	await testInstance.db.update({
+		model: "user",
+		update: {
+			twoFactorEnabled: true,
+		},
+		where: [{ field: "email", value: testInstance.testUser.email }],
+	});
+
+	it("should not mint multi-session cookies when sign-in is challenged", async () => {
+		let setCookieHeader = "";
+		const _res = await testInstance.client.signIn.email(
+			{
+				email: testInstance.testUser.email,
+				password: testInstance.testUser.password,
+			},
+			{
+				onResponse(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(
+			Array.from(cookies.keys()).some((name) => name.includes("_multi-")),
+		).toBe(false);
+		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expect(setCookieHeader).toContain("better-auth.two_factor");
 	});
 });

@@ -63,6 +63,17 @@ export interface TwoFactorOptions {
 	trustDeviceMaxAge?: number | undefined;
 }
 
+export type TwoFactorMethod = "totp" | "otp" | "backup-code";
+
+declare module "@better-auth/core" {
+	interface BetterAuthSignInChallengeRegistry {
+		"two-factor": {
+			attemptId: string;
+			availableMethods: TwoFactorMethod[];
+		};
+	}
+}
+
 export interface UserWithTwoFactor extends User {
 	/**
 	 * If the user has enabled two factor authentication.

@@ -11,8 +11,8 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
+import { resolveSignInWithRedirect } from "../../auth/resolve-sign-in";
 import { parseJSON } from "../../client/parser";
-import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -256,12 +256,19 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
 
-					await setSessionCookie(ctx, result.data);
-
 					// Redirect to final callback URL
 					const finalURL = result.isRegister
 						? payload.newUserURL || payload.callbackURL
 						: payload.callbackURL;
+					await resolveSignInWithRedirect(ctx, {
+						signIn: {
+							user: result.data,
+						},
+						redirectTarget: finalURL,
+						onFailedToCreateSession() {
+							throw redirectOnError(ctx, errorURL, "failed_to_create_session");
+						},
+					});
 
 					throw ctx.redirect(finalURL);
 				},

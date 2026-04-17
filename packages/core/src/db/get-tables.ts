@@ -150,6 +150,58 @@ export const getAuthTables = (
 		},
 	} satisfies BetterAuthDBSchema;
 
+	const shouldAddSignInAttemptTable = (options.plugins ?? []).some(
+		(plugin) => plugin.id === "two-factor",
+	);
+	const signInAttemptTable = {
+		signInAttempt: {
+			modelName: "signInAttempt",
+			fields: {
+				userId: {
+					type: "string",
+					required: true,
+					fieldName: "userId",
+					references: {
+						model: options.user?.modelName || "user",
+						field: "id",
+						onDelete: "cascade",
+					},
+					index: true,
+				},
+				expiresAt: {
+					type: "date",
+					required: true,
+					fieldName: "expiresAt",
+					index: true,
+				},
+				dontRememberMe: {
+					type: "boolean",
+					required: false,
+					fieldName: "dontRememberMe",
+				},
+				loginMethod: {
+					type: "string",
+					required: false,
+					fieldName: "loginMethod",
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					fieldName: "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					onUpdate: () => new Date(),
+					fieldName: "updatedAt",
+				},
+			},
+			order: 5,
+		},
+	} satisfies BetterAuthDBSchema;
+
 	return {
 		user: {
 			modelName: options.user?.modelName || "user",
@@ -290,6 +342,7 @@ export const getAuthTables = (
 		...(!options.secondaryStorage || options.verification?.storeInDatabase
 			? verificationTable
 			: {}),
+		...(shouldAddSignInAttemptTable ? signInAttemptTable : {}),
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;

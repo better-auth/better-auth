@@ -13,7 +13,7 @@ import {
 } from "vitest";
 import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
 import { admin } from "./admin";
@@ -607,6 +607,7 @@ describe("Admin plugin", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
+		expectNoTwoFactorChallenge(res);
 		const state = new URL(res.url!).searchParams.get("state");
 		let errorLocation: string | null = null;
 		await client.$fetch("/callback/google", {
@@ -641,7 +642,8 @@ describe("Admin plugin", async () => {
 			email: newUser?.email || "",
 			password: "test",
 		});
-		expect(res.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res.data);
+		expect(res.data.user).toBeDefined();
 	});
 
 	it("should allow to unban user", async () => {
@@ -1060,7 +1062,8 @@ describe("Admin plugin", async () => {
 			email: newUser?.email || "",
 			password: "newPassword",
 		});
-		expect(res2.data?.user).toBeDefined();
+		expectNoTwoFactorChallenge(res2.data);
+		expect(res2.data.user).toBeDefined();
 	});
 	it("should not allow admin to set user password with empty userId", async () => {
 		const res = await client.admin.setUserPassword(

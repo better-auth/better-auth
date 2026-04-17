@@ -11,9 +11,13 @@ import {
 	vi,
 } from "vitest";
 import { createAuthMiddleware } from "../../api";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
+import {
+	parseCookies,
+	parseSetCookieHeader,
+	setCookieToHeader,
+} from "../../cookies";
 import { signJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { genericOAuth } from "../generic-oauth/index";
@@ -21,6 +25,7 @@ import { magicLink } from "../magic-link";
 import { magicLinkClient } from "../magic-link/client";
 import { siwe } from "../siwe";
 import { siweClient } from "../siwe/client";
+import { twoFactor } from "../two-factor";
 import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
 
@@ -113,6 +118,196 @@ describe("lastLoginMethod", async () => {
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+	});
+
+	it("should not stamp the last login method when sign-in is challenged", async () => {
+		const { auth, client, db, testUser } = await getTestInstance(
+			{
+				plugins: [
+					lastLoginMethod(),
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient()],
+				},
+			},
+		);
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		let setCookieHeader = "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
+		expect(setCookieHeader).toContain("better-auth.two_factor");
+
+		const context = await auth.$context;
+		const attempt = await context.adapter.findOne<{
+			loginMethod?: string | null;
+		}>({
+			model: "signInAttempt",
+			where: [
+				{
+					field: "userId",
+					value: (await context.internalAdapter.findUserByEmail(
+						testUser.email,
+					))!.user.id,
+				},
+			],
+		});
+		expect(attempt?.loginMethod).toBe("email");
+	});
+
+	it("should stamp the last login method after a two-factor challenge completes", async () => {
+		let otp = "";
+		const { auth, db, testUser } = await getTestInstance({
+			plugins: [
+				lastLoginMethod(),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const challengedUser = await db.findOne<
+			(typeof testUser & { lastLoginMethod?: string | null }) | null
+		>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		expect(challengedUser?.lastLoginMethod).toBeUndefined();
+		const challengeHeaders = new Headers();
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				code: otp,
+			},
+			asResponse: true,
+		});
+		const cookies = parseSetCookieHeader(
+			verifyRes.headers.get("set-cookie") || "",
+		);
+		expect(cookies.get("better-auth.last_used_login_method")?.value).toBe(
+			"email",
+		);
+	});
+
+	it("should preserve the pending login method when the two-factor cookie is secure and renamed", async () => {
+		let otp = "";
+		const { auth, db, testUser } = await getTestInstance({
+			baseURL: "https://example.com",
+			advanced: {
+				useSecureCookies: true,
+				cookies: {
+					two_factor: {
+						name: "custom.two_factor",
+					},
+				},
+			},
+			plugins: [
+				lastLoginMethod(),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const challengeCookies = parseSetCookieHeader(
+			signInRes.headers.get("set-cookie") || "",
+		);
+		expect(
+			challengeCookies.get("__Secure-custom.two_factor")?.value,
+		).toBeDefined();
+
+		const challengeHeaders = new Headers();
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+		expect(otp).toHaveLength(6);
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				code: otp,
+			},
+			asResponse: true,
+		});
+		const verifyCookies = parseSetCookieHeader(
+			verifyRes.headers.get("set-cookie") || "",
+		);
+		expect(verifyCookies.get("better-auth.last_used_login_method")?.value).toBe(
+			"email",
+		);
 	});
 
 	it("should set the last login method cookie for siwe", async () => {
@@ -251,12 +446,176 @@ describe("lastLoginMethod", async () => {
 			},
 			{ throw: true },
 		);
+		expectNoTwoFactorChallenge(data);
 		const session = await auth.api.getSession({
 			headers: new Headers({
 				authorization: `Bearer ${data.token}`,
 			}),
 		});
 		expect(session?.user.lastLoginMethod).toBe("email");
+	});
+
+	it("should persist the original login method in the database after two-factor verification", async () => {
+		let otp = "";
+		const { auth, db, testUser } = await getTestInstance({
+			plugins: [
+				lastLoginMethod({ storeInDatabase: true }),
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp: nextOtp }) {
+							otp = nextOtp;
+						},
+					},
+				}),
+			],
+		});
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const challengeHeaders = new Headers();
+		setCookieToHeader(challengeHeaders)({ response: signInRes });
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {
+				code: otp,
+			},
+			asResponse: true,
+		});
+		const verifyJson = (await verifyRes.json()) as { token: string };
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${verifyJson.token}`,
+			}),
+		});
+		expect(session?.user.lastLoginMethod).toBe("email");
+	});
+
+	it("should ignore stale challenge cookies for session-scoped two-factor verification", async () => {
+		let otp = "";
+		let magicLinkEmail = { email: "", token: "", url: "" };
+		const activeUser = {
+			email: "active-last-login@example.com",
+			password: "password1234",
+			name: "Active User",
+		};
+		const challengedUser = {
+			email: "magic-last-login@example.com",
+			password: "password1234",
+			name: "Magic User",
+		};
+		const { auth, db } = await getTestInstance(
+			{
+				plugins: [
+					lastLoginMethod({ storeInDatabase: true }),
+					magicLink({
+						async sendMagicLink(data) {
+							magicLinkEmail = data;
+						},
+					}),
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp: nextOtp }) {
+								otp = nextOtp;
+							},
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: activeUser,
+		});
+		await auth.api.signUpEmail({
+			body: challengedUser,
+		});
+
+		const activeHeaders = new Headers();
+		const activeSignIn = await auth.api.signInEmail({
+			body: {
+				email: activeUser.email,
+				password: activeUser.password,
+			},
+			asResponse: true,
+		});
+		setCookieToHeader(activeHeaders)({ response: activeSignIn });
+
+		const activeSession = await auth.api.getSession({
+			headers: activeHeaders,
+		});
+		expect(activeSession?.user.lastLoginMethod).toBe("email");
+
+		await db.update({
+			model: "user",
+			update: {
+				twoFactorEnabled: true,
+			},
+			where: [{ field: "email", value: challengedUser.email }],
+		});
+
+		await auth.api.signInMagicLink({
+			body: {
+				email: challengedUser.email,
+			},
+			headers: new Headers(),
+		});
+		const magicToken =
+			new URL(magicLinkEmail.url).searchParams.get("token") || "";
+		const challengeResponse = await auth.api.magicLinkVerify({
+			query: {
+				token: magicToken,
+				callbackURL: "/callback",
+			},
+			headers: activeHeaders,
+			asResponse: true,
+		});
+		setCookieToHeader(activeHeaders)({ response: challengeResponse });
+
+		const challengedCookies = parseCookies(activeHeaders.get("cookie") || "");
+		expect(challengedCookies.get("better-auth.two_factor")).toBeDefined();
+
+		await auth.api.sendTwoFactorOTP({
+			headers: activeHeaders,
+			body: {},
+		});
+		expect(otp).toHaveLength(6);
+
+		await auth.api.verifyTwoFactorOTP({
+			headers: activeHeaders,
+			body: {
+				code: otp,
+			},
+			asResponse: true,
+		});
+
+		const updatedActiveUser = await db.findOne<
+			(typeof activeUser & { lastLoginMethod?: string | null }) | null
+		>({
+			model: "user",
+			where: [{ field: "email", value: activeUser.email }],
+		});
+		expect(updatedActiveUser?.lastLoginMethod).toBe("email");
 	});
 
 	it("should set the last login method for siwe in the database", async () => {
@@ -293,9 +652,10 @@ describe("lastLoginMethod", async () => {
 			chainId,
 			email: "user@example.com",
 		});
+		expectNoTwoFactorChallenge(data);
 		const session = await auth.api.getSession({
 			headers: new Headers({
-				authorization: `Bearer ${data?.token}`,
+				authorization: `Bearer ${data.token}`,
 			}),
 		});
 		expect(session?.user.lastLoginMethod).toBe("siwe");
@@ -377,24 +737,11 @@ describe("lastLoginMethod", async () => {
 		} as any);
 		const userCreateBefore =
 			initResult?.options?.databaseHooks?.user?.create?.before;
-		const sessionCreateAfter =
-			initResult?.options?.databaseHooks?.session?.create?.after;
 
 		await expect(
 			userCreateBefore?.(
 				{
 					email: "test@example.com",
-				} as any,
-				{
-					path: undefined,
-				} as any,
-			),
-		).resolves.toBeUndefined();
-
-		await expect(
-			sessionCreateAfter?.(
-				{
-					userId: "user-123",
 				} as any,
 				{
 					path: undefined,
@@ -424,8 +771,6 @@ describe("lastLoginMethod", async () => {
 		} as any);
 		const userCreateBefore =
 			initResult?.options?.databaseHooks?.user?.create?.before;
-		const sessionCreateAfter =
-			initResult?.options?.databaseHooks?.session?.create?.after;
 
 		await expect(
 			userCreateBefore?.(
@@ -438,25 +783,8 @@ describe("lastLoginMethod", async () => {
 			),
 		).resolves.toBeUndefined();
 
-		await expect(
-			sessionCreateAfter?.(
-				{
-					userId: "user-123",
-				} as any,
-				{
-					path: undefined,
-				} as any,
-			),
-		).resolves.toBeUndefined();
-
 		expect(customResolveMethod).toHaveBeenNthCalledWith(
 			1,
-			expect.objectContaining({
-				path: "",
-			}),
-		);
-		expect(customResolveMethod).toHaveBeenNthCalledWith(
-			2,
 			expect.objectContaining({
 				path: "",
 			}),
@@ -485,6 +813,7 @@ describe("lastLoginMethod", async () => {
 			},
 			{ throw: true },
 		);
+		expectNoTwoFactorChallenge(emailSignInData);
 
 		let session = await auth.api.getSession({
 			headers: new Headers({
@@ -502,6 +831,7 @@ describe("lastLoginMethod", async () => {
 			},
 			{ throw: true },
 		);
+		expectNoTwoFactorChallenge(emailSignInData2);
 
 		session = await auth.api.getSession({
 			headers: new Headers({
@@ -539,6 +869,7 @@ describe("lastLoginMethod", async () => {
 			},
 			{ throw: true },
 		);
+		expectNoTwoFactorChallenge(emailSignInData);
 
 		const session = await auth.api.getSession({
 			headers: new Headers({
@@ -562,7 +893,8 @@ describe("lastLoginMethod", async () => {
 			url: expect.stringContaining("google.com"),
 			redirect: true,
 		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		expectNoTwoFactorChallenge(signInRes.data);
+		const state = new URL(signInRes.data.url!).searchParams.get("state") || "";
 
 		const headers = new Headers();
 		await client.$fetch("/callback/google", {
@@ -692,15 +1024,7 @@ describe("lastLoginMethod", async () => {
 							return true;
 						},
 						handler: createAuthMiddleware(async (ctx) => {
-							const setCookieHeaders =
-								ctx.context.responseHeaders?.getSetCookie?.() || [];
-							const sessionTokenName =
-								ctx.context.authCookies.sessionToken.name;
-							// If session token is being set, also set an additional cookie BEFORE checking
-							const hasSessionToken = setCookieHeaders.some((cookie) =>
-								cookie.includes(sessionTokenName),
-							);
-							if (hasSessionToken) {
+							if (ctx.context.finalizedSignIn) {
 								ctx.setCookie("additional-test-cookie", "test-value", {
 									maxAge: 60 * 60 * 24 * 30,
 									httpOnly: false,

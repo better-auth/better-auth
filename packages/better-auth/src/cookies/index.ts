@@ -12,6 +12,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import { serializeCookie } from "better-call";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -261,6 +262,18 @@ export async function setCookieCache(
 	}
 }
 
+/**
+ * Writes the session cookie (and any supporting cookies) and pins the session
+ * onto `ctx.context.newSession` so downstream after-hooks and plugins observe
+ * the same session the browser just received.
+ *
+ * **Invariant:** any code path that publishes the session cookie for a given
+ * request must also call `ctx.context.setNewSession(session)` (done here). Do
+ * not write `better-auth.session_token` via `ctx.setSignedCookie` directly
+ * without mirroring the in-memory state, otherwise after-hooks will see a
+ * stale (or missing) session and make wrong decisions about what to do next
+ * (e.g. whether to stamp lastLoginMethod, whether to sync multi-session, etc.).
+ */
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
@@ -354,6 +367,31 @@ export function deleteSessionCookie(
 	if (!skipDontRememberMe) {
 		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
+}
+
+/**
+ * Append expired `Set-Cookie` headers for every auth cookie produced by
+ * `setSessionCookie`. Used during sign-in rollback (after-hook errors) to
+ * retract cookies that were already emitted before the DB session was
+ * deleted, avoiding a window where the browser holds a token that no
+ * longer exists server-side.
+ */
+export function expireSessionCookiesInHeaders(
+	headers: Headers,
+	authCookies: BetterAuthCookies,
+) {
+	const expire = (cookie: BetterAuthCookie) => {
+		headers.append(
+			"set-cookie",
+			serializeCookie(cookie.name, "", {
+				...cookie.attributes,
+				maxAge: 0,
+			}),
+		);
+	};
+	expire(authCookies.sessionToken);
+	expire(authCookies.sessionData);
+	expire(authCookies.dontRememberToken);
 }
 
 export function parseCookies(cookieHeader: string) {

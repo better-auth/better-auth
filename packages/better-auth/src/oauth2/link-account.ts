@@ -228,20 +228,8 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(user.id);
-	if (!session) {
-		return {
-			error: "unable to create session",
-			data: null,
-			isRegister: false,
-		};
-	}
-
 	return {
-		data: {
-			session,
-			user,
-		},
+		data: user,
 		error: null,
 		isRegister,
 	};

@@ -2,8 +2,8 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
+import { resolveSignInWithRedirect } from "../../auth/resolve-sign-in";
 import { getAwaitableValue } from "../../context/helpers";
-import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
@@ -253,7 +253,7 @@ export const callbackOAuth = createAuthEndpoint(
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
-		const result = await handleOAuthUserInfo(c, {
+		const oauthResult = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
 				id: String(userInfo.id),
@@ -267,25 +267,30 @@ export const callbackOAuth = createAuthEndpoint(
 				provider.options?.disableSignUp,
 			overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 		});
-		if (result.error) {
-			c.context.logger.error(result.error.split(" ").join("_"));
-			return redirectOnError(result.error.split(" ").join("_"));
+		if (oauthResult.error) {
+			c.context.logger.error(oauthResult.error.split(" ").join("_"));
+			return redirectOnError(oauthResult.error.split(" ").join("_"));
 		}
-		const { session, user } = result.data!;
-		await setSessionCookie(c, {
-			session,
-			user,
+		const user = oauthResult.data!;
+		const redirectTarget = (() => {
+			try {
+				const url = oauthResult.isRegister
+					? newUserURL || callbackURL
+					: callbackURL;
+				return url.toString();
+			} catch {
+				return oauthResult.isRegister ? newUserURL || callbackURL : callbackURL;
+			}
+		})();
+		await resolveSignInWithRedirect(c, {
+			signIn: {
+				user,
+			},
+			redirectTarget,
+			onFailedToCreateSession() {
+				return redirectOnError("failed_to_create_session");
+			},
 		});
-
-		let toRedirectTo: string;
-		try {
-			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;
-			toRedirectTo = url.toString();
-		} catch {
-			toRedirectTo = result.isRegister
-				? newUserURL || callbackURL
-				: callbackURL;
-		}
-		throw c.redirect(toRedirectTo);
+		throw c.redirect(redirectTarget);
 	},
 );

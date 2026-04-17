@@ -1,4 +1,5 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
+import type { GenericEndpointContext } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -13,8 +14,9 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
-import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
-import { generateRandomString } from "better-auth/crypto";
+import { resolveSignInWithRedirect } from "better-auth/auth/resolve-sign-in";
+import { deleteSessionCookie } from "better-auth/cookies";
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import * as saml from "samlify";
@@ -42,7 +44,12 @@ import type {
 	SSOOptions,
 	SSOProvider,
 } from "../types";
-import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	domainMatches,
+	normalizeSamlSessionIndex,
+	safeJsonParse,
+	validateEmailDomain,
+} from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	createIdP,
@@ -1371,7 +1378,7 @@ const callbackSSOQuerySchema = z.object({
  *   parsed from the request context.
  */
 async function handleOIDCCallback(
-	ctx: any,
+	ctx: GenericEndpointContext,
 	options: SSOOptions | undefined,
 	providerId: string,
 	stateData?: Awaited<ReturnType<typeof parseState>>,
@@ -1412,7 +1419,7 @@ async function handleOIDCCallback(
 	}
 	if (!provider) {
 		provider = await ctx.context.adapter
-			.findOne({
+			.findOne<SSOProvider<SSOOptions> & { oidcConfig: string }>({
 				model: "ssoProvider",
 				where: [
 					{
@@ -1421,7 +1428,7 @@ async function handleOIDCCallback(
 					},
 				],
 			})
-			.then((res: { oidcConfig: string } | null) => {
+			.then((res) => {
 				if (!res) {
 					return null;
 				}
@@ -1667,7 +1674,7 @@ async function handleOIDCCallback(
 	if (linked.error) {
 		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
 	}
-	const { session, user } = linked.data!;
+	const user = linked.data!;
 
 	if (
 		options?.provisionUser &&
@@ -1680,11 +1687,10 @@ async function handleOIDCCallback(
 			provider,
 		});
 	}
-
-	await assignOrganizationFromProvider(ctx as any, {
+	const providerOrganizationAssignment = {
 		user,
 		profile: {
-			providerType: "oidc",
+			providerType: "oidc" as const,
 			providerId: provider.providerId,
 			accountId: userInfo.id,
 			email: userInfo.email,
@@ -1694,20 +1700,51 @@ async function handleOIDCCallback(
 		provider,
 		token: tokenResponse,
 		provisioningOptions: options?.organizationProvisioning,
-	});
+	};
 
-	await setSessionCookie(ctx, {
-		session,
-		user,
+	const redirectTarget = (() => {
+		try {
+			const url = linked.isRegister ? newUserURL || callbackURL : callbackURL;
+			return url.toString();
+		} catch {
+			return linked.isRegister ? newUserURL || callbackURL : callbackURL;
+		}
+	})();
+	await resolveSignInWithRedirect(ctx, {
+		signIn: {
+			user,
+		},
+		redirectTarget,
+		onFailedToCreateSession() {
+			throw ctx.redirect(
+				`${errorURL || callbackURL}?error=failed_to_create_session`,
+			);
+		},
+		onChallenge: async (challenge) => {
+			if (challenge.type !== "two-factor" || !provider.organizationId) {
+				return;
+			}
+			const expiresAt =
+				ctx.context.signInAttempt?.id === challenge.attemptId
+					? ctx.context.signInAttempt.expiresAt
+					: new Date(Date.now() + 10 * 60 * 1000);
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: `${constants.SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX}${challenge.attemptId}`,
+				value: await symmetricEncrypt({
+					key: ctx.context.secretConfig,
+					data: JSON.stringify({
+						userId: user.id,
+						providerId: provider.providerId,
+						profile: providerOrganizationAssignment.profile,
+						token: tokenResponse,
+					}),
+				}),
+				expiresAt,
+			});
+		},
 	});
-	let toRedirectTo: string;
-	try {
-		const url = linked.isRegister ? newUserURL || callbackURL : callbackURL;
-		toRedirectTo = url.toString();
-	} catch {
-		toRedirectTo = linked.isRegister ? newUserURL || callbackURL : callbackURL;
-	}
-	throw ctx.redirect(toRedirectTo);
+	await assignOrganizationFromProvider(ctx, providerOrganizationAssignment);
+	throw ctx.redirect(redirectTarget);
 }
 
 const callbackSSOEndpointConfig = {
@@ -2144,7 +2181,12 @@ async function handleLogoutRequest(
 	}
 
 	const { nameID } = parsed.extract;
-	const sessionIndex = (parsed.extract as SAMLAssertionExtract).sessionIndex;
+	const sessionIndex = normalizeSamlSessionIndex(
+		(parsed.extract as SAMLAssertionExtract).sessionIndex as
+			| string
+			| string[]
+			| undefined,
+	);
 
 	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
 	const stored = await ctx.context.internalAdapter.findVerificationValue(key);

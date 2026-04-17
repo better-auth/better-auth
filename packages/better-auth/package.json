@@ -111,6 +111,16 @@
       "types": "./dist/api/index.d.mts",
       "default": "./dist/api/index.mjs"
     },
+    "./auth/resolve-sign-in": {
+      "dev-source": "./src/auth/resolve-sign-in.ts",
+      "types": "./dist/auth/resolve-sign-in.d.mts",
+      "default": "./dist/auth/resolve-sign-in.mjs"
+    },
+    "./auth/finalize-sign-in": {
+      "dev-source": "./src/auth/finalize-sign-in.ts",
+      "types": "./dist/auth/finalize-sign-in.d.mts",
+      "default": "./dist/auth/finalize-sign-in.mjs"
+    },
     "./db": {
       "dev-source": "./src/db/index.ts",
       "types": "./dist/db/index.d.mts",

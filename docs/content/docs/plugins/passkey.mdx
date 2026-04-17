@@ -183,6 +183,10 @@ To sign in with a passkey you can use the `signIn.passkey` method. This will pro
   ```
 </APIMethod>
 
+<Callout>
+  If you also use the [Two-Factor Authentication plugin](/docs/plugins/2fa), passkey sign-in may resolve to the standard sign-in challenge envelope (`{ type: "challenge", challenge: { type: "two-factor", attemptId, availableMethods } }`) instead of finalizing the session immediately. UV-verified passkey assertions complete sign-in directly; non-UV assertions can still require the configured second factor.
+</Callout>
+
 #### Example Usage
 
 ```ts

@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { resolveSignIn } from "../../auth/resolve-sign-in";
 import { parseUserOutput } from "../../db/schema";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
@@ -137,16 +137,15 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 								message: "Could not create user",
 							});
 						}
-						const session = await ctx.context.internalAdapter.createSession(
-							newUser.user.id,
-						);
-						await setSessionCookie(ctx, {
+						const result = await resolveSignIn(ctx, {
 							user: newUser.user,
-							session,
 						});
+						if (result.type === "challenge") {
+							return ctx.json(result);
+						}
 						return ctx.json({
-							token: session.token,
-							user: parseUserOutput(ctx.context.options, newUser.user),
+							token: result.session.token,
+							user: parseUserOutput(ctx.context.options, result.user),
 						});
 					}
 					const account = await ctx.context.internalAdapter.findAccount(sub);
@@ -170,17 +169,15 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							});
 						}
 					}
-					const session = await ctx.context.internalAdapter.createSession(
-						user.user.id,
-					);
-
-					await setSessionCookie(ctx, {
+					const result = await resolveSignIn(ctx, {
 						user: user.user,
-						session,
 					});
+					if (result.type === "challenge") {
+						return ctx.json(result);
+					}
 					return ctx.json({
-						token: session.token,
-						user: parseUserOutput(ctx.context.options, user.user),
+						token: result.session.token,
+						user: parseUserOutput(ctx.context.options, result.user),
 					});
 				},
 			),

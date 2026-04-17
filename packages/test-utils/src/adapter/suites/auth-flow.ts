@@ -71,6 +71,17 @@ export const authFlowTestSuite = createTestSuite(
 			});
 			const end = Date.now();
 			console.log(`signInEmail took ${end - start}ms (without hashing)`);
+			if (
+				result &&
+				typeof result === "object" &&
+				"type" in result &&
+				result.type === "challenge"
+			) {
+				throw new Error("unexpected 2FA challenge");
+			}
+			if (!result || typeof result !== "object" || !("user" in result)) {
+				throw new Error("unexpected sign-in result");
+			}
 			expect(result.user).toBeDefined();
 			expect(result.user.id).toBe(signUpResult.user.id);
 		},
@@ -136,6 +147,21 @@ export const authFlowTestSuite = createTestSuite(
 						body: { email: user.email, password: password },
 					});
 					process.env.TZ = "America/Los_Angeles";
+					if (
+						userSignIn &&
+						typeof userSignIn === "object" &&
+						"type" in userSignIn &&
+						userSignIn.type === "challenge"
+					) {
+						throw new Error("unexpected 2FA challenge");
+					}
+					if (
+						!userSignIn ||
+						typeof userSignIn !== "object" ||
+						!("user" in userSignIn)
+					) {
+						throw new Error("unexpected sign-in result");
+					}
 					expect(userSignUp.user.createdAt.toISOString()).toStrictEqual(
 						userSignIn.user.createdAt.toISOString(),
 					);

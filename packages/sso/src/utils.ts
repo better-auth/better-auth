@@ -78,6 +78,23 @@ export function getHostnameFromDomain(domain: string): string | null {
 	return getHostname(domain) || null;
 }
 
+/**
+ * SAML libraries can surface SessionIndex as either a scalar or an array.
+ * Normalize it once at the boundary so logout state comparisons stay stable.
+ */
+export function normalizeSamlSessionIndex(
+	sessionIndex: string | string[] | null | undefined,
+): string | undefined {
+	if (Array.isArray(sessionIndex)) {
+		return sessionIndex.find(
+			(value): value is string => typeof value === "string" && value.length > 0,
+		);
+	}
+	return typeof sessionIndex === "string" && sessionIndex.length > 0
+		? sessionIndex
+		: undefined;
+}
+
 export function maskClientId(clientId: string): string {
 	if (clientId.length <= 4) {
 		return "****";

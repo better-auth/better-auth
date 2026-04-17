@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { twoFactor } from "../two-factor";
 
 describe("bearer", async () => {
 	const { client, auth, testUser } = await getTestInstance(
@@ -101,5 +102,50 @@ describe("bearer", async () => {
 			}),
 		});
 		expect(session?.session).toBeDefined();
+	});
+
+	it("should not expose set-auth-token before two-factor verification completes", async () => {
+		const instance = await getTestInstance(
+			{
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							async sendOTP() {},
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await instance.auth.api.signUpEmail({
+			body: {
+				email: instance.testUser.email,
+				password: instance.testUser.password,
+				name: instance.testUser.name,
+			},
+		});
+
+		await instance.auth.$context.then(async (ctx) => {
+			await ctx.adapter.update({
+				model: "user",
+				update: {
+					twoFactorEnabled: true,
+				},
+				where: [{ field: "email", value: instance.testUser.email }],
+			});
+		});
+
+		const response = await instance.auth.api.signInEmail({
+			body: {
+				email: instance.testUser.email,
+				password: instance.testUser.password,
+			},
+			asResponse: true,
+		});
+
+		expect(response.headers.get("set-auth-token")).toBeNull();
 	});
 });
