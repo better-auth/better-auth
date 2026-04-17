@@ -28,20 +28,22 @@ jobs:
           exempt=false
           reason=""
 
-          case "$HEAD_REF" in
-            changeset-release/*)
-              exempt=true
-              reason="release PR from changeset-release/* branch"
-              ;;
-          esac
+          if [ "$HEAD_REPO" = "$UPSTREAM_REPO" ]; then
+            case "$HEAD_REF" in
+              changeset-release/*)
+                exempt=true
+                reason="release PR from changeset-release/* branch"
+                ;;
+            esac
 
-          if [ "$exempt" = "false" ] && [ "$HEAD_REPO" = "$UPSTREAM_REPO" ]; then
-            if [ "$HEAD_REF" = "next" ] && [ "$BASE_REF" = "main" ]; then
-              exempt=true
-              reason="next -> main promotion PR"
-            elif [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "next" ]; then
-              exempt=true
-              reason="main -> next sync PR"
+            if [ "$exempt" = "false" ]; then
+              if [ "$HEAD_REF" = "next" ] && [ "$BASE_REF" = "main" ]; then
+                exempt=true
+                reason="next -> main promotion PR"
+              elif [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "next" ]; then
+                exempt=true
+                reason="main -> next sync PR"
+              fi
             fi
           fi
 
