@@ -330,8 +330,11 @@ const createHasPermissionForRoles = <O extends OrganizationOptions>(
 		"/organization/has-permission-for-roles",
 		{
 			method: "POST",
+			requireHeaders: true,
 			body: createHasPermissionForRolesBodySchema,
+			use: [orgSessionMiddleware],
 			metadata: {
+				scope: "server",
 				$Infer: {
 					body: {} as PermissionExclusive & {
 						organizationId: string;

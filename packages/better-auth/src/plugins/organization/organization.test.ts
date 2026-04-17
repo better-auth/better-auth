@@ -1,4 +1,4 @@
-import type { APIError } from "@better-auth/core/error";
+import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from "vitest";
@@ -2115,6 +2115,27 @@ describe("hasPermissionForRoles", async () => {
 	});
 	if (!org) throw new Error("Organization not created");
 
+	it("requires an authenticated session even when roles are provided", async () => {
+		try {
+			await auth.api.hasPermissionForRoles({
+				headers: new Headers(),
+				body: {
+					organizationId: org.id,
+					roles: ["owner"],
+					permissions: {
+						project: ["create"],
+					},
+				},
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("UNAUTHORIZED");
+			}
+		}
+	});
+
 	it("skips membership lookup and invalidates cached roles after role updates and deletes", async () => {
 		const permissionKey = getPermissionCacheKey(org.id);
 
@@ -2160,6 +2181,7 @@ describe("hasPermissionForRoles", async () => {
 		secondaryStorage.delete.mockClear();
 
 		const firstCheck = await auth.api.hasPermissionForRoles({
+			headers,
 			body: {
 				organizationId: org.id,
 				roles: ["custom-cache"],
@@ -2189,6 +2211,7 @@ describe("hasPermissionForRoles", async () => {
 		expect(secondaryStorage.delete).toHaveBeenCalledWith(permissionKey);
 
 		const createAfterUpdate = await auth.api.hasPermissionForRoles({
+			headers,
 			body: {
 				organizationId: org.id,
 				roles: "custom-cache",
@@ -2198,6 +2221,7 @@ describe("hasPermissionForRoles", async () => {
 			},
 		});
 		const deleteAfterUpdate = await auth.api.hasPermissionForRoles({
+			headers,
 			body: {
 				organizationId: org.id,
 				roles: "custom-cache",
@@ -2223,6 +2247,7 @@ describe("hasPermissionForRoles", async () => {
 		expect(secondaryStorage.delete).toHaveBeenCalledWith(permissionKey);
 
 		const afterDelete = await auth.api.hasPermissionForRoles({
+			headers,
 			body: {
 				organizationId: org.id,
 				roles: ["custom-cache"],
@@ -2291,6 +2316,7 @@ describe("organization permission cache invalidation on delete", async () => {
 
 		const permissionKey = getPermissionCacheKey(org.id);
 		const warmCache = await auth.api.hasPermissionForRoles({
+			headers,
 			body: {
 				organizationId: org.id,
 				roles: ["custom-delete"],
@@ -2324,6 +2350,7 @@ describe("organization permission cache invalidation on delete", async () => {
 		expect(remainingRoles).toHaveLength(0);
 
 		const afterDelete = await auth.api.hasPermissionForRoles({
+			headers,
 			body: {
 				organizationId: org.id,
 				roles: ["custom-delete"],
