@@ -9,7 +9,7 @@ import { isValidIP, normalizeIP } from "./ip";
  * over bespoke regexes or substring matches; divergent checks are how bypass
  * vulnerabilities get introduced (e.g. Oligo's "0.0.0.0 Day" 2024).
  *
- * Three user-facing primitives:
+ * Four user-facing primitives:
  *
  *   - `classifyHost(host)` — the workhorse. Returns a {@link HostClassification}
  *     with `kind`, `literal`, and `canonical` fields.
@@ -189,8 +189,37 @@ function classifyIPv4(ip: string): HostKind {
 }
 
 /**
+ * Extract an IPv4 address embedded in an expanded IPv6 literal.
+ *
+ * Used to recurse into tunnel/translation forms (6to4, NAT64, Teredo) so a
+ * private destination cannot be smuggled behind a syntactically-public IPv6
+ * literal. `startGroup` is the index of the first of two 16-bit groups in the
+ * expanded form (`0000:0000:...`). With `xor: true`, the 32-bit value is XORed
+ * with `0xffffffff` before decoding (Teredo obfuscates the client IPv4 this
+ * way).
+ */
+function extractEmbeddedIPv4(
+	expanded: string,
+	startGroup: number,
+	options: { xor?: boolean } = {},
+): string | null {
+	const offset = startGroup * 5;
+	const g1 = Number.parseInt(expanded.slice(offset, offset + 4), 16);
+	const g2 = Number.parseInt(expanded.slice(offset + 5, offset + 9), 16);
+	if (!Number.isFinite(g1) || !Number.isFinite(g2)) return null;
+	let combined = ((g1 << 16) | g2) >>> 0;
+	if (options.xor) combined = (combined ^ 0xffffffff) >>> 0;
+	return `${(combined >>> 24) & 0xff}.${(combined >>> 16) & 0xff}.${(combined >>> 8) & 0xff}.${combined & 0xff}`;
+}
+
+/**
  * Classify an expanded, full-form, lowercase IPv6 address (no IPv4-mapped
  * input — those are unmapped to IPv4 before reaching here).
+ *
+ * 6to4 (`2002::/16`), NAT64 (`64:ff9b::/96`) and Teredo (`2001:0000::/32`)
+ * embed an IPv4 that can route to private/loopback space. If the embedded
+ * IPv4 classifies as non-`public`, return `reserved` — blocks SSRF without
+ * advertising the address as a loopback literal for RFC 8252 §7.3 matching.
  */
 function classifyIPv6(expanded: string): HostKind {
 	if (expanded === "0000:0000:0000:0000:0000:0000:0000:0000")
@@ -205,9 +234,26 @@ function classifyIPv6(expanded: string): HostKind {
 	if ((firstByte & 0xfe) === 0xfc) return "private";
 
 	if (expanded.startsWith("2001:0db8:")) return "documentation";
-	if (expanded.startsWith("2001:0000:")) return "reserved";
+
+	if (expanded.startsWith("2002:")) {
+		const embedded = extractEmbeddedIPv4(expanded, 1);
+		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
+		return "public";
+	}
+
+	if (expanded.startsWith("0064:ff9b:0000:0000:0000:0000:")) {
+		const embedded = extractEmbeddedIPv4(expanded, 6);
+		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
+		return "reserved";
+	}
+
+	if (expanded.startsWith("2001:0000:")) {
+		const embedded = extractEmbeddedIPv4(expanded, 6, { xor: true });
+		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
+		return "reserved";
+	}
+
 	if (expanded.startsWith("0100:0000:0000:0000:")) return "reserved";
-	if (expanded.startsWith("0064:ff9b:0000:0000:0000:0000:")) return "reserved";
 
 	return "public";
 }
@@ -249,6 +295,10 @@ export function classifyHost(host: string): HostClassification {
 		stripZoneId(stripBrackets(stripPort(host.trim()))),
 	);
 	const lowered = stripped.toLowerCase();
+
+	if (lowered === "") {
+		return { kind: "reserved", literal: "fqdn", canonical: "" };
+	}
 
 	if (!isValidIP(lowered)) {
 		if (lowered === "localhost" || lowered.endsWith(".localhost")) {

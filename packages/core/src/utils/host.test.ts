@@ -61,6 +61,16 @@ describe("Host Classification", () => {
 		it("should trim whitespace", () => {
 			expect(classifyHost("  127.0.0.1  ").kind).toBe("loopback");
 		});
+
+		it("should classify empty/whitespace input as non-public", () => {
+			// Defense-in-depth: isPublicRoutableHost must not return true for
+			// structurally invalid input, even though callers should validate upstream.
+			expect(classifyHost("").kind).toBe("reserved");
+			expect(classifyHost("   ").kind).toBe("reserved");
+			expect(isPublicRoutableHost("")).toBe(false);
+			expect(isLoopbackHost("")).toBe(false);
+			expect(isLoopbackIP("")).toBe(false);
+		});
 	});
 
 	describe("IPv4 Classification", () => {
@@ -194,6 +204,34 @@ describe("Host Classification", () => {
 			expect(classifyHost("2001:db8::1").canonical).toBe(
 				"2001:0db8:0000:0000:0000:0000:0000:0001",
 			);
+		});
+
+		describe("Tunnel / Translation Forms", () => {
+			it("should flag 6to4 (2002::/16) encoding a non-public IPv4", () => {
+				// 2002:WWXX:YYZZ::/48 routes to IPv4 W.X.Y.Z via a 6to4 gateway
+				expect(classifyHost("2002:7f00:0001::").kind).toBe("reserved"); // 127.0.0.1
+				expect(classifyHost("2002:a9fe:a9fe::").kind).toBe("reserved"); // 169.254.169.254
+				expect(classifyHost("2002:0a00:0001::").kind).toBe("reserved"); // 10.0.0.1
+			});
+
+			it("should pass through 6to4 encoding a public IPv4", () => {
+				// 2002:2606:4700:: encodes 38.6.71.0 (public)
+				expect(classifyHost("2002:2606:4700::").kind).toBe("public");
+			});
+
+			it("should flag NAT64 (64:ff9b::/96) encoding a non-public IPv4", () => {
+				expect(classifyHost("64:ff9b::7f00:1").kind).toBe("reserved"); // 127.0.0.1
+				expect(classifyHost("64:ff9b::a9fe:a9fe").kind).toBe("reserved"); // IMDS
+				expect(classifyHost("64:ff9b::0a00:1").kind).toBe("reserved"); // 10.0.0.1
+				expect(classifyHost("64:ff9b::").kind).toBe("reserved"); // prefix itself
+			});
+
+			it("should flag Teredo (2001::/32) encoding a non-public client IPv4", () => {
+				// Teredo XORs the client IPv4 with 0xFFFFFFFF, so 127.0.0.1 → 80ff:fffe
+				expect(classifyHost("2001:0:0:0:0:0:80ff:fffe").kind).toBe("reserved");
+				// 169.254.169.254 XOR 0xFFFFFFFF → 5601:5601
+				expect(classifyHost("2001:0:0:0:0:0:5601:5601").kind).toBe("reserved");
+			});
 		});
 	});
 
@@ -415,6 +453,19 @@ describe("Host Classification", () => {
 			expect(isLoopbackHost("localhost.")).toBe(true);
 			expect(isLoopbackHost("tenant.localhost.")).toBe(true);
 			expect(isLoopbackIP("127.0.0.1.")).toBe(true);
+		});
+
+		it("should prevent IPv6 tunnel-form SSRF (6to4, NAT64, Teredo)", () => {
+			// Attackers can wrap a private IPv4 in a syntactically-public IPv6
+			// literal. The classifier must recurse into the embedded address.
+			expect(isPublicRoutableHost("2002:7f00:0001::")).toBe(false); // 6to4 → 127.0.0.1
+			expect(isPublicRoutableHost("2002:a9fe:a9fe::")).toBe(false); // 6to4 → IMDS
+			expect(isPublicRoutableHost("64:ff9b::7f00:1")).toBe(false); // NAT64 → 127.0.0.1
+			expect(isPublicRoutableHost("64:ff9b::a9fe:a9fe")).toBe(false); // NAT64 → IMDS
+			expect(isPublicRoutableHost("2001:0:0:0:0:0:80ff:fffe")).toBe(false); // Teredo → 127.0.0.1
+			// Must NOT advertise tunnel forms as RFC 8252 loopback literals
+			expect(isLoopbackIP("2002:7f00:0001::")).toBe(false);
+			expect(isLoopbackIP("64:ff9b::7f00:1")).toBe(false);
 		});
 
 		it("should canonicalize to defeat representation attacks", () => {
