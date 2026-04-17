@@ -51,10 +51,13 @@ test.describe("dynamic baseURL (HTTP)", () => {
 		const { port, stop } = await setupServer(
 			{
 				baseURL: {
+					// Non-loopback hosts: `validateIssuerUrl` must upgrade the
+					// advertised issuer to https per RFC 9207, even though the
+					// configured protocol is http and the wire request is HTTP.
 					// `:*` makes the ephemeral test port match the pattern.
-					allowedHosts: ["tenant-a.localhost:*", "tenant-b.localhost:*"],
+					allowedHosts: ["tenant-a.example.com:*", "tenant-b.example.com:*"],
 					protocol: "http",
-					fallback: "http://fallback.localhost",
+					fallback: "http://fallback.example.com",
 				},
 			},
 			{ oauthProvider: true, disableTestUser: true },
@@ -62,7 +65,7 @@ test.describe("dynamic baseURL (HTTP)", () => {
 
 		try {
 			for (const subdomain of ["tenant-a", "tenant-b"]) {
-				const host = `${subdomain}.localhost:${port}`;
+				const host = `${subdomain}.example.com:${port}`;
 				const res = await httpGet(
 					port,
 					"/.well-known/oauth-authorization-server",
@@ -70,7 +73,7 @@ test.describe("dynamic baseURL (HTTP)", () => {
 				);
 				expect(res.status).toBe(200);
 				const body = JSON.parse(res.body) as { issuer?: string };
-				// `validateIssuerUrl` forces https for non-localhost hostnames (RFC 9207).
+				// `validateIssuerUrl` forces https for non-loopback hostnames (RFC 9207).
 				expect(body.issuer).toBe(`https://${host}/api/auth`);
 			}
 		} finally {
