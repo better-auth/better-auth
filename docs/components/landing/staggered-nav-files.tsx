@@ -187,7 +187,7 @@ const HorizontalLinesPattern: React.FC<{ className?: string }> = ({
 	);
 };
 
-const CommunityPattern: React.FC<{ className?: string }> = ({ className }) => {
+const _CommunityPattern: React.FC<{ className?: string }> = ({ className }) => {
 	const cols = 72;
 	const width = cols * 3;
 	const height = 100;
@@ -220,7 +220,7 @@ const CommunityPattern: React.FC<{ className?: string }> = ({ className }) => {
 	);
 };
 
-const CareersPattern: React.FC<{ className?: string }> = ({ className }) => {
+const _CareersPattern: React.FC<{ className?: string }> = ({ className }) => {
 	const cols = 80;
 	const rows = 48;
 	const cell = 2;
@@ -276,12 +276,9 @@ const products: ProductItem[] = [
 			"The TypeScript auth library. Plugins, adapters, and 20+ social providers.",
 		href: "/docs/introduction",
 		Icon: FrameworkLogoIcon,
-		Pattern: CommunityPattern,
+		Pattern: HorizontalLinesPattern,
 		patternClassName:
-			"absolute inset-0 w-full h-full text-primary/10 pointer-events-none [mask-image:linear-gradient(to_left,black_0%,transparent_100%)]",
-		BgPattern: CareersPattern,
-		bgPatternClassName:
-			"absolute inset-0 w-full h-full text-foreground/[0.14] group-hover/p:text-foreground/[0.22] transition-colors duration-200 pointer-events-none [mask-image:radial-gradient(ellipse_at_top_right,black_0%,transparent_70%)]",
+			"absolute inset-0 w-full h-full text-primary/10 pointer-events-none [mask-image:linear-gradient(to_top,black_0%,transparent_100%)]",
 	},
 	{
 		title: "Infrastructure",
@@ -293,9 +290,6 @@ const products: ProductItem[] = [
 		Pattern: HorizontalLinesPattern,
 		patternClassName:
 			"absolute inset-0 w-full h-full text-primary/10 pointer-events-none [mask-image:linear-gradient(to_top,black_0%,transparent_100%)]",
-		BgPattern: CareersPattern,
-		bgPatternClassName:
-			"absolute inset-0 w-full h-full text-foreground/[0.14] group-hover/p:text-foreground/[0.22] transition-colors duration-200 pointer-events-none [mask-image:radial-gradient(ellipse_at_top_right,black_0%,transparent_70%)]",
 	},
 ];
 
