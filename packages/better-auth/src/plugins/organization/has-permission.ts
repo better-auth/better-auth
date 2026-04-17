@@ -254,9 +254,19 @@ export const invalidatePermissionCache = async (
 	ctx: GenericEndpointContext,
 ) => {
 	cacheAllRoles.delete(organizationId);
-	await ctx.context.secondaryStorage?.delete(
-		getPermissionCacheKey(organizationId),
-	);
+	try {
+		await ctx.context.secondaryStorage?.delete(
+			getPermissionCacheKey(organizationId),
+		);
+	} catch (error) {
+		ctx.context.logger.warn(
+			"[organization] Failed to invalidate permission cache after an organization write. Continuing without blocking the request.",
+			{
+				error,
+				organizationId,
+			},
+		);
+	}
 };
 
 export const hasPermission = async (

@@ -2465,6 +2465,74 @@ describe("organization permission cache invalidation on delete", async () => {
 
 		expect(afterDelete.success).toBe(false);
 	});
+
+	it("still deletes the organization when secondary storage invalidation fails", async () => {
+		const failingOrg = await auth.api.createOrganization({
+			body: {
+				name: "permission-cache-delete-org-with-storage-error",
+				slug: `permission-cache-delete-org-with-storage-error-${crypto.randomUUID()}`,
+			},
+			headers,
+		});
+		if (!failingOrg) throw new Error("Organization not created");
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: failingOrg.id,
+				role: "custom-delete-failure",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const permissionKey = getPermissionCacheKey(failingOrg.id);
+		await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: failingOrg.id,
+				roles: ["custom-delete-failure"],
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		const context = await auth.$context;
+		const warnSpy = vi.spyOn(context.logger, "warn");
+		secondaryStorage.delete.mockImplementationOnce(() => {
+			throw new Error("secondary storage unavailable");
+		});
+
+		const deletedOrganization = await auth.api.deleteOrganization({
+			headers,
+			body: {
+				organizationId: failingOrg.id,
+			},
+		});
+
+		expect(deletedOrganization.id).toBe(failingOrg.id);
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("Failed to invalidate permission cache"),
+			expect.objectContaining({
+				organizationId: failingOrg.id,
+			}),
+		);
+		expect(storage.has(permissionKey)).toBe(true);
+
+		const remainingOrganizations = await db.findMany({
+			model: "organization",
+			where: [
+				{
+					field: "id",
+					value: failingOrg.id,
+				},
+			],
+		});
+		expect(remainingOrganizations).toHaveLength(0);
+	});
 });
 
 describe("organization permission cache without secondary storage", async () => {
