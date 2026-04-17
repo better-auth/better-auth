@@ -11,7 +11,8 @@ import type {
 	Scope,
 } from "./types";
 import {
-	basicToClientCredentials,
+	destructureCredentials,
+	extractClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
 	validateClientCredentials,
@@ -246,26 +247,22 @@ export async function revokeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
-		token,
-		token_type_hint,
-	}: {
-		client_id?: string;
-		client_secret?: string;
+	let { token, token_type_hint } = ctx.body as {
 		token: string;
 		token_type_hint?: "access_token" | "refresh_token";
-	} = ctx.body;
+	};
 
-	// Convert basic authorization
-	const authorization = ctx.request?.headers.get("authorization") || null;
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
-	}
-	// client_id is always required, client_secret is required for confidential clients
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/revoke`,
+	);
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
+
 	if (!client_id) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing required credentials",
@@ -290,6 +287,8 @@ export async function revokeEndpoint(
 		opts,
 		client_id,
 		client_secret,
+		undefined,
+		preVerifiedClient,
 	);
 
 	try {

@@ -56,10 +56,10 @@ describe("pairwise subject identifiers", async () => {
 	let publicClient: OAuthClient | null;
 	let sameHostClientA: OAuthClient | null;
 
-	const redirectUriA = `${rpBaseUrl}/api/auth/oauth2/callback/test-a`;
-	const redirectUriB = `${rpBaseUrl2}/api/auth/oauth2/callback/test-b`;
-	const redirectUriSameHost = `${rpBaseUrl}/api/auth/oauth2/callback/test-same`;
-	const redirectUriPublic = `${rpBaseUrl}/api/auth/oauth2/callback/test-public`;
+	const redirectUriA = `${rpBaseUrl}/api/auth/callback/test-a`;
+	const redirectUriB = `${rpBaseUrl2}/api/auth/callback/test-b`;
+	const redirectUriSameHost = `${rpBaseUrl}/api/auth/callback/test-same`;
+	const redirectUriPublic = `${rpBaseUrl}/api/auth/callback/test-public`;
 
 	beforeAll(async () => {
 		pairwiseClientA = await auth.api.adminCreateOAuthClient({
@@ -303,7 +303,7 @@ describe("pairwise subject identifiers", async () => {
 describe("pairwise DCR validation", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/test`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
 
 	it("should reject pairwise subject_type when pairwiseSecret not configured", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({

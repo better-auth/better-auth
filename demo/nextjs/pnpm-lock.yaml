@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@better-auth/cimd':
+        specifier: link:../../packages/cimd
+        version: link:../../packages/cimd
       '@better-auth/dash':
         specifier: ^0.1.6
         version: 0.1.6(better-auth@..+packages+better-auth)(zod@4.3.6)
