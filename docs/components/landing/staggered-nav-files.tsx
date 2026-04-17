@@ -1,7 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDownIcon, Search } from "lucide-react";
+import {
+	Briefcase,
+	ChevronDownIcon,
+	History,
+	PencilLine,
+	Search,
+	Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,12 +42,304 @@ const navFiles: NavFileItem[] = [
 
 const pricingFile: NavFileItem = { name: "pricing", href: "/pricing" };
 
-const resourceFiles: NavFileItem[] = [
-	{ name: "blog", href: "/blog" },
-	{ name: "changelog", href: "/changelog" },
-	{ name: "community", href: "/community" },
-	{ name: "careers", href: "/careers" },
+interface ProductItem {
+	title: string;
+	tagline: string;
+	description: string;
+	href: string;
+	Icon: React.ComponentType<{ className?: string }>;
+	Pattern?: React.FC<{ className?: string }>;
+	patternClassName?: string;
+	BgPattern?: React.FC<{ className?: string }>;
+	bgPatternClassName?: string;
+}
+
+const FrameworkLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
+	<svg
+		viewBox="0 0 30 45"
+		fill="currentColor"
+		className={`${className ?? ""} rotate-12`}
+		aria-hidden="true"
+	>
+		<path
+			fillRule="evenodd"
+			clipRule="evenodd"
+			d="M0 0H15V15H30V30H15V45H0V30V15V0Z"
+		/>
+	</svg>
+);
+
+const InfraLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
+	<svg
+		viewBox="30 0 30 45"
+		fill="currentColor"
+		className={`${className ?? ""} -rotate-12`}
+		aria-hidden="true"
+	>
+		<path
+			fillRule="evenodd"
+			clipRule="evenodd"
+			d="M45 30V15H30V0H45H60V15V30V45H45H30V30H45Z"
+		/>
+	</svg>
+);
+
+const TimelinePattern: React.FC<{ className?: string }> = ({ className }) => (
+	<svg
+		width="56"
+		height="56"
+		viewBox="0 0 56 56"
+		fill="none"
+		shapeRendering="geometricPrecision"
+		className={className}
+		aria-hidden="true"
+	>
+		<line x1="6" y1="6" x2="6" y2="50" stroke="currentColor" strokeWidth="1" />
+		<circle cx="6" cy="10" r="1.75" fill="currentColor" />
+		<circle cx="6" cy="28" r="1.75" fill="currentColor" />
+		<circle cx="6" cy="46" r="1.75" fill="currentColor" />
+		<line
+			x1="14"
+			y1="10"
+			x2="50"
+			y2="10"
+			stroke="currentColor"
+			strokeWidth="1"
+		/>
+		<line
+			x1="14"
+			y1="28"
+			x2="40"
+			y2="28"
+			stroke="currentColor"
+			strokeWidth="1"
+		/>
+		<line
+			x1="14"
+			y1="46"
+			x2="32"
+			y2="46"
+			stroke="currentColor"
+			strokeWidth="1"
+		/>
+	</svg>
+);
+
+const ScribblePattern: React.FC<{ className?: string }> = ({ className }) => (
+	<svg
+		width="64"
+		height="34"
+		viewBox="0 0 64 34"
+		fill="none"
+		className={className}
+		aria-hidden="true"
+	>
+		<path
+			d="M2 14 C 8 2, 14 2, 18 14 S 28 26, 34 14 S 48 2, 54 14 S 62 20, 62 20"
+			stroke="currentColor"
+			strokeWidth="1.4"
+			strokeLinecap="round"
+			fill="none"
+		/>
+		<path
+			d="M4 26 C 10 22, 20 28, 28 24 S 44 28, 52 24"
+			stroke="currentColor"
+			strokeWidth="1.1"
+			strokeLinecap="round"
+			fill="none"
+			opacity="0.7"
+		/>
+	</svg>
+);
+
+const HorizontalLinesPattern: React.FC<{ className?: string }> = ({
+	className,
+}) => {
+	const rows = 40;
+	const width = 100;
+	const height = rows * 3;
+	const lines: React.ReactElement[] = [];
+	for (let i = 0; i < rows; i++) {
+		const y = i * 3 + 1;
+		lines.push(
+			<line
+				key={i}
+				x1={0}
+				y1={y}
+				x2={width}
+				y2={y}
+				stroke="currentColor"
+				strokeWidth="0.75"
+			/>,
+		);
+	}
+	return (
+		<svg
+			width="100%"
+			height="100%"
+			viewBox={`0 0 ${width} ${height}`}
+			preserveAspectRatio="none"
+			className={className}
+			aria-hidden="true"
+		>
+			{lines}
+		</svg>
+	);
+};
+
+const CommunityPattern: React.FC<{ className?: string }> = ({ className }) => {
+	const cols = 72;
+	const width = cols * 3;
+	const height = 100;
+	const lines: React.ReactElement[] = [];
+	for (let i = 0; i < cols; i++) {
+		const x = i * 3 + 1;
+		lines.push(
+			<line
+				key={i}
+				x1={x}
+				y1={0}
+				x2={x}
+				y2={height}
+				stroke="currentColor"
+				strokeWidth="0.75"
+			/>,
+		);
+	}
+	return (
+		<svg
+			width="100%"
+			height="100%"
+			viewBox={`0 0 ${width} ${height}`}
+			preserveAspectRatio="none"
+			className={className}
+			aria-hidden="true"
+		>
+			{lines}
+		</svg>
+	);
+};
+
+const CareersPattern: React.FC<{ className?: string }> = ({ className }) => {
+	const cols = 80;
+	const rows = 48;
+	const cell = 2;
+	const gap = 1;
+	const stride = cell + gap;
+	const width = cols * stride;
+	const height = rows * stride;
+	const rects: React.ReactElement[] = [];
+	for (let r = 0; r < rows; r++) {
+		for (let c = 0; c < cols; c++) {
+			const nx = c / (cols - 1);
+			const ny = r / (rows - 1);
+			// Diagonal gradient from top-right (dense) to bottom-left (sparse).
+			// t = 0 at top-right, t = 1 at bottom-left, iso-lines run diagonally.
+			const t = (1 - nx + ny) / 2;
+			const density = 1 - t * 0.95;
+			// Deterministic pseudo-random hash per cell.
+			const seed = (c * 1664525 + r * 1013904223) ^ ((c + 17) * (r + 31));
+			const rand = ((seed >>> 0) % 10000) / 10000;
+			if (rand < density) {
+				rects.push(
+					<rect
+						key={`${c}-${r}`}
+						x={c * stride}
+						y={r * stride}
+						width={cell}
+						height={cell}
+					/>,
+				);
+			}
+		}
+	}
+	return (
+		<svg
+			width="100%"
+			height="100%"
+			viewBox={`0 0 ${width} ${height}`}
+			preserveAspectRatio="none"
+			fill="currentColor"
+			className={className}
+			aria-hidden="true"
+		>
+			{rects}
+		</svg>
+	);
+};
+
+const products: ProductItem[] = [
+	{
+		title: "Framework",
+		tagline: "Open source",
+		description:
+			"The TypeScript auth library. Plugins, adapters, and 20+ social providers.",
+		href: "/docs/introduction",
+		Icon: FrameworkLogoIcon,
+		Pattern: CommunityPattern,
+		patternClassName:
+			"absolute inset-0 w-full h-full text-primary/10 pointer-events-none [mask-image:linear-gradient(to_left,black_0%,transparent_100%)]",
+		BgPattern: CareersPattern,
+		bgPatternClassName:
+			"absolute inset-0 w-full h-full text-foreground/[0.14] group-hover/p:text-foreground/[0.22] transition-colors duration-200 pointer-events-none [mask-image:radial-gradient(ellipse_at_top_right,black_0%,transparent_70%)]",
+	},
+	{
+		title: "Infrastructure",
+		tagline: "Hosted platform",
+		description:
+			"Dashboard, audit logs, security detection, SSO, and abuse protection.",
+		href: "/pricing",
+		Icon: InfraLogoIcon,
+		Pattern: HorizontalLinesPattern,
+		patternClassName:
+			"absolute inset-0 w-full h-full text-primary/10 pointer-events-none [mask-image:linear-gradient(to_top,black_0%,transparent_100%)]",
+		BgPattern: CareersPattern,
+		bgPatternClassName:
+			"absolute inset-0 w-full h-full text-foreground/[0.14] group-hover/p:text-foreground/[0.22] transition-colors duration-200 pointer-events-none [mask-image:radial-gradient(ellipse_at_top_right,black_0%,transparent_70%)]",
+	},
 ];
+
+const resources: ProductItem[] = [
+	{
+		title: "Blog",
+		tagline: "Writing",
+		description: "Engineering, product, and updates",
+		href: "/blog",
+		Icon: PencilLine,
+		Pattern: ScribblePattern,
+		patternClassName:
+			"absolute right-3 top-3 text-foreground/30 group-hover/p:text-foreground/60 transition-colors duration-200 pointer-events-none",
+	},
+	{
+		title: "Changelog",
+		tagline: "Shipped",
+		description: "Latest releases and improvements",
+		href: "/changelog",
+		Icon: History,
+		Pattern: TimelinePattern,
+		patternClassName:
+			"absolute right-3 top-3 text-foreground/30 group-hover/p:text-foreground/60 transition-colors duration-200 pointer-events-none",
+	},
+	{
+		title: "Community",
+		tagline: "Discord",
+		description: "Join the conversation",
+		href: "/community",
+		Icon: Users,
+	},
+	{
+		title: "Careers",
+		tagline: "Hiring",
+		description: "Build with us",
+		href: "/careers",
+		Icon: Briefcase,
+	},
+];
+
+const resourceFiles: NavFileItem[] = resources.map((r) => ({
+	name: r.title.toLowerCase(),
+	href: r.href,
+}));
 
 interface MobileMenuSection {
 	name: string;
@@ -49,20 +348,17 @@ interface MobileMenuSection {
 }
 
 const mobileMenuSections: MobileMenuSection[] = [
+	{
+		name: "products",
+		children: products.map((p) => ({
+			name: p.title.toLowerCase(),
+			href: p.href,
+		})),
+	},
 	{ name: "pricing", href: "/pricing" },
 	{ name: "resources", children: resourceFiles },
 	{ name: "enterprise", href: "/enterprise" },
 ];
-
-function DropdownItem({ item }: { item: NavFileItem }) {
-	return (
-		<div className="group/item flex w-full min-w-0 items-center gap-1.5 px-3 py-1.5 hover:bg-foreground/[0.06] transition-colors duration-150 cursor-pointer">
-			<span className="block min-w-0 truncate font-mono text-[10px] uppercase tracking-wider text-foreground/75 dark:text-foreground/60 group-hover/item:text-foreground transition-colors duration-150">
-				{item.name}
-			</span>
-		</div>
-	);
-}
 
 const logoAssets = {
 	darkSvg: `
@@ -116,10 +412,12 @@ export function StaggeredNavFiles() {
 	const currentVersion = getVersionFromPathname(pathname);
 	const prefixHref = (href: string) => versionedDocsHref(href, currentVersion);
 	const [resourcesOpen, setResourcesOpen] = useState(false);
+	const [productsOpen, setProductsOpen] = useState(false);
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [mobileView, setMobileView] = useState<"docs" | "nav">("docs");
 	const [mobileDocSection, setMobileDocSection] = useState(-1);
 	const resourcesTimeout = useRef<NodeJS.Timeout>(undefined);
+	const productsTimeout = useRef<NodeJS.Timeout>(undefined);
 
 	useEffect(() => {
 		document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
@@ -145,6 +443,13 @@ export function StaggeredNavFiles() {
 	};
 	const closeResources = () => {
 		resourcesTimeout.current = setTimeout(() => setResourcesOpen(false), 150);
+	};
+	const openProducts = () => {
+		clearTimeout(productsTimeout.current);
+		setProductsOpen(true);
+	};
+	const closeProducts = () => {
+		productsTimeout.current = setTimeout(() => setProductsOpen(false), 150);
 	};
 	const isActive = useCallback((href: string) => pathname === href, [pathname]);
 	const isActivePrefix = useCallback(
@@ -374,6 +679,95 @@ export function StaggeredNavFiles() {
 						);
 					})}
 
+					{/* Products mega-menu tab */}
+					<motion.div
+						initial={{ opacity: 0, y: -4 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.2, delay: 0.125, ease: "easeOut" }}
+						className="relative flex-1"
+						onMouseEnter={openProducts}
+						onMouseLeave={closeProducts}
+					>
+						<div
+							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
+								productsOpen
+									? "bg-foreground/[0.04]"
+									: "hover:bg-foreground/[0.03]"
+							}`}
+						>
+							<span
+								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
+									productsOpen
+										? "text-foreground/80"
+										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+								}`}
+							>
+								products
+							</span>
+							<svg
+								className={`h-2 w-2 text-foreground/55 dark:text-foreground/40 transition-transform duration-200 ${
+									productsOpen ? "rotate-180" : ""
+								}`}
+								viewBox="0 0 10 6"
+								fill="none"
+							>
+								<path
+									d="M1 1L5 5L9 1"
+									stroke="currentColor"
+									strokeWidth="1.2"
+								/>
+							</svg>
+						</div>
+
+						<AnimatePresence>
+							{productsOpen && (
+								<motion.div
+									initial={{ opacity: 0, y: -4 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -4 }}
+									transition={{ duration: 0.12, ease: "easeOut" }}
+									className={`absolute top-full left-0 z-50 w-[340px] max-w-[calc(100vw-2rem)] border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60`}
+								>
+									<div className="flex flex-col divide-y divide-foreground/[0.06]">
+										{products.map((p) => (
+											<Link
+												key={p.title}
+												href={p.href}
+												onClick={() => setProductsOpen(false)}
+												className="group/p relative flex h-full flex-col gap-2.5 p-4 overflow-hidden hover:bg-foreground/[0.03] transition-colors"
+											>
+												{p.BgPattern && (
+													<p.BgPattern className={p.bgPatternClassName ?? ""} />
+												)}
+												{p.Pattern && (
+													<p.Pattern
+														className={
+															p.patternClassName ??
+															"absolute right-0 top-0 text-foreground/[0.09] group-hover/p:text-foreground/25 transition-colors duration-200 pointer-events-none"
+														}
+													/>
+												)}
+												<div className="relative flex items-center">
+													<span className="flex size-8 items-center justify-center border border-foreground/[0.1] text-foreground/70 group-hover/p:text-foreground group-hover/p:border-foreground/25 transition-colors bg-background">
+														<p.Icon className="size-4" />
+													</span>
+												</div>
+												<div className="relative flex flex-col gap-0.5">
+													<span className="text-[13px] font-medium text-foreground/90 group-hover/p:text-foreground transition-colors">
+														{p.title}
+													</span>
+													<span className="text-[11px] leading-relaxed text-foreground/55 dark:text-foreground/45">
+														{p.description}
+													</span>
+												</div>
+											</Link>
+										))}
+									</div>
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</motion.div>
+
 					{/* Pricing tab */}
 					<motion.div
 						initial={{ opacity: 0, y: -4 }}
@@ -483,27 +877,44 @@ export function StaggeredNavFiles() {
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
 									transition={{ duration: 0.12, ease: "easeOut" }}
-									className={`absolute top-full left-0 z-50 w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
+									className={`absolute top-full right-0 z-50 w-[480px] max-w-[calc(100vw-2rem)] border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60`}
 								>
-									{resourceFiles.map((item, i) => (
-										<motion.div
-											key={item.name}
-											initial={{ opacity: 0 }}
-											animate={{ opacity: 1 }}
-											transition={{ duration: 0.1, delay: i * 0.02 }}
-										>
+									<div className="grid grid-cols-2 divide-x divide-y divide-foreground/[0.06] [&>*:nth-child(-n+2)]:border-t-0 [&>*:nth-child(odd)]:border-l-0">
+										{resources.map((r) => (
 											<Link
-												href={item.href}
-												target={item.external ? "_blank" : undefined}
-												rel={item.external ? "noreferrer" : undefined}
+												key={r.title}
+												href={r.href}
 												onClick={() => setResourcesOpen(false)}
-												className="block"
+												className="group/p relative flex h-full flex-col gap-2.5 p-4 overflow-hidden hover:bg-foreground/[0.03] transition-colors"
 											>
-												<DropdownItem item={item} />
+												{r.BgPattern && (
+													<r.BgPattern className={r.bgPatternClassName ?? ""} />
+												)}
+												{r.Pattern && (
+													<r.Pattern
+														className={
+															r.patternClassName ??
+															"absolute right-0 top-0 text-foreground/[0.09] group-hover/p:text-foreground/25 transition-colors duration-200 pointer-events-none"
+														}
+													/>
+												)}
+												<div className="relative flex items-center">
+													<span className="flex size-8 items-center justify-center border border-foreground/[0.1] text-foreground/70 group-hover/p:text-foreground group-hover/p:border-foreground/25 transition-colors bg-background">
+														<r.Icon className="size-4" />
+													</span>
+												</div>
+												<div className="relative flex flex-col gap-0.5">
+													<span className="text-[13px] font-medium text-foreground/90 group-hover/p:text-foreground transition-colors">
+														{r.title}
+													</span>
+													<span className="text-[11px] leading-relaxed text-foreground/55 dark:text-foreground/45">
+														{r.description}
+													</span>
+												</div>
 											</Link>
-										</motion.div>
-									))}
-									<div className="mt-1 grid w-full grid-cols-[repeat(auto-fit,minmax(1.75rem,1fr))] items-center justify-items-center gap-y-0.5 border-t border-foreground/[0.06] px-2 pt-1">
+										))}
+									</div>
+									<div className="grid w-full grid-cols-[repeat(auto-fit,minmax(1.75rem,1fr))] items-center justify-items-center gap-y-0.5 border-t border-foreground/[0.06] px-2 py-2">
 										<a
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"

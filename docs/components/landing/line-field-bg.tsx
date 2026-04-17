@@ -10,9 +10,8 @@ void main() {
 }`;
 
 // Vertical straight lines with a top-to-bottom halftone envelope — cleared
-// behind the logo, strong fade above, lighter fade below. A slow outward
-// ripple pulse modulates line intensity. Output is monochrome; CSS handles
-// the invert between dark and light themes.
+// behind the logo, strong fade above, lighter fade below. Output is
+// monochrome; CSS handles the invert between dark and light themes.
 const FRAGMENT_SHADER = `
 precision highp float;
 
@@ -33,7 +32,7 @@ void main() {
   // --- Vertical straight lines ------------------------------------------
   // Uniform stripes drifting slowly sideways. Narrow smoothstep keeps the
   // strokes hairline-thin.
-  float stripeFreq = 110.0;
+  float stripeFreq = 120.0;
   float phase = uv.x * stripeFreq + t * 0.6;
   float stripe = abs(fract(phase) - 0.5) * 2.0; // 0 on line, 1 between
   float lineCore = 1.0 - smoothstep(0.06, 0.22, stripe);
@@ -49,7 +48,11 @@ void main() {
   // Hard-clear the logo zone so lines never crowd the mark.
   float centerClear = smoothstep(0.14, 0.28, dist);
 
-  float envelope = verticalHalo * centerClear;
+  // Fade the left side where the hero title lives so the lines don't
+  // compete with the text.
+  float leftFade = smoothstep(0.25, 0.7, uv.x);
+
+  float envelope = verticalHalo * centerClear * leftFade;
 
   // --- Outward ripple pulse ----------------------------------------------
   float ripple = 0.0;
@@ -69,7 +72,7 @@ void main() {
   float brightness = lines * 0.9 * vignette;
 
   // Keep overall intensity low so the logo remains the focal point.
-  brightness *= 0.75;
+  brightness *= 1.1;
   brightness = clamp(brightness, 0.0, 1.0);
 
   gl_FragColor = vec4(vec3(brightness), 1.0);
@@ -138,13 +141,9 @@ export function LineFieldBackground() {
 		const draw = () => {
 			const elapsed = (performance.now() - startTime) / 1000;
 
-			// The 3D logo sits above geometric center: parent has h-full +
-			// flex items-center, then the logo has -mt-[30%] (30% of the
-			// column's width). Convert that offset into UV-Y space using the
-			// canvas aspect ratio.
 			const cssW = canvas.offsetWidth || canvas.width;
 			const cssH = canvas.offsetHeight || canvas.height;
-			const logoOffsetPx = cssW * 0.15; // half of -mt-[30%]
+			const logoOffsetPx = cssW * 0.15;
 			const centerY = Math.min(0.5 + logoOffsetPx / cssH, 0.85);
 
 			gl.uniform1f(uTime, elapsed);
@@ -154,11 +153,6 @@ export function LineFieldBackground() {
 
 			frameRef.current = requestAnimationFrame(draw);
 		};
-
-		gl.uniform1f(uTime, 0);
-		gl.uniform2f(uResolution, canvas.width, canvas.height);
-		gl.uniform2f(uCenter, 0.5, 0.5);
-		gl.drawArrays(gl.TRIANGLES, 0, 6);
 
 		frameRef.current = requestAnimationFrame(draw);
 

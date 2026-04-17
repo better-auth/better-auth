@@ -17,6 +17,7 @@ import {
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
+	Navigation,
 	Phone,
 	Route,
 	ScanFace,

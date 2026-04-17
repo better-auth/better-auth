@@ -20,13 +20,6 @@ import {
 } from "./framework-sections";
 import { TrustedBy } from "./trusted-by";
 
-const cliCommands = [
-	{ name: "npm", command: "npx auth init" },
-	{ name: "yarn", command: "yarn dlx auth init" },
-	{ name: "pnpm", command: "pnpm dlx auth init" },
-	{ name: "bun", command: "bunx auth init" },
-];
-
 const mcpCommands = [
 	{ name: "Cursor", command: "npx auth mcp --cursor" },
 	{ name: "Claude Code", command: "npx auth mcp --claude-code" },
@@ -343,171 +336,35 @@ function InstallBlock() {
 												)}
 											</button>
 										) : (
-											<>
-												<button
-													onClick={() => {
-														if (copied) return;
-														setPmOpen(!pmOpen);
-													}}
-													className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors p-1"
-													aria-label="Copy command"
-												>
-													{copied ? (
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															viewBox="0 0 24 24"
-															className="h-4 w-4"
-														>
-															<path
-																fill="currentColor"
-																d="M9 16.17L4.83 12l-1.42 1.41L9 19L21 7l-1.41-1.41z"
-															/>
-														</svg>
-													) : (
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															viewBox="0 0 24 24"
-															className="h-4 w-4"
-														>
-															<path
-																fill="currentColor"
-																d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"
-															/>
-														</svg>
-													)}
-												</button>
-												{pmOpen && (
-													<>
-														<div
-															className="fixed inset-0 z-40"
-															role="button"
-															tabIndex={-1}
-															aria-label="Close dropdown"
-															onClick={() => setPmOpen(false)}
-															onKeyDown={(e) => {
-																if (e.key === "Escape") setPmOpen(false);
-															}}
+											<button
+												onClick={() => copy("npx auth init")}
+												className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors p-1"
+												aria-label="Copy command"
+											>
+												{copied ? (
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 24 24"
+														className="h-4 w-4"
+													>
+														<path
+															fill="currentColor"
+															d="M9 16.17L4.83 12l-1.42 1.41L9 19L21 7l-1.41-1.41z"
 														/>
-														<div className="absolute right-0 top-full mt-2 w-[138px] bg-white dark:bg-[#050505] border border-neutral-200 dark:border-white/[0.07] shadow-2xl shadow-black/10 dark:shadow-black/80 z-50 rounded-sm">
-															{cliCommands.map((pm, i) => (
-																<button
-																	key={pm.name}
-																	onClick={() => copy(pm.command)}
-																	className={cn(
-																		"flex items-center gap-2.5 w-full px-3 py-2 text-[12px] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.05] transition-all text-left",
-																		i < cliCommands.length - 1 &&
-																			"border-b border-neutral-100 dark:border-white/[0.06]",
-																	)}
-																>
-																	{pm.name === "npm" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 128 128"
-																		>
-																			<path
-																				fill="#cb3837"
-																				d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"
-																			/>
-																			<path
-																				fill="#fff"
-																				d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
-																			/>
-																		</svg>
-																	)}
-																	{pm.name === "yarn" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 256 256"
-																		>
-																			<path
-																				fill="#368FB9"
-																				d="M128 0C57.328 0 0 57.328 0 128s57.328 128 128 128s128-57.328 128-128S198.672 0 128 0"
-																			/>
-																			<path
-																				fill="#FFF"
-																				d="M203.317 174.06c-7.907 1.878-11.91 3.608-21.695 9.983c-15.271 9.884-31.976 14.48-31.976 14.48s-1.383 2.076-5.387 3.015c-6.918 1.68-32.963 3.114-35.335 3.163c-6.376.05-10.28-1.63-11.367-4.25c-3.311-7.907 4.744-11.367 4.744-11.367s-1.779-1.087-2.817-2.076c-.939-.939-1.927-2.816-2.224-2.125c-1.235 3.015-1.878 10.379-5.189 13.69c-4.547 4.596-13.146 3.064-18.236.395c-5.585-2.965.395-9.933.395-9.933s-3.015 1.779-5.436-1.878c-2.175-3.36-4.2-9.094-3.657-16.16c.593-8.056 9.587-15.865 9.587-15.865s-1.581-11.91 3.608-24.117c4.695-11.12 17.347-20.065 17.347-20.065s-10.626-11.762-6.672-22.338c2.57-6.92 3.608-6.87 4.448-7.166c2.965-1.137 5.831-2.373 7.957-4.695c10.625-11.466 24.166-9.292 24.166-9.292s6.425-19.52 12.356-15.715c1.828 1.186 8.401 15.814 8.401 15.814s7.018-4.102 7.809-2.57c4.25 8.254 4.744 24.019 2.866 33.607c-3.163 15.814-11.07 24.315-14.233 29.652c-.741 1.236 8.5 5.14 14.332 21.3c5.387 14.777.593 27.182 1.433 28.566c.148.247.198.346.198.346s6.177.494 18.582-7.166c6.622-4.102 14.48-8.698 23.425-8.797c8.65-.149 9.094 9.983 2.57 11.564"
-																			/>
-																		</svg>
-																	)}
-																	{pm.name === "pnpm" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 256 256"
-																		>
-																			<path
-																				fill="#F9AD00"
-																				d="M0 0h77.37v77.37H0zm89.32 0h77.37v77.37H89.32zm89.31 0h77.37v77.37h-77.37zM89.32 89.32h77.37v77.37H89.32zm89.31 0h77.37v77.37h-77.37z"
-																			/>
-																			<path
-																				fill="#4E4E4E"
-																				d="M0 89.32h77.37v77.37H0zm0 89.31h77.37v77.37H0zm89.32 0h77.37v77.37H89.32zm89.31 0h77.37v77.37h-77.37z"
-																			/>
-																		</svg>
-																	)}
-																	{pm.name === "bun" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 256 225"
-																		>
-																			<path
-																				fill="#FBF0DF"
-																				d="M234.937 114.066c0 49.288-50.779 89.243-113.418 89.243S8.101 163.354 8.101 114.066c0-30.558 19.443-57.552 49.32-73.56C87.3 24.498 105.9 8.101 121.52 8.101s28.97 13.384 64.097 32.405c29.878 16.008 49.32 43.002 49.32 73.56"
-																			/>
-																			<path
-																				fill="#F6DECE"
-																				d="M234.937 114.066a70.2 70.2 0 0 0-2.593-18.73c-8.846 107.909-140.476 113.093-192.227 80.818a129.62 129.62 0 0 0 81.402 27.155c62.542 0 113.418-40.02 113.418-89.243"
-																			/>
-																			<path
-																				fill="#CCBEA7"
-																				d="M112.186 16.3a53.18 53.18 0 0 1-18.244 40.409c-.907.81-.194 2.365.972 1.912c10.92-4.245 25.665-16.948 19.443-42.58c-.259-1.459-2.17-1.07-2.17.259m7.356 0a52.63 52.63 0 0 1 5.217 43.65c-.388 1.134 1.005 2.106 1.783 1.166c7.096-9.073 13.286-27.09-5.25-46.534c-.94-.842-2.398.454-1.75 1.588zm8.944-.551a53.2 53.2 0 0 1 22.198 38.108a1.07 1.07 0 0 0 2.106.357c2.981-11.31 1.296-30.59-23.235-40.604c-1.296-.518-2.138 1.232-1.069 2.01zM68.666 49.45a54.9 54.9 0 0 0 33.928-29.164c.584-1.167 2.43-.713 2.14.583c-5.607 25.924-24.37 31.336-36.035 30.623c-1.232.032-1.2-1.685-.033-2.042"
-																			/>
-																			<g transform="translate(53.792 88.4)">
-																				<ellipse
-																					cx="117.047"
-																					cy="40.183"
-																					fill="#FEBBD0"
-																					rx="18.957"
-																					ry="11.147"
-																				/>
-																				<ellipse
-																					cx="18.957"
-																					cy="40.183"
-																					fill="#FEBBD0"
-																					rx="18.957"
-																					ry="11.147"
-																				/>
-																				<path
-																					fill="#2E2218"
-																					d="M27.868 35.71a17.855 17.855 0 1 0-17.822-17.854c0 9.848 7.974 17.837 17.822 17.855m80.268 0A17.855 17.855 0 1 0 90.41 17.857c-.018 9.818 7.908 17.801 17.726 17.855"
-																				/>
-																				<path
-																					fill="#FFF"
-																					d="M22.36 18.99a6.708 6.708 0 1 0 .064-13.416a6.708 6.708 0 0 0-.065 13.416m80.267 0a6.708 6.708 0 1 0-.065 0z"
-																				/>
-																			</g>
-																			<path
-																				fill="#B71422"
-																				d="M144.365 137.722a28.94 28.94 0 0 1-9.463 15.263a22.07 22.07 0 0 1-12.962 6.092a22.17 22.17 0 0 1-13.383-6.092a28.94 28.94 0 0 1-9.333-15.263a2.333 2.333 0 0 1 2.593-2.625h39.988a2.333 2.333 0 0 1 2.56 2.625"
-																			/>
-																		</svg>
-																	)}
-																	<span className="font-mono text-[11px]">
-																		{pm.command.split(" ")[0]}
-																	</span>
-																</button>
-															))}
-														</div>
-													</>
+													</svg>
+												) : (
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 24 24"
+														className="h-4 w-4"
+													>
+														<path
+															fill="currentColor"
+															d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"
+														/>
+													</svg>
 												)}
-											</>
+											</button>
 										)}
 									</div>
 								</div>
@@ -1177,12 +1034,8 @@ export function HeroReadMe({
 							<span className="font-medium text-foreground/90 dark:text-foreground/80">
 								inside your app
 							</span>
-							. Composable,{" "}
-							<span className="border-b border-dashed border-foreground/30">
-								plugin-based
-							</span>
-							, and built to scale — powering from weekend projects to the
-							biggest{" "}
+							. Composable, plugin-based, and built to scale — powering from
+							weekend projects to the biggest{" "}
 							<span className="font-medium text-foreground/90 dark:text-foreground/80">
 								consumer and enterprise apps
 							</span>{" "}

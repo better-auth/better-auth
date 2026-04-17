@@ -97,7 +97,7 @@ const comparisonRows = [
 	{
 		label: "Additional audit logs",
 		starter: false,
-		pro: "$5/100k",
+		pro: "$0.0001/event",
 		enterprise: "Custom",
 	},
 	{
