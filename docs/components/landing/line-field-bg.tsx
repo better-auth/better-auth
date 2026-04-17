@@ -35,7 +35,47 @@ void main() {
   float stripeFreq = 120.0;
   float phase = uv.x * stripeFreq + t * 0.6;
   float stripe = abs(fract(phase) - 0.5) * 2.0; // 0 on line, 1 between
-  float lineCore = 1.0 - smoothstep(0.06, 0.22, stripe);
+
+  // Per-line thickness variation — most lines stay hairline, a minority
+  // are rendered heavier so the field reads as structured, not uniform.
+  float stripeIdx = floor(phase + 0.5);
+  float thickSeed = fract(sin(stripeIdx * 45.77) * 9823.11);
+  float vThickness = 0.22
+    + step(0.78, thickSeed) * 0.08
+    + step(0.93, thickSeed) * 0.14;
+  float stripeCore = 1.0 - smoothstep(0.06, vThickness, stripe);
+
+  // Break each vertical line into dashes at a fixed pixel cadence so the
+  // field reads as a ladder instead of a continuous stripe. Spacing matches
+  // the 32px grid motif used elsewhere in the brand.
+  float dashSpacingPx = 32.0;
+  float dashFract = fract(gl_FragCoord.y / dashSpacingPx);
+  float dashMask = smoothstep(0.06, 0.18, dashFract);
+  float lineCore = stripeCore * dashMask;
+
+  // Signal bead: a single packet at a time travels top-to-bottom through the
+  // empty channel between two lines. Each cycle picks a new channel so the
+  // effect reads as one deliberate signal rather than a busy field.
+  float gapIdx = floor(phase);
+  float beadCycle = 7.0;
+  float beadCycleIndex = floor(u_time / beadCycle);
+  float beadProgress = fract(u_time / beadCycle);
+  float targetGap = floor(
+    fract(sin(beadCycleIndex * 45.321 + 1.7) * 54321.98) * stripeFreq
+  );
+  float onTargetGap = 1.0 - step(0.5, abs(gapIdx - targetGap));
+  // Travel occupies the first 80% of the cycle; the remainder is a pause.
+  float travel = beadProgress / 0.8;
+  float beadVisible = step(beadProgress, 0.8);
+  float beadY = 1.0 - travel;
+  // Fade the bead in at the start and out at the end of its travel so it
+  // enters and exits softly rather than popping.
+  float travelFade = sin(clamp(travel, 0.0, 1.0) * 3.14159);
+  // Horizontal shape of the bead — bright in the middle of the channel,
+  // feathered off before reaching either bordering line.
+  float gapCore = smoothstep(0.55, 0.95, stripe);
+  float bead = exp(-pow((uv.y - beadY) * 22.0, 2.0)) * beadVisible * travelFade;
+  float signal = gapCore * bead * onTargetGap;
 
   // --- Vertical halftone envelope ----------------------------------------
   // Asymmetric fade: strong/fast above the logo so the mark sits on an
@@ -63,16 +103,17 @@ void main() {
     ripple += exp(-pow((dist - radius) * 10.0, 2.0)) * bell;
   }
 
-  float lines = lineCore * envelope * (0.55 + ripple * 1.4);
+  float lines = lineCore * envelope * (0.32 + ripple * 1.1);
+  lines += signal * envelope * 0.9;
 
   // Vignette.
   vec2 vc = uv - 0.5;
   float vignette = clamp(1.0 - dot(vc, vc) * 0.9, 0.0, 1.0);
 
-  float brightness = lines * 0.9 * vignette;
+  float brightness = lines * 0.75 * vignette;
 
   // Keep overall intensity low so the logo remains the focal point.
-  brightness *= 1.1;
+  brightness *= 0.9;
   brightness = clamp(brightness, 0.0, 1.0);
 
   gl_FragColor = vec4(vec3(brightness), 1.0);
