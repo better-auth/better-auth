@@ -3129,13 +3129,15 @@ describe("api-key", async () => {
 				originalSet(key, value);
 			};
 
-			const { data: keys } = await client.apiKey.list({}, { headers });
+			try {
+				const { data: keys } = await client.apiKey.list({}, { headers });
 
-			fallbackStorage.set = originalSet;
-
-			expect(keys).not.toBeNull();
-			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
-			expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
+				expect(keys).not.toBeNull();
+				expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
+				expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
+			} finally {
+				fallbackStorage.set = originalSet;
+			}
 		});
 
 		it("should not touch the ref list per key while populating", async () => {
