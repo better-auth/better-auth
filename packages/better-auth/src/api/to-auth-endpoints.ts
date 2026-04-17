@@ -351,15 +351,20 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 								/**
 								 * Only roll back when the response actually represents a
-								 * failed sign-in. A successful finalization whose response
-								 * happens to be an APIError (e.g. a 3xx redirect) is kept as-is.
-								 * If an after-hook swapped the response for something else,
-								 * rollback if that new value is an error.
+								 * failed sign-in. A 3xx redirect is a successful auth outcome
+								 * regardless of whether it was the handler's own response or
+								 * an after-hook replacement (e.g. oidc-provider redirecting
+								 * to the consent page after /sign-in/email).
 								 */
+								const isRedirectResponse =
+									isAPIError(result.response) &&
+									result.response.statusCode >= 300 &&
+									result.response.statusCode < 400;
 								const afterHooksReplacedResponse =
 									result.response !== preHookResponse;
 								const shouldRollback =
 									isAPIError(result.response) &&
+									!isRedirectResponse &&
 									(!finalizationWasSuccessful || afterHooksReplacedResponse);
 								if (shouldRollback) {
 									await rollBackFinalizedSignIn(internalContext);
