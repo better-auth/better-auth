@@ -1407,8 +1407,10 @@ If your app already knows the member roles for an organization, you can skip the
 
 ```ts title="has-permission-for-roles.ts"
 import { auth } from "@/lib/auth"
+import { headers } from "next/headers"
 
 await auth.api.hasPermissionForRoles({
+  headers: await headers(),
   body: {
     organizationId: "org-id",
     roles: ["admin", "member"],
@@ -1419,6 +1421,7 @@ await auth.api.hasPermissionForRoles({
 });
 
 await auth.api.hasPermissionForRoles({
+  headers: await headers(),
   body: {
     organizationId: "org-id",
     roles: "admin,member",
@@ -1429,6 +1432,8 @@ await auth.api.hasPermissionForRoles({
   },
 });
 ```
+
+`hasPermissionForRoles` is a server-side `auth.api` helper and still requires an authenticated session. It skips the membership lookup, but it does not expose organization permission evaluation as a public unauthenticated endpoint.
 
 **Check Role Permission**:
 

@@ -18,11 +18,9 @@ import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import {
-	getPermissionCacheKey,
-	hasPermission as hasPermissionHelper,
-} from "./has-permission";
+import { hasPermission as hasPermissionHelper } from "./has-permission";
 import { organization } from "./organization";
+import { cacheAllRoles } from "./permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -30,6 +28,9 @@ import type {
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+
+const getPermissionCacheKey = (organizationId: string) =>
+	`organization-role-permissions:${organizationId}`;
 
 describe("organization type", () => {
 	it("empty org type should works", () => {
@@ -1984,6 +1985,62 @@ describe("organization permission cache ttl", async () => {
 	});
 	if (!org) throw new Error("Organization not created");
 
+	it("falls back to the default ttl when permissionCache.ttl is non-finite", async () => {
+		const invalidTtlOrg = await auth.api.createOrganization({
+			body: {
+				name: "permission-cache-invalid-ttl-org",
+				slug: `permission-cache-invalid-ttl-org-${crypto.randomUUID()}`,
+			},
+			headers,
+		});
+		if (!invalidTtlOrg) throw new Error("Organization not created");
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: invalidTtlOrg.id,
+				role: "custom-invalid-ttl",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const context = await auth.$context;
+		const invalidTtlOptions = {
+			ac,
+			dynamicAccessControl: {
+				enabled: true,
+			},
+			permissionCache: {
+				enabled: true,
+				ttl: Number.NaN,
+			},
+		} satisfies OrganizationOptions;
+
+		secondaryStorage.set.mockClear();
+
+		const result = await hasPermissionHelper(
+			{
+				role: "custom-invalid-ttl",
+				options: invalidTtlOptions,
+				organizationId: invalidTtlOrg.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+			{ context } as any,
+		);
+
+		expect(result).toBe(true);
+		expect(secondaryStorage.set).toHaveBeenCalledWith(
+			getPermissionCacheKey(invalidTtlOrg.id),
+			expect.any(String),
+			60,
+		);
+	});
+
 	it("expires the in-memory role cache based on ttl", async () => {
 		await db.create({
 			model: "organizationRole",
@@ -2072,6 +2129,52 @@ describe("organization permission cache ttl", async () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("only stores in-memory cache entries when useMemoryCache is enabled", async () => {
+		onTestFinished(() => {
+			cacheAllRoles.clear();
+		});
+		const { headers: freshHeaders } = await signInWithTestUser();
+
+		const memoryCacheOrg = await auth.api.createOrganization({
+			body: {
+				name: "permission-cache-memory-write-org",
+				slug: `permission-cache-memory-write-org-${crypto.randomUUID()}`,
+			},
+			headers: freshHeaders,
+		});
+		if (!memoryCacheOrg) throw new Error("Organization not created");
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: memoryCacheOrg.id,
+				role: "custom-memory-cache",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const context = await auth.$context;
+		cacheAllRoles.clear();
+
+		const result = await hasPermissionHelper(
+			{
+				role: "custom-memory-cache",
+				options: organizationOptions,
+				organizationId: memoryCacheOrg.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+			{ context } as any,
+		);
+
+		expect(result).toBe(true);
+		expect(cacheAllRoles.has(memoryCacheOrg.id)).toBe(false);
 	});
 });
 

@@ -26,11 +26,15 @@ type DynamicRoleStatements = z.infer<typeof dynamicRoleStatementsSchema>;
 type PermissionStatements = z.infer<typeof permissionStatementsSchema>;
 
 const getPermissionCacheTTL = (options: OrganizationOptions) => {
-	const ttl = options.permissionCache?.ttl ?? DEFAULT_PERMISSION_CACHE_TTL;
-	return Math.max(Math.floor(ttl), 0);
+	const ttl = options.permissionCache?.ttl;
+	const normalizedTTL =
+		typeof ttl === "number" && Number.isFinite(ttl)
+			? ttl
+			: DEFAULT_PERMISSION_CACHE_TTL;
+	return Math.max(Math.floor(normalizedTTL), 0);
 };
 
-export const getPermissionCacheKey = (organizationId: string) =>
+const getPermissionCacheKey = (organizationId: string) =>
 	`organization-role-permissions:${organizationId}`;
 
 const getDefaultAccessControlRoles = (
@@ -53,8 +57,19 @@ const setMemoryRoleCache = (
 	roles: AccessControlRoleMap,
 	options: OrganizationOptions,
 ) => {
+	const ttl = getPermissionCacheTTL(options);
+	const now = Date.now();
+	for (const [cachedOrganizationId, cacheEntry] of cacheAllRoles) {
+		if (cacheEntry.expiresAt <= now) {
+			cacheAllRoles.delete(cachedOrganizationId);
+		}
+	}
+	if (ttl === 0) {
+		cacheAllRoles.delete(organizationId);
+		return;
+	}
 	cacheAllRoles.set(organizationId, {
-		expiresAt: Date.now() + getPermissionCacheTTL(options) * 1000,
+		expiresAt: now + ttl * 1000,
 		roles,
 	});
 };
@@ -164,7 +179,7 @@ const getSecondaryStorageRoleCache = async (
 	return buildAccessControlRoles(options, parsedPayload.data.roles);
 };
 
-export const resolveAccessControlRoles = async (
+const resolveAccessControlRoles = async (
 	input: {
 		organizationId: string;
 		options: OrganizationOptions;
@@ -173,11 +188,12 @@ export const resolveAccessControlRoles = async (
 	ctx: GenericEndpointContext,
 ) => {
 	const defaultRolesMap = getDefaultAccessControlRoles(input.options);
+	const shouldUseMemoryCache = input.useMemoryCache === true;
 	if (!input.organizationId) {
 		return defaultRolesMap;
 	}
 
-	if (input.useMemoryCache) {
+	if (shouldUseMemoryCache) {
 		const cachedRoles = getMemoryRoleCache(input.organizationId);
 		if (cachedRoles) {
 			return cachedRoles;
@@ -185,7 +201,9 @@ export const resolveAccessControlRoles = async (
 	}
 
 	if (!input.options.dynamicAccessControl?.enabled || !input.options.ac) {
-		setMemoryRoleCache(input.organizationId, defaultRolesMap, input.options);
+		if (shouldUseMemoryCache) {
+			setMemoryRoleCache(input.organizationId, defaultRolesMap, input.options);
+		}
 		return defaultRolesMap;
 	}
 
@@ -205,7 +223,9 @@ export const resolveAccessControlRoles = async (
 		ctx,
 	);
 	if (cachedRoles) {
-		setMemoryRoleCache(input.organizationId, cachedRoles, input.options);
+		if (shouldUseMemoryCache) {
+			setMemoryRoleCache(input.organizationId, cachedRoles, input.options);
+		}
 		return cachedRoles;
 	}
 
@@ -214,7 +234,9 @@ export const resolveAccessControlRoles = async (
 		ctx,
 	);
 	const acRoles = buildAccessControlRoles(input.options, dynamicRoleStatements);
-	setMemoryRoleCache(input.organizationId, acRoles, input.options);
+	if (shouldUseMemoryCache) {
+		setMemoryRoleCache(input.organizationId, acRoles, input.options);
+	}
 
 	if (input.options.permissionCache?.enabled && secondaryStorage) {
 		await secondaryStorage.set(
