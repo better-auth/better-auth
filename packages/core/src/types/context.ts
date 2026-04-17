@@ -423,30 +423,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};
-			/** @internal backing slot for `getNewSession`; written by session publishers. */
-			newSession: {
-				session: Session & Record<string, any>;
-				user: User & Record<string, any>;
-			} | null;
-			/** @internal backing slot for `getFinalizedSignIn`; written by `finalizeSignIn`. */
-			finalizedSignIn: FinalizedSignIn | null;
-			/** @internal backing slot for `getSignInAttempt`; written by challenge resolvers. */
-			signInAttempt: PendingSignInAttempt | null;
 			session: {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
-			/** @internal writer for `getNewSession`; do not call from plugin code. */
-			setNewSession: (
-				session: {
-					session: Session & Record<string, any>;
-					user: User & Record<string, any>;
-				} | null,
-			) => void;
-			/** @internal writer for `getFinalizedSignIn`; do not call from plugin code. */
-			setFinalizedSignIn: (signIn: FinalizedSignIn | null) => void;
-			/** @internal writer for `getSignInAttempt`; do not call from plugin code. */
-			setSignInAttempt: (attempt: PendingSignInAttempt | null) => void;
 			/**
 			 * Any session created during the current request, regardless of origin
 			 * (sign-in, sign-up, anonymous upgrade, device-authorization, etc.).

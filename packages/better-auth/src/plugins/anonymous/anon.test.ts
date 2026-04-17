@@ -659,8 +659,6 @@ describe("anonymous", async () => {
 						},
 						options: {},
 						secret: "secret",
-						setNewSession: vi.fn(),
-						setFinalizedSignIn: vi.fn(),
 					};
 				})(),
 				headers: new Headers(),

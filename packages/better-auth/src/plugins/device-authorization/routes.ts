@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { writers } from "@better-auth/core/context/internals";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
@@ -419,9 +420,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					});
 				}
 
-				// Set new session context for hooks and plugins
-				// (matches setSessionCookie logic)
-				ctx.context.setNewSession({
+				writers(ctx.context).setNewSession({
 					session,
 					user,
 				});

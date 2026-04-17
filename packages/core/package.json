@@ -64,6 +64,11 @@
       "types": "./dist/context/index.d.mts",
       "default": "./dist/context/index.mjs"
     },
+    "./context/internals": {
+      "dev-source": "./src/context/internals.ts",
+      "types": "./dist/context/internals.d.mts",
+      "default": "./dist/context/internals.mjs"
+    },
     "./env": {
       "dev-source": "./src/env/index.ts",
       "types": "./dist/env/index.d.mts",
@@ -118,6 +123,9 @@
       ],
       "context": [
         "dist/context/index.d.mts"
+      ],
+      "context/internals": [
+        "dist/context/internals.d.mts"
       ],
       "env": [
         "dist/env/index.d.mts"

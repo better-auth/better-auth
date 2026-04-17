@@ -1,4 +1,5 @@
 import type { GenericEndpointContext, SignInAttempt } from "@better-auth/core";
+import { writers } from "@better-auth/core/context/internals";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { getSessionFromCtx } from "../../api";
@@ -110,7 +111,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				if (!consumed) {
 					return rejectCookie(clearCookieOnFailure);
 				}
-				ctx.context.setSignInAttempt({
+				writers(ctx.context).setSignInAttempt({
 					...consumed,
 					user,
 				});

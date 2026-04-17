@@ -4,6 +4,7 @@ import type {
 	SignInChallenge,
 	SignInResolution,
 } from "@better-auth/core";
+import { writers } from "@better-auth/core/context/internals";
 import { checkTwoFactor } from "../plugins/two-factor/check";
 import { rotateTrustedDevice } from "../plugins/two-factor/trust-device";
 import type { User } from "../types";
@@ -33,8 +34,9 @@ export async function resolveSignIn(
 	ctx: GenericEndpointContext,
 	options: ResolveSignInOptions,
 ): Promise<SignInResolution> {
-	ctx.context.setFinalizedSignIn(null);
-	ctx.context.setSignInAttempt(null);
+	const ctxWriters = writers(ctx.context);
+	ctxWriters.setFinalizedSignIn(null);
+	ctxWriters.setSignInAttempt(null);
 
 	const twoFactor = await checkTwoFactor(ctx, {
 		user: options.user,

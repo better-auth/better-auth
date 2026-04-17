@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { writers } from "@better-auth/core/context/internals";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db/adapter-kysely";
@@ -1193,17 +1194,11 @@ describe("base context creation", () => {
 	});
 
 	describe("context methods", () => {
-		it("should have setNewSession method", async () => {
-			const ctx = await initBase({});
-			expect(ctx.setNewSession).toBeDefined();
-			expect(typeof ctx.setNewSession).toBe("function");
-		});
-
-		it("should set new session via setNewSession", async () => {
+		it("publishes new sessions via the internal writer surface", async () => {
 			const ctx = await initBase({});
 			const mockSession = { id: "test-session", userId: "user-1" } as any;
-			ctx.setNewSession(mockSession);
-			expect(ctx.newSession).toBe(mockSession);
+			writers(ctx).setNewSession(mockSession);
+			expect(ctx.getNewSession()).toBe(mockSession);
 		});
 
 		it("should have runMigrations method that throws", async () => {
@@ -1823,7 +1818,7 @@ describe("base context creation", () => {
 			const ctx = await initBase({});
 
 			expect(ctx.session).toBe(null);
-			expect(ctx.newSession).toBe(null);
+			expect(ctx.getNewSession()).toBe(null);
 		});
 
 		it("should handle basePath with special characters", async () => {

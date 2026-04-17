@@ -5,6 +5,7 @@ export {
 	runWithEndpointContext,
 } from "./endpoint-context";
 export { getBetterAuthVersion } from "./global";
+export { type AuthContextWriters, writers } from "./internals";
 export {
 	defineRequestState,
 	getCurrentRequestState,

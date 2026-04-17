@@ -1,9 +1,13 @@
 import type {
 	AuthContext,
 	BetterAuthOptions,
+	FinalizedSignIn,
+	PendingSignInAttempt,
 	SecretConfig,
 } from "@better-auth/core";
 import { getBetterAuthVersion } from "@better-auth/core/context";
+import type { AuthContextWriters } from "@better-auth/core/context/internals";
+import type { Session, User } from "@better-auth/core/db";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -251,7 +255,15 @@ Most of the features of Better Auth will not work correctly.`,
 	const trustedOrigins = await getTrustedOrigins(options);
 	const trustedProviders = await getTrustedProviders(options);
 
-	const ctx: AuthContext = {
+	const ctx: AuthContext &
+		AuthContextWriters & {
+			newSession: {
+				session: Session & Record<string, any>;
+				user: User & Record<string, any>;
+			} | null;
+			finalizedSignIn: FinalizedSignIn | null;
+			signInAttempt: PendingSignInAttempt | null;
+		} = {
 		appName: options.appName || "Better Auth",
 		baseURL: baseURL || "",
 		version: getBetterAuthVersion(),

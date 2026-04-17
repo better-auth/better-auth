@@ -4,6 +4,7 @@ import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { writers } from "@better-auth/core/context/internals";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
@@ -268,11 +269,12 @@ export async function setCookieCache(
  * the same session the browser just received.
  *
  * **Invariant:** any code path that publishes the session cookie for a given
- * request must also call `ctx.context.setNewSession(session)` (done here). Do
- * not write `better-auth.session_token` via `ctx.setSignedCookie` directly
- * without mirroring the in-memory state, otherwise after-hooks will see a
- * stale (or missing) session and make wrong decisions about what to do next
- * (e.g. whether to stamp lastLoginMethod, whether to sync multi-session, etc.).
+ * request must also mirror the session into request state via
+ * `writers(ctx.context).setNewSession(session)` (done here). Do not write
+ * `better-auth.session_token` via `ctx.setSignedCookie` directly without
+ * mirroring the in-memory state, otherwise after-hooks will see a stale (or
+ * missing) session and make wrong decisions about what to do next (e.g.
+ * whether to stamp lastLoginMethod, whether to sync multi-session, etc.).
  */
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
@@ -315,7 +317,7 @@ export async function setSessionCookie(
 		);
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
-	ctx.context.setNewSession(session);
+	writers(ctx.context).setNewSession(session);
 }
 
 /**

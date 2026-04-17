@@ -2,6 +2,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { writers } from "@better-auth/core/context/internals";
 import { APIError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
@@ -1206,7 +1207,7 @@ describe("finalized sign-in lifecycle", () => {
 				"/fake-sign-in",
 				{ method: "POST" },
 				async (c) => {
-					c.context.setFinalizedSignIn({
+					writers(c.context).setFinalizedSignIn({
 						session: {
 							token: "session-token",
 						} as any,

@@ -3,6 +3,7 @@ import type {
 	GenericEndpointContext,
 	SignInChallenge,
 } from "@better-auth/core";
+import { writers } from "@better-auth/core/context/internals";
 import type { User } from "../../types";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
@@ -128,9 +129,10 @@ export async function checkTwoFactor(
 		ctx.context.secret,
 		twoFactorCookie.attributes,
 	);
-	ctx.context.setNewSession(null);
-	ctx.context.setFinalizedSignIn(null);
-	ctx.context.setSignInAttempt({
+	const ctxWriters = writers(ctx.context);
+	ctxWriters.setNewSession(null);
+	ctxWriters.setFinalizedSignIn(null);
+	ctxWriters.setSignInAttempt({
 		...attempt,
 		user: input.user as User & Record<string, any>,
 	});

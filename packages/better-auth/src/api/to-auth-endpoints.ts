@@ -5,6 +5,7 @@ import {
 	runWithEndpointContext,
 	runWithRequestState,
 } from "@better-auth/core/context";
+import { writers } from "@better-auth/core/context/internals";
 import { shouldPublishLog } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import {
@@ -109,8 +110,9 @@ async function rollBackFinalizedSignIn(
 	if (responseHeaders) {
 		expireSessionCookiesInHeaders(responseHeaders, context.context.authCookies);
 	}
-	context.context.setNewSession(null);
-	context.context.setFinalizedSignIn(null);
+	const ctxWriters = writers(context.context);
+	ctxWriters.setNewSession(null);
+	ctxWriters.setFinalizedSignIn(null);
 }
 
 function isSuccessfulAuthFinalization(

@@ -2,6 +2,7 @@ import type {
 	GenericEndpointContext,
 	SignInResolution,
 } from "@better-auth/core";
+import { writers } from "@better-auth/core/context/internals";
 import { APIError } from "@better-auth/core/error";
 import { setSessionCookie } from "../cookies";
 import type { User } from "../types";
@@ -53,8 +54,9 @@ export async function finalizeSignIn(
 		session,
 		user: options.user as User & Record<string, any>,
 	};
-	ctx.context.setNewSession(finalized);
-	ctx.context.setFinalizedSignIn({
+	const ctxWriters = writers(ctx.context);
+	ctxWriters.setNewSession(finalized);
+	ctxWriters.setFinalizedSignIn({
 		session: finalized.session,
 		user: finalized.user,
 		attemptId: options.attemptId,

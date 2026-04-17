@@ -79,7 +79,7 @@ export const auth = betterAuth({
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
             if(ctx.path.startsWith("/sign-up")){
-                const newSession = ctx.context.newSession;
+                const newSession = ctx.context.getNewSession();
                 if(newSession){
                     sendMessage({
                         type: "user-register",
@@ -176,13 +176,13 @@ The `ctx` object contains another `context` object inside that's meant to hold c
 
 #### New Session
 
-The newly created session after an endpoint is run. This only exist in after hook.
+Reader for the newly created session on the request. Populated by any flow that publishes a session (sign-in, sign-up, anonymous upgrade, device authorization). Call it from an after hook.
 
 ```ts title="auth.ts"
 import { createAuthMiddleware } from "better-auth/api";
 
 createAuthMiddleware(async (ctx) => {
-    const newSession = ctx.context.newSession
+    const newSession = ctx.context.getNewSession();
 });
 ```
 
@@ -259,7 +259,7 @@ export const auth = betterAuth({
   hooks: {
     after: createAuthMiddleware(async (ctx) => {
       if (ctx.path.startsWith("/sign-up")) {
-        const newSession = ctx.context.newSession;
+        const newSession = ctx.context.getNewSession();
         if (newSession) {
           ctx.context.runInBackground(sendAnalyticsEvent(newSession.user.id));
         }
@@ -281,7 +281,7 @@ export const auth = betterAuth({
   hooks: {
     after: createAuthMiddleware(async (ctx) => {
       if (ctx.path.startsWith("/sign-up")) {
-        const newSession = ctx.context.newSession;
+        const newSession = ctx.context.getNewSession();
         if (newSession) {
           await ctx.context.runInBackgroundOrAwait(
             sendWelcomeEmail(newSession.user)
