@@ -113,7 +113,13 @@ export interface OrganizationCreator {
 }
 
 export function parseRoles(roles: string | string[]): string {
-	return Array.isArray(roles) ? roles.join(",") : roles;
+	if (Array.isArray(roles)) {
+		return roles
+			.map((role) => role.trim())
+			.filter(Boolean)
+			.join(",");
+	}
+	return roles;
 }
 
 export type DynamicAccessControlEndpoints<O extends OrganizationOptions> = {
@@ -159,22 +165,35 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
+	hasPermissionForRoles: ReturnType<typeof createHasPermissionForRoles<O>>;
 };
+
+const permissionBodySchema = z.xor([
+	z.object({
+		permission: z.record(z.string(), z.array(z.string())),
+	}),
+	z.object({
+		permissions: z.record(z.string(), z.array(z.string())),
+	}),
+]);
 
 const createHasPermissionBodySchema = z
 	.object({
 		organizationId: z.string().optional(),
 	})
-	.and(
-		z.xor([
-			z.object({
-				permission: z.record(z.string(), z.array(z.string())),
-			}),
-			z.object({
-				permissions: z.record(z.string(), z.array(z.string())),
-			}),
-		]),
-	);
+	.and(permissionBodySchema);
+
+const createHasPermissionForRolesBodySchema = z
+	.object({
+		organizationId: z.string(),
+		roles: z.string().or(z.array(z.string())),
+	})
+	.and(permissionBodySchema);
+
+const getPermissionsFromBody = (body: {
+	permission?: Record<string, unknown>;
+	permissions?: Record<string, unknown>;
+}) => body.permissions ?? body.permission ?? {};
 
 const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	type DefaultStatements = typeof defaultStatements;
@@ -276,8 +295,119 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				{
 					role: member.role,
 					options: options,
-					permissions: ctx.body.permissions as any,
+					permissions: getPermissionsFromBody(ctx.body) as any,
 					organizationId: activeOrganizationId,
+				},
+				ctx,
+			);
+
+			return ctx.json({
+				error: null,
+				success: result,
+			});
+		},
+	);
+};
+
+const createHasPermissionForRoles = <O extends OrganizationOptions>(
+	options: O,
+) => {
+	type DefaultStatements = typeof defaultStatements;
+	type Statements =
+		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
+	type PermissionType = {
+		[key in keyof Statements]?: Array<
+			Statements[key] extends readonly unknown[]
+				? ArrayElement<Statements[key]>
+				: never
+		>;
+	};
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
+
+	return createAuthEndpoint(
+		"/organization/has-permission-for-roles",
+		{
+			method: "POST",
+			body: createHasPermissionForRolesBodySchema,
+			metadata: {
+				$Infer: {
+					body: {} as PermissionExclusive & {
+						organizationId: string;
+						roles: string | string[];
+					},
+				},
+				openapi: {
+					description:
+						"Check if the provided organization roles have permission",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										organizationId: {
+											type: "string",
+											description:
+												"The organization to resolve dynamic roles from",
+										},
+										roles: {
+											oneOf: [
+												{ type: "string" },
+												{
+													type: "array",
+													items: { type: "string" },
+												},
+											],
+											description: "The caller-provided member roles",
+										},
+										permission: {
+											type: "object",
+											description: "The permission to check",
+											deprecated: true,
+										},
+										permissions: {
+											type: "object",
+											description: "The permission to check",
+										},
+									},
+									required: ["organizationId", "roles", "permissions"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: {
+												type: "string",
+											},
+											success: {
+												type: "boolean",
+											},
+										},
+										required: ["success"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const result = await hasPermission(
+				{
+					role: parseRoles(ctx.body.roles),
+					options,
+					permissions: getPermissionsFromBody(ctx.body) as any,
+					organizationId: ctx.body.organizationId,
 				},
 				ctx,
 			);
@@ -1212,6 +1342,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
 			hasPermission: createHasPermission(opts),
+			hasPermissionForRoles: createHasPermissionForRoles(opts),
 		},
 		schema: {
 			...(schema as BetterAuthPluginDBSchema),
