@@ -178,5 +178,4 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
-
 }
