@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -538,7 +538,7 @@ describe("setActiveTeam org scoping", async () => {
 	let outOfScopeTeamId: string;
 	let userId: string;
 
-	it("should reject teams outside the active organization and preserve the active team", async () => {
+	beforeAll(async () => {
 		const session = await client.getSession({
 			fetchOptions: { headers },
 		});
@@ -629,7 +629,9 @@ describe("setActiveTeam org scoping", async () => {
 		expect((sessionAfterScopedTeam.data?.session as any).activeTeamId).toBe(
 			scopedTeamId,
 		);
+	});
 
+	it("should reject teams outside the active organization and preserve the active team", async () => {
 		const setOutOfScopeTeam = await client.organization.setActiveTeam(
 			{
 				teamId: outOfScopeTeamId,
