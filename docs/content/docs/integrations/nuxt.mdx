@@ -10,11 +10,11 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 Mount the Better Auth handler to a catch-all Nitro route. Create a file at `server/api/auth/[...all].ts`:
 
 ```ts title="server/api/auth/[...all].ts"
-import { auth } from "~~/lib/auth" // import your auth config
+import { auth } from "~~/lib/auth"; // import your auth config
 
 export default defineEventHandler((event) => {
-	return auth.handler(toWebRequest(event))
-})
+	return auth.handler(toWebRequest(event));
+});
 ```
 
 <Callout type="info">
@@ -26,10 +26,10 @@ export default defineEventHandler((event) => {
 Create an auth client using `better-auth/vue` so `useSession` returns Vue refs:
 
 ```ts title="lib/auth-client.ts"
-import { createAuthClient } from "better-auth/vue"
+import { createAuthClient } from "better-auth/vue";
 
-export const authClient = createAuthClient()
-export const { signIn, signUp, signOut, useSession } = authClient
+export const authClient = createAuthClient();
+export const { signIn, signUp, signOut, useSession } = authClient;
 ```
 
 ## Use the session
@@ -38,9 +38,9 @@ Use `authClient.useSession(useFetch)` inside a page `setup()` to load the sessio
 
 ```vue title="app/pages/index.vue"
 <script setup lang="ts">
-import { authClient } from "~~/lib/auth-client"
+import { authClient } from "~~/lib/auth-client";
 
-const { data: session } = await authClient.useSession(useFetch)
+const { data: session } = await authClient.useSession(useFetch);
 </script>
 
 <template>
@@ -61,19 +61,19 @@ For client-only widgets like popovers or menus, call `authClient.useSession()` w
 Create a named route middleware and opt pages into it with `definePageMeta`:
 
 ```ts title="app/middleware/auth.ts"
-import { authClient } from "~~/lib/auth-client"
+import { authClient } from "~~/lib/auth-client";
 
 export default defineNuxtRouteMiddleware(async (to) => {
-	const { data: session } = await authClient.useSession(useFetch)
+	const { data: session } = await authClient.useSession(useFetch);
 	if (!session.value) {
-		return navigateTo({ path: "/login", query: { redirect: to.fullPath } })
+		return navigateTo({ path: "/login", query: { redirect: to.fullPath } });
 	}
-})
+});
 ```
 
 ```vue title="app/pages/dashboard.vue"
 <script setup lang="ts">
-definePageMeta({ middleware: "auth" })
+definePageMeta({ middleware: "auth" });
 </script>
 ```
 
@@ -84,15 +84,15 @@ Rename the file to `app/middleware/auth.global.ts` to run it on every route. Alw
 Call `auth.api.getSession` with the incoming `event.headers` and guard the route with `createError`:
 
 ```ts title="server/api/me.get.ts"
-import { auth } from "~~/lib/auth"
+import { auth } from "~~/lib/auth";
 
 export default defineEventHandler(async (event) => {
-	const session = await auth.api.getSession({ headers: event.headers })
+	const session = await auth.api.getSession({ headers: event.headers });
 	if (!session?.user) {
-		throw createError({ statusCode: 401, statusMessage: "Unauthorized" })
+		throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
 	}
-	return { user: session.user }
-})
+	return { user: session.user };
+});
 ```
 
 If you need to reuse this across many routes, factor the check into your own `server/utils/` helper.
@@ -105,29 +105,29 @@ Aside from `useSession(useFetch)`, `authClient` actions don't forward cookies du
 
 ```vue
 <script setup lang="ts">
-import { authClient } from "~~/lib/auth-client"
+import { authClient } from "~~/lib/auth-client";
 
-const accounts = ref<Awaited<ReturnType<typeof authClient.listAccounts>>["data"]>()
+const accounts = ref<Awaited<ReturnType<typeof authClient.listAccounts>>["data"]>();
 
 onMounted(async () => {
-	const { data } = await authClient.listAccounts()
-	accounts.value = data
-})
+	const { data } = await authClient.listAccounts();
+	accounts.value = data;
+});
 </script>
 ```
 
 **Approach B: create a request-scoped client that forwards cookies during SSR.** Add a `useAuth` composable and combine it with `useAsyncData`:
 
 ```ts title="app/composables/useAuth.ts"
-import { createAuthClient } from "better-auth/vue"
+import { createAuthClient } from "better-auth/vue";
 
 export function useAuth() {
-	const url = useRequestURL()
-	const headers = import.meta.server ? useRequestHeaders(["cookie"]) : undefined
+	const url = useRequestURL();
+	const headers = import.meta.server ? useRequestHeaders(["cookie"]) : undefined;
 	return createAuthClient({
 		baseURL: url.origin,
 		fetchOptions: { headers },
-	})
+	});
 }
 ```
 
@@ -135,7 +135,7 @@ export function useAuth() {
 <script setup lang="ts">
 const { data: accounts } = await useAsyncData("accounts", () =>
 	useAuth().listAccounts().then((res) => res.data),
-)
+);
 </script>
 ```
 
@@ -146,7 +146,7 @@ When you want to reuse the same auth setup across multiple Nuxt apps (for exampl
 ```ts title="nuxt.config.ts"
 export default defineNuxtConfig({
 	extends: ["./layers/auth"],
-})
+});
 ```
 
 ## Resources & examples
