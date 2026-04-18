@@ -9,6 +9,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
+import { safePlural } from "@better-auth/core/utils/pluralize";
 
 export interface PrismaConfig {
 	/**
@@ -148,7 +149,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
 						// Only check if field is explicitly marked as unique
 						const isUnique = foreignKeyAttributes?.unique === true;
-						return isUnique || config.usePlural === true ? key : `${key}s`;
+						return isUnique || config.usePlural === true
+							? key
+							: safePlural(key);
 					}
 
 					// Check backwards: does the base model have FKs to the joined model?
@@ -167,7 +170,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				} catch {
 					// Fallback to pluralizing if we can't determine uniqueness
 				}
-				return `${getModelName(joinedModel).toLowerCase()}s`;
+				return safePlural(getModelName(joinedModel).toLowerCase());
 			};
 			function operatorToPrismaOperator(operator: string) {
 				switch (operator) {

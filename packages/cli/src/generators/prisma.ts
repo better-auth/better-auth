@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { safePlural } from "@better-auth/core/utils/pluralize";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
@@ -401,7 +402,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					const fieldName =
 						isUnique || adapter.options?.usePlural === true
 							? `${relatedModel.toLowerCase()}`
-							: `${relatedModel.toLowerCase()}s`;
+							: safePlural(relatedModel.toLowerCase());
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,
