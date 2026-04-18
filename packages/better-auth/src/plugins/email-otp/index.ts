@@ -43,6 +43,17 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		...options,
 	} satisfies EmailOTPOptions;
 
+	Object.defineProperty(opts, "onOTPCreated", {
+		get() {
+			return options.onOTPCreated;
+		},
+		set(value) {
+			options.onOTPCreated = value;
+		},
+		enumerable: true,
+		configurable: true,
+	});
+
 	const sendVerificationOTPAction = sendVerificationOTP(opts);
 
 	return {
@@ -105,6 +116,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							const otp =
 								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 								defaultOTPGenerator(opts);
+
+							opts.onOTPCreated?.({ email, otp, type: "email-verification" });
+
 							const storedOTP = await storeOTP(ctx, opts, otp);
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: `${storedOTP}:0`,
