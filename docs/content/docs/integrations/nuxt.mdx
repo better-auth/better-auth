@@ -36,7 +36,7 @@ export const { signIn, signUp, signOut, useSession } = authClient
 
 Use `authClient.useSession(useFetch)` inside a page `setup()` to load the session on the server and hydrate it on the client. Pass Nuxt's `useFetch` so the request is made with the incoming cookies and the payload is reused during hydration:
 
-```vue title="pages/index.vue"
+```vue title="app/pages/index.vue"
 <script setup lang="ts">
 import { authClient } from "~~/lib/auth-client"
 
@@ -71,7 +71,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 })
 ```
 
-```vue title="pages/dashboard.vue"
+```vue title="app/pages/dashboard.vue"
 <script setup lang="ts">
 definePageMeta({ middleware: "auth" })
 </script>
@@ -131,7 +131,7 @@ export function useAuth() {
 }
 ```
 
-```vue title="pages/settings.vue"
+```vue title="app/pages/settings.vue"
 <script setup lang="ts">
 const { data: accounts } = await useAsyncData("accounts", () =>
 	useAuth().listAccounts().then((res) => res.data),
