@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
@@ -536,6 +537,11 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				}
 				const result = await resolveSignIn(ctx, {
 					user: updatedUser,
+					amr: {
+						method: BUILTIN_AMR_METHOD.EMAIL_OTP,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 				});
 				if (result.kind === "challenge") {
 					return ctx.json(result);
@@ -675,6 +681,11 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 				const result = await resolveSignIn(ctx, {
 					user: newUser,
+					amr: {
+						method: BUILTIN_AMR_METHOD.EMAIL_OTP,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 				});
 				if (result.kind === "challenge") {
 					return ctx.json(result);
@@ -693,6 +704,11 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const result = await resolveSignIn(ctx, {
 				user: user.user,
+				amr: {
+					method: BUILTIN_AMR_METHOD.EMAIL_OTP,
+					factor: "possession",
+					completedAt: new Date(),
+				},
 			});
 			if (result.kind === "challenge") {
 				return ctx.json(result);

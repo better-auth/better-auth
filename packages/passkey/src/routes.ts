@@ -2,6 +2,7 @@ import type {
 	GenericEndpointContext,
 	SignInChallenge,
 } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { base64 } from "@better-auth/utils/base64";
@@ -831,6 +832,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				}
 				const result = await resolveSignIn(ctx, {
 					user,
+					amr: {
+						method: BUILTIN_AMR_METHOD.PASSKEY,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 					skipChallenges: verification.authenticationInfo.userVerified
 						? ["two-factor"]
 						: undefined,

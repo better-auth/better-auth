@@ -3,6 +3,7 @@ import type {
 	GenericEndpointContext,
 	SecretConfig,
 } from "@better-auth/core";
+import { amrForProvider } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -263,6 +264,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					await resolveSignInWithRedirect(ctx, {
 						signIn: {
 							user: result.data,
+							amr: amrForProvider(payload.account.providerId),
 						},
 						redirectTarget: finalURL,
 						onFailedToCreateSession() {

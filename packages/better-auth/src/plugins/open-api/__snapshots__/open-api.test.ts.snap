@@ -62,6 +62,11 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       },
       "Session": {
         "properties": {
+          "amr": {
+            "default": "Generated at runtime",
+            "readOnly": true,
+            "type": "json",
+          },
           "createdAt": {
             "default": "Generated at runtime",
             "format": "date-time",

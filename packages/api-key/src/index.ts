@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin, HookEndpointContext } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -257,6 +258,13 @@ export function apiKey(
 										ctx.context.options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
 										"ms",
 									),
+								amr: [
+									{
+										method: BUILTIN_AMR_METHOD.API_KEY,
+										factor: "possession" as const,
+										completedAt: new Date(),
+									},
+								],
 							},
 						};
 

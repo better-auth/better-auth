@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { amrSchema } from "../../auth/amr-methods";
 import { coreSchema } from "./shared";
 
 export const signInAttemptSchema = coreSchema.extend({
@@ -6,11 +7,13 @@ export const signInAttemptSchema = coreSchema.extend({
 	expiresAt: z.date(),
 	dontRememberMe: z.boolean().nullish(),
 	/**
-	 * Primary factor used to initiate the sign-in (e.g. "email", "google",
-	 * "magic-link"). Populated after the primary factor resolves so the
-	 * downstream finalize path (after 2FA) can recover the original method.
+	 * Authentication methods completed before the attempt was created. The
+	 * primary factor (e.g. password, magic-link, an OAuth provider) lives at
+	 * `amr[0]`; subsequent factor verifications append on commit. Preserved
+	 * across the challenge so the finalized session's `amr` reflects the full
+	 * chain, not just the last step.
 	 */
-	loginMethod: z.string().nullish(),
+	amr: amrSchema.default(() => []),
 	/**
 	 * Count of failed verification attempts against this attempt. Incremented
 	 * on each invalid code; compared against `maxVerificationAttempts` to lock

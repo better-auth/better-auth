@@ -80,6 +80,7 @@ describe("general types", async () => {
 				userId: string;
 				expiresAt: Date;
 				token: string;
+				amr: import("@better-auth/core").AuthenticationMethodReference[];
 				ipAddress?: string | null | undefined;
 				userAgent?: string | null | undefined;
 			};

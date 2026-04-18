@@ -160,4 +160,15 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	adapter?: {
 		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
+	/**
+	 * Names of sign-in challenge kinds this plugin gates finalization on.
+	 *
+	 * Declaring a non-empty tuple activates the `signInAttempt` schema table
+	 * and enables `resolveSignIn` to pause for this challenge. The tuple is a
+	 * runtime pairing for the type-level `BetterAuthSignInChallengeRegistry`:
+	 * registry augmentation alone is insufficient, because adapters and
+	 * `getAuthTables` need to decide at runtime whether to emit the attempt
+	 * schema.
+	 */
+	signInChallenges?: readonly string[] | undefined;
 };

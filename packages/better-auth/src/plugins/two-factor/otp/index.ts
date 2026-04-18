@@ -1,4 +1,5 @@
 import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -213,7 +214,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					code: "OTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, key } = await verifyTwoFactor(ctx);
+			const resolver = await verifyTwoFactor(ctx);
+			const { session, key } = resolver;
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue({
@@ -313,7 +315,9 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			},
 		},
 		async (ctx) => {
-			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
+			const resolver = await verifyTwoFactor(ctx);
+			const { session, key } = resolver;
+			const invalid = resolver.invalid;
 			const toCheckOtp =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,
@@ -349,45 +353,74 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				new TextEncoder().encode(storedValue),
 				new TextEncoder().encode(inputValue),
 			);
+			const user = session.user as UserWithTwoFactor;
 			if (isCodeValid) {
-				if (!session.user.twoFactorEnabled) {
-					if (!session.session) {
+				if (!user.twoFactorEnabled) {
+					if (resolver.mode !== "management") {
 						throw APIError.from(
 							"BAD_REQUEST",
 							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						);
 					}
+					const activeSession = resolver.session.session;
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						session.user.id,
+						user.id,
 						{
 							twoFactorEnabled: true,
 						},
 					);
 					const newSession = await ctx.context.internalAdapter.createSession(
-						session.user.id,
+						user.id,
 						false,
-						session.session,
 					);
 					await setSessionCookie(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
-					);
+					await ctx.context.internalAdapter.deleteSession(activeSession.token);
 					return ctx.json({
 						token: newSession.token,
 						user: parseUserOutput(ctx.context.options, updatedUser),
 					});
 				}
-				return valid(ctx);
+				if (resolver.mode === "complete") {
+					return resolver.valid(ctx, {
+						method: BUILTIN_AMR_METHOD.OTP,
+						factor: "possession",
+						completedAt: new Date(),
+					});
+				}
+				return resolver.valid(ctx);
 			} else {
-				await ctx.context.internalAdapter.updateVerificationByIdentifier(
-					`2fa-otp-${key}`,
-					{
-						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
-					},
-				);
+				// Concurrent bad-code submissions would race a plain
+				// read-modify-write, collapsing increments so the OTP-scoped
+				// lockout could drift below the configured `allowedAttempts`.
+				// CAS on the stored value; on conflict, re-read and recompute
+				// up to a bounded number of retries. The attempt-level counter
+				// (recordSignInAttemptFailure) is the authoritative limiter,
+				// but this per-OTP counter is reached in management-mode
+				// enrollment where there is no attempt, so it must be correct
+				// on its own.
+				const identifier = `2fa-otp-${key}`;
+				const MAX_CAS_RETRIES = 5;
+				let latest = toCheckOtp!;
+				for (let i = 0; i < MAX_CAS_RETRIES; i++) {
+					const [currentOtp, currentCounter] = latest.value.split(":");
+					const nextValue = `${currentOtp}:${
+						(parseInt(currentCounter!, 10) || 0) + 1
+					}`;
+					const applied =
+						await ctx.context.internalAdapter.casUpdateVerificationValue(
+							identifier,
+							latest.value,
+							nextValue,
+						);
+					if (applied) break;
+					const reread =
+						await ctx.context.internalAdapter.findVerificationValue(identifier);
+					if (!reread) break;
+					latest = reread;
+				}
 				return invalid("INVALID_CODE");
 			}
 		},

@@ -163,7 +163,6 @@ async function readWhoAmI(baseURL: string, jar: CookieJar) {
 			user: {
 				email: string;
 				twoFactorEnabled?: boolean;
-				lastLoginMethod?: string | null;
 			} | null;
 		} | null;
 	};
@@ -472,9 +471,7 @@ test.describe("two factor user journeys", () => {
 		const sentOtps: Array<{ email: string | null; otp: string }> = [];
 		const { port, stop } = await setupServer({
 			plugins: [
-				lastLoginMethod({
-					storeInDatabase: true,
-				}),
+				lastLoginMethod(),
 				twoFactorConfig((input) => {
 					sentOtps.push(input);
 				}),
@@ -579,7 +576,9 @@ test.describe("two factor user journeys", () => {
 
 			const whoAmI = await readWhoAmI(baseURL, browserJar);
 			expect(whoAmI.session?.user?.email).toBe("test@test.com");
-			expect(whoAmI.session?.user?.lastLoginMethod).toBe("email");
+			expect(
+				getCookieValue(browserJar, "better-auth.last_used_login_method"),
+			).toBe("password");
 		} finally {
 			await stop();
 		}

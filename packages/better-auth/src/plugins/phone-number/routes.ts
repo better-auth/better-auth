@@ -1,3 +1,4 @@
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -178,6 +179,11 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const result = await resolveSignIn(ctx, {
 				user,
 				dontRememberMe: ctx.body.rememberMe === false,
+				amr: {
+					method: BUILTIN_AMR_METHOD.PASSWORD,
+					factor: "knowledge",
+					completedAt: new Date(),
+				},
 			});
 			if (result.kind === "challenge") {
 				return ctx.json(result);
@@ -630,6 +636,11 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (!ctx.body.disableSession) {
 				const result = await resolveSignIn(ctx, {
 					user,
+					amr: {
+						method: BUILTIN_AMR_METHOD.PHONE_OTP,
+						factor: "possession",
+						completedAt: new Date(),
+					},
 				});
 				if (result.kind === "challenge") {
 					return ctx.json(result);

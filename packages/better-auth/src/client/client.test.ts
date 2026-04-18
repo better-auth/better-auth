@@ -5,7 +5,7 @@ import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import type { Ref } from "vue";
+import type { DeepReadonly, Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import {
 	adminClient,
@@ -318,6 +318,7 @@ describe("type", () => {
 				userId: string;
 				expiresAt: Date;
 				token: string;
+				amr: import("@better-auth/core").AuthenticationMethodReference[];
 				ipAddress?: string | undefined | null;
 				userAgent?: string | undefined | null;
 				createdAt: Date;
@@ -535,7 +536,7 @@ describe("type", () => {
 
 		// Test the function signature directly to avoid overload resolution issues
 		expectTypeOf(client.useSession).toMatchTypeOf<
-			() => Readonly<
+			() => DeepReadonly<
 				Ref<{
 					data: {
 						user: {

@@ -143,6 +143,13 @@ export const getAuthTables = (
 					required: true,
 					index: true,
 				},
+				amr: {
+					type: "json",
+					required: true,
+					fieldName: options.session?.fields?.amr || "amr",
+					defaultValue: () => [],
+					input: false,
+				},
 				...session?.fields,
 				...options.session?.additionalFields,
 			},
@@ -151,7 +158,7 @@ export const getAuthTables = (
 	} satisfies BetterAuthDBSchema;
 
 	const shouldAddSignInAttemptTable = (options.plugins ?? []).some(
-		(plugin) => plugin.id === "two-factor",
+		(plugin) => (plugin.signInChallenges?.length ?? 0) > 0,
 	);
 	const signInAttemptTable = {
 		signInAttempt: {
@@ -179,10 +186,12 @@ export const getAuthTables = (
 					required: false,
 					fieldName: "dontRememberMe",
 				},
-				loginMethod: {
-					type: "string",
-					required: false,
-					fieldName: "loginMethod",
+				amr: {
+					type: "json",
+					required: true,
+					fieldName: "amr",
+					defaultValue: () => [],
+					input: false,
 				},
 				failedVerifications: {
 					type: "number",

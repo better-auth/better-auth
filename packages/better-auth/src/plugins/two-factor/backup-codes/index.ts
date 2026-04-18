@@ -1,3 +1,4 @@
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -322,7 +323,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { session, valid } = await verifyTwoFactor(ctx);
+					const resolver = await verifyTwoFactor(ctx);
+					const { session } = resolver;
 					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
@@ -348,10 +350,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						opts,
 					);
 					if (!validate.status || !validate.updated) {
-						throw APIError.from(
-							"UNAUTHORIZED",
-							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
-						);
+						return resolver.invalid("INVALID_BACKUP_CODE");
 					}
 					const updatedBackupCodes = await encodeBackupCodes(
 						validate.updated,
@@ -382,7 +381,14 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 
 					if (!ctx.body.disableSession) {
-						return valid(ctx);
+						if (resolver.mode === "complete") {
+							return resolver.valid(ctx, {
+								method: BUILTIN_AMR_METHOD.BACKUP_CODE,
+								factor: "possession",
+								completedAt: new Date(),
+							});
+						}
+						return resolver.valid(ctx);
 					}
 					return ctx.json({
 						token: session.session?.token,

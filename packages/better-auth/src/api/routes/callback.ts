@@ -1,3 +1,4 @@
+import { amrForProvider } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -285,6 +286,7 @@ export const callbackOAuth = createAuthEndpoint(
 		await resolveSignInWithRedirect(c, {
 			signIn: {
 				user,
+				amr: amrForProvider(provider.id),
 			},
 			redirectTarget,
 			onFailedToCreateSession() {

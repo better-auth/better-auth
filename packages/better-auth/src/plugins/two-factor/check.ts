@@ -1,4 +1,5 @@
 import type {
+	AuthenticationMethodReference,
 	BetterAuthSignInChallengeRegistry,
 	GenericEndpointContext,
 	SignInChallenge,
@@ -20,6 +21,12 @@ import type {
 
 export type TwoFactorCheckInput = {
 	user: User;
+	/**
+	 * Primary factor AMR entry. Persisted on the challenge attempt so the
+	 * finalized session's `amr` preserves the primary alongside the 2FA
+	 * factor, rather than collapsing to just the last step.
+	 */
+	amr: AuthenticationMethodReference;
 	dontRememberMe?: boolean;
 	/**
 	 * Forwarded from `resolveSignIn`. If `"two-factor"` is present the
@@ -122,6 +129,7 @@ export async function checkTwoFactor(
 		userId: user.id,
 		dontRememberMe: input.dontRememberMe,
 		expiresAt: new Date(Date.now() + maxAge * 1000),
+		amr: [input.amr],
 	});
 	await ctx.setSignedCookie(
 		twoFactorCookie.name,

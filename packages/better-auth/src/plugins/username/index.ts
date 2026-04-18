@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -398,6 +399,11 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const result = await resolveSignIn(ctx, {
 						user,
 						dontRememberMe: ctx.body.rememberMe === false,
+						amr: {
+							method: BUILTIN_AMR_METHOD.PASSWORD,
+							factor: "knowledge",
+							completedAt: new Date(),
+						},
 					});
 					if (result.kind === "challenge") {
 						return ctx.json(result);

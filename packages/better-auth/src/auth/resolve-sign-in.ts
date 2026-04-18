@@ -1,4 +1,5 @@
 import type {
+	AuthenticationMethodReference,
 	BetterAuthSignInChallengeRegistry,
 	GenericEndpointContext,
 	SignInChallenge,
@@ -16,6 +17,16 @@ import { appendSignInChallengeToURL } from "./sign-in-challenge-url";
 
 export type ResolveSignInOptions = {
 	user: User;
+	/**
+	 * Authentication Method Reference for the primary factor the caller just
+	 * verified. Required: every sign-in entry point must name what it proved
+	 * about the user, in the vocabulary defined by `BUILTIN_AMR_METHOD` (or a
+	 * provider id for OAuth). On a session finalization this becomes the
+	 * first (and for now, only) entry in `session.amr`; on a two-factor
+	 * pause it is persisted on the attempt so the finalized session after
+	 * verification carries the full chain.
+	 */
+	amr: AuthenticationMethodReference;
 	dontRememberMe?: boolean;
 	/**
 	 * Names of challenge kinds to skip. A challenge plugin consults this set
@@ -42,6 +53,7 @@ export async function resolveSignIn(
 		user: options.user,
 		dontRememberMe: options.dontRememberMe,
 		skipChallenges: options.skipChallenges,
+		amr: options.amr,
 	});
 
 	if (twoFactor?.kind === "challenge") {
@@ -53,6 +65,7 @@ export async function resolveSignIn(
 	return finalizeSignIn(ctx, {
 		user: options.user,
 		dontRememberMe: options.dontRememberMe,
+		amr: [options.amr],
 		afterCommit: rotation
 			? () => rotateTrustedDevice(ctx, rotation, options.user.id)
 			: undefined,

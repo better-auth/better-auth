@@ -301,20 +301,34 @@ export interface InternalAdapter<
 		data: Partial<Verification>,
 	): Promise<Verification>;
 
+	/**
+	 * Compare-and-swap update of a verification record's `value` column.
+	 * Writes `newValue` only when the current stored value still equals
+	 * `expectedValue`, returning `true` on success and `false` when another
+	 * caller already mutated the row. Use this when you need read-modify-write
+	 * semantics that survive concurrent writers, e.g. bumping an OTP attempt
+	 * counter stored alongside the code. Callers wrap this in a bounded
+	 * retry loop on `false` to re-read and recompute the next value.
+	 *
+	 * The DB path is atomic (the where clause includes the expected value);
+	 * the secondary-storage path is best-effort because generic KV stores
+	 * lack CAS primitives.
+	 */
+	casUpdateVerificationValue(
+		identifier: string,
+		expectedValue: string,
+		newValue: string,
+	): Promise<boolean>;
+
 	createSignInAttempt(
 		data: Omit<
 			SignInAttempt,
-			"createdAt" | "failedVerifications" | "id" | "updatedAt"
+			"amr" | "createdAt" | "failedVerifications" | "id" | "updatedAt"
 		> &
 			Partial<SignInAttempt>,
 	): Promise<SignInAttempt>;
 
 	findSignInAttempt(id: string): Promise<SignInAttempt | null>;
-
-	updateSignInAttempt(
-		id: string,
-		data: Partial<Pick<SignInAttempt, "loginMethod">>,
-	): Promise<SignInAttempt | null>;
 
 	deleteSignInAttempt(id: string): Promise<void>;
 

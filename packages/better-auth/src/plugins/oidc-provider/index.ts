@@ -3,6 +3,11 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import {
+	BUILTIN_AMR_METHOD,
+	RFC_8176_AMR_VALUES,
+	toRfc8176Amr,
+} from "@better-auth/core";
+import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
@@ -36,6 +41,14 @@ import type {
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
+
+let _builtinAmrMethods: Set<string> | undefined;
+const isBuiltinAmrMethod = (method: string): boolean => {
+	if (!_builtinAmrMethods) {
+		_builtinAmrMethods = new Set(Object.values(BUILTIN_AMR_METHOD));
+	}
+	return _builtinAmrMethods.has(method);
+};
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -121,6 +134,7 @@ export const getMetadata = (
 			"none",
 		],
 		code_challenge_methods_supported: ["S256"],
+		amr_values_supported: [...RFC_8176_AMR_VALUES],
 		claims_supported: [
 			"sub",
 			"iss",
@@ -132,6 +146,7 @@ export const getMetadata = (
 			"email",
 			"email_verified",
 			"name",
+			"amr",
 		],
 		...options?.metadata,
 	};
@@ -999,6 +1014,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
+						...(value.amr && value.amr.length > 0
+							? {
+									amr: value.amr.map((method) =>
+										toRfc8176Amr(method, {
+											provider: !isBuiltinAmrMethod(method),
+										}),
+									),
+								}
+							: {}),
 						...userClaims,
 						...additionalUserClaims,
 					};
@@ -1034,6 +1058,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 											expiresAt: accessTokenExpiresAt,
 											token: accessToken,
 											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+											amr: [],
 										},
 										user,
 									},

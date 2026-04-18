@@ -379,6 +379,12 @@ export interface CodeVerificationValue {
 	 * Nonce
 	 */
 	nonce?: string | undefined;
+	/**
+	 * Authentication method references captured on the session that
+	 * produced this code. Projected into the id_token `amr` claim so
+	 * relying parties can read the factor chain without a separate call.
+	 */
+	amr?: string[] | undefined;
 }
 
 export interface OAuthAccessToken {
@@ -537,6 +543,13 @@ export interface OIDCMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: ["S256"];
+	/**
+	 * Supported `amr` claim values, advertised so relying parties can discover
+	 * the vocabulary without out-of-band documentation. Built-in factors are
+	 * projected through the RFC 8176 registry; OAuth provider ids fall through
+	 * as `"fed"`.
+	 */
+	amr_values_supported: string[];
 	/**
 	 * The URL of the RP-initiated logout endpoint.
 	 *

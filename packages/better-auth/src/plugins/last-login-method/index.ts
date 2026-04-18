@@ -1,7 +1,4 @@
-import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { PACKAGE_VERSION } from "../../version";
 
@@ -12,147 +9,68 @@ declare module "@better-auth/core" {
 		};
 	}
 }
-/**
- * Configuration for tracking different authentication methods
- */
+
 export interface LastLoginMethodOptions {
 	/**
-	 * Name of the cookie to store the last login method
+	 * Name of the cookie to store the last login method.
 	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string | undefined;
 	/**
-	 * Cookie expiration time in seconds
+	 * Cookie expiration time in seconds.
 	 * @default 2592000 (30 days)
 	 */
 	maxAge?: number | undefined;
 	/**
-	 * Custom method to resolve the last login method
-	 * @param ctx - The context from the hook
-	 * @returns The last login method
+	 * @deprecated Removed. The cookie is now derived from `session.amr[0].method`;
+	 * persisting the last login method on the user row is no longer supported.
 	 */
-	customResolveMethod?:
-		| ((ctx: GenericEndpointContext) => string | null)
-		| undefined;
+	storeInDatabase?: never;
 	/**
-	 * Store the last login method in the database. This will create a new field in the user table.
-	 * @default false
+	 * @deprecated Removed. The plugin reads `session.amr[0].method` directly;
+	 * provide a custom AMR contributor in your sign-in flow instead.
 	 */
-	storeInDatabase?: boolean | undefined;
+	customResolveMethod?: never;
 	/**
-	 * Custom schema for the plugin
-	 * @default undefined
+	 * @deprecated Removed alongside `storeInDatabase`. There is no per-plugin
+	 * schema to override; AMR lives on the `session` table.
 	 */
-	schema?:
-		| {
-				user?: {
-					lastLoginMethod?: string;
-				};
-		  }
-		| undefined;
+	schema?: never;
 }
 
+const REMOVED_OPTIONS = [
+	"customResolveMethod",
+	"storeInDatabase",
+	"schema",
+] as const;
+
 /**
- * Plugin to track the last used login method
+ * Stamps a client-readable cookie with the primary factor from the finalized
+ * session's `amr` chain. Reads `session.amr[0]?.method` as the single source of
+ * truth; nothing is derived from request paths or persisted to the user row.
  */
-export const lastLoginMethod = <O extends LastLoginMethodOptions>(
-	userConfig?: O | undefined,
+export const lastLoginMethod = (
+	userConfig?: LastLoginMethodOptions | undefined,
 ) => {
 	const config = {
 		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
 		...userConfig,
 	} satisfies LastLoginMethodOptions;
-	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
-		const path = ctx.path;
-		if (!path) {
-			return null;
-		}
-
-		// Check for OAuth callbacks (/callback/:id or /oauth2/callback/:providerId)
-		if (path.startsWith("/callback/") || path.startsWith("/oauth2/callback/")) {
-			return ctx.params?.id || ctx.params?.providerId || path.split("/").pop();
-		}
-		// Check for email sign-in/sign-up
-		if (path === "/sign-in/email" || path === "/sign-up/email") {
-			return "email";
-		}
-		if (path.includes("siwe")) return "siwe";
-		if (path.includes("/passkey/verify-authentication")) return "passkey";
-		if (path.startsWith("/magic-link/verify")) return "magic-link";
-		return null;
-	};
-	const getResolveContext = (ctx: GenericEndpointContext) => {
-		return ctx.path ? ctx : ({ ...ctx, path: "" } as GenericEndpointContext);
-	};
-	const resolveMethod = (ctx: GenericEndpointContext) => {
-		const resolveContext = getResolveContext(ctx);
-		return (
-			config.customResolveMethod?.(resolveContext) ??
-			defaultResolveMethod(resolveContext)
-		);
-	};
-	const resolveAfterHookMethod = (ctx: GenericEndpointContext) => {
-		if (ctx.context.getFinalizedSignIn()?.attemptId) {
-			return ctx.context.getSignInAttempt()?.loginMethod ?? resolveMethod(ctx);
-		}
-		return resolveMethod(ctx);
-	};
-	const persistLastLoginMethod = async (
-		userId: string | undefined,
-		lastUsedLoginMethod: string,
-		ctx: {
-			internalAdapter: {
-				updateUser: (
-					userId: string,
-					data: { lastLoginMethod: string },
-				) => Promise<unknown>;
-			};
-			logger: {
-				error: (message: string, error: unknown) => void;
-			};
-		},
-	) => {
-		if (!config.storeInDatabase || !userId) {
-			return;
-		}
-
-		try {
-			await ctx.internalAdapter.updateUser(userId, {
-				lastLoginMethod: lastUsedLoginMethod,
-			});
-		} catch (error) {
-			ctx.logger.error("Failed to update lastLoginMethod", error);
-		}
-	};
 
 	return {
 		id: "last-login-method",
 		version: PACKAGE_VERSION,
-		init(ctx) {
-			return {
-				options: {
-					databaseHooks: {
-						user: {
-							create: {
-								async before(user, context) {
-									if (!config.storeInDatabase) return;
-									if (!context) return;
-									const lastUsedLoginMethod = resolveMethod(context);
-									if (lastUsedLoginMethod) {
-										return {
-											data: {
-												...user,
-												lastLoginMethod: lastUsedLoginMethod,
-											},
-										};
-									}
-								},
-							},
-						},
-					},
-				},
-			};
+		init() {
+			const removed = userConfig
+				? REMOVED_OPTIONS.filter((key) => key in userConfig)
+				: [];
+			if (removed.length > 0) {
+				throw new Error(
+					`last-login-method: options [${removed.join(", ")}] are no longer supported. The plugin now reads session.amr[0].method; remove them and rely on the session's amr chain.`,
+				);
+			}
+			return {};
 		},
 		hooks: {
 			after: [
@@ -161,61 +79,18 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const lastUsedLoginMethod = resolveAfterHookMethod(ctx);
-						if (!lastUsedLoginMethod) return;
-
 						const finalized = ctx.context.getFinalizedSignIn();
-						if (finalized) {
-							ctx.setCookie(config.cookieName, lastUsedLoginMethod, {
-								...ctx.context.authCookies.sessionToken.attributes,
-								maxAge: config.maxAge,
-								httpOnly: false,
-							});
-							await persistLastLoginMethod(
-								finalized.user.id,
-								lastUsedLoginMethod,
-								ctx.context,
-							);
-							return;
-						}
-
-						const attempt = ctx.context.getSignInAttempt();
-						if (!attempt?.id) return;
-						if (attempt.loginMethod === lastUsedLoginMethod) return;
-						await ctx.context.internalAdapter.updateSignInAttempt(attempt.id, {
-							loginMethod: lastUsedLoginMethod,
+						if (!finalized) return;
+						const primary = finalized.session.amr[0]?.method;
+						if (!primary) return;
+						ctx.setCookie(config.cookieName, primary, {
+							...ctx.context.authCookies.sessionToken.attributes,
+							maxAge: config.maxAge,
+							httpOnly: false,
 						});
 					}),
 				},
 			],
 		},
-		schema: (config.storeInDatabase
-			? {
-					user: {
-						fields: {
-							lastLoginMethod: {
-								type: "string",
-								input: false,
-								required: false,
-								fieldName:
-									config.schema?.user?.lastLoginMethod || "lastLoginMethod",
-							},
-						},
-					},
-				}
-			: undefined) as O["storeInDatabase"] extends true
-			? {
-					user: {
-						fields: {
-							lastLoginMethod: {
-								type: "string";
-								required: false;
-								input: false;
-							};
-						};
-					};
-				}
-			: undefined,
-		options: userConfig as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

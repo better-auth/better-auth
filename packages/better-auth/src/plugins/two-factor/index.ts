@@ -27,6 +27,12 @@ import type {
 } from "./types";
 
 export * from "./error-code";
+export type {
+	CompleteResolver,
+	ManagementResolver,
+	TwoFactorResolver,
+	TwoFactorVerifyResponse,
+} from "./verify-two-factor";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -90,6 +96,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	return {
 		id: "two-factor",
 		version: PACKAGE_VERSION,
+		signInChallenges: ["two-factor"] as const,
 		endpoints: {
 			...totp.endpoints,
 			...otp.endpoints,

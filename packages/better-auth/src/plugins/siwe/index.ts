@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError } from "../../api";
@@ -273,6 +274,11 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						const result = await resolveSignIn(ctx, {
 							user,
+							amr: {
+								method: BUILTIN_AMR_METHOD.SIWE,
+								factor: "possession",
+								completedAt: new Date(),
+							},
 						});
 						if (result.kind === "challenge") {
 							return ctx.json(result);

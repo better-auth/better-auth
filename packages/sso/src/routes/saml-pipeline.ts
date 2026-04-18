@@ -1,4 +1,5 @@
 import type { GenericEndpointContext, User } from "better-auth";
+import { amrForProvider } from "better-auth";
 import { APIError } from "better-auth/api";
 import { resolveSignInWithRedirect } from "better-auth/auth/resolve-sign-in";
 import { symmetricEncrypt } from "better-auth/crypto";
@@ -552,6 +553,7 @@ export async function processSAMLResponse(
 	await resolveSignInWithRedirect(ctx, {
 		signIn: {
 			user,
+			amr: amrForProvider(providerId),
 		},
 		redirectTarget: samlRedirectUrl,
 		onFailedToCreateSession() {

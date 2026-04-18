@@ -3,6 +3,7 @@ import type {
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -432,6 +433,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 						await resolveSignInWithRedirect(ctx, {
 							signIn: {
 								user,
+								amr: {
+									method: BUILTIN_AMR_METHOD.MAGIC_LINK,
+									factor: "possession",
+									completedAt: new Date(),
+								},
 							},
 							redirectTarget: isNewUser ? newUserCallbackURL : callbackURL,
 							onFailedToCreateSession() {
@@ -446,6 +452,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 					try {
 						result = await resolveSignIn(ctx, {
 							user,
+							amr: {
+								method: BUILTIN_AMR_METHOD.MAGIC_LINK,
+								factor: "possession",
+								completedAt: new Date(),
+							},
 						});
 					} catch (error) {
 						if (isFailedToCreateSessionError(error)) {

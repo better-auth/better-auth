@@ -1,6 +1,7 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type { GenericEndpointContext } from "better-auth";
 import {
+	amrForProvider,
 	createAuthorizationURL,
 	generateState,
 	HIDE_METADATA,
@@ -1713,6 +1714,7 @@ async function handleOIDCCallback(
 	await resolveSignInWithRedirect(ctx, {
 		signIn: {
 			user,
+			amr: amrForProvider(provider.providerId),
 		},
 		redirectTarget,
 		onFailedToCreateSession() {

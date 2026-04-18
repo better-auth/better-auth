@@ -1,3 +1,4 @@
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
@@ -262,9 +263,10 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					code: "TOTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, valid, invalid } = await verifyTwoFactor(ctx);
-			const user = session.user as UserWithTwoFactor;
-			const isSignIn = !session.session;
+			const resolver = await verifyTwoFactor(ctx);
+			const user = resolver.session.user as UserWithTwoFactor;
+			const isSignIn = resolver.mode === "complete";
+			const invalid = resolver.invalid;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
 				where: [{ field: "userId", value: user.id }],
@@ -303,9 +305,15 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			// and pre-migration rows where verified is null/undefined.
 			if (twoFactor.verified !== true) {
 				if (!user.twoFactorEnabled) {
-					// session.session is guaranteed non-null here: the sign-in guard
-					// above already rejected isSignIn && verified === false.
-					const activeSession = session.session!;
+					// Enrollment without an active session was rejected above; this
+					// branch is reachable only in management mode.
+					if (resolver.mode !== "management") {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
+						);
+					}
+					const activeSession = resolver.session.session;
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,
 						{
@@ -315,7 +323,6 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					const newSession = await ctx.context.internalAdapter.createSession(
 						user.id,
 						false,
-						activeSession,
 					);
 
 					await setSessionCookie(ctx, {
@@ -333,7 +340,14 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					where: [{ field: "id", value: twoFactor.id }],
 				});
 			}
-			return valid(ctx);
+			if (resolver.mode === "complete") {
+				return resolver.valid(ctx, {
+					method: BUILTIN_AMR_METHOD.TOTP,
+					factor: "possession",
+					completedAt: new Date(),
+				});
+			}
+			return resolver.valid(ctx);
 		},
 	);
 

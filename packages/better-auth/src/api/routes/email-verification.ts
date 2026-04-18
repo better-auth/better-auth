@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { JWTPayload, JWTVerifyResult } from "jose";
@@ -376,6 +377,11 @@ export const verifyEmail = createAuthEndpoint(
 					} else {
 						const result = await resolveSignIn(ctx, {
 							user: updatedUser,
+							amr: {
+								method: BUILTIN_AMR_METHOD.EMAIL_VERIFICATION,
+								factor: "possession",
+								completedAt: new Date(),
+							},
 						});
 						if (result.kind === "challenge") {
 							if (ctx.query.callbackURL) {
@@ -440,6 +446,11 @@ export const verifyEmail = createAuthEndpoint(
 					} else {
 						const result = await resolveSignIn(ctx, {
 							user: updatedUser,
+							amr: {
+								method: BUILTIN_AMR_METHOD.EMAIL_VERIFICATION,
+								factor: "possession",
+								completedAt: new Date(),
+							},
 						});
 						if (result.kind === "challenge") {
 							if (ctx.query.callbackURL) {
@@ -497,6 +508,11 @@ export const verifyEmail = createAuthEndpoint(
 					user: {
 						...user.user,
 						emailVerified: true,
+					},
+					amr: {
+						method: BUILTIN_AMR_METHOD.EMAIL_VERIFICATION,
+						factor: "possession",
+						completedAt: new Date(),
 					},
 				});
 				if (result.kind === "challenge") {

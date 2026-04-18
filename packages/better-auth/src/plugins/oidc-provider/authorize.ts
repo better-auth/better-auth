@@ -317,6 +317,7 @@ export async function authorize(
 				codeChallenge: query.code_challenge,
 				codeChallengeMethod: query.code_challenge_method,
 				nonce: query.nonce,
+				amr: session.session.amr.map((ref) => ref.method),
 			}),
 			identifier: code,
 			expiresAt,

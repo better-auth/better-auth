@@ -3,6 +3,7 @@ import type {
 	BetterAuthSignInChallengeRegistry,
 	SignInChallenge,
 } from "@better-auth/core";
+import { amrForProvider, BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -343,6 +344,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				}
 				const result = await resolveSignIn(c, {
 					user: data.data!,
+					amr: amrForProvider(provider.id),
 				});
 				if (result.kind === "challenge") {
 					return result as MaybeSignInChallenge<
@@ -604,6 +606,11 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			const result = await resolveSignIn(ctx, {
 				user: user.user,
 				dontRememberMe: ctx.body.rememberMe === false,
+				amr: {
+					method: BUILTIN_AMR_METHOD.PASSWORD,
+					factor: "knowledge",
+					completedAt: new Date(),
+				},
 			});
 			if (result.kind === "challenge") {
 				return result as MaybeSignInChallenge<{

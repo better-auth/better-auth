@@ -326,6 +326,7 @@ export const createInternalAdapter = (
 				...(sessionId ? { id: sessionId } : {}),
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
+				...defaultAdditionalFields,
 				...rest,
 				/**
 				 * If the user doesn't want to be remembered
@@ -340,7 +341,6 @@ export const createInternalAdapter = (
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
-				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
 			const res = await createWithHooks(
@@ -1234,8 +1234,78 @@ export const createInternalAdapter = (
 			}
 			return data as Verification;
 		},
+		/**
+		 * Compare-and-swap variant of `updateVerificationByIdentifier` scoped to
+		 * the `value` column. Writes `newValue` only when the current stored
+		 * value still equals `expectedValue`. Returns `true` on successful write
+		 * and `false` when another caller already mutated the record (or the
+		 * identifier is missing). Callers that need read-modify-write semantics
+		 * (e.g. an OTP attempt counter) should wrap this in a bounded retry loop
+		 * so concurrent bad-code submissions don't collapse their increments.
+		 *
+		 * DB path is genuinely atomic: `updateMany` filters on both the
+		 * identifier and the expected value, so the database either applies the
+		 * write or returns 0 affected rows. The secondary-storage path falls
+		 * back to get-check-set, which is best-effort under contention because
+		 * generic KV stores lack CAS primitives.
+		 */
+		casUpdateVerificationValue: async (
+			identifier: string,
+			expectedValue: string,
+			newValue: string,
+		): Promise<boolean> => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const cached = await secondaryStorage.get(
+					`verification:${storedIdentifier}`,
+				);
+				const parsed = cached ? safeJSONParse<Verification>(cached) : null;
+				if (parsed && parsed.value === expectedValue) {
+					const updated = { ...parsed, value: newValue };
+					const ttl = getTTLSeconds(
+						updated.expiresAt instanceof Date
+							? updated.expiresAt
+							: new Date(updated.expiresAt),
+					);
+					if (ttl > 0) {
+						await secondaryStorage.set(
+							`verification:${storedIdentifier}`,
+							JSON.stringify(updated),
+							ttl,
+						);
+					}
+					if (!options.verification?.storeInDatabase) {
+						return true;
+					}
+				} else if (!options.verification?.storeInDatabase) {
+					return false;
+				}
+			}
+
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const affected = await currentAdapter.updateMany({
+				model: "verification",
+				where: [
+					{ field: "identifier", value: storedIdentifier },
+					{ field: "value", value: expectedValue },
+				],
+				update: { value: newValue },
+			});
+			return affected === 1;
+		},
 		createSignInAttempt: async (
-			data: Omit<SignInAttempt, "createdAt" | "id" | "updatedAt"> &
+			data: Omit<
+				SignInAttempt,
+				"amr" | "createdAt" | "failedVerifications" | "id" | "updatedAt"
+			> &
 				Partial<SignInAttempt>,
 		) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
@@ -1245,6 +1315,7 @@ export const createInternalAdapter = (
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...data,
+					amr: data.amr ?? [],
 					failedVerifications: data.failedVerifications ?? 0,
 				},
 				// Restoration after a rolled-back sign-in re-inserts the previously
@@ -1266,25 +1337,6 @@ export const createInternalAdapter = (
 			return {
 				...attempt,
 				dontRememberMe: attempt.dontRememberMe ?? undefined,
-			};
-		},
-		updateSignInAttempt: async (
-			id: string,
-			data: Partial<Pick<SignInAttempt, "loginMethod">>,
-		) => {
-			const currentAdapter = await getCurrentAdapter(adapter);
-			const updated = await currentAdapter.update<SignInAttempt>({
-				model: "signInAttempt",
-				where: [{ field: "id", value: id }],
-				update: {
-					...data,
-					updatedAt: new Date(),
-				},
-			});
-			if (!updated) return null;
-			return {
-				...updated,
-				dontRememberMe: updated.dontRememberMe ?? undefined,
 			};
 		},
 		deleteSignInAttempt: async (id: string) => {
@@ -1322,31 +1374,50 @@ export const createInternalAdapter = (
 			options: { maxAttempts: number },
 		) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
-			const attempt = await currentAdapter.findOne<SignInAttempt>({
-				model: "signInAttempt",
-				where: [{ field: "id", value: id }],
-			});
-			if (!attempt) {
-				return null;
+			const MAX_CAS_RETRIES = 5;
+			for (let i = 0; i < MAX_CAS_RETRIES; i++) {
+				const attempt = await currentAdapter.findOne<SignInAttempt>({
+					model: "signInAttempt",
+					where: [{ field: "id", value: id }],
+				});
+				if (!attempt) {
+					return null;
+				}
+				const currentCount = attempt.failedVerifications ?? 0;
+				const nextCount = currentCount + 1;
+				const shouldLock =
+					nextCount >= options.maxAttempts && !attempt.lockedAt;
+				const now = new Date();
+				const affected = await currentAdapter.updateMany({
+					model: "signInAttempt",
+					where: [
+						{ field: "id", value: id },
+						{ field: "failedVerifications", value: currentCount },
+					],
+					update: {
+						failedVerifications: nextCount,
+						...(shouldLock ? { lockedAt: now } : {}),
+						updatedAt: now,
+					},
+				});
+				if (affected === 1) {
+					return {
+						...attempt,
+						failedVerifications: nextCount,
+						...(shouldLock ? { lockedAt: now } : {}),
+						updatedAt: now,
+						dontRememberMe: attempt.dontRememberMe ?? undefined,
+					};
+				}
 			}
-			const nextCount = (attempt.failedVerifications ?? 0) + 1;
-			const shouldLock = nextCount >= options.maxAttempts && !attempt.lockedAt;
-			const updated = await currentAdapter.update<SignInAttempt>({
-				model: "signInAttempt",
-				where: [{ field: "id", value: id }],
-				update: {
-					failedVerifications: nextCount,
-					...(shouldLock ? { lockedAt: new Date() } : {}),
-					updatedAt: new Date(),
-				},
-			});
-			if (!updated) {
-				return null;
-			}
-			return {
-				...updated,
-				dontRememberMe: updated.dontRememberMe ?? undefined,
-			};
+			// CAS exhausted under sustained contention. Returning null silently
+			// would mean the per-attempt lockout stops advancing, so surface it
+			// for operators to investigate (indicates either an attacker
+			// flooding verify requests or a pathological retry loop upstream).
+			logger.warn(
+				`recordSignInAttemptFailure: CAS exhausted after ${MAX_CAS_RETRIES} attempts for signInAttempt ${id}`,
+			);
+			return null;
 		},
 	};
 };

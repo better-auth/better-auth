@@ -3114,6 +3114,116 @@ describe("two-factor verify attempt hardening", async () => {
 		expect(res.data?.user?.email).toBe(testUser.email);
 	});
 
+	it("backup-code invalid bumps the attempt counter and locks after maxVerificationAttempts", async () => {
+		const { testUser, customFetchImpl, sessionSetter, db, auth } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						maxVerificationAttempts: 5,
+					} as Parameters<typeof twoFactor>[0]),
+				],
+			});
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+		await enrollTotp({
+			auth: auth as unknown as Awaited<
+				ReturnType<typeof getTestInstance>
+			>["auth"],
+			client,
+			db,
+			email: testUser.email,
+			password: testUser.password,
+			sessionSetter,
+		});
+		const { attemptId, challengeHeaders } = await startPausedSignIn({
+			client,
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		for (let i = 0; i < 5; i++) {
+			const bad = await client.twoFactor.verifyBackupCode({
+				code: "wrong-code",
+				attemptId,
+				fetchOptions: { headers: challengeHeaders },
+			} as Parameters<typeof client.twoFactor.verifyBackupCode>[0]);
+			expect(bad.error?.message).toBe(
+				TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE.message,
+			);
+		}
+
+		const afterLock = await client.twoFactor.verifyBackupCode({
+			code: "still-wrong",
+			attemptId,
+			fetchOptions: { headers: challengeHeaders },
+		} as Parameters<typeof client.twoFactor.verifyBackupCode>[0]);
+
+		expect(afterLock.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE.message,
+		);
+	});
+
+	it("trustDevice is honored in management mode (step-up on an active session)", async () => {
+		const { testUser, customFetchImpl, sessionSetter, db, auth } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+		const { secret } = await enrollTotp({
+			auth: auth as unknown as Awaited<
+				ReturnType<typeof getTestInstance>
+			>["auth"],
+			client,
+			db,
+			email: testUser.email,
+			password: testUser.password,
+			sessionSetter,
+		});
+		const { attemptId, challengeHeaders } = await startPausedSignIn({
+			client,
+			email: testUser.email,
+			password: testUser.password,
+		});
+		const sessionHeaders = new Headers();
+		const code = await createOTP(secret).totp();
+		await client.twoFactor.verifyTotp({
+			code,
+			attemptId,
+			fetchOptions: {
+				headers: challengeHeaders,
+				onSuccess: sessionSetter(sessionHeaders),
+			},
+		} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
+
+		const stepUpCode = await createOTP(secret).totp();
+		let stepUpSetCookie = "";
+		await client.twoFactor.verifyTotp({
+			code: stepUpCode,
+			trustDevice: true,
+			fetchOptions: {
+				headers: sessionHeaders,
+				onResponse(context) {
+					stepUpSetCookie = context.response.headers.get("Set-Cookie") || "";
+				},
+			},
+		} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
+
+		expect(stepUpSetCookie).toContain("better-auth.trust_device=");
+	});
+
 	it("finalizes with body attemptId alone when the two_factor cookie is absent", async () => {
 		const { testUser, customFetchImpl, sessionSetter, db, auth } =
 			await getTestInstance({

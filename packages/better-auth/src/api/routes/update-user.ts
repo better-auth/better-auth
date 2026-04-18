@@ -1,4 +1,8 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthenticationMethodReference,
+	BetterAuthOptions,
+} from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -289,8 +293,27 @@ export const changePassword = createAuthEndpoint(
 		let token = null;
 		if (revokeOtherSessions) {
 			await ctx.context.internalAdapter.deleteSessions(session.user.id);
+			// The current-password proof above is the freshest possible primary
+			// factor event for this user, so amr[0] is reissued with `now`.
+			// Subsequent factor entries (e.g. an earlier 2FA verification) are
+			// preserved with their original timestamps so consumers checking
+			// per-factor freshness see the real history.
+			const previousAmr =
+				(session.session.amr as AuthenticationMethodReference[] | undefined) ??
+				[];
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
+				undefined,
+				{
+					amr: [
+						{
+							method: BUILTIN_AMR_METHOD.PASSWORD,
+							factor: "knowledge",
+							completedAt: new Date(),
+						},
+						...previousAmr.slice(1),
+					],
+				},
 			);
 			if (!newSession) {
 				throw APIError.from(

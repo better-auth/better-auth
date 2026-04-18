@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
@@ -406,6 +407,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const session = await ctx.context.internalAdapter.createSession(
 					createdUser.id,
 					rememberMe === false,
+					{
+						amr: [
+							{
+								method: BUILTIN_AMR_METHOD.PASSWORD,
+								factor: "knowledge",
+								completedAt: new Date(),
+							},
+						],
+					},
 				);
 				if (!session) {
 					throw APIError.from(

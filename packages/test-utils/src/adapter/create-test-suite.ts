@@ -479,6 +479,7 @@ export const createTestSuite = <
 						userId: generateId(),
 						ipAddress: "127.0.0.1",
 						userAgent: "Some User Agent",
+						amr: [],
 					};
 					return session as any;
 				}

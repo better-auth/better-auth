@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { amrForProvider } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
@@ -139,6 +140,11 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						}
 						const result = await resolveSignIn(ctx, {
 							user: newUser.user,
+							amr: {
+								method: "google",
+								factor: "possession",
+								completedAt: new Date(),
+							},
 						});
 						if (result.kind === "challenge") {
 							return ctx.json(result);
@@ -171,6 +177,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					}
 					const result = await resolveSignIn(ctx, {
 						user: user.user,
+						amr: amrForProvider("google"),
 					});
 					if (result.kind === "challenge") {
 						return ctx.json(result);

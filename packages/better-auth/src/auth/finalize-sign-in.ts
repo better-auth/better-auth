@@ -1,4 +1,5 @@
 import type {
+	AuthenticationMethodReference,
 	GenericEndpointContext,
 	SignInResolution,
 } from "@better-auth/core";
@@ -12,6 +13,14 @@ export type FinalizedSession = Extract<SignInResolution, { kind: "session" }>;
 
 export type FinalizeSignInOptions = {
 	user: User;
+	/**
+	 * Full authentication chain completed for this session. The primary
+	 * factor appears first; subsequent factors (e.g. 2FA) append in
+	 * verification order. Persisted to `session.amr` so downstream consumers
+	 * (OIDC `amr` claim, last-login-method cookie, step-up checks) can read a
+	 * single canonical source instead of inferring from request paths.
+	 */
+	amr: readonly AuthenticationMethodReference[];
 	dontRememberMe?: boolean;
 	attemptId?: string;
 	/**
@@ -41,6 +50,7 @@ export async function finalizeSignIn(
 	const session = await ctx.context.internalAdapter.createSession(
 		options.user.id,
 		options.dontRememberMe,
+		{ amr: [...options.amr] },
 	);
 	if (!session) {
 		throw APIError.from("INTERNAL_SERVER_ERROR", {
