@@ -1860,13 +1860,14 @@ Delete a team from an organization:
 
 #### Set Active Team
 
-Sets the given team as the current active team. If `teamId` is `null` the current active team is unset.
+Sets the given team as the current active team for the current active organization. If `teamId` is `null` the current active team is unset.
 
 <APIMethod path="/organization/set-active-team" method="POST" requireSession>
   ```ts
   type setActiveTeam = {
       /**
        * The team ID of the team to set as the current active team.
+       * The team must belong to the current active organization.
        */
       teamId?: string = "team-id"
   }
