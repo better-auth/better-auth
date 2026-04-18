@@ -91,6 +91,13 @@ export type UsernameOptions = {
 				displayUsername?: "pre-normalization" | "post-normalization";
 		  }
 		| undefined;
+	/**
+	 * Whether the username should be immutable
+	 * When enabled, users cannot update their username after it has been set
+	 *
+	 * @default false
+	 */
+	immutableUsername?: boolean | undefined;
 };
 
 function defaultUsernameValidator(username: string) {
@@ -552,6 +559,19 @@ export const username = (options?: UsernameOptions | undefined) => {
 									throw APIError.from(
 										"BAD_REQUEST",
 										ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+									);
+								}
+							}
+
+							if (ctx.path === "/update-user" && options?.immutableUsername) {
+								const session = await getSessionFromCtx(ctx);
+								const hasUsername = !!session?.user.username;
+								const usernamesDiffer =
+									session?.user.username !== normalizedUsername;
+								if (hasUsername && usernamesDiffer) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										ERROR_CODES.USERNAME_IS_IMMUTABLE,
 									);
 								}
 							}
