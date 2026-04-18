@@ -1294,6 +1294,8 @@ export const createInternalAdapter = (
 				where: [{ field: "id", value: id }],
 			});
 		},
+		// Concurrency-only. Contract and non-goals are documented on the
+		// InternalAdapter interface; keep them in sync when editing either side.
 		consumeSignInAttempt: async (id: string) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
 			const attempt = await currentAdapter.findOne<SignInAttempt>({

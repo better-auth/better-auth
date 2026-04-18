@@ -70,6 +70,11 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		if (session && session.user.id !== attempt.userId) {
 			const cookieAttemptId = await getTwoFactorAttemptId(ctx);
 			if (cookieAttemptId !== attemptId) {
+				ctx.context.logger.info("auth.two-factor.verify.rejected", {
+					reason: "cross-user-attempt-id",
+					sessionUserId: session.user.id,
+					attemptUserId: attempt.userId,
+				});
 				return rejectCookie(clearCookieOnFailure);
 			}
 		}

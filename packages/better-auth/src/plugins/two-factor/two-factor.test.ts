@@ -615,7 +615,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect(res.error?.message).toBe(
-			"Too many attempts. Please request a new code.",
+			TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE.message,
 		);
 	});
 
@@ -2881,7 +2881,7 @@ describe("two-factor verify attempt hardening", async () => {
 		};
 	}
 
-	it("rejects cross-user attemptId with INVALID_TWO_FACTOR_COOKIE", async () => {
+	it("rejects cross-user attemptId with INVALID_TWO_FACTOR_COOKIE and audit-logs the mismatch", async () => {
 		const { testUser, customFetchImpl, sessionSetter, db, auth } =
 			await getTestInstance({
 				secret: DEFAULT_SECRET,
@@ -2913,7 +2913,7 @@ describe("two-factor verify attempt hardening", async () => {
 
 		const attackerEmail = "rfc6-s1-attacker@test.com";
 		const attackerPassword = "attacker-password-123";
-		await auth.api.signUpEmail({
+		const attackerSignUp = await auth.api.signUpEmail({
 			body: {
 				email: attackerEmail,
 				password: attackerPassword,
@@ -2928,6 +2928,9 @@ describe("two-factor verify attempt hardening", async () => {
 		});
 		expectNoTwoFactorChallenge(attackerSignIn.data);
 
+		const context = await auth.$context;
+		const loggerSpy = vi.spyOn(context.logger, "info");
+
 		const res = await client.twoFactor.verifyTotp({
 			code: "000000",
 			attemptId: victimAttemptId,
@@ -2938,6 +2941,25 @@ describe("two-factor verify attempt hardening", async () => {
 		expect(res.error?.message).toBe(
 			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
 		);
+
+		const victimUser = await context.internalAdapter.findUserByEmail(
+			testUser.email,
+		);
+		expect(loggerSpy).toHaveBeenCalledWith(
+			"auth.two-factor.verify.rejected",
+			expect.objectContaining({
+				reason: "cross-user-attempt-id",
+				sessionUserId: attackerSignUp.user.id,
+				attemptUserId: victimUser!.user.id,
+			}),
+		);
+		const allArgs = loggerSpy.mock.calls.flat();
+		expect(
+			allArgs.some(
+				(arg) => typeof arg === "string" && arg.includes(victimAttemptId),
+			),
+		).toBe(false);
+		loggerSpy.mockRestore();
 	});
 
 	it("atomically consumes the sign-in attempt under concurrent verify", async () => {

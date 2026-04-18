@@ -323,6 +323,22 @@ export interface InternalAdapter<
 	 * `deleteMany` row-count as a concurrency fence: under concurrent callers,
 	 * exactly one observes a delete count of 1 and receives the row; all
 	 * others receive null. Returns null if the attempt does not exist.
+	 *
+	 * Concurrency-only primitive. Callers are responsible for validating
+	 * identity, expiry, and lock state **before** calling consume:
+	 * - Identity. Cross-user submission requires proof of initiator (the
+	 *   signed two-factor cookie that binds the caller to the attempt).
+	 *   The cookie is read through `ctx` which the adapter cannot see,
+	 *   so the check lives at the call site (e.g. `verify-two-factor.ts`).
+	 * - Expiry. Compare `attempt.expiresAt` to `now()` in the caller.
+	 *   A millisecond TOCTOU window between that check and consume is
+	 *   bounded by the fence (only one caller wins) and is not a
+	 *   security boundary: the boundary is the verification code plus
+	 *   the per-attempt rate limit, not `expiresAt`.
+	 * - Lock. Reject when `attempt.lockedAt` is set; consume does not
+	 *   filter locked rows so that `recordSignInAttemptFailure` and
+	 *   `consumeSignInAttempt` can race safely without the delete path
+	 *   shadowing the lock-write path.
 	 */
 	consumeSignInAttempt(id: string): Promise<SignInAttempt | null>;
 

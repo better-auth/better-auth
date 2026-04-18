@@ -9,6 +9,6 @@ export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
 	INVALID_BACKUP_CODE: "Invalid backup code",
 	INVALID_CODE: "Invalid code",
 	TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE:
-		"Too many attempts. Please request a new code.",
+		"Too many attempts. Please sign in again.",
 	INVALID_TWO_FACTOR_COOKIE: "Invalid two factor cookie",
 });
