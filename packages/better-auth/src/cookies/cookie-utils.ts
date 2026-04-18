@@ -15,7 +15,6 @@ export interface CookieAttributes {
 	secure?: boolean | undefined;
 	httponly?: boolean | undefined;
 	partitioned?: boolean | undefined;
-	priority?: ("low" | "medium" | "high") | undefined;
 	samesite?: ("strict" | "lax" | "none") | undefined;
 	// TODO: tighten to `string | number | boolean | Date | undefined`.
 	// Kept as `any` for now to preserve the public type surface.
@@ -30,7 +29,6 @@ interface ParsedCookieOptions {
 	secure?: boolean | undefined;
 	httpOnly?: boolean | undefined;
 	partitioned?: boolean | undefined;
-	priority?: CookieAttributes["priority"];
 	sameSite?: CookieAttributes["samesite"];
 }
 
@@ -147,18 +145,6 @@ export function parseSetCookieHeader(
 				case "partitioned":
 					attrObj.partitioned = true;
 					break;
-				case "priority":
-					switch (attrValue?.trim().toLowerCase()) {
-						case "low":
-						case "medium":
-						case "high":
-							attrObj.priority = attrValue.trim().toLowerCase() as
-								| "low"
-								| "medium"
-								| "high";
-							break;
-					}
-					break;
 				default:
 					// Handle any other attributes
 					attrObj[normalizedAttrName] = attrValue ? attrValue.trim() : true;
@@ -184,7 +170,6 @@ export function toCookieOptions(
 		httpOnly: attributes.httponly,
 		sameSite: attributes.samesite,
 		partitioned: attributes.partitioned,
-		priority: attributes.priority,
 	};
 }
 

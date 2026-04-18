@@ -304,7 +304,7 @@ describe("cookie-utils parseSetCookieHeader", () => {
 
 	it("converts parsed cookie attributes into cookie options", () => {
 		const attributes = parseSetCookieHeader(
-			"session=xyz; Path=/auth; Expires=Mon, 01 Jan 2026 00:00:00 GMT; Max-Age=300; Secure; HttpOnly; SameSite=None; Partitioned; Priority=High",
+			"session=xyz; Path=/auth; Expires=Mon, 01 Jan 2026 00:00:00 GMT; Max-Age=300; Secure; HttpOnly; SameSite=None; Partitioned",
 		).get("session");
 
 		expect(attributes).toBeDefined();
@@ -316,7 +316,6 @@ describe("cookie-utils parseSetCookieHeader", () => {
 			httpOnly: true,
 			sameSite: "none",
 			partitioned: true,
-			priority: "high",
 		});
 	});
 });
