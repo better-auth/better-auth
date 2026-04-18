@@ -14,8 +14,24 @@ export interface CookieAttributes {
 	path?: string | undefined;
 	secure?: boolean | undefined;
 	httponly?: boolean | undefined;
+	partitioned?: boolean | undefined;
+	priority?: ("low" | "medium" | "high") | undefined;
 	samesite?: ("strict" | "lax" | "none") | undefined;
+	// TODO: tighten to `string | number | boolean | Date | undefined`.
+	// Kept as `any` for now to preserve the public type surface.
 	[key: string]: any;
+}
+
+interface ParsedCookieOptions {
+	maxAge?: number | undefined;
+	expires?: Date | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httpOnly?: boolean | undefined;
+	partitioned?: boolean | undefined;
+	priority?: CookieAttributes["priority"];
+	sameSite?: CookieAttributes["samesite"];
 }
 
 export const SECURE_COOKIE_PREFIX = "__Secure-";
@@ -128,6 +144,21 @@ export function parseSetCookieHeader(
 						? (attrValue.trim().toLowerCase() as "strict" | "lax" | "none")
 						: undefined;
 					break;
+				case "partitioned":
+					attrObj.partitioned = true;
+					break;
+				case "priority":
+					switch (attrValue?.trim().toLowerCase()) {
+						case "low":
+						case "medium":
+						case "high":
+							attrObj.priority = attrValue.trim().toLowerCase() as
+								| "low"
+								| "medium"
+								| "high";
+							break;
+					}
+					break;
 				default:
 					// Handle any other attributes
 					attrObj[normalizedAttrName] = attrValue ? attrValue.trim() : true;
@@ -139,6 +170,22 @@ export function parseSetCookieHeader(
 	});
 
 	return cookies;
+}
+
+export function toCookieOptions(
+	attributes: CookieAttributes,
+): ParsedCookieOptions {
+	return {
+		maxAge: attributes["max-age"],
+		expires: attributes.expires,
+		domain: attributes.domain,
+		path: attributes.path,
+		secure: attributes.secure,
+		httpOnly: attributes.httponly,
+		sameSite: attributes.samesite,
+		partitioned: attributes.partitioned,
+		priority: attributes.priority,
+	};
 }
 
 export function setCookieToHeader(headers: Headers) {

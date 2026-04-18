@@ -241,6 +241,64 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9231
+	 */
+	it("should preserve partitioned cookie attributes during get-session refresh", async () => {
+		const {
+			auth: partitionedAuth,
+			signInWithTestUser: signInWithPartitionedCookies,
+			customFetchImpl: partitionedFetchImpl,
+		} = await getTestInstance({
+			advanced: {
+				defaultCookieAttributes: {
+					partitioned: true,
+					sameSite: "none",
+					secure: true,
+					httpOnly: true,
+				},
+			},
+			session: {
+				updateAge: 0,
+			},
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return { user, session };
+				}),
+			],
+		});
+
+		const partitionedClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [customSessionClient<typeof partitionedAuth>()],
+			fetchOptions: { customFetchImpl: partitionedFetchImpl },
+		});
+
+		const { headers } = await signInWithPartitionedCookies();
+
+		await partitionedClient.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const refreshedCookies = context.response.headers.getSetCookie();
+					expect(refreshedCookies.length).toBeGreaterThan(0);
+
+					const parsedCookies = refreshedCookies.flatMap((cookieString) =>
+						Array.from(parseSetCookieHeader(cookieString).entries()),
+					);
+					const betterAuthCookies = parsedCookies.filter(([name]) =>
+						name.startsWith("better-auth."),
+					);
+
+					expect(betterAuthCookies.length).toBeGreaterThan(0);
+					for (const [, attributes] of betterAuthCookies) {
+						expect(attributes.partitioned).toBe(true);
+					}
+				},
+			},
+		});
+	});
+
 	it.skipIf(globalThis.gc == null)(
 		"should not create memory leaks with multiple plugin instances",
 		async () => {

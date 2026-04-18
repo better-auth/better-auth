@@ -13,6 +13,7 @@ import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	stripSecureCookiePrefix,
+	toCookieOptions,
 } from "./cookie-utils";
 
 describe("cookies", async () => {
@@ -287,6 +288,36 @@ describe("cookie-utils parseSetCookieHeader", () => {
 			new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
 		);
 		expect(map.get("c")?.value).toBe("3");
+	});
+
+	it("parses partitioned as a boolean cookie attribute", () => {
+		const map = parseSetCookieHeader(
+			"session=xyz; Path=/; Secure; HttpOnly; SameSite=None; Partitioned",
+		);
+
+		expect(map.get("session")?.value).toBe("xyz");
+		expect(map.get("session")?.secure).toBe(true);
+		expect(map.get("session")?.httponly).toBe(true);
+		expect(map.get("session")?.samesite).toBe("none");
+		expect(map.get("session")?.partitioned).toBe(true);
+	});
+
+	it("converts parsed cookie attributes into cookie options", () => {
+		const attributes = parseSetCookieHeader(
+			"session=xyz; Path=/auth; Expires=Mon, 01 Jan 2026 00:00:00 GMT; Max-Age=300; Secure; HttpOnly; SameSite=None; Partitioned; Priority=High",
+		).get("session");
+
+		expect(attributes).toBeDefined();
+		expect(toCookieOptions(attributes!)).toEqual({
+			path: "/auth",
+			expires: new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+			maxAge: 300,
+			secure: true,
+			httpOnly: true,
+			sameSite: "none",
+			partitioned: true,
+			priority: "high",
+		});
 	});
 });
 
