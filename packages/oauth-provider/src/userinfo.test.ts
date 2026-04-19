@@ -197,6 +197,30 @@ describe("oauth userinfo", async () => {
 		});
 	});
 
+	/**
+	 * Direct `auth.api` calls do not populate `ctx.request`; userinfo must read
+	 * `Authorization` from `ctx.headers` instead.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8806
+	 */
+	it("should return userinfo via auth.api with headers only (no Request)", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await auth.api.oauth2UserInfo({
+			headers: new Headers({
+				Authorization: `Bearer ${tokens.data!.access_token!}`,
+			}),
+		});
+		expect(userinfo).toMatchObject({
+			sub: user.id,
+			name: user.name,
+			given_name: expect.any(String),
+			family_name: expect.any(String),
+			email: user.email,
+			email_verified: user.emailVerified,
+		});
+	});
+
 	it("should pass provide all user information - jwt", async () => {
 		const tokens = await getTokens(undefined, validAudience);
 		expect(tokens.data?.access_token).toBeDefined();
