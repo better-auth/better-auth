@@ -15,8 +15,6 @@ const pricingTiers = [
 		seats: "1 dashboard seat",
 		featuresPrefix: "Includes",
 		features: [
-			"Unlimited users",
-			"All auth features",
 			"User management",
 			"Audit log retention (1 day)",
 			"1 dashboard seat",
@@ -79,18 +77,6 @@ const pricingTiers = [
 
 const comparisonRows = [
 	{
-		label: "Unlimited users",
-		starter: true,
-		pro: true,
-		enterprise: true,
-	},
-	{
-		label: "All auth features",
-		starter: true,
-		pro: true,
-		enterprise: true,
-	},
-	{
 		label: "Dashboard seats",
 		starter: "1",
 		pro: "Unlimited",
@@ -111,7 +97,7 @@ const comparisonRows = [
 	{
 		label: "Additional audit logs",
 		starter: false,
-		pro: "$5/100k",
+		pro: "$0.0001/event",
 		enterprise: "Custom",
 	},
 	{
@@ -253,11 +239,6 @@ function PricingCard({
 					<h3 className="text-[11px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/65">
 						{tier.name}
 					</h3>
-					{isHighlighted && (
-						<span className="text-[9px] font-mono uppercase tracking-widest text-foreground/70 dark:text-foreground/60 border border-dashed border-foreground/20 px-1.5 py-0.5 leading-none">
-							popular
-						</span>
-					)}
 				</div>
 
 				<div className="flex items-baseline gap-1.5 mb-3">
@@ -314,182 +295,79 @@ function PricingCard({
 	);
 }
 
-export function InfrastructureContent() {
+export function PricingContent() {
 	const tierKeys = ["starter", "pro", "enterprise"] as const;
 	const tierLabels = ["Starter", "Pro", "Enterprise"];
 
-	const capabilities = [
-		{
-			title: "Dashboard",
-			details: [
-				"User & session management",
-				"Organization overview",
-				"Real-time analytics",
-				"Team seats & RBAC",
-			],
-		},
-		{
-			title: "Audit Logs",
-			details: [
-				"Automatic event capture",
-				"Filterable log explorer",
-				"Configurable retention",
-				"Log drain to your SIEM",
-			],
-		},
-		{
-			title: "Security Detection",
-			details: [
-				"Bot & abuse detection",
-				"IP reputation scoring",
-				"Email validation",
-				"Behavioral analysis",
-			],
-		},
-		{
-			title: "Enterprise",
-			details: [
-				"Self-service SSO",
-				"SCIM provisioning",
-				"Directory sync",
-				"Role-based access",
-			],
-		},
-	];
-
 	return (
 		<div className="px-5 sm:px-6 lg:px-8 pb-16 space-y-10">
-			{/* Product intro */}
+			{/* Free framework note */}
 			<motion.div
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.05 }}
+				className="flex items-center gap-4 px-5 py-4 border border-dashed border-foreground/[0.12] bg-foreground/[0.02]"
 			>
-				<p className="text-sm sm:text-[15px] text-foreground/80 leading-relaxed max-w-lg mb-8">
-					Managed infrastructure on top of the open-source framework. Dashboard,
-					audit logs, security detection, and more — without building it
-					yourself.
-				</p>
-
-				{/* Capability cards */}
-				<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
-					{capabilities.map((cap, ci) => (
-						<motion.div
-							key={cap.title}
-							initial={{ opacity: 0, y: 8 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{
-								duration: 0.3,
-								delay: 0.1 + ci * 0.06,
-							}}
-							className="border border-dashed border-foreground/[0.10] -mt-px -ml-px p-4"
-						>
-							<h4 className="text-[13px] font-mono uppercase tracking-widest text-foreground/90 dark:text-foreground/85 mb-3">
-								{cap.title}
-							</h4>
-							<ul className="space-y-1.5">
-								{cap.details.map((d) => (
-									<li
-										key={d}
-										className="flex items-start gap-2 text-[12px] text-foreground/75 dark:text-foreground/65"
-									>
-										<span className="text-foreground/50 dark:text-foreground/55 mt-0.5 font-mono text-[10px] leading-none select-none shrink-0">
-											+
-										</span>
-										<span>{d}</span>
-									</li>
-								))}
-							</ul>
-						</motion.div>
-					))}
+				<div className="flex-1">
+					<p className="text-[13px] text-foreground/80 dark:text-foreground/70">
+						The Better Auth framework is{" "}
+						<span className="text-foreground font-medium">
+							free and open source
+						</span>
+						.
+					</p>
 				</div>
+				<a
+					href="/docs"
+					className="group shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 border border-foreground/15 text-foreground hover:border-foreground/30 hover:bg-foreground/[0.04] transition-all"
+				>
+					<span className="font-mono text-[11px] uppercase tracking-widest">
+						Docs
+					</span>
+					<svg
+						className="h-3 w-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+						viewBox="0 0 10 10"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="M1 9L9 1M9 1H3M9 1V7"
+							stroke="currentColor"
+							strokeWidth="1.3"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						/>
+					</svg>
+				</a>
 			</motion.div>
 
-			{/* How it works */}
+			{/* Infrastructure section */}
 			<motion.div
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3, delay: 0.2 }}
+				transition={{ duration: 0.3, delay: 0.15 }}
 			>
-				<p className="text-[11px] uppercase tracking-widest text-foreground/60 dark:text-foreground/50 font-mono mb-4">
-					# how it works
-				</p>
-				<div className="flex flex-col sm:flex-row gap-0">
-					{[
-						{
-							step: "01",
-							label: "Install the framework",
-							desc: "Self-hosted, runs on your database.",
-						},
-						{
-							step: "02",
-							label: "Connect to dashboard",
-							desc: "One config change to link your instance.",
-						},
-						{
-							step: "03",
-							label: "Monitor & manage",
-							desc: "Logs, alerts, users, and team access.",
-						},
-					].map((s, si) => (
-						<motion.div
-							key={s.step}
-							initial={{ opacity: 0, y: 6 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{
-								duration: 0.25,
-								delay: 0.25 + si * 0.06,
-							}}
-							className="flex-1 border border-dashed border-foreground/[0.10] -mt-px -ml-px p-4"
-						>
-							<span className="text-[10px] font-mono text-foreground/50 dark:text-foreground/45">
-								{s.step}
-							</span>
-							<p className="text-[13px] text-foreground/90 dark:text-foreground/80 mt-1.5 mb-1">
-								{s.label}
-							</p>
-							<p className="text-[11px] text-foreground/60 dark:text-foreground/50 leading-relaxed">
-								{s.desc}
-							</p>
-						</motion.div>
-					))}
-				</div>
-			</motion.div>
+				<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
+					INFRASTRUCTURE
+					<span className="flex-1 h-px bg-foreground/15" />
+				</h2>
 
-			{/* Divider into plans */}
-			<motion.div
-				initial={{ opacity: 0 }}
-				animate={{ opacity: 1 }}
-				transition={{ duration: 0.3, delay: 0.3 }}
-				className="relative flex items-center gap-4"
-			>
-				<div className="flex-1 h-px bg-foreground/[0.12]" />
-				<p className="text-[10px] font-mono uppercase tracking-widest text-foreground/55 dark:text-foreground/45 shrink-0">
-					Plans
+				<p className="text-sm sm:text-[15px] text-foreground/80 leading-relaxed max-w-lg mb-8">
+					Connect to our infrastructure and power your self-hosted Better Auth
+					with a dashboard, audit logs, security, and more.
 				</p>
-				<div className="flex-1 h-px bg-foreground/[0.12]" />
 			</motion.div>
 
 			{/* Pricing cards */}
 			<motion.div
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
-				transition={{ duration: 0.4, delay: 0.35 }}
+				transition={{ duration: 0.4, delay: 0.55 }}
 			>
 				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0">
 					{pricingTiers.map((tier, index) => (
 						<PricingCard key={tier.name} tier={tier} index={index} />
 					))}
-				</div>
-
-				<div className="mt-4 px-1">
-					<p className="text-xs text-foreground/55 dark:text-foreground/45 leading-relaxed">
-						<span className="text-foreground/70 dark:text-foreground/60 font-mono uppercase tracking-wider">
-							What&apos;s an audit log?
-						</span>{" "}
-						Any auth action tracked by the dashboard &mdash; sign-ins, password
-						resets, OTP checks, etc. Each action counts as one log.
-					</p>
 				</div>
 			</motion.div>
 
@@ -497,12 +375,8 @@ export function InfrastructureContent() {
 			<motion.div
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3, delay: 0.45 }}
+				transition={{ duration: 0.3, delay: 0.65 }}
 			>
-				<p className="text-[11px] uppercase tracking-widest text-foreground/60 dark:text-foreground/50 font-mono mb-5">
-					# feature comparison
-				</p>
-
 				<div className="border border-dashed border-foreground/[0.10] overflow-x-auto">
 					<table className="w-full min-w-[600px]">
 						<thead>
