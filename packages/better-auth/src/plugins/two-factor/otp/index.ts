@@ -3,7 +3,7 @@ import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../../cookies";
+import { getSessionCookieRememberMe, setSessionCookie } from "../../../cookies";
 import {
 	constantTimeEqual,
 	generateRandomString,
@@ -369,14 +369,20 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 							twoFactorEnabled: true,
 						},
 					);
+					const rememberMe = await getSessionCookieRememberMe(ctx);
 					const newSession = await ctx.context.internalAdapter.createSession(
 						user.id,
-						false,
+						rememberMe,
+						activeSession,
 					);
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
+					await setSessionCookie(
+						ctx,
+						{
+							session: newSession,
+							user: updatedUser,
+						},
+						rememberMe,
+					);
 					await ctx.context.internalAdapter.deleteSession(activeSession.token);
 					return ctx.json({
 						token: newSession.token,

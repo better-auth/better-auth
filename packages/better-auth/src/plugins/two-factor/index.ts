@@ -4,7 +4,11 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sensitiveSessionMiddleware } from "../../api";
-import { expireCookie, setSessionCookie } from "../../cookies";
+import {
+	expireCookie,
+	getSessionCookieRememberMe,
+	setSessionCookie,
+} from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
@@ -197,18 +201,23 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								twoFactorEnabled: true,
 							},
 						);
+						const rememberMe = await getSessionCookieRememberMe(ctx);
 						const newSession = await ctx.context.internalAdapter.createSession(
 							updatedUser.id,
-							false,
+							rememberMe,
 							ctx.context.session.session,
 						);
 						/**
 						 * Update the session cookie with the new user data
 						 */
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
+						await setSessionCookie(
+							ctx,
+							{
+								session: newSession,
+								user: updatedUser,
+							},
+							rememberMe,
+						);
 
 						//remove current session
 						await ctx.context.internalAdapter.deleteSession(
@@ -331,18 +340,23 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							},
 						],
 					});
+					const rememberMe = await getSessionCookieRememberMe(ctx);
 					const newSession = await ctx.context.internalAdapter.createSession(
 						updatedUser.id,
-						false,
+						rememberMe,
 						ctx.context.session.session,
 					);
 					/**
 					 * Update the session cookie with the new user data
 					 */
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
+					await setSessionCookie(
+						ctx,
+						{
+							session: newSession,
+							user: updatedUser,
+						},
+						rememberMe,
+					);
 					//remove current session
 					await ctx.context.internalAdapter.deleteSession(
 						ctx.context.session.session.token,

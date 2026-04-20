@@ -146,6 +146,30 @@ export function getCookies(options: BetterAuthOptions) {
 	};
 }
 
+/**
+ * New authentication flows default to persistent sessions unless the caller
+ * explicitly opted into a session-only cookie.
+ */
+export function normalizeRememberMe(rememberMe?: boolean): boolean {
+	return rememberMe !== false;
+}
+
+/**
+ * Session-replacement flows must preserve the current cookie policy explicitly
+ * before they create the replacement session row. `createSession()` cannot
+ * infer this from the request, because only the cookie layer knows whether the
+ * browser opted into session-only mode.
+ */
+export async function getSessionCookieRememberMe(
+	ctx: GenericEndpointContext,
+): Promise<boolean> {
+	const sessionOnlyCookie = await ctx.getSignedCookie(
+		ctx.context.authCookies.sessionOnlyToken.name,
+		ctx.context.secret,
+	);
+	return !sessionOnlyCookie;
+}
+
 export async function setCookieCache(
 	ctx: GenericEndpointContext,
 	session: {
@@ -285,13 +309,12 @@ export async function setSessionCookie(
 	rememberMe?: boolean | undefined,
 	overrides?: Partial<CookieOptions> | undefined,
 ) {
-	const sessionOnlyCookie = await ctx.getSignedCookie(
-		ctx.context.authCookies.sessionOnlyToken.name,
-		ctx.context.secret,
-	);
 	// if rememberMe is not set, inherit from the session-only cookie: its
 	// presence means the browser previously opted into session-only.
-	rememberMe = rememberMe !== undefined ? rememberMe : !sessionOnlyCookie;
+	rememberMe =
+		rememberMe !== undefined
+			? rememberMe
+			: await getSessionCookieRememberMe(ctx);
 
 	const options = ctx.context.authCookies.sessionToken.attributes;
 	const maxAge = rememberMe ? ctx.context.sessionConfig.expiresIn : undefined;

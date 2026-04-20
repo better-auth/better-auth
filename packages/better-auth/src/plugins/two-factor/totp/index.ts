@@ -4,7 +4,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sensitiveSessionMiddleware } from "../../../api";
-import { setSessionCookie } from "../../../cookies";
+import { getSessionCookieRememberMe, setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
@@ -320,15 +320,21 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 							twoFactorEnabled: true,
 						},
 					);
+					const rememberMe = await getSessionCookieRememberMe(ctx);
 					const newSession = await ctx.context.internalAdapter.createSession(
 						user.id,
-						false,
+						rememberMe,
+						activeSession,
 					);
 
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
+					await setSessionCookie(
+						ctx,
+						{
+							session: newSession,
+							user: updatedUser,
+						},
+						rememberMe,
+					);
 					await ctx.context.internalAdapter.deleteSession(activeSession.token);
 				}
 				// Mark verified only after all session operations succeed.

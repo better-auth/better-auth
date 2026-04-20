@@ -350,6 +350,9 @@ export const createInternalAdapter = (
 				 * set the session to expire in 1 day.
 				 * The cookie will be set to expire at the end of the session.
 				 * Undefined `rememberMe` defaults to remember (persistent).
+				 * Session-replacement flows must resolve the current cookie policy
+				 * before calling `createSession`, because this layer does not read
+				 * browser cookies and cannot infer "inherit the active session".
 				 */
 				expiresAt:
 					rememberMe === false

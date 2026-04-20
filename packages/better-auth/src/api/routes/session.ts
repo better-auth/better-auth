@@ -290,8 +290,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 									updatedAt: Date.now(),
 								};
 
-								// Set the refreshed cookie cache
-								await setCookieCache(ctx, refreshedSession, false);
+								// This branch only runs for persistent sessions; preserve
+								// that policy on both the token and cache cookies.
+								await setCookieCache(ctx, refreshedSession, !sessionOnlyCookie);
 
 								// Also refresh the session_token cookie expiry
 								const sessionTokenOptions =
@@ -475,7 +476,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							session: updatedSession,
 							user: session.user,
 						},
-						false,
+						!sessionOnlyCookie,
 						{
 							maxAge,
 						},

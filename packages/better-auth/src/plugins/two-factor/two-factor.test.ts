@@ -3736,3 +3736,108 @@ describe("trustDevice is not written when a post-verify after-hook rejects", asy
 		expectTwoFactorChallenge(secondBody);
 	});
 });
+
+describe("two factor session rotation remember me", async () => {
+	it("should preserve session-only expiry when TOTP verification rotates the active session", async () => {
+		const { auth, client, cookieSetter, db, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP() {},
+					},
+				}),
+			],
+		});
+		const headers = new Headers();
+		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expectNoTwoFactorChallenge(signInRes.data);
+
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+		});
+
+		const twoFactorRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: signInRes.data!.user.id }],
+		});
+		if (!twoFactorRecord) {
+			throw new Error("Expected two-factor enrollment row");
+		}
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorRecord.secret,
+		});
+		const code = await createOTP(secret).totp();
+
+		let rotatedCookies = new Map<string, Record<string, any>>();
+		const verifyRes = await client.twoFactor.verifyTotp({
+			code,
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					rotatedCookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+				},
+			},
+		});
+		expect(verifyRes.data?.token).toBeDefined();
+		expect(
+			rotatedCookies.get("better-auth.session_token")?.["max-age"],
+		).toBeUndefined();
+
+		const session = await auth.api.getSession({ headers });
+		expect(session).toBeDefined();
+		expect(new Date(session!.session.expiresAt).getTime()).toBeLessThanOrEqual(
+			Date.now() + 24 * 60 * 60 * 1000 + 5_000,
+		);
+	});
+
+	it("should preserve session-only expiry when skipVerificationOnEnable rotates the active session", async () => {
+		const { auth, client, cookieSetter, testUser } = await getTestInstance({
+			plugins: [
+				twoFactor({
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		const rotatedCookies = parseSetCookieHeader(
+			enableRes.headers.get("set-cookie") || "",
+		);
+		cookieSetter(headers)({ response: enableRes } as any);
+		expect(
+			rotatedCookies.get("better-auth.session_token")?.["max-age"],
+		).toBeUndefined();
+
+		const session = await auth.api.getSession({ headers });
+		expect(session).toBeDefined();
+		expect(new Date(session!.session.expiresAt).getTime()).toBeLessThanOrEqual(
+			Date.now() + 24 * 60 * 60 * 1000 + 5_000,
+		);
+	});
+});

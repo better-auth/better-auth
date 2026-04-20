@@ -6,7 +6,11 @@ import { BUILTIN_AMR_METHOD } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	getSessionCookieRememberMe,
+	setSessionCookie,
+} from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
@@ -301,10 +305,12 @@ export const changePassword = createAuthEndpoint(
 			const previousAmr =
 				(session.session.amr as AuthenticationMethodReference[] | undefined) ??
 				[];
+			const rememberMe = await getSessionCookieRememberMe(ctx);
 			const newSession = await ctx.context.internalAdapter.createSession(
 				session.user.id,
-				undefined,
+				rememberMe,
 				{
+					...session.session,
 					amr: [
 						{
 							method: BUILTIN_AMR_METHOD.PASSWORD,
@@ -322,10 +328,14 @@ export const changePassword = createAuthEndpoint(
 				);
 			}
 			// set the new session cookie
-			await setSessionCookie(ctx, {
-				session: newSession,
-				user: session.user,
-			});
+			await setSessionCookie(
+				ctx,
+				{
+					session: newSession,
+					user: session.user,
+				},
+				rememberMe,
+			);
 			token = newSession.token;
 		}
 

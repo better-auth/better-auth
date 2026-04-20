@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
+import { parseSetCookieHeader } from "../../cookies";
 import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
 import type { Account, Session } from "../../types";
 
@@ -774,5 +775,48 @@ describe("change-email without sendVerificationEmail", async () => {
 			expect(resNonExisting.error?.status).toBe(400);
 			expect(resExisting.error?.message).toBe(resNonExisting.error?.message);
 		});
+	});
+});
+
+describe("changePassword remember me", async () => {
+	it("should preserve session-only expiry when rotating the current session", async () => {
+		const { auth, client, cookieSetter, testUser } = await getTestInstance();
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		let rotatedCookies = new Map<string, Record<string, any>>();
+		const changePasswordResult = await client.changePassword({
+			newPassword: "password123-new",
+			currentPassword: testUser.password,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					rotatedCookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+				},
+			},
+		});
+		expect(changePasswordResult.data).toBeDefined();
+		expect(
+			rotatedCookies.get("better-auth.session_token")?.["max-age"],
+		).toBeUndefined();
+
+		const session = await auth.api.getSession({
+			headers,
+		});
+		expect(session).toBeDefined();
+		expect(new Date(session!.session.expiresAt).getTime()).toBeLessThanOrEqual(
+			Date.now() + 24 * 60 * 60 * 1000 + 5_000,
+		);
 	});
 });
