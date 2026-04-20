@@ -17,7 +17,7 @@ describe("redis-adapter", () => {
 			redisClient = createClient();
 			await redisClient.connect();
 			isRedisAvailable = true;
-		} catch (error) {
+		} catch (_error) {
 			isRedisAvailable = false;
 			redisClient = null;
 		}
@@ -28,7 +28,7 @@ describe("redis-adapter", () => {
 			try {
 				await redisClient.flushDb();
 				await redisClient.disconnect();
-			} catch(_error) {
+			} catch (_error) {
 				// Ignore cleanup errors
 			}
 		}
