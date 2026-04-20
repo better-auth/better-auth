@@ -8,9 +8,7 @@ export interface RedisAdapterConfig {
 	ttl?: number;
 }
 
-export const redisAdapter = (
-	config: RedisAdapterConfig,
-): ReturnType<typeof createAdapterFactory<BetterAuthOptions>> => {
+export const redisAdapter = (config: RedisAdapterConfig) => {
 	const client = config.client;
 	const ttl = config.ttl;
 
@@ -83,8 +81,8 @@ export const redisAdapter = (
 	function applyWhere(records: any[], where: CleanedWhere[]) {
 		if (!where || where.length === 0) return records;
 		return records.filter((record) => {
-			const andConditions: boolean[] = [];
-			const orConditions: boolean[] = [];
+			let andConditions: boolean[] = [];
+			let orConditions: boolean[] = [];
 
 			for (const clause of where) {
 				const val = record[clause.field];
@@ -149,7 +147,8 @@ export const redisAdapter = (
 						case "ne":
 							if (isInsensitiveString) {
 								match =
-									String(val || "").toLowerCase() !== String(v).toLowerCase();
+									String(val || "").toLowerCase() !==
+									String(v).toLowerCase();
 							} else {
 								// Coerce to same type for comparison
 								match = String(val) !== String(v);
@@ -212,7 +211,8 @@ export const redisAdapter = (
 						default:
 							if (isInsensitiveString) {
 								match =
-									String(val || "").toLowerCase() === String(v).toLowerCase();
+									String(val || "").toLowerCase() ===
+									String(v).toLowerCase();
 							} else {
 								// Coerce to same type for comparison (handles numeric IDs)
 								match = String(val) === String(v);
@@ -224,9 +224,7 @@ export const redisAdapter = (
 				else andConditions.push(match);
 			}
 
-			const andResult = andConditions.length
-				? andConditions.every(Boolean)
-				: true;
+			const andResult = andConditions.length ? andConditions.every(Boolean) : true;
 			const orResult = orConditions.length ? orConditions.some(Boolean) : false;
 			return orConditions.length > 0 ? orResult : andResult;
 		});
@@ -243,18 +241,46 @@ export const redisAdapter = (
 		});
 	}
 
-	function applyJoin(
-		base: any[],
-		db: Record<string, any[]>,
-		join?: JoinConfig,
-	) {
+	function applySelect(records: any[], select?: string[]) {
+		if (!select || select.length === 0) return records;
+
+		const selectKeys = Array.isArray(select)
+			? select
+			: Object.keys(select).filter((k) => select[k]);
+
+		if (selectKeys.length === 0) return records;
+
+		return records.map((record) => {
+			const filtered: any = {};
+
+			for (const key of selectKeys) {
+				if (record.hasOwnProperty(key)) {
+					filtered[key] = record[key];
+				}
+			}
+
+			for (const key of Object.keys(record)) {
+				const isJoin =
+					record[key] !== null &&
+					typeof record[key] === "object" &&
+					!(record[key] instanceof Date);
+				if (isJoin) {
+					filtered[key] = record[key];
+				}
+			}
+
+			return filtered;
+		});
+	}
+
+	function applyJoin(base: any[], db: Record<string, any[]>, join?: JoinConfig) {
 		if (!join) return base;
 		return base.map((record) => {
 			const result = { ...record };
 			for (const [joinModel, cfg] of Object.entries(join)) {
 				const table = db[joinModel] || [];
-				const matched = table.filter(
-					(r) => r[cfg.on.to] === record[cfg.on.from],
+				let matched = table.filter(
+					(r) => r[cfg.on.to] === record[cfg.on.from]
 				);
 
 				// Apply limit to joined records (default is 100 per JoinConfig spec)
@@ -286,7 +312,7 @@ export const redisAdapter = (
 					await client.set(
 						key,
 						JSON.stringify(dataToStore),
-						ttl ? { EX: ttl } : undefined,
+						ttl ? { EX: ttl } : undefined
 					);
 					// Ensure ID is always returned, even if it's numeric
 					return { ...dataToStore, id: String(dataToStore.id) };
@@ -343,7 +369,7 @@ export const redisAdapter = (
 						await client.set(
 							`${modelName}:${r.id}`,
 							JSON.stringify(updated),
-							ttl ? { EX: ttl } : undefined,
+							ttl ? { EX: ttl } : undefined
 						);
 					}
 					const result = { ...filtered[0], ...update };
@@ -359,7 +385,7 @@ export const redisAdapter = (
 						await client.set(
 							`${modelName}:${r.id}`,
 							JSON.stringify(updated),
-							ttl ? { EX: ttl } : undefined,
+							ttl ? { EX: ttl } : undefined
 						);
 					}
 					return filtered.length;

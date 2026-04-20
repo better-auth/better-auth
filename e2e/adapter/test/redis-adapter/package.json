@@ -1,0 +1,17 @@
+{
+  "name": "@better-auth-test/redis-adapter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:integration": "vitest run"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/redis-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
+    "better-auth": "workspace:*"
+  },
+  "dependencies": {
+    "redis": "^5.11.0"
+  }
+}

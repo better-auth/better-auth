@@ -25,6 +25,9 @@
     },
     {
       "path": "../../packages/prisma-adapter/tsconfig.json"
+    },
+    {
+      "path": "../../packages/redis-adapter/tsconfig.json"
     }
   ]
 }
