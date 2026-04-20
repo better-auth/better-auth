@@ -4015,8 +4015,11 @@ describe("signupWithInvitation session activation", async () => {
 		});
 
 		expect(observedMaximumMembersSession).toBeNull();
-		expect(createdSession.data?.session.activeOrganizationId).toBe(org.data!.id);
-		expect((createdSession.data?.session as { activeTeamId?: string }).activeTeamId)
-			.toBe(team.data!.id);
+		expect(createdSession.data?.session.activeOrganizationId).toBe(
+			org.data!.id,
+		);
+		expect(
+			(createdSession.data?.session as { activeTeamId?: string }).activeTeamId,
+		).toBe(team.data!.id);
 	});
 });

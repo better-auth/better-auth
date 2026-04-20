@@ -1835,6 +1835,7 @@ describe("edge cases: userId validation", async () => {
 
 describe("user enrollment flow", async () => {
 	let enrollmentToken: string | undefined;
+	let blockEnrollmentVerificationCreate = false;
 	let blockEnrollmentVerificationUpdate = false;
 
 	const { auth, signInWithTestUser, customFetchImpl, db } =
@@ -1867,6 +1868,15 @@ describe("user enrollment flow", async () => {
 							},
 						},
 					},
+					verification: {
+						create: {
+							before: async () => {
+								if (blockEnrollmentVerificationCreate) {
+									return false;
+								}
+							},
+						},
+					},
 				},
 			},
 			{ testUser: { name: "EnrollAdmin" } },
@@ -1893,6 +1903,33 @@ describe("user enrollment flow", async () => {
 		expect(res.data?.user?.email).toBe("enroll@test.com");
 		expect(res.data?.user?.emailVerified).toBe(false);
 		expect(enrollmentToken).toBeDefined();
+	});
+
+	it("should rollback enrollment user creation if verification creation fails", async () => {
+		const prevToken = enrollmentToken;
+		enrollmentToken = undefined;
+		blockEnrollmentVerificationCreate = true;
+
+		const res = await client.admin.createUser(
+			{
+				name: "Broken Enrollment",
+				email: "broken-enrollment@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+
+		blockEnrollmentVerificationCreate = false;
+
+		expect(res.error?.code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(enrollmentToken).toBeUndefined();
+
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "broken-enrollment@test.com" }],
+		});
+		expect(users).toHaveLength(0);
+		enrollmentToken = prevToken;
 	});
 
 	it("should not send enrollment email when password is provided", async () => {

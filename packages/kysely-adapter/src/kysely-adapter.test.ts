@@ -75,9 +75,23 @@ describe("kysely-adapter", () => {
 				exec: async () => ({ count: 0, duration: 0 }),
 				prepare: () => ({
 					bind: () => ({
-						all: async () => ({ results: [], success: true, meta: { duration: 0 } }),
+						all: async () => ({
+							results: [],
+							success: true,
+							meta: { duration: 0 },
+						}),
 						first: async () => null,
-						run: async () => ({ success: true, meta: { duration: 0, changes: 0, last_row_id: 0, rows_read: 0, rows_written: 0, size_after: 0 } }),
+						run: async () => ({
+							success: true,
+							meta: {
+								duration: 0,
+								changes: 0,
+								last_row_id: 0,
+								rows_read: 0,
+								rows_written: 0,
+								size_after: 0,
+							},
+						}),
 						raw: async () => [],
 					}),
 				}),

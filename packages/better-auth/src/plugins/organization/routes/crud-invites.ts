@@ -576,7 +576,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 
-				if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+				if (
+					invitation.email.toLowerCase() !== session.user.email.toLowerCase()
+				) {
 					throw APIError.from(
 						"FORBIDDEN",
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -1634,7 +1636,10 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 				};
 			});
 
-			await setSessionCookie(ctx, { session: result.session, user: result.user });
+			await setSessionCookie(ctx, {
+				session: result.session,
+				user: result.user,
+			});
 
 			return ctx.json({
 				token: result.session.token,

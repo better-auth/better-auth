@@ -363,50 +363,83 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				);
 			}
 			const willEnroll = !ctx.body.password && !!opts.sendEnrollmentEmail;
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
-				email: email,
-				name: ctx.body.name,
-				role:
-					(ctx.body.role && parseRoles(ctx.body.role)) ??
-					opts?.defaultRole ??
-					"user",
-				...ctx.body.data,
-				// Enrollment users must be unverified; override any value from data.
-				...(willEnroll ? { emailVerified: false } : {}),
-			});
+			const result = await runWithTransaction(ctx.context.adapter, async () => {
+				const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+					{
+						email: email,
+						name: ctx.body.name,
+						role:
+							(ctx.body.role && parseRoles(ctx.body.role)) ??
+							opts?.defaultRole ??
+							"user",
+						...ctx.body.data,
+						// Enrollment users must be unverified; override any value from data.
+						...(willEnroll ? { emailVerified: false } : {}),
+					},
+				);
 
-			if (!user) {
-				throw APIError.from(
-					"INTERNAL_SERVER_ERROR",
-					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
-				);
-			}
-			// Only create credential account if password is provided
-			if (ctx.body.password) {
-				const hashedPassword = await ctx.context.password.hash(
-					ctx.body.password,
-				);
-				await ctx.context.internalAdapter.linkAccount({
-					accountId: user.id,
-					providerId: "credential",
-					password: hashedPassword,
-					userId: user.id,
-				});
-			} else if (opts.sendEnrollmentEmail) {
+				if (!user) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
+					);
+				}
+
+				if (ctx.body.password) {
+					const hashedPassword = await ctx.context.password.hash(
+						ctx.body.password,
+					);
+					await ctx.context.internalAdapter.linkAccount({
+						accountId: user.id,
+						providerId: "credential",
+						password: hashedPassword,
+						userId: user.id,
+					});
+					return { user, enrollment: null };
+				}
+
+				if (!opts.sendEnrollmentEmail) {
+					return { user, enrollment: null };
+				}
+
 				const token = generateId(32);
 				const expiresAt = getDate(opts.enrollmentExpiresIn ?? 172800, "sec");
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `user-enrollment:${token}`,
-					value: user.id,
-					expiresAt,
-				});
-				const url = `${ctx.context.baseURL}/admin/complete-enrollment?token=${token}`;
+				const verification =
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: `user-enrollment:${token}`,
+						value: user.id,
+						expiresAt,
+					});
+				if (!verification) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+					);
+				}
+
+				return {
+					user,
+					enrollment: {
+						token,
+						url: `${ctx.context.baseURL}/admin/complete-enrollment?token=${token}`,
+					},
+				};
+			});
+
+			if (result.enrollment) {
 				await ctx.context.runInBackgroundOrAwait(
-					opts.sendEnrollmentEmail({ user, url, token }, ctx.request),
+					opts.sendEnrollmentEmail?.(
+						{
+							user: result.user,
+							url: result.enrollment.url,
+							token: result.enrollment.token,
+						},
+						ctx.request,
+					),
 				);
 			}
 			return ctx.json({
-				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
+				user: parseUserOutput(ctx.context.options, result.user) as UserWithRole,
 			});
 		},
 	);
@@ -1807,7 +1840,8 @@ export const completeEnrollment = (opts: AdminOptions) =>
 				}
 
 				const userId = verification.value;
-				const existingUser = await ctx.context.internalAdapter.findUserById(userId);
+				const existingUser =
+					await ctx.context.internalAdapter.findUserById(userId);
 				if (!existingUser) {
 					throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}
@@ -1832,9 +1866,12 @@ export const completeEnrollment = (opts: AdminOptions) =>
 					);
 				}
 
-				const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
-					emailVerified: true,
-				});
+				const updatedUser = await ctx.context.internalAdapter.updateUser(
+					userId,
+					{
+						emailVerified: true,
+					},
+				);
 				if (!updatedUser) {
 					throw APIError.from(
 						"INTERNAL_SERVER_ERROR",

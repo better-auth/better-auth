@@ -45,10 +45,19 @@ interface KyselyAdapterConfig {
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
-	 * Transactions are enabled by default for supported Kysely dialects.
+	 * When using Better Auth's Kysely database config, transactions are
+	 * enabled by default for supported dialects.
+	 *
+	 * When instantiating the adapter directly with `kyselyAdapter(db, config)`,
+	 * set this explicitly to `true` to opt into transactional execution.
+	 * Better Auth cannot reliably infer whether a pre-built Kysely instance
+	 * uses a dialect such as Cloudflare D1 that does not support interactive
+	 * transactions.
+	 *
 	 * If the database doesn't support interactive transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true for supported dialects
+	 *
+	 * @default false when omitted on direct `kyselyAdapter(...)` usage
 	 */
 	transaction?: boolean | undefined;
 }
