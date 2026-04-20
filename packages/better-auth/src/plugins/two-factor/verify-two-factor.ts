@@ -82,7 +82,7 @@ async function writeTrustDeviceCookie(
 ): Promise<void> {
 	const plugin = ctx.context.getPlugin("two-factor");
 	const trustDeviceMaxAge = (plugin?.options as TwoFactorOptions | undefined)
-		?.trustDeviceMaxAge;
+		?.trustDevice?.maxAge;
 	const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 	const trustDeviceCookie = ctx.context.createAuthCookie(
 		TRUST_DEVICE_COOKIE_NAME,

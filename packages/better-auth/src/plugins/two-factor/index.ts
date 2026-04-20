@@ -46,7 +46,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		twoFactorTable: "twoFactor",
 	};
 	const trustDeviceMaxAge =
-		options?.trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+		options?.trustDevice?.maxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 	const allowPasswordless = options?.allowPasswordless;
 	const backupCodeOptions = {
 		storeBackupCodes: "encrypted",

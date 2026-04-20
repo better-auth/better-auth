@@ -17,6 +17,8 @@ import { anonymous } from "../anonymous";
 import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type {
+	TwoFactorEnforcementDecide,
+	TwoFactorEnforcementDecideInput,
 	TwoFactorMethod,
 	TwoFactorTable,
 	UserWithTwoFactor,
@@ -1400,8 +1402,8 @@ describe("trust device server-side validation", async () => {
 	});
 });
 
-describe("trustDeviceMaxAge", async () => {
-	const customMaxAge = 7 * 24 * 60 * 60; // 7 days instead of default 30
+describe("trustDevice.maxAge", async () => {
+	const customMaxAge = 14 * 24 * 60 * 60; // 14 days; distinct from the 7-day default
 
 	let OTP = "";
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
@@ -1414,14 +1416,14 @@ describe("trustDeviceMaxAge", async () => {
 					},
 				},
 				skipVerificationOnEnable: true,
-				trustDeviceMaxAge: customMaxAge,
+				trustDevice: { maxAge: customMaxAge },
 			}),
 		],
 	});
 
 	let { headers } = await signInWithTestUser();
 
-	it("should use custom trustDeviceMaxAge for the trust device cookie", async () => {
+	it("should use custom trustDevice.maxAge for the trust device cookie", async () => {
 		// Enable 2FA
 		const enableRes = await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
@@ -1490,7 +1492,7 @@ describe("trustDeviceMaxAge", async () => {
 		expect(Math.abs(expiresAt - expectedExpiry)).toBeLessThan(5000);
 	});
 
-	it("should use default 30 days when trustDeviceMaxAge is not specified", async () => {
+	it("should use default 7 days when trustDevice.maxAge is not specified", async () => {
 		let defaultOTP = "";
 		const { auth: authDefault, signInWithTestUser: signInDefault } =
 			await getTestInstance({
@@ -1542,14 +1544,13 @@ describe("trustDeviceMaxAge", async () => {
 		});
 		expect(verifyRes.status).toBe(200);
 
-		// Verify the trust device cookie has the default max-age (30 days)
+		// Verify the trust device cookie has the default max-age (7 days)
 		const parsed = parseSetCookieHeader(
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
 		const trustDeviceCookie = parsed.get("better-auth.trust_device");
 		expect(trustDeviceCookie).toBeDefined();
-		// Default is 30 days = 30 * 24 * 60 * 60 = 2592000 seconds
-		expect(Number(trustDeviceCookie?.["max-age"])).toBe(30 * 24 * 60 * 60);
+		expect(Number(trustDeviceCookie?.["max-age"])).toBe(7 * 24 * 60 * 60);
 	});
 });
 
@@ -3262,5 +3263,334 @@ describe("two-factor verify attempt hardening", async () => {
 
 		expect(res.data?.token).toBeTruthy();
 		expect(res.data?.user?.email).toBe(testUser.email);
+	});
+});
+
+describe("enforcement.decide", async () => {
+	async function setupWithDecide(
+		decide: TwoFactorEnforcementDecide,
+		extra: { log?: (level: string, ...args: unknown[]) => void } = {},
+	) {
+		let OTP = "";
+		const instance = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			...(extra.log
+				? { logger: { level: "info" as const, log: extra.log } }
+				: {}),
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+					},
+					skipVerificationOnEnable: true,
+					enforcement: { decide },
+				}),
+			],
+		});
+		const { auth, testUser, signInWithTestUser } = instance;
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		return { auth, testUser, getOtp: () => OTP };
+	}
+
+	it('returning "skip" finalizes the session without issuing a challenge', async () => {
+		const { auth, testUser } = await setupWithDecide(() => "skip");
+		const signInRes = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const body = await signInRes.json();
+		expect(signInRes.status).toBe(200);
+		expectNoTwoFactorChallenge(body);
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		expect(parsed.get("better-auth.two_factor")).toBeUndefined();
+		expect(parsed.get("better-auth.session_token")).toBeDefined();
+	});
+
+	it('returning "enforce" bypasses a valid trust-device cookie', async () => {
+		const { auth, testUser, getOtp } = await setupWithDecide(({ challenge }) =>
+			challenge === "two-factor" ? "enforce" : undefined,
+		);
+
+		const firstSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const challengeHeaders = convertSetCookieToCookie(firstSignIn.headers);
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: { code: getOtp(), trustDevice: true },
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		const trustedHeaders = convertSetCookieToCookie(verifyRes.headers);
+
+		const secondSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			headers: trustedHeaders,
+			asResponse: true,
+		});
+		const body = await secondSignIn.json();
+		expectTwoFactorChallenge(body);
+	});
+
+	it("returning undefined defers to the trust-device default", async () => {
+		const { auth, testUser, getOtp } = await setupWithDecide(() => undefined);
+
+		const firstSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const challengeHeaders = convertSetCookieToCookie(firstSignIn.headers);
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: { code: getOtp(), trustDevice: true },
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		const trustedHeaders = convertSetCookieToCookie(verifyRes.headers);
+
+		const secondSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			headers: trustedHeaders,
+			asResponse: true,
+		});
+		const body = await secondSignIn.json();
+		expectNoTwoFactorChallenge(body);
+	});
+
+	it("receives { challenge, user, method, request } for the primary factor", async () => {
+		const captured: TwoFactorEnforcementDecideInput[] = [];
+		const { auth, testUser } = await setupWithDecide((input) => {
+			captured.push(input);
+			return undefined;
+		});
+		// Exercise the fetch path so ctx.request is a real Request; server-side
+		// `auth.api.*` calls invoke the pipeline without one (documented).
+		const handler = (req: Request) => auth.handler(req);
+		await handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			}),
+		);
+		expect(captured).toHaveLength(1);
+		const [input] = captured;
+		expect(input?.challenge).toBe("two-factor");
+		expect(input?.user.id).toBeTruthy();
+		expect(input?.method).toBe("password");
+		expect(input?.request).toBeInstanceOf(Request);
+	});
+
+	it('audit-logs every "skip" decision at info level with user/method/challenge/reason', async () => {
+		const log = vi.fn();
+		const { auth, testUser } = await setupWithDecide(
+			() => ({ decision: "skip", reason: "idp-amr-mfa" }),
+			{ log },
+		);
+		await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const skipCalls = log.mock.calls.filter(
+			([level, message]) =>
+				level === "info" &&
+				typeof message === "string" &&
+				message.includes("two-factor challenge skipped by decide hook"),
+		);
+		expect(skipCalls).toHaveLength(1);
+		const [, , payload] = skipCalls[0] as [
+			string,
+			string,
+			Record<string, unknown>,
+		];
+		expect(payload).toMatchObject({
+			method: "password",
+			challenge: "two-factor",
+			reason: "idp-amr-mfa",
+		});
+	});
+
+	it('literal "skip" return records reason: "unspecified"', async () => {
+		const log = vi.fn();
+		const { auth, testUser } = await setupWithDecide(() => "skip", { log });
+		await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const [, , payload] = log.mock.calls.find(
+			([level, message]) =>
+				level === "info" &&
+				typeof message === "string" &&
+				message.includes("two-factor challenge skipped by decide hook"),
+		) as [string, string, Record<string, unknown>];
+		expect(payload.reason).toBe("unspecified");
+	});
+
+	it('"enforce" decisions are not audit-logged as skips', async () => {
+		const log = vi.fn();
+		const { auth, testUser } = await setupWithDecide(() => "enforce", {
+			log,
+		});
+		await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const skipCalls = log.mock.calls.filter(
+			([level, message]) =>
+				level === "info" &&
+				typeof message === "string" &&
+				message.includes("two-factor challenge skipped by decide hook"),
+		);
+		expect(skipCalls).toHaveLength(0);
+	});
+
+	it("hook throws: exception propagates (fail-closed contract)", async () => {
+		const { auth, testUser } = await setupWithDecide(() => {
+			throw new Error("decide-hook-boom");
+		});
+		// Fail-closed: a `decide` hook error must not silently bypass 2FA.
+		// The exception propagates through the sign-in pipeline rather
+		// than being swallowed into a "skip" path.
+		await expect(
+			auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+				asResponse: true,
+			}),
+		).rejects.toThrow("decide-hook-boom");
+	});
+
+	it('"skip" decision wins over requireReverificationFor on the same path', async () => {
+		let OTP = "";
+		const decide: TwoFactorEnforcementDecide = () => "skip";
+		const { auth, testUser, signInWithTestUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+					},
+					skipVerificationOnEnable: true,
+					trustDevice: { requireReverificationFor: ["/sign-in/email"] },
+					enforcement: { decide },
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expectNoTwoFactorChallenge(body);
+		expect(OTP).toBe("");
+	});
+});
+
+describe("trustDevice.requireReverificationFor", async () => {
+	async function enrollAndTrust(requireReverificationFor: string[]) {
+		let OTP = "";
+		const { auth, testUser, signInWithTestUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+					},
+					skipVerificationOnEnable: true,
+					trustDevice: { requireReverificationFor },
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		const firstSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const challengeHeaders = convertSetCookieToCookie(firstSignIn.headers);
+		await auth.api.sendTwoFactorOTP({ headers: challengeHeaders, body: {} });
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: { code: OTP, trustDevice: true },
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		return {
+			auth,
+			testUser,
+			trustedHeaders: convertSetCookieToCookie(verifyRes.headers),
+		};
+	}
+
+	it("forces a fresh challenge on an allowlisted path despite a valid trust cookie", async () => {
+		const { auth, testUser, trustedHeaders } = await enrollAndTrust([
+			"/sign-in/email",
+		]);
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			headers: trustedHeaders,
+			asResponse: true,
+		});
+		const body = await res.json();
+		expectTwoFactorChallenge(body);
+	});
+
+	it("honors the trust cookie on paths outside the allowlist", async () => {
+		const { auth, testUser, trustedHeaders } = await enrollAndTrust([
+			"/update-password",
+		]);
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			headers: trustedHeaders,
+			asResponse: true,
+		});
+		const body = await res.json();
+		expectNoTwoFactorChallenge(body);
+	});
+
+	it("empty allowlist is a no-op: trust cookie skips the challenge", async () => {
+		const { auth, testUser, trustedHeaders } = await enrollAndTrust([]);
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			headers: trustedHeaders,
+			asResponse: true,
+		});
+		const body = await res.json();
+		expectNoTwoFactorChallenge(body);
 	});
 });

@@ -347,7 +347,7 @@ After the user has entered their 2FA code, you can verify it using `twoFactor.ve
        */
       code: string = "012345"
       /**
-       * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
+       * If true, the device will be trusted for the configured `trustDevice.maxAge` (default 7 days). It'll be refreshed on every sign in request within this time. 
        */
       trustDevice?: boolean = true
   }
@@ -391,7 +391,7 @@ Sending an OTP is done by calling the `authClient.twoFactor.sendOtp` function on
        */
       attemptId?: string
       /**
-       * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
+       * If true, the device will be trusted for the configured `trustDevice.maxAge` (default 7 days). It'll be refreshed on every sign in request within this time. 
        */
       trustDevice?: boolean = true
   }
@@ -420,7 +420,7 @@ After the user has entered their OTP code, you can verify it using `authClient.t
        */
       code: string = "012345"
       /**
-       * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
+       * If true, the device will be trusted for the configured `trustDevice.maxAge` (default 7 days). It'll be refreshed on every sign in request within this time. 
        */
       trustDevice?: boolean = true
   }
@@ -476,7 +476,7 @@ You can now allow users to provide a backup code as an account recovery method.
        */
       disableSession?: boolean = false
       /**
-       * If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. 
+       * If true, the device will be trusted for the configured `trustDevice.maxAge` (default 7 days). It'll be refreshed on every sign in request within this time. 
        */
       trustDevice?: boolean = true
   }
@@ -518,7 +518,56 @@ const verify2FA = async (code: string) => {
 }
 ```
 
-When `trustDevice` is set to `true`, the current device will be remembered for 30 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
+When `trustDevice` is set to `true`, the current device will be remembered for 7 days (configurable via `trustDevice.maxAge`). During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { twoFactor } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        twoFactor({
+            trustDevice: {
+                maxAge: 30 * 24 * 60 * 60, // seconds; opt in to the legacy 30-day window
+                // Force a fresh 2FA challenge on the listed sign-in paths
+                // even when the trust cookie is valid. Matched exactly
+                // against `ctx.path`; only sign-in resolution routes
+                // (e.g. `/sign-in/email`, `/sign-in/magic-link`,
+                // `/callback/:provider`) are consulted, so listing
+                // non-sign-in paths like `/update-password` is a no-op.
+                requireReverificationFor: ["/sign-in/email"],
+            },
+        }),
+    ],
+})
+```
+
+### Enforcement policy
+
+Use the `enforcement.decide` hook to override the defaulted challenge resolution per request: return `"skip"` to bypass 2FA (for example, to trust an upstream IdP's `amr=mfa` claim), `"enforce"` to require it even when a trust-device cookie is valid, or `undefined` to defer to the defaults. Every `"skip"` decision is audit-logged at `info` level.
+
+```ts title="auth.ts"
+twoFactor({
+    enforcement: {
+        async decide({ challenge, user, method, request }) {
+            // Honor an upstream IdP's MFA assertion for federated sign-ins.
+            if (method === "acme-corp-sso") {
+                return { decision: "skip", reason: "idp-amr-mfa" }
+            }
+            // `request` is undefined on server-side `auth.api.*` calls:
+            // only key on it when it is present.
+            if (request?.headers.get("x-trusted-proxy") === "1") {
+                return "skip"
+            }
+            return undefined
+        },
+    },
+})
+```
+
+Return either the literal `"enforce" | "skip" | undefined` or a structured `{ decision, reason }` object. The `reason` is recorded on the `"skip"` audit-log entry so operators can answer "why was 2FA bypassed for user X?" at incident-response time.
+
+The hook is a server-side allowlist: there is no client-sent flag, so every bypass is a server-held decision reading server-held inputs.
 
 ### Issuer
 
@@ -596,6 +645,15 @@ export const twoFactorTableFields = [
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
 
 **allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists.
+
+**trustDevice**: Trusted-device policy.
+
+* `maxAge` (seconds): Trust-device cookie lifetime. Default `604800` (7 days). Apps that prefer the longer window set this explicitly.
+* `requireReverificationFor` (string\[]): Sign-in endpoint paths (exact match against `ctx.path`) that force a fresh 2FA challenge even when the trust cookie is valid. Only sign-in resolution routes are consulted; listing non-sign-in paths is a no-op.
+
+**enforcement**: Per-request enforcement policy.
+
+* `decide(input)`: Server-side hook returning `"enforce"`, `"skip"`, `undefined`, or `{ decision, reason }` for a candidate challenge. `"skip"` is audit-logged at `info`; the structured form lets operators attach a `reason` that is persisted on the audit entry.
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 

@@ -13,6 +13,7 @@ import {
 import type { TrustedDeviceRotation } from "./trust-device";
 import { resolveTrustedDeviceRotation } from "./trust-device";
 import type {
+	TwoFactorEnforcementDecision,
 	TwoFactorMethod,
 	TwoFactorOptions,
 	TwoFactorTable,
@@ -85,8 +86,8 @@ async function getAvailableTwoFactorMethods(
 /**
  * Decides whether a sign-in needs to pause for 2FA. Returns:
  * - `null` when the user can be finalized immediately (no plugin, 2FA disabled,
- *    primary factor already satisfies 2FA, or sign-in originates from a trusted
- *    device).
+ *    primary factor already satisfies 2FA, a `decide` hook returned `"skip"`,
+ *    or sign-in originates from a trusted device).
  * - `{ kind: "trusted-device", rotation }` when the device should skip the
  *    challenge and have its trust-token rotated on successful commit.
  * - `{ kind: "challenge", challenge }` when the user must complete 2FA before
@@ -110,15 +111,27 @@ export async function checkTwoFactor(
 		return null;
 	}
 
-	const trustDeviceMaxAge =
-		options.trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
-	const rotation = await resolveTrustedDeviceRotation(
-		ctx,
-		user.id,
-		trustDeviceMaxAge,
-	);
-	if (rotation) {
-		return { kind: "trusted-device", rotation };
+	// Precedence: factor-level `skipChallenges` (above) > `decide` policy >
+	// `requireReverificationFor` allowlist > trust-device cookie rotation.
+	const decision = await runEnforcementDecide(ctx, options, input);
+	if (decision === "skip") {
+		return null;
+	}
+
+	const forceChallenge =
+		decision === "enforce" || matchesRequireReverification(ctx, options);
+
+	if (!forceChallenge) {
+		const trustDeviceMaxAge =
+			options.trustDevice?.maxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+		const rotation = await resolveTrustedDeviceRotation(
+			ctx,
+			user.id,
+			trustDeviceMaxAge,
+		);
+		if (rotation) {
+			return { kind: "trusted-device", rotation };
+		}
 	}
 
 	const maxAge = options.twoFactorCookieMaxAge ?? 10 * 60;
@@ -165,4 +178,68 @@ export async function getTwoFactorAttemptId(
 		ctx.context.secret,
 	);
 	return typeof attemptId === "string" ? attemptId : null;
+}
+
+/**
+ * Invoke `enforcement.decide` (if configured), normalize the literal-or-
+ * structured return to `"enforce" | "skip" | undefined`, and audit-log
+ * a "skip" outcome with the operator-supplied reason when present.
+ * Separated from `checkTwoFactor` so the primary flow stays linear and the
+ * logging contract (every bypass is observable) is enforced in one place.
+ */
+async function runEnforcementDecide(
+	ctx: GenericEndpointContext,
+	options: TwoFactorOptions,
+	input: TwoFactorCheckInput,
+): Promise<Exclude<TwoFactorEnforcementDecision, { decision: string }>> {
+	const decide = options.enforcement?.decide;
+	if (!decide) {
+		return undefined;
+	}
+	const raw = await decide({
+		challenge: "two-factor",
+		user: input.user,
+		method: input.amr.method,
+		request: ctx.request as Request | undefined,
+	});
+	const normalized = normalizeDecision(raw);
+	if (normalized.decision === "skip") {
+		ctx.context.logger.info("two-factor challenge skipped by decide hook", {
+			userId: input.user.id,
+			method: input.amr.method,
+			challenge: "two-factor",
+			reason: normalized.reason ?? "unspecified",
+		});
+	}
+	return normalized.decision;
+}
+
+function normalizeDecision(raw: TwoFactorEnforcementDecision): {
+	decision: "enforce" | "skip" | undefined;
+	reason?: string;
+} {
+	if (raw === "enforce" || raw === "skip") {
+		return { decision: raw };
+	}
+	if (raw && typeof raw === "object") {
+		return { decision: raw.decision, reason: raw.reason };
+	}
+	return { decision: undefined };
+}
+
+/**
+ * Exact-match the current request path against the trust-device
+ * reverification allowlist. Exact matching keeps the allowlist intent
+ * unambiguous: `"/update-password"` never silently covers
+ * `"/update-password/recovery"`.
+ */
+function matchesRequireReverification(
+	ctx: GenericEndpointContext,
+	options: TwoFactorOptions,
+): boolean {
+	const paths = options.trustDevice?.requireReverificationFor;
+	if (!paths || paths.length === 0) {
+		return false;
+	}
+	return paths.includes(ctx.path);
 }
