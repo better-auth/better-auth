@@ -66,7 +66,7 @@ export async function resolveSignIn(
 		user: options.user,
 		dontRememberMe: options.dontRememberMe,
 		amr: [options.amr],
-		afterCommit: rotation
+		onSuccess: rotation
 			? () => rotateTrustedDevice(ctx, rotation, options.user.id)
 			: undefined,
 	});

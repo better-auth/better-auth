@@ -75,6 +75,31 @@ async function commitFinalizedSignIn(context: InternalContext): Promise<void> {
 	await finalizedSignIn?.commit?.();
 }
 
+/**
+ * Fires the `onSuccess` closure a finalized sign-in registered with
+ * `finalizeSignIn({ onSuccess })`. Invoked once after-hooks complete without
+ * converting the response into a failure, so any side-effects it writes
+ * (trusted-device rotation, best-effort audit marks) are strictly durable.
+ * Errors are logged and swallowed: the sign-in already succeeded and
+ * best-effort writes must not rebound into an error response.
+ */
+async function runFinalizedSignInOnSuccess(
+	context: InternalContext,
+): Promise<void> {
+	const finalizedSignIn = context.context.getFinalizedSignIn();
+	if (!finalizedSignIn?.onSuccess) {
+		return;
+	}
+	try {
+		await finalizedSignIn.onSuccess();
+	} catch (error) {
+		context.context.logger.error(
+			"Sign-in onSuccess callback failed; sign-in succeeded, side-effect did not.",
+			error,
+		);
+	}
+}
+
 async function rollBackFinalizedSignIn(
 	context: InternalContext,
 ): Promise<void> {
@@ -390,7 +415,20 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								}
 
 								if (isAPIError(result.response) && !shouldReturnResponse) {
+									// `throw` falls into the outer catch which rolls back;
+									// firing `onSuccess` *before* the throw would leak its
+									// side-effects when the rollback expires the session.
 									throw result.response;
+								}
+
+								if (!shouldRollback && finalizationWasSuccessful) {
+									// After-hooks accepted the sign-in and the redirect path
+									// has had its chance to unwind. Fire post-success
+									// side-effects now, when the outcome is confirmed. This
+									// keeps durable writes (trusted-device rotation etc.) out
+									// of the commit window and eliminates the need for a
+									// paired rollback.
+									await runFinalizedSignInOnSuccess(internalContext);
 								}
 
 								let response: unknown;

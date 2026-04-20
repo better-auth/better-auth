@@ -24,11 +24,15 @@ export type FinalizeSignInOptions = {
 	dontRememberMe?: boolean;
 	attemptId?: string;
 	/**
-	 * Sibling-cookie rotations the dispatcher should perform atomically with
-	 * the session cookie (e.g. trusted-device rotation from two-factor). Runs
-	 * after the session cookie is written, only on a successful request.
+	 * Durable side-effects tied to a confirmed successful sign-in (trusted
+	 * device rotation, token refresh, last-login-method stamping). Runs after
+	 * every after-hook completes without turning the response into a failure,
+	 * so it never needs a paired undo: if the sign-in is rolled back the hook
+	 * simply never fires. Errors thrown here are logged and swallowed — the
+	 * sign-in already succeeded, so the caller still gets their session and
+	 * best-effort side-effects don't rebound into a 500.
 	 */
-	afterCommit?: (() => Promise<void> | void) | undefined;
+	onSuccess?: (() => Promise<void> | void) | undefined;
 	/**
 	 * Undoes handler-side writes the dispatcher cannot roll back on its own
 	 * (e.g. an atomically-consumed `signInAttempt`). Runs when a post-handler
@@ -70,10 +74,8 @@ export async function finalizeSignIn(
 		session: finalized.session,
 		user: finalized.user,
 		attemptId: options.attemptId,
-		commit: async () => {
-			await setSessionCookie(ctx, finalized, options.dontRememberMe);
-			await options.afterCommit?.();
-		},
+		commit: () => setSessionCookie(ctx, finalized, options.dontRememberMe),
+		onSuccess: options.onSuccess,
 		rollback: options.rollback,
 	});
 	return finalized;

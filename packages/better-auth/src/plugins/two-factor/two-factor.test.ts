@@ -1,3 +1,4 @@
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
@@ -3648,5 +3649,90 @@ describe("2fa config endpoints bypass cookie cache (#9132)", async () => {
 		expect(result.error).toBeNull();
 		expect(result.data?.status).toBe(true);
 		expect(result.data?.backupCodes.length).toBe(10);
+	});
+});
+
+describe("trustDevice is not written when a post-verify after-hook rejects", async () => {
+	let OTP = "";
+	const afterHookShouldReject = { value: false };
+	const { auth, testUser, db, signInWithTestUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP({ otp }) {
+						OTP = otp;
+					},
+				},
+				skipVerificationOnEnable: true,
+			}),
+			{
+				id: "rejecting-plugin",
+				hooks: {
+					after: [
+						{
+							matcher: (c) => c.path === "/two-factor/verify-otp",
+							handler: createAuthMiddleware(async (c) => {
+								if (afterHookShouldReject.value) {
+									throw c.error("BAD_REQUEST", {
+										message: "rejected after 2fa verify",
+									});
+								}
+							}),
+						},
+					],
+				},
+			},
+		],
+	});
+
+	it("rejects the verify response, does not write trust-device, and re-challenges on the next sign-in", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		const firstSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const challengeHeaders = convertSetCookieToCookie(firstSignIn.headers);
+		await auth.api.sendTwoFactorOTP({
+			headers: challengeHeaders,
+			body: {},
+		});
+
+		afterHookShouldReject.value = true;
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: challengeHeaders,
+			body: { code: OTP, trustDevice: true },
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(400);
+		afterHookShouldReject.value = false;
+
+		const trustRecords = await db.findMany({
+			model: "verification",
+			where: [
+				{
+					field: "identifier",
+					operator: "starts_with",
+					value: "trust-device-",
+				},
+			],
+		});
+		expect(trustRecords).toHaveLength(0);
+
+		const setCookie = verifyRes.headers.get("Set-Cookie") || "";
+		expect(setCookie).not.toContain("better-auth.trust_device=");
+
+		const secondSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const secondBody = await secondSignIn.json();
+		expectTwoFactorChallenge(secondBody);
 	});
 });

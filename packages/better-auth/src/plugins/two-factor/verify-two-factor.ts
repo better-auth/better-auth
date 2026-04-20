@@ -221,7 +221,12 @@ export async function verifyTwoFactor(
 							.createSignInAttempt(consumed)
 							.catch(() => {});
 					},
-					afterCommit: async () => {
+					onSuccess: async () => {
+						// Runs only once after-hooks accept the sign-in: writing a
+						// trust-device credential here means it cannot outlive a
+						// rolled-back session, and expiring the `two_factor` cookie
+						// only after confirmed success preserves the retry path on
+						// transient after-hook failures.
 						if (ctx.body.trustDevice) {
 							await writeTrustDeviceCookie(ctx, user.id);
 						}

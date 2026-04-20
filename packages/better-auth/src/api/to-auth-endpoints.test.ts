@@ -1266,6 +1266,204 @@ describe("finalized sign-in lifecycle", () => {
 		expect(commitCalls).toEqual(["commit"]);
 		expect(deletedSessions).toEqual(["session-token"]);
 	});
+
+	it("runs onSuccess strictly after after-hooks accept the sign-in", async () => {
+		const order: string[] = [];
+
+		const endpoints = {
+			fakeSignIn: createAuthEndpoint(
+				"/fake-sign-in",
+				{ method: "POST" },
+				async (c) => {
+					writers(c.context).setFinalizedSignIn({
+						session: { token: "session-token" } as any,
+						user: { id: "user-id" } as any,
+						commit: async () => {
+							order.push("commit");
+						},
+						onSuccess: async () => {
+							order.push("onSuccess");
+						},
+					});
+					return { ok: true };
+				},
+			),
+		};
+
+		const resolved = await init({});
+		resolved.options.plugins = [
+			{
+				id: "observing-plugin",
+				hooks: {
+					after: [
+						{
+							matcher: () => true,
+							handler: createAuthMiddleware(async () => {
+								order.push("after-hook");
+							}),
+						},
+					],
+				},
+			},
+		];
+
+		const api = toAuthEndpoints(endpoints, Promise.resolve(resolved));
+		await api.fakeSignIn();
+		expect(order).toEqual(["commit", "after-hook", "onSuccess"]);
+	});
+
+	it("skips onSuccess and runs rollback when an after-hook rejects", async () => {
+		const order: string[] = [];
+		const deletedSessions: string[] = [];
+
+		const endpoints = {
+			fakeSignIn: createAuthEndpoint(
+				"/fake-sign-in",
+				{ method: "POST" },
+				async (c) => {
+					writers(c.context).setFinalizedSignIn({
+						session: { token: "session-token" } as any,
+						user: { id: "user-id" } as any,
+						commit: async () => {
+							order.push("commit");
+						},
+						rollback: async () => {
+							order.push("rollback");
+						},
+						onSuccess: async () => {
+							order.push("onSuccess");
+						},
+					});
+					return { ok: true };
+				},
+			),
+		};
+
+		const resolved = await init({});
+		resolved.internalAdapter = {
+			...resolved.internalAdapter,
+			deleteSession: async (token: string) => {
+				deletedSessions.push(token);
+			},
+		} as typeof resolved.internalAdapter;
+		resolved.options.plugins = [
+			{
+				id: "rejecting-plugin",
+				hooks: {
+					after: [
+						{
+							matcher: () => true,
+							handler: createAuthMiddleware(async (c) => {
+								throw c.error("BAD_REQUEST", {
+									message: "rejected after finalize",
+								});
+							}),
+						},
+					],
+				},
+			},
+		];
+
+		const api = toAuthEndpoints(endpoints, Promise.resolve(resolved));
+		const response = await api.fakeSignIn({ asResponse: true });
+		expect(response.status).toBe(400);
+		expect(order).toEqual(["commit", "rollback"]);
+		expect(order).not.toContain("onSuccess");
+		expect(deletedSessions).toEqual(["session-token"]);
+	});
+
+	it("skips onSuccess when the rejected response propagates to a direct auth.api caller", async () => {
+		const order: string[] = [];
+		const deletedSessions: string[] = [];
+
+		const endpoints = {
+			fakeSignIn: createAuthEndpoint(
+				"/fake-sign-in",
+				{ method: "POST" },
+				async (c) => {
+					writers(c.context).setFinalizedSignIn({
+						session: { token: "session-token" } as any,
+						user: { id: "user-id" } as any,
+						commit: async () => {
+							order.push("commit");
+						},
+						onSuccess: async () => {
+							order.push("onSuccess");
+						},
+					});
+					return { ok: true };
+				},
+			),
+		};
+
+		const resolved = await init({});
+		resolved.internalAdapter = {
+			...resolved.internalAdapter,
+			deleteSession: async (token: string) => {
+				deletedSessions.push(token);
+			},
+		} as typeof resolved.internalAdapter;
+		resolved.options.plugins = [
+			{
+				id: "rejecting-plugin",
+				hooks: {
+					after: [
+						{
+							matcher: () => true,
+							handler: createAuthMiddleware(async (c) => {
+								throw c.error("BAD_REQUEST", {
+									message: "rejected after finalize",
+								});
+							}),
+						},
+					],
+				},
+			},
+		];
+
+		// `asResponse: false` causes the dispatcher to re-throw the APIError so
+		// it bubbles to the caller. `onSuccess` would leak trusted-device writes
+		// on this branch if it fired before the throw.
+		const api = toAuthEndpoints(endpoints, Promise.resolve(resolved));
+		await expect(api.fakeSignIn()).rejects.toSatisfy(isAPIError);
+		expect(order).not.toContain("onSuccess");
+		expect(deletedSessions).toEqual(["session-token"]);
+	});
+
+	it("swallows and logs onSuccess errors so the sign-in response is unaffected", async () => {
+		const loggedErrors: unknown[] = [];
+
+		const endpoints = {
+			fakeSignIn: createAuthEndpoint(
+				"/fake-sign-in",
+				{ method: "POST" },
+				async (c) => {
+					writers(c.context).setFinalizedSignIn({
+						session: { token: "session-token" } as any,
+						user: { id: "user-id" } as any,
+						commit: async () => {},
+						onSuccess: async () => {
+							throw new Error("trusted-device write failed");
+						},
+					});
+					return { ok: true };
+				},
+			),
+		};
+
+		const resolved = await init({});
+		resolved.logger = {
+			...resolved.logger,
+			error: ((..._args: unknown[]) => {
+				loggedErrors.push(_args);
+			}) as typeof resolved.logger.error,
+		};
+
+		const api = toAuthEndpoints(endpoints, Promise.resolve(resolved));
+		const response = await api.fakeSignIn({ asResponse: true });
+		expect(response.status).toBe(200);
+		expect(loggedErrors).toHaveLength(1);
+	});
 });
 
 describe("custom response code", () => {

@@ -90,12 +90,13 @@ export type PendingSignInAttempt = SignInAttempt & {
 };
 
 /**
- * A pre-bound closure that emits the session cookie (and any sign-in-scoped
- * siblings, e.g. a trusted-device rotation cookie) on the outgoing response.
+ * A pre-bound closure that emits the session cookie on the outgoing response.
  * `finalizeSignIn` builds it from the handler context so that cookie writes
- * have access to `getSignedCookie`/`setSignedCookie`; the dispatcher only
- * awaits it after the handler returns so the browser never receives a cookie
- * for a sign-in that fails later in the request pipeline.
+ * have access to `getSignedCookie`/`setSignedCookie`; the dispatcher awaits
+ * it after the handler returns and before after-hooks run so plugins that
+ * read `set-cookie` (bearer, oidc-provider, mcp) observe the freshly issued
+ * session. If an after-hook later converts the response into a failure, the
+ * dispatcher rolls back the DB session and appends expiring headers.
  */
 export type SignInCommit = () => Promise<void> | void;
 
@@ -106,12 +107,24 @@ export type SignInCommit = () => Promise<void> | void;
  */
 export type SignInRollback = () => Promise<void> | void;
 
+/**
+ * Durable side-effects tied to a confirmed successful sign-in: trusted-device
+ * credentials, token rotations, last-login-method stamps. Runs after all
+ * after-hooks complete without converting the response into a failure, so it
+ * observes the final outcome instead of racing it. Errors are logged and do
+ * not revert the sign-in, so side-effects should be designed as best-effort
+ * or idempotent (e.g. a failed trusted-device write is acceptable — the next
+ * sign-in simply re-challenges).
+ */
+export type SignInOnSuccess = () => Promise<void> | void;
+
 export type FinalizedSignIn = {
 	session: Session & Record<string, any>;
 	user: User & Record<string, any>;
 	attemptId?: string | undefined;
 	commit?: SignInCommit | undefined;
 	rollback?: SignInRollback | undefined;
+	onSuccess?: SignInOnSuccess | undefined;
 };
 
 /**
