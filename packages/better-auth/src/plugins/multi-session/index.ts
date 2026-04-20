@@ -358,6 +358,14 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							ctx.context.secret,
 							sessionCookieConfig.attributes,
 						);
+						// Register the shard cookie so the dispatcher expires it
+						// alongside the core session cookies if this sign-in
+						// rolls back. Otherwise the browser keeps a multi-session
+						// pointer to a token that no longer exists server-side.
+						ctx.context.getFinalizedSignIn()?.cookiesToExpireOnRollback.push({
+							name: cookieName,
+							attributes: sessionCookieConfig.attributes,
+						});
 					}),
 				},
 				{

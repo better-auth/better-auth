@@ -83,10 +83,20 @@ export const lastLoginMethod = (
 						if (!finalized) return;
 						const primary = finalized.session.amr[0]?.method;
 						if (!primary) return;
-						ctx.setCookie(config.cookieName, primary, {
+						const attributes = {
 							...ctx.context.authCookies.sessionToken.attributes,
 							maxAge: config.maxAge,
 							httpOnly: false,
+						};
+						ctx.setCookie(config.cookieName, primary, attributes);
+						// Register the marker cookie so the dispatcher expires it
+						// alongside the core session cookies if this sign-in
+						// rolls back. Otherwise the browser keeps a stale
+						// "last login method" pointing at a sign-in that never
+						// completed.
+						finalized.cookiesToExpireOnRollback.push({
+							name: config.cookieName,
+							attributes,
 						});
 					}),
 				},

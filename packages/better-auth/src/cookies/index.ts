@@ -371,14 +371,17 @@ export function deleteSessionCookie(
 
 /**
  * Append expired `Set-Cookie` headers for every auth cookie produced by
- * `setSessionCookie`. Used during sign-in rollback (after-hook errors) to
- * retract cookies that were already emitted before the DB session was
- * deleted, avoiding a window where the browser holds a token that no
+ * `setSessionCookie`, plus any plugin-issued cookies tied to the same
+ * sign-in (collected via `FinalizedSignIn.cookiesToExpireOnRollback`).
+ * Used during sign-in rollback (after-hook errors) to retract cookies that
+ * were already emitted before the DB session was deleted, avoiding a window
+ * where the browser holds a token (or a marker pointing at one) that no
  * longer exists server-side.
  */
 export function expireSessionCookiesInHeaders(
 	headers: Headers,
 	authCookies: BetterAuthCookies,
+	extras: readonly BetterAuthCookie[] = [],
 ) {
 	const expire = (cookie: BetterAuthCookie) => {
 		headers.append(
@@ -392,6 +395,9 @@ export function expireSessionCookiesInHeaders(
 	expire(authCookies.sessionToken);
 	expire(authCookies.sessionData);
 	expire(authCookies.sessionOnlyToken);
+	for (const extra of extras) {
+		expire(extra);
+	}
 }
 
 export function parseCookies(cookieHeader: string) {

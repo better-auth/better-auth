@@ -133,7 +133,11 @@ async function rollbackFinalizedSignIn(
 	// browser discards the now-orphaned token instead of 401-ing on it.
 	const responseHeaders = context.context.responseHeaders;
 	if (responseHeaders) {
-		expireSessionCookiesInHeaders(responseHeaders, context.context.authCookies);
+		expireSessionCookiesInHeaders(
+			responseHeaders,
+			context.context.authCookies,
+			finalizedSignIn.cookiesToExpireOnRollback,
+		);
 	}
 	const ctxWriters = writers(context.context);
 	ctxWriters.setIssuedSession(null);

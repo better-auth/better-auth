@@ -1215,6 +1215,7 @@ describe("finalized sign-in lifecycle", () => {
 						commit: async () => {
 							commitCalls.push("commit");
 						},
+						cookiesToExpireOnRollback: [],
 					});
 					return { ok: true };
 				},
@@ -1284,6 +1285,7 @@ describe("finalized sign-in lifecycle", () => {
 						onSuccess: async () => {
 							order.push("onSuccess");
 						},
+						cookiesToExpireOnRollback: [],
 					});
 					return { ok: true };
 				},
@@ -1333,6 +1335,7 @@ describe("finalized sign-in lifecycle", () => {
 						onSuccess: async () => {
 							order.push("onSuccess");
 						},
+						cookiesToExpireOnRollback: [],
 					});
 					return { ok: true };
 				},
@@ -1390,6 +1393,7 @@ describe("finalized sign-in lifecycle", () => {
 						onSuccess: async () => {
 							order.push("onSuccess");
 						},
+						cookiesToExpireOnRollback: [],
 					});
 					return { ok: true };
 				},
@@ -1445,6 +1449,7 @@ describe("finalized sign-in lifecycle", () => {
 						onSuccess: async () => {
 							throw new Error("trusted-device write failed");
 						},
+						cookiesToExpireOnRollback: [],
 					});
 					return { ok: true };
 				},

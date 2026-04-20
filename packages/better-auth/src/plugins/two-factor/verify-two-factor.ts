@@ -251,12 +251,21 @@ export async function verifyTwoFactor(
 	const prepareFinalizeResolver = async (
 		attemptId: string,
 		clearCookieOnFailure: boolean,
-	) => {
+	): Promise<FinalizeResolver | null> => {
 		const { attempt, user } = await loadAttempt(
 			attemptId,
 			clearCookieOnFailure,
 		);
 		if (attempt.lockedAt) {
+			// A locked attempt can never be finalized. If the caller already has
+			// a valid session for this user, the lockout shouldn't also block
+			// routine /two-factor/* management on the active session for the
+			// remainder of the attempt TTL: expire the stale cookie and fall
+			// through so the session-mode resolver below takes over.
+			if (session && session.user.id === attempt.userId) {
+				expireCookie(ctx, twoFactorCookie);
+				return null;
+			}
 			throw APIError.from(
 				"UNAUTHORIZED",
 				TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
@@ -266,7 +275,8 @@ export async function verifyTwoFactor(
 	};
 
 	if (requestedAttemptId) {
-		return prepareFinalizeResolver(requestedAttemptId, false);
+		const resolver = await prepareFinalizeResolver(requestedAttemptId, false);
+		if (resolver) return resolver;
 	}
 
 	/**
@@ -298,9 +308,14 @@ export async function verifyTwoFactor(
 			signedTwoFactorCookie,
 		);
 		if (attempt && attempt.expiresAt > new Date()) {
-			return prepareFinalizeResolver(signedTwoFactorCookie, true);
+			const resolver = await prepareFinalizeResolver(
+				signedTwoFactorCookie,
+				true,
+			);
+			if (resolver) return resolver;
+		} else {
+			expireCookie(ctx, twoFactorCookie);
 		}
-		expireCookie(ctx, twoFactorCookie);
 	}
 
 	if (session) {

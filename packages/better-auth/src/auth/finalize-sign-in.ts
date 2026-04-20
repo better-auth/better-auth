@@ -77,6 +77,7 @@ export async function finalizeSignIn(
 		commit: () => setSessionCookie(ctx, finalized, options.rememberMe),
 		onSuccess: options.onSuccess,
 		rollback: options.rollback,
+		cookiesToExpireOnRollback: [],
 	});
 	return finalized;
 }

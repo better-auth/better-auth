@@ -1377,14 +1377,19 @@ export const createInternalAdapter = (
 			// has already passed its window, even if cleanup hasn't reaped it. The
 			// atomic delete below repeats the same gate so a concurrent cleanup
 			// cannot race us into a false success.
-			if (!attempt || attempt.expiresAt <= now) {
+			if (!attempt || attempt.expiresAt <= now || attempt.lockedAt) {
 				return null;
 			}
+			// Gate the atomic delete on `lockedAt IS NULL` so a concurrent
+			// `recordSignInAttemptFailure` that locked the attempt between our
+			// read and this write cannot be bypassed: the delete misses, we
+			// return null, and the caller sees the verification as rejected.
 			const deleted = await currentAdapter.deleteMany({
 				model: "signInAttempt",
 				where: [
 					{ field: "id", value: id },
 					{ field: "expiresAt", operator: "gt", value: now },
+					{ field: "lockedAt", value: null },
 				],
 			});
 			if (deleted !== 1) {

@@ -130,6 +130,17 @@ export type FinalizedSignIn = {
 	commit?: SignInCommit | undefined;
 	rollback?: SignInRollback | undefined;
 	onSuccess?: SignInOnSuccess | undefined;
+	/**
+	 * Cookies set by after-hooks that are logically tied to this finalized
+	 * sign-in (e.g. multi-session shards, `last-login-method` marker). If the
+	 * sign-in rolls back, the dispatcher emits an expired `Set-Cookie` for
+	 * each entry alongside the core session cookies, so the browser doesn't
+	 * retain a marker pointing at a sign-in that never completed.
+	 *
+	 * Plugins push into this list from their after-hook immediately after
+	 * writing the cookie; the list is drained only by the rollback path.
+	 */
+	cookiesToExpireOnRollback: BetterAuthCookie[];
 };
 
 /**
