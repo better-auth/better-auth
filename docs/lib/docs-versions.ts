@@ -77,15 +77,20 @@ export function getVersionFromPathname(pathname: string): DocsVersion {
 
 /**
  * Strip a leading `/docs/<slug>` segment from a pathname, returning the
- * canonical latest-style path (`/docs/...`). Anchored so only the leading
- * version prefix is touched.
+ * canonical latest-style path (`/docs/...`). Anchored to the leading
+ * version segment so unrelated paths are untouched.
  */
 export function stripVersionPrefix(
 	pathname: string,
 	version: DocsVersion,
 ): string {
 	if (!version.slug) return pathname;
-	return pathname.replace(new RegExp(`^/docs/${version.slug}(?=/|$)`), "/docs");
+	const prefix = `/docs/${version.slug}`;
+	if (pathname === prefix) return "/docs";
+	if (pathname.startsWith(`${prefix}/`)) {
+		return `/docs${pathname.slice(prefix.length)}`;
+	}
+	return pathname;
 }
 
 /**
