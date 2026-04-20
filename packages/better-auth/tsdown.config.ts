@@ -17,6 +17,7 @@ export default defineConfig({
 		"./src/adapters/mongodb-adapter/index.ts",
 		"./src/adapters/kysely-adapter/index.ts",
 		"./src/adapters/memory-adapter/index.ts",
+		"./src/adapters/redis-adapter/index.ts",
 		"./src/adapters/index.ts",
 		"./src/db/index.ts",
 		"./src/db/adapter-kysely.ts",

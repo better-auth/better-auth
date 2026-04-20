@@ -17,7 +17,7 @@ describe("redis-adapter", () => {
 			redisClient = createClient();
 			await redisClient.connect();
 			isRedisAvailable = true;
-		} catch (_error) {
+		} catch (error) {
 			isRedisAvailable = false;
 			redisClient = null;
 		}

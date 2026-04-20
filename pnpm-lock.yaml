@@ -1381,6 +1381,9 @@ importers:
 
   packages/redis-adapter:
     dependencies:
+      ioredis:
+        specifier: ^5.0.0
+        version: 5.9.3
       redis:
         specifier: ^5.12.1
         version: 5.12.1(@opentelemetry/api@1.9.0)
@@ -1391,9 +1394,6 @@ importers:
       '@types/node':
         specifier: ^25.3.2
         version: 25.6.0
-      ioredis:
-        specifier: ^5.9.3
-        version: 5.9.3
       tsdown:
         specifier: 'catalog:'
         version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)

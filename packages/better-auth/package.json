@@ -196,6 +196,11 @@
       "types": "./dist/adapters/memory-adapter/index.d.mts",
       "default": "./dist/adapters/memory-adapter/index.mjs"
     },
+    "./adapters/redis-adapter": {
+      "dev-source": "./src/adapters/redis-adapter/index.ts",
+      "types": "./dist/adapters/redis-adapter/index.d.mts",
+      "default": "./dist/adapters/redis-adapter/index.mjs"
+    },
     "./adapters": {
       "dev-source": "./src/adapters/index.ts",
       "types": "./dist/adapters/index.d.mts",
