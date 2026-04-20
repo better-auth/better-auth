@@ -43,6 +43,9 @@
       "path": "./packages/memory-adapter/tsconfig.json"
     },
     {
+      "path": "./packages/redis-adapter/tsconfig.json"
+    },
+    {
       "path": "./packages/drizzle-adapter/tsconfig.json"
     },
     {

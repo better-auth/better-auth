@@ -1224,7 +1224,7 @@ export const createAdapterFactory =
 				if (!config.disableTransformOutput) {
 					transformed = await Promise.all(
 						res.map(async (r: Record<string, any>) => {
-							return await transformOutput(r, unsafeModel, undefined, join);
+							return await transformOutput(r, unsafeModel, select, join);
 						}),
 					);
 				}
