@@ -4,8 +4,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "postinstall": "pnpm sync-beta && fumadocs-mdx",
+    "postinstall": "fumadocs-mdx",
+    "predev": "pnpm sync-beta",
     "dev": "next dev --port 3000",
+    "prebuild": "pnpm sync-beta",
     "build": "next build",
     "postbuild": "pnpm sync-typesense",
     "start": "next start",

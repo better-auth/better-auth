@@ -8,6 +8,7 @@ import type { DocsVersion } from "@/lib/docs-versions";
 import {
 	docsVersions,
 	getVersionFromPathname,
+	stripVersionPrefix,
 	versionedDocsHref,
 } from "@/lib/docs-versions";
 
@@ -39,15 +40,7 @@ export function VersionSwitcher({ className }: { className?: string }) {
 		setOpen(false);
 		if (version.slug === currentVersion.slug) return;
 
-		// Extract the page path from the current pathname
-		let pagePath: string;
-		if (currentVersion.slug) {
-			// Currently on a versioned path: /docs/beta/introduction -> /docs/introduction
-			pagePath = pathname.replace(`/docs/${currentVersion.slug}`, "/docs");
-		} else {
-			pagePath = pathname;
-		}
-
+		const pagePath = stripVersionPrefix(pathname, currentVersion);
 		const targetHref = versionedDocsHref(pagePath, version);
 		router.push(targetHref);
 	}
@@ -146,12 +139,7 @@ export function MobileVersionSwitcher() {
 
 	function handleSelect(version: DocsVersion) {
 		if (version.slug === currentVersion.slug) return;
-		let pagePath: string;
-		if (currentVersion.slug) {
-			pagePath = pathname.replace(`/docs/${currentVersion.slug}`, "/docs");
-		} else {
-			pagePath = pathname;
-		}
+		const pagePath = stripVersionPrefix(pathname, currentVersion);
 		router.push(versionedDocsHref(pagePath, version));
 	}
 
@@ -209,12 +197,7 @@ export function SidebarVersionSwitcher() {
 	function handleSelect(version: DocsVersion) {
 		setOpen(false);
 		if (version.slug === currentVersion.slug) return;
-		let pagePath: string;
-		if (currentVersion.slug) {
-			pagePath = pathname.replace(`/docs/${currentVersion.slug}`, "/docs");
-		} else {
-			pagePath = pathname;
-		}
+		const pagePath = stripVersionPrefix(pathname, currentVersion);
 		router.push(versionedDocsHref(pagePath, version));
 	}
 

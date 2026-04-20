@@ -61,15 +61,31 @@ export function versionedDocsHref(path: string, version: DocsVersion): string {
 }
 
 /**
- * Extract the current version from a pathname.
+ * Extract the current version from a pathname. Matches on a full path segment
+ * so `/docs/beta-tutorial/...` is not misread as the `beta` version.
  */
 export function getVersionFromPathname(pathname: string): DocsVersion {
 	for (const v of docsVersions) {
-		if (v.slug && pathname.startsWith(`/docs/${v.slug}`)) {
+		if (!v.slug) continue;
+		const prefix = `/docs/${v.slug}`;
+		if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
 			return v;
 		}
 	}
 	return latestVersion;
+}
+
+/**
+ * Strip a leading `/docs/<slug>` segment from a pathname, returning the
+ * canonical latest-style path (`/docs/...`). Anchored so only the leading
+ * version prefix is touched.
+ */
+export function stripVersionPrefix(
+	pathname: string,
+	version: DocsVersion,
+): string {
+	if (!version.slug) return pathname;
+	return pathname.replace(new RegExp(`^/docs/${version.slug}(?=/|$)`), "/docs");
 }
 
 /**

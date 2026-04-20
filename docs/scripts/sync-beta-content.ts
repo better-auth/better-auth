@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const BRANCH = process.env.BETA_DOCS_BRANCH ?? "next";
@@ -9,6 +9,11 @@ const REPO =
 const REMOTE_PATH = "docs/content/docs";
 const DEST = "content/docs-beta";
 const TMP = ".beta-sync-tmp";
+
+if (process.env.BETA_DOCS_SKIP === "1") {
+	console.log("[sync-beta] skipped (BETA_DOCS_SKIP=1)");
+	process.exit(0);
+}
 
 function git(args: string[], cwd?: string) {
 	execFileSync("git", args, { stdio: "inherit", cwd });
@@ -37,8 +42,10 @@ try {
 	}
 
 	rmSync(DEST, { recursive: true, force: true });
-	mkdirSync(DEST, { recursive: true });
 	cpSync(srcPath, DEST, { recursive: true });
+	// Preserve the tracked .gitkeep so fumadocs-mdx can find the collection
+	// on a fresh clone before this script has run.
+	writeFileSync(join(DEST, ".gitkeep"), "");
 
 	console.log("[sync-beta] done");
 } finally {
