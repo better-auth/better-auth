@@ -196,6 +196,11 @@
       "types": "./dist/adapters/memory-adapter/index.d.mts",
       "default": "./dist/adapters/memory-adapter/index.mjs"
     },
+    "./adapters/redis": {
+      "dev-source": "./src/adapters/redis-adapter/index.ts",
+      "types": "./dist/adapters/redis-adapter/index.d.mts",
+      "default": "./dist/adapters/redis-adapter/index.mjs"
+    },
     "./adapters": {
       "dev-source": "./src/adapters/index.ts",
       "types": "./dist/adapters/index.d.mts",
@@ -495,6 +500,7 @@
     "@better-auth/memory-adapter": "workspace:*",
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
+    "@better-auth/redis-adapter": "workspace:^",
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
@@ -509,6 +515,9 @@
   },
   "devDependencies": {
     "@lynx-js/react": "^0.116.3",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/sdk-trace-node": "^1.30.0",
     "@sveltejs/kit": "^2.57.1",
     "@tanstack/react-start": "^1.163.2",
     "@tanstack/solid-start": "^1.163.2",
@@ -516,9 +525,6 @@
     "@types/google.accounts": "^0.0.18",
     "@types/pg": "^8.16.0",
     "@types/react": "catalog:react19",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-trace-base": "^1.30.0",
-    "@opentelemetry/sdk-trace-node": "^1.30.0",
     "happy-dom": "^20.8.9",
     "listhen": "^1.9.0",
     "msw": "^2.12.10",
