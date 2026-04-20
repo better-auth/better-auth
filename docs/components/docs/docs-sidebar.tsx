@@ -24,7 +24,7 @@ export function DocsSidebar() {
 	const prefixHref = (href: string) => versionedDocsHref(href, currentVersion);
 	// For matching, strip the version prefix from pathname so we can compare against canonical href
 	const canonicalPathname = currentVersion.slug
-		? pathname.replace(`/docs/v/${currentVersion.slug}`, "/docs")
+		? pathname.replace(`/docs/${currentVersion.slug}`, "/docs")
 		: pathname;
 	const [currentOpen, setCurrentOpen] = useState(0);
 	const navRef = useRef<HTMLElement>(null);

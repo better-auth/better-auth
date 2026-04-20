@@ -4,3 +4,7 @@ node_modules
 .env
 .DS_Store
 next-env.d.ts
+
+# Build-time sync target
+content/docs-beta/
+.beta-sync-tmp/

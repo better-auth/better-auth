@@ -10,6 +10,7 @@ import {
 	DocsPage,
 	DocsTitle,
 } from "fumadocs-ui/page";
+import { MilestoneIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
@@ -24,10 +25,21 @@ import {
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
 import { Callout } from "@/components/ui/callout";
+import type { DocsVersion } from "@/lib/docs-versions";
+import { docsVersions, resolveVersionFromSlug } from "@/lib/docs-versions";
 import { createMetadata } from "@/lib/metadata";
-import { source } from "@/lib/source";
+import { source, sourceBeta } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+
+function getSourceFor(versionSlug: string | null) {
+	switch (versionSlug) {
+		case "beta":
+			return sourceBeta;
+		default:
+			return source;
+	}
+}
 
 export default async function Page({
 	params,
@@ -35,13 +47,20 @@ export default async function Page({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const page = source.getPage(slug);
+	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
+	const src = getSourceFor(version.slug);
+	const page = src.getPage(relSlug);
 
 	if (!page) {
 		return notFound();
 	}
 
 	const { body: MDX, toc } = await page.data.load();
+
+	// Upstream content always lives at docs/content/docs on each branch;
+	// `content/docs-beta` is only a local sync target, not in the repo tree.
+	const rawBase = `https://raw.githubusercontent.com/better-auth/better-auth/${version.branch}/docs/content/docs`;
+	const githubBase = `https://github.com/better-auth/better-auth/blob/${version.branch}/docs/content/docs`;
 
 	return (
 		<DocsPage
@@ -54,19 +73,18 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				sha: "main",
+				sha: version.branch,
 				path: `docs/content/docs/${page.path}`,
 			}}
 		>
+			{version.slug === "beta" && <BetaBanner version={version} />}
 			<div className="flex items-center justify-between gap-4">
 				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
 				<div className="flex items-center gap-2 not-prose shrink-0">
-					<LLMCopyButton
-						rawUrl={`https://raw.githubusercontent.com/better-auth/better-auth/main/docs/content/docs/${page.path}`}
-					/>
+					<LLMCopyButton rawUrl={`${rawBase}/${page.path}`} />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
-						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.path}`}
+						githubUrl={`${githubBase}/${page.path}`}
 						rawMdUrl={`/llms.txt${page.url}.md`}
 					/>
 				</div>
@@ -136,8 +154,27 @@ export default async function Page({
 	);
 }
 
+function BetaBanner({ version }: { version: DocsVersion }) {
+	return (
+		<div className="mb-2 flex items-center gap-3 py-2.5 text-sm text-blue-600 dark:text-blue-400 text-pretty">
+			<MilestoneIcon size={18} className="shrink-0" fill="currentColor" />
+			<p>
+				You are currently viewing documentation for{" "}
+				<span className="bg-blue-600/10 dark:bg-blue-400/15 px-1 py-0.5 rounded-lg font-medium tracking-wider">
+					{version.label}
+				</span>
+			</p>
+		</div>
+	);
+}
+
 export async function generateStaticParams() {
-	return source.generateParams();
+	return docsVersions.flatMap((v) => {
+		const src = getSourceFor(v.slug);
+		return src.generateParams().map((p) => ({
+			slug: v.slug ? [v.slug, ...(p.slug ?? [])] : p.slug,
+		}));
+	});
 }
 
 export async function generateMetadata({
@@ -146,21 +183,27 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const page = source.getPage(slug);
+	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
+	const src = getSourceFor(version.slug);
+	const page = src.getPage(relSlug);
 	if (!page) return notFound();
 
+	const title = version.slug
+		? `${version.label} - ${page.data.title}`
+		: page.data.title;
+
 	const ogSearchParams = new URLSearchParams();
-	ogSearchParams.set("heading", page.data.title);
+	ogSearchParams.set("heading", title);
 	ogSearchParams.set("type", "documentation");
 	ogSearchParams.set("mode", "dark");
 
 	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
 
 	return createMetadata({
-		title: page.data.title,
+		title,
 		description: page.data.description,
 		openGraph: {
-			title: page.data.title,
+			title,
 			description: page.data.description,
 			type: "article",
 			images: [
@@ -168,13 +211,13 @@ export async function generateMetadata({
 					url: ogUrl,
 					width: 1200,
 					height: 630,
-					alt: page.data.title,
+					alt: title,
 				},
 			],
 		},
 		twitter: {
 			card: "summary_large_image",
-			title: page.data.title,
+			title,
 			description: page.data.description,
 			images: [ogUrl],
 		},

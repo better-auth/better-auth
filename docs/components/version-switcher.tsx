@@ -42,8 +42,8 @@ export function VersionSwitcher({ className }: { className?: string }) {
 		// Extract the page path from the current pathname
 		let pagePath: string;
 		if (currentVersion.slug) {
-			// Currently on a versioned path: /docs/v/v1.7-beta/introduction -> /docs/introduction
-			pagePath = pathname.replace(`/docs/v/${currentVersion.slug}`, "/docs");
+			// Currently on a versioned path: /docs/beta/introduction -> /docs/introduction
+			pagePath = pathname.replace(`/docs/${currentVersion.slug}`, "/docs");
 		} else {
 			pagePath = pathname;
 		}
@@ -52,9 +52,7 @@ export function VersionSwitcher({ className }: { className?: string }) {
 		router.push(targetHref);
 	}
 
-	const displayLabel = currentVersion.slug
-		? currentVersion.label
-		: `${currentVersion.label} ${currentVersion.version}`;
+	const displayLabel = currentVersion.label;
 
 	return (
 		<div ref={containerRef} className={`relative ${className ?? ""}`}>
@@ -123,9 +121,7 @@ export function VersionSwitcher({ className }: { className?: string }) {
 										)}
 									</span>
 									<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/75 dark:text-foreground/60 whitespace-nowrap">
-										{version.slug
-											? version.label
-											: `${version.label} ${version.version}`}
+										{version.label}
 									</span>
 									{version.badge && (
 										<span className="font-mono text-[9px] uppercase tracking-wider px-1 py-0.5 border border-dashed border-foreground/25 text-foreground/55">
@@ -152,7 +148,7 @@ export function MobileVersionSwitcher() {
 		if (version.slug === currentVersion.slug) return;
 		let pagePath: string;
 		if (currentVersion.slug) {
-			pagePath = pathname.replace(`/docs/v/${currentVersion.slug}`, "/docs");
+			pagePath = pathname.replace(`/docs/${currentVersion.slug}`, "/docs");
 		} else {
 			pagePath = pathname;
 		}
@@ -174,9 +170,7 @@ export function MobileVersionSwitcher() {
 								: "text-foreground/50 hover:text-foreground/80 hover:bg-foreground/5"
 						}`}
 					>
-						{version.slug
-							? version.label
-							: `${version.label} ${version.version}`}
+						{version.label}
 						{version.badge && (
 							<span className="text-[9px] px-1 py-0.5 border border-dashed border-foreground/25 text-foreground/55">
 								{version.badge}
@@ -217,7 +211,7 @@ export function SidebarVersionSwitcher() {
 		if (version.slug === currentVersion.slug) return;
 		let pagePath: string;
 		if (currentVersion.slug) {
-			pagePath = pathname.replace(`/docs/v/${currentVersion.slug}`, "/docs");
+			pagePath = pathname.replace(`/docs/${currentVersion.slug}`, "/docs");
 		} else {
 			pagePath = pathname;
 		}
@@ -242,18 +236,7 @@ export function SidebarVersionSwitcher() {
 				>
 					<path d="M7 8.25a2.75 2.75 0 1 0 0-5.5a2.75 2.75 0 0 0 0 5.5m0 0V12m0 3.75a2.75 2.75 0 1 0 0 5.5a2.75 2.75 0 0 0 0-5.5m0 0V12m10-3.75a2.75 2.75 0 1 0 0-5.5a2.75 2.75 0 0 0 0 5.5m0 0V9a3 3 0 0 1-3 3H7" />
 				</svg>
-				<span className="truncate">
-					{currentVersion.slug ? (
-						`v${currentVersion.version}`
-					) : (
-						<>
-							Latest{" "}
-							<span className="text-foreground/35">
-								v{currentVersion.version}
-							</span>
-						</>
-					)}
-				</span>
+				<span className="truncate">{currentVersion.label}</span>
 				{currentVersion.badge && (
 					<span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 border border-dashed border-foreground/20 text-foreground/45">
 						{currentVersion.badge}
@@ -309,18 +292,7 @@ export function SidebarVersionSwitcher() {
 											<Check className="size-3.5 text-foreground/70" />
 										)}
 									</span>
-									<span className="truncate">
-										{version.slug ? (
-											`v${version.version}`
-										) : (
-											<>
-												Latest{" "}
-												<span className="text-foreground/35">
-													v{version.version}
-												</span>
-											</>
-										)}
-									</span>
+									<span className="truncate">{version.label}</span>
 									{version.badge && (
 										<span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 border border-dashed border-foreground/20 text-foreground/45">
 											{version.badge}

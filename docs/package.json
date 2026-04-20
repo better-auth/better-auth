@@ -4,13 +4,14 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "postinstall": "fumadocs-mdx",
+    "postinstall": "pnpm sync-beta && fumadocs-mdx",
     "dev": "next dev --port 3000",
     "build": "next build",
     "postbuild": "pnpm sync-typesense",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "pnpm -w biome check docs/ --fix --unsafe",
+    "sync-beta": "node scripts/sync-beta-content.ts",
     "sync-typesense": "node scripts/sync-typesense.ts",
     "format:md": "remark . --ext md,mdx --output --quiet",
     "format:check": "remark . --ext md,mdx --quiet --frail"
