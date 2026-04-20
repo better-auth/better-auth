@@ -5,7 +5,8 @@ import { appendSignInChallengeToURL } from "../../auth/sign-in-challenge-url";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { setCookieToHeader } from "../../cookies/cookie-utils";
-import { symmetricDecrypt } from "../../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { generateRandomString } from "../../crypto/random";
 import {
 	expectNoTwoFactorChallenge,
 	expectTwoFactorChallenge,
@@ -3592,5 +3593,60 @@ describe("trustDevice.requireReverificationFor", async () => {
 		});
 		const body = await res.json();
 		expectNoTwoFactorChallenge(body);
+	});
+});
+
+describe("2fa config endpoints bypass cookie cache (#9132)", async () => {
+	it("generateBackupCodes sees DB truth when cookie cache is stale", async () => {
+		const { testUser, customFetchImpl, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [twoFactor()],
+		});
+
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		const staleHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: { onSuccess: setCookieToHeader(staleHeaders) },
+		});
+		const session = await client.getSession({
+			fetchOptions: { headers: staleHeaders, throw: true },
+		});
+
+		const encryptedSecret = await symmetricEncrypt({
+			key: DEFAULT_SECRET,
+			data: generateRandomString(32),
+		});
+		await db.create<TwoFactorTable>({
+			model: "twoFactor",
+			data: {
+				userId: session!.user.id,
+				secret: encryptedSecret,
+				backupCodes: encryptedSecret,
+				verified: true,
+			},
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: session!.user.id }],
+			update: { twoFactorEnabled: true },
+		});
+
+		const result = await client.twoFactor.generateBackupCodes({
+			password: testUser.password,
+			fetchOptions: { headers: staleHeaders },
+		});
+		expect(result.error).toBeNull();
+		expect(result.data?.status).toBe(true);
+		expect(result.data?.backupCodes.length).toBe(10);
 	});
 });

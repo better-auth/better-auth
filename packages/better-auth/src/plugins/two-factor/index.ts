@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
+import { sensitiveSessionMiddleware } from "../../api";
 import { expireCookie, setSessionCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
@@ -121,7 +121,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: enableTwoFactorBodySchema,
-					use: [sessionMiddleware],
+					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
 							summary: "Enable two factor authentication",
@@ -264,7 +264,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: disableTwoFactorBodySchema,
-					use: [sessionMiddleware],
+					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
 							summary: "Disable two factor authentication",

@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
-import { sessionMiddleware } from "../../../api";
+import { sensitiveSessionMiddleware } from "../../../api";
 import type { SecretConfig } from "../../../crypto";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
@@ -416,7 +416,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				{
 					method: "POST",
 					body: generateBackupCodesBodySchema,
-					use: [sessionMiddleware],
+					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
 							description:

@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sessionMiddleware } from "../../../api";
+import { sensitiveSessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
@@ -147,7 +147,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 		"/two-factor/get-totp-uri",
 		{
 			method: "POST",
-			use: [sessionMiddleware],
+			use: [sensitiveSessionMiddleware],
 			body: getTOTPURIBodySchema,
 			metadata: {
 				openapi: {
