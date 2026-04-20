@@ -478,7 +478,8 @@ Below is an example of how to add two factor authentication using two factor plu
 
     const disableTwoFactor = async() => {
         const data = await authClient.twoFactor.disable({
-            password // the user password is required
+            code, // a valid TOTP code or backup code (for TOTP accounts)
+            // password: userPassword // fallback for OTP-only accounts
         }) // this will disable two factor
     }
 

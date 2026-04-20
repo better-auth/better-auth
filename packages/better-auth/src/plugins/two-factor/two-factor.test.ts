@@ -509,7 +509,7 @@ describe("two factor", async () => {
 
 	it("should disable two factor", async () => {
 		const res = await client.twoFactor.disable({
-			password: testUser.password,
+			code: backupCodes[1]!,
 			fetchOptions: {
 				headers,
 			},
@@ -538,7 +538,7 @@ describe("two factor", async () => {
 describe("two factor auth API", async () => {
 	let OTP = "";
 	const sendOTP = vi.fn();
-	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		plugins: [
 			twoFactor({
@@ -634,19 +634,31 @@ describe("two factor auth API", async () => {
 	});
 
 	it("should disable two factor", async () => {
+		const session = await auth.api.getSession({
+			headers,
+		});
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor!.secret,
+		});
+		const code = await createOTP(decrypted).totp();
 		const res = await auth.api.disableTwoFactor({
 			headers,
 			body: {
-				password: testUser.password,
+				code,
 			},
 			asResponse: true,
 		});
 		headers = convertSetCookieToCookie(res.headers);
 		expect(res.status).toBe(200);
-		const session = await auth.api.getSession({
+		const sessionAfter = await auth.api.getSession({
 			headers,
 		});
-		expect(session?.user.twoFactorEnabled).toBe(false);
+		expect(sessionAfter?.user.twoFactorEnabled).toBe(false);
 	});
 });
 
@@ -1128,11 +1140,25 @@ describe("trust device server-side validation", async () => {
 		});
 		expect(verificationBefore).toBeDefined();
 
+		// Get valid TOTP code to disable 2FA
+		const session = await auth.api.getSession({
+			headers: sessionHeaders,
+		});
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor!.secret,
+		});
+		const code = await createOTP(decrypted).totp();
+
 		// Disable 2FA
 		const disableRes = await auth.api.disableTwoFactor({
 			headers: sessionHeaders,
 			body: {
-				password: testUser.password,
+				code,
 			},
 			asResponse: true,
 		});
@@ -2016,8 +2042,18 @@ describe("two factor passwordless", async () => {
 	});
 
 	it("allows disabling without password", async () => {
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: userId }],
+		});
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor!.secret,
+		});
+		const code = await createOTP(decrypted).totp();
+
 		const res = await auth.api.disableTwoFactor({
-			body: {},
+			body: { code },
 			headers,
 			asResponse: true,
 		});
@@ -2557,4 +2593,104 @@ describe("backup codes storage configurations", () => {
 			);
 		});
 	}
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9248
+ */
+describe("disable two factor requires code when TOTP is enabled", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+	let { headers } = await signInWithTestUser();
+
+	it("should reject disable with only password when TOTP is enabled", async () => {
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const res = await auth.api.disableTwoFactor({
+			headers,
+			body: {
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("should allow disable with valid TOTP code", async () => {
+		const session = await auth.api.getSession({ headers });
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor!.secret,
+		});
+		const code = await createOTP(decrypted).totp();
+
+		const res = await auth.api.disableTwoFactor({
+			headers,
+			body: { code },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9248
+ */
+describe("disable two factor with OTP-only account (no TOTP row)", async () => {
+	let OTP = "";
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP({ otp }) {
+						OTP = otp;
+					},
+				},
+			}),
+		],
+	});
+	let { headers } = await signInWithTestUser();
+
+	it("should disable two factor with password when user has OTP-only enrollment", async () => {
+		await auth.api.sendTwoFactorOTP({ headers, body: {} });
+		const otpEnrollRes = await auth.api.verifyTwoFactorOTP({
+			headers,
+			body: { code: OTP },
+			asResponse: true,
+		});
+		expect(otpEnrollRes.status).toBe(200);
+		headers = convertSetCookieToCookie(otpEnrollRes.headers);
+
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.twoFactorEnabled).toBe(true);
+
+		const res = await auth.api.disableTwoFactor({
+			headers,
+			body: {
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		const sessionAfter = await auth.api.getSession({
+			headers: convertSetCookieToCookie(res.headers),
+		});
+		expect(sessionAfter?.user.twoFactorEnabled).toBe(false);
+	});
 });
