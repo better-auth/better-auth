@@ -163,7 +163,7 @@ export interface OrganizationOptions {
 			| number
 			| ((data: {
 					teamId: string;
-					session: { user: User; session: Session } | null;
+					session: { user: User; session: Session };
 					organizationId: string;
 			  }) => Awaitable<number>)
 			| undefined;

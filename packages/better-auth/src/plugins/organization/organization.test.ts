@@ -3949,7 +3949,6 @@ describe("signupWithInvitation rollback behavior", async () => {
 describe("signupWithInvitation session activation", async () => {
 	let observedMaximumMembersSession:
 		| { user: { id: string }; session: { token: string } }
-		| null
 		| undefined;
 
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -4014,7 +4013,11 @@ describe("signupWithInvitation session activation", async () => {
 			},
 		});
 
-		expect(observedMaximumMembersSession).toBeNull();
+		expect(observedMaximumMembersSession).toBeDefined();
+		expect(observedMaximumMembersSession?.user.id).toBe(signup.data?.user.id);
+		expect(observedMaximumMembersSession?.session.token).toBe(
+			signup.data?.token,
+		);
 		expect(createdSession.data?.session.activeOrganizationId).toBe(
 			org.data!.id,
 		);

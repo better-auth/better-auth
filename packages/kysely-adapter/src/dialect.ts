@@ -7,6 +7,7 @@ import {
 	PostgresDialect,
 	SqliteDialect,
 } from "kysely";
+import { D1SqliteDialect } from "./d1-sqlite-dialect";
 import type { KyselyDatabaseType } from "./types";
 
 const inferTransactionSupport = (
@@ -28,10 +29,10 @@ const inferTransactionSupport = (
 		) {
 			return true;
 		}
-		if (db.dialect.constructor.name === "D1SqliteDialect") {
+		if (db.dialect instanceof D1SqliteDialect) {
 			return false;
 		}
-		return true;
+		return undefined;
 	}
 
 	// Cloudflare D1 does not support interactive transactions.

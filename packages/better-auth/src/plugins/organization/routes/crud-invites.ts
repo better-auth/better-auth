@@ -1508,31 +1508,6 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 								.filter(Boolean)
 						: [];
 
-				if (
-					teamIds.length &&
-					typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
-						"undefined"
-				) {
-					for (const teamId of teamIds) {
-						const teamMembersCount = await adapter.countTeamMembers({ teamId });
-						const maximumMembersPerTeam =
-							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-							"function"
-								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-										teamId,
-										session: null,
-										organizationId: invitation.organizationId,
-									})
-								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
-						if (teamMembersCount >= maximumMembersPerTeam) {
-							throw APIError.from(
-								"FORBIDDEN",
-								ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-							);
-						}
-					}
-				}
-
 				const newUser = await ctx.context.internalAdapter.createUser({
 					email: invitation.email,
 					name,
@@ -1559,6 +1534,45 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 							"FORBIDDEN",
 							ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 						);
+					}
+				}
+
+				const session = await ctx.context.internalAdapter.createSession(
+					newUser.id,
+					false,
+				);
+				if (!session) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+					);
+				}
+
+				if (
+					teamIds.length &&
+					typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
+						"undefined"
+				) {
+					for (const teamId of teamIds) {
+						const teamMembersCount = await adapter.countTeamMembers({ teamId });
+						const maximumMembersPerTeam =
+							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+							"function"
+								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+										teamId,
+										session: {
+											user: newUser,
+											session,
+										},
+										organizationId: invitation.organizationId,
+									})
+								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+						if (teamMembersCount >= maximumMembersPerTeam) {
+							throw APIError.from(
+								"FORBIDDEN",
+								ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+							);
+						}
 					}
 				}
 
@@ -1594,17 +1608,6 @@ export const signupWithInvitation = <O extends OrganizationOptions>(
 					role: invitation.role,
 					createdAt: new Date(),
 				});
-
-				const session = await ctx.context.internalAdapter.createSession(
-					newUser.id,
-					false,
-				);
-				if (!session) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-					);
-				}
 
 				let updatedSession = await adapter.setActiveOrganization(
 					session.token,
