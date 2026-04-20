@@ -270,15 +270,39 @@ export async function verifyTwoFactor(
 	}
 
 	/**
-	 * `/two-factor/*` serves two different intents:
-	 * - complete a paused sign-in, identified explicitly by `attemptId`
-	 * - manage two-factor state for the current authenticated session
+	 * `/two-factor/*` serves two intents, resolved in order of evidence:
 	 *
-	 * When a browser has both an active session and a paused sign-in, keep the
-	 * session-scoped management path stable unless the caller passes an
-	 * explicit `attemptId`. The signed two_factor cookie remains a fallback
-	 * only for browser flows that do not already have a live session.
+	 * 1. `body.attemptId` (above): JSON/native callers completing a paused
+	 *    sign-in.
+	 * 2. signed `two_factor` cookie pointing at a **live** attempt row:
+	 *    browser callers completing a paused sign-in, including OAuth/SSO
+	 *    callbacks where a pre-existing session cookie from a previously
+	 *    signed-in user may still be attached to the request.
+	 * 3. `session`: the current authenticated session, used for enrollment
+	 *    and step-up against the signed-in user.
+	 *
+	 * A live paused-attempt wins over a pre-existing session because it
+	 * carries explicit evidence that this request is finalizing a sign-in
+	 * started in this browser. Without this ordering, a signed-in user
+	 * starting a new OAuth/SSO sign-in that pauses for 2FA would be routed
+	 * to the session-management path instead of completing the new sign-in.
+	 *
+	 * A stale cookie (signed but the attempt row is gone or expired) is
+	 * treated as absent: we expire the cookie and fall through to session
+	 * mode, so leftover cookies from abandoned flows do not break routine
+	 * 2FA management on the active session.
 	 */
+	const signedTwoFactorCookie = await getTwoFactorAttemptId(ctx);
+	if (signedTwoFactorCookie) {
+		const attempt = await ctx.context.internalAdapter.findSignInAttempt(
+			signedTwoFactorCookie,
+		);
+		if (attempt && attempt.expiresAt > new Date()) {
+			return prepareFinalizeResolver(signedTwoFactorCookie, true);
+		}
+		expireCookie(ctx, twoFactorCookie);
+	}
+
 	if (session) {
 		const invalidSession = (
 			errorKey: keyof typeof TWO_FACTOR_ERROR_CODES,
@@ -300,11 +324,6 @@ export async function verifyTwoFactor(
 			session,
 			key: `${session.user.id}!${session.session.id}`,
 		};
-	}
-
-	const signedTwoFactorCookie = await getTwoFactorAttemptId(ctx);
-	if (signedTwoFactorCookie) {
-		return prepareFinalizeResolver(signedTwoFactorCookie, true);
 	}
 
 	throw APIError.from(

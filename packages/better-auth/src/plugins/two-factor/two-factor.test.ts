@@ -2680,7 +2680,7 @@ describe("2FA enforcement scope", async () => {
 
 		expect(updateRes.ok).toBe(true);
 		const json = await updateRes.json();
-		expect(json.type).not.toBe("challenge");
+		expect(json.kind).not.toBe("challenge");
 	});
 });
 

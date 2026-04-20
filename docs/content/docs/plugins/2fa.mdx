@@ -155,6 +155,7 @@ You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRe
 
 ```tsx
 import { authClient } from "@/lib/auth-client"
+import { isSignInChallengeOfKind } from "better-auth"
 
 await authClient.signIn.email({
         email: "user@example.com",
@@ -162,7 +163,7 @@ await authClient.signIn.email({
     },
     {
         async onSuccess(context) {
-            if (context.data.kind === "challenge" && context.data.challenge.kind === "two-factor") {
+            if (isSignInChallengeOfKind(context.data, "two-factor")) {
                 const { attemptId, availableMethods } = context.data.challenge
                 // Show the appropriate 2FA verification UI based on availableMethods
                 // and pass `attemptId` to your verification action.
@@ -171,6 +172,8 @@ await authClient.signIn.email({
     }
 )
 ```
+
+`isSignInChallengeOfKind(value, kind)` narrows to `{ kind: "challenge", challenge: { kind: <K>, ... } }`, so TypeScript knows which challenge payload fields are available. It replaces the nested `kind === "challenge" && challenge.kind === "..."` check you would otherwise write by hand.
 
 Using the `onTwoFactorRedirect` config:
 
@@ -650,6 +653,8 @@ export const twoFactorTableFields = [
 
 * `maxAge` (seconds): Trust-device cookie lifetime. Default `604800` (7 days). Apps that prefer the longer window set this explicitly.
 * `requireReverificationFor` (string\[]): Sign-in endpoint paths (exact match against `ctx.path`) that force a fresh 2FA challenge even when the trust cookie is valid. Only sign-in resolution routes are consulted; listing non-sign-in paths is a no-op.
+
+**maxVerificationAttempts**: Per-attempt lockout threshold. Each failed verification against a paused sign-in increments `signInAttempt.failedVerifications`; when the count reaches this value the attempt is locked and subsequent verifications (including one with a valid code) return `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE` until the user restarts the sign-in. Default `5`, per [NIST SP 800-63B-4 §5.2.2](https://pages.nist.gov/800-63-3/sp800-63b.html#sec5). Raise only with a clear threat-model justification.
 
 **enforcement**: Per-request enforcement policy.
 

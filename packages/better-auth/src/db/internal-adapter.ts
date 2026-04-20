@@ -295,6 +295,23 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
+		/**
+		 * Create a session row directly on the adapter. Most callers should go
+		 * through `finalizeSignIn` (or `resolveSignIn`) instead: that path
+		 * enforces the primary-factor AMR projection, runs sign-in hooks, and
+		 * participates in the rollback/commit dispatch in `to-auth-endpoints`.
+		 *
+		 * `override` is merged into the persisted row (with `id` stripped —
+		 * sessions must have fresh ids). `override.amr` is **not** validated
+		 * here: callers that pass it take full responsibility for the value
+		 * being a valid `AuthenticationMethodReference[]`. Prefer letting
+		 * `finalizeSignIn` derive AMR from the factor(s) you actually verified
+		 * over hand-rolling it here.
+		 *
+		 * `overrideAll` re-applies the override after the defaults block, so
+		 * caller-supplied `expiresAt` / `userId` / `token` can win; use with
+		 * care.
+		 */
 		createSession: async (
 			userId: string,
 			rememberMe?: boolean | undefined,
@@ -1351,16 +1368,24 @@ export const createInternalAdapter = (
 		// InternalAdapter interface; keep them in sync when editing either side.
 		consumeSignInAttempt: async (id: string) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
+			const now = new Date();
 			const attempt = await currentAdapter.findOne<SignInAttempt>({
 				model: "signInAttempt",
 				where: [{ field: "id", value: id }],
 			});
-			if (!attempt) {
+			// Pre-gate on expiry so we don't commit a sign-in for an attempt that
+			// has already passed its window, even if cleanup hasn't reaped it. The
+			// atomic delete below repeats the same gate so a concurrent cleanup
+			// cannot race us into a false success.
+			if (!attempt || attempt.expiresAt <= now) {
 				return null;
 			}
 			const deleted = await currentAdapter.deleteMany({
 				model: "signInAttempt",
-				where: [{ field: "id", value: id }],
+				where: [
+					{ field: "id", value: id },
+					{ field: "expiresAt", operator: "gt", value: now },
+				],
 			});
 			if (deleted !== 1) {
 				return null;

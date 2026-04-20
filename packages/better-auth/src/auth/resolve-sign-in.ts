@@ -49,6 +49,12 @@ export async function resolveSignIn(
 	ctxWriters.setFinalizedSignIn(null);
 	ctxWriters.setSignInAttempt(null);
 
+	// TODO(challenges): This is a single-challenge dispatcher hardcoded to 2FA.
+	// When a second challenge ships (e.g. step-up email, risk-based), replace
+	// this with a registry walk over `BetterAuthSignInChallengeRegistry` so
+	// challenge plugins register their own `check` hooks instead of being
+	// invoked by name. The resolver shape (`{ kind: "challenge" | "session" }`)
+	// is already designed for that generalization: only the dispatch is not.
 	const twoFactor = await checkTwoFactor(ctx, {
 		user: options.user,
 		rememberMe: options.rememberMe,
@@ -111,6 +117,26 @@ export async function resolveSignInWithRedirect(
 		}
 		throw error;
 	}
+}
+
+/**
+ * Respond to a paused sign-in (`{ kind: "challenge" }`) from an endpoint that
+ * optionally accepts a `callbackURL`. When `callbackURL` is set, redirect with
+ * the challenge encoded in the URL query (browser / form-post flows); when
+ * absent, return the challenge payload as JSON (SPA / native callers).
+ *
+ * Endpoints that must always redirect (OAuth callbacks) should use
+ * `resolveSignInWithRedirect` instead.
+ */
+export function respondToSignInChallenge(
+	ctx: GenericEndpointContext,
+	challenge: SignInChallenge,
+	callbackURL: string | undefined,
+) {
+	if (callbackURL) {
+		throw ctx.redirect(appendSignInChallengeToURL(callbackURL, challenge));
+	}
+	return ctx.json({ kind: "challenge" as const, challenge });
 }
 
 export { isFailedToCreateSessionError } from "./finalize-sign-in";

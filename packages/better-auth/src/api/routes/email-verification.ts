@@ -6,8 +6,10 @@ import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
 import * as z from "zod";
-import { resolveSignIn } from "../../auth/resolve-sign-in";
-import { appendSignInChallengeToURL } from "../../auth/sign-in-challenge-url";
+import {
+	resolveSignIn,
+	respondToSignInChallenge,
+} from "../../auth/resolve-sign-in";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
@@ -384,15 +386,11 @@ export const verifyEmail = createAuthEndpoint(
 							},
 						});
 						if (result.kind === "challenge") {
-							if (ctx.query.callbackURL) {
-								throw ctx.redirect(
-									appendSignInChallengeToURL(
-										ctx.query.callbackURL,
-										result.challenge,
-									),
-								);
-							}
-							return ctx.json(result);
+							return respondToSignInChallenge(
+								ctx,
+								result.challenge,
+								ctx.query.callbackURL,
+							);
 						}
 					}
 					if (ctx.query.callbackURL) {
@@ -453,15 +451,11 @@ export const verifyEmail = createAuthEndpoint(
 							},
 						});
 						if (result.kind === "challenge") {
-							if (ctx.query.callbackURL) {
-								throw ctx.redirect(
-									appendSignInChallengeToURL(
-										ctx.query.callbackURL,
-										result.challenge,
-									),
-								);
-							}
-							return ctx.json(result);
+							return respondToSignInChallenge(
+								ctx,
+								result.challenge,
+								ctx.query.callbackURL,
+							);
 						}
 					}
 					if (ctx.query.callbackURL) {
@@ -516,15 +510,11 @@ export const verifyEmail = createAuthEndpoint(
 					},
 				});
 				if (result.kind === "challenge") {
-					if (ctx.query.callbackURL) {
-						throw ctx.redirect(
-							appendSignInChallengeToURL(
-								ctx.query.callbackURL,
-								result.challenge,
-							),
-						);
-					}
-					return ctx.json(result);
+					return respondToSignInChallenge(
+						ctx,
+						result.challenge,
+						ctx.query.callbackURL,
+					);
 				}
 			} else {
 				await setSessionCookie(ctx, {
