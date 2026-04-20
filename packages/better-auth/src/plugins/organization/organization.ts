@@ -25,9 +25,11 @@ import {
 	cancelInvitation,
 	createInvitation,
 	getInvitation,
+	getInvitationPreview,
 	listInvitations,
 	listUserInvitations,
 	rejectInvitation,
+	signupWithInvitation,
 } from "./routes/crud-invites";
 import {
 	addMember,
@@ -159,6 +161,8 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
+	signupWithInvitation: ReturnType<typeof signupWithInvitation<O>>;
+	getInvitationPreview: ReturnType<typeof getInvitationPreview<O>>;
 };
 
 const createHasPermissionBodySchema = z
@@ -730,6 +734,8 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 */
 		leaveOrganization: leaveOrganization(opts),
 		listUserInvitations: listUserInvitations(opts),
+		signupWithInvitation: signupWithInvitation(opts),
+		getInvitationPreview: getInvitationPreview(opts),
 		/**
 		 * ### Endpoint
 		 *

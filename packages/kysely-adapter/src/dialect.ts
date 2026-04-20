@@ -9,6 +9,63 @@ import {
 } from "kysely";
 import type { KyselyDatabaseType } from "./types";
 
+const inferTransactionSupport = (
+	db: Exclude<BetterAuthOptions["database"], undefined>,
+): boolean | undefined => {
+	if ("db" in db) {
+		return db.transaction ?? true;
+	}
+
+	if ("dialect" in db) {
+		if (typeof db.transaction !== "undefined") {
+			return db.transaction;
+		}
+		if (
+			db.dialect instanceof SqliteDialect ||
+			db.dialect instanceof MysqlDialect ||
+			db.dialect instanceof PostgresDialect ||
+			db.dialect instanceof MssqlDialect
+		) {
+			return true;
+		}
+		if (db.dialect.constructor.name === "D1SqliteDialect") {
+			return false;
+		}
+		return true;
+	}
+
+	// Cloudflare D1 does not support interactive transactions.
+	if ("batch" in db && "exec" in db && "prepare" in db) {
+		return false;
+	}
+
+	if ("aggregate" in db && !("createSession" in db)) {
+		return true;
+	}
+
+	if ("getConnection" in db) {
+		return true;
+	}
+
+	if ("connect" in db) {
+		return true;
+	}
+
+	if ("fileControl" in db) {
+		return true;
+	}
+
+	if ("open" in db && "close" in db && "prepare" in db) {
+		return true;
+	}
+
+	if ("createSession" in db) {
+		return true;
+	}
+
+	return undefined;
+};
+
 export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],
 ): KyselyDatabaseType | null {
@@ -70,7 +127,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: db.db,
 			databaseType: db.type,
-			transaction: db.transaction,
+			transaction: inferTransactionSupport(db),
 		};
 	}
 
@@ -78,7 +135,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: new Kysely<any>({ dialect: db.dialect }),
 			databaseType: db.type,
-			transaction: db.transaction,
+			transaction: inferTransactionSupport(db),
 		};
 	}
 
@@ -155,6 +212,6 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	return {
 		kysely: dialect ? new Kysely<any>({ dialect }) : null,
 		databaseType,
-		transaction: undefined,
+		transaction: inferTransactionSupport(db),
 	};
 };

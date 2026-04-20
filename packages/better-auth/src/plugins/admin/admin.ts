@@ -9,6 +9,7 @@ import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
 	adminUpdateUser,
 	banUser,
+	completeEnrollment,
 	createUser,
 	getUser,
 	impersonateUser,
@@ -176,6 +177,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			removeUser: removeUser(opts),
 			setUserPassword: setUserPassword(opts),
 			userHasPermission: userHasPermission(opts as O),
+			completeEnrollment: completeEnrollment(opts),
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),

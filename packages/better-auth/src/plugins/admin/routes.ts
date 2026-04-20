@@ -2,10 +2,12 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import {
@@ -360,6 +362,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
+			const willEnroll = !ctx.body.password && !!opts.sendEnrollmentEmail;
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
 				email: email,
 				name: ctx.body.name,
@@ -368,6 +371,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					opts?.defaultRole ??
 					"user",
 				...ctx.body.data,
+				// Enrollment users must be unverified; override any value from data.
+				...(willEnroll ? { emailVerified: false } : {}),
 			});
 
 			if (!user) {
@@ -387,6 +392,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					password: hashedPassword,
 					userId: user.id,
 				});
+			} else if (opts.sendEnrollmentEmail) {
+				const token = generateId(32);
+				const expiresAt = getDate(opts.enrollmentExpiresIn ?? 172800, "sec");
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: `user-enrollment:${token}`,
+					value: user.id,
+					expiresAt,
+				});
+				const url = `${ctx.context.baseURL}/admin/complete-enrollment?token=${token}`;
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendEnrollmentEmail({ user, url, token }, ctx.request),
+				);
 			}
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
@@ -1707,3 +1724,133 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 		},
 	);
 };
+
+/**
+ * ### Endpoint
+ *
+ * POST `/admin/complete-enrollment`
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.completeEnrollment`
+ *
+ * **client:**
+ * `authClient.admin.completeEnrollment`
+ *
+ * Allows a user created without a password (via `createUser` with
+ * `sendEnrollmentEmail` configured) to set their password and verify
+ * their email address in one step, using the enrollment token they
+ * received by email.
+ */
+export const completeEnrollment = (opts: AdminOptions) =>
+	createAuthEndpoint(
+		"/admin/complete-enrollment",
+		{
+			method: "POST",
+			body: z.object({
+				token: z.string().meta({
+					description: "The enrollment token received by email",
+				}),
+				password: z.string().meta({
+					description: "The password to set for the account",
+				}),
+			}),
+			metadata: {
+				openapi: {
+					operationId: "completeEnrollment",
+					summary: "Complete user enrollment",
+					description:
+						"Set a password and verify the email for an account created without a password via the admin plugin",
+					responses: {
+						200: {
+							description: "Enrollment completed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											user: {
+												$ref: "#/components/schemas/User",
+											},
+										},
+										required: ["user"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { password } = ctx.body;
+			const minPasswordLength = ctx.context.password.config.minPasswordLength;
+			if (password.length < minPasswordLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+			}
+			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+			if (password.length > maxPasswordLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			}
+
+			const user = await runWithTransaction(ctx.context.adapter, async () => {
+				const verification =
+					await ctx.context.internalAdapter.findVerificationValue(
+						`user-enrollment:${ctx.body.token}`,
+					);
+				if (!verification || verification.expiresAt < new Date()) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ADMIN_ERROR_CODES.ENROLLMENT_TOKEN_NOT_FOUND_OR_EXPIRED,
+					);
+				}
+
+				const userId = verification.value;
+				const existingUser = await ctx.context.internalAdapter.findUserById(userId);
+				if (!existingUser) {
+					throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+				}
+
+				const accounts = await ctx.context.internalAdapter.findAccounts(userId);
+				const hasCredentialAccount = accounts.some(
+					(a: { providerId: string }) => a.providerId === "credential",
+				);
+
+				if (!hasCredentialAccount) {
+					const hashedPassword = await ctx.context.password.hash(password);
+					await ctx.context.internalAdapter.linkAccount({
+						accountId: userId,
+						providerId: "credential",
+						password: hashedPassword,
+						userId,
+					});
+				} else if (existingUser.emailVerified) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ADMIN_ERROR_CODES.USER_ALREADY_HAS_PASSWORD,
+					);
+				}
+
+				const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
+					emailVerified: true,
+				});
+				if (!updatedUser) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+					);
+				}
+
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`user-enrollment:${ctx.body.token}`,
+				);
+
+				return updatedUser;
+			});
+
+			return ctx.json({
+				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
+			});
+		},
+	);

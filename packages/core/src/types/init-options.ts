@@ -494,10 +494,11 @@ export type BetterAuthOptions = {
 						debugLogs?: DBAdapterDebugLogOption;
 						/**
 						 * Whether to execute multiple operations in a transaction.
-						 * If the database doesn't support transactions,
+						 * Transactions are enabled by default for supported Kysely dialects.
+						 * If the database doesn't support interactive transactions,
 						 * set this to `false` and operations will be executed sequentially.
 						 *
-						 * @default false
+						 * @default true for supported dialects
 						 */
 						transaction?: boolean;
 				  }
@@ -524,10 +525,11 @@ export type BetterAuthOptions = {
 						debugLogs?: DBAdapterDebugLogOption;
 						/**
 						 * Whether to execute multiple operations in a transaction.
-						 * If the database doesn't support transactions,
+						 * Transactions are enabled by default for supported Kysely dialects.
+						 * If the database doesn't support interactive transactions,
 						 * set this to `false` and operations will be executed sequentially.
 						 *
-						 * @default false
+						 * @default true for supported dialects
 						 */
 						transaction?: boolean;
 				  }

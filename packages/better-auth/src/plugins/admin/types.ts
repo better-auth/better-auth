@@ -84,6 +84,51 @@ export interface AdminOptions {
 	 * @default false
 	 */
 	allowImpersonatingAdmins?: boolean | undefined;
+	/**
+	 * Send an enrollment email to a newly created user who has no password.
+	 *
+	 * When `createUser` is called without a `password`, if this callback is
+	 * provided the user will be created with `emailVerified: false` and an
+	 * enrollment token will be generated. The token can be redeemed via
+	 * `POST /admin/complete-enrollment` to set the password and verify the
+	 * email in one step.
+	 *
+	 * @example
+	 * ```ts
+	 * sendEnrollmentEmail: async ({ user, url, token }) => {
+	 *   await sendEmail({
+	 *     to: user.email,
+	 *     subject: "Complete your registration",
+	 *     body: `Set your password here: ${url}`,
+	 *   });
+	 * }
+	 * ```
+	 */
+	sendEnrollmentEmail?:
+		| ((
+				data: {
+					/**
+					 * The newly created user
+					 */
+					user: User;
+					/**
+					 * The enrollment URL (points to `/admin/complete-enrollment?token=...`)
+					 */
+					url: string;
+					/**
+					 * The raw enrollment token
+					 */
+					token: string;
+				},
+				request?: Request,
+		  ) => Promise<void>)
+		| undefined;
+	/**
+	 * Duration of the enrollment token in seconds.
+	 *
+	 * @default 172800 (48 hours)
+	 */
+	enrollmentExpiresIn?: number | undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
