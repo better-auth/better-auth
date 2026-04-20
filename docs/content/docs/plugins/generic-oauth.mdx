@@ -94,6 +94,10 @@ To start the OAuth sign-in process:
        * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
        */
       requestSignUp?: boolean = false
+      /**
+       * Any additional data to pass through the oauth flow.
+       */
+      additionalData?: Record<string, any> = {}
   }
   ```
 </APIMethod>
@@ -113,6 +117,10 @@ To link an OAuth account to an existing user:
        * The URL to redirect to once the account linking was complete. 
        */
       callbackURL: string = "/successful-link"
+      /**
+       * Any additional data to pass through the oauth flow.
+       */
+      additionalData?: Record<string, any> = {}
   }
   ```
 </APIMethod>
@@ -122,6 +130,14 @@ To link an OAuth account to an existing user:
 The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
 
 Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
+
+### Passing Additional Data Through OAuth Flow
+
+You can pass additional data through the OAuth flow without storing it in the database. This is useful for scenarios like tracking referral codes, analytics sources, or other temporary data that should be processed during authentication but not persisted.
+
+#### Accessing Additional Data in Hooks
+
+The additional data is available in your hooks during the OAuth callback through `getOAuthState`.
 
 ## Pre-configured Provider Helpers
 

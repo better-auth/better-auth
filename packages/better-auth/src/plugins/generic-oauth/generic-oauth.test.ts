@@ -1,8 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { getOAuthState } from "../../api";
 import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
@@ -1086,6 +1088,153 @@ describe("oauth2", async () => {
 		});
 
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
+	});
+
+	it("should pass additional data through oauth sign in", async () => {
+		const providerId = "test-additional-data-sign-in";
+
+		let oauthState: Awaited<ReturnType<typeof getOAuthState>> = null;
+		const headers = new Headers();
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+					],
+				}),
+			],
+			hooks: {
+				after: createAuthMiddleware(async (ctx) => {
+					if (
+						ctx.path === "/oauth2/callback/:providerId" &&
+						ctx.params.providerId === providerId
+					) {
+						oauthState = await getOAuthState();
+					}
+				}),
+			},
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const signUpRes = await authClient.signIn.oauth2({
+			providerId,
+			callbackURL: "http://localhost:3000/callback",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+			additionalData: {
+				source: "SIGNUP_PAGE",
+			},
+		});
+		const simulation = await simulateOAuthFlow(
+			signUpRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(simulation.callbackURL).toBe("http://localhost:3000/new_user");
+		expect(oauthState).not.toBeNull();
+		expect(oauthState).toMatchObject({
+			source: "SIGNUP_PAGE",
+		});
+	});
+
+	it("should pass additional data through oauth account linking", async () => {
+		const providerId = "test-additional-data-link";
+
+		let oauthState: Awaited<ReturnType<typeof getOAuthState>> = null;
+		let headers = new Headers();
+
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+					],
+				}),
+			],
+			hooks: {
+				after: createAuthMiddleware(async (ctx) => {
+					if (
+						ctx.path === "/oauth2/callback/:providerId" &&
+						ctx.params.providerId === providerId
+					) {
+						oauthState = await getOAuthState();
+					}
+				}),
+			},
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const loginRes = await authClient.signIn.oauth2({
+			providerId,
+			callbackURL: "http://localhost:3000/callback",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+			additionalData: {
+				source: "LOGIN_PAGE",
+			},
+		});
+		const loginSimulation = await simulateOAuthFlow(
+			loginRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(loginSimulation.callbackURL).toBe("http://localhost:3000/new_user");
+
+		oauthState = null;
+		headers = loginSimulation.headers;
+
+		const linkRes = await authClient.linkSocial({
+			provider: providerId,
+			callbackURL: "http://localhost:3000/link/callback",
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+			additionalData: {
+				source: "LINK_ACCOUNT_PAGE",
+			},
+		});
+		const linkSimulation = await simulateOAuthFlow(
+			linkRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		expect(linkSimulation.callbackURL).toBe(
+			"http://localhost:3000/link/callback",
+		);
+		expect(oauthState).not.toBeNull();
+		expect(oauthState).toMatchObject({
+			source: "LINK_ACCOUNT_PAGE",
+		});
 	});
 
 	describe("Okta Provider Helper", () => {

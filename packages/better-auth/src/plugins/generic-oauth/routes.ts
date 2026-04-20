@@ -573,6 +573,10 @@ const OAuth2LinkAccountBodySchema = z.object({
 				"The URL to redirect to if there is an error during the link process",
 		})
 		.optional(),
+	/**
+	 * Any additional data to pass through the oauth flow.
+	 */
+	additionalData: z.record(z.string(), z.any()).optional(),
 });
 /**
  * ### Endpoint
@@ -696,7 +700,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 					userId: session.user.id,
 					email: session.user.email,
 				},
-				undefined,
+				c.body.additionalData,
 			);
 
 			const additionalParams =
