@@ -623,6 +623,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			>({
 				model: "team",
 				data,
+				forceAllowId: true,
 			});
 			return team;
 		},
@@ -967,6 +968,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					teamId:
 						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
 				},
+				forceAllowId: true,
 			});
 
 			return invite;

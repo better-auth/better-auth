@@ -445,6 +445,80 @@ describe("organization hooks", async () => {
 		expect(afterCreateTeam).toHaveBeenCalled();
 	});
 
+	it("should allow passing id through `beforeCreateTeam`", async () => {
+		const customTeamId = "custom-team-id";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					teams: {
+						enabled: true,
+					},
+					organizationHooks: {
+						beforeCreateTeam: async () => {
+							return {
+								data: {
+									id: customTeamId,
+								},
+							};
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const result = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		const teams = await auth.api.listOrganizationTeams({
+			headers,
+			query: {
+				organizationId: result?.id,
+			},
+		});
+		expect(teams[0]?.id).toBe(customTeamId);
+	});
+
+	it("should allow passing id through `beforeCreateInvitation`", async () => {
+		const customInvitationId = "custom-invitation-id";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						beforeCreateInvitation: async () => {
+							return {
+								data: {
+									id: customInvitationId,
+								},
+							};
+						},
+					},
+					async sendInvitationEmail() {},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		const invitation = await auth.api.createInvitation({
+			body: {
+				email: "invited@test.com",
+				role: "member",
+				organizationId: org?.id,
+			},
+			headers,
+		});
+		expect(invitation?.id).toBe(customInvitationId);
+	});
+
 	it("should allow internal organization creation when disabled for users", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
