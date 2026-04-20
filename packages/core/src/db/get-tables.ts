@@ -181,10 +181,10 @@ export const getAuthTables = (
 					fieldName: "expiresAt",
 					index: true,
 				},
-				dontRememberMe: {
+				rememberMe: {
 					type: "boolean",
 					required: false,
-					fieldName: "dontRememberMe",
+					fieldName: "rememberMe",
 				},
 				amr: {
 					type: "json",

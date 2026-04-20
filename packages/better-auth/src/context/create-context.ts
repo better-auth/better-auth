@@ -2,8 +2,8 @@ import type {
 	AuthContext,
 	BetterAuthOptions,
 	FinalizedSignIn,
-	PendingSignInAttempt,
 	SecretConfig,
+	SignInAttemptWithUser,
 } from "@better-auth/core";
 import { getBetterAuthVersion } from "@better-auth/core/context";
 import type { AuthContextWriters } from "@better-auth/core/context/internals";
@@ -257,12 +257,12 @@ Most of the features of Better Auth will not work correctly.`,
 
 	const ctx: AuthContext &
 		AuthContextWriters & {
-			newSession: {
+			issuedSession: {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
 			finalizedSignIn: FinalizedSignIn | null;
-			signInAttempt: PendingSignInAttempt | null;
+			signInAttempt: SignInAttemptWithUser | null;
 		} = {
 		appName: options.appName || "Better Auth",
 		baseURL: baseURL || "",
@@ -358,12 +358,12 @@ Most of the features of Better Auth will not work correctly.`,
 			},
 			checkPassword,
 		},
-		setNewSession(session) {
-			this.newSession = session;
+		setIssuedSession(session) {
+			this.issuedSession = session;
 		},
-		newSession: null,
-		getNewSession() {
-			return this.newSession;
+		issuedSession: null,
+		getIssuedSession() {
+			return this.issuedSession;
 		},
 		setFinalizedSignIn(signIn) {
 			this.finalizedSignIn = signIn;

@@ -1120,14 +1120,14 @@ export const impersonateUser = (opts: AdminOptions) =>
 			}
 			const authCookies = ctx.context.authCookies;
 			deleteSessionCookie(ctx);
-			const dontRememberMeCookie = await ctx.getSignedCookie(
-				ctx.context.authCookies.dontRememberToken.name,
+			const sessionOnlyCookie = await ctx.getSignedCookie(
+				ctx.context.authCookies.sessionOnlyToken.name,
 				ctx.context.secret,
 			);
 			const adminCookieProp = ctx.context.createAuthCookie("admin_session");
 			await ctx.setSignedCookie(
 				adminCookieProp.name,
-				`${ctx.context.session.session.token}:${dontRememberMeCookie || ""}`,
+				`${ctx.context.session.session.token}:${sessionOnlyCookie || ""}`,
 				ctx.context.secret,
 				authCookies.sessionToken.attributes,
 			);
@@ -1137,7 +1137,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 					session: session,
 					user: targetUser,
 				},
-				true,
+				false,
 			);
 			return ctx.json({
 				session: session,
@@ -1203,7 +1203,7 @@ export const stopImpersonating = () =>
 					message: "Failed to find admin session",
 				});
 			}
-			const [adminSessionToken, dontRememberMeCookie] = adminCookie?.split(":");
+			const [adminSessionToken, sessionOnlyCookie] = adminCookie?.split(":");
 			const adminSession = await ctx.context.internalAdapter.findSession(
 				adminSessionToken!,
 			);
@@ -1213,7 +1213,7 @@ export const stopImpersonating = () =>
 				});
 			}
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
-			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
+			await setSessionCookie(ctx, adminSession, !sessionOnlyCookie);
 			expireCookie(ctx, adminSessionCookie);
 			return ctx.json({
 				session: parseSessionOutput(ctx.context.options, adminSession.session),

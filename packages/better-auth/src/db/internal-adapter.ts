@@ -297,7 +297,7 @@ export const createInternalAdapter = (
 		},
 		createSession: async (
 			userId: string,
-			dontRememberMe?: boolean | undefined,
+			rememberMe?: boolean | undefined,
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
@@ -331,11 +331,13 @@ export const createInternalAdapter = (
 				/**
 				 * If the user doesn't want to be remembered
 				 * set the session to expire in 1 day.
-				 * The cookie will be set to expire at the end of the session
+				 * The cookie will be set to expire at the end of the session.
+				 * Undefined `rememberMe` defaults to remember (persistent).
 				 */
-				expiresAt: dontRememberMe
-					? getDate(60 * 60 * 24, "sec") // 1 day
-					: getDate(sessionExpiration, "sec"),
+				expiresAt:
+					rememberMe === false
+						? getDate(60 * 60 * 24, "sec") // 1 day
+						: getDate(sessionExpiration, "sec"),
 				userId,
 				token: generateId(32),
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -1309,7 +1311,7 @@ export const createInternalAdapter = (
 				Partial<SignInAttempt>,
 		) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
-			const attempt = await currentAdapter.create<SignInAttempt>({
+			return currentAdapter.create<SignInAttempt>({
 				model: "signInAttempt",
 				data: {
 					createdAt: new Date(),
@@ -1323,7 +1325,6 @@ export const createInternalAdapter = (
 				// original id, which the adapter would otherwise strip.
 				forceAllowId: true,
 			});
-			return attempt;
 		},
 		findSignInAttempt: async (id: string) => {
 			const currentAdapter = await getCurrentAdapter(adapter);
@@ -1336,7 +1337,7 @@ export const createInternalAdapter = (
 			}
 			return {
 				...attempt,
-				dontRememberMe: attempt.dontRememberMe ?? undefined,
+				rememberMe: attempt.rememberMe ?? undefined,
 			};
 		},
 		deleteSignInAttempt: async (id: string) => {
@@ -1366,7 +1367,7 @@ export const createInternalAdapter = (
 			}
 			return {
 				...attempt,
-				dontRememberMe: attempt.dontRememberMe ?? undefined,
+				rememberMe: attempt.rememberMe ?? undefined,
 			};
 		},
 		recordSignInAttemptFailure: async (
@@ -1406,7 +1407,7 @@ export const createInternalAdapter = (
 						failedVerifications: nextCount,
 						...(shouldLock ? { lockedAt: now } : {}),
 						updatedAt: now,
-						dontRememberMe: attempt.dontRememberMe ?? undefined,
+						rememberMe: attempt.rememberMe ?? undefined,
 					};
 				}
 			}

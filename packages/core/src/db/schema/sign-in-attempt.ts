@@ -5,7 +5,7 @@ import { coreSchema } from "./shared";
 export const signInAttemptSchema = coreSchema.extend({
 	userId: z.coerce.string(),
 	expiresAt: z.date(),
-	dontRememberMe: z.boolean().nullish(),
+	rememberMe: z.boolean().nullish(),
 	/**
 	 * Authentication methods completed before the attempt was created. The
 	 * primary factor (e.g. password, magic-link, an OAuth provider) lives at

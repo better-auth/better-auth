@@ -68,7 +68,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			code_challenge_method = "plain",
 		} = payload;
 		const userId =
-			ctx.context.session?.user.id || ctx.context.getNewSession()?.user.id;
+			ctx.context.session?.user.id || ctx.context.getIssuedSession()?.user.id;
 		if (!userId || client_id !== opts.clientID) {
 			return null;
 		}
@@ -136,7 +136,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							`${opts.cookiePrefix}.transfer_token`,
 							ctx.context.secret,
 						);
-						if (!ctx.context.getNewSession()?.session || !transferCookie) {
+						if (!ctx.context.getIssuedSession()?.session || !transferCookie) {
 							return;
 						}
 
@@ -182,7 +182,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							}
 						}
 
-						if (!ctx.context.getNewSession()?.session) {
+						if (!ctx.context.getIssuedSession()?.session) {
 							return;
 						}
 

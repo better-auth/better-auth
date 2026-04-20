@@ -280,7 +280,7 @@ export type BetterAuthAdvancedOptions = {
 	 * default cookie names:
 	 * - "session_token"
 	 * - "session_data"
-	 * - "dont_remember"
+	 * - "session_only"
 	 * - "account_data"
 	 *
 	 * plugins can also add additional cookies

@@ -121,7 +121,7 @@ export function getCookies(options: BetterAuthOptions) {
 	const accountData = createCookie("account_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
-	const dontRememberToken = createCookie("dont_remember");
+	const sessionOnlyToken = createCookie("session_only");
 	return {
 		sessionToken: {
 			name: sessionToken.name,
@@ -135,9 +135,9 @@ export function getCookies(options: BetterAuthOptions) {
 			name: sessionData.name,
 			attributes: sessionData.attributes,
 		},
-		dontRememberToken: {
-			name: dontRememberToken.name,
-			attributes: dontRememberToken.attributes,
+		sessionOnlyToken: {
+			name: sessionOnlyToken.name,
+			attributes: sessionOnlyToken.attributes,
 		},
 		accountData: {
 			name: accountData.name,
@@ -152,7 +152,7 @@ export async function setCookieCache(
 		session: Session & Record<string, any>;
 		user: User;
 	},
-	dontRememberMe: boolean,
+	rememberMe: boolean,
 ) {
 	if (!ctx.context.options.session?.cookieCache?.enabled) {
 		return;
@@ -185,9 +185,9 @@ export async function setCookieCache(
 
 	const options = {
 		...ctx.context.authCookies.sessionData.attributes,
-		maxAge: dontRememberMe
-			? undefined
-			: ctx.context.authCookies.sessionData.attributes.maxAge,
+		maxAge: rememberMe
+			? ctx.context.authCookies.sessionData.attributes.maxAge
+			: undefined,
 	};
 
 	const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
@@ -265,12 +265,12 @@ export async function setCookieCache(
 
 /**
  * Writes the session cookie (and any supporting cookies) and pins the session
- * onto `ctx.context.newSession` so downstream after-hooks and plugins observe
- * the same session the browser just received.
+ * onto `ctx.context.issuedSession` so downstream after-hooks and plugins
+ * observe the same session the browser just received.
  *
  * **Invariant:** any code path that publishes the session cookie for a given
  * request must also mirror the session into request state via
- * `writers(ctx.context).setNewSession(session)` (done here). Do not write
+ * `writers(ctx.context).setIssuedSession(session)` (done here). Do not write
  * `better-auth.session_token` via `ctx.setSignedCookie` directly without
  * mirroring the in-memory state, otherwise after-hooks will see a stale (or
  * missing) session and make wrong decisions about what to do next (e.g.
@@ -282,21 +282,19 @@ export async function setSessionCookie(
 		session: Session & Record<string, any>;
 		user: User;
 	},
-	dontRememberMe?: boolean | undefined,
+	rememberMe?: boolean | undefined,
 	overrides?: Partial<CookieOptions> | undefined,
 ) {
-	const dontRememberMeCookie = await ctx.getSignedCookie(
-		ctx.context.authCookies.dontRememberToken.name,
+	const sessionOnlyCookie = await ctx.getSignedCookie(
+		ctx.context.authCookies.sessionOnlyToken.name,
 		ctx.context.secret,
 	);
-	// if dontRememberMe is not set, use the cookie value
-	dontRememberMe =
-		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
+	// if rememberMe is not set, inherit from the session-only cookie: its
+	// presence means the browser previously opted into session-only.
+	rememberMe = rememberMe !== undefined ? rememberMe : !sessionOnlyCookie;
 
 	const options = ctx.context.authCookies.sessionToken.attributes;
-	const maxAge = dontRememberMe
-		? undefined
-		: ctx.context.sessionConfig.expiresIn;
+	const maxAge = rememberMe ? ctx.context.sessionConfig.expiresIn : undefined;
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.token,
@@ -308,16 +306,16 @@ export async function setSessionCookie(
 		},
 	);
 
-	if (dontRememberMe) {
+	if (!rememberMe) {
 		await ctx.setSignedCookie(
-			ctx.context.authCookies.dontRememberToken.name,
+			ctx.context.authCookies.sessionOnlyToken.name,
 			"true",
 			ctx.context.secret,
-			ctx.context.authCookies.dontRememberToken.attributes,
+			ctx.context.authCookies.sessionOnlyToken.attributes,
 		);
 	}
-	await setCookieCache(ctx, session, dontRememberMe);
-	writers(ctx.context).setNewSession(session);
+	await setCookieCache(ctx, session, rememberMe);
+	writers(ctx.context).setIssuedSession(session);
 }
 
 /**
@@ -335,7 +333,7 @@ export function expireCookie(
 
 export function deleteSessionCookie(
 	ctx: GenericEndpointContext,
-	skipDontRememberMe?: boolean | undefined,
+	skipSessionOnly?: boolean | undefined,
 ) {
 	expireCookie(ctx, ctx.context.authCookies.sessionToken);
 	expireCookie(ctx, ctx.context.authCookies.sessionData);
@@ -366,8 +364,8 @@ export function deleteSessionCookie(
 	const cleanCookies = sessionStore.clean();
 	sessionStore.setCookies(cleanCookies);
 
-	if (!skipDontRememberMe) {
-		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+	if (!skipSessionOnly) {
+		expireCookie(ctx, ctx.context.authCookies.sessionOnlyToken);
 	}
 }
 
@@ -393,7 +391,7 @@ export function expireSessionCookiesInHeaders(
 	};
 	expire(authCookies.sessionToken);
 	expire(authCookies.sessionData);
-	expire(authCookies.dontRememberToken);
+	expire(authCookies.sessionOnlyToken);
 }
 
 export function parseCookies(cookieHeader: string) {

@@ -265,7 +265,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			}
 			const resolver = await verifyTwoFactor(ctx);
 			const user = resolver.session.user as UserWithTwoFactor;
-			const isSignIn = resolver.mode === "complete";
+			const isSignIn = resolver.mode === "finalize";
 			const invalid = resolver.invalid;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
@@ -306,8 +306,8 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			if (twoFactor.verified !== true) {
 				if (!user.twoFactorEnabled) {
 					// Enrollment without an active session was rejected above; this
-					// branch is reachable only in management mode.
-					if (resolver.mode !== "management") {
+					// branch is reachable only in session mode.
+					if (resolver.mode !== "session") {
 						throw APIError.from(
 							"BAD_REQUEST",
 							TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
@@ -340,7 +340,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					where: [{ field: "id", value: twoFactor.id }],
 				});
 			}
-			if (resolver.mode === "complete") {
+			if (resolver.mode === "finalize") {
 				return resolver.valid(ctx, {
 					method: BUILTIN_AMR_METHOD.TOTP,
 					factor: "possession",

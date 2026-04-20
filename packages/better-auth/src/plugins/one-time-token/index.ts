@@ -220,8 +220,8 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const newSession = ctx.context.getNewSession();
-						if (newSession) {
+						const issuedSession = ctx.context.getIssuedSession();
+						if (issuedSession) {
 							if (!opts?.setOttHeaderOnNewSession) {
 								return;
 							}
@@ -236,7 +236,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 									.filter(Boolean),
 							);
 							headersSet.add("set-ott");
-							const token = await generateToken(ctx, newSession);
+							const token = await generateToken(ctx, issuedSession);
 							ctx.setHeader("set-ott", token);
 							ctx.setHeader(
 								"Access-Control-Expose-Headers",

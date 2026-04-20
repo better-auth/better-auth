@@ -322,7 +322,7 @@ describe("two factor", async () => {
 		);
 	});
 
-	it("should not set dont_remember while a sign-in is paused behind two factor", async () => {
+	it("should not set session_only while a sign-in is paused behind two factor", async () => {
 		const activeSessionHeaders = new Headers();
 		await client.signIn.email({
 			email: testUser.email,
@@ -365,7 +365,7 @@ describe("two factor", async () => {
 		const parsed = parseSetCookieHeader(
 			sessionResponse.headers.get("Set-Cookie") || "",
 		);
-		expect(parsed.get("better-auth.dont_remember")?.value).not.toBeDefined();
+		expect(parsed.get("better-auth.session_only")?.value).not.toBeDefined();
 	});
 
 	it("should fail when passing invalid TOTP code with expected error code", async () => {
@@ -519,11 +519,11 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
-					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
+					expect(parsed.get("better-auth.trusted_device")?.value).toBeDefined();
 					newHeaders.set(
 						"cookie",
-						`better-auth.trust_device=${
-							parsed.get("better-auth.trust_device")?.value
+						`better-auth.trusted_device=${
+							parsed.get("better-auth.trusted_device")?.value
 						}`,
 					);
 				},
@@ -540,11 +540,11 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
-					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
+					expect(parsed.get("better-auth.trusted_device")?.value).toBeDefined();
 					updatedHeaders.set(
 						"cookie",
-						`better-auth.trust_device=${
-							parsed.get("better-auth.trust_device")?.value
+						`better-auth.trusted_device=${
+							parsed.get("better-auth.trusted_device")?.value
 						}`,
 					);
 				},
@@ -1151,7 +1151,7 @@ describe("trust device server-side validation", async () => {
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
 		const trustDeviceCookieValue = parsed.get(
-			"better-auth.trust_device",
+			"better-auth.trusted_device",
 		)?.value;
 		expect(trustDeviceCookieValue).toBeDefined();
 
@@ -1186,7 +1186,7 @@ describe("trust device server-side validation", async () => {
 		const trustHeaders = new Headers();
 		trustHeaders.set(
 			"cookie",
-			`better-auth.trust_device=${trustDeviceCookieValue}`,
+			`better-auth.trusted_device=${trustDeviceCookieValue}`,
 		);
 
 		const signIn2Res = await auth.api.signInEmail({
@@ -1209,7 +1209,7 @@ describe("trust device server-side validation", async () => {
 		const signIn2Parsed = parseSetCookieHeader(
 			signIn2Res.headers.get("Set-Cookie") || "",
 		);
-		const clearedTrustCookie = signIn2Parsed.get("better-auth.trust_device");
+		const clearedTrustCookie = signIn2Parsed.get("better-auth.trusted_device");
 		expect(clearedTrustCookie?.value).toBe("");
 	});
 
@@ -1246,7 +1246,7 @@ describe("trust device server-side validation", async () => {
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
 		const trustDeviceCookieValue = parsed.get(
-			"better-auth.trust_device",
+			"better-auth.trusted_device",
 		)?.value;
 		expect(trustDeviceCookieValue).toBeDefined();
 
@@ -1279,7 +1279,7 @@ describe("trust device server-side validation", async () => {
 			signOutRes.headers.get("Set-Cookie") || "",
 		);
 		const trustCookieAfterSignOut = signOutParsed.get(
-			"better-auth.trust_device",
+			"better-auth.trusted_device",
 		);
 		// Cookie should either not be set (unchanged) or still have its value
 		expect(trustCookieAfterSignOut?.value || "preserved").not.toBe("");
@@ -1300,7 +1300,7 @@ describe("trust device server-side validation", async () => {
 		const trustHeaders = new Headers();
 		trustHeaders.set(
 			"cookie",
-			`better-auth.trust_device=${trustDeviceCookieValue}`,
+			`better-auth.trusted_device=${trustDeviceCookieValue}`,
 		);
 
 		const signIn2Res = await auth.api.signInEmail({
@@ -1352,7 +1352,7 @@ describe("trust device server-side validation", async () => {
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
 		const trustDeviceCookieValue = parsed.get(
-			"better-auth.trust_device",
+			"better-auth.trusted_device",
 		)?.value;
 		expect(trustDeviceCookieValue).toBeDefined();
 
@@ -1387,7 +1387,7 @@ describe("trust device server-side validation", async () => {
 		const disableParsed = parseSetCookieHeader(
 			disableRes.headers.get("Set-Cookie") || "",
 		);
-		const clearedCookie = disableParsed.get("better-auth.trust_device");
+		const clearedCookie = disableParsed.get("better-auth.trusted_device");
 		expect(clearedCookie?.value).toBe("");
 
 		// Verify the DB record was deleted
@@ -1464,7 +1464,7 @@ describe("trustDevice.maxAge", async () => {
 		const parsed = parseSetCookieHeader(
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
-		const trustDeviceCookie = parsed.get("better-auth.trust_device");
+		const trustDeviceCookie = parsed.get("better-auth.trusted_device");
 		expect(trustDeviceCookie).toBeDefined();
 		expect(Number(trustDeviceCookie?.["max-age"])).toBe(customMaxAge);
 
@@ -1550,7 +1550,7 @@ describe("trustDevice.maxAge", async () => {
 		const parsed = parseSetCookieHeader(
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
-		const trustDeviceCookie = parsed.get("better-auth.trust_device");
+		const trustDeviceCookie = parsed.get("better-auth.trusted_device");
 		expect(trustDeviceCookie).toBeDefined();
 		expect(Number(trustDeviceCookie?.["max-age"])).toBe(7 * 24 * 60 * 60);
 	});
@@ -3224,7 +3224,7 @@ describe("two-factor verify attempt hardening", async () => {
 			},
 		} as Parameters<typeof client.twoFactor.verifyTotp>[0]);
 
-		expect(stepUpSetCookie).toContain("better-auth.trust_device=");
+		expect(stepUpSetCookie).toContain("better-auth.trusted_device=");
 	});
 
 	it("finalizes with body attemptId alone when the two_factor cookie is absent", async () => {
@@ -3726,7 +3726,7 @@ describe("trustDevice is not written when a post-verify after-hook rejects", asy
 		expect(trustRecords).toHaveLength(0);
 
 		const setCookie = verifyRes.headers.get("Set-Cookie") || "";
-		expect(setCookie).not.toContain("better-auth.trust_device=");
+		expect(setCookie).not.toContain("better-auth.trusted_device=");
 
 		const secondSignIn = await auth.api.signInEmail({
 			body: { email: testUser.email, password: testUser.password },

@@ -198,8 +198,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 				}
 
-				const dontRememberMe = await ctx.getSignedCookie(
-					ctx.context.authCookies.dontRememberToken.name,
+				const sessionOnlyCookie = await ctx.getSignedCookie(
+					ctx.context.authCookies.sessionOnlyToken.name,
 					ctx.context.secret,
 				);
 
@@ -296,7 +296,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								// Also refresh the session_token cookie expiry
 								const sessionTokenOptions =
 									ctx.context.authCookies.sessionToken.attributes;
-								const sessionTokenMaxAge = dontRememberMe
+								const sessionTokenMaxAge = sessionOnlyCookie
 									? undefined
 									: ctx.context.sessionConfig.expiresIn;
 								await ctx.setSignedCookie(
@@ -390,7 +390,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 * or if the session refresh is disabled
 				 */
-				if (dontRememberMe || ctx.query?.disableRefresh) {
+				if (sessionOnlyCookie || ctx.query?.disableRefresh) {
 					// Parse session and user to ensure additionalFields are included
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
@@ -432,7 +432,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * return the session without performing writes, but include needsRefresh flag
 				 */
 				if (deferSessionRefresh && !isPostRequest) {
-					await setCookieCache(ctx, session, !!dontRememberMe);
+					await setCookieCache(ctx, session, !sessionOnlyCookie);
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
 						session.session,
@@ -495,7 +495,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
-				await setCookieCache(ctx, session, !!dontRememberMe);
+				await setCookieCache(ctx, session, !sessionOnlyCookie);
 				// Parse session and user to ensure additionalFields are included
 				const parsedSession = parseSessionOutput(
 					ctx.context.options,

@@ -554,8 +554,8 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 			const currentSession = await getSessionFromCtx(ctx);
 			if (currentSession && updatedUser.emailVerified) {
-				const dontRememberMeCookie = await ctx.getSignedCookie(
-					ctx.context.authCookies.dontRememberToken.name,
+				const sessionOnlyCookie = await ctx.getSignedCookie(
+					ctx.context.authCookies.sessionOnlyToken.name,
 					ctx.context.secret,
 				);
 				await setCookieCache(
@@ -567,7 +567,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 							emailVerified: true,
 						},
 					},
-					!!dontRememberMeCookie,
+					!sessionOnlyCookie,
 				);
 			}
 			return ctx.json({

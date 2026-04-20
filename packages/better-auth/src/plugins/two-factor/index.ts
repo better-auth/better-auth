@@ -13,8 +13,8 @@ import { PACKAGE_VERSION } from "../../version";
 import type { BackupCodeOptions } from "./backup-codes";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
-	TRUST_DEVICE_COOKIE_MAX_AGE,
-	TRUST_DEVICE_COOKIE_NAME,
+	TRUSTED_DEVICE_COOKIE_MAX_AGE,
+	TRUSTED_DEVICE_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
@@ -28,8 +28,8 @@ import type {
 
 export * from "./error-code";
 export type {
-	CompleteResolver,
-	ManagementResolver,
+	FinalizeResolver,
+	SessionResolver,
 	TwoFactorResolver,
 	TwoFactorVerifyResponse,
 } from "./verify-two-factor";
@@ -46,7 +46,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		twoFactorTable: "twoFactor",
 	};
 	const trustDeviceMaxAge =
-		options?.trustDevice?.maxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+		options?.trustDevice?.maxAge ?? TRUSTED_DEVICE_COOKIE_MAX_AGE;
 	const allowPasswordless = options?.allowPasswordless;
 	const backupCodeOptions = {
 		storeBackupCodes: "encrypted",
@@ -348,7 +348,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						ctx.context.session.session.token,
 					);
 					const disableTrustCookie = ctx.context.createAuthCookie(
-						TRUST_DEVICE_COOKIE_NAME,
+						TRUSTED_DEVICE_COOKIE_NAME,
 						{
 							maxAge: trustDeviceMaxAge,
 						},

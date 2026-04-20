@@ -381,7 +381,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 
 					if (!ctx.body.disableSession) {
-						if (resolver.mode === "complete") {
+						if (resolver.mode === "finalize") {
 							return resolver.valid(ctx, {
 								method: BUILTIN_AMR_METHOD.BACKUP_CODE,
 								factor: "possession",

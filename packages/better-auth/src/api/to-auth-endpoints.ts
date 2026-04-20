@@ -100,7 +100,7 @@ async function runFinalizedSignInOnSuccess(
 	}
 }
 
-async function rollBackFinalizedSignIn(
+async function rollbackFinalizedSignIn(
 	context: InternalContext,
 ): Promise<void> {
 	const finalizedSignIn = context.context.getFinalizedSignIn();
@@ -136,11 +136,11 @@ async function rollBackFinalizedSignIn(
 		expireSessionCookiesInHeaders(responseHeaders, context.context.authCookies);
 	}
 	const ctxWriters = writers(context.context);
-	ctxWriters.setNewSession(null);
+	ctxWriters.setIssuedSession(null);
 	ctxWriters.setFinalizedSignIn(null);
 }
 
-function isSuccessfulAuthFinalization(
+function didSignInSucceed(
 	response: unknown,
 	context: InternalContext,
 ): boolean {
@@ -339,7 +339,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								// Non-APIError throw escapes the handler path before
 								// after-hooks get a chance to run; clean up any session
 								// row `finalizeSignIn` may have already persisted.
-								await rollBackFinalizedSignIn(internalContext);
+								await rollbackFinalizedSignIn(internalContext);
 								throw e;
 							})) as {
 								headers: Headers;
@@ -365,11 +365,11 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								 * cookie then references a dead session and is rejected on next
 								 * use.
 								 */
-								const finalizationWasSuccessful = isSuccessfulAuthFinalization(
+								const signInSucceeded = didSignInSucceed(
 									result.response,
 									internalContext,
 								);
-								if (finalizationWasSuccessful) {
+								if (signInSucceeded) {
 									await commitFinalizedSignIn(internalContext);
 								}
 
@@ -401,9 +401,9 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								const shouldRollback =
 									isAPIError(result.response) &&
 									!isRedirectResponse &&
-									(!finalizationWasSuccessful || afterHooksReplacedResponse);
+									(!signInSucceeded || afterHooksReplacedResponse);
 								if (shouldRollback) {
-									await rollBackFinalizedSignIn(internalContext);
+									await rollbackFinalizedSignIn(internalContext);
 								}
 
 								if (
@@ -421,7 +421,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 									throw result.response;
 								}
 
-								if (!shouldRollback && finalizationWasSuccessful) {
+								if (!shouldRollback && signInSucceeded) {
 									// After-hooks accepted the sign-in and the redirect path
 									// has had its chance to unwind. Fire post-success
 									// side-effects now, when the outcome is confirmed. This
@@ -460,7 +460,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								}
 								return response;
 							} catch (error) {
-								await rollBackFinalizedSignIn(internalContext);
+								await rollbackFinalizedSignIn(internalContext);
 								throw error;
 							}
 						}),

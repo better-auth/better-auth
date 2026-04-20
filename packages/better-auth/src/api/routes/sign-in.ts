@@ -605,7 +605,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 
 			const result = await resolveSignIn(ctx, {
 				user: user.user,
-				dontRememberMe: ctx.body.rememberMe === false,
+				rememberMe: ctx.body.rememberMe,
 				amr: {
 					method: BUILTIN_AMR_METHOD.PASSWORD,
 					factor: "knowledge",

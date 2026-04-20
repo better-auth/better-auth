@@ -442,7 +442,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						const session =
 							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
-							ctx.context.getNewSession();
+							ctx.context.getIssuedSession();
 						if (!session) {
 							return;
 						}

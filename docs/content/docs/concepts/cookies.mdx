@@ -29,7 +29,7 @@ By default, Better Auth uses the following cookies:
 
 * `session_token` to store the session token
 * `session_data` to store the session data if cookie cache is enabled
-* `dont_remember` to store the flag when `rememberMe` is disabled
+* `session_only` to store the flag when `rememberMe` is disabled (session-only, no `max-age`)
 
 Plugins may also use cookies to store data. For example, the Two Factor Authentication plugin uses the `two_factor` cookie to store the two-factor authentication state.
 

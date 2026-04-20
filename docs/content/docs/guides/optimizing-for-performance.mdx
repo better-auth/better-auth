@@ -133,7 +133,7 @@ export const auth = betterAuth({
   hooks: {
     after: createAuthMiddleware(async (ctx) => {
       if (ctx.path === "/sign-up/email") {
-        ctx.context.runInBackground(logSignUp(ctx.context.getNewSession()?.user.id));
+        ctx.context.runInBackground(logSignUp(ctx.context.getIssuedSession()?.user.id));
       }
     }),
   },

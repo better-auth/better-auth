@@ -3,8 +3,8 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { expireCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import {
-	TRUST_DEVICE_COOKIE_MAX_AGE,
-	TRUST_DEVICE_COOKIE_NAME,
+	TRUSTED_DEVICE_COOKIE_MAX_AGE,
+	TRUSTED_DEVICE_COOKIE_NAME,
 } from "./constant";
 
 export type TrustedDeviceRotation = {
@@ -17,10 +17,10 @@ export type TrustedDeviceRotation = {
 export async function resolveTrustedDeviceRotation(
 	ctx: GenericEndpointContext,
 	userId: string,
-	maxAge = TRUST_DEVICE_COOKIE_MAX_AGE,
+	maxAge = TRUSTED_DEVICE_COOKIE_MAX_AGE,
 ): Promise<TrustedDeviceRotation | null> {
 	const trustDeviceCookie = ctx.context.createAuthCookie(
-		TRUST_DEVICE_COOKIE_NAME,
+		TRUSTED_DEVICE_COOKIE_NAME,
 		{
 			maxAge,
 		},
@@ -88,7 +88,7 @@ export async function rotateTrustedDevice(
 		expiresAt: new Date(Date.now() + rotation.maxAge * 1000),
 	});
 	const trustDeviceCookie = ctx.context.createAuthCookie(
-		TRUST_DEVICE_COOKIE_NAME,
+		TRUSTED_DEVICE_COOKIE_NAME,
 		{
 			maxAge: rotation.maxAge,
 		},

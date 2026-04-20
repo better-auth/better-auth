@@ -635,17 +635,17 @@ describe("anonymous", async () => {
 
 	describe("anonymous cleanup safeguards", () => {
 		function createMiddlewareContext({
-			newSessionUser,
+			issuedUser,
 			deleteUser,
 		}: {
-			newSessionUser: Record<string, any>;
+			issuedUser: Record<string, any>;
 			deleteUser: ReturnType<typeof vi.fn>;
 		}) {
 			return {
 				path: "/sign-in/anonymous",
 				context: (() => {
 					const finalized = {
-						user: newSessionUser,
+						user: issuedUser,
 						session: {
 							token: "new-token",
 						},
@@ -653,7 +653,7 @@ describe("anonymous", async () => {
 					return {
 						responseHeaders: new Headers(),
 						getFinalizedSignIn: () => finalized,
-						getNewSession: () => null,
+						getIssuedSession: () => null,
 						internalAdapter: {
 							deleteUser,
 						},
@@ -676,7 +676,7 @@ describe("anonymous", async () => {
 			const handler = plugin.hooks?.after?.[0]?.handler;
 			const deleteUser = vi.fn();
 			const ctx = createMiddlewareContext({
-				newSessionUser: {
+				issuedUser: {
 					id: "anon-user",
 					isAnonymous: true,
 				},
@@ -703,7 +703,7 @@ describe("anonymous", async () => {
 			const handler = plugin.hooks?.after?.[0]?.handler;
 			const deleteUser = vi.fn();
 			const ctx = createMiddlewareContext({
-				newSessionUser: {
+				issuedUser: {
 					id: "linked-user",
 					isAnonymous: false,
 				},

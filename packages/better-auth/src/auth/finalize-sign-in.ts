@@ -21,7 +21,7 @@ export type FinalizeSignInOptions = {
 	 * single canonical source instead of inferring from request paths.
 	 */
 	amr: readonly AuthenticationMethodReference[];
-	dontRememberMe?: boolean;
+	rememberMe?: boolean;
 	attemptId?: string;
 	/**
 	 * Durable side-effects tied to a confirmed successful sign-in (trusted
@@ -53,7 +53,7 @@ export async function finalizeSignIn(
 ): Promise<FinalizedSession> {
 	const session = await ctx.context.internalAdapter.createSession(
 		options.user.id,
-		options.dontRememberMe,
+		options.rememberMe,
 		{ amr: [...options.amr] },
 	);
 	if (!session) {
@@ -69,12 +69,12 @@ export async function finalizeSignIn(
 		user: options.user as User & Record<string, any>,
 	};
 	const ctxWriters = writers(ctx.context);
-	ctxWriters.setNewSession(finalized);
+	ctxWriters.setIssuedSession(finalized);
 	ctxWriters.setFinalizedSignIn({
 		session: finalized.session,
 		user: finalized.user,
 		attemptId: options.attemptId,
-		commit: () => setSessionCookie(ctx, finalized, options.dontRememberMe),
+		commit: () => setSessionCookie(ctx, finalized, options.rememberMe),
 		onSuccess: options.onSuccess,
 		rollback: options.rollback,
 	});

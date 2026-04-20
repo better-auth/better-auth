@@ -208,7 +208,7 @@ test.describe("vanilla-node two factor", async () => {
 		expect(verifyResponse.status).toBe(200);
 
 		let cookies = await page.context().cookies();
-		expect(findAuthCookie(cookies, "better-auth.trust_device")).toBeDefined();
+		expect(findAuthCookie(cookies, "better-auth.trusted_device")).toBeDefined();
 
 		await runClient(page, ({ client }) => client.signOut());
 
@@ -411,7 +411,7 @@ test.describe("vanilla-node two factor", async () => {
 		expect(verifyResponse.status).toBe(200);
 
 		let cookies = await page.context().cookies();
-		expect(findAuthCookie(cookies, "better-auth.trust_device")).toBeDefined();
+		expect(findAuthCookie(cookies, "better-auth.trusted_device")).toBeDefined();
 
 		const disableResponse = await postAuthJSON(
 			page,
@@ -422,7 +422,9 @@ test.describe("vanilla-node two factor", async () => {
 		expect(disableResponse.status).toBe(200);
 
 		cookies = await page.context().cookies();
-		expect(findAuthCookie(cookies, "better-auth.trust_device")).toBeUndefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.trusted_device"),
+		).toBeUndefined();
 
 		await runClient(page, ({ client }) => client.signOut());
 

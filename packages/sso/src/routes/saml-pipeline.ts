@@ -602,7 +602,7 @@ export async function processSAMLResponse(
 		},
 	});
 	await assignOrganizationFromProvider(ctx, providerOrganizationAssignment);
-	const finalizedSession = ctx.context.getNewSession();
+	const finalizedSession = ctx.context.getIssuedSession();
 	if (!finalizedSession) {
 		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 			message: "Failed to create session",

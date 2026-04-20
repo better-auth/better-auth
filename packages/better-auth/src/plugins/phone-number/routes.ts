@@ -178,7 +178,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			const result = await resolveSignIn(ctx, {
 				user,
-				dontRememberMe: ctx.body.rememberMe === false,
+				rememberMe: ctx.body.rememberMe,
 				amr: {
 					method: BUILTIN_AMR_METHOD.PASSWORD,
 					factor: "knowledge",

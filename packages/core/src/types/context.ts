@@ -85,7 +85,12 @@ export type GenericEndpointContext<
 	context: AuthContext<Options>;
 };
 
-export type PendingSignInAttempt = SignInAttempt & {
+/**
+ * A `SignInAttempt` hydrated with the owning user. Used on the request-scoped
+ * `getSignInAttempt()` reader so consumers can act on the paused sign-in
+ * without a second DB lookup.
+ */
+export type SignInAttemptWithUser = SignInAttempt & {
 	user?: User & Record<string, any>;
 };
 
@@ -143,7 +148,7 @@ export type FinalizedSignIn = {
  * 3. Any per-request context needed at resume time goes on the opaque
  *    `SignInAttempt.payload` bag, not in a cookie.
  * 4. A primary factor may request that your challenge be skipped by passing
- *    its discriminant in `resolveSignIn({ skipChallenges: [...] })`.
+ *    its discriminant in `resolveSignIn({ satisfiedChallenges: [...] })`.
  *
  * @example
  * ```ts
@@ -221,7 +226,7 @@ export interface InternalAdapter<
 
 	createSession(
 		userId: string,
-		dontRememberMe?: boolean | undefined,
+		rememberMe?: boolean | undefined,
 		override?: (Partial<Session> & Record<string, any>) | undefined,
 		overrideAll?: boolean | undefined,
 	): Promise<Session>;
@@ -471,21 +476,21 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				user: User & Record<string, any>;
 			} | null;
 			/**
-			 * Any session created during the current request, regardless of origin
+			 * Any session issued during the current request, regardless of origin
 			 * (sign-in, sign-up, anonymous upgrade, device-authorization, etc.).
 			 * Cookie publication happens later during request finalization.
 			 * Consumers that care only about "a session exists" (bearer, jwt, mcp,
 			 * multi-session, one-time-token, oidc-provider) read this.
 			 */
-			getNewSession: () => {
+			getIssuedSession: () => {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
 			/**
 			 * Set when a sign-in flow committed in this request. Narrower than
-			 * `getNewSession`: sign-up, anonymous upgrades, and device-auth do not
-			 * populate it. Consumers that care about "a sign-in completed" (e.g.
-			 * last-login-method, anonymous linking) read this.
+			 * `getIssuedSession`: sign-up, anonymous upgrades, and device-auth do
+			 * not populate it. Consumers that care about "a sign-in completed"
+			 * (e.g. last-login-method, anonymous linking) read this.
 			 */
 			getFinalizedSignIn: () => FinalizedSignIn | null;
 			/**
@@ -493,7 +498,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * exists only so the current request can finalize or replay work for
 			 * the attempt that actually completed.
 			 */
-			getSignInAttempt: () => PendingSignInAttempt | null;
+			getSignInAttempt: () => SignInAttemptWithUser | null;
 			socialProviders: OAuthProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;

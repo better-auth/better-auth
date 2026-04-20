@@ -79,11 +79,11 @@ export const auth = betterAuth({
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
             if(ctx.path.startsWith("/sign-up")){
-                const newSession = ctx.context.getNewSession();
-                if(newSession){
+                const issuedSession = ctx.context.getIssuedSession();
+                if(issuedSession){
                     sendMessage({
                         type: "user-register",
-                        name: newSession.user.name,
+                        name: issuedSession.user.name,
                     })
                 }
             }
@@ -182,7 +182,7 @@ Reader for the newly created session on the request. Populated by any flow that 
 import { createAuthMiddleware } from "better-auth/api";
 
 createAuthMiddleware(async (ctx) => {
-    const newSession = ctx.context.getNewSession();
+    const issuedSession = ctx.context.getIssuedSession();
 });
 ```
 
@@ -259,9 +259,9 @@ export const auth = betterAuth({
   hooks: {
     after: createAuthMiddleware(async (ctx) => {
       if (ctx.path.startsWith("/sign-up")) {
-        const newSession = ctx.context.getNewSession();
-        if (newSession) {
-          ctx.context.runInBackground(sendAnalyticsEvent(newSession.user.id));
+        const issuedSession = ctx.context.getIssuedSession();
+        if (issuedSession) {
+          ctx.context.runInBackground(sendAnalyticsEvent(issuedSession.user.id));
         }
       }
     }),
@@ -281,10 +281,10 @@ export const auth = betterAuth({
   hooks: {
     after: createAuthMiddleware(async (ctx) => {
       if (ctx.path.startsWith("/sign-up")) {
-        const newSession = ctx.context.getNewSession();
-        if (newSession) {
+        const issuedSession = ctx.context.getIssuedSession();
+        if (issuedSession) {
           await ctx.context.runInBackgroundOrAwait(
-            sendWelcomeEmail(newSession.user)
+            sendWelcomeEmail(issuedSession.user)
           );
         }
       }

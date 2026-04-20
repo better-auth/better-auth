@@ -2,7 +2,7 @@ import type { Session, User } from "../db";
 import type {
 	AuthContext,
 	FinalizedSignIn,
-	PendingSignInAttempt,
+	SignInAttemptWithUser,
 } from "../types/context";
 
 /**
@@ -18,14 +18,14 @@ import type {
  * @internal
  */
 export interface AuthContextWriters {
-	setNewSession(
+	setIssuedSession(
 		value: {
 			session: Session & Record<string, any>;
 			user: User & Record<string, any>;
 		} | null,
 	): void;
 	setFinalizedSignIn(value: FinalizedSignIn | null): void;
-	setSignInAttempt(value: PendingSignInAttempt | null): void;
+	setSignInAttempt(value: SignInAttemptWithUser | null): void;
 }
 
 /**

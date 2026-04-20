@@ -7,7 +7,7 @@ import type {
 import { writers } from "@better-auth/core/context/internals";
 import type { User } from "../../types";
 import {
-	TRUST_DEVICE_COOKIE_MAX_AGE,
+	TRUSTED_DEVICE_COOKIE_MAX_AGE,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import type { TrustedDeviceRotation } from "./trust-device";
@@ -28,13 +28,13 @@ export type TwoFactorCheckInput = {
 	 * factor, rather than collapsing to just the last step.
 	 */
 	amr: AuthenticationMethodReference;
-	dontRememberMe?: boolean;
+	rememberMe?: boolean;
 	/**
-	 * Forwarded from `resolveSignIn`. If `"two-factor"` is present the
-	 * challenge is bypassed (primary factor already satisfied it, e.g. passkey
-	 * user-verified).
+	 * Challenge kinds the primary factor has already satisfied. Forwarded from
+	 * `resolveSignIn`. If `"two-factor"` is present the challenge is bypassed
+	 * (e.g. passkey user-verified sign-in already proves possession+inherence).
 	 */
-	skipChallenges?: readonly (keyof BetterAuthSignInChallengeRegistry)[];
+	satisfiedChallenges?: readonly (keyof BetterAuthSignInChallengeRegistry)[];
 };
 
 export type TwoFactorCheckResult =
@@ -107,11 +107,11 @@ export async function checkTwoFactor(
 		return null;
 	}
 
-	if (input.skipChallenges?.includes("two-factor")) {
+	if (input.satisfiedChallenges?.includes("two-factor")) {
 		return null;
 	}
 
-	// Precedence: factor-level `skipChallenges` (above) > `decide` policy >
+	// Precedence: factor-level `satisfiedChallenges` (above) > `decide` policy >
 	// `requireReverificationFor` allowlist > trust-device cookie rotation.
 	const decision = await runEnforcementDecide(ctx, options, input);
 	if (decision === "skip") {
@@ -123,7 +123,7 @@ export async function checkTwoFactor(
 
 	if (!forceChallenge) {
 		const trustDeviceMaxAge =
-			options.trustDevice?.maxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+			options.trustDevice?.maxAge ?? TRUSTED_DEVICE_COOKIE_MAX_AGE;
 		const rotation = await resolveTrustedDeviceRotation(
 			ctx,
 			user.id,
@@ -140,7 +140,7 @@ export async function checkTwoFactor(
 	});
 	const attempt = await ctx.context.internalAdapter.createSignInAttempt({
 		userId: user.id,
-		dontRememberMe: input.dontRememberMe,
+		rememberMe: input.rememberMe,
 		expiresAt: new Date(Date.now() + maxAge * 1000),
 		amr: [input.amr],
 	});
@@ -151,7 +151,7 @@ export async function checkTwoFactor(
 		twoFactorCookie.attributes,
 	);
 	const ctxWriters = writers(ctx.context);
-	ctxWriters.setNewSession(null);
+	ctxWriters.setIssuedSession(null);
 	ctxWriters.setFinalizedSignIn(null);
 	ctxWriters.setSignInAttempt({
 		...attempt,

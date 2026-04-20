@@ -236,12 +236,14 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						/**
-						 * Fall back to `newSession` for flows (e.g. `/sign-up/email`) that
-						 * publish a session via `setSessionCookie` without going through
-						 * `resolveSignIn` and therefore never populate `finalizedSignIn`.
+						 * Fall back to the issued session for flows (e.g. `/sign-up/email`)
+						 * that publish a session via `setSessionCookie` without going
+						 * through `resolveSignIn` and therefore never populate
+						 * `finalizedSignIn`.
 						 */
 						const committed =
-							ctx.context.getFinalizedSignIn() ?? ctx.context.getNewSession();
+							ctx.context.getFinalizedSignIn() ??
+							ctx.context.getIssuedSession();
 						if (!committed) {
 							return;
 						}
@@ -258,12 +260,12 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 
-						const newSessionUser = committed.user as
+						const issuedUser = committed.user as
 							| (UserWithAnonymous & Record<string, any>)
 							| undefined;
-						const isSameUser = newSessionUser?.id === session.user.id;
-						const newSessionIsAnonymous = Boolean(newSessionUser?.isAnonymous);
-						if (isSameUser || newSessionIsAnonymous) {
+						const isSameUser = issuedUser?.id === session.user.id;
+						const issuedUserIsAnonymous = Boolean(issuedUser?.isAnonymous);
+						if (isSameUser || issuedUserIsAnonymous) {
 							return;
 						}
 						const user = {

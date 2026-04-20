@@ -27,14 +27,14 @@ export type ResolveSignInOptions = {
 	 * verification carries the full chain.
 	 */
 	amr: AuthenticationMethodReference;
-	dontRememberMe?: boolean;
+	rememberMe?: boolean;
 	/**
-	 * Names of challenge kinds to skip. A challenge plugin consults this set
-	 * when deciding whether to pause the sign-in. Primary factors that already
-	 * satisfy higher assurance (e.g. passkey UV) pass the challenges they
-	 * subsume (e.g. `["two-factor"]`).
+	 * Challenges the primary factor has already satisfied. Challenge plugins
+	 * consult this set before pausing the sign-in: a primary factor that
+	 * subsumes a challenge (e.g. passkey UV proving possession + inherence)
+	 * passes the corresponding discriminants (e.g. `["two-factor"]`).
 	 */
-	skipChallenges?: readonly (keyof BetterAuthSignInChallengeRegistry)[];
+	satisfiedChallenges?: readonly (keyof BetterAuthSignInChallengeRegistry)[];
 };
 
 /**
@@ -51,8 +51,8 @@ export async function resolveSignIn(
 
 	const twoFactor = await checkTwoFactor(ctx, {
 		user: options.user,
-		dontRememberMe: options.dontRememberMe,
-		skipChallenges: options.skipChallenges,
+		rememberMe: options.rememberMe,
+		satisfiedChallenges: options.satisfiedChallenges,
 		amr: options.amr,
 	});
 
@@ -64,7 +64,7 @@ export async function resolveSignIn(
 		twoFactor?.kind === "trusted-device" ? twoFactor.rotation : null;
 	return finalizeSignIn(ctx, {
 		user: options.user,
-		dontRememberMe: options.dontRememberMe,
+		rememberMe: options.rememberMe,
 		amr: [options.amr],
 		onSuccess: rotation
 			? () => rotateTrustedDevice(ctx, rotation, options.user.id)
@@ -90,7 +90,7 @@ export type ResolveSignInRedirectOptions = {
  * redirect. On a paused challenge it throws `ctx.redirect(...)` with the
  * challenge encoded in the URL query. On a session it resolves to `void` so
  * the caller can `throw ctx.redirect(redirectTarget)` themselves. The session
- * itself is accessible via `ctx.context.getNewSession()` if needed.
+ * itself is accessible via `ctx.context.getIssuedSession()` if needed.
  */
 export async function resolveSignInWithRedirect(
 	ctx: GenericEndpointContext,

@@ -944,7 +944,7 @@ describe("magic link two-factor challenge", async () => {
 		expect(sessions).toHaveLength(0);
 	});
 
-	it("should preserve inherited dont_remember state after two-factor verification", async () => {
+	it("should preserve inherited session_only state after two-factor verification", async () => {
 		let verificationEmail: VerificationEmail = {
 			email: "",
 			token: "",
@@ -999,7 +999,7 @@ describe("magic link two-factor challenge", async () => {
 			where: [{ field: "id", value: existingUser.id }],
 		});
 
-		const dontRememberResponse = await auth.api.signInEmail({
+		const sessionOnlyResponse = await auth.api.signInEmail({
 			body: {
 				email: testUser.email,
 				password: testUser.password,
@@ -1007,13 +1007,13 @@ describe("magic link two-factor challenge", async () => {
 			},
 			asResponse: true,
 		});
-		const dontRememberCookies = parseSetCookieHeader(
-			dontRememberResponse.headers.get("set-cookie") || "",
+		const sessionOnlyCookies = parseSetCookieHeader(
+			sessionOnlyResponse.headers.get("set-cookie") || "",
 		);
-		const dontRememberCookie = dontRememberCookies.get(
-			"better-auth.dont_remember",
+		const sessionOnlyCookie = sessionOnlyCookies.get(
+			"better-auth.session_only",
 		)?.value;
-		expect(dontRememberCookie).toBeDefined();
+		expect(sessionOnlyCookie).toBeDefined();
 
 		await client.signIn.magicLink({
 			email: existingUser.email,
@@ -1022,7 +1022,7 @@ describe("magic link two-factor challenge", async () => {
 		const challengeHeaders = new Headers();
 		challengeHeaders.set(
 			"cookie",
-			`better-auth.dont_remember=${dontRememberCookie}`,
+			`better-auth.session_only=${sessionOnlyCookie}`,
 		);
 
 		const verifyURL = new URL(verificationEmail.url);
@@ -1039,7 +1039,7 @@ describe("magic link two-factor challenge", async () => {
 		expect(challengeCookie).toBeTruthy();
 		challengeHeaders.set(
 			"cookie",
-			`better-auth.dont_remember=${dontRememberCookie}; better-auth.two_factor=${challengeCookie}`,
+			`better-auth.session_only=${sessionOnlyCookie}; better-auth.two_factor=${challengeCookie}`,
 		);
 
 		await auth.api.sendTwoFactorOTP({
@@ -1062,6 +1062,6 @@ describe("magic link two-factor challenge", async () => {
 		expect(
 			cookies.get("better-auth.session_token")?.["max-age"],
 		).not.toBeDefined();
-		expect(cookies.get("better-auth.dont_remember")?.value).toBeDefined();
+		expect(cookies.get("better-auth.session_only")?.value).toBeDefined();
 	});
 });

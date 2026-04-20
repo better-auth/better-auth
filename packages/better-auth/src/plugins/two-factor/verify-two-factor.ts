@@ -14,8 +14,8 @@ import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
 import { getTwoFactorAttemptId } from "./check";
 import {
-	TRUST_DEVICE_COOKIE_MAX_AGE,
-	TRUST_DEVICE_COOKIE_NAME,
+	TRUSTED_DEVICE_COOKIE_MAX_AGE,
+	TRUSTED_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
@@ -33,8 +33,8 @@ export type TwoFactorVerifyResponse = {
  * `valid` requires the second-factor `AuthenticationMethodReference` so the
  * factor is appended to `session.amr` on commit.
  */
-export type CompleteResolver = {
-	mode: "complete";
+export type FinalizeResolver = {
+	mode: "finalize";
 	valid: (
 		ctx: GenericEndpointContext,
 		factor: AuthenticationMethodReference,
@@ -50,15 +50,15 @@ export type CompleteResolver = {
  * `valid` takes no factor: there is no sign-in to finalize and no AMR chain
  * to extend.
  */
-export type ManagementResolver = {
-	mode: "management";
+export type SessionResolver = {
+	mode: "session";
 	valid: (ctx: GenericEndpointContext) => Promise<TwoFactorVerifyResponse>;
 	invalid: (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => never;
 	session: { session: Session; user: User };
 	key: string;
 };
 
-export type TwoFactorResolver = CompleteResolver | ManagementResolver;
+export type TwoFactorResolver = FinalizeResolver | SessionResolver;
 
 function getMaxVerificationAttempts(ctx: GenericEndpointContext): number {
 	const plugin = ctx.context.getPlugin("two-factor");
@@ -70,22 +70,22 @@ function getMaxVerificationAttempts(ctx: GenericEndpointContext): number {
 }
 
 /**
- * Write the trust-device verification record and signed cookie, and expire
- * the dontRememberToken so the next sign-in from this browser bypasses 2FA
- * for the configured window. Shared between the complete (finalize paused
- * sign-in) and management (step-up / enrollment) resolvers so `trustDevice`
- * behaves identically regardless of entry point.
+ * Write the trusted-device verification record and signed cookie, and expire
+ * the sessionOnlyToken so the next sign-in from this browser bypasses 2FA
+ * for the configured window. Shared between the finalize (paused sign-in) and
+ * session (step-up / enrollment) resolvers so `trustDevice` behaves identically
+ * regardless of entry point.
  */
-async function writeTrustDeviceCookie(
+async function writeTrustedDeviceCookie(
 	ctx: GenericEndpointContext,
 	userId: string,
 ): Promise<void> {
 	const plugin = ctx.context.getPlugin("two-factor");
 	const trustDeviceMaxAge = (plugin?.options as TwoFactorOptions | undefined)
 		?.trustDevice?.maxAge;
-	const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+	const maxAge = trustDeviceMaxAge ?? TRUSTED_DEVICE_COOKIE_MAX_AGE;
 	const trustDeviceCookie = ctx.context.createAuthCookie(
-		TRUST_DEVICE_COOKIE_NAME,
+		TRUSTED_DEVICE_COOKIE_NAME,
 		{ maxAge },
 	);
 	const trustIdentifier = `trust-device-${generateRandomString(32)}`;
@@ -104,7 +104,7 @@ async function writeTrustDeviceCookie(
 		ctx.context.secret,
 		trustDeviceCookie.attributes,
 	);
-	expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+	expireCookie(ctx, ctx.context.authCookies.sessionOnlyToken);
 }
 
 export async function verifyTwoFactor(
@@ -185,14 +185,14 @@ export async function verifyTwoFactor(
 		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 	};
 
-	const buildResolver = (
+	const buildFinalizeResolver = (
 		attempt: SignInAttempt,
 		user: UserWithTwoFactor,
 		clearCookieOnFailure: boolean,
-	): CompleteResolver => {
+	): FinalizeResolver => {
 		const attemptId = attempt.id;
 		return {
-			mode: "complete",
+			mode: "finalize",
 			valid: async (
 				ctx: GenericEndpointContext,
 				factor: AuthenticationMethodReference,
@@ -208,7 +208,7 @@ export async function verifyTwoFactor(
 				});
 				const finalizedSession = await finalizeSignIn(ctx, {
 					user,
-					dontRememberMe: consumed.dontRememberMe ?? undefined,
+					rememberMe: consumed.rememberMe ?? undefined,
 					amr: [...(consumed.amr ?? []), factor],
 					attemptId,
 					rollback: async () => {
@@ -228,7 +228,7 @@ export async function verifyTwoFactor(
 						// only after confirmed success preserves the retry path on
 						// transient after-hook failures.
 						if (ctx.body.trustDevice) {
-							await writeTrustDeviceCookie(ctx, user.id);
+							await writeTrustedDeviceCookie(ctx, user.id);
 						}
 						expireCookie(ctx, twoFactorCookie);
 					},
@@ -248,7 +248,7 @@ export async function verifyTwoFactor(
 		};
 	};
 
-	const resolveAttempt = async (
+	const prepareFinalizeResolver = async (
 		attemptId: string,
 		clearCookieOnFailure: boolean,
 	) => {
@@ -262,11 +262,11 @@ export async function verifyTwoFactor(
 				TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 			);
 		}
-		return buildResolver(attempt, user, clearCookieOnFailure);
+		return buildFinalizeResolver(attempt, user, clearCookieOnFailure);
 	};
 
 	if (requestedAttemptId) {
-		return resolveAttempt(requestedAttemptId, false);
+		return prepareFinalizeResolver(requestedAttemptId, false);
 	}
 
 	/**
@@ -286,10 +286,10 @@ export async function verifyTwoFactor(
 			throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 		};
 		return {
-			mode: "management",
+			mode: "session",
 			valid: async (ctx: GenericEndpointContext) => {
 				if (ctx.body?.trustDevice) {
-					await writeTrustDeviceCookie(ctx, session.user.id);
+					await writeTrustedDeviceCookie(ctx, session.user.id);
 				}
 				return ctx.json({
 					token: session.session.token,
@@ -304,7 +304,7 @@ export async function verifyTwoFactor(
 
 	const signedTwoFactorCookie = await getTwoFactorAttemptId(ctx);
 	if (signedTwoFactorCookie) {
-		return resolveAttempt(signedTwoFactorCookie, true);
+		return prepareFinalizeResolver(signedTwoFactorCookie, true);
 	}
 
 	throw APIError.from(

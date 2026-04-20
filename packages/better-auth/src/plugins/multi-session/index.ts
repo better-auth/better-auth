@@ -315,11 +315,11 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				{
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
-						const newSession = ctx.context.getNewSession();
-						if (!newSession) return;
+						const issuedSession = ctx.context.getIssuedSession();
+						if (!issuedSession) return;
 
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
-						const sessionToken = newSession.session.token;
+						const sessionToken = issuedSession.session.token;
 						const cookieName = `${sessionCookieConfig.name}_multi-${sessionToken.toLowerCase()}`;
 
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
@@ -335,7 +335,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							if (!token) continue;
 							const session =
 								await ctx.context.internalAdapter.findSession(token);
-							if (session?.user.id === newSession.user.id) {
+							if (session?.user.id === issuedSession.user.id) {
 								tokensToDelete.push(token);
 								ctx.setCookie(key, "", {
 									...sessionCookieConfig.attributes,

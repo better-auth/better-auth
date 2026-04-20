@@ -356,7 +356,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const user = session.user as UserWithTwoFactor;
 			if (isCodeValid) {
 				if (!user.twoFactorEnabled) {
-					if (resolver.mode !== "management") {
+					if (resolver.mode !== "session") {
 						throw APIError.from(
 							"BAD_REQUEST",
 							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
@@ -383,7 +383,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						user: parseUserOutput(ctx.context.options, updatedUser),
 					});
 				}
-				if (resolver.mode === "complete") {
+				if (resolver.mode === "finalize") {
 					return resolver.valid(ctx, {
 						method: BUILTIN_AMR_METHOD.OTP,
 						factor: "possession",

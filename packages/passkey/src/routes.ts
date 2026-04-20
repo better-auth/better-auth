@@ -837,7 +837,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 						factor: "possession",
 						completedAt: new Date(),
 					},
-					skipChallenges: verification.authenticationInfo.userVerified
+					satisfiedChallenges: verification.authenticationInfo.userVerified
 						? ["two-factor"]
 						: undefined,
 				});

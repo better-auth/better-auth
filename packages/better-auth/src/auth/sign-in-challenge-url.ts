@@ -24,7 +24,7 @@ function kindSpecificParams(
  * body and send it back as `body.attemptId`.
  */
 export function appendSignInChallengeToURL(
-	target: string,
+	redirectTarget: string,
 	challenge: SignInChallenge,
 ): string {
 	const params: Array<[string, string]> = [
@@ -32,17 +32,18 @@ export function appendSignInChallengeToURL(
 		...kindSpecificParams(challenge),
 	];
 
-	if (ABSOLUTE_URL_PATTERN.test(target)) {
-		const url = new URL(target);
+	if (ABSOLUTE_URL_PATTERN.test(redirectTarget)) {
+		const url = new URL(redirectTarget);
 		for (const [key, value] of params) {
 			url.searchParams.set(key, value);
 		}
 		return url.toString();
 	}
 
-	const hashIndex = target.indexOf("#");
-	const beforeHash = hashIndex === -1 ? target : target.slice(0, hashIndex);
-	const hash = hashIndex === -1 ? "" : target.slice(hashIndex);
+	const hashIndex = redirectTarget.indexOf("#");
+	const beforeHash =
+		hashIndex === -1 ? redirectTarget : redirectTarget.slice(0, hashIndex);
+	const hash = hashIndex === -1 ? "" : redirectTarget.slice(hashIndex);
 	const separator = beforeHash.includes("?") ? "&" : "?";
 	const encoded = params
 		.map(

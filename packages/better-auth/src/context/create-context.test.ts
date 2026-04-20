@@ -1194,11 +1194,11 @@ describe("base context creation", () => {
 	});
 
 	describe("context methods", () => {
-		it("publishes new sessions via the internal writer surface", async () => {
+		it("publishes issued sessions via the internal writer surface", async () => {
 			const ctx = await initBase({});
 			const mockSession = { id: "test-session", userId: "user-1" } as any;
-			writers(ctx).setNewSession(mockSession);
-			expect(ctx.getNewSession()).toBe(mockSession);
+			writers(ctx).setIssuedSession(mockSession);
+			expect(ctx.getIssuedSession()).toBe(mockSession);
 		});
 
 		it("should have runMigrations method that throws", async () => {
@@ -1818,7 +1818,7 @@ describe("base context creation", () => {
 			const ctx = await initBase({});
 
 			expect(ctx.session).toBe(null);
-			expect(ctx.getNewSession()).toBe(null);
+			expect(ctx.getIssuedSession()).toBe(null);
 		});
 
 		it("should handle basePath with special characters", async () => {
