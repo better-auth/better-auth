@@ -4777,5 +4777,62 @@ describe("api-key", async () => {
 			});
 			expect(deleteManySpy).toHaveBeenCalledTimes(1);
 		});
+
+		it("should not run list cleanup across mixed configs without a configId when one config disables autoCleanup", async () => {
+			setCleanupCheckTime(new Date("2030-01-01T00:01:00.000Z"));
+
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey([
+						{
+							configId: "default",
+							keyExpiration: {
+								autoCleanup: true,
+							},
+						},
+						{
+							configId: "manual-cleanup",
+							keyExpiration: {
+								autoCleanup: false,
+							},
+						},
+					]),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+			const ctx = await auth.$context;
+			const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+			await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					configId: "default",
+				},
+			});
+			await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					configId: "manual-cleanup",
+				},
+			});
+
+			deleteManySpy.mockClear();
+
+			advanceCleanupCheckTime();
+			await auth.api.listApiKeys({
+				headers,
+			});
+			expect(deleteManySpy).not.toHaveBeenCalled();
+
+			advanceCleanupCheckTime();
+			await auth.api.listApiKeys({
+				query: {
+					configId: "default",
+				},
+				headers,
+			});
+			expect(deleteManySpy).toHaveBeenCalledTimes(1);
+		});
 	});
 });

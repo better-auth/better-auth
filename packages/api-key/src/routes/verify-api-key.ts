@@ -307,9 +307,7 @@ export function verifyApiKey({
 							);
 						},
 					);
-					if (opts.deferUpdates) {
-						ctx.context.runInBackground(cleanupTask);
-					}
+					ctx.context.runInBackground(cleanupTask);
 				}
 			} catch (error) {
 				ctx.context.logger.error("Failed to validate API key:", error);
