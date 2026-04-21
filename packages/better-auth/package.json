@@ -515,7 +515,8 @@
     "type-fest": "^5.4.4",
     "typescript": "catalog:",
     "vitest": "^4.0.18",
-    "vue": "^3.5.29"
+    "vue": "^3.5.29",
+    "@better-auth/organization": "workspace:*"
   },
   "peerDependencies": {
     "@lynx-js/react": "*",

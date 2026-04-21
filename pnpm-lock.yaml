@@ -929,6 +929,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@lynx-js/react':
         specifier: ^0.116.3
         version: 0.116.3(@types/react@19.2.14)
