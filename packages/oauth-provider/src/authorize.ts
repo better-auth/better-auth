@@ -137,7 +137,7 @@ export function getIssuer(
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
-function getErrorURL(
+export function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: string,
 	description: string,
@@ -146,6 +146,59 @@ function getErrorURL(
 		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
 	const formattedURL = formatErrorURL(baseURL, error, description);
 	return formattedURL;
+}
+
+/**
+ * Finds the matching entry in a client's registered redirect_uris for a
+ * requested redirect_uri. Honors RFC 8252 §7.3 loopback port variance for
+ * 127.0.0.1 and [::1], matching on scheme+host+path+query and ignoring
+ * port. DNS names like "localhost" are excluded per §8.3.
+ */
+export function findRegisteredRedirectUri(
+	registered: readonly string[] | undefined,
+	requested: string | undefined,
+): string | undefined {
+	if (!registered || !requested) return undefined;
+	return registered.find((url) => {
+		if (url === requested) return true;
+		try {
+			const reg = new URL(url);
+			const req = new URL(requested);
+			return (
+				(reg.hostname === "127.0.0.1" || reg.hostname === "[::1]") &&
+				reg.hostname === req.hostname &&
+				reg.pathname === req.pathname &&
+				reg.protocol === req.protocol &&
+				reg.search === req.search
+			);
+		} catch {
+			return false;
+		}
+	});
+}
+
+/**
+ * Loads the client, verifies it's enabled, and returns the requested
+ * redirect_uri when it matches a registered entry. Returns null whenever the
+ * RP cannot be safely reached, so callers can fall back to the server error
+ * page (avoiding open-redirect risk on validation failures).
+ */
+export async function resolveTrustedRedirectUri(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	clientId: string | undefined,
+	redirectUri: string | undefined,
+): Promise<string | null> {
+	if (!clientId || !redirectUri) return null;
+	let client: Awaited<ReturnType<typeof getClient>> | undefined;
+	try {
+		client = await getClient(ctx, opts, clientId);
+	} catch {
+		return null;
+	}
+	if (!client || client.disabled) return null;
+	const matched = findRegisteredRedirectUri(client.redirectUris, redirectUri);
+	return matched ? redirectUri : null;
 }
 
 export async function authorizeEndpoint(
@@ -260,24 +313,10 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectUri = client.redirectUris?.find((url) => {
-		if (url === query.redirect_uri) return true;
-		try {
-			const registered = new URL(url);
-			const requested = new URL(query.redirect_uri);
-			// RFC 8252 §7.3: loopback IPs match on scheme+host+path+query, ignoring port
-			if (
-				(registered.hostname === "127.0.0.1" ||
-					registered.hostname === "[::1]") &&
-				registered.hostname === requested.hostname &&
-				registered.pathname === requested.pathname &&
-				registered.protocol === requested.protocol &&
-				registered.search === requested.search
-			)
-				return true;
-		} catch {}
-		return false;
-	});
+	const redirectUri = findRegisteredRedirectUri(
+		client.redirectUris,
+		query.redirect_uri,
+	);
 	if (!redirectUri || !query.redirect_uri) {
 		return handleRedirect(
 			ctx,
