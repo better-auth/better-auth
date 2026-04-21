@@ -615,12 +615,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return organizations;
 		},
-		createTeam: async (data: Omit<TeamInput, "id">) => {
+		createTeam: async (data: TeamInput) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<
-				Omit<TeamInput, "id">,
-				InferTeam<O, false>
-			>({
+			const team = await adapter.create<TeamInput, InferTeam<O, false>>({
 				model: "team",
 				data,
 				forceAllowId: true,
@@ -955,7 +952,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				"sec",
 			);
 			const invite = await adapter.create<
-				Omit<InvitationInput, "id">,
+				InvitationInput,
 				InferInvitation<O, false>
 			>({
 				model: "invitation",
