@@ -214,6 +214,19 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9195
+	 */
+	it("should accept disableRefresh as a query string without validation error", async () => {
+		const { headers } = await signInWithTestUser();
+		const session = await client.getSession({
+			query: { disableRefresh: true },
+			fetchOptions: { headers },
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.error).toBeNull();
+	});
+
 	it("should not comma-join Set-Cookie headers", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.getSession({
