@@ -13,7 +13,7 @@ import {
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { getDate } from "../utils";
+import { getDate, isValidCidr } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
 
@@ -99,6 +99,14 @@ const updateApiKeyBodySchema = z.object({
 		.record(z.string(), z.array(z.string()))
 		.meta({
 			description: "Update the permissions on the API Key. server-only.",
+		})
+		.optional()
+		.nullable(),
+	ipAllowlist: z
+		.array(z.string())
+		.meta({
+			description:
+				"Update the IP allowlist on the API Key. Pass `null` to clear. server-only.",
 		})
 		.optional()
 		.nullable(),
@@ -273,6 +281,7 @@ export function updateApiKey({
 				rateLimitEnabled,
 				rateLimitTimeWindow,
 				rateLimitMax,
+				ipAllowlist,
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
@@ -300,7 +309,8 @@ export function updateApiKey({
 					rateLimitTimeWindow !== undefined ||
 					rateLimitEnabled !== undefined ||
 					remaining !== undefined ||
-					permissions !== undefined
+					permissions !== undefined ||
+					ipAllowlist !== undefined
 				) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
 				}
@@ -427,6 +437,27 @@ export function updateApiKey({
 				newValues.permissions = JSON.stringify(permissions);
 			}
 
+			if (ipAllowlist !== undefined) {
+				if (ipAllowlist === null) {
+					//@ts-expect-error - clearing the stored string.
+					newValues.ipAllowlist = null;
+				} else {
+					if (ipAllowlist.length === 0) {
+						throw APIError.from("BAD_REQUEST", ERROR_CODES.EMPTY_IP_ALLOWLIST);
+					}
+					for (const entry of ipAllowlist) {
+						if (!isValidCidr(entry)) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								ERROR_CODES.INVALID_IP_ALLOWLIST_ENTRY,
+							);
+						}
+					}
+					//@ts-expect-error - we intentionally save ipAllowlist as string on DB.
+					newValues.ipAllowlist = JSON.stringify(ipAllowlist);
+				}
+			}
+
 			if (Object.keys(newValues).length === 0) {
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.NO_VALUES_TO_UPDATE);
 			}
@@ -494,6 +525,12 @@ export function updateApiKey({
 							[key: string]: string[];
 						}>(returningApiKey.permissions)
 					: null,
+				ipAllowlist:
+					typeof returningApiKey.ipAllowlist === "string"
+						? safeJSONParse<string[]>(
+								returningApiKey.ipAllowlist as unknown as string,
+							)
+						: (returningApiKey.ipAllowlist ?? null),
 			});
 		},
 	);

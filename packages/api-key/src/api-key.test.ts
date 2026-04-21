@@ -4640,4 +4640,162 @@ describe("api-key", async () => {
 			expect(updatedKey.referenceId).toBe(org.id);
 		});
 	});
+
+	// =========================================================================
+	// IP ALLOWLIST
+	// =========================================================================
+
+	describe("ipAllowlist", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [apiKey({ enableSessionForAPIKeys: true })],
+			},
+			{ clientOptions: { plugins: [apiKeyClient()] } },
+		);
+		const { headers, user } = await signInWithTestUser();
+
+		it("creates a key with an ipAllowlist and returns it parsed", async () => {
+			const created = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					ipAllowlist: ["127.0.0.1", "10.0.0.0/8", "2001:db8::/32"],
+				},
+			});
+			expect(created.ipAllowlist).toEqual([
+				"127.0.0.1",
+				"10.0.0.0/8",
+				"2001:db8::/32",
+			]);
+		});
+
+		it("rejects creation with an invalid CIDR entry", async () => {
+			let err: APIError | null = null;
+			try {
+				await auth.api.createApiKey({
+					body: { userId: user.id, ipAllowlist: ["not-an-ip"] },
+				});
+			} catch (e) {
+				if (isAPIError(e)) err = e;
+			}
+			expect(err).not.toBeNull();
+			expect(err?.body?.code).toEqual("INVALID_IP_ALLOWLIST_ENTRY");
+		});
+
+		it("rejects creation with an empty ipAllowlist array", async () => {
+			let err: APIError | null = null;
+			try {
+				await auth.api.createApiKey({
+					body: { userId: user.id, ipAllowlist: [] },
+				});
+			} catch (e) {
+				if (isAPIError(e)) err = e;
+			}
+			expect(err).not.toBeNull();
+			expect(err?.body?.code).toEqual("EMPTY_IP_ALLOWLIST");
+		});
+
+		it("verifies successfully when clientIp matches", async () => {
+			const { key } = await auth.api.createApiKey({
+				body: { userId: user.id, ipAllowlist: ["192.168.1.0/24"] },
+			});
+			const result = await auth.api.verifyApiKey({
+				body: { key, clientIp: "192.168.1.42" },
+			});
+			expect(result.valid).toBe(true);
+			expect(result.key?.ipAllowlist).toEqual(["192.168.1.0/24"]);
+		});
+
+		it("rejects verification when clientIp is not in the allowlist and does not mutate counters", async () => {
+			const created = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+					ipAllowlist: ["192.168.1.0/24"],
+					remaining: 5,
+				},
+			});
+			const key = created.key;
+			const keyId = created.id;
+
+			const result = await auth.api.verifyApiKey({
+				body: { key, clientIp: "10.0.0.1" },
+			});
+			expect(result.valid).toBe(false);
+			expect(result.error?.code).toEqual("IP_NOT_ALLOWED");
+
+			const after = await auth.api.getApiKey({
+				query: { id: keyId },
+				headers,
+			});
+			expect(after.remaining).toEqual(5);
+			expect(after.requestCount).toEqual(0);
+			expect(after.lastRequest).toBeNull();
+		});
+
+		it("matches an exact IPv6 address", async () => {
+			const { key } = await auth.api.createApiKey({
+				body: { userId: user.id, ipAllowlist: ["2001:db8::1"] },
+			});
+			const ok = await auth.api.verifyApiKey({
+				body: { key, clientIp: "2001:db8::1" },
+			});
+			expect(ok.valid).toBe(true);
+
+			const bad = await auth.api.verifyApiKey({
+				body: { key, clientIp: "2001:db8::2" },
+			});
+			expect(bad.valid).toBe(false);
+			expect(bad.error?.code).toEqual("IP_NOT_ALLOWED");
+		});
+
+		it("matches a v4 CIDR against a v4-mapped IPv6 client IP", async () => {
+			const { key } = await auth.api.createApiKey({
+				body: { userId: user.id, ipAllowlist: ["10.0.0.0/8"] },
+			});
+			const result = await auth.api.verifyApiKey({
+				body: { key, clientIp: "::ffff:10.1.2.3" },
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it("can be cleared by updating to null", async () => {
+			const created = await auth.api.createApiKey({
+				body: { userId: user.id, ipAllowlist: ["192.168.1.0/24"] },
+			});
+			const updated = await auth.api.updateApiKey({
+				body: { keyId: created.id, userId: user.id, ipAllowlist: null },
+			});
+			expect(updated.ipAllowlist).toBeNull();
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key, clientIp: "10.0.0.1" },
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it("enforces allowlist on the enableSessionForAPIKeys session hook path", async () => {
+			const { key } = await auth.api.createApiKey({
+				body: { userId: user.id, ipAllowlist: ["203.0.113.1"] },
+			});
+
+			const reqHeaders = new Headers();
+			reqHeaders.set("x-api-key", key);
+			reqHeaders.set("x-forwarded-for", "198.51.100.9");
+			let err: APIError | null = null;
+			let session: Awaited<ReturnType<typeof auth.api.getSession>> | null =
+				null;
+			try {
+				session = await auth.api.getSession({ headers: reqHeaders });
+			} catch (e) {
+				if (isAPIError(e)) err = e;
+			}
+			// The session hook surfaces the allowlist rejection — either as a
+			// thrown `IP_NOT_ALLOWED` error, or (depending on framework wrapping)
+			// by declining to mock a session. Either is acceptable; what must
+			// NOT happen is a successful session.
+			expect(session).toBeNull();
+			if (err) {
+				expect(err.body?.code).toEqual("IP_NOT_ALLOWED");
+			}
+		});
+	});
 });

@@ -156,6 +156,12 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key/ref
        * @serverOnly
        */
       permissions?: Record<string, string[]>
+      /**
+       * Restrict the Api Key to requests originating from these IPs or CIDR ranges.
+       * Supports IPv4 and IPv6. server-only.
+       * @serverOnly
+       */
+      ipAllowlist?: string[]
   }
   ```
 </APIMethod>
@@ -190,6 +196,12 @@ Otherwise if it throws, it will throw an `APIError`.
        * The permissions to verify. Optional.
        */
       permissions?: Record<string, string[]>
+      /**
+       * Explicit client IP to check against the key's `ipAllowlist`.
+       * Pass this when verifying behind a gateway so the allowlist matches
+       * the upstream caller, not the gateway itself. Optional.
+       */
+      clientIp?: string
   }
   ```
 </APIMethod>
@@ -203,6 +215,43 @@ type Result = {
   key: Omit<ApiKey, "key"> | null;
 };
 ```
+
+#### IP allowlist
+
+If the key was created with a non-empty `ipAllowlist`, verification will fail
+with `IP_NOT_ALLOWED` when the caller's IP does not match any entry. A
+rejected request does not consume `remaining`, `requestCount`, or update
+`lastRequest` — denied IPs cannot burn quota.
+
+The caller's IP is resolved in this order:
+
+1. The `clientIp` field on the request body, if provided.
+2. The first valid IP found in the headers listed by
+   `advanced.ipAddress.ipAddressHeaders` (defaults to `x-forwarded-for`).
+
+<Callout type="warn">
+  `x-forwarded-for` is trusted based on your Better Auth `advanced.ipAddress` config.
+  If your deployment sits behind an additional proxy or gateway that terminates
+  the API-key request, the IP Better Auth sees will be the gateway's — always
+  pass `clientIp` explicitly in that case, or the allowlist will be
+  effectively bypassed.
+</Callout>
+
+Entries accept single IPs or CIDR ranges, for both IPv4 and IPv6:
+
+```ts
+ipAllowlist: [
+  "203.0.113.42",     // single IPv4
+  "198.51.100.0/24",  // IPv4 CIDR
+  "2001:db8::1",      // single IPv6
+  "2001:db8::/32",    // IPv6 CIDR
+]
+```
+
+Cloud functions (Lambda, Cloud Run, Fly) have ephemeral egress IPs — customers
+calling from those environments must route through a NAT gateway with a
+stable address, or the allowlist will rotate them out. To remove the
+restriction, update the key with `ipAllowlist: null`.
 
 ***
 
@@ -306,6 +355,12 @@ type Result = Omit<ApiKey, "key">;
        * @serverOnly
        */
       permissions?: Record<string, string[]>
+      /**
+       * Update the IP allowlist on the API Key. Pass `null` to clear.
+       * server-only.
+       * @serverOnly
+       */
+      ipAllowlist?: string[] | null
   }
   ```
 </APIMethod>

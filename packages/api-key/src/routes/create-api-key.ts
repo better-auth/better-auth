@@ -11,7 +11,7 @@ import { setApiKey } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { getDate } from "../utils";
+import { getDate, isValidCidr } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
 
@@ -93,6 +93,14 @@ const createApiKeyBodySchema = z.object({
 			description: "Permissions of the Api Key.",
 		})
 		.optional(),
+	ipAllowlist: z
+		.array(z.string())
+		.meta({
+			description:
+				"Restrict the Api Key to requests originating from these IPs or CIDR ranges. Supports IPv4 and IPv6.",
+		})
+		.optional()
+		.nullable(),
 	userId: z.coerce
 		.string()
 		.meta({
@@ -284,6 +292,7 @@ export function createApiKey({
 				rateLimitMax,
 				rateLimitTimeWindow,
 				rateLimitEnabled,
+				ipAllowlist,
 			} = ctx.body;
 
 			const opts = resolveConfiguration(ctx.context, configurations, configId);
@@ -301,6 +310,7 @@ export function createApiKey({
 					rateLimitTimeWindow !== undefined ||
 					rateLimitEnabled !== undefined ||
 					permissions !== undefined ||
+					ipAllowlist !== undefined ||
 					remaining !== null
 				);
 			})();
@@ -419,6 +429,20 @@ export function createApiKey({
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.NAME_REQUIRED);
 			}
 
+			if (ipAllowlist !== undefined && ipAllowlist !== null) {
+				if (ipAllowlist.length === 0) {
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.EMPTY_IP_ALLOWLIST);
+				}
+				for (const entry of ipAllowlist) {
+					if (!isValidCidr(entry)) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ERROR_CODES.INVALID_IP_ALLOWLIST_ENTRY,
+						);
+					}
+				}
+			}
+
 			deleteAllExpiredApiKeys(ctx.context);
 
 			const key = await keyGenerator({
@@ -446,6 +470,11 @@ export function createApiKey({
 				? JSON.stringify(permissions)
 				: defaultPermissions
 					? JSON.stringify(defaultPermissions)
+					: undefined;
+
+			const ipAllowlistToApply =
+				ipAllowlist && ipAllowlist.length > 0
+					? JSON.stringify(ipAllowlist)
 					: undefined;
 
 			const resolvedConfigId = opts.configId ?? "default";
@@ -482,6 +511,8 @@ export function createApiKey({
 				requestCount: 0,
 				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
+				//@ts-expect-error - we intentionally save ipAllowlist as string on DB.
+				ipAllowlist: ipAllowlistToApply,
 			};
 
 			if (metadata) {
@@ -521,6 +552,12 @@ export function createApiKey({
 				permissions: apiKey.permissions
 					? safeJSONParse(apiKey.permissions)
 					: null,
+				ipAllowlist:
+					typeof (apiKey as ApiKey).ipAllowlist === "string"
+						? safeJSONParse<string[]>(
+								(apiKey as ApiKey).ipAllowlist as unknown as string,
+							)
+						: ((apiKey as ApiKey).ipAllowlist ?? null),
 			});
 		},
 	);

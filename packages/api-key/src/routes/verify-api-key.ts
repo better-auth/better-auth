@@ -15,7 +15,7 @@ import {
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { isAPIError } from "../utils";
+import { getClientIpExact, isAPIError, matchesAnyCidr } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
 
@@ -25,12 +25,21 @@ export async function validateApiKey({
 	opts,
 	schema,
 	permissions,
+	clientIp,
 }: {
 	hashedKey: string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
+	/**
+	 * Explicit client IP to check against the key's `ipAllowlist`. When not
+	 * provided, falls back to deriving the IP from `ctx.request` using the
+	 * configured `advanced.ipAddress.ipAddressHeaders`. Pass this when
+	 * verification is being performed on behalf of a downstream caller
+	 * (e.g. behind a gateway) so the allowlist matches the real origin.
+	 */
+	clientIp?: string | undefined;
 }) {
 	const apiKey = await getApiKey(ctx, hashedKey, opts);
 
@@ -91,6 +100,23 @@ export async function validateApiKey({
 		const result = r.authorize(permissions);
 		if (!result.success) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
+		}
+	}
+
+	// IP allowlist check. Runs before any quota/rate-limit mutation so a
+	// rejected request never burns `remaining`, `requestCount`, or bumps
+	// `lastRequest`. Fails closed when the key has a non-empty allowlist but
+	// the client IP cannot be resolved.
+	const rawIpAllowlist =
+		typeof apiKey.ipAllowlist === "string"
+			? safeJSONParse<string[]>(apiKey.ipAllowlist)
+			: (apiKey.ipAllowlist ?? null);
+	if (rawIpAllowlist && rawIpAllowlist.length > 0) {
+		const resolvedIp =
+			clientIp ??
+			(ctx.request ? getClientIpExact(ctx.request, ctx.context.options) : null);
+		if (!resolvedIp || !matchesAnyCidr(resolvedIp, rawIpAllowlist)) {
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.IP_NOT_ALLOWED);
 		}
 	}
 
@@ -235,6 +261,13 @@ const verifyApiKeyBodySchema = z.object({
 			description: "The permissions to verify.",
 		})
 		.optional(),
+	clientIp: z
+		.string()
+		.meta({
+			description:
+				"Explicit client IP to check against the key's IP allowlist. Use this when verifying behind a gateway so the allowlist matches the upstream caller, not the gateway itself.",
+		})
+		.optional(),
 });
 
 export function verifyApiKey({
@@ -288,6 +321,7 @@ export function verifyApiKey({
 				apiKey = await validateApiKey({
 					hashedKey: hashed,
 					permissions: ctx.body.permissions,
+					clientIp: ctx.body.clientIp,
 					ctx,
 					opts: lookupOpts,
 					schema,
@@ -358,6 +392,13 @@ export function verifyApiKey({
 					}>(returningApiKey.permissions)
 				: null;
 
+			const returningIpAllowlist =
+				typeof (returningApiKey as ApiKey).ipAllowlist === "string"
+					? safeJSONParse<string[]>(
+							(returningApiKey as ApiKey).ipAllowlist as unknown as string,
+						)
+					: ((returningApiKey as ApiKey).ipAllowlist ?? null);
+
 			return ctx.json({
 				valid: true,
 				error: null,
@@ -366,6 +407,7 @@ export function verifyApiKey({
 						? null
 						: ({
 								...returningApiKey,
+								ipAllowlist: returningIpAllowlist,
 								metadata: migratedMetadata,
 							} as Omit<ApiKey, "key">),
 			});
