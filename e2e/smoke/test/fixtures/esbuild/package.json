@@ -2,6 +2,7 @@
   "name": "@better-auth-test/fixtures-esbuild",
   "private": true,
   "dependencies": {
+    "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*"
   },
   "devDependencies": {

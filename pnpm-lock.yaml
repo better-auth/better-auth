@@ -715,6 +715,9 @@ importers:
 
   e2e/smoke/test/fixtures/esbuild:
     dependencies:
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../../../../packages/sso
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
