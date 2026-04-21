@@ -1,5 +1,4 @@
 import { electron } from "@better-auth/electron";
-import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
@@ -26,7 +25,8 @@ import {
 } from "better-auth/plugins";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
-import { Stripe } from "stripe";
+import Stripe from "stripe";
+import { sendDemoEmail } from "./demo-email";
 
 const dialect = (() => {
 	if (process.env.USE_MYSQL) {
@@ -35,7 +35,9 @@ const dialect = (() => {
 				"Using MySQL dialect without MYSQL_DATABASE_URL. Please set it in your environment variables.",
 			);
 		}
-		return new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""));
+		return new MysqlDialect({
+			pool: createPool(process.env.MYSQL_DATABASE_URL),
+		});
 	} else {
 		if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
 			return new LibsqlDialect({
@@ -47,6 +49,10 @@ const dialect = (() => {
 	return null;
 })();
 
+const databaseType: "mysql" | "sqlite" = process.env.USE_MYSQL
+	? "mysql"
+	: "sqlite";
+
 if (!dialect) {
 	throw new Error("No dialect found");
 }
@@ -55,11 +61,20 @@ const authOptions = {
 	appName: "Better Auth Demo",
 	database: {
 		dialect,
-		type: "sqlite",
+		type: databaseType,
 	},
 	emailVerification: {
-		async sendVerificationEmail({ user, url }) {
-			await sendEmail({
+		async sendVerificationEmail({
+			user,
+			url,
+		}: {
+			user: {
+				email: string;
+				name: string;
+			};
+			url: string;
+		}) {
+			await sendDemoEmail({
 				to: user.email,
 				subject: "Verify your email address",
 				template: "verify-email",
@@ -92,8 +107,17 @@ const authOptions = {
 	},
 	emailAndPassword: {
 		enabled: true,
-		async sendResetPassword({ user, url }) {
-			await sendEmail({
+		async sendResetPassword({
+			user,
+			url,
+		}: {
+			user: {
+				email: string;
+				name: string;
+			};
+			url: string;
+		}) {
+			await sendDemoEmail({
 				to: user.email,
 				subject: "Reset your password",
 				template: "reset-password",
@@ -146,7 +170,7 @@ const authOptions = {
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				sendEmail({
+				await sendDemoEmail({
 					to: data.email,
 					subject: "You've been invited to join an organization",
 					template: "invitation",
@@ -166,7 +190,7 @@ const authOptions = {
 		twoFactor({
 			otpOptions: {
 				async sendOTP({ user, otp }) {
-					await sendEmail({
+					await sendDemoEmail({
 						to: user.email,
 						subject: "Your two-factor authentication code",
 						template: "two-factor",
@@ -190,7 +214,10 @@ const authOptions = {
 				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
 		}),
 		nextCookies(),
-		oneTap(),
+		...(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID &&
+		process.env.GOOGLE_CLIENT_SECRET
+			? [oneTap()]
+			: []),
 		stripe({
 			stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
@@ -445,9 +472,9 @@ const authOptions = {
 		"com.better-auth.demo:/",
 		"https://appleid.apple.com",
 	],
-} satisfies BetterAuthOptions;
+};
 
-export const auth = betterAuth({
+const authConfig = {
 	...authOptions,
 	plugins: [
 		...(authOptions.plugins ?? []),
@@ -461,13 +488,13 @@ export const auth = betterAuth({
 					session,
 				};
 			},
-			authOptions,
+			authOptions as unknown as BetterAuthOptions,
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
-		dash(),
-		sentinel(),
 	],
-});
+};
+
+export const auth = betterAuth(authConfig as unknown as BetterAuthOptions);
 
 export type Session = typeof auth.$Infer.Session;
 export type ActiveOrganization = typeof auth.$Infer.ActiveOrganization;

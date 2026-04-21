@@ -20,6 +20,9 @@ export default function Page() {
 	const params = useSearchParams();
 
 	useEffect(() => {
+		if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+			return;
+		}
 		authClient.oneTap({
 			fetchOptions: {
 				query: params,
@@ -32,7 +35,7 @@ export default function Page() {
 				},
 			},
 		});
-	}, []);
+	}, [params, router]);
 
 	useEffect(() => {
 		if (params.get("client_id") === "electron") {

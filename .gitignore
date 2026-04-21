@@ -206,6 +206,7 @@ android/
 
 playwright-report/
 test-results/
+.playwright-mcp/
 
 state.txt
 

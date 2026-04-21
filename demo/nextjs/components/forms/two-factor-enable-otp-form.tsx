@@ -5,11 +5,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
-import QRCode from "react-qr-code";
 import { toast } from "sonner";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import CopyButton from "@/components/ui/copy-button";
 import {
 	Field,
 	FieldError,
@@ -24,24 +22,29 @@ import { TwoFactorRecoveryCodes } from "./two-factor-recovery-codes";
 
 const passwordSchema = z.object({
 	password: z.string(),
+	label: z.string().optional(),
 });
 
 const otpSchema = z.object({
-	otp: z.string().min(6, "OTP must be at least 6 characters."),
+	code: z
+		.string()
+		.length(6, "OTP code must be 6 digits.")
+		.regex(/^\d+$/, "OTP code must be digits only."),
 });
 
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 type OtpFormValues = z.infer<typeof otpSchema>;
 
-interface TwoFactorEnableFormProps {
+interface TwoFactorEnableOtpFormProps {
 	onSuccess?: () => void;
 }
 
-export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
+export function TwoFactorEnableOtpForm({
+	onSuccess,
+}: TwoFactorEnableOtpFormProps) {
 	const queryClient = useQueryClient();
 	const [loading, startTransition] = useTransition();
-	const [totpURI, setTotpURI] = useState<string>("");
-	const [methodId, setMethodId] = useState<string>("");
+	const [methodId, setMethodId] = useState("");
 	const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
 	const [isVerified, setIsVerified] = useState(false);
 
@@ -49,28 +52,32 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 		resolver: zodResolver(passwordSchema),
 		defaultValues: {
 			password: "",
+			label: "Email OTP",
 		},
 	});
 
 	const otpForm = useForm<OtpFormValues>({
 		resolver: zodResolver(otpSchema),
 		defaultValues: {
-			otp: "",
+			code: "",
 		},
 	});
 
 	const onPasswordSubmit = (data: PasswordFormValues) => {
 		startTransition(async () => {
-			await authClient.twoFactor.enableTotp({
+			await authClient.twoFactor.enableOtp({
 				password: data.password || undefined,
+				label: data.label || undefined,
 				fetchOptions: {
 					async onSuccess(ctx) {
-						setTotpURI(ctx.data.totpURI);
 						setMethodId(ctx.data.method.id);
 						setRecoveryCodes(ctx.data.recoveryCodes);
 						await queryClient.invalidateQueries({
 							queryKey: userKeys.twoFactorMethods(),
 						});
+						toast.success(
+							"Email OTP sent. Check the server logs for local testing.",
+						);
 					},
 					onError(context) {
 						toast.error(context.error.message);
@@ -84,14 +91,14 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 		startTransition(async () => {
 			await authClient.twoFactor.verify({
 				methodId,
-				code: data.otp,
+				code: data.code,
 				fetchOptions: {
 					async onSuccess() {
 						await queryClient.invalidateQueries({
 							queryKey: userKeys.twoFactorMethods(),
 						});
 						setIsVerified(true);
-						toast.success("TOTP enabled successfully");
+						toast.success("Email OTP enabled successfully");
 					},
 					onError(context) {
 						toast.error(context.error.message);
@@ -102,58 +109,49 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 		});
 	};
 
-	if (totpURI) {
-		if (isVerified) {
-			return (
-				<TwoFactorRecoveryCodes codes={recoveryCodes} onDone={onSuccess} />
-			);
-		}
+	if (isVerified) {
+		return <TwoFactorRecoveryCodes codes={recoveryCodes} onDone={onSuccess} />;
+	}
 
+	if (methodId) {
 		return (
-			<div className="flex flex-col gap-4">
-				<div className="flex items-center justify-center">
-					<QRCode value={totpURI} />
-				</div>
-				<div className="flex gap-2 items-center justify-center">
-					<p className="text-sm text-muted-foreground">Copy URI to clipboard</p>
-					<CopyButton textToCopy={totpURI} />
-				</div>
-				<form
-					onSubmit={otpForm.handleSubmit(onOtpSubmit)}
-					className="flex flex-col gap-4"
-				>
-					<FieldGroup>
-						<Controller
-							name="otp"
-							control={otpForm.control}
-							render={({ field, fieldState }) => (
-								<Field data-invalid={fieldState.invalid}>
-									<FieldLabel htmlFor="enable-otp">
-										Scan the QR code with your TOTP app and enter the code
-									</FieldLabel>
-									<Input
-										{...field}
-										id="enable-otp"
-										placeholder="Enter OTP code"
-										aria-invalid={fieldState.invalid}
-										autoComplete="one-time-code"
-									/>
-									{fieldState.invalid && (
-										<FieldError errors={[fieldState.error]} />
-									)}
-								</Field>
-							)}
-						/>
-					</FieldGroup>
-					<Button type="submit" disabled={loading}>
-						{loading ? (
-							<Loader2 size={16} className="animate-spin" />
-						) : (
-							"Verify & Enable"
+			<form
+				onSubmit={otpForm.handleSubmit(onOtpSubmit)}
+				className="flex flex-col gap-4"
+			>
+				<FieldGroup>
+					<Controller
+						name="code"
+						control={otpForm.control}
+						render={({ field, fieldState }) => (
+							<Field data-invalid={fieldState.invalid}>
+								<FieldLabel htmlFor="enable-email-otp-code">
+									Enter the email OTP code
+								</FieldLabel>
+								<Input
+									{...field}
+									id="enable-email-otp-code"
+									inputMode="numeric"
+									maxLength={6}
+									placeholder="Enter 6-digit code"
+									aria-invalid={fieldState.invalid}
+									autoComplete="one-time-code"
+								/>
+								{fieldState.invalid && (
+									<FieldError errors={[fieldState.error]} />
+								)}
+							</Field>
 						)}
-					</Button>
-				</form>
-			</div>
+					/>
+				</FieldGroup>
+				<Button type="submit" disabled={loading}>
+					{loading ? (
+						<Loader2 size={16} className="animate-spin" />
+					) : (
+						"Verify & Enable"
+					)}
+				</Button>
+			</form>
 		);
 	}
 
@@ -164,14 +162,32 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 		>
 			<FieldGroup>
 				<Controller
+					name="label"
+					control={passwordForm.control}
+					render={({ field, fieldState }) => (
+						<Field data-invalid={fieldState.invalid}>
+							<FieldLabel htmlFor="enable-email-otp-label">Label</FieldLabel>
+							<Input
+								{...field}
+								id="enable-email-otp-label"
+								placeholder="Email OTP"
+								aria-invalid={fieldState.invalid}
+							/>
+							{fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+						</Field>
+					)}
+				/>
+				<Controller
 					name="password"
 					control={passwordForm.control}
 					render={({ field, fieldState }) => (
 						<Field data-invalid={fieldState.invalid}>
-							<FieldLabel htmlFor="enable-password">Password</FieldLabel>
+							<FieldLabel htmlFor="enable-email-otp-password">
+								Password
+							</FieldLabel>
 							<PasswordInput
 								{...field}
-								id="enable-password"
+								id="enable-email-otp-password"
 								placeholder="Enter your password if your account has one"
 								aria-invalid={fieldState.invalid}
 								autoComplete="current-password"
@@ -182,7 +198,7 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 				/>
 			</FieldGroup>
 			<Button type="submit" disabled={loading}>
-				{loading ? <Loader2 size={16} className="animate-spin" /> : "Continue"}
+				{loading ? <Loader2 size={16} className="animate-spin" /> : "Send Code"}
 			</Button>
 		</form>
 	);

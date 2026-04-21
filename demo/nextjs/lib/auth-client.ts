@@ -1,4 +1,3 @@
-import { dashClient } from "@better-auth/dash/client";
 import { electronProxyClient } from "@better-auth/electron/proxy";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { passkeyClient } from "@better-auth/passkey/client";
@@ -19,22 +18,32 @@ import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
 	plugins: [
-		dashClient(),
 		organizationClient(),
 		twoFactorClient({
-			onTwoFactorRedirect() {
-				window.location.href = "/two-factor";
+			onTwoFactorRedirect({ methods }) {
+				const hasTotp = methods.some((method) => method.kind === "totp");
+				const hasOtp = methods.some((method) => method.kind === "otp");
+				const destination = hasTotp
+					? "/two-factor"
+					: hasOtp
+						? "/two-factor/otp"
+						: "/two-factor/recovery-code";
+				window.location.href = destination;
 			},
 		}),
 		passkeyClient(),
 		adminClient(),
 		multiSessionClient(),
-		oneTapClient({
-			clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
-			promptOptions: {
-				maxAttempts: 1,
-			},
-		}),
+		...(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+			? [
+					oneTapClient({
+						clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+						promptOptions: {
+							maxAttempts: 1,
+						},
+					}),
+				]
+			: []),
 		oauthProviderClient(),
 		stripeClient({
 			subscription: true,

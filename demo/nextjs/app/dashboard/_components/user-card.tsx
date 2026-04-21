@@ -21,6 +21,7 @@ import { UAParser } from "ua-parser-js";
 import { ChangePasswordForm } from "@/components/forms/change-password-form";
 import { TwoFactorDisableForm } from "@/components/forms/two-factor-disable-form";
 import { TwoFactorEnableForm } from "@/components/forms/two-factor-enable-form";
+import { TwoFactorEnableOtpForm } from "@/components/forms/two-factor-enable-otp-form";
 import { TwoFactorQrForm } from "@/components/forms/two-factor-qr-form";
 import { UpdateUserForm } from "@/components/forms/update-user-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -69,15 +70,28 @@ const UserCard = (props: {
 	const { data } = useSessionQuery();
 	const twoFactorMethodsQuery = useTwoFactorMethodsQuery();
 	const session = data || props.session;
-	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
+	const [disableTwoFactorDialog, setDisableTwoFactorDialog] =
+		useState<boolean>(false);
+	const [enableTotpDialog, setEnableTotpDialog] = useState<boolean>(false);
+	const [enableOtpDialog, setEnableOtpDialog] = useState<boolean>(false);
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
 	const [activeSessions, setActiveSessions] = useState(props.activeSessions);
+	const twoFactorMethods = twoFactorMethodsQuery.data?.methods ?? [];
 	const hasVerifiedTwoFactor = twoFactorMethodsQuery.data?.enabled ?? false;
+	const hasTotpMethod = twoFactorMethods.some(
+		(method) => method.kind === "totp",
+	);
+	const hasOtpMethod = twoFactorMethods.some((method) => method.kind === "otp");
+	const hasVerifiedTotpMethod = twoFactorMethods.some(
+		(method) => method.kind === "totp" && Boolean(method.verifiedAt),
+	);
+	const hasVerifiedOtpMethod = twoFactorMethods.some(
+		(method) => method.kind === "otp" && Boolean(method.verifiedAt),
+	);
 	const totpMethodId =
-		twoFactorMethodsQuery.data?.methods.find((method) => method.kind === "totp")
-			?.id ?? null;
+		twoFactorMethods.find((method) => method.kind === "totp")?.id ?? null;
 	const removeActiveSession = (id: string) =>
 		setActiveSessions(activeSessions.filter((session) => session.id !== id));
 
@@ -232,44 +246,85 @@ const UserCard = (props: {
 									</DialogContent>
 								</Dialog>
 							)}
-							<Dialog open={twoFactorDialog} onOpenChange={setTwoFactorDialog}>
-								<DialogTrigger asChild>
-									<Button
-										variant={hasVerifiedTwoFactor ? "destructive" : "outline"}
-										className="gap-2"
-									>
-										{hasVerifiedTwoFactor ? (
-											<ShieldOff size={16} />
-										) : (
+							{!hasVerifiedTotpMethod ? (
+								<Dialog
+									open={enableTotpDialog}
+									onOpenChange={setEnableTotpDialog}
+								>
+									<DialogTrigger asChild>
+										<Button variant="outline" className="gap-2">
 											<ShieldCheck size={16} />
-										)}
-										<span className="md:text-sm text-xs">
-											{hasVerifiedTwoFactor ? "Disable 2FA" : "Enable 2FA"}
-										</span>
-									</Button>
-								</DialogTrigger>
-								<DialogContent className="sm:max-w-[425px] w-11/12">
-									<DialogHeader>
-										<DialogTitle>
-											{hasVerifiedTwoFactor ? "Disable 2FA" : "Enable 2FA"}
-										</DialogTitle>
-										<DialogDescription>
-											{hasVerifiedTwoFactor
-												? "Disable the second factor authentication from your account"
-												: "Enable 2FA to secure your account"}
-										</DialogDescription>
-									</DialogHeader>
-									{hasVerifiedTwoFactor ? (
-										<TwoFactorDisableForm
-											onSuccess={() => setTwoFactorDialog(false)}
-										/>
-									) : (
+											<span className="md:text-sm text-xs">
+												{hasTotpMethod ? "Continue TOTP Setup" : "Enable TOTP"}
+											</span>
+										</Button>
+									</DialogTrigger>
+									<DialogContent className="sm:max-w-[425px] w-11/12">
+										<DialogHeader>
+											<DialogTitle>Enable TOTP</DialogTitle>
+											<DialogDescription>
+												Add an authenticator app as a two-factor method
+											</DialogDescription>
+										</DialogHeader>
 										<TwoFactorEnableForm
-											onSuccess={() => setTwoFactorDialog(false)}
+											onSuccess={() => setEnableTotpDialog(false)}
 										/>
-									)}
-								</DialogContent>
-							</Dialog>
+									</DialogContent>
+								</Dialog>
+							) : null}
+							{!hasVerifiedOtpMethod ? (
+								<Dialog
+									open={enableOtpDialog}
+									onOpenChange={setEnableOtpDialog}
+								>
+									<DialogTrigger asChild>
+										<Button variant="outline" className="gap-2">
+											<ShieldCheck size={16} />
+											<span className="md:text-sm text-xs">
+												{hasOtpMethod
+													? "Continue Email OTP Setup"
+													: "Enable Email OTP"}
+											</span>
+										</Button>
+									</DialogTrigger>
+									<DialogContent className="sm:max-w-[425px] w-11/12">
+										<DialogHeader>
+											<DialogTitle>Enable Email OTP</DialogTitle>
+											<DialogDescription>
+												Add email one-time passwords as a two-factor method
+											</DialogDescription>
+										</DialogHeader>
+										<TwoFactorEnableOtpForm
+											onSuccess={() => setEnableOtpDialog(false)}
+										/>
+									</DialogContent>
+								</Dialog>
+							) : null}
+							{hasVerifiedTwoFactor ? (
+								<Dialog
+									open={disableTwoFactorDialog}
+									onOpenChange={setDisableTwoFactorDialog}
+								>
+									<DialogTrigger asChild>
+										<Button variant="destructive" className="gap-2">
+											<ShieldOff size={16} />
+											<span className="md:text-sm text-xs">Disable 2FA</span>
+										</Button>
+									</DialogTrigger>
+									<DialogContent className="sm:max-w-[425px] w-11/12">
+										<DialogHeader>
+											<DialogTitle>Disable 2FA</DialogTitle>
+											<DialogDescription>
+												Disable the second factor authentication from your
+												account
+											</DialogDescription>
+										</DialogHeader>
+										<TwoFactorDisableForm
+											onSuccess={() => setDisableTwoFactorDialog(false)}
+										/>
+									</DialogContent>
+								</Dialog>
+							) : null}
 						</div>
 					</div>
 				</div>

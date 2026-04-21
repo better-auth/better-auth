@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { TwoFactorMethodLinks } from "@/components/forms/two-factor-method-links";
-import { TwoFactorTotpForm } from "@/components/forms/two-factor-totp-form";
+import { TwoFactorRecoveryCodeForm } from "@/components/forms/two-factor-recovery-code-form";
 import {
 	Card,
 	CardContent,
@@ -19,16 +19,18 @@ export default function Page() {
 		<main className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
 			<Card className="w-[350px]">
 				<CardHeader>
-					<CardTitle>TOTP Verification</CardTitle>
+					<CardTitle>Recovery Code Verification</CardTitle>
 					<CardDescription>
-						Enter your 6-digit TOTP code to authenticate
+						Use one of your saved recovery codes to complete sign-in
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<TwoFactorTotpForm onSuccess={() => router.push("/dashboard")} />
+					<TwoFactorRecoveryCodeForm
+						onSuccess={() => router.push("/dashboard")}
+					/>
 				</CardContent>
 				<CardFooter className="text-sm text-muted-foreground gap-2">
-					<TwoFactorMethodLinks current="totp" />
+					<TwoFactorMethodLinks current="recovery-code" />
 				</CardFooter>
 			</Card>
 		</main>
