@@ -5,6 +5,7 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
+import type { OAuthErrorCode } from "./oauth-endpoint";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -22,21 +23,11 @@ import {
 } from "./utils";
 
 /**
- * OIDC Error Codes
- * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthError
- */
-type OIDCAuthError =
-	| "login_required"
-	| "consent_required"
-	| "interaction_required"
-	| "account_selection_required";
-
-/**
  * Formats an error url
  */
 export function formatErrorURL(
 	url: string,
-	error: string,
+	error: OAuthErrorCode,
 	description: string,
 	state?: string,
 	iss?: string,
@@ -67,7 +58,7 @@ function redirectWithPromptNoneError(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	query: OAuthAuthorizationQuery,
-	error: OIDCAuthError,
+	error: OAuthErrorCode,
 	description: string,
 ) {
 	return handleRedirect(
@@ -139,7 +130,7 @@ export function getIssuer(
  */
 export function getErrorURL(
 	ctx: GenericEndpointContext,
-	error: string,
+	error: OAuthErrorCode,
 	description: string,
 ) {
 	const baseURL =
@@ -164,6 +155,8 @@ export function findRegisteredRedirectUri(
 		try {
 			const reg = new URL(url);
 			const req = new URL(requested);
+			// TODO: swap to @better-auth/core/utils/host#isLoopbackIP once the
+			// main→next sync lands to cover the full 127.0.0.0/8 range (RFC 8252 §7.3).
 			return (
 				(reg.hostname === "127.0.0.1" || reg.hostname === "[::1]") &&
 				reg.hostname === req.hostname &&

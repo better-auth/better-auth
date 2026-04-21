@@ -41,7 +41,20 @@ import type * as z from "zod";
  *   already-parsed query params).
  */
 
+/**
+ * Canonical OAuth 2.0 / OpenID Connect error codes. The union is the single
+ * vocabulary for every error-emitting surface in this plugin: token, authorize,
+ * revoke, introspect, register, userinfo, logout, consent, and the redirect
+ * error channel. Entries are grouped by source RFC so the declaration doubles
+ * as a specification map.
+ *
+ * The trailing `(string & {})` keeps the type open for product-specific codes
+ * (e.g. `"invalid_verification"`, `"invalid_user"`) while preserving editor
+ * autocomplete for the listed standard codes. Prefer a standard code whenever
+ * one applies; fall back to a custom string only for states no RFC covers.
+ */
 export type OAuthErrorCode =
+	// RFC 6749 §4.1.2.1, §5.2 core authorization + token errors
 	| "invalid_request"
 	| "invalid_client"
 	| "invalid_grant"
@@ -49,11 +62,31 @@ export type OAuthErrorCode =
 	| "unsupported_grant_type"
 	| "unsupported_response_type"
 	| "invalid_scope"
-	| "invalid_redirect_uri"
-	| "invalid_client_metadata"
 	| "access_denied"
 	| "server_error"
 	| "temporarily_unavailable"
+	// RFC 6750 §3.1 bearer token / RFC 7662 introspection
+	| "invalid_token"
+	// RFC 7009 §2.2.1 token revocation
+	| "unsupported_token_type"
+	// RFC 7591 §3.2.2 dynamic client registration
+	| "invalid_redirect_uri"
+	| "invalid_client_metadata"
+	| "invalid_software_statement"
+	| "unapproved_software_statement"
+	// RFC 8707 §2 resource indicators
+	| "invalid_target"
+	// RFC 9101 §6 JWT-secured authorization requests (JAR)
+	| "invalid_request_object"
+	// OIDC Core 1.0 §3.1.2.6 authorization error response
+	| "login_required"
+	| "consent_required"
+	| "interaction_required"
+	| "account_selection_required"
+	| "invalid_request_uri"
+	| "request_not_supported"
+	| "request_uri_not_supported"
+	| "registration_not_supported"
 	| (string & {});
 
 export interface OAuthFieldErrorMap {
@@ -91,7 +124,7 @@ export type OAuthRedirectOnError<Ctx = any> = (
 
 type ValidationErrorHookArgs = {
 	message: string;
-	issues: readonly z.core.$ZodIssue[];
+	issues: readonly z.ZodIssue[];
 };
 
 type ValidationErrorHook = (args: ValidationErrorHookArgs) => unknown;
@@ -148,6 +181,11 @@ export function createOAuthEndpoint<
 	if (errorDelivery === "redirect" && !redirectOnError) {
 		throw new Error(
 			`createOAuthEndpoint(${path}): errorDelivery "redirect" requires redirectOnError`,
+		);
+	}
+	if (errorDelivery !== "redirect" && redirectOnError) {
+		throw new Error(
+			`createOAuthEndpoint(${path}): redirectOnError requires errorDelivery "redirect"`,
 		);
 	}
 
@@ -229,7 +267,7 @@ export function createOAuthEndpoint<
 }
 
 export function mapIssuesToOAuthError(
-	issues: readonly z.core.$ZodIssue[],
+	issues: readonly z.ZodIssue[],
 	fieldErrors?: Record<string, OAuthFieldError>,
 	defaultError: OAuthErrorCode = "invalid_request",
 ): OAuthEndpointErrorResult {
@@ -252,7 +290,7 @@ export function mapIssuesToOAuthError(
 }
 
 function resolveErrorCode(
-	issue: z.core.$ZodIssue,
+	issue: z.ZodIssue,
 	mapping: OAuthFieldError | undefined,
 	defaultError: OAuthErrorCode,
 ): OAuthErrorCode {
@@ -273,15 +311,19 @@ function resolveErrorCode(
  * code combined with a message suffix of "received undefined". The suffix is
  * pinned by a regression test so a zod rephrase fails the test instead of
  * silently reclassifying missing fields.
+ *
+ * Assumes the default zod error map. Consumers that install a localized map
+ * via `z.setErrorMap()` will break this check, collapsing missing-field
+ * failures to `defaultError`.
  */
-export function isMissingValueIssue(issue: z.core.$ZodIssue): boolean {
+export function isMissingValueIssue(issue: z.ZodIssue): boolean {
 	return (
 		issue.code === "invalid_type" &&
 		issue.message.endsWith("received undefined")
 	);
 }
 
-function firstPathSegment(issue: z.core.$ZodIssue): string | undefined {
+function firstPathSegment(issue: z.ZodIssue): string | undefined {
 	const segment = issue.path?.[0];
 	if (segment === undefined) return undefined;
 	if (typeof segment === "string") return segment;
@@ -293,7 +335,7 @@ function firstPathSegment(issue: z.core.$ZodIssue): string | undefined {
 	return String(segment);
 }
 
-function describeIssue(issue: z.core.$ZodIssue): string {
+function describeIssue(issue: z.ZodIssue): string {
 	const field = fieldPath(issue);
 	if (!field) return issue.message;
 
@@ -318,7 +360,7 @@ function describeIssue(issue: z.core.$ZodIssue): string {
 	return `${field}: ${issue.message}`;
 }
 
-function fieldPath(issue: z.core.$ZodIssue): string {
+function fieldPath(issue: z.ZodIssue): string {
 	if (!issue.path?.length) return "";
 	return issue.path
 		.map((segment) => {

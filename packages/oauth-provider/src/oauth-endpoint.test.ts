@@ -183,4 +183,18 @@ describe("createOAuthEndpoint factory guards", () => {
 			),
 		).toThrow(/requires redirectOnError/);
 	});
+
+	it("throws when redirectOnError is set without errorDelivery 'redirect'", () => {
+		expect(() =>
+			createOAuthEndpoint(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: z.object({ grant_type: z.string() }),
+					redirectOnError: async () => ({}),
+				},
+				async () => ({}),
+			),
+		).toThrow(/requires errorDelivery "redirect"/);
+	});
 });
