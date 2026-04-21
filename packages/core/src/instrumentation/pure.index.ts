@@ -1,73 +1,26 @@
-import type { Span, Tracer } from "@opentelemetry/api";
+import type { OpenTelemetryAPI } from "./noop";
+import { noopOpenTelemetryAPI } from "./noop";
 
 /**
  * Noop variant of `./instrumentation` for runtimes where the dynamic
- * `import("@opentelemetry/api")` in `./api` can't be relied on.
+ * `import("@opentelemetry/api")` in `./api` can't resolve via the normal
+ * ECMAScript dynamic-import semantics.
  *
- * Browsers and edge bundlers (`browser`, `edge` package.json conditions)
- * don't typically run a global `TracerProvider`, and some isolate runtimes
- * reject bare specifiers at resolve time and throw synchronously from the
- * `import()` expression itself rather than rejecting the returned promise.
- * In those cases the `.catch()` in `getOpenTelemetryAPI` never runs and
- * every call through `withSpan` surfaces an uncaught error.
+ * Convex's V8 isolate rejects bare specifiers at resolve time and throws
+ * synchronously from the `import()` expression itself rather than rejecting
+ * the returned promise (see `get-convex/convex-backend`
+ * `crates/isolate/src/request_scope.rs` `dynamic_import_callback`, which
+ * returns `None` on resolver error; V8 treats that as a pending exception).
+ * The `.catch()` in `getOpenTelemetryAPI` never runs and every `withSpan`
+ * call surfaces an uncaught error.
  *
- * This module mirrors the public shape of `./index` without touching
- * `@opentelemetry/api` at all. Wired through `package.json` conditional
- * exports on the `./instrumentation` subpath, matching the existing
- * `./async_hooks` pattern.
+ * This module is wired through `package.json` conditional exports on the
+ * `./instrumentation` subpath, matching the existing `./async_hooks` pattern.
+ * The noop primitives live in `./noop` and are shared with `./api` so the
+ * two entries can't drift.
  */
 
 export * from "./attributes";
-
-type OpenTelemetryAPI = Pick<
-	typeof import("@opentelemetry/api"),
-	"trace" | "SpanStatusCode"
->;
-
-function createNoopSpan(): Span {
-	const span = {
-		end(): void {},
-		setAttribute(_key: string, _value: unknown): void {},
-		setStatus(_status: unknown): void {},
-		recordException(_exception: unknown): void {},
-		updateName(_name: string) {
-			return span;
-		},
-	} as unknown as Span;
-	return span;
-}
-
-function createNoopTracer(noopSpan: Span): Tracer {
-	function startActiveSpan<F extends (span: Span) => unknown>(
-		_name: string,
-		_options: { attributes?: Record<string, string | number | boolean> },
-		fn: F,
-	): ReturnType<F> {
-		return fn(noopSpan) as ReturnType<F>;
-	}
-	return { startActiveSpan } as Tracer;
-}
-
-function createNoopTraceAPI() {
-	const noopTracer = createNoopTracer(createNoopSpan());
-	return {
-		getTracer(_name?: string, _version?: string) {
-			return noopTracer;
-		},
-		getActiveSpan(): Span | undefined {
-			return undefined;
-		},
-	};
-}
-
-const noopOpenTelemetryAPI: OpenTelemetryAPI = {
-	SpanStatusCode: {
-		UNSET: 0,
-		OK: 1,
-		ERROR: 2,
-	},
-	trace: createNoopTraceAPI(),
-} as OpenTelemetryAPI;
 
 export function getOpenTelemetryAPI(): OpenTelemetryAPI {
 	return noopOpenTelemetryAPI;
