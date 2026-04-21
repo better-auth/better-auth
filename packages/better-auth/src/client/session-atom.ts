@@ -39,10 +39,7 @@ export function getSessionAtom(
 	options?: BetterAuthClientOptions | undefined,
 ) {
 	const $signal = atom<boolean>(false);
-	const session: SessionAtom = useAuthQuery<{
-		user: User;
-		session: Session;
-	}>($signal, "/get-session", $fetch, {
+	const session = useAuthQuery<SessionData>($signal, "/get-session", $fetch, {
 		method: "GET",
 	});
 
