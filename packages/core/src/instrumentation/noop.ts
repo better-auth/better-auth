@@ -59,7 +59,7 @@ function createNoopTraceAPI() {
 	};
 }
 
-export function createNoopOpenTelemetryAPI(): OpenTelemetryAPI {
+function createNoopOpenTelemetryAPI(): OpenTelemetryAPI {
 	return {
 		SpanStatusCode: {
 			UNSET: 0,
