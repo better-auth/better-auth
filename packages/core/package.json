@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.6.5",
+  "version": "1.7.0-beta.1",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -178,9 +178,6 @@
   },
   "peerDependenciesMeta": {
     "@cloudflare/workers-types": {
-      "optional": true
-    },
-    "@opentelemetry/api": {
       "optional": true
     }
   }
