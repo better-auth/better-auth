@@ -86,7 +86,7 @@ export function stripVersionPrefix(
 ): string {
 	if (!version.slug) return pathname;
 	const prefix = `/docs/${version.slug}`;
-	if (pathname === prefix) return "/docs";
+	if (pathname === prefix || pathname === `${prefix}/`) return "/docs";
 	if (pathname.startsWith(`${prefix}/`)) {
 		return `/docs${pathname.slice(prefix.length)}`;
 	}
@@ -98,7 +98,7 @@ export function stripVersionPrefix(
  *
  * - Non-`/docs` links (anchors, external, /blog, etc.) pass through untouched.
  * - On latest (`slug === null`), this is a no-op.
- * - Links that already target a known version (e.g. `/docs/v1.5/...`) are
+ * - Links that already target one of the currently-registered versions are
  *   preserved so authors can link across versions explicitly when needed.
  */
 export function scopeDocsHref(

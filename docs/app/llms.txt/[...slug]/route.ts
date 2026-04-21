@@ -6,18 +6,9 @@ import {
 	resolveVersionFromSlug,
 } from "../../../lib/docs-versions";
 import { getLLMText, LLM_TEXT_ERROR } from "../../../lib/llm-text";
-import { source, sourceBeta } from "../../../lib/source";
+import { getSourceFor } from "../../../lib/source";
 
 export const revalidate = false;
-
-function getSourceFor(versionSlug: string | null) {
-	switch (versionSlug) {
-		case "beta":
-			return sourceBeta;
-		default:
-			return source;
-	}
-}
 
 export async function GET(
 	_req: NextRequest,

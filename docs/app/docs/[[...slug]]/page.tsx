@@ -32,18 +32,9 @@ import {
 	scopeDocsHref,
 } from "@/lib/docs-versions";
 import { createMetadata } from "@/lib/metadata";
-import { source, sourceBeta } from "@/lib/source";
+import { getSourceFor } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
-
-function getSourceFor(versionSlug: string | null) {
-	switch (versionSlug) {
-		case "beta":
-			return sourceBeta;
-		default:
-			return source;
-	}
-}
 
 export default async function Page({
 	params,
