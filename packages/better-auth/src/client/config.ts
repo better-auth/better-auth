@@ -95,9 +95,14 @@ export const getClientConfig = (
 		$fetch,
 		options,
 	);
+
+	let hasHydrated = false;
 	const hydrateSession = (sessionData: SessionData | null) => {
+		if (hasHydrated || sessionData === null) return;
+		hasHydrated = true;
 		hydrateSessionAtom(session, sessionData);
 	};
+
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	const pluginsAtoms = {

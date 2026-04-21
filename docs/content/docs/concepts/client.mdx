@@ -487,8 +487,8 @@ type Props = {
 
 export function SessionCard({ initialSession }: Props) {
     authClient.hydrateSession(initialSession)
-    const { data } = authClient.useSession()
-    const session = data ?? initialSession
+    const { data, isPending } = authClient.useSession()
+    const session = isPending ? initialSession : data
 
     if (!session) return <p>Not signed in</p>
     return <pre>{JSON.stringify(session, null, 2)}</pre>
@@ -496,7 +496,7 @@ export function SessionCard({ initialSession }: Props) {
 ```
 
 <Callout>
-  * `hydrateSession` is idempotent. It only sets data when the session is empty.
+  * Only the first non-null call to `hydrateSession` takes effect.
   * Passing `null` is safe. It will be ignored and `useSession` will fetch as usual.
 </Callout>
 

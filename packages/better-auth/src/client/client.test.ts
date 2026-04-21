@@ -265,6 +265,54 @@ describe("run time proxy", async () => {
 	});
 
 	/**
+	 * Re-running hydrateSession on a later render (e.g. after sign-out cleared
+	 * the atom) must not restore the stale initial session. Hydration is
+	 * one-shot per client instance.
+	 */
+	it("should not re-hydrate after the session atom has been cleared", () => {
+		const client = createVanillaClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const initialSession = {
+			user: {
+				id: "1",
+				name: "Hydrated",
+				email: "hydrated@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		};
+
+		client.hydrateSession(initialSession);
+
+		// Simulate sign-out clearing the session atom.
+		const sessionAtom = client.$store.atoms.session!;
+		sessionAtom.set({
+			...sessionAtom.get(),
+			data: null,
+			isPending: false,
+		});
+
+		// A later render calls hydrateSession again with the same initialSession.
+		client.hydrateSession(initialSession);
+
+		expect(sessionAtom.get().data).toBeNull();
+	});
+
+	/**
 	 * The auth client is a module-level singleton, so the session atom is shared
 	 * across concurrent SSR requests. Writing during server render would leak one
 	 * request's session into another. Hydration must be a no-op on the server.
