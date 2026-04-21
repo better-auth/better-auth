@@ -1,7 +1,9 @@
+import type { APIError } from "@better-auth/core/error";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { isAPIError } from "../../utils/is-api-error";
 import { organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
@@ -501,8 +503,11 @@ describe("team", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9237
+ */
 describe("setActiveTeam org scoping", async () => {
-	const { auth, signInWithTestUser } = await getTestInstance({
+	const { auth, db, signInWithTestUser } = await getTestInstance({
 		plugins: [
 			organization({
 				async sendInvitationEmail() {},
@@ -535,7 +540,9 @@ describe("setActiveTeam org scoping", async () => {
 
 	let activeOrganizationId: string;
 	let scopedTeamId: string;
+	let outOfScopeOrganizationId: string;
 	let outOfScopeTeamId: string;
+	let sessionToken: string;
 	let userId: string;
 
 	beforeAll(async () => {
@@ -543,6 +550,7 @@ describe("setActiveTeam org scoping", async () => {
 			fetchOptions: { headers },
 		});
 		userId = session.data?.user.id as string;
+		sessionToken = session.data?.session.token as string;
 
 		const firstOrganization = await client.organization.create({
 			name: "Scoped Org One",
@@ -579,13 +587,13 @@ describe("setActiveTeam org scoping", async () => {
 			keepCurrentActiveOrganization: true,
 			fetchOptions: { headers },
 		});
-		const secondOrganizationId = secondOrganization.data?.id as string;
-		expect(secondOrganizationId).toBeDefined();
+		outOfScopeOrganizationId = secondOrganization.data?.id as string;
+		expect(outOfScopeOrganizationId).toBeDefined();
 
 		const outOfScopeTeam = await client.organization.createTeam(
 			{
 				name: "Scoped Team Two",
-				organizationId: secondOrganizationId,
+				organizationId: outOfScopeOrganizationId,
 			},
 			{
 				headers,
@@ -599,7 +607,7 @@ describe("setActiveTeam org scoping", async () => {
 			body: {
 				userId,
 				teamId: outOfScopeTeamId,
-				organizationId: secondOrganizationId,
+				organizationId: outOfScopeOrganizationId,
 			},
 		});
 
@@ -656,6 +664,60 @@ describe("setActiveTeam org scoping", async () => {
 		expect((sessionAfterRejectedTeam.data?.session as any).activeTeamId).toBe(
 			scopedTeamId,
 		);
+	});
+
+	it("should reject refreshing the current active team when the session org changes externally", async () => {
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "token",
+					value: sessionToken,
+				},
+			],
+			update: {
+				activeOrganizationId: outOfScopeOrganizationId,
+			},
+		});
+
+		let error: APIError | null = null;
+		await auth.api
+			.setActiveTeam({
+				body: {},
+				headers,
+			})
+			.catch((e: APIError) => {
+				error = e;
+			});
+
+		expect(error).not.toBeNull();
+		expect(isAPIError(error)).toBeTruthy();
+		expect(error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND.message,
+		);
+
+		const sessionAfterRefreshAttempt = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(
+			(sessionAfterRefreshAttempt.data?.session as any).activeOrganizationId,
+		).toBe(outOfScopeOrganizationId);
+		expect((sessionAfterRefreshAttempt.data?.session as any).activeTeamId).toBe(
+			scopedTeamId,
+		);
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "token",
+					value: sessionToken,
+				},
+			],
+			update: {
+				activeOrganizationId: activeOrganizationId,
+			},
+		});
 	});
 
 	it("should require an active organization before setting the active team", async () => {
