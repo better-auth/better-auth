@@ -405,7 +405,7 @@ describe("oauth", async () => {
 		expect(signInResponse.url).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInResponse.url!, {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -961,7 +961,7 @@ describe("oauth", async () => {
 		expect(signInResponse.url).toContain(rpBaseUrl);
 
 		let callbackURL = "";
-		await client.$fetch(signInResponse.url, {
+		await client.$fetch(signInResponse.url!, {
 			method: "GET",
 			headers,
 			onError(ctx) {

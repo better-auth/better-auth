@@ -8,6 +8,8 @@ export interface TelemetryEvent {
 	payload: Record<string, any>;
 }
 
+export type TelemetryAuthConfig = Record<string, unknown>;
+
 export interface TelemetryContext {
 	customTrack?: ((event: TelemetryEvent) => Promise<void>) | undefined;
 	database?: string | undefined;

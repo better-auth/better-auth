@@ -25,7 +25,7 @@
     "dev": "tsdown --watch",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --build tsconfig.build.json"
   },
   "files": [
     "dist"

@@ -32,9 +32,7 @@
     "coverage:report": "nyc --temp-dir=./coverage/raw report --reporter=lcov --reporter text-summary",
     "coverage:open": "open coverage/lcov-report/index.html",
     "e2e:smoke": "turbo e2e:smoke",
-    "e2e:integration": "turbo e2e:integration",
-    "typecheck": "tsc --build",
-    "typecheck:dist": "tsc --project tsconfig.dist-check.json"
+    "e2e:integration": "turbo e2e:integration"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
