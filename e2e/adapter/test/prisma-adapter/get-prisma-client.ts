@@ -1,20 +1,25 @@
+import { rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
 import type { Dialect } from "./constants";
-import { DATABASE_URLS } from "./constants";
+import { getDatabaseUrl, getSqliteDatabasePath } from "./constants";
 
 type PC = InstanceType<typeof PrismaClient>;
 
-async function createAdapter(dialect: Dialect) {
+async function createAdapter(dialect: Dialect, migrationCount: number) {
 	if (dialect === "sqlite") {
 		const { PrismaBetterSqlite3 } = await import(
 			"@prisma/adapter-better-sqlite3"
 		);
-		return new PrismaBetterSqlite3({ url: DATABASE_URLS[dialect] });
+		return new PrismaBetterSqlite3({
+			url: getDatabaseUrl(dialect, migrationCount),
+		});
 	}
 	if (dialect === "postgresql") {
 		const { PrismaPg } = await import("@prisma/adapter-pg");
-		return new PrismaPg({ connectionString: DATABASE_URLS[dialect] });
+		return new PrismaPg({
+			connectionString: getDatabaseUrl(dialect, migrationCount),
+		});
 	}
 	// mysql — use object config instead of URL string to avoid
 	// mariadb driver hanging on URL-based connection strings.
@@ -49,8 +54,8 @@ export const getPrismaClient = async (dialect: Dialect) => {
 	// schema generation, not actual database queries.
 	const adapter =
 		migrationCount === 0
-			? await createAdapter("sqlite")
-			: await createAdapter(dialect);
+			? await createAdapter("sqlite", 0)
+			: await createAdapter(dialect, migrationCount);
 	const db = new PrismaClient({ adapter });
 	clientMap.set(`${dialect}-${migrationCount}`, db);
 	return db as PC;
@@ -73,4 +78,7 @@ export const destroyPrismaClient = ({
 		db.$disconnect();
 	}
 	clientMap.delete(`${dialect}-${migrationCount}`);
+	if (dialect === "sqlite") {
+		rmSync(getSqliteDatabasePath(migrationCount), { force: true });
+	}
 };

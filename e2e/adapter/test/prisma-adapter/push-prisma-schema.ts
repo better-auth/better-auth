@@ -1,9 +1,10 @@
 import { execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Dialect } from "./constants";
-import { DATABASE_URLS } from "./constants";
+import { getDatabaseUrl } from "./constants";
 
 // Cache previously generated client directories per schema content,
 // so we can copy instead of running `prisma generate` again.
@@ -18,24 +19,33 @@ function resolvePrismaCli() {
 	);
 }
 
-export async function pushPrismaSchema(dialect: Dialect) {
+export async function pushPrismaSchema(
+	dialect: Dialect,
+	schemaPath: string,
+	migrationCount: number,
+) {
 	const cwd = import.meta.dirname;
 	const cli = `${process.execPath} ${resolvePrismaCli()}`;
+	const tmpDir = join(cwd, ".tmp");
 
-	// Write a per-dialect prisma config file (Prisma v7 requires datasource url here)
-	const configPath = join(cwd, `prisma-config-${dialect}.ts`);
+	// Prisma adapter tests invoke migrations concurrently, so every run needs
+	// its own config and schema file to avoid cross-test file races.
+	fs.mkdirSync(tmpDir, { recursive: true });
+	const configPath = join(
+		tmpDir,
+		`prisma-config-${dialect}-${randomUUID()}.ts`,
+	);
 	fs.writeFileSync(
 		configPath,
 		`import { defineConfig } from "prisma/config";
 export default defineConfig({
-	schema: "./schema-${dialect}.prisma",
-	datasource: { url: "${DATABASE_URLS[dialect]}" },
+	schema: ${JSON.stringify(schemaPath)},
+	datasource: { url: "${getDatabaseUrl(dialect, migrationCount)}" },
 });
 `,
 		"utf-8",
 	);
 
-	const schemaPath = join(cwd, `schema-${dialect}.prisma`);
 	const schemaContent = fs.readFileSync(schemaPath, "utf-8");
 	// Strip the output path (changes each iteration) for cache key comparison
 	const schemaKey = schemaContent.replace(/\s*output\s*=\s*"[^"]*"\n?/, "");
@@ -79,6 +89,7 @@ export default defineConfig({
 		);
 		throw error;
 	} finally {
-		fs.unlinkSync(configPath);
+		fs.rmSync(configPath, { force: true });
+		fs.rmSync(schemaPath, { force: true });
 	}
 }

@@ -393,6 +393,12 @@ export const createTestSuite = <
 				suiteName,
 			};
 
+			const resolveOptions = (
+				options: BetterAuthOptions | Partial<BetterAuthOptions> | undefined,
+			): BetterAuthOptions => {
+				return deepmerge(config?.defaultBetterAuthOptions || {}, options || {});
+			};
+
 			/**
 			 * Apply BetterAuth options and run migrations if needed.
 			 * Tracks migration statistics.
@@ -401,10 +407,7 @@ export const createTestSuite = <
 				options: BetterAuthOptions | Partial<BetterAuthOptions>,
 				forceMigrate: boolean = false,
 			): Promise<BetterAuthOptions> => {
-				const finalOptions = deepmerge(
-					config?.defaultBetterAuthOptions || {},
-					options || {},
-				);
+				const finalOptions = resolveOptions(options);
 
 				// Check if options have changed
 				const optionsChanged = !deepEqual(currentAppliedOptions, finalOptions);
@@ -417,6 +420,10 @@ export const createTestSuite = <
 						const migrationStart = performance.now();
 						await helpers.runMigrations();
 						const migrationTime = performance.now() - migrationStart;
+
+						for (const model of Object.keys(createdRows)) {
+							delete createdRows[model];
+						}
 
 						stats.migrationCount++;
 						stats.totalMigrationTime += migrationTime;
@@ -661,10 +668,7 @@ export const createTestSuite = <
 					await helpers.cleanup();
 				} catch {}
 				if (config.defaultBetterAuthOptions && !allDisabled) {
-					await applyOptionsAndMigrate(
-						config.defaultBetterAuthOptions,
-						config.alwaysMigrate,
-					);
+					await applyOptionsAndMigrate({}, config.alwaysMigrate);
 				}
 			});
 
@@ -813,10 +817,6 @@ export const createTestSuite = <
 				}
 			};
 
-			// Track the current group's migration options
-			let currentGroupMigrationOptions: BetterAuthOptions | null | undefined =
-				null;
-
 			for (let i = 0; i < testEntries.length; i++) {
 				const { name: testName, testFn, migrateBetterAuth } = testEntries[i]!;
 
@@ -851,36 +851,18 @@ export const createTestSuite = <
 						await (async () => {
 							if (shouldSkip) return;
 
-							const thisMigration = deepmerge(
-								config.defaultBetterAuthOptions || {},
-								migrateBetterAuth || {},
-							);
+							const rawTargetOptions =
+								isFirstInGroup && testGroup
+									? testGroup.migrationOptions || {}
+									: migrateBetterAuth || {};
+							const targetOptions = resolveOptions(rawTargetOptions);
 
-							// If this is the first test in a group, migrate to the group's options
-							if (isFirstInGroup && testGroup) {
-								const groupMigrationOptions = testGroup.migrationOptions;
-								const groupFinalOptions = deepmerge(
-									config.defaultBetterAuthOptions || {},
-									groupMigrationOptions || {},
-								);
-
-								// Only migrate if the group's options are different from current state
-								if (
-									!deepEqual(
-										currentGroupMigrationOptions,
-										groupMigrationOptions,
-									)
-								) {
-									await applyOptionsAndMigrate(groupFinalOptions, true);
-									currentGroupMigrationOptions = groupMigrationOptions;
-								}
-							}
-							// If this test is not in a group or not first in group, check if migration is needed
-							else if (
-								!deepEqual(currentGroupMigrationOptions, migrateBetterAuth)
-							) {
-								await applyOptionsAndMigrate(thisMigration, true);
-								currentGroupMigrationOptions = migrateBetterAuth;
+							// Some tests call modifyBetterAuthOptions inside the test body,
+							// which mutates the currently applied schema. We need to compare
+							// against the actual applied options, not just the group's static
+							// migration marker, so later tests can restore the expected schema.
+							if (!deepEqual(currentAppliedOptions, targetOptions)) {
+								await applyOptionsAndMigrate(rawTargetOptions, true);
 							}
 						})();
 

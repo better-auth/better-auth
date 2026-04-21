@@ -10,7 +10,6 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
-import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import {
 	destroyPrismaClient,
@@ -31,9 +30,13 @@ const { execute } = await testAdapter({
 	runMigrations: async (options: BetterAuthOptions) => {
 		const db = await getPrismaClient(dialect);
 		const migrationCount = incrementMigrationCount();
-		await generateAuthConfigFile(options);
-		await generatePrismaSchema(options, db, migrationCount, dialect);
-		await pushPrismaSchema(dialect);
+		const schemaPath = await generatePrismaSchema(
+			options,
+			db,
+			migrationCount,
+			dialect,
+		);
+		await pushPrismaSchema(dialect, schemaPath, migrationCount);
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
