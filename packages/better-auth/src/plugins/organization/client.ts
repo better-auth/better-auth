@@ -12,7 +12,7 @@ import type {
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { PACKAGE_VERSION } from "../../version";
-import type { AccessControl, ArrayElement, Role, Statements } from "../access";
+import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
@@ -35,7 +35,7 @@ export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 };
 
 interface OrganizationClientOptions {
-	ac?: { statements: Statements } | undefined;
+	ac?: AccessControl | undefined;
 	roles?:
 		| {
 				[key in string]: Role;
@@ -92,9 +92,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements =
-		CO["ac"] extends { statements: infer S extends DefaultStatements }
-			? S
-			: DefaultStatements;
+		CO["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -129,7 +127,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		id: "organization",
 		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as OrganizationPlugin<{
-			ac: CO["ac"] extends { statements: Statements }
+			ac: CO["ac"] extends AccessControl
 				? CO["ac"]
 				: AccessControl<DefaultStatements>;
 			roles: CO["roles"] extends Record<string, Role>

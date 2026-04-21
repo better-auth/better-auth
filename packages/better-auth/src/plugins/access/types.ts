@@ -1,5 +1,5 @@
 import type { LiteralString } from "@better-auth/core";
-import type { AuthorizeResponse, createAccessControl } from "./access";
+import type { AuthorizeResponse } from "./access";
 
 export type ArrayElement<T> = T extends readonly (infer E)[] ? E : never;
 
@@ -21,8 +21,12 @@ export type Statements = {
 	readonly [resource: string]: readonly LiteralString[];
 };
 
-export type AccessControl<TStatements extends Statements = Statements> =
-	ReturnType<typeof createAccessControl<TStatements>>;
+export interface AccessControl<TStatements extends Statements = Statements> {
+	statements: TStatements;
+	newRole(
+		statements: { [K in keyof TStatements]?: SubArray<TStatements[K]> },
+	): Role;
+}
 
 export type Role<TStatements extends Statements = Record<string, any>> = {
 	authorize: (
