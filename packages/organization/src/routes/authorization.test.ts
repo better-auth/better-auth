@@ -1,10 +1,13 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { organization } from "@better-auth/organization";
+import type { BetterAuthPlugin } from "better-auth";
+import {
+	createAuthEndpoint,
+	requireOrgRole,
+	sessionMiddleware,
+} from "better-auth/api";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthEndpoint, sessionMiddleware } from "..";
-import { requireOrgRole } from "./authorization";
+import { organization } from "../organization";
 
 const checkOrgAdmin = createAuthEndpoint(
 	"/test-check-org-admin",
@@ -35,7 +38,7 @@ const createAuthorizationTestPlugin = () =>
 		},
 	}) satisfies BetterAuthPlugin;
 
-declare module "@better-auth/core" {
+declare module "better-auth" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"test-authorization-plugin": {
 			creator: typeof createAuthorizationTestPlugin;
