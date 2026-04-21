@@ -1,5 +1,6 @@
 import assert from "node:assert";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { it } from "node:test";
@@ -8,27 +9,66 @@ import { fileURLToPath } from "node:url";
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
 /**
+ * Resolve the esbuild CLI from the fixture's devDependency (not `npx`), so the
+ * same binary runs in CI and on developer machines without relying on npm's
+ * global cache or network.
+ */
+function getEsbuildBin(fixtureDir: string): string {
+	const binDir = join(fixtureDir, "node_modules", ".bin");
+	if (process.platform === "win32") {
+		const cmd = join(binDir, "esbuild.cmd");
+		if (existsSync(cmd)) {
+			return cmd;
+		}
+	}
+	const unixShim = join(binDir, "esbuild");
+	if (existsSync(unixShim)) {
+		return unixShim;
+	}
+	throw new Error(
+		`esbuild not found under ${fixtureDir}. From the repo root run: pnpm install`,
+	);
+}
+
+async function runEsbuild(fixtureDir: string, args: string[]): Promise<void> {
+	const bin = getEsbuildBin(fixtureDir);
+	let stderr = "";
+	let stdout = "";
+	const child = spawn(bin, args, {
+		cwd: fixtureDir,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	child.stdout?.on("data", (c) => {
+		stdout += String(c);
+	});
+	child.stderr?.on("data", (c) => {
+		stderr += String(c);
+	});
+	await new Promise<void>((resolve, reject) => {
+		child.on("close", (code) => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(
+					new Error(
+						`esbuild exited with code ${code}\nstderr:\n${stderr}\nstdout:\n${stdout}`,
+					),
+				);
+			}
+		});
+	});
+}
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/6213
  */
 it("build client without zod runtime", async () => {
 	const esbuildDir = join(fixturesDir, "esbuild");
-	const buildProcess = spawn(
-		"npx",
-		["esbuild", "src/client.ts", "--bundle", "--outfile=dist/client.js"],
-		{
-			cwd: esbuildDir,
-			stdio: "pipe",
-		},
-	);
-	await new Promise<void>((resolve, reject) => {
-		buildProcess.on("close", (code) => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(new Error(`esbuild client build failed with code ${code}`));
-			}
-		});
-	});
+	await runEsbuild(esbuildDir, [
+		"src/client.ts",
+		"--bundle",
+		"--outfile=dist/client.js",
+	]);
 	const outputFile = join(esbuildDir, "dist", "client.js");
 	const outputContent = await readFile(outputFile, "utf-8");
 	assert.ok(
@@ -51,34 +91,13 @@ it("build client without zod runtime", async () => {
  */
 it("esbuild bundle: @better-auth/sso SAML SP metadata without inline XML", async () => {
 	const esbuildDir = join(fixturesDir, "esbuild");
-	const buildProcess = spawn(
-		"npx",
-		[
-			"esbuild",
-			"src/sso-bundle-sp-metadata.ts",
-			"--bundle",
-			"--format=cjs",
-			"--platform=node",
-			"--outfile=dist/sso-bundle-sp-metadata.cjs",
-		],
-		{
-			cwd: esbuildDir,
-			stdio: "pipe",
-		},
-	);
-	await new Promise<void>((resolve, reject) => {
-		buildProcess.on("close", (code) => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(
-					new Error(
-						`esbuild @better-auth/sso SP metadata bundle failed with code ${code}`,
-					),
-				);
-			}
-		});
-	});
+	await runEsbuild(esbuildDir, [
+		"src/sso-bundle-sp-metadata.ts",
+		"--bundle",
+		"--format=cjs",
+		"--platform=node",
+		"--outfile=dist/sso-bundle-sp-metadata.cjs",
+	]);
 	const runProcess = spawn(
 		"node",
 		[join(esbuildDir, "dist", "sso-bundle-sp-metadata.cjs")],
@@ -108,23 +127,11 @@ it("esbuild bundle: @better-auth/sso SAML SP metadata without inline XML", async
 
 it("build minimal without unexpected imports", async () => {
 	const esbuildDir = join(fixturesDir, "esbuild");
-	const buildProcess = spawn(
-		"npx",
-		["esbuild", "src/minimal.ts", "--bundle", "--outfile=dist/minimal.js"],
-		{
-			cwd: esbuildDir,
-			stdio: "pipe",
-		},
-	);
-	await new Promise<void>((resolve, reject) => {
-		buildProcess.on("close", (code) => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(new Error(`Vite build failed with code ${code}`));
-			}
-		});
-	});
+	await runEsbuild(esbuildDir, [
+		"src/minimal.ts",
+		"--bundle",
+		"--outfile=dist/minimal.js",
+	]);
 	const outputFile = join(esbuildDir, "dist", "minimal.js");
 	const outputContent = await readFile(outputFile, "utf-8");
 	assert.ok(
