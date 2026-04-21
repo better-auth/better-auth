@@ -183,6 +183,15 @@ export const apiKeySchema = ({
 					input: false,
 				},
 				/**
+				 * JSON-stringified array of IP/CIDR entries the key is restricted to.
+				 * When null or absent, the key has no IP restriction.
+				 */
+				ipAllowlist: {
+					type: "string",
+					required: false,
+					input: false,
+				},
+				/**
 				 * Any additional metadata you want to store with the key.
 				 */
 				metadata: {

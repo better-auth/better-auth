@@ -44,4 +44,9 @@ export const API_KEY_ERROR_CODES = defineErrorCodes({
 		"No default api-key configuration found.",
 	ORGANIZATION_PLUGIN_REQUIRED:
 		"Organization plugin is required for organization-owned API keys. Please install and configure the organization plugin.",
+	INVALID_IP_ALLOWLIST_ENTRY:
+		"ipAllowlist contains an invalid IP or CIDR entry.",
+	EMPTY_IP_ALLOWLIST:
+		"ipAllowlist must be omitted or null to disable, not an empty array.",
+	IP_NOT_ALLOWED: "Request IP is not in the API key's allowlist.",
 });

@@ -383,4 +383,12 @@ export type ApiKey = {
 				[key: string]: string[];
 		  } | null)
 		| undefined;
+	/**
+	 * IP allowlist for the API key. When non-empty, verification will reject
+	 * requests whose client IP does not match any entry. Entries may be single
+	 * IPs or CIDR ranges, for both IPv4 and IPv6.
+	 *
+	 * `null` / `undefined` means the key has no IP restriction.
+	 */
+	ipAllowlist?: string[] | null | undefined;
 };
