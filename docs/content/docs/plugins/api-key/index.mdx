@@ -230,11 +230,22 @@ The caller's IP is resolved in this order:
    `advanced.ipAddress.ipAddressHeaders` (defaults to `x-forwarded-for`).
 
 <Callout type="warn">
-  `x-forwarded-for` is trusted based on your Better Auth `advanced.ipAddress` config.
-  If your deployment sits behind an additional proxy or gateway that terminates
-  the API-key request, the IP Better Auth sees will be the gateway's — always
-  pass `clientIp` explicitly in that case, or the allowlist will be
-  effectively bypassed.
+  **`clientIp` must be server-trusted.** Never pass an IP value that came
+  directly from a client — a request header your frontend forwarded, a field
+  in a JSON body, a query string. If the value is user-controlled, an
+  attacker with a leaked key bypasses the allowlist by sending the "correct"
+  IP themselves. Only pass `clientIp` values you resolved yourself from a
+  connection you trust (your reverse-proxy's `CF-Connecting-IP` /
+  `X-Forwarded-For` after verifying the immediate peer is your proxy, your
+  gateway's documented client-IP header, etc.).
+</Callout>
+
+<Callout type="warn">
+  `x-forwarded-for` is trusted based on your Better Auth `advanced.ipAddress`
+  config. If your deployment sits behind an additional proxy or gateway that
+  terminates the API-key request, the IP Better Auth sees will be the
+  gateway's — always pass `clientIp` explicitly in that case (resolved per
+  the rule above), or the allowlist will be effectively bypassed.
 </Callout>
 
 Entries accept single IPs or CIDR ranges, for both IPv4 and IPv6:

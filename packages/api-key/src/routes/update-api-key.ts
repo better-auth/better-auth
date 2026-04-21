@@ -248,6 +248,13 @@ export function updateApiKey({
 												description:
 													"Permissions for the api key (stored as JSON string)",
 											},
+											ipAllowlist: {
+												type: "array",
+												items: { type: "string" },
+												nullable: true,
+												description:
+													"IP/CIDR allowlist for the key. `null` when unrestricted.",
+											},
 										},
 										required: [
 											"id",

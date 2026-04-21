@@ -135,6 +135,15 @@ function ipv6ToBigInt(ip: string): bigint | null {
 	return out;
 }
 
+function parsePrefixLength(prefixStr: string, max: number): number | null {
+	// Require at least one digit and only digits — `Number("")` coerces to 0,
+	// which would silently turn "1.2.3.4/" into a /0 allow-everything rule.
+	if (!/^\d+$/.test(prefixStr)) return null;
+	const prefix = Number(prefixStr);
+	if (!Number.isInteger(prefix) || prefix < 0 || prefix > max) return null;
+	return prefix;
+}
+
 export function parseCidr(entry: string): ParsedCidr | null {
 	if (typeof entry !== "string" || entry.length === 0) return null;
 	const slash = entry.indexOf("/");
@@ -146,8 +155,8 @@ export function parseCidr(entry: string): ParsedCidr | null {
 	if (normalized.includes(".")) {
 		const value = ipv4ToBigInt(normalized);
 		if (value === null) return null;
-		const prefix = prefixStr === null ? 32 : Number(prefixStr);
-		if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return null;
+		const prefix = prefixStr === null ? 32 : parsePrefixLength(prefixStr, 32);
+		if (prefix === null) return null;
 		const mask =
 			prefix === 0 ? 0n : (0xffffffffn << BigInt(32 - prefix)) & 0xffffffffn;
 		return { family: "v4", network: value & mask, prefix };
@@ -155,8 +164,8 @@ export function parseCidr(entry: string): ParsedCidr | null {
 
 	const value = ipv6ToBigInt(normalized);
 	if (value === null) return null;
-	const prefix = prefixStr === null ? 128 : Number(prefixStr);
-	if (!Number.isInteger(prefix) || prefix < 0 || prefix > 128) return null;
+	const prefix = prefixStr === null ? 128 : parsePrefixLength(prefixStr, 128);
+	if (prefix === null) return null;
 	const fullMask = (1n << 128n) - 1n;
 	const mask =
 		prefix === 0 ? 0n : (fullMask << BigInt(128 - prefix)) & fullMask;

@@ -4681,6 +4681,26 @@ describe("api-key", async () => {
 			expect(err?.body?.code).toEqual("INVALID_IP_ALLOWLIST_ENTRY");
 		});
 
+		/**
+		 * Regression: `Number("")` coerces to 0, so a trailing-slash entry like
+		 * "1.2.3.4/" would previously parse as `/0` and silently match every IP
+		 * in the family. Both empty and non-numeric prefixes must be rejected.
+		 */
+		it("rejects malformed CIDR prefixes (empty or non-numeric)", async () => {
+			for (const bad of ["1.2.3.4/", "1.2.3.4/abc", "2001:db8::/"]) {
+				let err: APIError | null = null;
+				try {
+					await auth.api.createApiKey({
+						body: { userId: user.id, ipAllowlist: [bad] },
+					});
+				} catch (e) {
+					if (isAPIError(e)) err = e;
+				}
+				expect(err, `entry ${bad} should be rejected`).not.toBeNull();
+				expect(err?.body?.code).toEqual("INVALID_IP_ALLOWLIST_ENTRY");
+			}
+		});
+
 		it("rejects creation with an empty ipAllowlist array", async () => {
 			let err: APIError | null = null;
 			try {

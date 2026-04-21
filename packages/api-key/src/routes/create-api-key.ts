@@ -259,6 +259,13 @@ export function createApiKey({
 												},
 												description: "Permissions associated with the key",
 											},
+											ipAllowlist: {
+												type: "array",
+												items: { type: "string" },
+												nullable: true,
+												description:
+													"IP/CIDR allowlist for the key. `null` when unrestricted.",
+											},
 										},
 										required: [
 											"id",
