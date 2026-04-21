@@ -233,17 +233,6 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	if (!(query.response_type === "code")) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(
-				ctx,
-				"unsupported_response_type",
-				"unsupported response type",
-			),
-		);
-	}
-
 	// Check client
 	const client = await getClient(ctx, opts, query.client_id);
 	if (!client) {

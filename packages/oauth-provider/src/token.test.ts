@@ -1724,6 +1724,54 @@ describe("oauth token - client secret validation", async () => {
 		return { client, oauthClient, db };
 	}
 
+	it("should return unsupported_grant_type for unknown grant type", async () => {
+		const { client } = await createValidationInstance();
+
+		let responseStatus = 0;
+		const tokenResponse = await client.oauth2.token(
+			{
+				// @ts-expect-error grant_type unsupported type
+				grant_type: "password",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+			},
+		);
+
+		expect(responseStatus).toBe(400);
+		expect(tokenResponse.error).toMatchObject({
+			error: "unsupported_grant_type",
+		});
+	});
+
+	it("should return invalid_request when grant type is missing", async () => {
+		const { client } = await createValidationInstance();
+
+		const tokenResponse = await client.oauth2.token(
+			{
+				// @ts-expect-error grant_type not sent
+				grant_type: undefined,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(tokenResponse.error).toMatchObject({
+			status: 400,
+			error: "unsupported_grant_type",
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8016
 	 */
