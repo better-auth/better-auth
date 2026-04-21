@@ -32,6 +32,7 @@ import {
 	getJwtPlugin,
 	verifyOAuthQueryParams,
 } from "./utils";
+import { translateOAuthValidationError } from "./utils/rfc-error-translator";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -261,6 +262,86 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				},
 			],
 			after: [
+				{
+					/**
+					 * Translate Better Auth's framework-level Zod validation
+					 * envelope (`{code: "VALIDATION_ERROR"}`) into the
+					 * RFC 6749 §5.2 / §4.1.2.1 / RFC 7591 §3.2.2 envelope
+					 * each OAuth 2.1 endpoint is expected to emit.
+					 *
+					 * Only framework-level validation errors are reshaped;
+					 * handler-level OAuth errors (already
+					 * `{error, error_description}`) pass through unchanged.
+					 *
+					 * @see utils/rfc-error-translator.ts
+					 * @see https://github.com/better-auth/better-auth/issues/9250
+					 */
+					matcher(ctx) {
+						if (typeof ctx.path !== "string") return false;
+						if (!ctx.path.startsWith("/oauth2/")) return false;
+						const returned = ctx.context.returned;
+						if (!returned || typeof returned !== "object") return false;
+						const body = (returned as { body?: { code?: string } }).body;
+						return body?.code === "VALIDATION_ERROR";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const returned = ctx.context.returned as {
+							body?: { code?: string; message?: string };
+							statusCode?: number;
+						};
+						if (returned?.body?.code !== "VALIDATION_ERROR") return;
+						if (
+							typeof ctx.path !== "string" ||
+							!ctx.path.startsWith("/oauth2/")
+						)
+							return;
+
+						// Build a synthetic set of Zod issues from the parsed
+						// request body/query. The underlying Zod issues array
+						// is dropped when better-call re-wraps the validation
+						// failure, so we reconstruct just enough classification
+						// signal (`invalid_type`/`received: undefined`) for the
+						// translator's missing-vs-unsupported distinction.
+						const issues: Array<{
+							code: string;
+							received: string;
+							path: Array<string | number>;
+						}> = [];
+						const record = (source: unknown, field: string) => {
+							if (
+								source &&
+								typeof source === "object" &&
+								!(field in (source as Record<string, unknown>))
+							) {
+								issues.push({
+									code: "invalid_type",
+									received: "undefined",
+									path: [field],
+								});
+							}
+						};
+						// Probe the handful of fields with path-dependent RFC
+						// error codes; other fields fall back to string parsing.
+						record(ctx.body, "grant_type");
+						record(ctx.query, "response_type");
+
+						const validationResponse = new Response(
+							JSON.stringify(returned.body ?? {}),
+							{
+								status: returned.statusCode ?? 400,
+								headers: { "content-type": "application/json" },
+							},
+						);
+						const translated = await translateOAuthValidationError({
+							path: ctx.path,
+							response: validationResponse,
+							request: ctx.request,
+							baseUrl: ctx.context.baseURL,
+							issues,
+						});
+						if (translated) return translated;
+					}),
+				},
 				{
 					// Should only capture when session cookie is set (ie after login)
 					matcher(ctx) {

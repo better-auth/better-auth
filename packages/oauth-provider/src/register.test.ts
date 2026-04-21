@@ -622,3 +622,76 @@ describe("oauth register - skip_consent blocked", async () => {
 		expect(res.data?.client_id).toBeDefined();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9250
+ *
+ * Framework-level Zod validation errors on /oauth2/register must be
+ * rendered in the RFC 7591 §3.2.2 envelope, not Better Auth's generic
+ * VALIDATION_ERROR format. The translator in `hooks.after` produces the
+ * right envelope based on which field failed.
+ */
+describe("oauth register - RFC 7591 §3.2.2 input validation", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	it("returns invalid_redirect_uri when redirect_uris contains an unsafe URL", async () => {
+		let status = 0;
+		let body: any = null;
+		let cacheControl: string | null = null;
+		await client.$fetch<any>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: ["javascript:alert(1)"],
+			},
+			onError(ctx) {
+				status = ctx.response.status;
+				body = ctx.error;
+				cacheControl = ctx.response.headers.get("cache-control");
+			},
+		});
+		expect(status).toBe(400);
+		expect(body).toMatchObject({ error: "invalid_redirect_uri" });
+		expect(body).not.toHaveProperty("code", "VALIDATION_ERROR");
+		// OAuth 2.1 / RFC 7591 response header requirement.
+		expect(cacheControl).toBe("no-store");
+	});
+
+	it("returns invalid_client_metadata when grant_types contains an unsupported value", async () => {
+		let status = 0;
+		let body: any = null;
+		await client.$fetch<any>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: ["http://localhost:5000/callback"],
+				grant_types: ["password"], // not in the enum
+			},
+			onError(ctx) {
+				status = ctx.response.status;
+				body = ctx.error;
+			},
+		});
+		expect(status).toBe(400);
+		expect(body).toMatchObject({ error: "invalid_client_metadata" });
+	});
+});

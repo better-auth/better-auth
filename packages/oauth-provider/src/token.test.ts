@@ -1805,6 +1805,66 @@ describe("oauth token - client secret validation", async () => {
 		);
 		expect(responseStatus).toBe(500);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9250
+	 *
+	 * End-to-end coverage for the translator wired into `hooks.after`:
+	 * a framework-level Zod validation error (`{code:"VALIDATION_ERROR"}`)
+	 * is reshaped into the RFC 6749 §5.2 envelope.
+	 */
+	describe("RFC 6749 §5.2 input validation", () => {
+		it("returns unsupported_grant_type for an unknown grant_type value", async () => {
+			const { client } = await createValidationInstance({
+				oauthProviderConfig: { disableJwtPlugin: true },
+			});
+			let status = 0;
+			let body: any = null;
+			let cacheControl: string | null = null;
+			await client.$fetch<any>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "foo" }),
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(ctx) {
+					status = ctx.response.status;
+					body = ctx.error;
+					cacheControl = ctx.response.headers.get("cache-control");
+				},
+			});
+			expect(status).toBe(400);
+			expect(body).toMatchObject({ error: "unsupported_grant_type" });
+			expect(body).toHaveProperty("error_description");
+			expect(body).not.toHaveProperty("code", "VALIDATION_ERROR");
+			// OAuth 2.1 requires `Cache-Control: no-store` on token error responses.
+			expect(cacheControl).toBe("no-store");
+		});
+
+		it("returns invalid_request for missing grant_type", async () => {
+			const { client } = await createValidationInstance({
+				oauthProviderConfig: { disableJwtPlugin: true },
+			});
+			let status = 0;
+			let body: any = null;
+			await client.$fetch<any>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({}),
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(ctx) {
+					status = ctx.response.status;
+					body = ctx.error;
+				},
+			});
+			expect(status).toBe(400);
+			expect(body).toMatchObject({ error: "invalid_request" });
+			expect(body).not.toHaveProperty("code", "VALIDATION_ERROR");
+		});
+	});
 });
 
 describe("id token claim override security", async () => {

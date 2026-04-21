@@ -418,6 +418,57 @@ describe("oauth authorize - authenticated", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9250
+	 *
+	 * End-to-end: when Zod validation fails on a query field, the
+	 * translator wired into `hooks.after` produces an RFC 6749 §4.1.2.1
+	 * redirect instead of Better Auth's generic VALIDATION_ERROR JSON.
+	 */
+	it("should redirect with unsupported_response_type for an unknown response_type", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "token"); // not supported
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "rt-test-state");
+
+		let errorRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirectUrl).toContain("error=unsupported_response_type");
+		expect(errorRedirectUrl).toContain("state=rt-test-state");
+	});
+
+	it("should redirect with invalid_request for unknown code_challenge_method", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("code_challenge_method", "plain");
+		authUrl.searchParams.set("state", "rt-ccm-state");
+
+		let errorRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirectUrl).toContain("error=invalid_request");
+		expect(errorRedirectUrl).toContain("state=rt-ccm-state");
+	});
+
 	it("should have metadata issuer match iss parameter (RFC 9207)", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
