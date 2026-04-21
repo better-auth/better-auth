@@ -78,12 +78,11 @@ export const sveltekitCookies = (
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
 
-							for (const [name, { value, ...ops }] of parsed) {
+							for (const [name, attributes] of parsed) {
 								try {
-									const cookieOptions = toCookieOptions({ value, ...ops });
-									event.cookies.set(name, value, {
-										...cookieOptions,
-										path: ops.path || "/",
+									event.cookies.set(name, attributes.value, {
+										...toCookieOptions(attributes),
+										path: attributes.path || "/",
 									});
 								} catch {
 									// this will avoid any issue related to already streamed response
