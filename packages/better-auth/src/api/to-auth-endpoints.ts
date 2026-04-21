@@ -305,6 +305,29 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 							}
 
 							if (isAPIError(result.response) && !shouldReturnResponse) {
+								/**
+								 * Non-response path: we re-throw the raw APIError
+								 * to callers of `auth.api.*`. `result.headers`
+								 * holds the merged ctx + explicit headers (see
+								 * catch block above) — rewrite
+								 * `kAPIErrorHeaderSymbol` with the merged set so
+								 * downstream pipelines (e.g. better-call's
+								 * response builder, or an outer hook catch) see
+								 * the same headers we'd have written on the
+								 * response.
+								 */
+								if (result.headers) {
+									Object.defineProperty(
+										result.response,
+										kAPIErrorHeaderSymbol,
+										{
+											enumerable: false,
+											configurable: true,
+											writable: false,
+											value: result.headers,
+										},
+									);
+								}
 								throw result.response;
 							}
 

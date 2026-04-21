@@ -4,20 +4,13 @@ import type {
 	StrictEndpoint,
 } from "better-call";
 import {
-	APIError,
 	createEndpoint,
 	createMiddleware,
 	kAPIErrorHeaderSymbol,
 } from "better-call";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
-
-function isAPIError(error: unknown): error is APIError {
-	return (
-		error instanceof APIError ||
-		(error as { name?: string } | null)?.name === "APIError"
-	);
-}
+import { isAPIError } from "../utils/is-api-error";
 
 /**
  * Better-call's createEndpoint re-throws APIError without exposing the headers
