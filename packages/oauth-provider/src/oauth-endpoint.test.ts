@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import {
-	createOAuthEndpoint,
-	isMissingValueIssue,
-	mapIssuesToOAuthError,
-} from "./oauth-endpoint";
+import { isMissingValueIssue, mapIssuesToOAuthError } from "./oauth-endpoint";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/9250
@@ -166,35 +162,5 @@ describe("zod v4 issue shape contract", () => {
 		expect(issue).toBeDefined();
 		expect(issue!.code).toBe("invalid_value");
 		expect(isMissingValueIssue(issue!)).toBe(false);
-	});
-});
-
-describe("createOAuthEndpoint factory guards", () => {
-	it("throws when errorDelivery is 'redirect' but redirectOnError is absent", () => {
-		expect(() =>
-			createOAuthEndpoint(
-				"/oauth2/authorize",
-				{
-					method: "GET",
-					query: z.object({ client_id: z.string() }),
-					errorDelivery: "redirect",
-				},
-				async () => ({}),
-			),
-		).toThrow(/requires redirectOnError/);
-	});
-
-	it("throws when redirectOnError is set without errorDelivery 'redirect'", () => {
-		expect(() =>
-			createOAuthEndpoint(
-				"/oauth2/token",
-				{
-					method: "POST",
-					body: z.object({ grant_type: z.string() }),
-					redirectOnError: async () => ({}),
-				},
-				async () => ({}),
-			),
-		).toThrow(/requires errorDelivery "redirect"/);
 	});
 });

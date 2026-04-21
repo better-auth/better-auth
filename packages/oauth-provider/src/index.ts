@@ -10,7 +10,6 @@ export type {
 	OAuthEndpointErrorResult,
 	OAuthEndpointRedirectContext,
 	OAuthErrorCode,
-	OAuthErrorDelivery,
 	OAuthFieldError,
 	OAuthFieldErrorMap,
 	OAuthRedirectOnError,

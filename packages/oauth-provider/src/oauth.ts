@@ -12,14 +12,7 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
-import {
-	authorizeEndpoint,
-	formatErrorURL,
-	getErrorURL,
-	getIssuer,
-	handleRedirect,
-	resolveTrustedRedirectUri,
-} from "./authorize";
+import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
@@ -413,38 +406,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							)
 							.optional(),
 					}),
-					errorDelivery: "redirect",
-					redirectOnError: async ({ error, error_description, ctx }) => {
-						const raw = (ctx.query ?? {}) as Record<string, unknown>;
-						const clientId =
-							typeof raw.client_id === "string" ? raw.client_id : undefined;
-						const redirectUriRaw =
-							typeof raw.redirect_uri === "string"
-								? raw.redirect_uri
-								: undefined;
-						const trusted = await resolveTrustedRedirectUri(
-							ctx,
-							opts,
-							clientId,
-							redirectUriRaw,
-						);
-						if (trusted) {
-							return handleRedirect(
-								ctx,
-								formatErrorURL(
-									trusted,
-									error,
-									error_description,
-									typeof raw.state === "string" ? raw.state : undefined,
-									getIssuer(ctx, opts),
-								),
-							);
-						}
-						return handleRedirect(
-							ctx,
-							getErrorURL(ctx, error, error_description),
-						);
-					},
+					redirectOnError: authorizeRedirectOnError(opts),
 					fieldErrors: {
 						response_type: { invalid: "unsupported_response_type" },
 					},

@@ -5,7 +5,7 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
-import type { OAuthErrorCode } from "./oauth-endpoint";
+import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -128,7 +128,7 @@ export function getIssuer(
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
-export function getErrorURL(
+function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: OAuthErrorCode,
 	description: string,
@@ -150,19 +150,31 @@ function findRegisteredRedirectUri(
 	requested: string | undefined,
 ): string | undefined {
 	if (!registered || !requested) return undefined;
+
+	let req: URL | undefined;
+	try {
+		req = new URL(requested);
+	} catch {
+		// malformed requested — only exact-match branch can succeed below
+	}
+
+	// TODO(sync-from-main-9226): swap for isLoopbackIP(req.hostname) once the
+	// helper lands here, to cover the full 127.0.0.0/8 range per RFC 8252 §7.3.
+	const loopbackReq =
+		req?.hostname === "127.0.0.1" || req?.hostname === "[::1]"
+			? req
+			: undefined;
+
 	return registered.find((url) => {
 		if (url === requested) return true;
+		if (!loopbackReq) return false;
 		try {
 			const reg = new URL(url);
-			const req = new URL(requested);
-			// TODO: swap to @better-auth/core/utils/host#isLoopbackIP once the
-			// main→next sync lands to cover the full 127.0.0.0/8 range (RFC 8252 §7.3).
 			return (
-				(reg.hostname === "127.0.0.1" || reg.hostname === "[::1]") &&
-				reg.hostname === req.hostname &&
-				reg.pathname === req.pathname &&
-				reg.protocol === req.protocol &&
-				reg.search === req.search
+				reg.hostname === loopbackReq.hostname &&
+				reg.pathname === loopbackReq.pathname &&
+				reg.protocol === loopbackReq.protocol &&
+				reg.search === loopbackReq.search
 			);
 		} catch {
 			return false;
@@ -176,7 +188,7 @@ function findRegisteredRedirectUri(
  * RP cannot be safely reached, so callers can fall back to the server error
  * page (avoiding open-redirect risk on validation failures).
  */
-export async function resolveTrustedRedirectUri(
+async function resolveTrustedRedirectUri(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	clientId: string | undefined,
@@ -192,6 +204,43 @@ export async function resolveTrustedRedirectUri(
 	if (!client || client.disabled) return null;
 	const matched = findRegisteredRedirectUri(client.redirectUris, redirectUri);
 	return matched ? redirectUri : null;
+}
+
+/**
+ * Builds the `redirectOnError` callback for `/oauth2/authorize`: redirects
+ * back to the RP with the RFC 6749 error query params when the already-parsed
+ * query maps to a trusted registered redirect_uri, otherwise falls back to
+ * the server error page (to avoid open-redirect risk on validation failures).
+ */
+export function authorizeRedirectOnError(
+	opts: OAuthOptions<Scope[]>,
+): OAuthRedirectOnError<GenericEndpointContext> {
+	return async ({ error, error_description, ctx }) => {
+		const raw = (ctx.query ?? {}) as Record<string, unknown>;
+		const clientId =
+			typeof raw.client_id === "string" ? raw.client_id : undefined;
+		const redirectUriRaw =
+			typeof raw.redirect_uri === "string" ? raw.redirect_uri : undefined;
+		const trusted = await resolveTrustedRedirectUri(
+			ctx,
+			opts,
+			clientId,
+			redirectUriRaw,
+		);
+		if (trusted) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					trusted,
+					error,
+					error_description,
+					typeof raw.state === "string" ? raw.state : undefined,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
+		return handleRedirect(ctx, getErrorURL(ctx, error, error_description));
+	};
 }
 
 export async function authorizeEndpoint(
