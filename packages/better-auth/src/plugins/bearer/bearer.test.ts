@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { seedVerifiedOtpMethod } from "../../test-utils/two-factor";
 import { twoFactor } from "../two-factor";
 
 describe("bearer", async () => {
@@ -129,13 +130,13 @@ describe("bearer", async () => {
 		});
 
 		await instance.auth.$context.then(async (ctx) => {
-			await ctx.adapter.update({
-				model: "user",
-				update: {
-					twoFactorEnabled: true,
-				},
-				where: [{ field: "email", value: instance.testUser.email }],
-			});
+			const user = await ctx.internalAdapter.findUserByEmail(
+				instance.testUser.email,
+			);
+			if (!user) {
+				throw new Error("Expected test user");
+			}
+			await seedVerifiedOtpMethod(instance.db, user.user.id);
 		});
 
 		const response = await instance.auth.api.signInEmail({

@@ -4,12 +4,12 @@ import type {
 	ClientFetchOption,
 } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
-import type { TwoFactorMethod } from "../two-factor/types";
+import type { TwoFactorMethodDescriptor } from "../two-factor/types";
 
 type TwoFactorChallenge = {
 	kind: "two-factor";
 	attemptId: string;
-	availableMethods: TwoFactorMethod[];
+	methods: TwoFactorMethodDescriptor[];
 };
 
 type SignInChallengeResponse = {
@@ -202,7 +202,7 @@ export interface GoogleOneTapActionOptions
 	onTwoFactorRedirect?:
 		| ((context: {
 				attemptId: string;
-				availableMethods: TwoFactorMethod[];
+				methods: TwoFactorMethodDescriptor[];
 		  }) => void | Promise<void>)
 		| undefined;
 	/**
@@ -250,11 +250,8 @@ function buildTwoFactorRedirectURL(
 	currentURL: string,
 	challenge: TwoFactorChallenge,
 ) {
-	// The server's signed two-factor cookie carries the attemptId; omit it from
-	// the URL to avoid Referer / proxy-log leakage (#S5).
 	const redirectURL = new URL(callbackURL ?? "/", currentURL);
 	redirectURL.searchParams.set("challenge", "two-factor");
-	redirectURL.searchParams.set("methods", challenge.availableMethods.join(","));
 	return redirectURL.toString();
 }
 
@@ -330,7 +327,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								if (opts?.onTwoFactorRedirect) {
 									await opts.onTwoFactorRedirect({
 										attemptId: challenge.attemptId,
-										availableMethods: challenge.availableMethods,
+										methods: challenge.methods,
 									});
 									return;
 								}
@@ -402,7 +399,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							if (opts?.onTwoFactorRedirect) {
 								await opts.onTwoFactorRedirect({
 									attemptId: challenge.attemptId,
-									availableMethods: challenge.availableMethods,
+									methods: challenge.methods,
 								});
 								return;
 							}

@@ -1,6 +1,7 @@
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
+import type { Auth, BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import {
@@ -19,7 +20,7 @@ import {
 } from "better-auth/plugins";
 import { Stripe } from "stripe";
 
-export const auth = betterAuth({
+const config = {
 	appName: "Better Auth Demo",
 	plugins: [
 		anonymous({}),
@@ -200,9 +201,13 @@ export const auth = betterAuth({
 		}),
 		lastLoginMethod(),
 	],
-});
+} satisfies BetterAuthOptions;
 
-auth.api
+const authInstance = betterAuth(config);
+
+export const auth = authInstance as unknown as Auth<BetterAuthOptions>;
+
+authInstance.api
 	.createOrganization({
 		body: {
 			name: "My Org",

@@ -6,7 +6,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { parseJSON } from "../../client/parser";
 import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
+import {
+	expectNoTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethod,
+} from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { twoFactor } from "../two-factor";
 import { oAuthProxy } from ".";
@@ -677,13 +681,7 @@ describe("oauth-proxy", async () => {
 				name: "First Last",
 				emailVerified: true,
 			});
-			await preview.db.update({
-				model: "user",
-				update: {
-					twoFactorEnabled: true,
-				},
-				where: [{ field: "id", value: existingUser.id }],
-			});
+			await seedVerifiedOtpMethod(preview.db, existingUser.id);
 
 			const headers = new Headers();
 			const signInRes = await production.client.signIn.social(
@@ -739,12 +737,12 @@ describe("oauth-proxy", async () => {
 			expect(redirectURL.pathname).toBe("/dashboard");
 			expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 			expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-			expect(redirectURL.searchParams.get("methods")).toBe("otp");
+			expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 			const cookies = parseSetCookieHeader(setCookieHeader);
 			const twoFactorCookie =
-				cookies.get("better-auth.two_factor") ??
-				cookies.get("__Secure-better-auth.two_factor");
+				cookies.get("better-auth.two_factor_challenge") ??
+				cookies.get("__Secure-better-auth.two_factor_challenge");
 			expect(twoFactorCookie?.value).toBeDefined();
 
 			const previewSessions = await previewCtx.internalAdapter.listSessions(

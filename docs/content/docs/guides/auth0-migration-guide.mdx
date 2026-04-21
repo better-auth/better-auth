@@ -193,6 +193,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
     </Callout>
 
     ```ts title="scripts/migrate-auth0.ts"
+    import { createHash } from "node:crypto";
     import { ManagementClient } from 'auth0';
     import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
     import { auth } from '@/lib/auth';
@@ -229,19 +230,20 @@ Before starting the migration process, set up Better Auth in your project. Follo
         return date;
     }
 
-    // Helper function to generate backup codes for 2FA
-    async function generateBackupCodes(secret: string) {
-        const key = secret;
-        const backupCodes = Array.from({ length: 10 })
+    // Helper function to create recovery-code rows for method-based 2FA
+    function createRecoveryCodes(methodId: string) {
+        const recoveryCodes = Array.from({ length: 10 })
             .fill(null)
             .map(() => generateRandomString(10, "a-z", "0-9", "A-Z"))
             .map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
 
-        const encCodes = await symmetricEncrypt({
-            data: JSON.stringify(backupCodes),
-            key: key,
-        });
-        return encCodes;
+        return {
+            recoveryCodes,
+            rows: recoveryCodes.map((code) => ({
+                methodId,
+                codeHash: createHash("sha256").update(code).digest("hex"),
+            })),
+        };
     }
 
     function mapAuth0RoleToBetterAuthRole(auth0Roles: string[]) {
@@ -311,14 +313,51 @@ Before starting the migration process, set up Better Auth in your project. Follo
         for (const factor of auth0User.mfa_factors) {
             try {
                 if (factor.totp && factor.totp.secret) {
+                    const totpMethodId = `${userId}:totp`;
                     await ctx.adapter.create({
-                        model: "twoFactor",
+                        model: "twoFactorMethod",
                         data: {
-                            userId: userId,
-                            secret: factor.totp.secret,
-                            backupCodes: await generateBackupCodes(factor.totp.secret)
-                        }
+                            id: totpMethodId,
+                            userId,
+                            kind: "totp",
+                            label: "Imported from Auth0",
+                            verifiedAt: new Date(),
+                            lastUsedAt: null,
+                        },
+                        forceAllowId: true,
                     });
+                    await ctx.adapter.create({
+                        model: "twoFactorTotp",
+                        data: {
+                            methodId: totpMethodId,
+                            secret: await symmetricEncrypt({
+                                data: factor.totp.secret,
+                                key: ctx.secret,
+                            }),
+                        },
+                    });
+
+                    const recoveryMethodId = `${userId}:recovery`;
+                    const { rows } = createRecoveryCodes(recoveryMethodId);
+                    await ctx.adapter.create({
+                        model: "twoFactorMethod",
+                        data: {
+                            id: recoveryMethodId,
+                            userId,
+                            kind: "recovery-code",
+                            label: null,
+                            verifiedAt: new Date(),
+                            lastUsedAt: null,
+                        },
+                        forceAllowId: true,
+                    });
+
+                    for (const row of rows) {
+                        await ctx.adapter.create({
+                            model: "twoFactorRecoveryCode",
+                            data: row,
+                        });
+                    }
                 }
             } catch (error) {
                 console.error(`Failed to migrate MFA factor for user ${userId}:`, error);

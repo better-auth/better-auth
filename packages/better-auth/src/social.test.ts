@@ -20,7 +20,11 @@ import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
 import { getMigrations } from "./db/get-migration";
 import { twoFactor } from "./plugins";
-import { expectNoTwoFactorChallenge, getTestInstance } from "./test-utils";
+import {
+	expectNoTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethod,
+} from "./test-utils";
 import { DEFAULT_SECRET } from "./utils/constants";
 
 const server = new OAuth2Server();
@@ -1728,13 +1732,7 @@ describe("Vercel Provider", async () => {
 			name: "Vercel User",
 			emailVerified: true,
 		});
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.id);
 
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({
@@ -1762,12 +1760,14 @@ describe("Vercel Provider", async () => {
 					expect(redirectURL.pathname).toBe("/dashboard");
 					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 					expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-					expect(redirectURL.searchParams.get("methods")).toBe("otp");
+					expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 					const cookies = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(
+						cookies.get("better-auth.two_factor_challenge")?.value,
+					).toBeDefined();
 				},
 			},
 		);

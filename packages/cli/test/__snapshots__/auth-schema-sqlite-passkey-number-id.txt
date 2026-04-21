@@ -35,6 +35,7 @@ export const custom_session = sqliteTable(
     userId: integer("user_id")
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
+    amr: text("amr", { mode: "json" }).notNull(),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
 );

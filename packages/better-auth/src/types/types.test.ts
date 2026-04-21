@@ -17,19 +17,24 @@ type TestTypeOptions = {
 };
 
 type HasTwoFactorChallengeBranch<T> =
-	Extract<
-		T,
-		{
-			kind: "challenge";
-			challenge: {
-				kind: "two-factor";
-				attemptId: string;
-				availableMethods: readonly string[];
-			};
-		}
-	> extends never
-		? false
-		: true;
+	Extract<T, { kind: "challenge" }> extends {
+		challenge: infer Challenge;
+	}
+		? Extract<
+				Challenge,
+				{
+					kind: "two-factor";
+					attemptId: string;
+					methods: {
+						id: string;
+						kind: "totp" | "otp" | "recovery-code";
+						label: string | null;
+					}[];
+				}
+			> extends never
+			? false
+			: true
+		: false;
 
 const pingEndpoint = createAuthEndpoint(
 	"/test-type-ping",
@@ -241,12 +246,18 @@ describe("general types", async () => {
 		const value = {} as SignInEmailReturn;
 		if (isSignInChallenge(value)) {
 			expectTypeOf(value.kind).toEqualTypeOf<"challenge">();
-			expectTypeOf(value.challenge.kind).toEqualTypeOf<"two-factor">();
+			expectTypeOf(value.challenge.kind).toEqualTypeOf<
+				"two-factor" | "test-challenge"
+			>();
 		}
 		if (isSignInChallengeOfKind(value, "two-factor")) {
 			expectTypeOf(value.challenge.attemptId).toEqualTypeOf<string>();
-			expectTypeOf(value.challenge.availableMethods).toEqualTypeOf<
-				("totp" | "otp" | "backup-code")[]
+			expectTypeOf(value.challenge.methods).toEqualTypeOf<
+				{
+					id: string;
+					kind: "totp" | "otp" | "recovery-code";
+					label: string | null;
+				}[]
 			>();
 		}
 	});
@@ -263,7 +274,6 @@ describe("general types", async () => {
 			image?: string | undefined | null;
 			createdAt: Date;
 			updatedAt: Date;
-			twoFactorEnabled: boolean | undefined | null;
 		}>();
 
 		expectTypeOf<typeof auth.$Infer.Session.session>().toMatchObjectType<{

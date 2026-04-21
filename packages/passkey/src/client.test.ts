@@ -164,7 +164,7 @@ describe("passkey client", () => {
 						challenge: {
 							kind: "two-factor",
 							attemptId: "attempt-id",
-							availableMethods: ["otp"],
+							methods: [{ id: "otp-method-id", kind: "otp", label: null }],
 						},
 					},
 				};
@@ -189,7 +189,7 @@ describe("passkey client", () => {
 			challenge: {
 				kind: "two-factor",
 				attemptId: "attempt-id",
-				availableMethods: ["otp"],
+				methods: [{ id: "otp-method-id", kind: "otp", label: null }],
 			},
 		});
 		expect(listPasskeys.set).not.toHaveBeenCalled();

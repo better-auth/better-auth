@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   mysqlEnum,
+  json,
   index,
 } from "drizzle-orm/mysql-core";
 
@@ -38,6 +39,7 @@ export const session = mysqlTable(
     userId: varchar("user_id", { length: 36 })
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    amr: json("amr", { mode: "json" }).notNull(),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
 );

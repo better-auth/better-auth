@@ -6,8 +6,6 @@ import type {
 	SignInResolution,
 } from "@better-auth/core";
 import { writers } from "@better-auth/core/context/internals";
-import { checkTwoFactor } from "../plugins/two-factor/check";
-import { rotateTrustedDevice } from "../plugins/two-factor/trust-device";
 import type { User } from "../types";
 import {
 	finalizeSignIn,
@@ -39,7 +37,7 @@ export type ResolveSignInOptions = {
 
 /**
  * Single sign-in resolver: either finalizes a session right now, or pauses
- * for a registered challenge (currently only `"two-factor"`).
+ * for the first registered plugin challenge that applies.
  */
 export async function resolveSignIn(
 	ctx: GenericEndpointContext,
@@ -49,31 +47,40 @@ export async function resolveSignIn(
 	ctxWriters.setFinalizedSignIn(null);
 	ctxWriters.setSignInAttempt(null);
 
-	// TODO(challenges): This is a single-challenge dispatcher hardcoded to 2FA.
-	// When a second challenge ships (e.g. step-up email, risk-based), replace
-	// this with a registry walk over `BetterAuthSignInChallengeRegistry` so
-	// challenge plugins register their own `check` hooks instead of being
-	// invoked by name. The resolver shape (`{ kind: "challenge" | "session" }`)
-	// is already designed for that generalization: only the dispatch is not.
-	const twoFactor = await checkTwoFactor(ctx, {
-		user: options.user,
-		rememberMe: options.rememberMe,
-		satisfiedChallenges: options.satisfiedChallenges,
-		amr: options.amr,
-	});
-
-	if (twoFactor?.kind === "challenge") {
-		return { kind: "challenge", challenge: twoFactor.challenge };
+	const onSuccessCallbacks: Array<() => Promise<void> | void> = [];
+	for (const plugin of ctx.context.options.plugins ?? []) {
+		if (!plugin.checkSignInChallenge) {
+			continue;
+		}
+		const result = await plugin.checkSignInChallenge(ctx, {
+			user: options.user,
+			rememberMe: options.rememberMe,
+			satisfiedChallenges: options.satisfiedChallenges,
+			amr: options.amr,
+		});
+		if (!result) {
+			continue;
+		}
+		if (result.kind === "challenge") {
+			if (!plugin.signInChallenges?.includes(result.challenge.kind)) {
+				throw new Error(
+					`Plugin "${plugin.id}" returned challenge "${String(result.challenge.kind)}" without declaring it in signInChallenges`,
+				);
+			}
+			return { kind: "challenge", challenge: result.challenge };
+		}
+		onSuccessCallbacks.push(result.onSuccess);
 	}
-
-	const rotation =
-		twoFactor?.kind === "trusted-device" ? twoFactor.rotation : null;
 	return finalizeSignIn(ctx, {
 		user: options.user,
 		rememberMe: options.rememberMe,
 		amr: [options.amr],
-		onSuccess: rotation
-			? () => rotateTrustedDevice(ctx, rotation, options.user.id)
+		onSuccess: onSuccessCallbacks.length
+			? async () => {
+					for (const callback of onSuccessCallbacks) {
+						await callback();
+					}
+				}
 			: undefined,
 	});
 }

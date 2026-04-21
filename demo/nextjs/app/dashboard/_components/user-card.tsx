@@ -55,6 +55,7 @@ import {
 import { useRevokeSessionMutation } from "@/data/user/revoke-session-mutation";
 import { useSessionQuery } from "@/data/user/session-query";
 import { useSignOutMutation } from "@/data/user/sign-out-mutation";
+import { useTwoFactorMethodsQuery } from "@/data/user/two-factor-query";
 import type { Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 
@@ -66,12 +67,17 @@ const UserCard = (props: {
 	const signOutMutation = useSignOutMutation();
 	const revokeSessionMutation = useRevokeSessionMutation();
 	const { data } = useSessionQuery();
+	const twoFactorMethodsQuery = useTwoFactorMethodsQuery();
 	const session = data || props.session;
 	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
 	const [activeSessions, setActiveSessions] = useState(props.activeSessions);
+	const hasVerifiedTwoFactor = twoFactorMethodsQuery.data?.enabled ?? false;
+	const totpMethodId =
+		twoFactorMethodsQuery.data?.methods.find((method) => method.kind === "totp")
+			?.id ?? null;
 	const removeActiveSession = (id: string) =>
 		setActiveSessions(activeSessions.filter((session) => session.id !== id));
 
@@ -207,7 +213,7 @@ const UserCard = (props: {
 					<div className="flex flex-col gap-2">
 						<p className="text-sm">Two Factor</p>
 						<div className="flex gap-2">
-							{!!session?.user.twoFactorEnabled && (
+							{totpMethodId && (
 								<Dialog>
 									<DialogTrigger asChild>
 										<Button variant="outline" className="gap-2">
@@ -222,44 +228,38 @@ const UserCard = (props: {
 												Scan the QR code with your TOTP app
 											</DialogDescription>
 										</DialogHeader>
-										<TwoFactorQrForm />
+										<TwoFactorQrForm methodId={totpMethodId} />
 									</DialogContent>
 								</Dialog>
 							)}
 							<Dialog open={twoFactorDialog} onOpenChange={setTwoFactorDialog}>
 								<DialogTrigger asChild>
 									<Button
-										variant={
-											session?.user.twoFactorEnabled ? "destructive" : "outline"
-										}
+										variant={hasVerifiedTwoFactor ? "destructive" : "outline"}
 										className="gap-2"
 									>
-										{session?.user.twoFactorEnabled ? (
+										{hasVerifiedTwoFactor ? (
 											<ShieldOff size={16} />
 										) : (
 											<ShieldCheck size={16} />
 										)}
 										<span className="md:text-sm text-xs">
-											{session?.user.twoFactorEnabled
-												? "Disable 2FA"
-												: "Enable 2FA"}
+											{hasVerifiedTwoFactor ? "Disable 2FA" : "Enable 2FA"}
 										</span>
 									</Button>
 								</DialogTrigger>
 								<DialogContent className="sm:max-w-[425px] w-11/12">
 									<DialogHeader>
 										<DialogTitle>
-											{session?.user.twoFactorEnabled
-												? "Disable 2FA"
-												: "Enable 2FA"}
+											{hasVerifiedTwoFactor ? "Disable 2FA" : "Enable 2FA"}
 										</DialogTitle>
 										<DialogDescription>
-											{session?.user.twoFactorEnabled
+											{hasVerifiedTwoFactor
 												? "Disable the second factor authentication from your account"
 												: "Enable 2FA to secure your account"}
 										</DialogDescription>
 									</DialogHeader>
-									{session?.user.twoFactorEnabled ? (
+									{hasVerifiedTwoFactor ? (
 										<TwoFactorDisableForm
 											onSuccess={() => setTwoFactorDialog(false)}
 										/>

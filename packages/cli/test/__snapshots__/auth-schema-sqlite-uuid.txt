@@ -1,5 +1,11 @@
 import { relations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const custom_user = sqliteTable("custom_user", {
   id: text("id").primaryKey(),
@@ -16,9 +22,6 @@ export const custom_user = sqliteTable("custom_user", {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(
-    false,
-  ),
   username: text("username").unique(),
   displayUsername: text("display_username"),
 });
@@ -40,6 +43,7 @@ export const custom_session = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
+    amr: text("amr", { mode: "json" }).notNull(),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
 );
@@ -92,27 +96,133 @@ export const custom_verification = sqliteTable(
   (table) => [index("custom_verification_identifier_idx").on(table.identifier)],
 );
 
-export const twoFactor = sqliteTable(
-  "two_factor",
+export const signInAttempt = sqliteTable(
+  "sign_in_attempt",
   {
     id: text("id").primaryKey(),
-    secret: text("secret").notNull(),
-    backupCodes: text("backup_codes").notNull(),
     userId: text("user_id")
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
-    verified: integer("verified", { mode: "boolean" }).default(true),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    rememberMe: integer("remember_me", { mode: "boolean" }),
+    amr: text("amr", { mode: "json" }).notNull(),
+    failedVerifications: integer("failed_verifications").default(0).notNull(),
+    lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
   },
   (table) => [
-    index("twoFactor_secret_idx").on(table.secret),
-    index("twoFactor_userId_idx").on(table.userId),
+    index("signInAttempt_userId_idx").on(table.userId),
+    index("signInAttempt_expiresAt_idx").on(table.expiresAt),
+  ],
+);
+
+export const twoFactorMethod = sqliteTable(
+  "two_factor_method",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    label: text("label"),
+    verifiedAt: integer("verified_at", { mode: "timestamp_ms" }),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("twoFactorMethod_userId_idx").on(table.userId),
+    index("twoFactorMethod_kind_idx").on(table.kind),
+    index("twoFactorMethod_verifiedAt_idx").on(table.verifiedAt),
+  ],
+);
+
+export const twoFactorTotp = sqliteTable(
+  "two_factor_totp",
+  {
+    id: text("id").primaryKey(),
+    methodId: text("method_id")
+      .notNull()
+      .unique()
+      .references(() => twoFactorMethod.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("twoFactorTotp_methodId_uidx").on(table.methodId)],
+);
+
+export const twoFactorRecoveryCode = sqliteTable(
+  "two_factor_recovery_code",
+  {
+    id: text("id").primaryKey(),
+    methodId: text("method_id")
+      .notNull()
+      .references(() => twoFactorMethod.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    usedAt: integer("used_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("twoFactorRecoveryCode_methodId_idx").on(table.methodId),
+    index("twoFactorRecoveryCode_codeHash_idx").on(table.codeHash),
+  ],
+);
+
+export const trustedDevice = sqliteTable(
+  "trusted_device",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    lookupKeyHash: text("lookup_key_hash").notNull().unique(),
+    label: text("label"),
+    userAgent: text("user_agent"),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("trustedDevice_userId_idx").on(table.userId),
+    index("trustedDevice_expiresAt_idx").on(table.expiresAt),
   ],
 );
 
 export const custom_userRelations = relations(custom_user, ({ many }) => ({
   custom_sessions: many(custom_session),
   custom_accounts: many(custom_account),
-  twoFactors: many(twoFactor),
+  signInAttempts: many(signInAttempt),
+  twoFactorMethods: many(twoFactorMethod),
+  trustedDevices: many(trustedDevice),
 }));
 
 export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
@@ -129,9 +239,45 @@ export const custom_accountRelations = relations(custom_account, ({ one }) => ({
   }),
 }));
 
-export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+export const signInAttemptRelations = relations(signInAttempt, ({ one }) => ({
   custom_user: one(custom_user, {
-    fields: [twoFactor.userId],
+    fields: [signInAttempt.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorMethodRelations = relations(
+  twoFactorMethod,
+  ({ one, many }) => ({
+    custom_user: one(custom_user, {
+      fields: [twoFactorMethod.userId],
+      references: [custom_user.id],
+    }),
+    twoFactorTotp: many(twoFactorTotp),
+    twoFactorRecoveryCodes: many(twoFactorRecoveryCode),
+  }),
+);
+
+export const twoFactorTotpRelations = relations(twoFactorTotp, ({ one }) => ({
+  twoFactorMethod: one(twoFactorMethod, {
+    fields: [twoFactorTotp.methodId],
+    references: [twoFactorMethod.id],
+  }),
+}));
+
+export const twoFactorRecoveryCodeRelations = relations(
+  twoFactorRecoveryCode,
+  ({ one }) => ({
+    twoFactorMethod: one(twoFactorMethod, {
+      fields: [twoFactorRecoveryCode.methodId],
+      references: [twoFactorMethod.id],
+    }),
+  }),
+);
+
+export const trustedDeviceRelations = relations(trustedDevice, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [trustedDevice.userId],
     references: [custom_user.id],
   }),
 }));

@@ -12,7 +12,7 @@ import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization, twoFactor } from "better-auth/plugins";
-import { getTestInstance } from "better-auth/test";
+import { getTestInstance, seedVerifiedOtpMethod } from "better-auth/test";
 import bodyParser from "body-parser";
 import type {
 	Application as ExpressApp,
@@ -36,6 +36,52 @@ import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS, SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import type { SAMLSessionRecord } from "./types";
 import { safeJsonParse } from "./utils";
+
+type TwoFactorChallengeTestAuth = {
+	api: {
+		getPendingTwoFactorChallenge(input: {
+			headers: Headers;
+		}): Promise<{ methods: Array<{ id: string }> }>;
+		sendTwoFactorCode(input: {
+			headers: Headers;
+			body: { methodId: string };
+		}): Promise<unknown>;
+		verifyTwoFactor(input: {
+			headers: Headers;
+			body: { methodId: string; code: string };
+			asResponse: true;
+		}): Promise<Response>;
+	};
+};
+
+async function sendAndVerifyPendingOtpChallenge(
+	twoFactorAuth: TwoFactorChallengeTestAuth,
+	headers: Headers,
+	resolveCode: string | (() => string),
+) {
+	const pendingChallenge = await twoFactorAuth.api.getPendingTwoFactorChallenge(
+		{
+			headers,
+		},
+	);
+	const otpMethodId = pendingChallenge.methods[0]?.id;
+	if (!otpMethodId) {
+		throw new Error("Expected OTP method");
+	}
+	await twoFactorAuth.api.sendTwoFactorCode({
+		headers,
+		body: { methodId: otpMethodId },
+	});
+	const code = typeof resolveCode === "function" ? resolveCode() : resolveCode;
+	return twoFactorAuth.api.verifyTwoFactor({
+		headers,
+		body: {
+			methodId: otpMethodId,
+			code,
+		},
+		asResponse: true,
+	});
+}
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -3235,9 +3281,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			providerId: "loop-2fa-provider",
 			accountId: "test@email.com",
 		});
-		await context.internalAdapter.updateUser(existingUser.id, {
-			twoFactorEnabled: true,
-		});
+		await seedVerifiedOtpMethod(context.adapter, existingUser.id);
 
 		let samlResponse:
 			| { samlResponse: string; entityEndpoint?: string }
@@ -5423,9 +5467,7 @@ describe("SAML Single Logout (SLO)", () => {
 				providerId: "slo-2fa-test",
 				accountId: "test@email.com",
 			});
-			await context.internalAdapter.updateUser(existingUser.id, {
-				twoFactorEnabled: true,
-			});
+			await seedVerifiedOtpMethod(context.adapter, existingUser.id);
 
 			let samlResponse: { samlResponse: string } | undefined;
 			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
@@ -5459,24 +5501,16 @@ describe("SAML Single Logout (SLO)", () => {
 				callbackResponse.headers.get("set-cookie") ?? "",
 			);
 			expect(
-				challengeCookies.get("better-auth.two_factor")?.value,
+				challengeCookies.get("better-auth.two_factor_challenge")?.value,
 			).toBeDefined();
 
 			const challengeHeaders = new Headers();
 			setCookieToHeader(challengeHeaders)({ response: callbackResponse });
-			await auth.api.sendTwoFactorOTP({
-				headers: challengeHeaders,
-				body: {},
-			});
-			expect(otp).toHaveLength(6);
-
-			const verifyResponse = await auth.api.verifyTwoFactorOTP({
-				headers: challengeHeaders,
-				body: {
-					code: otp,
-				},
-				asResponse: true,
-			});
+			const verifyResponse = await sendAndVerifyPendingOtpChallenge(
+				auth,
+				challengeHeaders,
+				() => otp,
+			);
 			expect(verifyResponse.status).toBe(200);
 
 			const sessions = await context.internalAdapter.listSessions(
@@ -5570,9 +5604,7 @@ describe("SAML Single Logout (SLO)", () => {
 				providerId: "slo-org-2fa-test",
 				accountId: "test@email.com",
 			});
-			await context.internalAdapter.updateUser(existingUser.id, {
-				twoFactorEnabled: true,
-			});
+			await seedVerifiedOtpMethod(context.adapter, existingUser.id);
 
 			let samlResponse: { samlResponse: string } | undefined;
 			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
@@ -5617,19 +5649,11 @@ describe("SAML Single Logout (SLO)", () => {
 
 			const challengeHeaders = new Headers();
 			setCookieToHeader(challengeHeaders)({ response: callbackResponse });
-			await auth.api.sendTwoFactorOTP({
-				headers: challengeHeaders,
-				body: {},
-			});
-			expect(otp).toHaveLength(6);
-
-			const verifyResponse = await auth.api.verifyTwoFactorOTP({
-				headers: challengeHeaders,
-				body: {
-					code: otp,
-				},
-				asResponse: true,
-			});
+			const verifyResponse = await sendAndVerifyPendingOtpChallenge(
+				auth,
+				challengeHeaders,
+				() => otp,
+			);
 			expect(verifyResponse.status).toBe(200);
 
 			const finalizedOrg = await auth.api.getFullOrganization({
@@ -5712,9 +5736,7 @@ describe("SAML Single Logout (SLO)", () => {
 				providerId: "saml-post-body-2fa",
 				accountId: "test@email.com",
 			});
-			await context.internalAdapter.updateUser(existingUser.id, {
-				twoFactorEnabled: true,
-			});
+			await seedVerifiedOtpMethod(context.adapter, existingUser.id);
 
 			let samlResponse: { samlResponse: string } | undefined;
 			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
@@ -5754,7 +5776,7 @@ describe("SAML Single Logout (SLO)", () => {
 			).toBeNull();
 			const signedTwoFactorCookie = parseSetCookieHeader(
 				callbackResponse.headers.get("set-cookie") ?? "",
-			).get("better-auth.two_factor")?.value;
+			).get("better-auth.two_factor_challenge")?.value;
 			expect(signedTwoFactorCookie).toBeTruthy();
 			const attemptId = signedTwoFactorCookie!.slice(
 				0,
@@ -5767,19 +5789,11 @@ describe("SAML Single Logout (SLO)", () => {
 			const challengeHeaders = new Headers();
 			setCookieToHeader(challengeHeaders)({ response: callbackResponse });
 
-			await auth.api.sendTwoFactorOTP({
-				headers: challengeHeaders,
-				body: {},
-			});
-			expect(otp).toHaveLength(6);
-
-			const verifyResponse = await auth.api.verifyTwoFactorOTP({
-				headers: challengeHeaders,
-				body: {
-					code: otp,
-				},
-				asResponse: true,
-			});
+			const verifyResponse = await sendAndVerifyPendingOtpChallenge(
+				auth,
+				challengeHeaders,
+				() => otp,
+			);
 			expect(verifyResponse.status).toBe(200);
 			expect(capturedBody).toMatchObject({
 				code: otp,

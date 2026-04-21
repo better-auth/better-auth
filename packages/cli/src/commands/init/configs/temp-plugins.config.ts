@@ -102,7 +102,7 @@ export const tempPluginsConfig = {
 					],
 					argument: {
 						index: 0,
-						isProperty: "totp",
+						isProperty: "totpOptions",
 					},
 				},
 				{
@@ -143,18 +143,18 @@ export const tempPluginsConfig = {
 					],
 					argument: {
 						index: 0,
-						isProperty: "otp",
+						isProperty: "otpOptions",
 					},
 				},
 				{
-					flag: "backup-code",
-					description: "The options for the backup code.",
+					flag: "recovery-code",
+					description: "The options for the recovery code.",
 					skip: "prompt",
 					isNestedObject: [
 						{
-							flag: "backup-code-amount",
-							question: "What is the amount of backup codes to generate?",
-							description: "The amount of backup codes to generate.",
+							flag: "recovery-code-amount",
+							question: "What is the amount of recovery codes to generate?",
+							description: "The amount of recovery codes to generate.",
 							defaultValue: 10,
 							skip: "prompt",
 							argument: {
@@ -164,9 +164,9 @@ export const tempPluginsConfig = {
 							},
 						},
 						{
-							flag: "backup-code-length",
-							question: "What is the length of the backup codes?",
-							description: "The length of the backup codes.",
+							flag: "recovery-code-length",
+							question: "What is the length of the recovery codes?",
+							description: "The length of the recovery codes.",
 							defaultValue: 10,
 							skip: "prompt",
 							argument: {
@@ -178,31 +178,8 @@ export const tempPluginsConfig = {
 					],
 					argument: {
 						index: 0,
-						isProperty: "backupCodeOptions",
+						isProperty: "recoveryCodeOptions",
 					},
-				},
-				{
-					flag: "two-factor-schema",
-					argument: {
-						index: 0,
-						isProperty: "schema",
-					},
-					description: "The schema for the two factor plugin.",
-					skip: "prompt",
-					isNestedObject: [
-						{
-							flag: "two-factor-table",
-							question: "What is the name of the two factor table?",
-							description: "The name of the two factor table.",
-							defaultValue: "twoFactor",
-							skip: "prompt",
-							argument: {
-								index: 0,
-								isProperty: "twoFactorTable",
-								schema: z.coerce.string().optional(),
-							},
-						},
-					],
 				},
 			],
 		},

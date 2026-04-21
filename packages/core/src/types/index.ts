@@ -5,6 +5,8 @@ export type {
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
 	BetterAuthSignInChallengeRegistry,
+	CheckSignInChallengeInput,
+	CheckSignInChallengeResult,
 	FinalizedSignIn,
 	GenericEndpointContext,
 	InfoContext,

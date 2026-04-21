@@ -19,16 +19,17 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
 
 const passwordSchema = z.object({
-	password: z.string().min(8, "Password must be at least 8 characters."),
+	password: z.string(),
 });
 
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 interface TwoFactorQrFormProps {
+	methodId: string;
 	onSuccess?: (totpURI: string) => void;
 }
 
-export function TwoFactorQrForm({ onSuccess }: TwoFactorQrFormProps) {
+export function TwoFactorQrForm({ methodId, onSuccess }: TwoFactorQrFormProps) {
 	const [loading, startTransition] = useTransition();
 	const [totpURI, setTotpURI] = useState<string>("");
 
@@ -42,7 +43,7 @@ export function TwoFactorQrForm({ onSuccess }: TwoFactorQrFormProps) {
 	const onSubmit = (data: PasswordFormValues) => {
 		startTransition(async () => {
 			await authClient.twoFactor.getTotpUri(
-				{ password: data.password },
+				{ methodId, password: data.password || undefined },
 				{
 					onSuccess(context) {
 						setTotpURI(context.data.totpURI);
@@ -85,7 +86,7 @@ export function TwoFactorQrForm({ onSuccess }: TwoFactorQrFormProps) {
 							<PasswordInput
 								{...field}
 								id="qr-password"
-								placeholder="Enter your password"
+								placeholder="Enter your password if your account has one"
 								aria-invalid={fieldState.invalid}
 								autoComplete="current-password"
 							/>

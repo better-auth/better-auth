@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -14,10 +15,11 @@ import {
 	FieldLabel,
 } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
+import { userKeys } from "@/data/user/keys";
 import { authClient } from "@/lib/auth-client";
 
 const disableSchema = z.object({
-	password: z.string().min(8, "Password must be at least 8 characters."),
+	password: z.string(),
 });
 
 type DisableFormValues = z.infer<typeof disableSchema>;
@@ -27,6 +29,7 @@ interface TwoFactorDisableFormProps {
 }
 
 export function TwoFactorDisableForm({ onSuccess }: TwoFactorDisableFormProps) {
+	const queryClient = useQueryClient();
 	const [loading, startTransition] = useTransition();
 
 	const form = useForm<DisableFormValues>({
@@ -39,9 +42,12 @@ export function TwoFactorDisableForm({ onSuccess }: TwoFactorDisableFormProps) {
 	const onSubmit = (data: DisableFormValues) => {
 		startTransition(async () => {
 			await authClient.twoFactor.disable({
-				password: data.password,
+				password: data.password || undefined,
 				fetchOptions: {
-					onSuccess() {
+					async onSuccess() {
+						await queryClient.invalidateQueries({
+							queryKey: userKeys.twoFactorMethods(),
+						});
 						toast.success("2FA disabled successfully");
 						onSuccess?.();
 					},
@@ -68,7 +74,7 @@ export function TwoFactorDisableForm({ onSuccess }: TwoFactorDisableFormProps) {
 							<PasswordInput
 								{...field}
 								id="disable-password"
-								placeholder="Enter your password"
+								placeholder="Enter your password if your account has one"
 								aria-invalid={fieldState.invalid}
 								autoComplete="current-password"
 							/>

@@ -16,12 +16,13 @@ model User {
   image                String?               @db.Text
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
-  twoFactorEnabled     Boolean?              @default(false)
   username             String?
   displayUsername      String?               @db.Text
   sessions             Session[]
   accounts             Account[]
-  twofactors           TwoFactor[]
+  signinattempts       SignInAttempt[]
+  twofactormethods     TwoFactorMethod[]
+  trusteddevices       TrustedDevice[]
   members              Member[]
   workspaceinvitations WorkspaceInvitation[]
 
@@ -40,6 +41,7 @@ model Session {
   userAgent            String?  @db.Text
   userId               String
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amr                  String
   activeOrganizationId String?  @db.Text
 
   @@unique([token])
@@ -79,17 +81,84 @@ model Verification {
   @@map("verification")
 }
 
-model TwoFactor {
-  id          String   @id
-  secret      String   @db.Text
-  backupCodes String   @db.Text
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  verified    Boolean? @default(true)
+model SignInAttempt {
+  id                  String    @id
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt           DateTime
+  rememberMe          Boolean?
+  amr                 String
+  failedVerifications Int       @default(0)
+  lockedAt            DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  @@index([secret(length: 191)])
   @@index([userId(length: 191)])
-  @@map("twoFactor")
+  @@index([expiresAt])
+  @@map("signInAttempt")
+}
+
+model TwoFactorMethod {
+  id                     String                  @id
+  userId                 String
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind                   String                  @db.Text
+  label                  String?                 @db.Text
+  verifiedAt             DateTime?
+  lastUsedAt             DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  twofactortotp          TwoFactorTotp?
+  twofactorrecoverycodes TwoFactorRecoveryCode[]
+
+  @@index([userId(length: 191)])
+  @@index([kind(length: 191)])
+  @@index([verifiedAt])
+  @@map("twoFactorMethod")
+}
+
+model TwoFactorTotp {
+  id              String          @id
+  methodId        String
+  twofactormethod TwoFactorMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
+  secret          String          @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([methodId])
+  @@map("twoFactorTotp")
+}
+
+model TwoFactorRecoveryCode {
+  id              String          @id
+  methodId        String
+  twofactormethod TwoFactorMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
+  codeHash        String          @db.Text
+  usedAt          DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([methodId(length: 191)])
+  @@index([codeHash(length: 191)])
+  @@map("twoFactorRecoveryCode")
+}
+
+model TrustedDevice {
+  id            String    @id
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lookupKeyHash String
+  label         String?   @db.Text
+  userAgent     String?   @db.Text
+  lastUsedAt    DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([lookupKeyHash])
+  @@index([userId(length: 191)])
+  @@index([expiresAt])
+  @@map("trustedDevice")
 }
 
 model Workspace {

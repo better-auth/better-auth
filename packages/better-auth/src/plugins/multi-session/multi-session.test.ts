@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { seedVerifiedOtpMethodForEmail } from "../../test-utils/two-factor";
 import { twoFactor } from "../two-factor";
 import { multiSession } from ".";
 import { multiSessionClient } from "./client";
@@ -319,13 +320,11 @@ describe("multi-session with two-factor challenges", async () => {
 		},
 	);
 
-	await testInstance.db.update({
-		model: "user",
-		update: {
-			twoFactorEnabled: true,
-		},
-		where: [{ field: "email", value: testInstance.testUser.email }],
-	});
+	await seedVerifiedOtpMethodForEmail(
+		testInstance.auth,
+		testInstance.db,
+		testInstance.testUser.email,
+	);
 
 	it("should not mint multi-session cookies when sign-in is challenged", async () => {
 		let setCookieHeader = "";
@@ -345,7 +344,9 @@ describe("multi-session with two-factor challenges", async () => {
 		expect(
 			Array.from(cookies.keys()).some((name) => name.includes("_multi-")),
 		).toBe(false);
-		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
-		expect(setCookieHeader).toContain("better-auth.two_factor");
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
+		expect(setCookieHeader).toContain("better-auth.two_factor_challenge");
 	});
 });

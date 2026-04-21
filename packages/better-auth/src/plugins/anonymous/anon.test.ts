@@ -14,10 +14,15 @@ import {
 import * as apiModule from "../../api";
 import { parseSetCookieHeader, setCookieToHeader } from "../../cookies";
 import { signJWT, symmetricDecrypt } from "../../crypto";
-import { expectNoTwoFactorChallenge, getTestInstance } from "../../test-utils";
+import {
+	expectNoTwoFactorChallenge,
+	expectTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethodForEmail,
+} from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { twoFactor } from "../two-factor";
-import type { TwoFactorTable } from "../two-factor/types";
+import type { TwoFactorTotpSecret } from "../two-factor/types";
 import { anonymous } from ".";
 import { anonymousClient } from "./client";
 
@@ -156,13 +161,7 @@ describe("anonymous", async () => {
 			throw new Error("Expected anonymous session");
 		}
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
+		await seedVerifiedOtpMethodForEmail(auth, db, testUser.email);
 
 		const signInRes = await auth.api.signInEmail({
 			body: {
@@ -172,37 +171,35 @@ describe("anonymous", async () => {
 			headers,
 			asResponse: true,
 		});
-		const challengeBody = (await signInRes.clone().json()) as {
-			kind: "challenge";
-			challenge: {
-				kind: "two-factor";
-				attemptId: string;
-			};
-		};
+		const challengeBody = await signInRes.clone().json();
 		expect(
 			parseSetCookieHeader(signInRes.headers.get("set-cookie") || "").get(
-				"better-auth.two_factor",
+				"better-auth.two_factor_challenge",
 			),
 		).toBeDefined();
-		expect(challengeBody.kind).toBe("challenge");
-		expect(challengeBody.challenge.kind).toBe("two-factor");
-		expect(challengeBody.challenge.attemptId).toBeTruthy();
+		expectTwoFactorChallenge(challengeBody);
+		const otpMethodId = challengeBody.challenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
 		expect(onLinkAccount).not.toHaveBeenCalled();
 
 		const challengeHeaders = new Headers(headers);
 		setCookieToHeader(challengeHeaders)({ response: signInRes });
-		await auth.api.sendTwoFactorOTP({
+		await auth.api.sendTwoFactorCode({
 			headers: challengeHeaders,
 			body: {
 				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
 			},
 		});
 		expect(otp).toHaveLength(6);
 
-		const verifyRes = await auth.api.verifyTwoFactorOTP({
+		const verifyRes = await auth.api.verifyTwoFactor({
 			headers: challengeHeaders,
 			body: {
 				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
 				code: otp,
 			},
 			asResponse: true,
@@ -263,13 +260,7 @@ describe("anonymous", async () => {
 			throw new Error("Expected anonymous session");
 		}
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
+		await seedVerifiedOtpMethodForEmail(auth, db, testUser.email);
 
 		const signInRes = await auth.api.signInEmail({
 			body: {
@@ -279,32 +270,30 @@ describe("anonymous", async () => {
 			headers,
 			asResponse: true,
 		});
-		const challengeBody = (await signInRes.clone().json()) as {
-			kind: "challenge";
-			challenge: {
-				kind: "two-factor";
-				attemptId: string;
-			};
-		};
-		expect(challengeBody.kind).toBe("challenge");
-		expect(challengeBody.challenge.kind).toBe("two-factor");
-		expect(challengeBody.challenge.attemptId).toBeTruthy();
+		const challengeBody = await signInRes.clone().json();
+		expectTwoFactorChallenge(challengeBody);
+		const otpMethodId = challengeBody.challenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
 		expect(onLinkAccount).not.toHaveBeenCalled();
 
 		const challengeHeaders = new Headers(headers);
 		setCookieToHeader(challengeHeaders)({ response: signInRes });
-		await auth.api.sendTwoFactorOTP({
+		await auth.api.sendTwoFactorCode({
 			headers: challengeHeaders,
 			body: {
 				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
 			},
 		});
 		expect(otp).toHaveLength(6);
 
-		const verifyRes = await auth.api.verifyTwoFactorOTP({
+		const verifyRes = await auth.api.verifyTwoFactor({
 			headers: challengeHeaders,
 			body: {
 				attemptId: challengeBody.challenge.attemptId,
+				methodId: otpMethodId,
 				code: otp,
 			},
 			asResponse: true,
@@ -334,9 +323,7 @@ describe("anonymous", async () => {
 							onLinkAccount(data);
 						},
 					}),
-					twoFactor({
-						allowPasswordless: true,
-					}),
+					twoFactor(),
 				],
 			},
 			{ disableTestUser: true },
@@ -352,26 +339,27 @@ describe("anonymous", async () => {
 			throw new Error("Expected anonymous session");
 		}
 
-		await auth.api.enableTwoFactor({
+		const enableResponse = await auth.api.enableTwoFactorTotp({
 			headers,
 			body: {},
 		});
-		const twoFactorRecord = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: session.user.id }],
+		const totpRecord = await db.findOne<TwoFactorTotpSecret>({
+			model: "twoFactorTotp",
+			where: [{ field: "methodId", value: enableResponse.method.id }],
 		});
-		if (!twoFactorRecord) {
-			throw new Error("Expected two factor row");
+		if (!totpRecord) {
+			throw new Error("Expected TOTP record");
 		}
 		const secret = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
-			data: twoFactorRecord.secret,
+			data: totpRecord.secret,
 		});
 		const code = await createOTP(secret).totp();
 
-		const verifyRes = await auth.api.verifyTOTP({
+		const verifyRes = await auth.api.verifyTwoFactor({
 			headers,
 			body: {
+				methodId: enableResponse.method.id,
 				code,
 			},
 			asResponse: true,

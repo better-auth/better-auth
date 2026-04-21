@@ -335,7 +335,6 @@ describe("type", () => {
 				testField4: string;
 				testField?: string | undefined | null;
 				testField2?: number | undefined | null;
-				twoFactorEnabled: boolean | undefined | null;
 			};
 		}>();
 	});
@@ -353,7 +352,6 @@ describe("type", () => {
 			createdAt: Date;
 			updatedAt: Date;
 			image?: string | undefined | null;
-			twoFactorEnabled: boolean | undefined | null;
 		}>();
 	});
 
@@ -625,8 +623,8 @@ describe("type", () => {
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED.code,
-		).toEqualTypeOf<"OTP_HAS_EXPIRED">();
+			client.$ERROR_CODES.CODE_HAS_EXPIRED.code,
+		).toEqualTypeOf<"CODE_HAS_EXPIRED">();
 
 		// Should have email-otp error codes
 		expectTypeOf(

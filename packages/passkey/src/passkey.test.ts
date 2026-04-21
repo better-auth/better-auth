@@ -4,7 +4,7 @@ import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { twoFactor } from "better-auth/plugins";
-import { getTestInstance } from "better-auth/test";
+import { getTestInstance, seedVerifiedOtpMethod } from "better-auth/test";
 import {
 	afterEach,
 	assert,
@@ -81,7 +81,7 @@ function isTwoFactorChallengeResponse(value: unknown): value is {
 	challenge: {
 		kind: "two-factor";
 		attemptId: string;
-		availableMethods: string[];
+		methods: { id: string; kind: string; label: string | null }[];
 	};
 } {
 	if (!value || typeof value !== "object") return false;
@@ -387,13 +387,7 @@ describe("passkey", async () => {
 		if (!user) {
 			throw new Error("Expected test user");
 		}
-		await context.adapter.update({
-			model: "user",
-			where: [{ field: "id", value: user.user.id }],
-			update: {
-				twoFactorEnabled: true,
-			},
-		});
+		await seedVerifiedOtpMethod(context.adapter, user.user.id);
 		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
 			model: "passkey",
 			data: {
@@ -439,12 +433,20 @@ describe("passkey", async () => {
 		const challengeCookies = parseSetCookieHeader(
 			challengeResponse.headers.get("set-cookie") || "",
 		);
-		expect(challengeCookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expect(
+			challengeCookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
 		const challengeJson: unknown = await challengeResponse.json();
 		assert(isTwoFactorChallengeResponse(challengeJson));
 		expect(challengeJson.challenge.kind).toBe("two-factor");
 		expect(challengeJson.challenge.attemptId).toBeTruthy();
-		expect(challengeJson.challenge.availableMethods).toEqual(["otp"]);
+		expect(challengeJson.challenge.methods).toEqual([
+			{
+				id: expect.any(String),
+				kind: "otp",
+				label: null,
+			},
+		]);
 
 		const sessions = await context.internalAdapter.listSessions(user.user.id);
 		expect(sessions).toHaveLength(beforeSessions.length);
@@ -472,13 +474,7 @@ describe("passkey", async () => {
 		if (!user) {
 			throw new Error("Expected test user");
 		}
-		await context.adapter.update({
-			model: "user",
-			where: [{ field: "id", value: user.user.id }],
-			update: {
-				twoFactorEnabled: true,
-			},
-		});
+		await seedVerifiedOtpMethod(context.adapter, user.user.id);
 		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
 			model: "passkey",
 			data: {

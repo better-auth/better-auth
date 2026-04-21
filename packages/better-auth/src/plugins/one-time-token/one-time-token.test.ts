@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { seedVerifiedOtpMethodForEmail } from "../../test-utils/two-factor";
 import { isAPIError } from "../../utils/is-api-error";
 import { twoFactor } from "../two-factor";
 import { oneTimeToken } from ".";
@@ -381,13 +382,11 @@ describe("One-time token", async () => {
 				],
 			});
 
-			await testInstance.db.update({
-				model: "user",
-				update: {
-					twoFactorEnabled: true,
-				},
-				where: [{ field: "email", value: testInstance.testUser.email }],
-			});
+			await seedVerifiedOtpMethodForEmail(
+				testInstance.auth,
+				testInstance.db,
+				testInstance.testUser.email,
+			);
 
 			const response = await testInstance.auth.api.signInEmail({
 				body: {

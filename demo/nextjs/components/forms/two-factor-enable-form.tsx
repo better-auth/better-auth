@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -17,10 +18,11 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { userKeys } from "@/data/user/keys";
 import { authClient } from "@/lib/auth-client";
 
 const passwordSchema = z.object({
-	password: z.string().min(8, "Password must be at least 8 characters."),
+	password: z.string(),
 });
 
 const otpSchema = z.object({
@@ -35,8 +37,10 @@ interface TwoFactorEnableFormProps {
 }
 
 export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
+	const queryClient = useQueryClient();
 	const [loading, startTransition] = useTransition();
 	const [totpURI, setTotpURI] = useState<string>("");
+	const [methodId, setMethodId] = useState<string>("");
 
 	const passwordForm = useForm<PasswordFormValues>({
 		resolver: zodResolver(passwordSchema),
@@ -54,11 +58,15 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 
 	const onPasswordSubmit = (data: PasswordFormValues) => {
 		startTransition(async () => {
-			await authClient.twoFactor.enable({
-				password: data.password,
+			await authClient.twoFactor.enableTotp({
+				password: data.password || undefined,
 				fetchOptions: {
-					onSuccess(ctx) {
+					async onSuccess(ctx) {
 						setTotpURI(ctx.data.totpURI);
+						setMethodId(ctx.data.method.id);
+						await queryClient.invalidateQueries({
+							queryKey: userKeys.twoFactorMethods(),
+						});
 					},
 					onError(context) {
 						toast.error(context.error.message);
@@ -70,10 +78,14 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 
 	const onOtpSubmit = (data: OtpFormValues) => {
 		startTransition(async () => {
-			await authClient.twoFactor.verifyTotp({
+			await authClient.twoFactor.verify({
+				methodId,
 				code: data.otp,
 				fetchOptions: {
-					onSuccess() {
+					async onSuccess() {
+						await queryClient.invalidateQueries({
+							queryKey: userKeys.twoFactorMethods(),
+						});
 						toast.success("2FA enabled successfully");
 						onSuccess?.();
 					},
@@ -150,7 +162,7 @@ export function TwoFactorEnableForm({ onSuccess }: TwoFactorEnableFormProps) {
 							<PasswordInput
 								{...field}
 								id="enable-password"
-								placeholder="Enter your password"
+								placeholder="Enter your password if your account has one"
 								aria-invalid={fieldState.invalid}
 								autoComplete="current-password"
 							/>

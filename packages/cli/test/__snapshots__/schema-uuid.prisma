@@ -9,19 +9,20 @@ datasource db {
 }
 
 model User {
-  id               String      @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  id               String            @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
   name             String
   email            String
-  emailVerified    Boolean     @default(false)
+  emailVerified    Boolean           @default(false)
   image            String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  twoFactorEnabled Boolean?    @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   username         String?
   displayUsername  String?
   sessions         Session[]
   accounts         Account[]
-  twofactors       TwoFactor[]
+  signinattempts   SignInAttempt[]
+  twofactormethods TwoFactorMethod[]
+  trusteddevices   TrustedDevice[]
 
   @@unique([email])
   @@unique([username])
@@ -38,6 +39,7 @@ model Session {
   userAgent String?
   userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amr       Json
 
   @@unique([token])
   @@index([userId])
@@ -76,15 +78,82 @@ model Verification {
   @@map("verification")
 }
 
-model TwoFactor {
-  id          String   @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
-  secret      String
-  backupCodes String
-  userId      String   @db.Uuid
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  verified    Boolean? @default(true)
+model SignInAttempt {
+  id                  String    @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  userId              String    @db.Uuid
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt           DateTime
+  rememberMe          Boolean?
+  amr                 Json
+  failedVerifications Int       @default(0)
+  lockedAt            DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  @@index([secret])
   @@index([userId])
-  @@map("twoFactor")
+  @@index([expiresAt])
+  @@map("signInAttempt")
+}
+
+model TwoFactorMethod {
+  id                     String                  @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  userId                 String                  @db.Uuid
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind                   String
+  label                  String?
+  verifiedAt             DateTime?
+  lastUsedAt             DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  twofactortotp          TwoFactorTotp?
+  twofactorrecoverycodes TwoFactorRecoveryCode[]
+
+  @@index([userId])
+  @@index([kind])
+  @@index([verifiedAt])
+  @@map("twoFactorMethod")
+}
+
+model TwoFactorTotp {
+  id              String          @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  methodId        String          @db.Uuid
+  twofactormethod TwoFactorMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
+  secret          String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([methodId])
+  @@map("twoFactorTotp")
+}
+
+model TwoFactorRecoveryCode {
+  id              String          @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  methodId        String          @db.Uuid
+  twofactormethod TwoFactorMethod @relation(fields: [methodId], references: [id], onDelete: Cascade)
+  codeHash        String
+  usedAt          DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([methodId])
+  @@index([codeHash])
+  @@map("twoFactorRecoveryCode")
+}
+
+model TrustedDevice {
+  id            String    @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+  userId        String    @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lookupKeyHash String
+  label         String?
+  userAgent     String?
+  lastUsedAt    DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([lookupKeyHash])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("trustedDevice")
 }

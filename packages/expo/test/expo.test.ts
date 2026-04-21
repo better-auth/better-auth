@@ -1,7 +1,11 @@
 import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink, oAuthProxy, twoFactor } from "better-auth/plugins";
-import { expectNoTwoFactorChallenge, getTestInstance } from "better-auth/test";
+import {
+	expectNoTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethod,
+} from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";
 import {
@@ -1041,11 +1045,7 @@ describe("expo deep link injection for two-factor challenges", async () => {
 			name: "Expo Magic Link",
 			emailVerified: true,
 		});
-		await db.update({
-			model: "user",
-			update: { twoFactorEnabled: true },
-			where: [{ field: "id", value: user.id }],
-		});
+		await seedVerifiedOtpMethod(db, user.id);
 
 		await client.signIn.magicLink({
 			email: user.email,
@@ -1070,12 +1070,14 @@ describe("expo deep link injection for two-factor challenges", async () => {
 					const url = new URL(location!);
 					expect(url.searchParams.get("challenge")).toBe("two-factor");
 					expect(url.searchParams.get("attemptId")).toBeNull();
-					expect(url.searchParams.get("methods")).toBe("otp");
+					expect(url.searchParams.get("methods")).toBeNull();
 
 					const injectedCookie = url.searchParams.get("cookie");
 					expect(injectedCookie).toBeDefined();
 					const cookies = parseSetCookieHeader(injectedCookie!);
-					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(
+						cookies.get("better-auth.two_factor_challenge")?.value,
+					).toBeDefined();
 					expect(cookies.get("better-auth.session_token")?.value ?? "").toBe(
 						"",
 					);
@@ -1091,7 +1093,7 @@ describe("expo deep link injection for two-factor challenges", async () => {
 		let verificationToken = "";
 		const storage = new Map<string, string>();
 
-		const { client, db, testUser } = await getTestInstance(
+		const { auth, client, db, testUser } = await getTestInstance(
 			{
 				emailAndPassword: {
 					enabled: true,
@@ -1127,11 +1129,12 @@ describe("expo deep link injection for two-factor challenges", async () => {
 			},
 		);
 
-		await db.update({
-			model: "user",
-			update: { twoFactorEnabled: true },
-			where: [{ field: "email", value: testUser.email }],
-		});
+		const context = await auth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		if (!user) {
+			throw new Error("Expected test user");
+		}
+		await seedVerifiedOtpMethod(db, user.user.id);
 
 		let redirectHandled = false;
 		const { error } = await client.verifyEmail(
@@ -1151,12 +1154,14 @@ describe("expo deep link injection for two-factor challenges", async () => {
 					const url = new URL(location!);
 					expect(url.searchParams.get("challenge")).toBe("two-factor");
 					expect(url.searchParams.get("attemptId")).toBeNull();
-					expect(url.searchParams.get("methods")).toBe("otp");
+					expect(url.searchParams.get("methods")).toBeNull();
 
 					const injectedCookie = url.searchParams.get("cookie");
 					expect(injectedCookie).toBeDefined();
 					const cookies = parseSetCookieHeader(injectedCookie!);
-					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(
+						cookies.get("better-auth.two_factor_challenge")?.value,
+					).toBeDefined();
 					expect(cookies.get("better-auth.session_token")?.value ?? "").toBe(
 						"",
 					);

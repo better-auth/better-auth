@@ -3,7 +3,7 @@ import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
 import { organization } from "better-auth/plugins";
 import { twoFactor } from "better-auth/plugins/two-factor";
-import { getTestInstance } from "better-auth/test";
+import { getTestInstance, seedVerifiedOtpMethod } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
@@ -11,6 +11,52 @@ import { ssoClient } from "./client";
 import { SSO_PENDING_PROVIDER_ORG_ASSIGNMENT_KEY_PREFIX } from "./constants";
 
 const server = new OAuth2Server();
+
+type TwoFactorChallengeTestAuth = {
+	api: {
+		getPendingTwoFactorChallenge(input: {
+			headers: Headers;
+		}): Promise<{ methods: Array<{ id: string }> }>;
+		sendTwoFactorCode(input: {
+			headers: Headers;
+			body: { methodId: string };
+		}): Promise<unknown>;
+		verifyTwoFactor(input: {
+			headers: Headers;
+			body: { methodId: string; code: string };
+			asResponse: true;
+		}): Promise<Response>;
+	};
+};
+
+async function sendAndVerifyPendingOtpChallenge(
+	twoFactorAuth: TwoFactorChallengeTestAuth,
+	headers: Headers,
+	resolveCode: string | (() => string),
+) {
+	const pendingChallenge = await twoFactorAuth.api.getPendingTwoFactorChallenge(
+		{
+			headers,
+		},
+	);
+	const otpMethodId = pendingChallenge.methods[0]?.id;
+	if (!otpMethodId) {
+		throw new Error("Expected OTP method");
+	}
+	await twoFactorAuth.api.sendTwoFactorCode({
+		headers,
+		body: { methodId: otpMethodId },
+	});
+	const code = typeof resolveCode === "function" ? resolveCode() : resolveCode;
+	return twoFactorAuth.api.verifyTwoFactor({
+		headers,
+		body: {
+			methodId: otpMethodId,
+			code,
+		},
+		asResponse: true,
+	});
+}
 
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
@@ -85,7 +131,6 @@ describe("SSO", async () => {
 
 		return { callbackURL, headers: newHeaders };
 	}
-
 	it("should register a new SSO provider", async () => {
 		const { headers } = await signInWithTestUser();
 		const provider = await auth.api.registerSSOProvider({
@@ -1300,13 +1345,7 @@ describe("SSO shared redirectURI", async () => {
 		if (!existingUser) {
 			throw new Error("Expected linked SSO user");
 		}
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.user.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.user.id);
 		const beforeSessions = await context.internalAdapter.listSessions(
 			existingUser.user.id,
 		);
@@ -1349,10 +1388,12 @@ describe("SSO shared redirectURI", async () => {
 		expect(redirectURL.pathname).toBe("/dashboard");
 		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-		expect(redirectURL.searchParams.get("methods")).toBe("otp");
+		expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 		const cookies = parseSetCookieHeader(setCookieHeader);
-		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
 
 		const sessions = await context.internalAdapter.listSessions(
 			existingUser.user.id,
@@ -1464,13 +1505,7 @@ describe("SSO shared redirectURI", async () => {
 		if (!existingUser) {
 			throw new Error("Expected linked SSO user");
 		}
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.user.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.user.id);
 		await db.delete({
 			model: "member",
 			where: [
@@ -1517,7 +1552,7 @@ describe("SSO shared redirectURI", async () => {
 		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 		const signedTwoFactorCookie = parseSetCookieHeader(setCookieHeader).get(
-			"better-auth.two_factor",
+			"better-auth.two_factor_challenge",
 		)?.value;
 		expect(signedTwoFactorCookie).toBeTruthy();
 		const attemptId = signedTwoFactorCookie!.slice(
@@ -1554,19 +1589,11 @@ describe("SSO shared redirectURI", async () => {
 			}),
 		});
 
-		await twoFactorAuth.api.sendTwoFactorOTP({
-			headers: challengeHeaders,
-			body: {},
-		});
-		expect(otp).toHaveLength(6);
-
-		const verifyResponse = await twoFactorAuth.api.verifyTwoFactorOTP({
-			headers: challengeHeaders,
-			body: {
-				code: otp,
-			},
-			asResponse: true,
-		});
+		const verifyResponse = await sendAndVerifyPendingOtpChallenge(
+			twoFactorAuth,
+			challengeHeaders,
+			() => otp,
+		);
 		expect(verifyResponse.status).toBe(200);
 
 		const finalizedOrg = await twoFactorAuth.api.getFullOrganization({
@@ -1692,13 +1719,7 @@ describe("SSO shared redirectURI", async () => {
 		if (!existingUser) {
 			throw new Error("Expected linked SSO user");
 		}
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.user.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.user.id);
 		await db.delete({
 			model: "member",
 			where: [
@@ -1747,7 +1768,7 @@ describe("SSO shared redirectURI", async () => {
 			),
 		).toBeNull();
 		const signedTwoFactorCookie = parseSetCookieHeader(setCookieHeader).get(
-			"better-auth.two_factor",
+			"better-auth.two_factor_challenge",
 		)?.value;
 		expect(signedTwoFactorCookie).toBeTruthy();
 		const attemptId = signedTwoFactorCookie!.slice(
@@ -1763,22 +1784,16 @@ describe("SSO shared redirectURI", async () => {
 				},
 			}),
 		});
-		await twoFactorAuth.api.sendTwoFactorOTP({
-			headers: challengeHeaders,
-			body: {},
-		});
-		expect(otp).toHaveLength(6);
 		const sessionsBeforeFailedVerify =
 			await context.internalAdapter.listSessions(existingUser.user.id);
 		getRole.mockRejectedValueOnce(new Error("role resolution failed"));
 
 		await expect(
-			twoFactorAuth.api.verifyTwoFactorOTP({
-				headers: challengeHeaders,
-				body: {
-					code: otp,
-				},
-			}),
+			sendAndVerifyPendingOtpChallenge(
+				twoFactorAuth,
+				challengeHeaders,
+				() => otp,
+			),
 		).rejects.toThrow("role resolution failed");
 
 		const pendingAttempt =
@@ -1796,13 +1811,13 @@ describe("SSO shared redirectURI", async () => {
 		expect(pendingAssignment?.value).toBeDefined();
 
 		getRole.mockResolvedValueOnce("member");
-		const retryResponse = await twoFactorAuth.api.verifyTwoFactorOTP({
-			headers: challengeHeaders,
-			body: {
-				code: otp,
-			},
-		});
-		expect(retryResponse.user.id).toBe(existingUser.user.id);
+		const retryResponse = await sendAndVerifyPendingOtpChallenge(
+			twoFactorAuth,
+			challengeHeaders,
+			() => otp,
+		);
+		expect(retryResponse.status).toBe(200);
+		expect((await retryResponse.json()).user.id).toBe(existingUser.user.id);
 
 		const finalizedOrg = await twoFactorAuth.api.getFullOrganization({
 			query: {

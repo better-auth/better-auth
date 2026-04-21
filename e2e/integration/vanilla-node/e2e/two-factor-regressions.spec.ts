@@ -17,6 +17,23 @@ import { setupServer } from "./utils";
 
 type CookieJar = Map<string, string>;
 
+type TwoFactorMethodKind = "otp" | "totp" | "recovery-code";
+
+type TwoFactorMethodDescriptor = {
+	id: string;
+	kind: TwoFactorMethodKind;
+	label: string | null;
+};
+
+type TwoFactorChallengeResponse = {
+	kind: "challenge";
+	challenge: {
+		kind: "two-factor";
+		attemptId: string;
+		methods: TwoFactorMethodDescriptor[];
+	};
+};
+
 function splitSetCookieHeader(setCookie: string): string[] {
 	if (!setCookie) {
 		return [];
@@ -178,7 +195,6 @@ async function readWhoAmI(
 		session: {
 			user: {
 				email: string;
-				twoFactorEnabled?: boolean;
 			} | null;
 		} | null;
 	};
@@ -189,6 +205,94 @@ async function readMemberCount(baseAppURL: string, email: string) {
 		`${baseAppURL}/debug/member-count?email=${encodeURIComponent(email)}`,
 	);
 	return (await response.json()) as { count: number };
+}
+
+async function enableTwoFactor(
+	baseURL: string,
+	jar: CookieJar,
+	password?: string,
+) {
+	return authRequest(`${baseURL}/two-factor/enable-otp`, jar, {
+		method: "POST",
+		body: password ? { password } : {},
+	});
+}
+
+async function listTwoFactorMethods(baseURL: string, jar: CookieJar) {
+	const response = await authRequest(`${baseURL}/two-factor/list-methods`, jar);
+	expect(response.status).toBe(200);
+	return (await response.json()) as {
+		enabled: boolean;
+		methods: Array<{
+			id: string;
+			kind: TwoFactorMethodKind;
+			label?: string | null;
+		}>;
+	};
+}
+
+async function getPendingTwoFactorChallenge(baseURL: string, jar: CookieJar) {
+	const response = await authRequest(
+		`${baseURL}/two-factor/pending-challenge`,
+		jar,
+	);
+	expect(response.status).toBe(200);
+	return (await response.json()) as {
+		kind: "two-factor";
+		attemptId: string;
+		methods: TwoFactorMethodDescriptor[];
+	};
+}
+
+function getMethodId(
+	methods: Array<{ id: string; kind: TwoFactorMethodKind }>,
+	kind: TwoFactorMethodKind,
+) {
+	const method = methods.find((candidate) => candidate.kind === kind);
+	expect(method).toBeDefined();
+	return method!.id;
+}
+
+async function sendPendingTwoFactorOtp(
+	baseURL: string,
+	jar: CookieJar,
+	attemptId?: string,
+) {
+	const challenge = await getPendingTwoFactorChallenge(baseURL, jar);
+	const methodId = getMethodId(challenge.methods, "otp");
+	return authRequest(`${baseURL}/two-factor/send-code`, jar, {
+		method: "POST",
+		body: attemptId ? { attemptId, methodId } : { methodId },
+	});
+}
+
+async function _sendSessionTwoFactorOtp(baseURL: string, jar: CookieJar) {
+	const methods = await listTwoFactorMethods(baseURL, jar);
+	const methodId = getMethodId(methods.methods, "otp");
+	return authRequest(`${baseURL}/two-factor/send-code`, jar, {
+		method: "POST",
+		body: { methodId },
+	});
+}
+
+async function verifyPendingTwoFactorOtp(
+	baseURL: string,
+	jar: CookieJar,
+	code: string,
+	attemptId?: string,
+	trustDevice?: boolean,
+) {
+	const challenge = await getPendingTwoFactorChallenge(baseURL, jar);
+	const methodId = getMethodId(challenge.methods, "otp");
+	return authRequest(`${baseURL}/two-factor/verify`, jar, {
+		method: "POST",
+		body: {
+			code,
+			methodId,
+			...(attemptId ? { attemptId } : {}),
+			...(trustDevice === undefined ? {} : { trustDevice }),
+		},
+	});
 }
 
 test.describe("two factor regression paths", () => {
@@ -228,21 +332,15 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(signInResponse.status).toBe(200);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
 
-			const whoAmI = await readWhoAmI(baseURL, sessionJar);
-			expect(whoAmI.session?.user?.email).toBe("test@test.com");
-			expect(whoAmI.session?.user?.twoFactorEnabled).toBe(true);
+			const methods = await listTwoFactorMethods(baseURL, sessionJar);
+			expect(methods.enabled).toBe(true);
 
 			const sendMagicLinkResponse = await authRequest(
 				`${baseURL}/sign-in/magic-link`,
@@ -271,13 +369,16 @@ test.describe("two factor regression paths", () => {
 
 			// Redirect-exit flows must hand the caller a 2FA challenge without
 			// ever leaving behind an authenticated session cookie. The attemptId
-			// travels only in the signed `better-auth.two_factor` cookie: query
+			// travels only in the signed `better-auth.two_factor_challenge`
+			// cookie: query
 			// parameters leak through Referer headers and proxy logs.
 			const location = verifyResponse.headers.get("location");
 			expect(location).toContain("challenge=two-factor");
 			expect(location).not.toContain("attemptId=");
-			expect(location).toContain("methods=");
-			expect(hasCookie(freshJar, "better-auth.two_factor")).toBe(true);
+			expect(location).not.toContain("methods=");
+			expect(hasCookie(freshJar, "better-auth.two_factor_challenge")).toBe(
+				true,
+			);
 			expect(hasCookie(freshJar, "better-auth.session_token")).toBe(false);
 		} finally {
 			await stop();
@@ -316,15 +417,10 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(signInResponse.status).toBe(200);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
 
@@ -341,31 +437,26 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(challengeResponse.status).toBe(200);
 			expect(hasCookie(sessionJar, "session_token")).toBe(true);
-			expect(hasCookie(sessionJar, "two_factor")).toBe(true);
+			expect(hasCookie(sessionJar, "two_factor_challenge")).toBe(true);
 
-			const challengeBody = (await challengeResponse.json()) as {
-				kind: "challenge";
-				challenge: {
-					kind: "two-factor";
-					attemptId: string;
-					availableMethods: string[];
-				};
-			};
+			const challengeBody =
+				(await challengeResponse.json()) as TwoFactorChallengeResponse;
+			const otpMethodId = getMethodId(challengeBody.challenge.methods, "otp");
 			expect(challengeBody.kind).toBe("challenge");
 			expect(challengeBody.challenge.kind).toBe("two-factor");
 			expect(challengeBody.challenge.attemptId).toBeTruthy();
-			expect(challengeBody.challenge.availableMethods).toContain("otp");
 
 			const currentSession = await readWhoAmI(baseURL, sessionJar);
 			expect(currentSession.session?.user?.email).toBe("test@test.com");
 
 			const sendOtpResponse = await authRequest(
-				`${baseURL}/two-factor/send-otp`,
+				`${baseURL}/two-factor/send-code`,
 				sessionJar,
 				{
 					method: "POST",
 					body: {
 						attemptId: challengeBody.challenge.attemptId,
+						methodId: otpMethodId,
 					},
 				},
 			);
@@ -373,18 +464,19 @@ test.describe("two factor regression paths", () => {
 			expect(otpCode).toHaveLength(6);
 
 			const verifyResponse = await authRequest(
-				`${baseURL}/two-factor/verify-otp`,
+				`${baseURL}/two-factor/verify`,
 				sessionJar,
 				{
 					method: "POST",
 					body: {
 						attemptId: challengeBody.challenge.attemptId,
+						methodId: otpMethodId,
 						code: otpCode,
 					},
 				},
 			);
 			expect(verifyResponse.status).toBe(200);
-			expect(hasCookie(sessionJar, "two_factor")).toBe(false);
+			expect(hasCookie(sessionJar, "two_factor_challenge")).toBe(false);
 
 			const verifiedSession = await readWhoAmI(baseURL, sessionJar);
 			expect(verifiedSession.session?.user?.email).toBe("test@test.com");
@@ -430,21 +522,15 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(signInResponse.status).toBe(200);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
 
-			const whoAmI = await readWhoAmI(baseURL, sessionJar);
-			expect(whoAmI.session?.user?.email).toBe("test@test.com");
-			expect(whoAmI.session?.user?.twoFactorEnabled).toBe(true);
+			const methods = await listTwoFactorMethods(baseURL, sessionJar);
+			expect(methods.enabled).toBe(true);
 
 			const sendVerificationResponse = await authRequest(
 				`${baseURL}/send-verification-email`,
@@ -474,8 +560,10 @@ test.describe("two factor regression paths", () => {
 			const location = verifyResponse.headers.get("location");
 			expect(location).toContain("challenge=two-factor");
 			expect(location).not.toContain("attemptId=");
-			expect(location).toContain("methods=");
-			expect(hasCookie(freshJar, "better-auth.two_factor")).toBe(true);
+			expect(location).not.toContain("methods=");
+			expect(hasCookie(freshJar, "better-auth.two_factor_challenge")).toBe(
+				true,
+			);
 			expect(hasCookie(freshJar, "better-auth.session_token")).toBe(false);
 		} finally {
 			await stop();
@@ -562,20 +650,14 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(initialVerifyResponse.status).toBe(200);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
-			const whoAmI = await readWhoAmI(baseURL, sessionJar);
-			expect(whoAmI.session?.user?.email).toBe(email);
-			expect(whoAmI.session?.user?.twoFactorEnabled).toBe(true);
+			const methods = await listTwoFactorMethods(baseURL, sessionJar);
+			expect(methods.enabled).toBe(true);
 
 			const sendChallengeOTPResponse = await authRequest(
 				`${baseURL}/phone-number/send-otp`,
@@ -603,7 +685,9 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(challengeResponse.status).toBe(200);
 			expect(challengeResponse.headers.get("set-auth-token")).toBeNull();
-			expect(hasCookie(challengeJar, "better-auth.two_factor")).toBe(true);
+			expect(hasCookie(challengeJar, "better-auth.two_factor_challenge")).toBe(
+				true,
+			);
 			expect(hasCookie(challengeJar, "better-auth.session_token")).toBe(false);
 			const challengeWhoAmI = await readWhoAmI(baseURL, challengeJar);
 			expect(challengeWhoAmI.session).toBeNull();
@@ -668,20 +752,14 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(signInResponse.status).toBe(200);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
-			const whoAmI = await readWhoAmI(baseURL, sessionJar);
-			expect(whoAmI.session?.user?.email).toBe(email);
-			expect(whoAmI.session?.user?.twoFactorEnabled).toBe(true);
+			const methods = await listTwoFactorMethods(baseURL, sessionJar);
+			expect(methods.enabled).toBe(true);
 
 			const sendVerificationOTPResponse = await authRequest(
 				`${baseURL}/email-otp/send-verification-otp`,
@@ -710,7 +788,9 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(challengeResponse.status).toBe(200);
 			expect(challengeResponse.headers.get("set-auth-token")).toBeNull();
-			expect(hasCookie(challengeJar, "better-auth.two_factor")).toBe(true);
+			expect(hasCookie(challengeJar, "better-auth.two_factor_challenge")).toBe(
+				true,
+			);
 			expect(hasCookie(challengeJar, "better-auth.session_token")).toBe(false);
 			const challengeWhoAmI = await readWhoAmI(baseURL, challengeJar);
 			expect(challengeWhoAmI.session).toBeNull();
@@ -754,15 +834,10 @@ test.describe("two factor regression paths", () => {
 			expect(signInResponse.status).toBe(200);
 			expect(signInResponse.headers.get("set-auth-token")).toBeTruthy();
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
 
@@ -780,28 +855,21 @@ test.describe("two factor regression paths", () => {
 			expect(challengeResponse.status).toBe(200);
 			expect(challengeResponse.headers.get("set-auth-token")).toBeNull();
 			expect(hasCookie(challengeJar, "better-auth.session_token")).toBe(false);
-			expect(hasCookie(challengeJar, "better-auth.two_factor")).toBe(true);
+			expect(hasCookie(challengeJar, "better-auth.two_factor_challenge")).toBe(
+				true,
+			);
 
-			const sendOtpResponse = await authRequest(
-				`${baseURL}/two-factor/send-otp`,
+			const sendOtpResponse = await sendPendingTwoFactorOtp(
+				baseURL,
 				challengeJar,
-				{
-					method: "POST",
-					body: {},
-				},
 			);
 			expect(sendOtpResponse.status).toBe(200);
 			expect(latestTwoFactorOTP).toHaveLength(6);
 
-			const verifyResponse = await authRequest(
-				`${baseURL}/two-factor/verify-otp`,
+			const verifyResponse = await verifyPendingTwoFactorOtp(
+				baseURL,
 				challengeJar,
-				{
-					method: "POST",
-					body: {
-						code: latestTwoFactorOTP,
-					},
-				},
+				latestTwoFactorOTP,
 			);
 			expect(verifyResponse.status).toBe(200);
 
@@ -851,15 +919,10 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(signInResponse.status).toBe(200);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
 
@@ -889,7 +952,9 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(verifyResponse.status).toBe(200);
 			expect(hasCookie(transferJar, "better-auth.session_token")).toBe(true);
-			expect(hasCookie(transferJar, "better-auth.two_factor")).toBe(false);
+			expect(hasCookie(transferJar, "better-auth.two_factor_challenge")).toBe(
+				false,
+			);
 
 			const transferredSession = await readWhoAmI(baseURL, transferJar);
 			expect(transferredSession.session?.user?.email).toBe("test@test.com");
@@ -932,15 +997,10 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(signInResponse.status).toBe(200);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
+			const enableResponse = await enableTwoFactor(
+				baseURL,
 				sessionJar,
-				{
-					method: "POST",
-					body: {
-						password: "password123",
-					},
-				},
+				"password123",
 			);
 			expect(enableResponse.status).toBe(200);
 
@@ -988,7 +1048,9 @@ test.describe("two factor regression paths", () => {
 				},
 			);
 			expect(tokenResponse.status).toBe(200);
-			expect(hasCookie(deviceJar, "better-auth.two_factor")).toBe(false);
+			expect(hasCookie(deviceJar, "better-auth.two_factor_challenge")).toBe(
+				false,
+			);
 
 			const tokenPayload = (await tokenResponse.json()) as {
 				access_token?: string;
@@ -1059,15 +1121,10 @@ test.describe("two factor regression paths", () => {
 				);
 				expect(signInResponse.status).toBe(200);
 
-				const enableResponse = await authRequest(
-					`${baseURL}/two-factor/enable`,
+				const enableResponse = await enableTwoFactor(
+					baseURL,
 					sessionJar,
-					{
-						method: "POST",
-						body: {
-							password: "password123",
-						},
-					},
+					"password123",
 				);
 				expect(enableResponse.status).toBe(200);
 
@@ -1102,10 +1159,10 @@ test.describe("two factor regression paths", () => {
 				const redirectLocation = callbackResponse.headers.get("location");
 				const redirectURL = new URL(redirectLocation!, "http://localhost:3000");
 				expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-				expect(
-					(redirectURL.searchParams.get("methods") ?? "").split(","),
-				).toContain("otp");
-				expect(hasCookie(oauthJar, "better-auth.two_factor")).toBe(true);
+				expect(redirectURL.searchParams.get("methods")).toBeNull();
+				expect(hasCookie(oauthJar, "better-auth.two_factor_challenge")).toBe(
+					true,
+				);
 				expect(hasCookie(oauthJar, "better-auth.session_token")).toBe(false);
 
 				const challengeWhoAmI = await readWhoAmI(baseURL, oauthJar);
@@ -1255,15 +1312,10 @@ test.describe("two factor regression paths", () => {
 				);
 				expect(signUpResponse.status).toBe(200);
 
-				const enableResponse = await authRequest(
-					`${baseURL}/two-factor/enable`,
+				const enableResponse = await enableTwoFactor(
+					baseURL,
 					userJar,
-					{
-						method: "POST",
-						body: {
-							password: "password123",
-						},
-					},
+					"password123",
 				);
 				expect(enableResponse.status).toBe(200);
 
@@ -1299,7 +1351,9 @@ test.describe("two factor regression paths", () => {
 				const redirectURL = new URL(redirectLocation!, "http://localhost:3000");
 				expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 				expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-				expect(hasCookie(oauthJar, "better-auth.two_factor")).toBe(true);
+				expect(hasCookie(oauthJar, "better-auth.two_factor_challenge")).toBe(
+					true,
+				);
 				expect(hasCookie(oauthJar, "better-auth.session_token")).toBe(false);
 
 				const beforeMembers = await readMemberCount(
@@ -1308,26 +1362,17 @@ test.describe("two factor regression paths", () => {
 				);
 				expect(beforeMembers.count).toBe(0);
 
-				const sendOtpResponse = await authRequest(
-					`${baseURL}/two-factor/send-otp`,
+				const sendOtpResponse = await sendPendingTwoFactorOtp(
+					baseURL,
 					oauthJar,
-					{
-						method: "POST",
-						body: {},
-					},
 				);
 				expect(sendOtpResponse.status).toBe(200);
 				expect(otp).toHaveLength(6);
 
-				const verifyOtpResponse = await authRequest(
-					`${baseURL}/two-factor/verify-otp`,
+				const verifyOtpResponse = await verifyPendingTwoFactorOtp(
+					baseURL,
 					oauthJar,
-					{
-						method: "POST",
-						body: {
-							code: otp,
-						},
-					},
+					otp,
 				);
 				expect(verifyOtpResponse.status).toBe(200);
 
@@ -1371,7 +1416,6 @@ test.describe("two factor regression paths", () => {
 				plugins: [
 					sso(),
 					twoFactor({
-						allowPasswordless: true,
 						skipVerificationOnEnable: true,
 						otpOptions: {
 							sendOTP() {},
@@ -1464,14 +1508,7 @@ test.describe("two factor regression paths", () => {
 				);
 				expect(hasCookie(linkJar, "better-auth.session_token")).toBe(true);
 
-				const enableTwoFactorResponse = await authRequest(
-					`${baseURL}/two-factor/enable`,
-					linkJar,
-					{
-						method: "POST",
-						body: {},
-					},
-				);
+				const enableTwoFactorResponse = await enableTwoFactor(baseURL, linkJar);
 				expect(enableTwoFactorResponse.status).toBe(200);
 
 				const ssoStartResponse = await authRequest(
@@ -1505,10 +1542,10 @@ test.describe("two factor regression paths", () => {
 				const redirectLocation = callbackResponse.headers.get("location");
 				const redirectURL = new URL(redirectLocation!, "http://localhost:3000");
 				expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
-				expect(
-					(redirectURL.searchParams.get("methods") ?? "").split(","),
-				).toContain("otp");
-				expect(hasCookie(ssoJar, "better-auth.two_factor")).toBe(true);
+				expect(redirectURL.searchParams.get("methods")).toBeNull();
+				expect(hasCookie(ssoJar, "better-auth.two_factor_challenge")).toBe(
+					true,
+				);
 				expect(hasCookie(ssoJar, "better-auth.session_token")).toBe(false);
 
 				const challengeWhoAmI = await readWhoAmI(baseURL, ssoJar);
@@ -1540,7 +1577,6 @@ test.describe("two factor regression paths", () => {
 					},
 				}),
 				twoFactor({
-					allowPasswordless: true,
 					skipVerificationOnEnable: true,
 					otpOptions: {
 						sendOTP({ otp }) {
@@ -1585,14 +1621,7 @@ test.describe("two factor regression paths", () => {
 			expect(bootstrapSignInResponse.status).toBe(200);
 			expect(hasCookie(bootstrapJar, "better-auth.session_token")).toBe(true);
 
-			const enableResponse = await authRequest(
-				`${baseURL}/two-factor/enable`,
-				bootstrapJar,
-				{
-					method: "POST",
-					body: {},
-				},
-			);
+			const enableResponse = await enableTwoFactor(baseURL, bootstrapJar);
 			expect(enableResponse.status).toBe(200);
 
 			const signOutResponse = await authRequest(
@@ -1633,31 +1662,31 @@ test.describe("two factor regression paths", () => {
 			);
 			expect(challengeResponse.status).toBe(200);
 
-			const challengePayload = (await challengeResponse.json()) as {
-				kind?: "challenge";
-				challenge?: {
-					kind: "two-factor";
-					attemptId: string;
-					availableMethods: string[];
-				};
-			};
+			const challengePayload =
+				(await challengeResponse.json()) as TwoFactorChallengeResponse;
+			const otpMethodId = getMethodId(
+				challengePayload.challenge.methods,
+				"otp",
+			);
 			expect(challengePayload.kind).toBe("challenge");
 			expect(challengePayload.challenge?.kind).toBe("two-factor");
 			expect(challengePayload.challenge?.attemptId).toBeTruthy();
-			expect(challengePayload.challenge?.availableMethods).toContain("otp");
-			expect(hasCookie(challengeJar, "better-auth.two_factor")).toBe(true);
+			expect(hasCookie(challengeJar, "better-auth.two_factor_challenge")).toBe(
+				true,
+			);
 			expect(hasCookie(challengeJar, "better-auth.session_token")).toBe(false);
 
 			const challengeWhoAmI = await readWhoAmI(baseURL, challengeJar);
 			expect(challengeWhoAmI.session).toBeNull();
 
 			const sendOtpResponse = await authRequest(
-				`${baseURL}/two-factor/send-otp`,
+				`${baseURL}/two-factor/send-code`,
 				challengeJar,
 				{
 					method: "POST",
 					body: {
-						attemptId: challengePayload.challenge?.attemptId,
+						attemptId: challengePayload.challenge.attemptId,
+						methodId: otpMethodId,
 					},
 				},
 			);
@@ -1665,19 +1694,22 @@ test.describe("two factor regression paths", () => {
 			expect(otpCode).toHaveLength(6);
 
 			const verifyOtpResponse = await authRequest(
-				`${baseURL}/two-factor/verify-otp`,
+				`${baseURL}/two-factor/verify`,
 				challengeJar,
 				{
 					method: "POST",
 					body: {
-						attemptId: challengePayload.challenge?.attemptId,
+						attemptId: challengePayload.challenge.attemptId,
+						methodId: otpMethodId,
 						code: otpCode,
 					},
 				},
 			);
 			expect(verifyOtpResponse.status).toBe(200);
 			expect(hasCookie(challengeJar, "better-auth.session_token")).toBe(true);
-			expect(hasCookie(challengeJar, "better-auth.two_factor")).toBe(false);
+			expect(hasCookie(challengeJar, "better-auth.two_factor_challenge")).toBe(
+				false,
+			);
 		} finally {
 			await stop();
 		}

@@ -174,6 +174,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
     Create a new file called `migrate-clerk.ts` in the `scripts` folder and add the following code:
 
     ```ts title="scripts/migrate-clerk.ts"
+    import { createHash } from "node:crypto";
     import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 
     import { auth } from "@/lib/auth"; // import your auth instance
@@ -255,19 +256,19 @@ Before starting the migration process, set up Better Auth in your project. Follo
     }
 
 
-    export async function generateBackupCodes(
-      secret: string,
-    ) {
-      const key = secret;
-      const backupCodes = Array.from({ length: 10 })
+    function createRecoveryCodes(methodId: string) {
+      const recoveryCodes = Array.from({ length: 10 })
           .fill(null)
           .map(() => generateRandomString(10, "a-z", "0-9", "A-Z"))
           .map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
-      const encCodes = await symmetricEncrypt({
-          data: JSON.stringify(backupCodes),
-          key: key,
-      });
-      return encCodes
+
+      return {
+          recoveryCodes,
+          rows: recoveryCodes.map((code) => ({
+              methodId,
+              codeHash: createHash("sha256").update(code).digest("hex"),
+          })),
+      };
     }
 
     // Helper function to safely convert timestamp to Date
@@ -317,10 +318,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
                   image: clerkUser?.image_url,
                   createdAt: safeDateConversion(clerkUser?.created_at),
                   updatedAt: safeDateConversion(clerkUser?.updated_at),
-                  // # Two Factor (if you enabled two factor plugin)
-                  ...(isTwoFactorEnabled ? {
-                      twoFactorEnabled: clerkUser?.two_factor_enabled
-                  } : {}),
                   // # Admin (if you enabled admin plugin)
                   ...(isAdminEnabled ? {
                       banned: clerkUser?.banned,
@@ -388,16 +385,53 @@ Before starting the migration process, set up Better Auth in your project. Follo
               }
           }
 
-          //two factor
-          if (isTwoFactorEnabled) {
+          // two factor
+          if (isTwoFactorEnabled && createdUser?.id && totp_secret) {
+              const totpMethodId = `${createdUser.id}:totp`;
               await ctx.adapter.create({
-                  model: "twoFactor",
+                  model: "twoFactorMethod",
                   data: {
-                      userId: createdUser?.id,
-                      secret: totp_secret,
-                      backupCodes: await generateBackupCodes(totp_secret)
-                  }
-              })
+                      id: totpMethodId,
+                      userId: createdUser.id,
+                      kind: "totp",
+                      label: "Imported from Clerk",
+                      verifiedAt: new Date(),
+                      lastUsedAt: null,
+                  },
+                  forceAllowId: true,
+              });
+              await ctx.adapter.create({
+                  model: "twoFactorTotp",
+                  data: {
+                      methodId: totpMethodId,
+                      secret: await symmetricEncrypt({
+                          data: totp_secret,
+                          key: ctx.secret,
+                      }),
+                  },
+              });
+
+              const recoveryMethodId = `${createdUser.id}:recovery`;
+              const { rows } = createRecoveryCodes(recoveryMethodId);
+              await ctx.adapter.create({
+                  model: "twoFactorMethod",
+                  data: {
+                      id: recoveryMethodId,
+                      userId: createdUser.id,
+                      kind: "recovery-code",
+                      label: null,
+                      verifiedAt: new Date(),
+                      lastUsedAt: null,
+                  },
+                  forceAllowId: true,
+              });
+
+              for (const row of rows) {
+                  await ctx.adapter.create({
+                      model: "twoFactorRecoveryCode",
+                      data: row,
+                  });
+              }
           }
       }
     }

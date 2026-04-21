@@ -4,6 +4,7 @@ import {
 	expectNoTwoFactorChallenge,
 	expectTwoFactorChallenge,
 	getTestInstance,
+	seedVerifiedOtpMethod,
 } from "../../test-utils";
 import { bearer } from "../bearer";
 import { twoFactor } from "../two-factor";
@@ -155,11 +156,7 @@ describe("phone-number two-factor challenge", async () => {
 		code: verificationOtp,
 	});
 
-	await db.update({
-		model: "user",
-		where: [{ field: "id", value: signUp.data.user.id }],
-		update: { twoFactorEnabled: true },
-	});
+	await seedVerifiedOtpMethod(db, signUp.data.user.id);
 
 	it("should return a challenge and clear the session cookies", async () => {
 		let setCookieHeader = "";
@@ -179,10 +176,17 @@ describe("phone-number two-factor challenge", async () => {
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		expect(cookies.get("better-auth.session_token")).toBeUndefined();
 		expect(cookies.get("better-auth.session_data")).toBeUndefined();
-		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
 		expectTwoFactorChallenge(res.data);
 		expect(res.data.challenge.attemptId).toBeTruthy();
-		expect(res.data.challenge.availableMethods).toEqual(["otp"]);
+		expect(res.data.challenge.methods).toEqual([
+			expect.objectContaining({
+				kind: "otp",
+				label: null,
+			}),
+		]);
 	});
 
 	it("should challenge passwordless phone verification before issuing a session", async () => {
@@ -207,10 +211,17 @@ describe("phone-number two-factor challenge", async () => {
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		expect(cookies.get("better-auth.session_token")).toBeUndefined();
 		expect(cookies.get("better-auth.session_data")).toBeUndefined();
-		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
 		expectTwoFactorChallenge(res.data);
 		expect(res.data.challenge.attemptId).toBeTruthy();
-		expect(res.data.challenge.availableMethods).toEqual(["otp"]);
+		expect(res.data.challenge.methods).toEqual([
+			expect.objectContaining({
+				kind: "otp",
+				label: null,
+			}),
+		]);
 	});
 });
 

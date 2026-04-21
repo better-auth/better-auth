@@ -1,4 +1,5 @@
 import type { CookieOptions, EndpointContext } from "better-call";
+import type { AuthenticationMethodReference } from "../auth/amr-methods";
 import type {
 	Account,
 	BetterAuthDBSchema,
@@ -167,7 +168,11 @@ export type FinalizedSignIn = {
  *   interface BetterAuthSignInChallengeRegistry {
  *     "two-factor": {
  *       attemptId: string;
- *       availableMethods: TwoFactorMethod[];
+ *       factors: {
+ *         id: string;
+ *         kind: "totp" | "otp" | "recovery-code";
+ *         label: string | null;
+ *       }[];
  *     };
  *   }
  * }
@@ -180,6 +185,34 @@ export type SignInChallenge = {
 		kind: K;
 	} & BetterAuthSignInChallengeRegistry[K];
 }[keyof BetterAuthSignInChallengeRegistry];
+
+export type CheckSignInChallengeInput = {
+	user: User;
+	/**
+	 * Authentication record for the primary factor the caller just proved.
+	 * Challenge plugins use this to persist the full factor chain when they
+	 * pause sign-in (e.g. password first, OTP second).
+	 */
+	amr: AuthenticationMethodReference;
+	rememberMe?: boolean;
+	/**
+	 * Challenges the primary factor has already satisfied. Plugins consult
+	 * this set before pausing sign-in so a stronger primary factor can bypass
+	 * a downstream challenge it already subsumes.
+	 */
+	satisfiedChallenges?: readonly (keyof BetterAuthSignInChallengeRegistry)[];
+};
+
+export type CheckSignInChallengeResult =
+	| {
+			kind: "challenge";
+			challenge: SignInChallenge;
+	  }
+	| {
+			kind: "commit";
+			onSuccess: SignInOnSuccess;
+	  }
+	| null;
 
 /**
  * Discriminated envelope returned by the sign-in resolver.

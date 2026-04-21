@@ -9,7 +9,11 @@ import {
 	setCookieToHeader,
 } from "../../cookies";
 import { signJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils";
+import {
+	expectTwoFactorChallenge,
+	getTestInstance,
+	seedVerifiedOtpMethodForEmail,
+} from "../../test-utils";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { magicLink } from "../magic-link";
 import { magicLinkClient } from "../magic-link/client";
@@ -108,7 +112,7 @@ describe("lastLoginMethod", async () => {
 	});
 
 	it("does not stamp the cookie while sign-in is challenged by two-factor", async () => {
-		const { client, db, testUser } = await getTestInstance(
+		const { auth, client, db, testUser } = await getTestInstance(
 			{
 				plugins: [
 					lastLoginMethod(),
@@ -126,13 +130,7 @@ describe("lastLoginMethod", async () => {
 			},
 		);
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
+		await seedVerifiedOtpMethodForEmail(auth, db, testUser.email);
 
 		let setCookieHeader = "";
 		await client.signIn.email(
@@ -149,7 +147,7 @@ describe("lastLoginMethod", async () => {
 
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
-		expect(setCookieHeader).toContain("better-auth.two_factor");
+		expect(setCookieHeader).toContain("better-auth.two_factor_challenge");
 	});
 
 	it("stamps the primary factor after two-factor verification completes", async () => {
@@ -167,13 +165,7 @@ describe("lastLoginMethod", async () => {
 			],
 		});
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
+		await seedVerifiedOtpMethodForEmail(auth, db, testUser.email);
 
 		const signInRes = await auth.api.signInEmail({
 			body: {
@@ -182,17 +174,24 @@ describe("lastLoginMethod", async () => {
 			},
 			asResponse: true,
 		});
+		const challengeBody = await signInRes.clone().json();
+		expectTwoFactorChallenge(challengeBody);
+		const otpMethodId = challengeBody.challenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
 		const challengeHeaders = new Headers();
 		setCookieToHeader(challengeHeaders)({ response: signInRes });
-		await auth.api.sendTwoFactorOTP({
+		await auth.api.sendTwoFactorCode({
 			headers: challengeHeaders,
-			body: {},
+			body: { methodId: otpMethodId },
 		});
 		expect(otp).toHaveLength(6);
 
-		const verifyRes = await auth.api.verifyTwoFactorOTP({
+		const verifyRes = await auth.api.verifyTwoFactor({
 			headers: challengeHeaders,
 			body: {
+				methodId: otpMethodId,
 				code: otp,
 			},
 			asResponse: true,
@@ -212,8 +211,8 @@ describe("lastLoginMethod", async () => {
 			advanced: {
 				useSecureCookies: true,
 				cookies: {
-					two_factor: {
-						name: "custom.two_factor",
+					two_factor_challenge: {
+						name: "custom.two_factor_challenge",
 					},
 				},
 			},
@@ -229,13 +228,7 @@ describe("lastLoginMethod", async () => {
 			],
 		});
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
+		await seedVerifiedOtpMethodForEmail(auth, db, testUser.email);
 
 		const signInRes = await auth.api.signInEmail({
 			body: {
@@ -248,19 +241,26 @@ describe("lastLoginMethod", async () => {
 			signInRes.headers.get("set-cookie") || "",
 		);
 		expect(
-			challengeCookies.get("__Secure-custom.two_factor")?.value,
+			challengeCookies.get("__Secure-custom.two_factor_challenge")?.value,
 		).toBeDefined();
 
 		const challengeHeaders = new Headers();
 		setCookieToHeader(challengeHeaders)({ response: signInRes });
-		await auth.api.sendTwoFactorOTP({
+		const challengeBody = await signInRes.clone().json();
+		expectTwoFactorChallenge(challengeBody);
+		const otpMethodId = challengeBody.challenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
+		await auth.api.sendTwoFactorCode({
 			headers: challengeHeaders,
-			body: {},
+			body: { methodId: otpMethodId },
 		});
 
-		const verifyRes = await auth.api.verifyTwoFactorOTP({
+		const verifyRes = await auth.api.verifyTwoFactor({
 			headers: challengeHeaders,
 			body: {
+				methodId: otpMethodId,
 				code: otp,
 			},
 			asResponse: true,

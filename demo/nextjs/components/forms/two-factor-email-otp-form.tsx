@@ -13,6 +13,7 @@ import {
 	FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { usePendingTwoFactorChallengeQuery } from "@/data/user/two-factor-query";
 import { authClient } from "@/lib/auth-client";
 
 const otpSchema = z.object({
@@ -35,10 +36,14 @@ export function TwoFactorEmailOtpForm({
 	onError,
 	userEmail = "your email",
 }: TwoFactorEmailOtpFormProps) {
+	const pendingChallengeQuery = usePendingTwoFactorChallengeQuery();
 	const [loading, startTransition] = useTransition();
 	const [isOtpSent, setIsOtpSent] = useState(false);
 	const [isVerified, setIsVerified] = useState(false);
 	const [message, setMessage] = useState("");
+	const otpMethodId = pendingChallengeQuery.data?.methods.find(
+		(method) => method.kind === "otp",
+	)?.id;
 
 	const form = useForm<OtpFormValues>({
 		resolver: zodResolver(otpSchema),
@@ -48,19 +53,28 @@ export function TwoFactorEmailOtpForm({
 	});
 
 	const handleSendOtp = () => {
+		if (!otpMethodId) {
+			onError?.("No OTP method is available for this sign-in.");
+			return;
+		}
 		startTransition(async () => {
-			await authClient.twoFactor.sendOtp();
+			await authClient.twoFactor.sendCode({ methodId: otpMethodId });
 			setIsOtpSent(true);
 			setMessage(`OTP sent to ${userEmail}`);
 		});
 	};
 
 	const onSubmit = (data: OtpFormValues) => {
+		if (!otpMethodId) {
+			onError?.("No OTP method is available for this sign-in.");
+			return;
+		}
 		startTransition(async () => {
-			const res = await authClient.twoFactor.verifyOtp({
+			const res = await authClient.twoFactor.verify({
+				methodId: otpMethodId,
 				code: data.code,
 			});
-			if (res.data) {
+			if (res.data && !res.error) {
 				setIsVerified(true);
 				setMessage("OTP validated successfully");
 				onSuccess?.();
@@ -70,6 +84,22 @@ export function TwoFactorEmailOtpForm({
 			}
 		});
 	};
+
+	if (pendingChallengeQuery.isLoading) {
+		return (
+			<div className="flex items-center justify-center py-4">
+				<Loader2 className="h-5 w-5 animate-spin" />
+			</div>
+		);
+	}
+
+	if (!otpMethodId) {
+		return (
+			<p className="text-sm text-muted-foreground">
+				This sign-in attempt does not have an OTP method available.
+			</p>
+		);
+	}
 
 	if (isVerified) {
 		return (

@@ -7,12 +7,20 @@ type JsonResponse = {
 	json: unknown;
 };
 
+type TwoFactorMethodKind = "otp" | "totp" | "recovery-code";
+
+type TwoFactorMethodDescriptor = {
+	id: string;
+	kind: TwoFactorMethodKind;
+	label: string | null;
+};
+
 type TwoFactorChallengeEnvelope = {
 	kind: "challenge";
 	challenge: {
 		kind: "two-factor";
 		attemptId: string;
-		availableMethods: string[];
+		methods: TwoFactorMethodDescriptor[];
 	};
 };
 
@@ -36,7 +44,7 @@ function expectTwoFactorChallengeData(
 	const challenge = envelope.challenge as Record<string, unknown>;
 	expect(challenge.kind).toBe("two-factor");
 	expect(typeof challenge.attemptId).toBe("string");
-	expect(Array.isArray(challenge.availableMethods)).toBe(true);
+	expect(Array.isArray(challenge.methods)).toBe(true);
 }
 
 async function postAuthJSON(
@@ -68,9 +76,14 @@ async function enableTwoFactorForTestUser(
 	page: Parameters<typeof runClient>[0],
 	serverPort: number,
 ) {
-	const response = await postAuthJSON(page, serverPort, "/two-factor/enable", {
-		password: "password123",
-	});
+	const response = await postAuthJSON(
+		page,
+		serverPort,
+		"/two-factor/enable-otp",
+		{
+			password: "password123",
+		},
+	);
 	expect(response.status).toBe(200);
 	return response.json;
 }
@@ -82,6 +95,15 @@ async function signInAsTestUser(page: Parameters<typeof runClient>[0]) {
 			password: "password123",
 		}),
 	);
+}
+
+function getChallengeMethodId(
+	challenge: TwoFactorChallengeEnvelope["challenge"],
+	kind: TwoFactorMethodKind,
+) {
+	const method = challenge.methods.find((candidate) => candidate.kind === kind);
+	expect(method).toBeDefined();
+	return method!.id;
 }
 
 test.describe("vanilla-node two factor", async () => {
@@ -124,20 +146,25 @@ test.describe("vanilla-node two factor", async () => {
 		expect(signInResult.error).toBeNull();
 		expectTwoFactorChallengeData(signInResult.data);
 		expect(signInResult.data.challenge.attemptId).toBeTruthy();
-		expect(signInResult.data.challenge.availableMethods).toContain("otp");
+		const otpMethodId = getChallengeMethodId(
+			signInResult.data.challenge,
+			"otp",
+		);
 
 		// The challenge must not leak an authenticated session before OTP succeeds.
 		let cookies = await page.context().cookies();
 		expect(
 			findAuthCookie(cookies, "better-auth.session_token"),
 		).toBeUndefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeDefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeDefined();
 
 		const sendOtpResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/send-otp",
-			{ attemptId: signInResult.data.challenge.attemptId },
+			"/two-factor/send-code",
+			{ methodId: otpMethodId },
 		);
 		expect(sendOtpResponse.status).toBe(200);
 		expect(lastOTP).toHaveLength(6);
@@ -146,8 +173,8 @@ test.describe("vanilla-node two factor", async () => {
 		const invalidResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-otp",
-			{ attemptId: signInResult.data.challenge.attemptId, code: invalidOtp },
+			"/two-factor/verify",
+			{ methodId: otpMethodId, code: invalidOtp },
 		);
 		expect(invalidResponse.status).toBe(401);
 
@@ -155,19 +182,23 @@ test.describe("vanilla-node two factor", async () => {
 		expect(
 			findAuthCookie(cookies, "better-auth.session_token"),
 		).toBeUndefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeDefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeDefined();
 
 		const verifyResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-otp",
-			{ attemptId: signInResult.data.challenge.attemptId, code: lastOTP },
+			"/two-factor/verify",
+			{ methodId: otpMethodId, code: lastOTP },
 		);
 		expect(verifyResponse.status).toBe(200);
 
 		cookies = await page.context().cookies();
 		expect(findAuthCookie(cookies, "better-auth.session_token")).toBeDefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeUndefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeUndefined();
 	});
 
 	test("remembers a trusted device and skips the next challenge", async ({
@@ -185,12 +216,16 @@ test.describe("vanilla-node two factor", async () => {
 		const challengeResult = await signInAsTestUser(page);
 		expectTwoFactorChallengeData(challengeResult.data);
 		expect(challengeResult.data.challenge.attemptId).toBeTruthy();
+		const otpMethodId = getChallengeMethodId(
+			challengeResult.data.challenge,
+			"otp",
+		);
 
 		const sendOtpResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/send-otp",
-			{ attemptId: challengeResult.data.challenge.attemptId },
+			"/two-factor/send-code",
+			{ methodId: otpMethodId },
 		);
 		expect(sendOtpResponse.status).toBe(200);
 		expect(lastOTP).toHaveLength(6);
@@ -198,9 +233,9 @@ test.describe("vanilla-node two factor", async () => {
 		const verifyResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-otp",
+			"/two-factor/verify",
 			{
-				attemptId: challengeResult.data.challenge.attemptId,
+				methodId: otpMethodId,
 				code: lastOTP,
 				trustDevice: true,
 			},
@@ -221,7 +256,9 @@ test.describe("vanilla-node two factor", async () => {
 
 		cookies = await page.context().cookies();
 		expect(findAuthCookie(cookies, "better-auth.session_token")).toBeDefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeUndefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeUndefined();
 	});
 
 	test("allows completing a challenged sign-in with a backup code", async ({
@@ -238,10 +275,10 @@ test.describe("vanilla-node two factor", async () => {
 			ref.serverPort,
 		);
 		expect(isRecord(enableResponse)).toBe(true);
-		expect(Array.isArray(enableResponse.backupCodes)).toBe(true);
+		expect(Array.isArray(enableResponse.recoveryCodes)).toBe(true);
 
-		const backupCode = Array.isArray(enableResponse.backupCodes)
-			? enableResponse.backupCodes[0]
+		const backupCode = Array.isArray(enableResponse.recoveryCodes)
+			? enableResponse.recoveryCodes[0]
 			: null;
 		expect(typeof backupCode).toBe("string");
 
@@ -251,6 +288,10 @@ test.describe("vanilla-node two factor", async () => {
 		expect(signInResult.error).toBeNull();
 		expectTwoFactorChallengeData(signInResult.data);
 		expect(signInResult.data.challenge.attemptId).toBeTruthy();
+		const recoveryMethodId = getChallengeMethodId(
+			signInResult.data.challenge,
+			"recovery-code",
+		);
 
 		// Recovery codes should complete the pending challenge without any
 		// authenticated session existing before the code is verified.
@@ -258,19 +299,23 @@ test.describe("vanilla-node two factor", async () => {
 		expect(
 			findAuthCookie(cookies, "better-auth.session_token"),
 		).toBeUndefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeDefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeDefined();
 
 		const verifyResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-backup-code",
-			{ attemptId: signInResult.data.challenge.attemptId, code: backupCode },
+			"/two-factor/verify",
+			{ methodId: recoveryMethodId, code: backupCode },
 		);
 		expect(verifyResponse.status).toBe(200);
 
 		cookies = await page.context().cookies();
 		expect(findAuthCookie(cookies, "better-auth.session_token")).toBeDefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeUndefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeUndefined();
 
 		await runClient(page, ({ client }) => client.signOut());
 
@@ -278,12 +323,16 @@ test.describe("vanilla-node two factor", async () => {
 		expect(secondChallenge.error).toBeNull();
 		expectTwoFactorChallengeData(secondChallenge.data);
 		expect(secondChallenge.data.challenge.attemptId).toBeTruthy();
+		const secondRecoveryMethodId = getChallengeMethodId(
+			secondChallenge.data.challenge,
+			"recovery-code",
+		);
 
 		const reusedCodeResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-backup-code",
-			{ attemptId: secondChallenge.data.challenge.attemptId, code: backupCode },
+			"/two-factor/verify",
+			{ methodId: secondRecoveryMethodId, code: backupCode },
 		);
 		expect(reusedCodeResponse.status).toBe(401);
 
@@ -291,7 +340,9 @@ test.describe("vanilla-node two factor", async () => {
 		expect(
 			findAuthCookie(cookies, "better-auth.session_token"),
 		).toBeUndefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeDefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeDefined();
 	});
 
 	test("regenerates backup codes and invalidates the previous set", async ({
@@ -308,27 +359,27 @@ test.describe("vanilla-node two factor", async () => {
 			ref.serverPort,
 		);
 		expect(isRecord(enableResponse)).toBe(true);
-		expect(Array.isArray(enableResponse.backupCodes)).toBe(true);
+		expect(Array.isArray(enableResponse.recoveryCodes)).toBe(true);
 
-		const previousBackupCode = Array.isArray(enableResponse.backupCodes)
-			? enableResponse.backupCodes[0]
+		const previousBackupCode = Array.isArray(enableResponse.recoveryCodes)
+			? enableResponse.recoveryCodes[0]
 			: null;
 		expect(typeof previousBackupCode).toBe("string");
 
 		const regenerateResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/generate-backup-codes",
+			"/two-factor/regenerate-recovery-codes",
 			{ password: "password123" },
 		);
 		expect(regenerateResponse.status).toBe(200);
 		expect(isRecord(regenerateResponse.json)).toBe(true);
-		expect(Array.isArray(regenerateResponse.json.backupCodes)).toBe(true);
+		expect(Array.isArray(regenerateResponse.json.recoveryCodes)).toBe(true);
 
 		const regeneratedBackupCode = Array.isArray(
-			regenerateResponse.json.backupCodes,
+			regenerateResponse.json.recoveryCodes,
 		)
-			? regenerateResponse.json.backupCodes[0]
+			? regenerateResponse.json.recoveryCodes[0]
 			: null;
 		expect(typeof regeneratedBackupCode).toBe("string");
 
@@ -338,13 +389,17 @@ test.describe("vanilla-node two factor", async () => {
 		expect(signInResult.error).toBeNull();
 		expectTwoFactorChallengeData(signInResult.data);
 		expect(signInResult.data.challenge.attemptId).toBeTruthy();
+		const recoveryMethodId = getChallengeMethodId(
+			signInResult.data.challenge,
+			"recovery-code",
+		);
 
 		const previousCodeResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-backup-code",
+			"/two-factor/verify",
 			{
-				attemptId: signInResult.data.challenge.attemptId,
+				methodId: recoveryMethodId,
 				code: previousBackupCode,
 			},
 		);
@@ -354,14 +409,16 @@ test.describe("vanilla-node two factor", async () => {
 		expect(
 			findAuthCookie(cookies, "better-auth.session_token"),
 		).toBeUndefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeDefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeDefined();
 
 		const regeneratedCodeResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-backup-code",
+			"/two-factor/verify",
 			{
-				attemptId: signInResult.data.challenge.attemptId,
+				methodId: recoveryMethodId,
 				code: regeneratedBackupCode,
 			},
 		);
@@ -369,7 +426,9 @@ test.describe("vanilla-node two factor", async () => {
 
 		cookies = await page.context().cookies();
 		expect(findAuthCookie(cookies, "better-auth.session_token")).toBeDefined();
-		expect(findAuthCookie(cookies, "better-auth.two_factor")).toBeUndefined();
+		expect(
+			findAuthCookie(cookies, "better-auth.two_factor_challenge"),
+		).toBeUndefined();
 	});
 
 	test("clears trusted-device state when disabling two factor", async ({
@@ -388,12 +447,16 @@ test.describe("vanilla-node two factor", async () => {
 		expect(challengeResult.error).toBeNull();
 		expectTwoFactorChallengeData(challengeResult.data);
 		expect(challengeResult.data.challenge.attemptId).toBeTruthy();
+		const otpMethodId = getChallengeMethodId(
+			challengeResult.data.challenge,
+			"otp",
+		);
 
 		const sendOtpResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/send-otp",
-			{ attemptId: challengeResult.data.challenge.attemptId },
+			"/two-factor/send-code",
+			{ methodId: otpMethodId },
 		);
 		expect(sendOtpResponse.status).toBe(200);
 		expect(lastOTP).toHaveLength(6);
@@ -401,9 +464,9 @@ test.describe("vanilla-node two factor", async () => {
 		const verifyResponse = await postAuthJSON(
 			page,
 			ref.serverPort,
-			"/two-factor/verify-otp",
+			"/two-factor/verify",
 			{
-				attemptId: challengeResult.data.challenge.attemptId,
+				methodId: otpMethodId,
 				code: lastOTP,
 				trustDevice: true,
 			},

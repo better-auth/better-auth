@@ -248,6 +248,12 @@ export const createAdapterFactory =
 						newValue = newValue !== null ? Number(newValue) : null;
 					}
 				} else if (
+					fieldAttributes!.type === "json" &&
+					Array.isArray(newValue) &&
+					config.supportsArrays === false
+				) {
+					newValue = JSON.stringify(newValue);
+				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
 					fieldAttributes!.type === "json"

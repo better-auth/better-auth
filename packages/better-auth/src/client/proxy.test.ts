@@ -145,7 +145,7 @@ describe("createDynamicPathProxy", () => {
 				challenge: {
 					kind: "two-factor",
 					attemptId: "attempt-id",
-					availableMethods: ["otp"],
+					methods: [{ id: "method-otp", kind: "otp", label: null }],
 				},
 			};
 			if (options?.onSuccess) {
@@ -247,7 +247,7 @@ describe("createDynamicPathProxy", () => {
 		const proxy = createDynamicPathProxy(
 			{
 				twoFactor: {
-					sendOtp: {},
+					sendCode: {},
 				},
 			},
 			client as any,
@@ -258,7 +258,7 @@ describe("createDynamicPathProxy", () => {
 
 		vi.useFakeTimers();
 
-		await (proxy.twoFactor.sendOtp as any)();
+		await (proxy.twoFactor.sendCode as any)();
 		vi.runAllTimers();
 
 		expect(signalSet).not.toHaveBeenCalled();
@@ -304,7 +304,7 @@ describe("createDynamicPathProxy", () => {
 		const proxy = createDynamicPathProxy(
 			{
 				twoFactor: {
-					verifyOtp: {},
+					verify: {},
 				},
 			},
 			client as any,
@@ -315,7 +315,7 @@ describe("createDynamicPathProxy", () => {
 
 		vi.useFakeTimers();
 
-		await (proxy.twoFactor.verifyOtp as any)();
+		await (proxy.twoFactor.verify as any)();
 		vi.runAllTimers();
 
 		expect(signalSet).toHaveBeenCalledTimes(1);

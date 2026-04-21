@@ -5,6 +5,7 @@ import {
   timestamp,
   boolean,
   integer,
+  jsonb,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -36,6 +37,7 @@ export const custom_session = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
+    amr: jsonb("amr").notNull(),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
 );

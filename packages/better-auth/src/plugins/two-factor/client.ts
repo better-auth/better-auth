@@ -2,22 +2,16 @@ import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
 import type { twoFactor as twoFa } from ".";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import type { TwoFactorMethod } from "./types";
+import type { TwoFactorMethodDescriptor } from "./types";
 
 export * from "./error-code";
 
-const SESSION_CHANGING_TWO_FACTOR_PATHS = new Set([
-	"/two-factor/disable",
-	"/two-factor/enable",
-	"/two-factor/verify-totp",
-	"/two-factor/verify-otp",
-	"/two-factor/verify-backup-code",
-]);
+const SESSION_CHANGING_TWO_FACTOR_PATHS = new Set(["/two-factor/verify"]);
 
 type TwoFactorSignInChallenge = {
 	kind: "two-factor";
 	attemptId: string;
-	availableMethods: TwoFactorMethod[];
+	methods: TwoFactorMethodDescriptor[];
 };
 
 type SignInChallengeResponse = {
@@ -42,27 +36,14 @@ export const twoFactorClient = (
 	options?:
 		| {
 				/**
-				 * the page to redirect if a user needs to verify
-				 * their two factor
+				 * Redirect target for full-page challenge handling.
 				 *
 				 * @warning This causes a full page reload when used.
 				 */
 				twoFactorPage?: string;
-				/**
-				 * A redirect callback invoked when sign-in pauses for two-factor
-				 * verification.
-				 */
 				onTwoFactorRedirect?: (context: {
-					/**
-					 * The opaque identifier for the paused sign-in attempt. Pass this
-					 * back to `/two-factor/*` verification calls.
-					 */
 					attemptId: string;
-					/**
-					 * The list of 2FA methods available to the user (e.g.
-					 * `["totp", "otp", "backup-code"]`).
-					 */
-					availableMethods: TwoFactorMethod[];
+					methods: TwoFactorMethodDescriptor[];
 				}) => void | Promise<void>;
 		  }
 		| undefined,
@@ -79,13 +60,17 @@ export const twoFactorClient = (
 		],
 		pathMethods: {
 			"/two-factor/disable": "POST",
-			"/two-factor/enable": "POST",
-			"/two-factor/send-otp": "POST",
-			"/two-factor/generate-backup-codes": "POST",
+			"/two-factor/enable-totp": "POST",
 			"/two-factor/get-totp-uri": "POST",
-			"/two-factor/verify-totp": "POST",
-			"/two-factor/verify-otp": "POST",
-			"/two-factor/verify-backup-code": "POST",
+			"/two-factor/enable-otp": "POST",
+			"/two-factor/list-methods": "GET",
+			"/two-factor/pending-challenge": "GET",
+			"/two-factor/send-code": "POST",
+			"/two-factor/verify": "POST",
+			"/two-factor/regenerate-recovery-codes": "POST",
+			"/two-factor/remove-method": "POST",
+			"/two-factor/list-trusted-devices": "GET",
+			"/two-factor/revoke-trusted-device": "POST",
 		},
 		fetchPlugins: [
 			{
@@ -96,26 +81,20 @@ export const twoFactorClient = (
 						if (!isTwoFactorChallenge(context.data)) {
 							return;
 						}
-						const { attemptId, availableMethods } = context.data.challenge;
+						const { attemptId, methods } = context.data.challenge;
 						if (options?.onTwoFactorRedirect) {
 							await options.onTwoFactorRedirect({
 								attemptId,
-								availableMethods,
+								methods,
 							});
 							return;
 						}
 						if (options?.twoFactorPage && typeof window !== "undefined") {
-							// The server's signed two-factor cookie carries the attemptId.
-							// Omit it from the URL to avoid Referer / proxy-log leakage (#S5).
 							const redirectURL = new URL(
 								options.twoFactorPage,
 								window.location.href,
 							);
 							redirectURL.searchParams.set("challenge", "two-factor");
-							redirectURL.searchParams.set(
-								"methods",
-								availableMethods.join(","),
-							);
 							window.location.href = redirectURL.toString();
 						}
 					},
@@ -126,7 +105,4 @@ export const twoFactorClient = (
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "./backup-codes";
-export type * from "./otp";
-export type * from "./totp";
 export type * from "./types";

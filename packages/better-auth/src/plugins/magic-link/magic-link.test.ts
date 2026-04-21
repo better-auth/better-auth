@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { expectNoTwoFactorChallenge } from "../../test-utils/two-factor";
+import {
+	expectNoTwoFactorChallenge,
+	seedVerifiedOtpMethod,
+} from "../../test-utils/two-factor";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { twoFactor } from "../two-factor";
 import { magicLink } from ".";
@@ -907,13 +910,7 @@ describe("magic link two-factor challenge", async () => {
 			name: "Magic Link User",
 			emailVerified: true,
 		});
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.id);
 
 		await client.signIn.magicLink({
 			email: "magic-2fa@test.com",
@@ -929,12 +926,14 @@ describe("magic link two-factor challenge", async () => {
 				expect(redirectURL.pathname).toBe("/");
 				expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 				expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-				expect(redirectURL.searchParams.get("methods")).toBe("otp");
+				expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
 				);
-				expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+				expect(
+					cookies.get("better-auth.two_factor_challenge")?.value,
+				).toBeDefined();
 			},
 		});
 
@@ -991,13 +990,7 @@ describe("magic link two-factor challenge", async () => {
 				emailVerified: true,
 			}),
 		);
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.id);
 
 		const sessionOnlyResponse = await auth.api.signInEmail({
 			body: {
@@ -1033,24 +1026,33 @@ describe("magic link two-factor challenge", async () => {
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
 				);
-				challengeCookie = cookies.get("better-auth.two_factor")?.value || "";
+				challengeCookie =
+					cookies.get("better-auth.two_factor_challenge")?.value || "";
 			},
 		});
 		expect(challengeCookie).toBeTruthy();
 		challengeHeaders.set(
 			"cookie",
-			`better-auth.session_only=${sessionOnlyCookie}; better-auth.two_factor=${challengeCookie}`,
+			`better-auth.session_only=${sessionOnlyCookie}; better-auth.two_factor_challenge=${challengeCookie}`,
 		);
 
-		await auth.api.sendTwoFactorOTP({
+		const pendingChallenge = await auth.api.getPendingTwoFactorChallenge({
 			headers: challengeHeaders,
-			body: {},
+		});
+		const otpMethodId = pendingChallenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
+		await auth.api.sendTwoFactorCode({
+			headers: challengeHeaders,
+			body: { methodId: otpMethodId },
 		});
 		expect(otp).toHaveLength(6);
 
-		const verifyResponse = await auth.api.verifyTwoFactorOTP({
+		const verifyResponse = await auth.api.verifyTwoFactor({
 			headers: challengeHeaders,
 			body: {
+				methodId: otpMethodId,
 				code: otp,
 			},
 			asResponse: true,

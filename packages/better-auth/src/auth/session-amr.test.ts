@@ -7,6 +7,7 @@ import { magicLink } from "../plugins/magic-link";
 import { magicLinkClient } from "../plugins/magic-link/client";
 import { twoFactor } from "../plugins/two-factor";
 import { getTestInstance } from "../test-utils";
+import { convertSetCookieToCookie } from "../test-utils/headers";
 
 async function readSessionAMR(
 	auth: { api: { getSession: (opts: { headers: Headers }) => any } },
@@ -84,9 +85,9 @@ describe("session.amr is the canonical authentication record", () => {
 		});
 	});
 
-	it("two-factor append: verifying TOTP adds a second amr entry, primary first", async () => {
+	it("two-factor append: verifying OTP adds a second amr entry, primary first", async () => {
 		let otp = "";
-		const { auth, db, testUser } = await getTestInstance({
+		const { auth, testUser } = await getTestInstance({
 			plugins: [
 				twoFactor({
 					otpOptions: {
@@ -97,22 +98,34 @@ describe("session.amr is the canonical authentication record", () => {
 				}),
 			],
 		});
-		await db.update({
-			model: "user",
-			update: { twoFactorEnabled: true },
-			where: [{ field: "email", value: testUser.email }],
+
+		const initialSignIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
 		});
+		const sessionHeaders = convertSetCookieToCookie(initialSignIn.headers);
+		const enableResponse = await auth.api.enableTwoFactorOtp({
+			body: { password: testUser.password },
+			headers: sessionHeaders,
+		});
+		await auth.api.verifyTwoFactor({
+			body: { methodId: enableResponse.method.id, code: otp },
+			headers: sessionHeaders,
+		});
+
 		const signInRes = await auth.api.signInEmail({
 			body: { email: testUser.email, password: testUser.password },
 			asResponse: true,
 		});
-		const challengeHeaders = new Headers();
-		const signInSetCookie = signInRes.headers.get("set-cookie") ?? "";
-		challengeHeaders.set("cookie", signInSetCookie.replace(/;.*$/, ""));
-		await auth.api.sendTwoFactorOTP({ headers: challengeHeaders, body: {} });
-		const verifyRes = await auth.api.verifyTwoFactorOTP({
+		const challengeHeaders = convertSetCookieToCookie(signInRes.headers);
+		otp = "";
+		await auth.api.sendTwoFactorCode({
 			headers: challengeHeaders,
-			body: { code: otp },
+			body: { methodId: enableResponse.method.id },
+		});
+		const verifyRes = await auth.api.verifyTwoFactor({
+			headers: challengeHeaders,
+			body: { methodId: enableResponse.method.id, code: otp },
 			asResponse: true,
 		});
 		const body = (await verifyRes.json()) as { token: string };

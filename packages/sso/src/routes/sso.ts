@@ -57,6 +57,7 @@ import {
 	createSAMLPostForm,
 	createSP,
 	findSAMLProvider,
+	getSPMetadataXml,
 } from "./helpers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 
@@ -141,47 +142,22 @@ export const spMetadata = (options?: SSOOptions) => {
 				});
 			}
 
-			const sloLocation = `${ctx.context.baseURL}/sso/saml2/sp/slo/${ctx.query.providerId}`;
-			const singleLogoutService = options?.saml?.enableSingleLogout
-				? [
-						{
-							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-							Location: sloLocation,
-						},
-						{
-							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-							Location: sloLocation,
-						},
-					]
-				: undefined;
-
-			const sp = parsedSamlConfig.spMetadata.metadata
-				? saml.ServiceProvider({
-						metadata: parsedSamlConfig.spMetadata.metadata,
-					})
-				: saml.SPMetadata({
-						entityID:
-							parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
-						assertionConsumerService: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location:
-									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs/${ctx.query.providerId}`,
-							},
-						],
-						singleLogoutService,
-						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-						authnRequestsSigned: parsedSamlConfig.authnRequestsSigned || false,
-						nameIDFormat: parsedSamlConfig.identifierFormat
-							? [parsedSamlConfig.identifierFormat]
-							: undefined,
-					});
-			return new Response(sp.getMetadata(), {
-				headers: {
-					"Content-Type": "application/xml",
+			return new Response(
+				getSPMetadataXml(
+					parsedSamlConfig,
+					ctx.context.baseURL,
+					ctx.query.providerId,
+					{
+						includeSingleLogoutService:
+							options?.saml?.enableSingleLogout ?? false,
+					},
+				),
+				{
+					headers: {
+						"Content-Type": "application/xml",
+					},
 				},
-			});
+			);
 		},
 	);
 };
@@ -1252,33 +1228,11 @@ export const signInSSO = (options?: SSOOptions) => {
 					false,
 				);
 
-				let metadata = parsedSamlConfig.spMetadata.metadata;
-
-				if (!metadata) {
-					metadata =
-						saml
-							.SPMetadata({
-								entityID:
-									parsedSamlConfig.spMetadata?.entityID ||
-									parsedSamlConfig.issuer,
-								assertionConsumerService: [
-									{
-										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-										Location:
-											parsedSamlConfig.callbackUrl ||
-											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
-									},
-								],
-								wantMessageSigned:
-									parsedSamlConfig.wantAssertionsSigned || false,
-								authnRequestsSigned:
-									parsedSamlConfig.authnRequestsSigned || false,
-								nameIDFormat: parsedSamlConfig.identifierFormat
-									? [parsedSamlConfig.identifierFormat]
-									: undefined,
-							})
-							.getMetadata() || "";
-				}
+				const metadata = getSPMetadataXml(
+					parsedSamlConfig,
+					ctx.context.baseURL,
+					provider.providerId,
+				);
 
 				const sp = saml.ServiceProvider({
 					metadata: metadata,

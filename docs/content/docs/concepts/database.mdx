@@ -585,10 +585,16 @@ export const auth = betterAuth({
   plugins: [
     twoFactor({
       schema: {
-        user: {
+        twoFactorMethod: {
           fields: {
-            twoFactorEnabled: "two_factor_enabled",
-            secret: "two_factor_secret",
+            userId: "user_id",
+            verifiedAt: "verified_at",
+          },
+        },
+        trustedDevice: {
+          fields: {
+            userId: "user_id",
+            lookupKeyHash: "lookup_key_hash",
           },
         },
       },
@@ -978,11 +984,12 @@ Much like standard hooks, database hooks also provide a `ctx` object that offers
 
 ## Plugins Schema
 
-Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
+Plugins can define their own tables in the database to store additional data. For example, the two factor authentication plugin adds dedicated method tables:
 
-* `twoFactorEnabled`: Whether two factor authentication is enabled for the user.
-* `twoFactorSecret`: The secret key used to generate TOTP codes.
-* `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
+* `twoFactorMethod`: method metadata such as `kind`, `label`, and `verifiedAt`.
+* `twoFactorTotp`: encrypted TOTP secrets keyed by method ID.
+* `twoFactorRecoveryCode`: hashed recovery-code rows keyed by method ID.
+* `trustedDevice`: trusted-device records keyed by user ID.
 
 To add new tables and columns to your database, you have two options:
 

@@ -95,6 +95,52 @@ export function createSP(
 	});
 }
 
+export function getSPMetadataXml(
+	config: SAMLConfig,
+	baseURL: string,
+	providerId: string,
+	options?: {
+		includeSingleLogoutService?: boolean;
+	},
+): string {
+	if (config.spMetadata?.metadata) {
+		return config.spMetadata.metadata;
+	}
+
+	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
+	const acsUrl =
+		config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`;
+
+	return saml
+		.ServiceProvider({
+			entityID: config.spMetadata?.entityID || config.issuer,
+			assertionConsumerService: [
+				{
+					Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+					Location: acsUrl,
+				},
+			],
+			singleLogoutService: options?.includeSingleLogoutService
+				? [
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+							Location: sloLocation,
+						},
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+							Location: sloLocation,
+						},
+					]
+				: undefined,
+			wantMessageSigned: config.wantAssertionsSigned || false,
+			authnRequestsSigned: config.authnRequestsSigned || false,
+			nameIDFormat: config.identifierFormat
+				? [config.identifierFormat]
+				: undefined,
+		})
+		.getMetadata();
+}
+
 export function createIdP(config: SAMLConfig) {
 	const idpData = config.idpMetadata;
 	if (idpData?.metadata) {

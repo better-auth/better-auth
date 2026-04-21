@@ -1,14 +1,14 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
-	OTP_NOT_ENABLED: "OTP not enabled",
-	OTP_HAS_EXPIRED: "OTP has expired",
-	TOTP_NOT_ENABLED: "TOTP not enabled",
-	TWO_FACTOR_NOT_ENABLED: "Two factor isn't enabled",
-	BACKUP_CODES_NOT_ENABLED: "Backup codes aren't enabled",
-	INVALID_BACKUP_CODE: "Invalid backup code",
+	METHOD_NOT_FOUND: "Two-factor method not found",
+	METHOD_NOT_READY: "Two-factor method is not ready",
+	CODE_DELIVERY_NOT_SUPPORTED: "The selected method cannot receive a code",
+	CODE_HAS_EXPIRED: "The verification code has expired",
+	RECOVERY_CODES_NOT_ENABLED: "Recovery codes aren't enabled",
 	INVALID_CODE: "Invalid code",
 	TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE:
 		"Too many attempts. Please sign in again.",
-	INVALID_TWO_FACTOR_COOKIE: "Invalid two factor cookie",
+	INVALID_PENDING_CHALLENGE: "Invalid pending two-factor challenge",
+	TRUSTED_DEVICE_NOT_FOUND: "Trusted device not found",
 });

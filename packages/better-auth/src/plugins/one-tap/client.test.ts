@@ -72,7 +72,7 @@ describe("oneTapClient", () => {
 				challenge: {
 					kind: "two-factor",
 					attemptId: "attempt-id",
-					availableMethods: ["otp"],
+					methods: [{ id: "method-otp", kind: "otp", label: null }],
 				},
 			},
 		});
@@ -97,7 +97,7 @@ describe("oneTapClient", () => {
 			},
 		});
 		expect(googleWindow.windowObject.location.href).toBe(
-			"http://localhost/dashboard?challenge=two-factor&methods=otp",
+			"http://localhost/dashboard?challenge=two-factor",
 		);
 	});
 
@@ -110,7 +110,10 @@ describe("oneTapClient", () => {
 				challenge: {
 					kind: "two-factor",
 					attemptId: "attempt-id",
-					availableMethods: ["totp", "otp"],
+					methods: [
+						{ id: "method-totp", kind: "totp", label: null },
+						{ id: "method-otp", kind: "otp", label: null },
+					],
 				},
 			},
 		});
@@ -131,7 +134,10 @@ describe("oneTapClient", () => {
 
 		expect(onTwoFactorRedirect).toHaveBeenCalledWith({
 			attemptId: "attempt-id",
-			availableMethods: ["totp", "otp"],
+			methods: [
+				{ id: "method-totp", kind: "totp", label: null },
+				{ id: "method-otp", kind: "otp", label: null },
+			],
 		});
 		expect(googleWindow.windowObject.location.href).toBe(
 			"http://localhost/current",
@@ -146,7 +152,7 @@ describe("oneTapClient", () => {
 				challenge: {
 					kind: "two-factor",
 					attemptId: "prompt-attempt",
-					availableMethods: ["otp"],
+					methods: [{ id: "method-otp", kind: "otp", label: null }],
 				},
 			},
 		});
@@ -170,7 +176,7 @@ describe("oneTapClient", () => {
 			},
 		});
 		expect(googleWindow.windowObject.location.href).toBe(
-			"http://localhost/dashboard?challenge=two-factor&methods=otp",
+			"http://localhost/dashboard?challenge=two-factor",
 		);
 	});
 });

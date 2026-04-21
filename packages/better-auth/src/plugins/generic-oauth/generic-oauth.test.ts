@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
+import { seedVerifiedOtpMethod } from "../../test-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { twoFactor } from "../two-factor";
 import { genericOAuth } from ".";
@@ -193,13 +194,7 @@ describe("oauth2", async () => {
 			name: "OAuth2 Test",
 			emailVerified: true,
 		});
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.id);
 
 		const localClient = createAuthClient({
 			plugins: [genericOAuthClient()],
@@ -247,10 +242,12 @@ describe("oauth2", async () => {
 		expect(redirectURL.pathname).toBe("/dashboard");
 		expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-		expect(redirectURL.searchParams.get("methods")).toBe("otp");
+		expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 		const cookies = parseSetCookieHeader(setCookieHeader);
-		expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+		expect(
+			cookies.get("better-auth.two_factor_challenge")?.value,
+		).toBeDefined();
 
 		const sessions = await context.internalAdapter.listSessions(
 			existingUser.id,
@@ -330,13 +327,7 @@ describe("oauth2", async () => {
 			name: "OAuth2 Test",
 			emailVerified: true,
 		});
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "id", value: existingUser.id }],
-		});
+		await seedVerifiedOtpMethod(db, existingUser.id);
 
 		const localClient = createAuthClient({
 			plugins: [genericOAuthClient()],
@@ -363,7 +354,7 @@ describe("oauth2", async () => {
 		const redirectURL = new URL(callbackURL, "http://localhost:3000");
 		expect(redirectURL.searchParams.get("attemptId")).toBeNull();
 		const signedTwoFactorCookie = parseSetCookieHeader(setCookieHeader).get(
-			"better-auth.two_factor",
+			"better-auth.two_factor_challenge",
 		)?.value;
 		expect(signedTwoFactorCookie).toBeTruthy();
 		const attemptId = signedTwoFactorCookie!.slice(
@@ -375,15 +366,23 @@ describe("oauth2", async () => {
 		expect(pendingAttempt).toBeTruthy();
 		expect(observedCallbackContext).toBeUndefined();
 
-		await localAuth.api.sendTwoFactorOTP({
+		const pendingChallenge = await localAuth.api.getPendingTwoFactorChallenge({
 			headers: challengeHeaders,
-			body: {},
+		});
+		const otpMethodId = pendingChallenge.methods[0]?.id;
+		if (!otpMethodId) {
+			throw new Error("Expected OTP method");
+		}
+		await localAuth.api.sendTwoFactorCode({
+			headers: challengeHeaders,
+			body: { methodId: otpMethodId },
 		});
 		expect(otp).toHaveLength(6);
 
-		const verifyResponse = await localAuth.api.verifyTwoFactorOTP({
+		const verifyResponse = await localAuth.api.verifyTwoFactor({
 			headers: challengeHeaders,
 			body: {
+				methodId: otpMethodId,
 				code: otp,
 			},
 			asResponse: true,

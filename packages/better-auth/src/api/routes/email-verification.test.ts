@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { twoFactor } from "../../plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { expectNoTwoFactorChallenge } from "../../test-utils/two-factor";
+import {
+	expectNoTwoFactorChallenge,
+	seedVerifiedOtpMethod,
+} from "../../test-utils/two-factor";
 import { createEmailVerificationToken } from "./email-verification";
 
 describe("Email Verification", async () => {
@@ -394,13 +397,12 @@ describe("Email Verification two-factor challenge", async () => {
 			],
 		});
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
+		const context = await auth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+		if (!user) {
+			throw new Error("Expected test user");
+		}
+		await seedVerifiedOtpMethod(db, user.user.id);
 
 		await client.verifyEmail(
 			{
@@ -419,18 +421,18 @@ describe("Email Verification two-factor challenge", async () => {
 					expect(redirectURL.pathname).toBe("/dashboard");
 					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 					expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-					expect(redirectURL.searchParams.get("methods")).toBe("otp");
+					expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 					const cookies = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(
+						cookies.get("better-auth.two_factor_challenge")?.value,
+					).toBeDefined();
 				},
 			},
 		);
 
-		const context = await auth.$context;
-		const user = await context.internalAdapter.findUserByEmail(testUser.email);
 		expect(user?.user.id).toBeDefined();
 		const sessions = await context.internalAdapter.listSessions(user!.user.id);
 		expect(sessions).toHaveLength(0);
@@ -459,13 +461,7 @@ describe("Email Verification two-factor challenge", async () => {
 			throw new Error("Expected test user");
 		}
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
+		await seedVerifiedOtpMethod(db, originalUser.user.id);
 
 		const verificationToken = await createEmailVerificationToken(
 			context.secret,
@@ -495,12 +491,14 @@ describe("Email Verification two-factor challenge", async () => {
 					expect(redirectURL.pathname).toBe("/settings");
 					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 					expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-					expect(redirectURL.searchParams.get("methods")).toBe("otp");
+					expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 					const cookies = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(
+						cookies.get("better-auth.two_factor_challenge")?.value,
+					).toBeDefined();
 					expect(cookies.get("better-auth.session_token")).toBeUndefined();
 					expect(cookies.get("better-auth.session_data")).toBeUndefined();
 				},
@@ -534,14 +532,6 @@ describe("Email Verification two-factor challenge", async () => {
 			],
 		});
 
-		await db.update({
-			model: "user",
-			update: {
-				twoFactorEnabled: true,
-			},
-			where: [{ field: "email", value: testUser.email }],
-		});
-
 		const context = await auth.$context;
 		const originalUser = await context.internalAdapter.findUserByEmail(
 			testUser.email,
@@ -549,6 +539,7 @@ describe("Email Verification two-factor challenge", async () => {
 		if (!originalUser) {
 			throw new Error("Expected test user");
 		}
+		await seedVerifiedOtpMethod(db, originalUser.user.id);
 
 		const legacyToken = await createEmailVerificationToken(
 			context.secret,
@@ -576,12 +567,14 @@ describe("Email Verification two-factor challenge", async () => {
 					expect(redirectURL.pathname).toBe("/settings");
 					expect(redirectURL.searchParams.get("challenge")).toBe("two-factor");
 					expect(redirectURL.searchParams.get("attemptId")).toBeNull();
-					expect(redirectURL.searchParams.get("methods")).toBe("otp");
+					expect(redirectURL.searchParams.get("methods")).toBeNull();
 
 					const cookies = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					expect(cookies.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(
+						cookies.get("better-auth.two_factor_challenge")?.value,
+					).toBeDefined();
 					expect(cookies.get("better-auth.session_token")).toBeUndefined();
 					expect(cookies.get("better-auth.session_data")).toBeUndefined();
 				},
