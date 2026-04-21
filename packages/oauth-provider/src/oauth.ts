@@ -792,9 +792,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						client_assertion: z.string().optional(),
 						client_assertion_type: z.string().optional(),
 						token: z.string(),
-						token_type_hint: z
-							.enum(["access_token", "refresh_token"])
-							.optional(),
+						// RFC 7662 §2.1: hint, server MAY ignore. Unknown values are
+						// coerced to undefined in introspectEndpoint so detection falls
+						// back to trying both token types.
+						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -935,14 +936,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						client_assertion: z.string().optional(),
 						client_assertion_type: z.string().optional(),
 						token: z.string(),
-						token_type_hint: z
-							.string()
-							.pipe(z.enum(["access_token", "refresh_token"]))
-							.optional(),
+						// RFC 7009 §2.2.1: hint, server MAY ignore. Unknown values are
+						// coerced to undefined in revokeEndpoint; `unsupported_token_type`
+						// in RFC 7009 applies to the token itself, not the hint value.
+						token_type_hint: z.string().optional(),
 					}),
-					fieldErrors: {
-						token_type_hint: { invalid: "unsupported_token_type" },
-					},
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {

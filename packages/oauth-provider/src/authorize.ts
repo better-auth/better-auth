@@ -23,7 +23,9 @@ import {
 } from "./utils";
 
 /**
- * Formats an error url
+ * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
+ * implicit and hybrid flows are delivered in the URL fragment, not the query.
+ * Callers on the code flow (default) omit `mode` and get query delivery.
  */
 export function formatErrorURL(
 	url: string,
@@ -31,6 +33,7 @@ export function formatErrorURL(
 	description: string,
 	state?: string,
 	iss?: string,
+	mode: "query" | "fragment" = "query",
 ) {
 	const searchParams = new URLSearchParams({
 		error,
@@ -38,7 +41,34 @@ export function formatErrorURL(
 	});
 	state && searchParams.append("state", state);
 	iss && searchParams.append("iss", iss);
+	if (mode === "fragment") {
+		return `${url}#${searchParams.toString()}`;
+	}
 	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
+}
+
+/**
+ * Selects the response mode for an error redirect to the RP. OIDC Core 1.0 §5
+ * defines defaults based on response_type: `code` → query, types containing
+ * `token` / `id_token` → fragment. An explicit `response_mode` overrides.
+ *
+ * When `response_type` is duplicated (array) or absent, we can't trust the
+ * caller's intent, so we default to query — the safer channel for
+ * unrecognized shapes.
+ */
+function deriveResponseMode(
+	raw: Record<string, unknown>,
+): "query" | "fragment" {
+	const responseMode =
+		typeof raw.response_mode === "string" ? raw.response_mode : undefined;
+	if (responseMode === "fragment") return "fragment";
+	if (responseMode === "query") return "query";
+	const responseType =
+		typeof raw.response_type === "string" ? raw.response_type : undefined;
+	if (responseType && /\b(token|id_token)\b/.test(responseType)) {
+		return "fragment";
+	}
+	return "query";
 }
 
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
@@ -236,6 +266,7 @@ export function authorizeRedirectOnError(
 					error_description,
 					typeof raw.state === "string" ? raw.state : undefined,
 					getIssuer(ctx, opts),
+					deriveResponseMode(raw),
 				),
 			);
 		}

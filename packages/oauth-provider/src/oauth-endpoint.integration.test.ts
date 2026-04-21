@@ -122,13 +122,15 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	});
 
 	describe("oauth2Revoke (JSON delivery)", () => {
-		it("unknown token_type_hint → unsupported_token_type", async () => {
-			const { status, body } = await postForm("/oauth2/revoke", {
+		it("unknown token_type_hint is ignored at schema level (RFC 7009 §2.2.1)", async () => {
+			const { body } = await postForm("/oauth2/revoke", {
 				token: "placeholder",
 				token_type_hint: "id_token",
 			});
-			expect(status).toBe(400);
-			expect(body?.error).toBe("unsupported_token_type");
+			// The schema used to reject unknown hints with unsupported_token_type.
+			// RFC 7009 §2.2.1 says servers MAY ignore the hint; that error code is
+			// reserved for the token type itself being unsupported, not the hint.
+			expect(body?.error).not.toBe("unsupported_token_type");
 		});
 
 		it("missing token → invalid_request with envelope", async () => {
@@ -159,7 +161,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	});
 
 	describe("oauth2Authorize (redirect delivery)", () => {
-		it("unsupported response_type → RP redirect with state and iss", async () => {
+		it("unsupported response_type=token → error in fragment (OIDC §5)", async () => {
 			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
 			const state = "opaque-state-abc";
 			const qs = new URLSearchParams({
@@ -175,15 +177,33 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			expect(status).toBeLessThan(400);
 			expect(location).toBeTruthy();
 			const errorUrl = new URL(location!);
-			// RP receives the error: Location starts with the registered redirect_uri,
-			// echoes state, and carries iss per RFC 9207.
+			// Implicit flow: errors MUST be in the fragment, not query.
 			expect(location!.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.hash).toBeTruthy();
+			const params = new URLSearchParams(errorUrl.hash.slice(1));
+			expect(params.get("error")).toBe("unsupported_response_type");
+			expect(params.get("error_description")).toBeTruthy();
+			expect(params.get("state")).toBe(state);
+			expect(params.get("iss")).toBeTruthy();
+		});
+
+		it("response_mode=query overrides implicit default", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "token",
+				response_mode: "query",
+				state: "s",
+			}).toString();
+			const { location } = await captureRedirect(`/oauth2/authorize?${qs}`);
+			expect(location).toBeTruthy();
+			const errorUrl = new URL(location!);
+			// Explicit response_mode wins over the response_type-derived default.
+			expect(errorUrl.hash).toBe("");
 			expect(errorUrl.searchParams.get("error")).toBe(
 				"unsupported_response_type",
 			);
-			expect(errorUrl.searchParams.get("error_description")).toBeTruthy();
-			expect(errorUrl.searchParams.get("state")).toBe(state);
-			expect(errorUrl.searchParams.get("iss")).toBeTruthy();
 		});
 
 		it("duplicated response_type → invalid_request (RFC 6749 §3.1)", async () => {
