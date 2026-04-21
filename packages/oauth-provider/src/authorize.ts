@@ -145,7 +145,7 @@ export function getErrorURL(
  * 127.0.0.1 and [::1], matching on scheme+host+path+query and ignoring
  * port. DNS names like "localhost" are excluded per §8.3.
  */
-export function findRegisteredRedirectUri(
+function findRegisteredRedirectUri(
 	registered: readonly string[] | undefined,
 	requested: string | undefined,
 ): string | undefined {
