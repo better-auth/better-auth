@@ -52,6 +52,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigration) continue;
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
@@ -286,6 +287,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigration) continue;
 		const modelName = getModelName(tableKey);
 
 		type Relation = {

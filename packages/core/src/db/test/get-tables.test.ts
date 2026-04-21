@@ -113,4 +113,28 @@ describe("getAuthTables", () => {
 
 		expect(tables.verification).toBeDefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8347
+	 */
+	it("should preserve disableMigration from plugin schema", () => {
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "test",
+					schema: {
+						test: {
+							fields: {
+								name: { type: "string", required: true },
+							},
+							disableMigration: true,
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.test).toBeDefined();
+		expect(tables.test!.disableMigration).toBe(true);
+	});
 });
