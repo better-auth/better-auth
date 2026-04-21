@@ -729,7 +729,7 @@ export interface OAuthAuthorizationQuery {
 	 * Optional in the query when using request_uri (PAR) — resolved from stored params.
 	 */
 	// NEVER SUPPORT "token" or "id_token" - depreciated in oAuth2.1
-	response_type?: "code";
+	response_type?: string;
 	/**
 	 * PAR request_uri. When present, other params are resolved from the stored request.
 	 */

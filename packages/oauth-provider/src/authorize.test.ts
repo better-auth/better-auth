@@ -421,6 +421,29 @@ describe("oauth authorize - authenticated", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9250
 	 */
+	it("should redirect with unsupported_response_type for an unknown response_type", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "token");
+		authUrl.searchParams.set("scope", "openid");
+
+		let errorRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirectUrl).toContain("error=unsupported_response_type");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9250
+	 */
 	it("should redirect with invalid_request for unsupported code_challenge_method", async () => {
 		if (!oauthClient?.client_id) {
 			throw Error("beforeAll not run properly");

@@ -372,7 +372,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "GET",
 					query: z.object({
-						response_type: z.enum(["code"]).optional(),
+						response_type: z.string().optional(),
 						client_id: z.string(),
 						redirect_uri: SafeUrlSchema.optional(),
 						scope: z.string().optional(),
