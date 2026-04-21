@@ -206,4 +206,75 @@ describe("endpoints instrumentation", () => {
 		);
 		expect(span.attributes[ATTR_HTTP_ROUTE]).toBe("/route-with-params/:slug");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9269
+	 */
+	it("emits a root span when the rate limiter rejects a request with 429", async () => {
+		const instance = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 60,
+				max: 3,
+				customRules: {
+					"/sign-in/*": { window: 60, max: 2 },
+				},
+			},
+		});
+
+		await instance.client.signIn.email({
+			email: instance.testUser.email,
+			password: instance.testUser.password,
+		});
+		await instance.client.signIn.email({
+			email: instance.testUser.email,
+			password: instance.testUser.password,
+		});
+		exporter.reset();
+
+		const res = await instance.client.signIn.email({
+			email: instance.testUser.email,
+			password: instance.testUser.password,
+		});
+		expect(res.error?.status).toBe(429);
+
+		const allSpans = exporter.getFinishedSpans();
+		const rootSpan = allSpans.find(
+			(s) =>
+				s.name.includes("/sign-in/email") &&
+				!s.name.startsWith("hook") &&
+				!s.name.startsWith("handler") &&
+				!s.name.startsWith("middleware") &&
+				!s.name.startsWith("onRequest") &&
+				!s.name.startsWith("onResponse"),
+		);
+		expect(rootSpan).toBeDefined();
+		expect(rootSpan!.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(429);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9269
+	 */
+	it("emits a root span when onRequest returns early for a disabled path", async () => {
+		const instance = await getTestInstance({
+			disabledPaths: ["/get-session"],
+		});
+		exporter.reset();
+
+		const res = await instance.client.getSession();
+		expect(res.error?.status).toBe(404);
+
+		const allSpans = exporter.getFinishedSpans();
+		const rootSpan = allSpans.find(
+			(s) =>
+				s.name.includes("/get-session") &&
+				!s.name.startsWith("hook") &&
+				!s.name.startsWith("handler") &&
+				!s.name.startsWith("middleware") &&
+				!s.name.startsWith("onRequest") &&
+				!s.name.startsWith("onResponse"),
+		);
+		expect(rootSpan).toBeDefined();
+		expect(rootSpan!.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(404);
+	});
 });

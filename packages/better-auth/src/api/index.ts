@@ -11,6 +11,7 @@ import {
 	ATTR_HOOK_TYPE,
 	ATTR_HTTP_RESPONSE_STATUS_CODE,
 	ATTR_HTTP_ROUTE,
+	getOpenTelemetryAPI,
 	withSpan,
 } from "@better-auth/core/instrumentation";
 import { normalizePathname } from "@better-auth/core/utils/url";
@@ -270,6 +271,9 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		middlewares,
 	};
 }
+const INSTRUMENTATION_SCOPE = "better-auth";
+const INSTRUMENTATION_VERSION = import.meta.env?.BETTER_AUTH_VERSION ?? "1.0.0";
+
 export const router = <Option extends BetterAuthOptions>(
 	ctx: AuthContext,
 	options: Option,
@@ -277,7 +281,7 @@ export const router = <Option extends BetterAuthOptions>(
 	const { api, middlewares } = getEndpoints(ctx, options);
 	const basePath = new URL(ctx.baseURL).pathname;
 
-	return createRouter(api, {
+	const { handler: innerHandler, endpoints } = createRouter(api, {
 		routerContext: ctx,
 		openapi: {
 			disabled: true,
@@ -399,6 +403,44 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 		},
 	});
+
+	return {
+		handler: async (request: Request) => {
+			const { trace, SpanStatusCode } = getOpenTelemetryAPI();
+			const tracer = trace.getTracer(
+				INSTRUMENTATION_SCOPE,
+				INSTRUMENTATION_VERSION,
+			);
+			const method = request.method;
+			const path = normalizePathname(request.url, basePath);
+
+			return tracer.startActiveSpan(
+				`${method} ${path}`,
+				{
+					attributes: {
+						[ATTR_HTTP_ROUTE]: path,
+					},
+				},
+				async (span) => {
+					try {
+						const response = await innerHandler(request);
+						span.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, response.status);
+						span.end();
+						return response;
+					} catch (err) {
+						span.recordException(err as Error);
+						span.setStatus({
+							code: SpanStatusCode.ERROR,
+							message: String((err as Error)?.message ?? err),
+						});
+						span.end();
+						throw err;
+					}
+				},
+			);
+		},
+		endpoints,
+	};
 };
 
 export {
