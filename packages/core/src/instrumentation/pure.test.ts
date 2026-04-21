@@ -52,6 +52,38 @@ describe("instrumentation (pure entry)", () => {
 		expect(() => span.setAttribute("k", "v")).not.toThrow();
 	});
 
+	it("noop tracer.startActiveSpan honors all three OpenTelemetry overloads", () => {
+		const tracer = getOpenTelemetryAPI().trace.getTracer("t");
+
+		// (name, fn)
+		const r1 = tracer.startActiveSpan("two-arg", (s) => {
+			expect(s).toBeDefined();
+			return 1 as const;
+		});
+		expect(r1).toBe(1);
+
+		// (name, options, fn)
+		const r2 = tracer.startActiveSpan("three-arg", { attributes: {} }, (s) => {
+			expect(s).toBeDefined();
+			return 2 as const;
+		});
+		expect(r2).toBe(2);
+
+		// (name, options, context, fn)
+		const r3 = (
+			tracer.startActiveSpan as unknown as (
+				name: string,
+				options: unknown,
+				context: unknown,
+				fn: (span: unknown) => unknown,
+			) => unknown
+		)("four-arg", {}, {}, (s) => {
+			expect(s).toBeDefined();
+			return 3 as const;
+		});
+		expect(r3).toBe(3);
+	});
+
 	it("does not reference `@opentelemetry/api` at runtime", async () => {
 		const mod = await import("./pure.index");
 		expect(mod.withSpan.toString()).not.toContain("opentelemetry");
