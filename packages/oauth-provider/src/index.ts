@@ -10,8 +10,8 @@ export type {
 	OAuthEndpointErrorResult,
 	OAuthEndpointRedirectContext,
 	OAuthErrorCode,
-	OAuthFieldError,
-	OAuthFieldErrorMap,
+	OAuthFieldErrorCode,
+	OAuthFieldErrorCodeMap,
 	OAuthRedirectOnError,
 } from "./oauth-endpoint";
 export { checkOAuthClient, oauthToSchema } from "./register";

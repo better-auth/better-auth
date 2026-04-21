@@ -56,12 +56,12 @@ export type OAuthErrorCode =
 	| "registration_not_supported"
 	| (string & {});
 
-export type OAuthFieldErrorMap = {
+export type OAuthFieldErrorCodeMap = {
 	missing?: OAuthErrorCode;
 	invalid?: OAuthErrorCode;
 };
 
-export type OAuthFieldError = OAuthErrorCode | OAuthFieldErrorMap;
+export type OAuthFieldErrorCode = OAuthErrorCode | OAuthFieldErrorCodeMap;
 
 export interface OAuthEndpointErrorResult {
 	error: OAuthErrorCode;
@@ -103,9 +103,9 @@ export interface OAuthEndpointExtras {
 	 * `jwks.keys[0].n` collapse to `jwks`; lift a nested schema to a
 	 * top-level field when per-sub-field codes are required.
 	 */
-	fieldErrors?: Record<string, OAuthFieldError>;
+	errorCodesByField?: Record<string, OAuthFieldErrorCode>;
 	/**
-	 * RFC code returned when no `fieldErrors` entry matches or the failure is
+	 * RFC code returned when no `errorCodesByField` entry matches or the failure is
 	 * structurally malformed (wrong type, duplicated params, bad format,
 	 * failed refinement).
 	 * @default "invalid_request"
@@ -118,7 +118,7 @@ export interface OAuthEndpointExtras {
  * for body/query shape while validation failures serialize as the RFC 6749
  * §5.2 error envelope `{ error, error_description }`.
  *
- * A failing issue is routed by its first path segment via `fieldErrors`:
+ * A failing issue is routed by its first path segment via `errorCodesByField`:
  * - missing required (`invalid_type` + "received undefined") → `.missing`
  * - unsupported value (`invalid_value`) → `.invalid`
  * - anything else (wrong type, duplicated params, bad format) → `defaultError`
@@ -140,7 +140,7 @@ export function createOAuthEndpoint<
 	const {
 		redirectOnError,
 		onValidationError: userHook,
-		fieldErrors,
+		errorCodesByField,
 		defaultError = "invalid_request",
 		...rest
 	} = options;
@@ -151,7 +151,11 @@ export function createOAuthEndpoint<
 			onValidationError: async (args: ValidationErrorHookArgs) => {
 				if (userHook) await userHook(args);
 				throw new APIError("BAD_REQUEST", {
-					...mapIssuesToOAuthError(args.issues, fieldErrors, defaultError),
+					...mapIssuesToOAuthError(
+						args.issues,
+						errorCodesByField,
+						defaultError,
+					),
 				});
 			},
 		} as unknown as Options;
@@ -192,7 +196,7 @@ export function createOAuthEndpoint<
 			response: redirect({
 				...mapIssuesToOAuthError(
 					result.error.issues,
-					fieldErrors,
+					errorCodesByField,
 					defaultError,
 				),
 				ctx,
@@ -215,7 +219,7 @@ export function createOAuthEndpoint<
 
 export function mapIssuesToOAuthError(
 	issues: readonly z.core.$ZodIssue[],
-	fieldErrors?: Record<string, OAuthFieldError>,
+	errorCodesByField?: Record<string, OAuthFieldErrorCode>,
 	defaultError: OAuthErrorCode = "invalid_request",
 ): OAuthEndpointErrorResult {
 	const issue = issues[0];
@@ -228,7 +232,7 @@ export function mapIssuesToOAuthError(
 
 	const first = issue.path?.[0];
 	const fieldKey = typeof first === "string" ? first : undefined;
-	const mapping = fieldKey ? fieldErrors?.[fieldKey] : undefined;
+	const mapping = fieldKey ? errorCodesByField?.[fieldKey] : undefined;
 	const field = issue.path?.length ? z.core.toDotPath(issue.path) : "";
 
 	return {
@@ -239,7 +243,7 @@ export function mapIssuesToOAuthError(
 
 function resolveErrorCode(
 	issue: z.core.$ZodIssue,
-	mapping: OAuthFieldError | undefined,
+	mapping: OAuthFieldErrorCode | undefined,
 	defaultError: OAuthErrorCode,
 ): OAuthErrorCode {
 	if (typeof mapping === "string") return mapping;

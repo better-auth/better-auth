@@ -407,7 +407,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 					}),
 					redirectOnError: authorizeRedirectOnError(opts),
-					fieldErrors: {
+					errorCodesByField: {
 						response_type: { invalid: "unsupported_response_type" },
 					},
 					metadata: {
@@ -646,7 +646,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: z.string().optional(),
 						scope: z.string().optional(),
 					}),
-					fieldErrors: {
+					errorCodesByField: {
 						grant_type: {
 							missing: "invalid_request",
 							invalid: "unsupported_grant_type",
@@ -1231,7 +1231,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							})
 							.optional(),
 					}),
-					fieldErrors: {
+					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",
 						software_statement: "invalid_software_statement",
