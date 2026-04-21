@@ -3,6 +3,30 @@ import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { wildcardMatch } from "./wildcard";
 
+/**
+ * Minimal loopback check for dev scheme inference only. Reachable from
+ * `client/config.ts` via `getBaseURL`, so we MUST NOT import the full
+ * `@better-auth/core/utils/host` classifier here: its `utils/ip` dependency
+ * on zod would leak into the client bundle (see `e2e/smoke/test/vite.spec.ts`).
+ *
+ * Server-side SSRF/loopback checks (oauth redirect matching, trusted-origin
+ * resolution, electron fetch gate) continue to use the authoritative
+ * `isLoopbackHost` from `@better-auth/core/utils/host`. This helper's only
+ * job is picking `http` vs `https` for dev ergonomics.
+ */
+function isLoopbackForDevScheme(host: string): boolean {
+	const hostname = host
+		.replace(/:\d+$/, "")
+		.replace(/^\[|\]$/g, "")
+		.toLowerCase();
+	return (
+		hostname === "localhost" ||
+		hostname.endsWith(".localhost") ||
+		hostname === "::1" ||
+		hostname.startsWith("127.")
+	);
+}
+
 function checkHasPath(url: string): boolean {
 	try {
 		const parsedUrl = new URL(url);
@@ -301,25 +325,11 @@ export function getProtocolFromSource(
 	// Local dev: prefer `http` for loopback hosts so the headers-only path
 	// doesn't diverge from the HTTP handler's URL-derived scheme.
 	const host = getHostFromSource(source, trustedProxyHeaders);
-	if (host && isLoopbackHost(host)) {
+	if (host && isLoopbackForDevScheme(host)) {
 		return "http";
 	}
 
 	return "https";
-}
-
-function isLoopbackHost(host: string): boolean {
-	const h = host.toLowerCase();
-	return (
-		h === "localhost" ||
-		h.startsWith("localhost:") ||
-		h === "127.0.0.1" ||
-		h.startsWith("127.0.0.1:") ||
-		h === "[::1]" ||
-		h.startsWith("[::1]:") ||
-		h === "0.0.0.0" ||
-		h.startsWith("0.0.0.0:")
-	);
 }
 
 /**
