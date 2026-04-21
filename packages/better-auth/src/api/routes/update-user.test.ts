@@ -366,6 +366,50 @@ describe("updateUser", async () => {
 		expect(firstSession?.user.name).toBe("updatedName");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8156
+	 */
+	it("should propagate updates when secondaryStorage auto-deserializes JSON (e.g. @vercel/kv)", async () => {
+		const store = new Map<string, unknown>();
+		const { client: authClient, signInWithTestUser: signIn } =
+			await getTestInstance({
+				secondaryStorage: {
+					set(key, value, ttl) {
+						// Simulate @vercel/kv behavior: stores string but get() returns parsed object
+						store.set(key, JSON.parse(value));
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+		const { headers: headers1 } = await signIn();
+
+		// Verify the store actually holds a parsed object with string dates
+		const session1 = await authClient.getSession({
+			fetchOptions: { headers: headers1, throw: true },
+		});
+		const cached = store.get(session1!.session.token) as
+			| { session?: { expiresAt?: unknown } }
+			| undefined;
+		expect(typeof cached?.session?.expiresAt).toBe("string");
+
+		// This was the crash in #8156: TypeError: expiresAt.getTime is not a function
+		await authClient.updateUser({
+			name: "updatedViaKV",
+			fetchOptions: { headers: headers1, throw: true },
+		});
+
+		const refreshed = await authClient.getSession({
+			fetchOptions: { headers: headers1, throw: true },
+		});
+		expect(refreshed?.user.name).toBe("updatedViaKV");
+	});
+
 	it("should not write to secondary storage multiple times for the same session token during updateUser", async () => {
 		const store = new Map<string, string>();
 		const writeLog: { key: string; timestamp: number }[] = [];
