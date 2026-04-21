@@ -17,6 +17,11 @@ export function hydrateSessionAtom(
 	sessionAtom: SessionAtom,
 	session: SessionData | null,
 ) {
+	// The client is a module-level singleton, so writing during SSR would leak
+	// one request's session into concurrent requests sharing the same process.
+	if (typeof window === "undefined") {
+		return;
+	}
 	const currentSession = sessionAtom.get();
 	if (currentSession.data !== null || session === null) {
 		return;

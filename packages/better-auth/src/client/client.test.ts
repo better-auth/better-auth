@@ -264,6 +264,46 @@ describe("run time proxy", async () => {
 		expect(session().isPending).toBe(true);
 	});
 
+	/**
+	 * The auth client is a module-level singleton, so the session atom is shared
+	 * across concurrent SSR requests. Writing during server render would leak one
+	 * request's session into another. Hydration must be a no-op on the server.
+	 */
+	it("should not write to the shared atom during server render", () => {
+		const client = createVanillaClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		vi.stubGlobal("window", undefined);
+		try {
+			client.hydrateSession({
+				user: {
+					id: "user-a",
+					name: "User A",
+					email: "a@email.com",
+					emailVerified: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				session: {
+					id: "session-a",
+					userId: "user-a",
+					expiresAt: new Date(),
+					token: "token-a",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		expect(client.$store.atoms.session!.get().data).toBeNull();
+	});
+
 	it("should allow second argument fetch options", async () => {
 		let called = false;
 		const client = createSolidClient({

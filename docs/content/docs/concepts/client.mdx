@@ -461,7 +461,7 @@ if(error?.code){
 
 ### SSR Hydration
 
-With SSR frameworks like Next.js, Nuxt, or SvelteKit, `useSession` fetches the session on the client, causing a loading flash. Use `hydrateSession` to pre-fill the session with server-fetched data so `useSession` returns data immediately:
+With SSR frameworks like Next.js, Nuxt, or SvelteKit, `useSession` fetches the session on the client, causing a loading flash. Pass the server-fetched session to `hydrateSession` and use it as a fallback so the first render has data on both the server and the client:
 
 ```tsx title="page.tsx (server component)"
 import { auth } from "@/lib/auth"
@@ -487,16 +487,17 @@ type Props = {
 
 export function SessionCard({ initialSession }: Props) {
     authClient.hydrateSession(initialSession)
-    const { data, isPending } = authClient.useSession()
+    const { data } = authClient.useSession()
+    const session = data ?? initialSession
 
-    // isPending is immediately false, data is available on first render
-    // A background refetch still happens to ensure freshness
+    if (!session) return <p>Not signed in</p>
+    return <pre>{JSON.stringify(session, null, 2)}</pre>
 }
 ```
 
 <Callout>
-- `hydrateSession` is idempotent. It only sets data when the session is empty.
-- Passing `null` is safe. It will be ignored and `useSession` will fetch as usual.
+  * `hydrateSession` is idempotent. It only sets data when the session is empty.
+  * Passing `null` is safe. It will be ignored and `useSession` will fetch as usual.
 </Callout>
 
 ### Plugins
