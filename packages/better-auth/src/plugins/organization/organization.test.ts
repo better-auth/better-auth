@@ -2553,6 +2553,56 @@ describe("Additional Fields", async () => {
 		}>();
 	});
 
+	it("should infer team additional fields on $Infer.Team", () => {
+		type Team = typeof auth.$Infer.Team;
+		expectTypeOf<Team>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			organizationId: string;
+			createdAt: Date;
+			updatedAt?: Date | undefined;
+			teamRequiredField: string;
+			teamOptionalField?: string | undefined;
+			teamHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer organization additional fields on $Infer.Organization", () => {
+		type Organization = typeof auth.$Infer.Organization;
+		expectTypeOf<Organization>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			slug: string;
+			createdAt: Date;
+			logo?: string | null | undefined;
+			metadata?: any;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
+			someHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer member additional fields on $Infer.Member", () => {
+		type Member = typeof auth.$Infer.Member;
+		expectTypeOf<Member>().toEqualTypeOf<{
+			id: string;
+			organizationId: string;
+			userId: string;
+			role: "member" | "admin" | "owner";
+			createdAt: Date;
+			teamId?: string | undefined;
+			user: {
+				id: string;
+				email: string;
+				name: string;
+				image?: string | undefined;
+			};
+			memberRequiredField: string;
+			memberOptionalField?: string | undefined;
+			memberHiddenField?: string | undefined;
+		}>();
+	});
+
 	it("useActiveOrganization hook", async () => {
 		const { data, error } = await getAtomValue(
 			() => orgClientPlugin.getAtoms(client.$fetch).activeOrganization,
