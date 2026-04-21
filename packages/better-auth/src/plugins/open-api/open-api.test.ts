@@ -125,6 +125,20 @@ describe("open-api", async () => {
 		);
 	});
 
+	it("should use OpenAPI 3.1 nullable format for get-session response", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const getSessionSchema =
+			paths["/get-session"].post.responses["200"].content["application/json"]
+				.schema;
+
+		expect(Array.isArray(getSessionSchema.type)).toBe(true);
+		expect(getSessionSchema.type).toContain("object");
+		expect(getSessionSchema.type).toContain("null");
+		expect(getSessionSchema.nullable).toBe(undefined);
+	});
+
 	it("should use anyOf format for optional object types in OpenAPI 3.1", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;

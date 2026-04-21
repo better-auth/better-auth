@@ -19,6 +19,7 @@ import {
 	Mailbox,
 	Navigation,
 	Phone,
+	Route,
 	ScanFace,
 	ScrollTextIcon,
 	Server,
@@ -445,11 +446,6 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
-			},
-			{
-				title: "Dynamic Base URL",
-				href: "/docs/concepts/dynamic-base-url",
-				icon: () => <Navigation className="w-4 h-4 text-current" />,
 			},
 		],
 		Icon: () => (
@@ -1118,7 +1114,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Vercel",
 				href: "/docs/authentication/vercel",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1153,7 +1148,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "WeChat",
 				href: "/docs/authentication/wechat",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1497,7 +1491,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Electron",
 				icon: Icons.electron,
 				href: "/docs/integrations/electron",
-				isNew: true,
 			},
 			{
 				title: "SvelteKit",
@@ -1534,7 +1527,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Encore",
 				icon: Icons.encore,
 				href: "/docs/integrations/encore",
-				isNew: true,
 			},
 			{
 				title: "Express",
@@ -1927,7 +1919,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
-				isNew: true,
 			},
 			{
 				title: "SSO",
@@ -1966,7 +1957,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					</svg>
 				),
 				href: "/docs/plugins/scim",
-				isNew: true,
 			},
 			{
 				title: "Utility",
@@ -2138,23 +2128,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						viewBox="0 0 256 257"
 					>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="M147.386 69.071L147.129 0h-38.515l.257 69.071l19.257 26.448zm-38.515 118.371v69.328h38.515v-69.328l-19.258-26.447z"
 						></path>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="m147.386 187.442l40.57 55.976l31.069-22.596l-40.57-55.975l-31.069-10.015zM108.871 69.071L68.044 13.095L36.975 35.691l40.57 55.976l31.326 10.014z"
 						></path>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="M77.545 91.667L11.811 70.355L0 106.816l65.733 21.569l31.069-10.271zm81.653 46.732l19.257 26.448l65.734 21.311L256 149.697l-65.733-21.312z"
 						></path>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="M190.267 128.385L256 106.816l-11.811-36.461l-65.734 21.312l-19.257 26.447zm-124.534 0L0 149.697l11.811 36.461l65.734-21.311l19.257-26.448z"
 						></path>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="m77.545 164.847l-40.57 55.975l31.069 22.596l40.827-55.976v-32.61zm100.91-73.18l40.57-55.976l-31.069-22.596l-40.57 55.976v32.61z"
 						></path>
 					</svg>
@@ -2165,7 +2155,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Test Utils",
 				href: "/docs/plugins/test-utils",
 				icon: () => <FlaskConical className="w-4 h-4" />,
-				isNew: true,
 			},
 			{
 				title: "Payments",
@@ -2300,28 +2289,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					>
 						<path
 							d="M7.44678 1H1L26.9696 46L53 1H9.39298L26.9696 31.4858L30.193 26.0202L19.0632 6.7085H43.3298L26.9696 34.8866L7.44678 1Z"
-							fill="currentColor"
-						/>
-					</svg>
-				),
-			},
-			{
-				title: "Commet",
-				href: "/docs/plugins/commet",
-				icon: () => (
-					<svg
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 500 500"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							d="M250 71L356.521 255.5H143.479L250 71Z"
-							fill="currentColor"
-						/>
-						<path
-							d="M250 440L356.521 255.5H143.479L250 440Z"
 							fill="currentColor"
 						/>
 					</svg>
@@ -2465,6 +2432,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Dynamic Base URL",
+				href: "/docs/guides/dynamic-base-url",
+				icon: () => <Route className="w-4 h-4 text-current" />,
+			},
+			{
 				title: "SAML SSO with Okta",
 				href: "/docs/guides/saml-sso-with-okta",
 				icon: () => (
@@ -2483,6 +2455,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Optimize for Performance",
 				href: "/docs/guides/optimizing-for-performance",
 				icon: () => <Gauge className="size-4" />,
+			},
+			{
+				title: "Dynamic Base URL",
+				href: "/docs/guides/dynamic-base-url",
+				icon: () => <Navigation className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "Migration",
@@ -2865,6 +2842,10 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						title: "signup_disabled",
 						href: "/docs/reference/errors/signup_disabled",
+					},
+					{
+						title: "please_restart_the_process",
+						href: "/docs/reference/errors/please_restart_the_process",
 					},
 				],
 			},
