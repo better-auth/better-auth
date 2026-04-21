@@ -1208,7 +1208,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					}),
 					onValidationError: ({ issues, message }) => {
 						const redirectUriIssue = issues.find(
-							(issue) => issue.path?.[0] === "redirect_uris",
+							(issue) =>
+								issue.path?.[0] === "redirect_uris" ||
+								issue.path?.[0] === "post_logout_redirect_uris",
 						);
 						if (redirectUriIssue) {
 							throw new APIError("BAD_REQUEST", {

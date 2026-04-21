@@ -71,6 +71,18 @@ describe("oauth register", async () => {
 		});
 	});
 
+	it("should return invalid_redirect_uri for malformed post_logout_redirect_uris", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			post_logout_redirect_uris: ["not-a-uri"],
+		});
+
+		expect(response.error).toMatchObject({
+			status: 400,
+			error: "invalid_redirect_uri",
+		});
+	});
+
 	it("should fail without authentication", async () => {
 		const unauthenticatedClient = createAuthClient({
 			plugins: [oauthProviderClient()],
