@@ -170,6 +170,30 @@ describe("oauth revoke", async () => {
 		expect(revocation.error?.status).toBe(401);
 	});
 
+	it("should return unsupported_token_type for unknown token_type_hint", async () => {
+		const tokens = await getTokens();
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				// @ts-expect-error testing unsupported token_type_hint value
+				token_type_hint: "id_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(revocation.error).toMatchObject({
+			status: 400,
+			error: "unsupported_token_type",
+		});
+	});
+
 	it("should pass verification with token_type_hint access_token and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
 		const revocation = await client.oauth2.revoke(

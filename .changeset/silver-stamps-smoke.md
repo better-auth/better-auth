@@ -7,3 +7,4 @@ Throws correct [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749#section-
 - `unsupported_grant_type` for `grant_type` at `/token`
 - `unsupported_response_type` for `response_type` at `/authorize`
 - `invalid_redirect_uri` for `redirect_uri` and `post_logout_redirect_uris` at `/register`
+- `unsupported_token_type` for `token_type_hint` at `/revoke`

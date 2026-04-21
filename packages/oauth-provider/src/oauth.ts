@@ -928,6 +928,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.enum(["access_token", "refresh_token"])
 							.optional(),
 					}),
+					onValidationError: ({ issues, message }) => {
+						const tokenTypeIssue = issues.find(
+							(issue) => issue.path?.[0] === "token_type_hint",
+						);
+						if (tokenTypeIssue) {
+							throw new APIError("BAD_REQUEST", {
+								error: "unsupported_token_type",
+								error_description: message,
+							});
+						}
+					},
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
