@@ -21,7 +21,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node -e \"require('fs').copyFileSync('dist/index.d.mts','dist/index.d.ts')\"",
     "dev": "tsdown --watch",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
@@ -37,7 +37,7 @@
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.mjs"
     }
   },
