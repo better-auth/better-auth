@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { organization } from "@better-auth/organization";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { organization } from "../../plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthEndpoint, sessionMiddleware } from "..";
 import { requireOrgRole } from "./authorization";
