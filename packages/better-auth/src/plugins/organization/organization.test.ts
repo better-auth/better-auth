@@ -2588,9 +2588,15 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			userId: string;
-			role: string;
+			role: "member" | "admin" | "owner";
 			createdAt: Date;
 			teamId?: string | undefined;
+			user: {
+				id: string;
+				email: string;
+				name: string;
+				image?: string | undefined;
+			};
 			memberRequiredField: string;
 			memberOptionalField?: string | undefined;
 			memberHiddenField?: string | undefined;
