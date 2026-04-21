@@ -1,0 +1,76 @@
+---
+title: Kysely Adapter
+description: Integrate Better Auth with Kysely.
+---
+
+Kysely is a type-safe SQL query builder for TypeScript that supports multiple relational databases such as PostgreSQL, MySQL, SQLite, and more. It provides a flexible and strongly-typed way to build and execute SQL queries.
+
+Before getting started, make sure you have a supported database set up (such as PostgreSQL, MySQL, or SQLite) and Kysely configured in your project. For more information, see the [Kysely Documentation](https://kysely.dev/docs/intro).
+
+## Installation
+
+Kysely support is built into Better Auth. You only need to install Kysely and a database driver:
+
+```package-install
+kysely better-sqlite3
+```
+
+## Example Usage
+
+You can use the Kysely adapter to connect to your database as follows.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { Kysely, SqliteDialect } from "kysely";
+import Database from "better-sqlite3";
+
+const db = new Kysely({
+  dialect: new SqliteDialect({
+    database: new Database("db.sqlite"),
+  }),
+});
+
+export const auth = betterAuth({
+  database: db,
+});
+```
+
+## Schema generation & migration
+
+Better Auth CLI supports schema generation and migrations when using Kysely:
+
+```bash
+npx auth@latest generate
+npx auth@latest migrate
+```
+
+## Joins (Experimental)
+
+Database joins are useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+The Kysely adapter supports joins through Better Auth’s experimental joins feature.
+To enable this, set the `experimental.joins` option to `true` in your auth configuration.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  experimental: { joins: true }
+});
+```
+
+## Additional Information
+
+<Callout>
+  Kysely is the underlying engine used by Better Auth for relational databases.
+
+  You can use any supported SQL dialect such as PostgreSQL, MySQL, SQLite, or MSSQL.
+
+  For performance tips and best practices, see the{" "}
+
+  <Link href="/docs/guides/optimizing-for-performance">
+    performance optimization guide
+  </Link>
+</Callout>

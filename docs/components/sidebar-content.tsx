@@ -1412,6 +1412,32 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Kysely",
+				href: "/docs/adapters/kysely",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="16px"
+						height="16px"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2.2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						{/* vertical line */}
+						<line x1="6" y1="4" x2="6" y2="20" />
+
+						{/* upper diagonal */}
+						<line x1="6" y1="12" x2="18" y2="4" />
+
+						{/* lower diagonal */}
+						<line x1="6" y1="12" x2="18" y2="20" />
+					</svg>
+				),
+			},
+			{
 				group: true,
 				title: "Others",
 				href: "",
