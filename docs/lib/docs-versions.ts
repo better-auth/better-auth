@@ -106,8 +106,12 @@ export function scopeDocsHref(
 	version: DocsVersion,
 ): string | undefined {
 	if (!href || !version.slug) return href;
-	if (!href.startsWith("/docs/") && href !== "/docs") return href;
-	const segment = href.split("/")[2];
+	// Match /docs exactly, /docs/..., /docs?query, or /docs#hash.
+	if (!/^\/docs(?:\/|$|[?#])/.test(href)) return href;
+	// Strip query/hash before checking the version segment so
+	// `/docs/beta?foo` isn't treated as an unversioned link.
+	const pathOnly = href.split(/[?#]/, 1)[0];
+	const segment = pathOnly.split("/")[2];
 	if (segment && docsVersions.some((v) => v.slug === segment)) return href;
 	return versionedDocsHref(href, version);
 }
