@@ -1416,5 +1416,47 @@ describe("SSO provider read endpoints", () => {
 
 			expect(response.status).toBe(200);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9133
+		 */
+		it("should reject registration when user is not a member of the organization", async () => {
+			const { auth, getAuthHeaders, createOrganization } = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+
+			const outsiderHeaders = await getAuthHeaders({
+				email: "outsider@example.com",
+				password: "password123",
+				name: "Outsider",
+			});
+
+			const response = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "org-saml-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						audience: "my-audience",
+						wantAssertionsSigned: true,
+						spMetadata: {},
+					},
+					organizationId: org!.id,
+				},
+				headers: outsiderHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
 	});
 });

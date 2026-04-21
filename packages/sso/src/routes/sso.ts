@@ -35,6 +35,7 @@ import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
+	Member,
 	OIDCConfig,
 	SAMLAssertionExtract,
 	SAMLConfig,
@@ -50,7 +51,7 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
-import { isOrgAdmin } from "./providers";
+import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 
 /**
@@ -630,7 +631,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const member = await ctx.context.adapter.findOne<Member>({
 					model: "member",
 					where: [
 						{
@@ -643,23 +644,16 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						},
 					],
 				});
-				if (!organization) {
+				if (!member) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
 					});
 				}
-				if (ctx.context.hasPlugin("organization")) {
-					const hasAdminAccess = await isOrgAdmin(
-						ctx,
-						user.id,
-						ctx.body.organizationId,
-					);
-					if (!hasAdminAccess) {
-						throw new APIError("FORBIDDEN", {
-							message:
-								"You must be an organization owner or admin to register SSO providers",
-						});
-					}
+				if (ctx.context.hasPlugin("organization") && !hasOrgAdminRole(member)) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							"You must be an organization owner or admin to register SSO providers",
+					});
 				}
 			}
 
