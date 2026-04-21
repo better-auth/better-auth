@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.6.5",
+  "version": "1.6.6",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "license": "MIT",
