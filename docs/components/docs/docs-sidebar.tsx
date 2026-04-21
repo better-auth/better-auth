@@ -12,7 +12,11 @@ import { contents } from "@/components/sidebar-content";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { SidebarVersionSwitcher } from "@/components/version-switcher";
-import { getVersionFromPathname, versionedDocsHref } from "@/lib/docs-versions";
+import {
+	getVersionFromPathname,
+	stripVersionPrefix,
+	versionedDocsHref,
+} from "@/lib/docs-versions";
 import { cn } from "@/lib/utils";
 
 type Section = (typeof contents)[number];
@@ -23,9 +27,7 @@ export function DocsSidebar() {
 	const currentVersion = getVersionFromPathname(pathname);
 	const prefixHref = (href: string) => versionedDocsHref(href, currentVersion);
 	// For matching, strip the version prefix from pathname so we can compare against canonical href
-	const canonicalPathname = currentVersion.slug
-		? pathname.replace(`/docs/v/${currentVersion.slug}`, "/docs")
-		: pathname;
+	const canonicalPathname = stripVersionPrefix(pathname, currentVersion);
 	const [currentOpen, setCurrentOpen] = useState(0);
 	const navRef = useRef<HTMLElement>(null);
 

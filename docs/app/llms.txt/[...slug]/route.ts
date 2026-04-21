@@ -1,8 +1,12 @@
 import { notFound } from "next/navigation";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import {
+	docsVersions,
+	resolveVersionFromSlug,
+} from "../../../lib/docs-versions";
 import { getLLMText, LLM_TEXT_ERROR } from "../../../lib/llm-text";
-import { source } from "../../../lib/source";
+import { getSourceFor } from "../../../lib/source";
 
 export const revalidate = false;
 
@@ -22,11 +26,12 @@ export async function GET(
 		slug = slug.slice(1);
 	}
 
-	const page = source.getPage(slug);
+	const { version, relSlug } = resolveVersionFromSlug(slug);
+	const page = getSourceFor(version.slug).getPage(relSlug);
 	if (!page) notFound();
 
 	try {
-		const content = await getLLMText(page);
+		const content = await getLLMText(page, version);
 		return new NextResponse(content, {
 			status: 200,
 			headers: { "Content-Type": "text/markdown" },
@@ -41,5 +46,10 @@ export async function GET(
 }
 
 export function generateStaticParams() {
-	return source.generateParams();
+	return docsVersions.flatMap((v) => {
+		const src = getSourceFor(v.slug);
+		return src.generateParams().map((p) => ({
+			slug: v.slug ? [v.slug, ...(p.slug ?? [])] : (p.slug ?? []),
+		}));
+	});
 }
