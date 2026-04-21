@@ -1206,6 +1206,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							})
 							.optional(),
 					}),
+					onValidationError: ({ issues, message }) => {
+						const redirectUriIssue = issues.find(
+							(issue) => issue.path?.[0] === "redirect_uris",
+						);
+						if (redirectUriIssue) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_redirect_uri",
+								error_description: message,
+							});
+						}
+					},
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",

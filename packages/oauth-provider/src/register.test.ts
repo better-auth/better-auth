@@ -60,6 +60,17 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
+	it("should return invalid_redirect_uri for malformed redirect_uris", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: ["not-a-uri"],
+		});
+
+		expect(response.error).toMatchObject({
+			status: 400,
+			error: "invalid_redirect_uri",
+		});
+	});
+
 	it("should fail without authentication", async () => {
 		const unauthenticatedClient = createAuthClient({
 			plugins: [oauthProviderClient()],
