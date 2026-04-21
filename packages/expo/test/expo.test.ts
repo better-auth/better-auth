@@ -1129,66 +1129,81 @@ describe("expo deep link cookie injection for verify-email", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/8952
  */
-describe("expo session cache hydration on startup", async () => {
-	it("should hydrate session atom from cached session data on init", async () => {
+describe("expo session cache hydration", async () => {
+	it("preserves additional fields through the cache round-trip", async () => {
 		const storage = new Map<string, string>();
-		const cachedSession = {
-			session: {
-				id: "cached-session-id",
-				expiresAt: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
-				userId: "cached-user-id",
-				token: "cached-token",
-			},
-			user: {
-				id: "cached-user-id",
-				email: "cached@test.com",
-				name: "Cached User",
+		const sharedClientOptions = {
+			storage: {
+				getItem: (key: string) => storage.get(key) || null,
+				setItem: (key: string, value: string) => storage.set(key, value),
 			},
 		};
-		storage.set("better-auth_session_data", JSON.stringify(cachedSession));
-
-		const { client } = await getTestInstance(
-			{
-				plugins: [expo()],
-				trustedOrigins: ["better-auth://"],
-			},
-			{
-				clientOptions: {
-					plugins: [
-						expoClient({
-							storage: {
-								getItem: (key) => storage.get(key) || null,
-								setItem: (key, value) => storage.set(key, value),
-							},
-						}),
-					],
+		const serverConfig = {
+			emailAndPassword: { enabled: true },
+			user: {
+				additionalFields: {
+					favoriteColor: {
+						type: "string" as const,
+						defaultValue: "blue",
+					},
 				},
 			},
-		);
+			session: {
+				additionalFields: {
+					deviceLabel: {
+						type: "string" as const,
+						defaultValue: "test-device",
+					},
+				},
+			},
+			plugins: [expo()],
+			trustedOrigins: ["better-auth://"],
+		};
 
-		const session = client.$store.atoms.session!.get();
-		expect(session.data).toMatchObject({
-			session: { id: "cached-session-id" },
-			user: { id: "cached-user-id" },
+		const { client: writer, testUser } = await getTestInstance(serverConfig, {
+			clientOptions: { plugins: [expoClient(sharedClientOptions)] },
 		});
-		expect(session.isPending).toBe(true);
+		await writer.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await writer.getSession();
+
+		const { client: coldStart } = await getTestInstance(serverConfig, {
+			clientOptions: { plugins: [expoClient(sharedClientOptions)] },
+		});
+		const atom = coldStart.$store.atoms.session!.get();
+		expect(atom.data).toMatchObject({
+			user: { favoriteColor: "blue" },
+			session: { deviceLabel: "test-device" },
+		});
+		// Hydration is optimistic; /get-session will still be awaited.
+		expect(atom.isPending).toBe(true);
 	});
 
-	it("should not hydrate session atom when cache is empty", async () => {
+	it.each([
+		["expired", new Date(Date.now() - 60_000).toISOString()],
+		["missing", undefined],
+		["invalid", "not-a-date"],
+	])("does not hydrate when session.expiresAt is %s", async (_label, expiresAt) => {
 		const storage = new Map<string, string>();
+		storage.set(
+			"better-auth_session_data",
+			JSON.stringify({
+				user: { id: "u1" },
+				session: { id: "s1", expiresAt },
+			}),
+		);
 
 		const { client } = await getTestInstance(
-			{
-				plugins: [expo()],
-				trustedOrigins: ["better-auth://"],
-			},
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
 			{
 				clientOptions: {
 					plugins: [
 						expoClient({
 							storage: {
-								getItem: (key) => storage.get(key) || null,
-								setItem: (key, value) => storage.set(key, value),
+								getItem: (k) => storage.get(k) || null,
+								setItem: (k, v) => storage.set(k, v),
 							},
 						}),
 					],
@@ -1196,119 +1211,32 @@ describe("expo session cache hydration on startup", async () => {
 			},
 		);
 
-		const session = client.$store.atoms.session!.get();
-		expect(session.data).toBeNull();
+		expect(client.$store.atoms.session!.get().data).toBeNull();
 	});
 
-	it("should not hydrate session atom when cached session is expired", async () => {
+	it("does not hydrate when disableCache is set", async () => {
 		const storage = new Map<string, string>();
-		const expiredSession = {
-			session: {
-				id: "expired-session-id",
-				expiresAt: new Date(Date.now() - 1000 * 60).toISOString(),
-				userId: "user-id",
-				token: "expired-token",
-			},
-			user: {
-				id: "user-id",
-				email: "expired@test.com",
-				name: "Expired User",
-			},
-		};
-		storage.set("better-auth_session_data", JSON.stringify(expiredSession));
-
-		const { client } = await getTestInstance(
-			{
-				plugins: [expo()],
-				trustedOrigins: ["better-auth://"],
-			},
-			{
-				clientOptions: {
-					plugins: [
-						expoClient({
-							storage: {
-								getItem: (key) => storage.get(key) || null,
-								setItem: (key, value) => storage.set(key, value),
-							},
-						}),
-					],
+		storage.set(
+			"better-auth_session_data",
+			JSON.stringify({
+				user: { id: "u1" },
+				session: {
+					id: "s1",
+					expiresAt: new Date(Date.now() + 60_000).toISOString(),
 				},
-			},
+			}),
 		);
 
-		const session = client.$store.atoms.session!.get();
-		expect(session.data).toBeNull();
-	});
-
-	it("should not hydrate session atom when expiresAt is missing or invalid", async () => {
-		const storage = new Map<string, string>();
-		const corruptSession = {
-			session: {
-				id: "corrupt-session-id",
-				userId: "user-id",
-				token: "corrupt-token",
-			},
-			user: {
-				id: "user-id",
-				email: "corrupt@test.com",
-				name: "Corrupt User",
-			},
-		};
-		storage.set("better-auth_session_data", JSON.stringify(corruptSession));
-
 		const { client } = await getTestInstance(
-			{
-				plugins: [expo()],
-				trustedOrigins: ["better-auth://"],
-			},
-			{
-				clientOptions: {
-					plugins: [
-						expoClient({
-							storage: {
-								getItem: (key) => storage.get(key) || null,
-								setItem: (key, value) => storage.set(key, value),
-							},
-						}),
-					],
-				},
-			},
-		);
-
-		const session = client.$store.atoms.session!.get();
-		expect(session.data).toBeNull();
-	});
-
-	it("should not hydrate session atom when disableCache is true", async () => {
-		const storage = new Map<string, string>();
-		const cachedSession = {
-			session: {
-				id: "cached-session-id",
-				expiresAt: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
-				userId: "cached-user-id",
-				token: "cached-token",
-			},
-			user: {
-				id: "cached-user-id",
-				email: "cached@test.com",
-				name: "Cached User",
-			},
-		};
-		storage.set("better-auth_session_data", JSON.stringify(cachedSession));
-
-		const { client } = await getTestInstance(
-			{
-				plugins: [expo()],
-				trustedOrigins: ["better-auth://"],
-			},
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
 			{
 				clientOptions: {
 					plugins: [
 						expoClient({
 							disableCache: true,
 							storage: {
-								getItem: (key) => storage.get(key) || null,
-								setItem: (key, value) => storage.set(key, value),
+								getItem: (k) => storage.get(k) || null,
+								setItem: (k, v) => storage.set(k, v),
 							},
 						}),
 					],
@@ -1316,8 +1244,7 @@ describe("expo session cache hydration on startup", async () => {
 			},
 		);
 
-		const session = client.$store.atoms.session!.get();
-		expect(session.data).toBeNull();
+		expect(client.$store.atoms.session!.get().data).toBeNull();
 	});
 });
 
