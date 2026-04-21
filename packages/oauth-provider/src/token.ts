@@ -38,9 +38,9 @@ export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const grantType: GrantType | undefined = ctx.body?.grant_type;
+	const grantType: GrantType = ctx.body?.grant_type;
 
-	if (opts.grantTypes && grantType && !opts.grantTypes.includes(grantType)) {
+	if (opts.grantTypes && !opts.grantTypes.includes(grantType)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `unsupported grant_type ${grantType}`,
 			error: "unsupported_grant_type",
@@ -54,16 +54,6 @@ export async function tokenEndpoint(
 			return handleClientCredentialsGrant(ctx, opts);
 		case "refresh_token":
 			return handleRefreshTokenGrant(ctx, opts);
-		case undefined:
-			throw new APIError("BAD_REQUEST", {
-				error_description: "missing required grant_type",
-				error: "unsupported_grant_type",
-			});
-		default:
-			throw new APIError("BAD_REQUEST", {
-				error_description: `unsupported grant_type ${grantType}`,
-				error: "unsupported_grant_type",
-			});
 	}
 }
 
