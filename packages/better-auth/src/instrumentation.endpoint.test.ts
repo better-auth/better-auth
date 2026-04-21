@@ -238,18 +238,9 @@ describe("endpoints instrumentation", () => {
 		});
 		expect(res.error?.status).toBe(429);
 
-		const allSpans = exporter.getFinishedSpans();
-		const rootSpan = allSpans.find(
-			(s) =>
-				s.name.includes("/sign-in/email") &&
-				!s.name.startsWith("hook") &&
-				!s.name.startsWith("handler") &&
-				!s.name.startsWith("middleware") &&
-				!s.name.startsWith("onRequest") &&
-				!s.name.startsWith("onResponse"),
-		);
-		expect(rootSpan).toBeDefined();
-		expect(rootSpan!.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(429);
+		const rootSpan = await waitForSpan((s) => s.name === "HTTP POST");
+		expect(rootSpan.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(429);
+		expect(rootSpan.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
 	});
 
 	/**
@@ -264,17 +255,22 @@ describe("endpoints instrumentation", () => {
 		const res = await instance.client.getSession();
 		expect(res.error?.status).toBe(404);
 
-		const allSpans = exporter.getFinishedSpans();
-		const rootSpan = allSpans.find(
-			(s) =>
-				s.name.includes("/get-session") &&
-				!s.name.startsWith("hook") &&
-				!s.name.startsWith("handler") &&
-				!s.name.startsWith("middleware") &&
-				!s.name.startsWith("onRequest") &&
-				!s.name.startsWith("onResponse"),
+		const rootSpan = await waitForSpan((s) => s.name === "HTTP GET");
+		expect(rootSpan.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(404);
+		expect(rootSpan.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
+	});
+
+	it("updates the root span with the low-cardinality route template after resolution", async () => {
+		const instance = await createTestInstance();
+		await instance.client.$fetch("/route-with-params/acme-segment", {
+			method: "GET",
+		});
+
+		const rootSpan = await waitForSpan(
+			(s) => s.name === "GET /route-with-params/:slug" && !s.parentSpanId,
 		);
-		expect(rootSpan).toBeDefined();
-		expect(rootSpan!.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(404);
+		expect(rootSpan.attributes[ATTR_HTTP_ROUTE]).toBe(
+			"/route-with-params/:slug",
+		);
 	});
 });

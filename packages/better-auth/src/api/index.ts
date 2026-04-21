@@ -412,14 +412,11 @@ export const router = <Option extends BetterAuthOptions>(
 				INSTRUMENTATION_VERSION,
 			);
 			const method = request.method;
-			const path = normalizePathname(request.url, basePath);
 
 			return tracer.startActiveSpan(
-				`${method} ${path}`,
+				`HTTP ${method}`,
 				{
-					attributes: {
-						[ATTR_HTTP_ROUTE]: path,
-					},
+					attributes: {},
 				},
 				async (span) => {
 					try {
