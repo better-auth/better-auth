@@ -823,9 +823,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 												token_type_hint: {
 													type: "string",
-													enum: ["access_token", "refresh_token"],
 													description:
-														"Hint about the type of the token submitted for introspection",
+														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
 												},
 												resource: {
 													type: "string",
@@ -967,9 +966,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 												token_type_hint: {
 													type: "string",
-													enum: ["access_token", "refresh_token"],
 													description:
-														"Hint about the type of the token submitted for revocation",
+														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
 												},
 											},
 											required: ["token"],
