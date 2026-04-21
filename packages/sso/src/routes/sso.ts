@@ -17,7 +17,6 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
-import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import * as z from "zod";
@@ -33,6 +32,7 @@ import {
 import { validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
+import { saml } from "../samlify";
 import type {
 	AuthnRequestRecord,
 	OIDCConfig,
