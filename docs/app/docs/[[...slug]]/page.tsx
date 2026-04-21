@@ -26,7 +26,11 @@ import {
 } from "@/components/docs/mdx-components";
 import { Callout } from "@/components/ui/callout";
 import type { DocsVersion } from "@/lib/docs-versions";
-import { docsVersions, resolveVersionFromSlug } from "@/lib/docs-versions";
+import {
+	docsVersions,
+	resolveVersionFromSlug,
+	scopeDocsHref,
+} from "@/lib/docs-versions";
 import { createMetadata } from "@/lib/metadata";
 import { source, sourceBeta } from "@/lib/source";
 import { cn } from "@/lib/utils";
@@ -61,6 +65,10 @@ export default async function Page({
 	// `content/docs-beta` is only a local sync target, not in the repo tree.
 	const rawBase = `https://raw.githubusercontent.com/better-auth/better-auth/${version.branch}/docs/content/docs`;
 	const githubBase = `https://github.com/better-auth/better-auth/blob/${version.branch}/docs/content/docs`;
+
+	// Keep every absolute /docs link scoped to the version being viewed.
+	const scope = (href: string | undefined) => scopeDocsHref(href, version);
+	const DefaultAnchor = defaultMdxComponents.a;
 
 	return (
 		<DocsPage
@@ -135,11 +143,16 @@ export default async function Page({
 								className="w-full h-[500px]"
 							/>
 						),
+						a: (props: React.ComponentProps<"a">) => (
+							<DefaultAnchor {...props} href={scope(props.href)} />
+						),
 						Link: ({
+							href,
 							className,
 							...props
 						}: React.ComponentProps<typeof Link>) => (
 							<Link
+								href={typeof href === "string" ? (scope(href) ?? href) : href}
 								className={cn(
 									"font-medium underline underline-offset-4",
 									className,

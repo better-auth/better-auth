@@ -94,6 +94,25 @@ export function stripVersionPrefix(
 }
 
 /**
+ * Rewrite an absolute `/docs/...` link so it stays within the active version.
+ *
+ * - Non-`/docs` links (anchors, external, /blog, etc.) pass through untouched.
+ * - On latest (`slug === null`), this is a no-op.
+ * - Links that already target a known version (e.g. `/docs/v1.5/...`) are
+ *   preserved so authors can link across versions explicitly when needed.
+ */
+export function scopeDocsHref(
+	href: string | undefined,
+	version: DocsVersion,
+): string | undefined {
+	if (!href || !version.slug) return href;
+	if (!href.startsWith("/docs/") && href !== "/docs") return href;
+	const segment = href.split("/")[2];
+	if (segment && docsVersions.some((v) => v.slug === segment)) return href;
+	return versionedDocsHref(href, version);
+}
+
+/**
  * Split a catch-all slug into its version + the remaining content slug.
  *
  * `["beta", "plugins", "email-otp"]` -> { version: beta, relSlug: ["plugins", "email-otp"] }
