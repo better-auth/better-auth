@@ -653,7 +653,7 @@ export const auth = betterAuth({
 
 Set custom strategies for ID generation and findMany queries.
 
-* `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: random nanoid-style string). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
+* `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
 * `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
 
 ```ts
