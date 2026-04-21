@@ -2,7 +2,8 @@
   "name": "@better-auth-test/fixtures-vite",
   "private": true,
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
     "better-auth": "workspace:*"

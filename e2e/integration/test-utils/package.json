@@ -5,6 +5,9 @@
     "./playwright": "./src/playwright.ts"
   },
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
   "devDependencies": {
     "terminate": "^2.8.0"
   }

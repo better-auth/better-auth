@@ -157,7 +157,7 @@ export async function getTestInstance<
 			?.replace(/\*/g, "test")
 			.replace(/\?/g, "x");
 		const headers = host ? new Headers({ host }) : undefined;
-		//@ts-expect-error
+		// @ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
 			headers,

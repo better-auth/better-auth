@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "android": "expo run:android"
+    "android": "expo run:android",
+    "typecheck": "tsc --project demo/expo/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@better-auth/expo": "link:../../packages/expo",

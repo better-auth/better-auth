@@ -1,9 +1,10 @@
 import { fileURLToPath } from "node:url";
-import type { PrismaClient } from "@prisma/client";
 import type { Dialect } from "./constants";
 import { DATABASE_URLS } from "./constants";
 
-type PC = InstanceType<typeof PrismaClient>;
+export type PC = {
+	$disconnect(): Promise<void>;
+};
 
 async function createAdapter(dialect: Dialect) {
 	if (dialect === "sqlite") {

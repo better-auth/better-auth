@@ -1,14 +1,20 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "customConditions": [],
+    "customConditions": ["dev-source"],
+    "rootDir": "../..",
     "target": "esnext",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "moduleResolution": "node16",
-    "module": "Node16"
+    "moduleResolution": "bundler",
+    "module": "esnext"
   },
-  "include": ["./test/**/*"]
+  "include": [
+    "./test/*.ts",
+    "../../packages/api-key/src/**/*.ts",
+    "../../packages/api-key/package.json"
+  ],
+  "exclude": ["./test/fixtures/**"]
 }

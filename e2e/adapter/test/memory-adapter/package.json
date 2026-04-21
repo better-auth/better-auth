@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e:integration": "vitest run"
+    "e2e:integration": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",

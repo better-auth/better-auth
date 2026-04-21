@@ -1,6 +1,6 @@
-import type { BetterAuthOptions } from "@better-auth/core";
 import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import { testAdapter } from "@better-auth/test-utils/adapter";
+import type { BetterAuthOptions } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { Kysely, MssqlDialect } from "kysely";
 import * as Tarn from "tarn";

@@ -1,13 +1,13 @@
 import { createAccessControl } from "better-auth/plugins/access";
-import { getTestInstance } from "better-auth/test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { organization } from "better-auth/plugins/organization";
 import {
 	adminAc,
 	defaultStatements,
 	memberAc,
 	ownerAc,
-} from "../../better-auth/src/plugins/organization/access";
-import { organization } from "../../better-auth/src/plugins/organization/organization";
+} from "better-auth/plugins/organization/access";
+import { getTestInstance } from "better-auth/test";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 

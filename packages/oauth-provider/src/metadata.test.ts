@@ -345,7 +345,7 @@ describe("oauth resource metadata", async () => {
 	});
 
 	const authClient = createAuthClient({
-		plugins: [oauthProviderResourceClient(auth)],
+		plugins: [oauthProviderResourceClient(auth as any)],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,

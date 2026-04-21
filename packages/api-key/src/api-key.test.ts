@@ -4096,12 +4096,8 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	describe("organization-owned API keys", async () => {
-		const { organization } = await import(
-			"../../better-auth/src/plugins/organization"
-		);
-		const { organizationClient } = await import(
-			"../../better-auth/src/plugins/organization/client"
-		);
+		const { organization } = await import("better-auth/plugins/organization");
+		const { organizationClient } = await import("better-auth/client/plugins");
 
 		const { auth, signInWithTestUser, client } = await getTestInstance(
 			{

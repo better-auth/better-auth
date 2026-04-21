@@ -7,6 +7,7 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
+    "@better-auth/api-key": "workspace:*",
     "@better-auth/core": "workspace:*",
     "@better-auth/redis-storage": "workspace:*",
     "@better-auth/sso": "workspace:*",
@@ -15,6 +16,7 @@
     "msw": "^2.12.10"
   },
   "scripts": {
-    "e2e:smoke": "node --test ./test/*.spec.ts"
+    "e2e:smoke": "node --test ./test/*.spec.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   }
 }
