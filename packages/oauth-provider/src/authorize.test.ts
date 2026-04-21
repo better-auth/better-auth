@@ -418,6 +418,34 @@ describe("oauth authorize - authenticated", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9250
+	 */
+	it("should redirect with invalid_request for unsupported code_challenge_method", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "ccm-test-state");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "plain");
+
+		let errorRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirectUrl).toContain(redirectUri);
+		expect(errorRedirectUrl).toContain("error=invalid_request");
+		expect(errorRedirectUrl).toContain("state=ccm-test-state");
+	});
+
 	it("should have metadata issuer match iss parameter (RFC 9207)", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");

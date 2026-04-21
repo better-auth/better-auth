@@ -2468,6 +2468,75 @@ describe("customTokenResponseFields", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9250
+ */
+describe("oauth token - RFC 6749 §5.2 input validation", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				disableJwtPlugin: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	type OAuthErrorBody = {
+		error?: string;
+		error_description?: string;
+		code?: string;
+		message?: string;
+	};
+
+	async function postTokenForm(
+		body: URLSearchParams,
+	): Promise<{ status: number; error: OAuthErrorBody | null }> {
+		let status = 0;
+		let error: OAuthErrorBody | null = null;
+		await client.$fetch<unknown>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: {
+				accept: "application/json",
+				"content-type": "application/x-www-form-urlencoded",
+			},
+			onError(ctx) {
+				status = ctx.response.status;
+				error = ctx.error as OAuthErrorBody;
+			},
+		});
+		return { status, error };
+	}
+
+	it("returns unsupported_grant_type for an unknown grant_type value", async () => {
+		const { status, error } = await postTokenForm(
+			new URLSearchParams({ grant_type: "foo" }),
+		);
+		expect(status).toBe(400);
+		expect(error).toMatchObject({ error: "unsupported_grant_type" });
+		expect(error).not.toHaveProperty("code", "VALIDATION_ERROR");
+	});
+
+	it("returns invalid_request when grant_type is missing", async () => {
+		const { status, error } = await postTokenForm(new URLSearchParams({}));
+		expect(status).toBe(400);
+		expect(error).toMatchObject({ error: "invalid_request" });
+		expect(error).not.toHaveProperty("code", "VALIDATION_ERROR");
+	});
+});
+
 describe("verificationValueSchema", () => {
 	it("should validate a well-formed verification value", () => {
 		const value: VerificationValue = {

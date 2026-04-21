@@ -55,9 +55,10 @@ export async function tokenEndpoint(
 		case "refresh_token":
 			return handleRefreshTokenGrant(ctx, opts);
 		case undefined:
+			// RFC 6749 §5.2: missing required parameter is invalid_request.
 			throw new APIError("BAD_REQUEST", {
 				error_description: "missing required grant_type",
-				error: "unsupported_grant_type",
+				error: "invalid_request",
 			});
 		default:
 			throw new APIError("BAD_REQUEST", {

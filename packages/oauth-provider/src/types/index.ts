@@ -825,7 +825,7 @@ export interface OAuthAuthorizationQuery {
 	/**
 	 * Code challenge method used
 	 */
-	code_challenge_method?: "S256";
+	code_challenge_method?: string;
 	/**
 	 * String value used to associate a Client session with an ID Token, and to mitigate replay
 	 * attacks. The value is passed through unmodified from the Authentication Request to the ID Token.

@@ -379,7 +379,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						state: z.string().optional(),
 						request_uri: z.string().optional(),
 						code_challenge: z.string().optional(),
-						code_challenge_method: z.enum(["S256"]).optional(),
+						code_challenge_method: z.string().optional(),
 						nonce: z.string().optional(),
 						prompt: z
 							.enum([
@@ -609,11 +609,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						grant_type: z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
+						grant_type: z.string().optional(),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
 						code: z.string().optional(),
