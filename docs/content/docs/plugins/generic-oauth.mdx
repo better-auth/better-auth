@@ -461,6 +461,10 @@ When a stateless callback hits `/callback/:providerId`, Better Auth discards the
 
 Leave `allowIdpInitiated` off (the default) for any provider that always initiates the flow from your side — stateless callbacks to those providers indicate malformed or malicious requests and should be rejected.
 
+<Callout type="warn">
+  Set the global `baseURL` option when enabling `allowIdpInitiated`. IDP-initiated callbacks carry no initiating request body, so the bounce uses `baseURL` as the post-login destination. If `baseURL` is unset, the bounce fails with `CALLBACK_URL_REQUIRED`.
+</Callout>
+
 ### Error Handling
 
 The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.

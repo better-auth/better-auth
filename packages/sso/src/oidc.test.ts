@@ -1785,6 +1785,17 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		expect(url.searchParams.get("code")).toBeNull();
 	});
 
+	it("should not bounce when the `code` parameter is empty", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).not.toContain("http://localhost:8080/authorize");
+	});
+
 	it("should not bounce on an empty `state=` parameter, only on truly stateless callbacks", async () => {
 		const res = await customFetchImpl(
 			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=idp-issued-code&state=",
