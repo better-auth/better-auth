@@ -1054,10 +1054,11 @@ describe("oauth2", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/4951
+	 * @see https://github.com/better-auth/better-auth/pull/9069
 	 */
 	it("should redirect to the error page when a GET callback arrives without state", async () => {
 		const res = await customFetchImpl(
-			`http://localhost:3000/api/auth/oauth2/callback/${providerId}?code=dummy`,
+			`http://localhost:3000/api/auth/callback/${providerId}?code=dummy`,
 			{
 				method: "GET",
 				redirect: "manual",
@@ -1065,7 +1066,7 @@ describe("oauth2", async () => {
 		);
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get("location")).toContain("please_restart_the_process");
+		expect(res.headers.get("location")).toContain("state_not_found");
 	});
 
 	it("should await async mapProfileToUser", async () => {
