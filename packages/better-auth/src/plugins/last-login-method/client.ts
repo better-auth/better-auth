@@ -10,6 +10,16 @@ export interface LastLoginMethodClientConfig {
 	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string | undefined;
+	/**
+	 * Domain for the cookie. Required when using cross-subdomain cookies
+	 * so the client can properly clear the cookie set by the server.
+	 *
+	 * Should match the `domain` value in your server's
+	 * `crossSubDomainCookies` configuration.
+	 *
+	 * @example ".example.com"
+	 */
+	domain?: string | undefined;
 }
 
 function getCookieValue(name: string): string | null {
@@ -50,7 +60,8 @@ export const lastLoginMethodClient = (
 				 */
 				clearLastUsedLoginMethod: (): void => {
 					if (typeof document !== "undefined") {
-						document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+						const domainPart = config.domain ? ` domain=${config.domain};` : "";
+						document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;${domainPart}`;
 					}
 				},
 				/**
