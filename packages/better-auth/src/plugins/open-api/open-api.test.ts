@@ -1,6 +1,103 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
+import * as z from "zod";
+import { createAuthEndpoint } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { emailOTP } from "../email-otp";
 import { openAPI } from ".";
+
+const nullableIntersectionPlugin = {
+	id: "nullable-intersection-test",
+	endpoints: {
+		nullableIntersection: createAuthEndpoint(
+			"/test/nullable-intersection",
+			{
+				method: "POST",
+				body: z
+					.object({
+						email: z.string(),
+					})
+					.nullable()
+					.and(
+						z
+							.object({
+								otp: z.string(),
+							})
+							.nullable(),
+					),
+				metadata: {
+					openapi: {
+						operationId: "nullableIntersectionTest",
+						description: "Test nullable object intersection request bodies",
+						responses: {
+							200: {
+								description: "Success",
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												success: {
+													type: "boolean",
+												},
+											},
+											required: ["success"],
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+const defaultBodyPlugin = {
+	id: "default-body-test",
+	endpoints: {
+		defaultBody: createAuthEndpoint(
+			"/test/default-body",
+			{
+				method: "POST",
+				body: z
+					.object({
+						rememberMe: z.boolean(),
+					})
+					.default({
+						rememberMe: true,
+					}),
+				metadata: {
+					openapi: {
+						operationId: "defaultBodyTest",
+						description: "Test default-wrapped request bodies",
+						responses: {
+							200: {
+								description: "Success",
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												success: {
+													type: "boolean",
+												},
+											},
+											required: ["success"],
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
 
 describe("open-api", async () => {
 	const { auth } = await getTestInstance({
@@ -18,6 +115,20 @@ describe("open-api", async () => {
 				},
 			},
 		},
+	});
+	const { auth: authWithEmailOTP } = await getTestInstance({
+		plugins: [
+			openAPI(),
+			emailOTP({
+				sendVerificationOTP: async () => {},
+			}),
+		],
+	});
+	const { auth: authWithNullableIntersection } = await getTestInstance({
+		plugins: [openAPI(), nullableIntersectionPlugin],
+	});
+	const { auth: authWithDefaultBody } = await getTestInstance({
+		plugins: [openAPI(), defaultBodyPlugin],
 	});
 
 	it("should generate OpenAPI schema", async () => {
@@ -252,5 +363,93 @@ describe("open-api", async () => {
 		expect(signUpProps.rememberMe).toBeDefined();
 		const baseTypes = getBaseType(signUpProps.rememberMe.type);
 		expect(baseTypes).toContain("boolean");
+	});
+
+	it("should include request bodies for all email OTP POST endpoints", async () => {
+		const schema = await authWithEmailOTP.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const emailOTPPostPaths = [
+			"/email-otp/send-verification-otp",
+			"/email-otp/check-verification-otp",
+			"/email-otp/verify-email",
+			"/sign-in/email-otp",
+			"/email-otp/request-password-reset",
+			"/forget-password/email-otp",
+			"/email-otp/reset-password",
+			"/email-otp/request-email-change",
+			"/email-otp/change-email",
+		];
+
+		for (const path of emailOTPPostPaths) {
+			expect(paths[path]?.post?.requestBody).toBeDefined();
+		}
+	});
+
+	it("should merge object and record intersections for email OTP sign-in request bodies", async () => {
+		const schema = await authWithEmailOTP.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const signInEmailOTPRequestBody =
+			paths["/sign-in/email-otp"].post.requestBody;
+		expect(signInEmailOTPRequestBody.required).toBe(true);
+
+		const signInEmailOTPSchema =
+			signInEmailOTPRequestBody.content["application/json"].schema;
+		expect(signInEmailOTPSchema.type).toBe("object");
+		expect(signInEmailOTPSchema.required).toEqual(["email", "otp"]);
+		expect(signInEmailOTPSchema.properties.email.type).toBe("string");
+		expect(signInEmailOTPSchema.properties.otp.type).toBe("string");
+		expect(signInEmailOTPSchema.properties.name.type).toEqual([
+			"string",
+			"null",
+		]);
+		expect(signInEmailOTPSchema.properties.image.type).toEqual([
+			"string",
+			"null",
+		]);
+		expect(signInEmailOTPSchema.additionalProperties).toEqual({});
+	});
+
+	it("should keep plain email OTP request bodies as object schemas", async () => {
+		const schema = await authWithEmailOTP.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const resetPasswordRequestBody =
+			paths["/email-otp/reset-password"].post.requestBody;
+		expect(resetPasswordRequestBody.required).toBe(true);
+
+		const resetPasswordSchema =
+			resetPasswordRequestBody.content["application/json"].schema;
+		expect(resetPasswordSchema.type).toBe("object");
+		expect(resetPasswordSchema.required).toEqual(["email", "otp", "password"]);
+		expect(resetPasswordSchema.additionalProperties).toBeUndefined();
+	});
+
+	it("should preserve nullable object intersections when merging schemas", async () => {
+		const schema =
+			await authWithNullableIntersection.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const requestBody = paths["/test/nullable-intersection"].post.requestBody;
+		expect(requestBody.required).toBe(true);
+
+		const requestBodySchema = requestBody.content["application/json"].schema;
+		expect(requestBodySchema.type).toEqual(["object", "null"]);
+		expect(requestBodySchema.properties.email.type).toBe("string");
+		expect(requestBodySchema.properties.otp.type).toBe("string");
+		expect(requestBodySchema.required).toEqual(["email", "otp"]);
+	});
+
+	it("should mark default-wrapped request bodies as optional", async () => {
+		const schema = await authWithDefaultBody.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const requestBody = paths["/test/default-body"].post.requestBody;
+		expect(requestBody.required).toBe(false);
+
+		const requestBodySchema = requestBody.content["application/json"].schema;
+		expect(requestBodySchema.type).toBe("object");
+		expect(requestBodySchema.properties.rememberMe.type).toBe("boolean");
+		expect(requestBodySchema.default).toEqual({ rememberMe: true });
 	});
 });
