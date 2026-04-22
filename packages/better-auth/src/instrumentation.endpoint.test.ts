@@ -206,4 +206,71 @@ describe("endpoints instrumentation", () => {
 		);
 		expect(span.attributes[ATTR_HTTP_ROUTE]).toBe("/route-with-params/:slug");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9269
+	 */
+	it("emits a root span when the rate limiter rejects a request with 429", async () => {
+		const instance = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 60,
+				max: 3,
+				customRules: {
+					"/sign-in/*": { window: 60, max: 2 },
+				},
+			},
+		});
+
+		await instance.client.signIn.email({
+			email: instance.testUser.email,
+			password: instance.testUser.password,
+		});
+		await instance.client.signIn.email({
+			email: instance.testUser.email,
+			password: instance.testUser.password,
+		});
+		exporter.reset();
+
+		const res = await instance.client.signIn.email({
+			email: instance.testUser.email,
+			password: instance.testUser.password,
+		});
+		expect(res.error?.status).toBe(429);
+
+		const rootSpan = await waitForSpan((s) => s.name === "HTTP POST");
+		expect(rootSpan.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(429);
+		expect(rootSpan.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9269
+	 */
+	it("emits a root span when onRequest returns early for a disabled path", async () => {
+		const instance = await getTestInstance({
+			disabledPaths: ["/get-session"],
+		});
+		exporter.reset();
+
+		const res = await instance.client.getSession();
+		expect(res.error?.status).toBe(404);
+
+		const rootSpan = await waitForSpan((s) => s.name === "HTTP GET");
+		expect(rootSpan.attributes[ATTR_HTTP_RESPONSE_STATUS_CODE]).toBe(404);
+		expect(rootSpan.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
+	});
+
+	it("updates the root span with the low-cardinality route template after resolution", async () => {
+		const instance = await createTestInstance();
+		await instance.client.$fetch("/route-with-params/acme-segment", {
+			method: "GET",
+		});
+
+		const rootSpan = await waitForSpan(
+			(s) => s.name === "GET /route-with-params/:slug" && !s.parentSpanId,
+		);
+		expect(rootSpan.attributes[ATTR_HTTP_ROUTE]).toBe(
+			"/route-with-params/:slug",
+		);
+	});
 });

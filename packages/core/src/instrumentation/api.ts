@@ -11,6 +11,9 @@ function createNoopSpan(): Span {
 		setAttribute(_key: string, _value: unknown): void {},
 		setStatus(_status: unknown): void {},
 		recordException(_exception: unknown): void {},
+		updateName(_name: string) {
+			return this;
+		},
 	} as Span;
 }
 
@@ -31,6 +34,9 @@ function createNoopTraceAPI() {
 	return {
 		getTracer(_name?: string, _version?: string) {
 			return noopTracer;
+		},
+		getActiveSpan(): Span | undefined {
+			return undefined;
 		},
 	};
 }
