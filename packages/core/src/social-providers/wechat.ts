@@ -79,6 +79,7 @@ export const wechat = (options: WeChatOptions) => {
 						(RESERVED_AUTHORIZATION_PARAMS as readonly string[]).includes(key)
 					)
 						continue;
+					if (key === "appid") continue;
 					url.searchParams.set(key, value);
 				}
 			}

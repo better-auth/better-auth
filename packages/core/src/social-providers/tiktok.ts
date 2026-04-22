@@ -153,6 +153,7 @@ export const tiktok = (options: TiktokOptions) => {
 						(RESERVED_AUTHORIZATION_PARAMS as readonly string[]).includes(key)
 					)
 						continue;
+					if (key === "client_key") continue;
 					url.searchParams.set(key, value);
 				}
 			}

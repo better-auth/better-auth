@@ -65,8 +65,8 @@ export const atlassian = (options: AtlassianOptions) => {
 				codeVerifier,
 				redirectURI,
 				additionalParams: {
-					audience: "api.atlassian.com",
 					...(additionalParams ?? {}),
+					audience: "api.atlassian.com",
 				},
 				prompt: options.prompt,
 			});

@@ -47,8 +47,8 @@ export const notion = (options: NotionOptions) => {
 				redirectURI,
 				loginHint,
 				additionalParams: {
-					owner: "user",
 					...(additionalParams ?? {}),
+					owner: "user",
 				},
 			});
 		},
