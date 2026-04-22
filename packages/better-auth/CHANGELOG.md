@@ -1,5 +1,34 @@
 # better-auth
 
+## 1.7.0-beta.2
+
+### Minor Changes
+
+- [#8977](https://github.com/better-auth/better-auth/pull/8977) [`954b664`](https://github.com/better-auth/better-auth/commit/954b664f4f251f8dd028451dab3ab43067dbf890) Thanks [@ruban-s](https://github.com/ruban-s)! - allow passing `userId` and `organizationId` to the `listUserTeams` API. `userId` lets callers list teams for another member of an organization (gated behind the `member:update` permission). `organizationId` scopes the result to a specific organization without needing to switch the session's active organization, matching the pattern used by `addTeamMember`/`removeTeamMember`.
+
+### Patch Changes
+
+- [#9205](https://github.com/better-auth/better-auth/pull/9205) [`9aed910`](https://github.com/better-auth/better-auth/commit/9aed910499eb4cbc3dd0c395ff5534893daab7a4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(two-factor): revert enforcement broadening from [#9122](https://github.com/better-auth/better-auth/issues/9122)
+
+  Restores the pre-[#9122](https://github.com/better-auth/better-auth/issues/9122) enforcement scope. 2FA is challenged only on `/sign-in/email`, `/sign-in/username`, and `/sign-in/phone-number`, matching the behavior that shipped through v1.6.2. Non-credential sign-in flows (magic link, email OTP, OAuth, SSO, passkey, SIWE, one-tap, phone-number OTP, device authorization, email-verification auto-sign-in) are no longer gated by a 2FA challenge by default.
+
+  A broader enforcement scope with per-method opt-outs and alignment to NIST SP 800-63B-4 authenticator assurance levels is planned for a future minor release.
+
+- [#9068](https://github.com/better-auth/better-auth/pull/9068) [`acbd6ef`](https://github.com/better-auth/better-auth/commit/acbd6ef69f88ea54174446ac0465a426bad7ca09) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Fix forced UUID user IDs from create hooks being ignored on PostgreSQL adapters when `advanced.database.generateId` is set to `"uuid"`.
+
+- [#9165](https://github.com/better-auth/better-auth/pull/9165) [`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - chore(adapters): require patched `drizzle-orm` and `kysely` peer versions
+
+  Narrows the `drizzle-orm` peer to `^0.45.2` and the `kysely` peer to `^0.28.14`. Both new ranges track the minor line that carries the vulnerability fix and nothing newer, so the adapters only advertise support for versions that have actually been tested against. Consumers on older ORM releases see an install-time warning and can upgrade alongside the adapter; the peer is marked optional, so installs do not hard-fail.
+
+- Updated dependencies [[`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9)]:
+  - @better-auth/drizzle-adapter@1.7.0-beta.2
+  - @better-auth/kysely-adapter@1.7.0-beta.2
+  - @better-auth/core@1.7.0-beta.2
+  - @better-auth/memory-adapter@1.7.0-beta.2
+  - @better-auth/mongo-adapter@1.7.0-beta.2
+  - @better-auth/prisma-adapter@1.7.0-beta.2
+  - @better-auth/telemetry@1.7.0-beta.2
+
 ## 1.7.0-beta.1
 
 ### Minor Changes
