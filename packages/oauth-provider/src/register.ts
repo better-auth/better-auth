@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
@@ -6,15 +7,6 @@ import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
 import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
-
-/**
- * Loopback hostnames where RFC 8252 §7.3 permits `http` for local development.
- * Accepts `url.hostname` (brackets and port already stripped by the URL parser).
- */
-function isLoopbackHostname(hostname: string): boolean {
-	const lower = hostname.toLowerCase();
-	return lower === "localhost" || lower === "127.0.0.1" || lower === "::1";
-}
 
 /**
  * Resolves the auth method and type for unauthenticated DCR.
@@ -304,7 +296,7 @@ export async function checkOAuthClient(
 					"backchannel_logout_uri must not include a fragment component",
 			});
 		}
-		const loopback = isLoopbackHostname(url.hostname);
+		const loopback = isLoopbackHost(url.hostname);
 		// Spec §2.2: SHOULD be https for confidential clients. Enforce on
 		// confidential clients, with a loopback carve-out (RFC 8252 §7.3) so
 		// local development against http://127.0.0.1:<port> works.
