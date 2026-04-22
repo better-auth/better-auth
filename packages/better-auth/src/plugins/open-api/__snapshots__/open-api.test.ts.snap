@@ -3,6 +3,7 @@
 exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
 {
   "components": {
+    "parameters": {},
     "schemas": {
       "Account": {
         "properties": {
@@ -199,25 +200,33 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
   "info": {
     "description": "API Reference for your Better Auth Instance",
     "title": "Better Auth",
-    "version": "1.1.0",
+    "version": "1.6.6",
   },
-  "openapi": "3.1.1",
+  "openapi": "3.1.0",
   "paths": {
     "/account-info": {
       "get": {
         "description": "Get the account info provided by the provider",
-        "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "The provider given account id for which to get the account info",
+            "in": "query",
+            "name": "accountId",
+            "required": false,
+            "schema": {
+              "description": "The provider given account id for which to get the account info",
+              "type": "string",
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
                   "properties": {
                     "data": {
-                      "additionalProperties": true,
-                      "properties": {},
+                      "additionalProperties": {},
                       "type": "object",
                     },
                     "user": {
@@ -260,6 +269,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -271,85 +283,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -364,105 +298,59 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     },
     "/callback/{id}": {
       "get": {
-        "description": undefined,
-        "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "user",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
         "responses": {
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          "200": {
+            "description": "Success",
           },
         },
         "security": [
@@ -475,115 +363,88 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         ],
       },
       "post": {
-        "description": undefined,
-        "operationId": undefined,
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "user",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "properties": {},
+                "properties": {
+                  "code": {
+                    "type": "string",
+                  },
+                  "device_id": {
+                    "type": "string",
+                  },
+                  "error": {
+                    "type": "string",
+                  },
+                  "error_description": {
+                    "type": "string",
+                  },
+                  "state": {
+                    "type": "string",
+                  },
+                  "user": {
+                    "type": "string",
+                  },
+                },
                 "type": "object",
               },
             },
           },
         },
         "responses": {
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          "200": {
+            "description": "Success",
           },
         },
         "security": [
@@ -598,9 +459,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     },
     "/change-email": {
       "post": {
-        "description": undefined,
         "operationId": "changeEmail",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -608,13 +467,11 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "callbackURL": {
                     "description": "The URL to redirect to after email verification",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "newEmail": {
                     "description": "The new email address to set must be a valid email address",
+                    "format": "email",
                     "type": "string",
                   },
                 },
@@ -625,7 +482,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -634,20 +490,23 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "properties": {
                     "message": {
-                      "description": "Status message of the email change process",
                       "enum": [
                         "Email updated",
                         "Verification email sent",
+                        null,
                       ],
-                      "nullable": true,
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null",
+                      ],
                     },
                     "status": {
                       "description": "Indicates if the request was successful",
                       "type": "boolean",
                     },
                     "user": {
-                      "$ref": "#/components/schemas/User",
+                      "additionalProperties": {},
+                      "description": "The updated user (when email update is immediate)",
                       "type": "object",
                     },
                   },
@@ -658,13 +517,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Email change request processed successfully",
+            "description": "Success",
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -676,85 +538,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -771,7 +555,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Change the password of the user",
         "operationId": "changePassword",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -787,10 +570,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "revokeOtherSessions": {
                     "description": "Must be a boolean value",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                 },
                 "required": [
@@ -801,7 +581,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -810,42 +589,38 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "properties": {
                     "token": {
-                      "description": "New session token if other sessions were revoked",
-                      "nullable": true,
-                      "type": "string",
+                      "description": "New session token if revokeOtherSessions was requested; otherwise null",
+                      "type": [
+                        "string",
+                        "null",
+                      ],
                     },
                     "user": {
                       "properties": {
                         "createdAt": {
-                          "description": "When the user was created",
                           "format": "date-time",
                           "type": "string",
                         },
                         "email": {
-                          "description": "The email address of the user",
                           "format": "email",
                           "type": "string",
                         },
                         "emailVerified": {
-                          "description": "Whether the email has been verified",
                           "type": "boolean",
                         },
                         "id": {
-                          "description": "The unique identifier of the user",
                           "type": "string",
                         },
                         "image": {
-                          "description": "The profile image URL of the user",
-                          "format": "uri",
-                          "nullable": true,
-                          "type": "string",
+                          "type": [
+                            "string",
+                            "null",
+                          ],
                         },
                         "name": {
-                          "description": "The name of the user",
                           "type": "string",
                         },
                         "updatedAt": {
-                          "description": "When the user was last updated",
                           "format": "date-time",
                           "type": "string",
                         },
@@ -854,6 +629,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "id",
                         "email",
                         "name",
+                        "image",
                         "emailVerified",
                         "createdAt",
                         "updatedAt",
@@ -862,19 +638,23 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     },
                   },
                   "required": [
+                    "token",
                     "user",
                   ],
                   "type": "object",
                 },
               },
             },
-            "description": "Password successfully changed",
+            "description": "Success",
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -886,85 +666,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -981,7 +683,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Delete the user",
         "operationId": "deleteUser",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -992,11 +693,11 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "type": "string",
                   },
                   "password": {
-                    "description": "The user's password. Required if session is not fresh",
+                    "description": "The password of the user is required to delete the user",
                     "type": "string",
                   },
                   "token": {
-                    "description": "The deletion verification token",
+                    "description": "The token to delete the user is required",
                     "type": "string",
                   },
                 },
@@ -1032,13 +733,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "User deletion processed successfully",
+            "description": "Success",
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -1050,85 +754,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -1144,25 +770,25 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/delete-user/callback": {
       "get": {
         "description": "Callback to complete user deletion with verification token",
-        "operationId": undefined,
         "parameters": [
           {
+            "description": "The token to verify the deletion request",
             "in": "query",
             "name": "token",
+            "required": true,
             "schema": {
               "description": "The token to verify the deletion request",
               "type": "string",
             },
           },
           {
+            "description": "The URL to redirect to after deletion",
             "in": "query",
             "name": "callbackURL",
+            "required": false,
             "schema": {
               "description": "The URL to redirect to after deletion",
-              "type": [
-                "string",
-                "null",
-              ],
+              "type": "string",
             },
           },
         ],
@@ -1173,14 +799,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "properties": {
                     "message": {
-                      "description": "Confirmation message",
                       "enum": [
                         "User deleted",
                       ],
                       "type": "string",
                     },
                     "success": {
-                      "description": "Indicates if the deletion was successful",
                       "type": "boolean",
                     },
                   },
@@ -1192,13 +816,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "User successfully deleted",
+            "description": "Success",
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -1210,85 +837,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -1304,8 +853,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/error": {
       "get": {
         "description": "Displays an error page",
-        "operationId": undefined,
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
@@ -1316,103 +863,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Success",
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "HTML error page",
           },
         },
         "security": [
@@ -1428,8 +879,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/get-access-token": {
       "post": {
         "description": "Get a valid access token, doing a refresh if needed",
-        "operationId": undefined,
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1437,10 +886,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "accountId": {
                     "description": "The account ID associated with the refresh token",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "providerId": {
                     "description": "The provider ID for the OAuth provider",
@@ -1448,10 +894,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "userId": {
                     "description": "The user ID associated with the account",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -1461,7 +904,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -1487,16 +929,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "A Valid access token",
+            "description": "Success",
           },
           "400": {
-            "description": "Invalid refresh token or provider configuration",
-          },
-          "401": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -1508,67 +950,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -1585,7 +967,34 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": "Get the current session",
         "operationId": "getSession",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "Disable cookie cache and fetch session from database",
+            "in": "query",
+            "name": "disableCookieCache",
+            "required": false,
+            "schema": {
+              "description": "Disable cookie cache and fetch session from database",
+              "type": [
+                "boolean",
+                "null",
+              ],
+            },
+          },
+          {
+            "description": "Disable session refresh. Useful for checking session status, without updating the session",
+            "in": "query",
+            "name": "disableRefresh",
+            "required": false,
+            "schema": {
+              "description": "Disable session refresh. Useful for checking session status, without updating the session",
+              "type": [
+                "boolean",
+                "null",
+              ],
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1593,10 +1002,14 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "properties": {
                     "session": {
-                      "$ref": "#/components/schemas/Session",
+                      "additionalProperties": {},
+                      "description": "The current session object",
+                      "type": "object",
                     },
                     "user": {
-                      "$ref": "#/components/schemas/User",
+                      "additionalProperties": {},
+                      "description": "The authenticated user",
+                      "type": "object",
                     },
                   },
                   "required": [
@@ -1617,6 +1030,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -1628,85 +1044,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -1721,17 +1059,34 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Get the current session",
         "operationId": "getSession",
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {},
-                "type": "object",
-              },
+        "parameters": [
+          {
+            "description": "Disable cookie cache and fetch session from database",
+            "in": "query",
+            "name": "disableCookieCache",
+            "required": false,
+            "schema": {
+              "description": "Disable cookie cache and fetch session from database",
+              "type": [
+                "boolean",
+                "null",
+              ],
             },
           },
-        },
+          {
+            "description": "Disable session refresh. Useful for checking session status, without updating the session",
+            "in": "query",
+            "name": "disableRefresh",
+            "required": false,
+            "schema": {
+              "description": "Disable session refresh. Useful for checking session status, without updating the session",
+              "type": [
+                "boolean",
+                "null",
+              ],
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1739,10 +1094,14 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "properties": {
                     "session": {
-                      "$ref": "#/components/schemas/Session",
+                      "additionalProperties": {},
+                      "description": "The current session object",
+                      "type": "object",
                     },
                     "user": {
-                      "$ref": "#/components/schemas/User",
+                      "additionalProperties": {},
+                      "description": "The authenticated user",
+                      "type": "object",
                     },
                   },
                   "required": [
@@ -1763,6 +1122,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -1774,85 +1136,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -1869,101 +1153,109 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Link a social account to the user",
         "operationId": "linkSocialAccount",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "properties": {
                   "additionalData": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "additionalProperties": {},
+                    "type": "object",
                   },
                   "callbackURL": {
                     "description": "The URL to redirect to after the user has signed in",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "disableRedirect": {
                     "description": "Disable automatic redirection to the provider. Useful for handling the redirection yourself",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                   "errorCallbackURL": {
                     "description": "The URL to redirect to if there is an error during the link process",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "idToken": {
-                    "description": undefined,
                     "properties": {
                       "accessToken": {
-                        "description": undefined,
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "nonce": {
-                        "description": undefined,
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "refreshToken": {
-                        "description": undefined,
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "scopes": {
-                        "description": undefined,
-                        "type": [
-                          "array",
-                          "null",
-                        ],
+                        "items": {
+                          "type": "string",
+                        },
+                        "type": "array",
                       },
                       "token": {
-                        "description": undefined,
                         "type": "string",
                       },
                     },
                     "required": [
                       "token",
                     ],
-                    "type": [
-                      "object",
-                      "null",
-                    ],
+                    "type": "object",
                   },
                   "provider": {
-                    "description": undefined,
-                    "type": "string",
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "apple",
+                          "atlassian",
+                          "cognito",
+                          "discord",
+                          "facebook",
+                          "figma",
+                          "github",
+                          "microsoft",
+                          "google",
+                          "huggingface",
+                          "slack",
+                          "spotify",
+                          "twitch",
+                          "twitter",
+                          "dropbox",
+                          "kick",
+                          "linear",
+                          "linkedin",
+                          "gitlab",
+                          "tiktok",
+                          "reddit",
+                          "roblox",
+                          "salesforce",
+                          "vk",
+                          "zoom",
+                          "notion",
+                          "kakao",
+                          "naver",
+                          "line",
+                          "paybin",
+                          "paypal",
+                          "polar",
+                          "railway",
+                          "vercel",
+                          "wechat",
+                        ],
+                        "type": "string",
+                      },
+                      {
+                        "type": "string",
+                      },
+                    ],
                   },
                   "requestSignUp": {
-                    "description": undefined,
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                   "scopes": {
                     "description": "Additional scopes to request from the provider",
-                    "type": [
-                      "array",
-                      "null",
-                    ],
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
                   },
                 },
                 "required": [
@@ -1973,7 +1265,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -2007,6 +1298,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -2018,85 +1312,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -2113,7 +1329,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": "List all accounts linked to the user",
         "operationId": "listUserAccounts",
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
@@ -2165,102 +1380,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             },
             "description": "Success",
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
-          },
         },
         "security": [
           {
@@ -2276,14 +1395,15 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": "List all active sessions for the user",
         "operationId": "listUserSessions",
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
+                  "description": "Active sessions for the current user",
                   "items": {
-                    "$ref": "#/components/schemas/Session",
+                    "additionalProperties": {},
+                    "type": "object",
                   },
                   "type": "array",
                 },
@@ -2296,6 +1416,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -2307,85 +1430,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -2401,8 +1446,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/ok": {
       "get": {
         "description": "Check if the API is working",
-        "operationId": undefined,
-        "parameters": [],
         "responses": {
           "200": {
             "content": {
@@ -2421,103 +1464,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "API is working",
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Success",
           },
         },
         "security": [
@@ -2533,8 +1480,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/refresh-token": {
       "post": {
         "description": "Refresh the access token using a refresh token",
-        "operationId": undefined,
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2542,10 +1487,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "accountId": {
                     "description": "The account ID associated with the refresh token",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "providerId": {
                     "description": "The provider ID for the OAuth provider",
@@ -2553,10 +1495,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "userId": {
                     "description": "The user ID associated with the account",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -2566,7 +1505,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -2599,16 +1537,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Access token refreshed successfully",
+            "description": "Success",
           },
           "400": {
-            "description": "Invalid refresh token or provider configuration",
-          },
-          "401": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -2620,67 +1558,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -2697,7 +1575,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Send a password reset email to the user",
         "operationId": "requestPasswordReset",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2705,14 +1582,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "email": {
                     "description": "The email address of the user to send a password reset email to",
+                    "format": "email",
                     "type": "string",
                   },
                   "redirectTo": {
                     "description": "The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter \`?error=INVALID_TOKEN\`. If the token is valid, it'll be redirected with a query parameter \`?token=VALID_TOKEN",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -2722,7 +1597,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -2737,6 +1611,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "type": "boolean",
                     },
                   },
+                  "required": [
+                    "status",
+                  ],
                   "type": "object",
                 },
               },
@@ -2748,6 +1625,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -2759,85 +1639,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -2854,7 +1656,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Reset the password for a user",
         "operationId": "resetPassword",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2866,10 +1677,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "token": {
                     "description": "The token to reset the password",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -2879,7 +1687,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -2891,6 +1698,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "type": "boolean",
                     },
                   },
+                  "required": [
+                    "status",
+                  ],
                   "type": "object",
                 },
               },
@@ -2902,6 +1712,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -2913,85 +1726,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -3010,135 +1745,19 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         "operationId": "resetPasswordCallback",
         "parameters": [
           {
-            "description": "The token to reset the password",
-            "in": "path",
-            "name": "token",
-            "required": true,
-            "schema": {
-              "type": "string",
-            },
-          },
-          {
             "description": "The URL to redirect the user to reset their password",
             "in": "query",
             "name": "callbackURL",
             "required": true,
             "schema": {
+              "description": "The URL to redirect the user to reset their password",
               "type": "string",
             },
           },
         ],
         "responses": {
           "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "token": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
             "description": "Success",
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
           },
         },
         "security": [
@@ -3154,18 +1773,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/revoke-other-sessions": {
       "post": {
         "description": "Revoke all other sessions for the user except the current one",
-        "operationId": undefined,
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {},
-                "type": "object",
-              },
-            },
-          },
-        },
         "responses": {
           "200": {
             "content": {
@@ -3191,6 +1798,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -3202,85 +1812,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -3296,8 +1828,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/revoke-session": {
       "post": {
         "description": "Revoke a single session",
-        "operationId": undefined,
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3341,6 +1871,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -3352,85 +1885,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -3446,18 +1901,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/revoke-sessions": {
       "post": {
         "description": "Revoke all sessions for the user",
-        "operationId": undefined,
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {},
-                "type": "object",
-              },
-            },
-          },
-        },
         "responses": {
           "200": {
             "content": {
@@ -3483,6 +1926,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -3494,85 +1940,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -3589,7 +1957,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Send a verification email to the user",
         "operationId": "sendVerificationEmail",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3598,12 +1965,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   "callbackURL": {
                     "description": "The URL to use for email verification callback",
                     "example": "https://example.com/callback",
-                    "nullable": true,
                     "type": "string",
                   },
                   "email": {
                     "description": "The email to send the verification email to",
                     "example": "user@example.com",
+                    "format": "email",
                     "type": "string",
                   },
                 },
@@ -3623,10 +1990,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   "properties": {
                     "status": {
                       "description": "Indicates if the email was sent successfully",
-                      "example": true,
                       "type": "boolean",
                     },
                   },
+                  "required": [
+                    "status",
+                  ],
                   "type": "object",
                 },
               },
@@ -3638,23 +2007,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
-                    "message": {
-                      "description": "Error message",
-                      "example": "Verification email isn't enabled",
+                    "code": {
                       "type": "string",
                     },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
                     "message": {
                       "type": "string",
                     },
@@ -3666,67 +2021,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -3743,7 +2038,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Sign in with email and password",
         "operationId": "signInEmail",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3751,10 +2045,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "callbackURL": {
                     "description": "Callback URL to use as a redirect for email verification",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "email": {
                     "description": "Email of the user",
@@ -3767,10 +2058,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   "rememberMe": {
                     "default": true,
                     "description": "If this is false, the session will not be remembered. Default is \`true\`.",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                 },
                 "required": [
@@ -3781,19 +2069,15 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Session response when idToken is provided",
                   "properties": {
                     "redirect": {
-                      "enum": [
-                        false,
-                      ],
+                      "description": "Whether a redirect is required",
                       "type": "boolean",
                     },
                     "token": {
@@ -3801,11 +2085,14 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "type": "string",
                     },
                     "url": {
-                      "nullable": true,
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null",
+                      ],
                     },
                     "user": {
-                      "$ref": "#/components/schemas/User",
+                      "additionalProperties": {},
+                      "description": "The authenticated user",
                       "type": "object",
                     },
                   },
@@ -3818,13 +2105,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Success - Returns either session details or redirect URL",
+            "description": "Success",
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -3836,85 +2126,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -3931,70 +2143,45 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Sign in with a social provider",
         "operationId": "socialSignIn",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "properties": {
                   "additionalData": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "additionalProperties": {},
+                    "description": "Additional data to be passed through the OAuth flow",
+                    "type": "object",
                   },
                   "callbackURL": {
                     "description": "Callback URL to redirect to after the user has signed in",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "disableRedirect": {
                     "description": "Disable automatic redirection to the provider. Useful for handling the redirection yourself",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                   "errorCallbackURL": {
                     "description": "Callback URL to redirect to if an error happens",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "idToken": {
-                    "description": undefined,
                     "properties": {
                       "accessToken": {
                         "description": "Access token from the provider",
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "expiresAt": {
                         "description": "Expiry date of the token",
-                        "type": [
-                          "number",
-                          "null",
-                        ],
+                        "type": "number",
                       },
                       "nonce": {
                         "description": "Nonce used to generate the token",
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "refreshToken": {
                         "description": "Refresh token from the provider",
-                        "type": [
-                          "string",
-                          "null",
-                        ],
+                        "type": "string",
                       },
                       "token": {
                         "description": "ID token from the provider",
@@ -4004,81 +2191,92 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "description": "The user object from the provider. Only available for some providers like Apple.",
                         "properties": {
                           "email": {
-                            "description": undefined,
-                            "type": [
-                              "string",
-                              "null",
-                            ],
+                            "type": "string",
                           },
                           "name": {
-                            "description": undefined,
                             "properties": {
                               "firstName": {
-                                "description": undefined,
-                                "type": [
-                                  "string",
-                                  "null",
-                                ],
+                                "type": "string",
                               },
                               "lastName": {
-                                "description": undefined,
-                                "type": [
-                                  "string",
-                                  "null",
-                                ],
+                                "type": "string",
                               },
                             },
-                            "type": [
-                              "object",
-                              "null",
-                            ],
+                            "type": "object",
                           },
                         },
-                        "type": [
-                          "object",
-                          "null",
-                        ],
+                        "type": "object",
                       },
                     },
                     "required": [
                       "token",
                     ],
-                    "type": [
-                      "object",
-                      "null",
-                    ],
+                    "type": "object",
                   },
                   "loginHint": {
                     "description": "The login hint to use for the authorization code request",
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "newUserCallbackURL": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "provider": {
-                    "description": undefined,
-                    "type": "string",
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "apple",
+                          "atlassian",
+                          "cognito",
+                          "discord",
+                          "facebook",
+                          "figma",
+                          "github",
+                          "microsoft",
+                          "google",
+                          "huggingface",
+                          "slack",
+                          "spotify",
+                          "twitch",
+                          "twitter",
+                          "dropbox",
+                          "kick",
+                          "linear",
+                          "linkedin",
+                          "gitlab",
+                          "tiktok",
+                          "reddit",
+                          "roblox",
+                          "salesforce",
+                          "vk",
+                          "zoom",
+                          "notion",
+                          "kakao",
+                          "naver",
+                          "line",
+                          "paybin",
+                          "paypal",
+                          "polar",
+                          "railway",
+                          "vercel",
+                          "wechat",
+                        ],
+                        "type": "string",
+                      },
+                      {
+                        "type": "string",
+                      },
+                    ],
                   },
                   "requestSignUp": {
                     "description": "Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
-                    "type": [
-                      "boolean",
-                      "null",
-                    ],
+                    "type": "boolean",
                   },
                   "scopes": {
                     "description": "Array of scopes to request from the provider. This will override the default scopes passed.",
-                    "type": [
-                      "array",
-                      "null",
-                    ],
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
                   },
                 },
                 "required": [
@@ -4088,48 +2286,52 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Session response when idToken is provided",
+                  "description": "Response varies by flow: idToken returns redirect=false with token/user; OAuth redirect returns url plus a redirect flag.",
                   "properties": {
                     "redirect": {
-                      "enum": [
-                        false,
-                      ],
+                      "description": "False when the user is signed in via idToken; true/false otherwise depending on whether the redirect is performed server-side",
                       "type": "boolean",
                     },
                     "token": {
+                      "description": "Session token. Present in the idToken flow.",
                       "type": "string",
                     },
                     "url": {
-                      "type": "string",
+                      "description": "Authorization URL. Present in the OAuth redirect flow.",
+                      "type": [
+                        "string",
+                        "null",
+                      ],
                     },
                     "user": {
-                      "$ref": "#/components/schemas/User",
+                      "additionalProperties": {},
+                      "description": "The user object. Present in the idToken flow.",
                       "type": "object",
                     },
                   },
                   "required": [
                     "redirect",
-                    "token",
-                    "user",
                   ],
                   "type": "object",
                 },
               },
             },
-            "description": "Success - Returns either session details or redirect URL",
+            "description": "Success",
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -4141,85 +2343,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -4236,17 +2360,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Sign out the current user",
         "operationId": "signOut",
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {},
-                "type": "object",
-              },
-            },
-          },
-        },
         "responses": {
           "200": {
             "content": {
@@ -4257,107 +2370,14 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "type": "boolean",
                     },
                   },
+                  "required": [
+                    "success",
+                  ],
                   "type": "object",
                 },
               },
             },
             "description": "Success",
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
           },
         },
         "security": [
@@ -4374,43 +2394,52 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Sign up a user using email and password",
         "operationId": "signUpWithEmailAndPassword",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "callbackURL": {
-                    "description": "The URL to use for email verification callback",
-                    "type": "string",
+                "allOf": [
+                  {
+                    "properties": {
+                      "callbackURL": {
+                        "description": "The URL to use for email verification callback",
+                        "type": "string",
+                      },
+                      "email": {
+                        "description": "The email of the user",
+                        "format": "email",
+                        "type": "string",
+                      },
+                      "image": {
+                        "description": "The profile image URL of the user",
+                        "type": "string",
+                      },
+                      "name": {
+                        "description": "The name of the user",
+                        "type": "string",
+                      },
+                      "password": {
+                        "description": "The password of the user",
+                        "minLength": 1,
+                        "type": "string",
+                      },
+                      "rememberMe": {
+                        "description": "If this is false, the session will not be remembered. Default is \`true\`.",
+                        "type": "boolean",
+                      },
+                    },
+                    "required": [
+                      "name",
+                      "email",
+                      "password",
+                    ],
+                    "type": "object",
                   },
-                  "email": {
-                    "description": "The email of the user",
-                    "type": "string",
+                  {
+                    "additionalProperties": {},
+                    "type": "object",
                   },
-                  "image": {
-                    "description": "The profile image URL of the user",
-                    "type": "string",
-                  },
-                  "name": {
-                    "description": "The name of the user",
-                    "type": "string",
-                  },
-                  "password": {
-                    "description": "The password of the user",
-                    "type": "string",
-                  },
-                  "rememberMe": {
-                    "description": "If this is false, the session will not be remembered. Default is \`true\`.",
-                    "type": "boolean",
-                  },
-                },
-                "required": [
-                  "name",
-                  "email",
-                  "password",
                 ],
-                "type": "object",
               },
             },
           },
@@ -4423,8 +2452,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   "properties": {
                     "token": {
                       "description": "Authentication token for the session",
-                      "nullable": true,
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null",
+                      ],
                     },
                     "user": {
                       "properties": {
@@ -4448,9 +2479,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         },
                         "image": {
                           "description": "The profile image URL of the user",
-                          "format": "uri",
-                          "nullable": true,
-                          "type": "string",
+                          "type": [
+                            "string",
+                            "null",
+                          ],
                         },
                         "name": {
                           "description": "The name of the user",
@@ -4466,6 +2498,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "id",
                         "email",
                         "name",
+                        "image",
                         "emailVerified",
                         "createdAt",
                         "updatedAt",
@@ -4474,19 +2507,23 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     },
                   },
                   "required": [
+                    "token",
                     "user",
                   ],
                   "type": "object",
                 },
               },
             },
-            "description": "Successfully created user",
+            "description": "Success",
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -4498,100 +2535,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unprocessable Entity. User already exists or failed to create user.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -4607,22 +2551,15 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/unlink-account": {
       "post": {
         "description": "Unlink an account",
-        "operationId": undefined,
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "properties": {
                   "accountId": {
-                    "description": undefined,
-                    "type": [
-                      "string",
-                      "null",
-                    ],
+                    "type": "string",
                   },
                   "providerId": {
-                    "description": undefined,
                     "type": "string",
                   },
                 },
@@ -4633,7 +2570,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -4645,6 +2581,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "type": "boolean",
                     },
                   },
+                  "required": [
+                    "status",
+                  ],
                   "type": "object",
                 },
               },
@@ -4656,6 +2595,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -4667,85 +2609,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -4762,12 +2626,11 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Update the current session",
         "operationId": "updateSession",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "properties": {},
+                "additionalProperties": {},
                 "type": "object",
               },
             },
@@ -4780,10 +2643,14 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "properties": {
                     "session": {
-                      "$ref": "#/components/schemas/Session",
+                      "additionalProperties": {},
+                      "description": "The updated session object",
                       "type": "object",
                     },
                   },
+                  "required": [
+                    "session",
+                  ],
                   "type": "object",
                 },
               },
@@ -4795,6 +2662,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -4806,85 +2676,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -4901,22 +2693,11 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Update the current user",
         "operationId": "updateUser",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "image": {
-                    "description": "The image of the user",
-                    "nullable": true,
-                    "type": "string",
-                  },
-                  "name": {
-                    "description": "The name of the user",
-                    "type": "string",
-                  },
-                },
+                "additionalProperties": {},
                 "type": "object",
               },
             },
@@ -4928,11 +2709,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
-                    "user": {
-                      "$ref": "#/components/schemas/User",
-                      "type": "object",
+                    "status": {
+                      "type": "boolean",
                     },
                   },
+                  "required": [
+                    "status",
+                  ],
                   "type": "object",
                 },
               },
@@ -4944,6 +2727,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -4955,85 +2741,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -5049,7 +2757,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
     "/verify-email": {
       "get": {
         "description": "Verify the email of the user",
-        "operationId": undefined,
         "parameters": [
           {
             "description": "The token to verify the email",
@@ -5057,6 +2764,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "name": "token",
             "required": true,
             "schema": {
+              "description": "The token to verify the email",
               "type": "string",
             },
           },
@@ -5066,6 +2774,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "name": "callbackURL",
             "required": false,
             "schema": {
+              "description": "The URL to redirect to after email verification",
               "type": "string",
             },
           },
@@ -5081,12 +2790,15 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "type": "boolean",
                     },
                     "user": {
-                      "$ref": "#/components/schemas/User",
-                      "type": "object",
+                      "additionalProperties": {},
+                      "description": "The verified user, if returned",
+                      "type": [
+                        "object",
+                        "null",
+                      ],
                     },
                   },
                   "required": [
-                    "user",
                     "status",
                   ],
                   "type": "object",
@@ -5100,6 +2812,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -5111,85 +2826,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -5206,7 +2843,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Verify the current user's password",
         "operationId": "verifyPassword",
-        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5224,7 +2860,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
           },
-          "required": true,
         },
         "responses": {
           "200": {
@@ -5236,6 +2871,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "type": "boolean",
                     },
                   },
+                  "required": [
+                    "status",
+                  ],
                   "type": "object",
                 },
               },
@@ -5247,6 +2885,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "code": {
+                      "type": "string",
+                    },
                     "message": {
                       "type": "string",
                     },
@@ -5258,85 +2899,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 },
               },
             },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+            "description": "Bad Request. One of the declared error codes was thrown.",
           },
         },
         "security": [
@@ -5367,5 +2930,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "name": "Default",
     },
   ],
+  "webhooks": {},
 }
 `;

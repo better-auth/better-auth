@@ -1,3 +1,10 @@
+import type { RouteConfig } from "@asteasolutions/zod-to-openapi";
+import {
+	extendZodWithOpenApi,
+	OpenAPIRegistry,
+	OpenApiGeneratorV3,
+	OpenApiGeneratorV31,
+} from "@asteasolutions/zod-to-openapi";
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import type {
 	DBFieldAttribute,
@@ -5,88 +12,18 @@ import type {
 	DBFieldType,
 } from "@better-auth/core/db";
 import type {
-	Endpoint,
-	EndpointOptions,
-	OpenAPIParameter,
-	OpenAPISchemaType,
-} from "better-call";
+	OpenAPIObject,
+	PathItemObject,
+	SchemaObject,
+} from "openapi3-ts/oas31";
 import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
+import { PACKAGE_VERSION } from "../../version";
 
-export interface Path {
-	get?:
-		| {
-				tags?: string[];
-				operationId?: string;
-				description?: string;
-				security?: [{ bearerAuth: string[] }];
-				parameters?: OpenAPIParameter[];
-				responses?: {
-					[key in string]: {
-						description?: string;
-						content: {
-							"application/json": {
-								schema: {
-									type?: OpenAPISchemaType;
-									properties?: Record<string, any>;
-									required?: string[];
-									$ref?: string;
-								};
-							};
-						};
-					};
-				};
-		  }
-		| undefined;
-	post?:
-		| {
-				tags?: string[];
-				operationId?: string;
-				description?: string;
-				security?: [{ bearerAuth: string[] }];
-				parameters?: OpenAPIParameter[];
-				requestBody?: {
-					content: {
-						"application/json": {
-							schema: {
-								type?: OpenAPISchemaType;
-								properties?: Record<string, any>;
-								required?: string[];
-								$ref?: string;
-							};
-						};
-					};
-				};
-				responses?: {
-					[key in string]: {
-						description?: string;
-						content: {
-							"application/json": {
-								schema: {
-									type?: OpenAPISchemaType;
-									properties?: Record<string, any>;
-									required?: string[];
-									$ref?: string;
-								};
-							};
-						};
-					};
-				};
-		  }
-		| undefined;
-}
+extendZodWithOpenApi(z);
 
-type AllowedType = "string" | "number" | "boolean" | "array" | "object";
-const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
-function getTypeFromZodType(zodType: z.ZodType<any>) {
-	// unwrap ZodDefault to get the inner type
-	if (zodType instanceof z.ZodDefault) {
-		return getTypeFromZodType(zodType.unwrap() as any);
-	}
-	const type = zodType.type;
-	return allowedType.has(type) ? (type as AllowedType) : "string";
-}
+export type Path = PathItemObject;
 
 export type FieldSchema = {
 	type: DBFieldType;
@@ -103,492 +40,333 @@ export type OpenAPIModelSchema = {
 	required?: string[] | undefined;
 };
 
-function getFieldSchema(field: DBFieldAttribute) {
-	const schema: FieldSchema = {
-		type: field.type === "date" ? "string" : field.type,
-		...(field.type === "date" && { format: "date-time" }),
-	};
+export interface GeneratorOptions {
+	/** OpenAPI spec version. Defaults to 3.1. */
+	version?: "3.0" | "3.1";
+}
 
+const capitalize = (s: string): string =>
+	s.charAt(0).toUpperCase() + s.slice(1);
+
+function dbFieldToSchema(field: DBFieldAttribute): SchemaObject {
+	const schema: SchemaObject = {
+		type: field.type === "date" ? "string" : (field.type as never),
+	};
+	if (field.type === "date") schema.format = "date-time";
 	if (field.defaultValue !== undefined) {
 		schema.default =
 			typeof field.defaultValue === "function"
 				? "Generated at runtime"
 				: field.defaultValue;
 	}
-
-	if (field.input === false) {
-		schema.readOnly = true;
-	}
-
+	if (field.input === false) schema.readOnly = true;
 	return schema;
 }
 
-function getParameters(options: EndpointOptions) {
-	const parameters: OpenAPIParameter[] = [];
-	if (options.metadata?.openapi?.parameters) {
-		parameters.push(...options.metadata.openapi.parameters);
-		return parameters;
+function dbTableToSchema(table: {
+	fields: Record<string, DBFieldAttribute | undefined>;
+}): SchemaObject {
+	const properties: Record<string, SchemaObject> = { id: { type: "string" } };
+	const required: string[] = [];
+	for (const [key, field] of Object.entries(table.fields)) {
+		if (!field) continue;
+		properties[key] = dbFieldToSchema(field);
+		if (field.required && field.input !== false) required.push(key);
 	}
-	if (options.query instanceof z.ZodObject) {
-		Object.entries(options.query.shape).forEach(([key, value]) => {
-			if (value instanceof z.ZodType) {
-				parameters.push({
-					name: key,
-					in: "query",
-					schema: {
-						...processZodType(value as z.ZodType<any>),
-						...("minLength" in value && (value as any).minLength
-							? {
-									minLength: (value as any).minLength as number,
-								}
-							: {}),
-					},
-				});
-			}
-		});
-	}
-	return parameters;
-}
-
-function getRequestBody(options: EndpointOptions): any {
-	if (options.metadata?.openapi?.requestBody) {
-		return options.metadata.openapi.requestBody;
-	}
-	if (!options.body) return undefined;
-	if (
-		options.body instanceof z.ZodObject ||
-		options.body instanceof z.ZodOptional
-	) {
-		// @ts-expect-error
-		const shape = options.body.shape;
-		if (!shape) return undefined;
-		const properties: Record<string, any> = {};
-		const required: string[] = [];
-		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof z.ZodType) {
-				properties[key] = processZodType(value as z.ZodType<any>);
-				if (!(value instanceof z.ZodOptional)) {
-					required.push(key);
-				}
-			}
-		});
-		return {
-			required:
-				options.body instanceof z.ZodOptional
-					? false
-					: options.body
-						? true
-						: false,
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties,
-						required,
-					},
-				},
-			},
-		};
-	}
-	return undefined;
-}
-
-function processZodType(zodType: z.ZodType<any>): any {
-	// optional unwrapping
-	if (zodType instanceof z.ZodOptional) {
-		const innerType = zodType.unwrap() as any;
-		const innerSchema = processZodType(innerType);
-		if (innerSchema.type) {
-			const type = Array.isArray(innerSchema.type)
-				? innerSchema.type
-				: [innerSchema.type];
-			return {
-				...innerSchema,
-				type: Array.from(new Set([...type, "null"])),
-			};
-		}
-		return {
-			anyOf: [innerSchema, { type: "null" }],
-		};
-	}
-	// default unwrapping
-	if (zodType instanceof z.ZodDefault) {
-		const innerType = zodType.unwrap() as any;
-		const innerSchema = processZodType(innerType);
-		const defaultValueDef = (zodType as any)._def.defaultValue;
-		const defaultValue =
-			typeof defaultValueDef === "function"
-				? defaultValueDef()
-				: defaultValueDef;
-		return {
-			...innerSchema,
-			default: defaultValue,
-		};
-	}
-	// object unwrapping
-	if (zodType instanceof z.ZodObject) {
-		const shape = (zodType as any).shape;
-		if (shape) {
-			const properties: Record<string, any> = {};
-			const required: string[] = [];
-			Object.entries(shape).forEach(([key, value]) => {
-				if (value instanceof z.ZodType) {
-					properties[key] = processZodType(value as z.ZodType<any>);
-					if (!(value instanceof z.ZodOptional)) {
-						required.push(key);
-					}
-				}
-			});
-			return {
-				type: "object",
-				properties,
-				...(required.length > 0 ? { required } : {}),
-				description: (zodType as any).description,
-			};
-		}
-	}
-
-	// For primitive types, get the correct type from the unwrapped ZodType
-	const baseSchema = {
-		type: getTypeFromZodType(zodType),
-		description: (zodType as any).description,
-	};
-
-	return baseSchema;
-}
-
-function getResponse(responses?: Record<string, any> | undefined) {
 	return {
-		"400": {
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties: {
-							message: {
-								type: "string",
-							},
-						},
-						required: ["message"],
-					},
-				},
-			},
-			description:
-				"Bad Request. Usually due to missing parameters, or invalid parameters.",
-		},
-		"401": {
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties: {
-							message: {
-								type: "string",
-							},
-						},
-						required: ["message"],
-					},
-				},
-			},
-			description: "Unauthorized. Due to missing or invalid authentication.",
-		},
-		"403": {
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties: {
-							message: {
-								type: "string",
-							},
-						},
-					},
-				},
-			},
-			description:
-				"Forbidden. You do not have permission to access this resource or to perform this action.",
-		},
-		"404": {
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties: {
-							message: {
-								type: "string",
-							},
-						},
-					},
-				},
-			},
-			description: "Not Found. The requested resource was not found.",
-		},
-		"429": {
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties: {
-							message: {
-								type: "string",
-							},
-						},
-					},
-				},
-			},
-			description:
-				"Too Many Requests. You have exceeded the rate limit. Try again later.",
-		},
-		"500": {
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties: {
-							message: {
-								type: "string",
-							},
-						},
-					},
-				},
-			},
-			description:
-				"Internal Server Error. This is a problem with the server that you cannot fix.",
-		},
-		...responses,
-	} as any;
+		type: "object",
+		properties,
+		...(required.length > 0 ? { required } : {}),
+	};
 }
 
-function toOpenApiPath(path: string) {
-	// /reset-password/:token -> /reset-password/{token}
-	// replace all : with {}
+function toOpenApiPath(path: string): string {
 	return path
 		.split("/")
 		.map((part) => (part.startsWith(":") ? `{${part.slice(1)}}` : part))
 		.join("/");
 }
 
-export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
-	const baseEndpoints = getEndpoints(ctx, {
-		...options,
-		plugins: [],
+function unwrapOptional(schema: z.ZodType): z.ZodType {
+	return schema instanceof z.ZodOptional
+		? (schema.unwrap() as z.ZodType)
+		: schema;
+}
+
+/**
+ * Rewrites legacy OAS 3.0 `nullable: true` into OAS 3.1 union types inside
+ * hand-written metadata that still flows through the transitional fallback.
+ *
+ * Applied only to fallback values. Routes that declare Zod `response` schemas
+ * bypass this path entirely; the generator emits correct 3.1 from Zod directly.
+ */
+function upgradeNullableInPlace(value: unknown): unknown {
+	if (value === null || typeof value !== "object") return value;
+	if (Array.isArray(value)) {
+		for (const entry of value) upgradeNullableInPlace(entry);
+		return value;
+	}
+	const record = value as Record<string, unknown>;
+	if (record.nullable === true) {
+		const existingType = record.type;
+		if (Array.isArray(existingType)) {
+			if (!existingType.includes("null")) existingType.push("null");
+		} else if (typeof existingType === "string") {
+			record.type = [existingType, "null"];
+		} else {
+			record.type = ["null"];
+		}
+		// biome-ignore lint/performance/noDelete: must remove `nullable` entirely; undefined assignment leaves the key visible to JSON serializers.
+		delete record.nullable;
+	} else if (record.nullable === false) {
+		// biome-ignore lint/performance/noDelete: see above.
+		delete record.nullable;
+	}
+	for (const key of Object.keys(record)) upgradeNullableInPlace(record[key]);
+	return value;
+}
+
+const ERROR_BODY_SCHEMA: SchemaObject = {
+	type: "object",
+	properties: {
+		message: { type: "string" },
+		code: { type: "string" },
+	},
+	required: ["message"],
+};
+
+interface EndpointLike {
+	path?: string;
+	options: {
+		method?: string | string[];
+		body?: z.ZodType;
+		query?: z.ZodType;
+		params?: z.ZodType;
+		response?: z.ZodType;
+		errors?: readonly string[];
+		metadata?: {
+			SERVER_ONLY?: boolean;
+			openapi?: {
+				description?: string;
+				summary?: string;
+				tags?: string[];
+				operationId?: string;
+				security?: RouteConfig["security"];
+				deprecated?: boolean;
+				externalDocs?: RouteConfig["externalDocs"];
+				// Legacy fallback fields; tolerated for now, prefer `response`.
+				requestBody?: unknown;
+				parameters?: unknown;
+				responses?: Record<string, unknown>;
+			};
+		};
+	};
+}
+
+function buildRouteConfig(
+	endpoint: EndpointLike,
+	method: string,
+	defaultTag: string,
+): RouteConfig | null {
+	if (!endpoint.path) return null;
+	const opts = endpoint.options;
+	const openapi = opts.metadata?.openapi;
+	const lowerMethod = method.toLowerCase() as RouteConfig["method"];
+
+	const config: RouteConfig = {
+		method: lowerMethod,
+		path: toOpenApiPath(endpoint.path),
+		tags: [defaultTag, ...(openapi?.tags ?? [])],
+		...(openapi?.description ? { description: openapi.description } : {}),
+		...(openapi?.summary ? { summary: openapi.summary } : {}),
+		...(openapi?.operationId ? { operationId: openapi.operationId } : {}),
+		...(openapi?.deprecated ? { deprecated: openapi.deprecated } : {}),
+		...(openapi?.externalDocs ? { externalDocs: openapi.externalDocs } : {}),
+		security: openapi?.security ?? [{ bearerAuth: [] }],
+		request: {},
+		responses: {},
+	};
+
+	if (
+		opts.body &&
+		(method === "POST" ||
+			method === "PUT" ||
+			method === "PATCH" ||
+			method === "DELETE")
+	) {
+		config.request!.body = {
+			content: {
+				"application/json": {
+					schema: opts.body,
+				},
+			},
+		};
+	} else if (
+		openapi?.requestBody &&
+		(method === "POST" || method === "PUT" || method === "PATCH")
+	) {
+		// TODO(open-api): remove this fallback once every plugin migrates its
+		// `metadata.openapi.requestBody` blocks to Zod `body` schemas.
+		const legacy = structuredClone(openapi.requestBody);
+		upgradeNullableInPlace(legacy);
+		config.request!.body = legacy as unknown as NonNullable<
+			RouteConfig["request"]
+		>["body"];
+	}
+
+	if (opts.query) {
+		const unwrapped = unwrapOptional(opts.query);
+		if (unwrapped instanceof z.ZodObject) {
+			config.request!.query = unwrapped;
+		}
+	}
+
+	if (opts.params instanceof z.ZodObject) {
+		config.request!.params = opts.params;
+	}
+
+	if (opts.response) {
+		config.responses[200] = {
+			description: "Success",
+			content: {
+				"application/json": {
+					schema: opts.response,
+				},
+			},
+		};
+	} else if (openapi?.responses?.["200"]) {
+		// TODO(open-api): remove this fallback once every plugin migrates its
+		// `metadata.openapi.responses` to Zod `response` schemas.
+		const legacy = structuredClone(openapi.responses["200"]);
+		upgradeNullableInPlace(legacy);
+		config.responses[200] = legacy as RouteConfig["responses"][string];
+	} else {
+		config.responses[200] = { description: "Success" };
+	}
+
+	if (opts.errors && opts.errors.length > 0) {
+		config.responses[400] = {
+			description: "Bad Request. One of the declared error codes was thrown.",
+			content: { "application/json": { schema: ERROR_BODY_SCHEMA } },
+		};
+	}
+
+	if (openapi?.responses) {
+		for (const [status, value] of Object.entries(openapi.responses)) {
+			if (status === "200") continue;
+			const legacy = structuredClone(value);
+			upgradeNullableInPlace(legacy);
+			config.responses[status] = legacy as RouteConfig["responses"][string];
+		}
+	}
+
+	return config;
+}
+
+export async function generator(
+	ctx: AuthContext,
+	options: BetterAuthOptions,
+	generatorOptions?: GeneratorOptions,
+): Promise<OpenAPIObject> {
+	const version = generatorOptions?.version ?? "3.1";
+	const coreRegistry = new OpenAPIRegistry();
+
+	coreRegistry.registerComponent("securitySchemes", "bearerAuth", {
+		type: "http",
+		scheme: "bearer",
+		description: "Bearer token authentication",
+	});
+	coreRegistry.registerComponent("securitySchemes", "apiKeyCookie", {
+		type: "apiKey",
+		in: "cookie",
+		name: "apiKeyCookie",
+		description: "API Key authentication via cookie",
 	});
 
 	const tables = getAuthTables({
 		...options,
 		session: {
 			...options.session,
-			storeSessionInDatabase: true, // Forcing this to true to return the session table schema
+			storeSessionInDatabase: true,
 		},
 	});
-	const models = Object.entries(tables).reduce<
-		Record<string, OpenAPIModelSchema>
-	>((acc, [key, value]) => {
-		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
-		const fields = value.fields;
-		const required: string[] = [];
-		const properties: Record<string, FieldSchema> = {
-			id: { type: "string" },
-		};
-		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
-			if (!fieldValue) return;
-			properties[fieldKey] = getFieldSchema(fieldValue);
-			if (fieldValue.required && fieldValue.input !== false) {
-				required.push(fieldKey);
-			}
-		});
+	for (const [key, table] of Object.entries(tables)) {
+		coreRegistry.registerComponent(
+			"schemas",
+			capitalize(key),
+			dbTableToSchema(table as { fields: Record<string, DBFieldAttribute> }),
+		);
+	}
 
-		Object.entries(properties).forEach(([key, prop]) => {
-			const field = value.fields[key];
-			if (field && field.type === "date" && prop.type === "string") {
-				prop.format = "date-time";
-			}
-		});
-		acc[modelName] = {
-			type: "object",
-			properties,
-			required,
-		};
-		return acc;
-	}, {});
-
-	const components = {
-		schemas: {
-			...models,
-		},
-	};
-
-	const paths: Record<string, Path> = {};
-
-	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
-		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
-		const options = value.options as EndpointOptions;
-		if (options.metadata?.SERVER_ONLY) return;
-		const path = toOpenApiPath(value.path);
-		const methods = Array.isArray(options.method)
-			? options.method
-			: [options.method];
-		for (const method of methods.filter((m) => m === "GET" || m === "DELETE")) {
-			paths[path] = {
-				...paths[path],
-				[method.toLowerCase()]: {
-					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
-					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
-					security: [
-						{
-							bearerAuth: [],
-						},
-					],
-					parameters: getParameters(options),
-					responses: getResponse(options.metadata?.openapi?.responses),
-				},
-			};
-		}
-		for (const method of methods.filter(
-			(m) => m === "POST" || m === "PATCH" || m === "PUT",
-		)) {
-			const body = getRequestBody(options);
-			paths[path] = {
-				...paths[path],
-				[method.toLowerCase()]: {
-					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
-					description: options.metadata?.openapi?.description,
-					operationId: options.metadata?.openapi?.operationId,
-					security: [
-						{
-							bearerAuth: [],
-						},
-					],
-					parameters: getParameters(options),
-					...(body
-						? { requestBody: body }
-						: {
-								requestBody: {
-									//set body none
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {},
-											},
-										},
-									},
-								},
-							}),
-					responses: getResponse(options.metadata?.openapi?.responses),
-				},
-			};
-		}
+	const baseEndpoints = getEndpoints(ctx, {
+		...options,
+		plugins: [],
 	});
 
-	for (const plugin of options.plugins || []) {
-		if (plugin.id === "open-api") {
+	for (const endpoint of Object.values(baseEndpoints.api) as EndpointLike[]) {
+		if (!endpoint.path || ctx.options.disabledPaths?.includes(endpoint.path)) {
 			continue;
 		}
+		if (endpoint.options.metadata?.SERVER_ONLY) continue;
+		const methods = Array.isArray(endpoint.options.method)
+			? endpoint.options.method
+			: endpoint.options.method
+				? [endpoint.options.method]
+				: [];
+		for (const method of methods) {
+			if (method === "HEAD" || method === "*") continue;
+			const config = buildRouteConfig(endpoint, method, "Default");
+			if (config) coreRegistry.registerPath(config);
+		}
+	}
+
+	const pluginDefinitions: (typeof coreRegistry.definitions)[] = [];
+	for (const plugin of options.plugins ?? []) {
+		if (plugin.id === "open-api") continue;
+		const pluginTag = capitalize(plugin.id);
+		const pluginRegistry = new OpenAPIRegistry();
 		const pluginEndpoints = getEndpoints(ctx, {
 			...options,
 			plugins: [plugin],
 		});
-		const api = Object.keys(pluginEndpoints.api)
-			.map((key) => {
-				if (
-					baseEndpoints.api[key as keyof typeof baseEndpoints.api] === undefined
-				) {
-					return pluginEndpoints.api[key as keyof typeof pluginEndpoints.api];
-				}
-				return null;
-			})
-			.filter((x) => x !== null) as Endpoint[];
-		Object.entries(api).forEach(([key, value]) => {
-			if (!value.path || ctx.options.disabledPaths?.includes(value.path))
-				return;
-			const options = value.options as EndpointOptions;
-			if (options.metadata?.SERVER_ONLY) return;
-			const path = toOpenApiPath(value.path);
-			const methods = Array.isArray(options.method)
-				? options.method
-				: [options.method];
-			for (const method of methods.filter(
-				(m) => m === "GET" || m === "DELETE",
-			)) {
-				paths[path] = {
-					...paths[path],
-					[method.toLowerCase()]: {
-						tags: options.metadata?.openapi?.tags || [
-							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
-						],
-						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
-						security: [
-							{
-								bearerAuth: [],
-							},
-						],
-						parameters: getParameters(options),
-						responses: getResponse(options.metadata?.openapi?.responses),
-					},
-				};
+		for (const [key, endpoint] of Object.entries(pluginEndpoints.api)) {
+			if (
+				baseEndpoints.api[key as keyof typeof baseEndpoints.api] !== undefined
+			) {
+				continue;
 			}
-			for (const method of methods.filter(
-				(m) => m === "POST" || m === "PATCH" || m === "PUT",
-			)) {
-				paths[path] = {
-					...paths[path],
-					[method.toLowerCase()]: {
-						tags: options.metadata?.openapi?.tags || [
-							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
-						],
-						description: options.metadata?.openapi?.description,
-						operationId: options.metadata?.openapi?.operationId,
-						security: [
-							{
-								bearerAuth: [],
-							},
-						],
-						parameters: getParameters(options),
-						requestBody: getRequestBody(options),
-						responses: getResponse(options.metadata?.openapi?.responses),
-					},
-				};
+			const e = endpoint as EndpointLike;
+			if (!e.path || ctx.options.disabledPaths?.includes(e.path)) continue;
+			if (e.options.metadata?.SERVER_ONLY) continue;
+			const methods = Array.isArray(e.options.method)
+				? e.options.method
+				: e.options.method
+					? [e.options.method]
+					: [];
+			for (const method of methods) {
+				if (method === "HEAD" || method === "*") continue;
+				const config = buildRouteConfig(e, method, pluginTag);
+				if (config) pluginRegistry.registerPath(config);
 			}
-		});
+		}
+		pluginDefinitions.push(pluginRegistry.definitions);
 	}
 
-	const res = {
-		openapi: "3.1.1",
+	const allDefinitions = [
+		...coreRegistry.definitions,
+		...pluginDefinitions.flat(),
+	];
+	const Generator =
+		version === "3.0" ? OpenApiGeneratorV3 : OpenApiGeneratorV31;
+	const doc = new Generator(allDefinitions).generateDocument({
+		openapi: version === "3.0" ? "3.0.3" : "3.1.0",
 		info: {
 			title: "Better Auth",
 			description: "API Reference for your Better Auth Instance",
-			version: "1.1.0",
+			version: PACKAGE_VERSION,
 		},
-		components: {
-			...components,
-			securitySchemes: {
-				apiKeyCookie: {
-					type: "apiKey",
-					in: "cookie",
-					name: "apiKeyCookie",
-					description: "API Key authentication via cookie",
-				},
-				bearerAuth: {
-					type: "http",
-					scheme: "bearer",
-					description: "Bearer token authentication",
-				},
-			},
-		},
-		security: [
-			{
-				apiKeyCookie: [],
-				bearerAuth: [],
-			},
-		],
-		servers: [
-			{
-				url: ctx.baseURL,
-			},
-		],
+		servers: [{ url: ctx.baseURL }],
+		security: [{ apiKeyCookie: [], bearerAuth: [] }],
 		tags: [
 			{
 				name: "Default",
@@ -596,7 +374,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					"Default endpoints that are included with Better Auth by default. These endpoints are not part of any plugin.",
 			},
 		],
-		paths,
-	};
-	return res;
+	});
+
+	return doc as OpenAPIObject;
 }

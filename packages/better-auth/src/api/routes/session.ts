@@ -36,32 +36,21 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
+			response: z
+				.object({
+					session: z
+						.record(z.string(), z.any())
+						.meta({ description: "The current session object" }),
+					user: z
+						.record(z.string(), z.any())
+						.meta({ description: "The authenticated user" }),
+				})
+				.nullable(),
+			errors: ["METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED"],
 			metadata: {
 				openapi: {
 					operationId: "getSession",
 					description: "Get the current session",
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										// better-call's OpenAPI schema type doesn't yet model OAS 3.1 union `type`.
-										type: ["object", "null"] as unknown as "object",
-										properties: {
-											session: {
-												$ref: "#/components/schemas/Session",
-											},
-											user: {
-												$ref: "#/components/schemas/User",
-											},
-										},
-										required: ["session", "user"],
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -650,25 +639,14 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			operationId: "listUserSessions",
 			use: [sessionMiddleware],
 			requireHeaders: true,
+			response: z
+				.array(z.record(z.string(), z.any()))
+				.meta({ description: "Active sessions for the current user" }),
+			errors: ["INTERNAL_SERVER_ERROR"],
 			metadata: {
 				openapi: {
 					operationId: "listUserSessions",
 					description: "List all active sessions for the user",
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										type: "array",
-										items: {
-											$ref: "#/components/schemas/Session",
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -709,45 +687,15 @@ export const revokeSession = createAuthEndpoint(
 		}),
 		use: [sensitiveSessionMiddleware],
 		requireHeaders: true,
+		response: z.object({
+			status: z.boolean().meta({
+				description: "Indicates if the session was revoked successfully",
+			}),
+		}),
+		errors: ["INTERNAL_SERVER_ERROR"],
 		metadata: {
 			openapi: {
 				description: "Revoke a single session",
-				requestBody: {
-					content: {
-						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									token: {
-										type: "string",
-										description: "The token to revoke",
-									},
-								},
-								required: ["token"],
-							},
-						},
-					},
-				},
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-											description:
-												"Indicates if the session was revoked successfully",
-										},
-									},
-									required: ["status"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -785,29 +733,15 @@ export const revokeSessions = createAuthEndpoint(
 		method: "POST",
 		use: [sensitiveSessionMiddleware],
 		requireHeaders: true,
+		response: z.object({
+			status: z.boolean().meta({
+				description: "Indicates if all sessions were revoked successfully",
+			}),
+		}),
+		errors: ["INTERNAL_SERVER_ERROR"],
 		metadata: {
 			openapi: {
 				description: "Revoke all sessions for the user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-											description:
-												"Indicates if all sessions were revoked successfully",
-										},
-									},
-									required: ["status"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -840,30 +774,17 @@ export const revokeOtherSessions = createAuthEndpoint(
 		method: "POST",
 		requireHeaders: true,
 		use: [sensitiveSessionMiddleware],
+		response: z.object({
+			status: z.boolean().meta({
+				description:
+					"Indicates if all other sessions were revoked successfully",
+			}),
+		}),
+		errors: ["UNAUTHORIZED"],
 		metadata: {
 			openapi: {
 				description:
 					"Revoke all other sessions for the user except the current one",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-											description:
-												"Indicates if all other sessions were revoked successfully",
-										},
-									},
-									required: ["status"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},

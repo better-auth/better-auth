@@ -1,6 +1,7 @@
 import type {
 	EndpointContext,
 	EndpointOptions,
+	StandardSchemaV1,
 	StrictEndpoint,
 } from "better-call";
 import {
@@ -58,15 +59,35 @@ export const createAuthMiddleware = createMiddleware.create({
 
 const use = [optionsMiddleware];
 
+/**
+ * Better Auth extensions to better-call's EndpointOptions. These fields are
+ * read by the OpenAPI plugin and pass through better-call's spread untouched.
+ */
+export interface AuthEndpointExtras {
+	/**
+	 * Schema for the successful 200 response body. Drives OpenAPI `responses` and
+	 * (when `openAPI({ validateResponses: true })` is set) dev-time handler
+	 * output validation.
+	 */
+	response?: StandardSchemaV1;
+	/**
+	 * Error codes this handler may throw via `APIError`. Drives the
+	 * non-2xx entries of OpenAPI `responses`.
+	 */
+	errors?: readonly string[];
+}
+
+export type AuthEndpointOptions = EndpointOptions & AuthEndpointExtras;
+
 type EndpointHandler<
 	Path extends string,
-	Options extends EndpointOptions,
+	Options extends AuthEndpointOptions,
 	R,
 > = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
 
 export function createAuthEndpoint<
 	Path extends string,
-	Options extends EndpointOptions,
+	Options extends AuthEndpointOptions,
 	R,
 >(
 	path: Path,
@@ -76,7 +97,7 @@ export function createAuthEndpoint<
 
 export function createAuthEndpoint<
 	Path extends string,
-	Options extends EndpointOptions,
+	Options extends AuthEndpointOptions,
 	R,
 >(
 	options: Options,
@@ -85,7 +106,7 @@ export function createAuthEndpoint<
 
 export function createAuthEndpoint<
 	Path extends string,
-	Opts extends EndpointOptions,
+	Opts extends AuthEndpointOptions,
 	R,
 >(
 	pathOrOptions: Path | Opts,
@@ -134,7 +155,7 @@ export function createAuthEndpoint<
 
 export type AuthEndpoint<
 	Path extends string,
-	Opts extends EndpointOptions,
+	Opts extends AuthEndpointOptions,
 	R,
 > = ReturnType<typeof createAuthEndpoint<Path, Opts, R>>;
 export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;

@@ -29,6 +29,14 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			operationId: "updateUser",
 			body: updateUserBodySchema,
 			use: [sessionMiddleware],
+			response: z.object({
+				status: z.boolean(),
+			}),
+			errors: [
+				"BAD_REQUEST",
+				"BODY_MUST_BE_AN_OBJECT",
+				"EMAIL_CAN_NOT_BE_UPDATED",
+			],
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
@@ -39,44 +47,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				openapi: {
 					operationId: "updateUser",
 					description: "Update the current user",
-					requestBody: {
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										name: {
-											type: "string",
-											description: "The name of the user",
-										},
-										image: {
-											type: "string",
-											description: "The image of the user",
-											nullable: true,
-										},
-									},
-								},
-							},
-						},
-					},
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											user: {
-												type: "object",
-												$ref: "#/components/schemas/User",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -177,75 +147,32 @@ export const changePassword = createAuthEndpoint(
 			openapi: {
 				operationId: "changePassword",
 				description: "Change the password of the user",
-				responses: {
-					"200": {
-						description: "Password successfully changed",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										token: {
-											type: "string",
-											nullable: true, // Only present if revokeOtherSessions is true
-											description:
-												"New session token if other sessions were revoked",
-										},
-										user: {
-											type: "object",
-											properties: {
-												id: {
-													type: "string",
-													description: "The unique identifier of the user",
-												},
-												email: {
-													type: "string",
-													format: "email",
-													description: "The email address of the user",
-												},
-												name: {
-													type: "string",
-													description: "The name of the user",
-												},
-												image: {
-													type: "string",
-													format: "uri",
-													nullable: true,
-													description: "The profile image URL of the user",
-												},
-												emailVerified: {
-													type: "boolean",
-													description: "Whether the email has been verified",
-												},
-												createdAt: {
-													type: "string",
-													format: "date-time",
-													description: "When the user was created",
-												},
-												updatedAt: {
-													type: "string",
-													format: "date-time",
-													description: "When the user was last updated",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"name",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
-										},
-									},
-									required: ["user"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
+		response: z.object({
+			token: z.string().nullable().meta({
+				description:
+					"New session token if revokeOtherSessions was requested; otherwise null",
+			}),
+			user: z.object({
+				id: z.string(),
+				email: z.email(),
+				name: z.string(),
+				image: z.string().nullable(),
+				emailVerified: z.boolean(),
+				createdAt: z.string().meta({ format: "date-time" }),
+				updatedAt: z.string().meta({ format: "date-time" }),
+			}),
+		}),
+		errors: [
+			"BAD_REQUEST",
+			"INTERNAL_SERVER_ERROR",
+			"PASSWORD_TOO_SHORT",
+			"PASSWORD_TOO_LONG",
+			"CREDENTIAL_ACCOUNT_NOT_FOUND",
+			"INVALID_PASSWORD",
+			"FAILED_TO_GET_SESSION",
+		],
 	},
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
@@ -402,59 +329,25 @@ export const deleteUser = createAuthEndpoint(
 				})
 				.optional(),
 		}),
+		response: z.object({
+			success: z.boolean().meta({
+				description: "Indicates if the operation was successful",
+			}),
+			message: z
+				.enum(["User deleted", "Verification email sent"])
+				.meta({ description: "Status message of the deletion process" }),
+		}),
+		errors: [
+			"BAD_REQUEST",
+			"NOT_FOUND",
+			"CREDENTIAL_ACCOUNT_NOT_FOUND",
+			"INVALID_PASSWORD",
+			"SESSION_EXPIRED",
+		],
 		metadata: {
 			openapi: {
 				operationId: "deleteUser",
 				description: "Delete the user",
-				requestBody: {
-					content: {
-						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									callbackURL: {
-										type: "string",
-										description:
-											"The callback URL to redirect to after the user is deleted",
-									},
-									password: {
-										type: "string",
-										description:
-											"The user's password. Required if session is not fresh",
-									},
-									token: {
-										type: "string",
-										description: "The deletion verification token",
-									},
-								},
-							},
-						},
-					},
-				},
-				responses: {
-					"200": {
-						description: "User deletion processed successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										success: {
-											type: "boolean",
-											description: "Indicates if the operation was successful",
-										},
-										message: {
-											type: "string",
-											enum: ["User deleted", "Verification email sent"],
-											description: "Status message of the deletion process",
-										},
-									},
-									required: ["success", "message"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -578,34 +471,15 @@ export const deleteUserCallback = createAuthEndpoint(
 				.optional(),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		response: z.object({
+			success: z.boolean(),
+			message: z.enum(["User deleted"]),
+		}),
+		errors: ["NOT_FOUND", "INVALID_TOKEN", "FAILED_TO_GET_USER_INFO"],
 		metadata: {
 			openapi: {
 				description:
 					"Callback to complete user deletion with verification token",
-				responses: {
-					"200": {
-						description: "User successfully deleted",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										success: {
-											type: "boolean",
-											description: "Indicates if the deletion was successful",
-										},
-										message: {
-											type: "string",
-											enum: ["User deleted"],
-											description: "Confirmation message",
-										},
-									},
-									required: ["success", "message"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -679,38 +553,22 @@ export const changeEmail = createAuthEndpoint(
 				.optional(),
 		}),
 		use: [sensitiveSessionMiddleware],
+		response: z.object({
+			user: z.record(z.string(), z.any()).optional().meta({
+				description: "The updated user (when email update is immediate)",
+			}),
+			status: z
+				.boolean()
+				.meta({ description: "Indicates if the request was successful" }),
+			message: z
+				.enum(["Email updated", "Verification email sent"])
+				.nullable()
+				.optional(),
+		}),
+		errors: ["BAD_REQUEST"],
 		metadata: {
 			openapi: {
 				operationId: "changeEmail",
-				responses: {
-					"200": {
-						description: "Email change request processed successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										user: {
-											type: "object",
-											$ref: "#/components/schemas/User",
-										},
-										status: {
-											type: "boolean",
-											description: "Indicates if the request was successful",
-										},
-										message: {
-											type: "string",
-											enum: ["Email updated", "Verification email sent"],
-											description: "Status message of the email change process",
-											nullable: true,
-										},
-									},
-									required: ["status"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},

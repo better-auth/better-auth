@@ -58,30 +58,15 @@ export const requestPasswordReset = createAuthEndpoint(
 				})
 				.optional(),
 		}),
+		response: z.object({
+			status: z.boolean(),
+			message: z.string().optional(),
+		}),
+		errors: ["BAD_REQUEST", "RESET_PASSWORD_DISABLED"],
 		metadata: {
 			openapi: {
 				operationId: "requestPasswordReset",
 				description: "Send a password reset email to the user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-										},
-										message: {
-											type: "string",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 		use: [originCheck((ctx) => ctx.body.redirectTo)],
@@ -164,43 +149,6 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 			openapi: {
 				operationId: "resetPasswordCallback",
 				description: "Redirects the user to the callback URL with the token",
-				parameters: [
-					{
-						name: "token",
-						in: "path",
-						required: true,
-						description: "The token to reset the password",
-						schema: {
-							type: "string",
-						},
-					},
-					{
-						name: "callbackURL",
-						in: "query",
-						required: true,
-						description: "The URL to redirect the user to reset their password",
-						schema: {
-							type: "string",
-						},
-					},
-				],
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										token: {
-											type: "string",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -247,27 +195,19 @@ export const resetPassword = createAuthEndpoint(
 				})
 				.optional(),
 		}),
+		response: z.object({
+			status: z.boolean(),
+		}),
+		errors: [
+			"BAD_REQUEST",
+			"INVALID_TOKEN",
+			"PASSWORD_TOO_SHORT",
+			"PASSWORD_TOO_LONG",
+		],
 		metadata: {
 			openapi: {
 				operationId: "resetPassword",
 				description: "Reset the password for a user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -343,28 +283,15 @@ export const verifyPassword = createAuthEndpoint(
 				description: "The password to verify",
 			}),
 		}),
+		response: z.object({
+			status: z.boolean(),
+		}),
+		errors: ["BAD_REQUEST", "INVALID_PASSWORD"],
 		metadata: {
 			scope: "server",
 			openapi: {
 				operationId: "verifyPassword",
 				description: "Verify the current user's password",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 		use: [sensitiveSessionMiddleware],

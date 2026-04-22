@@ -15,14 +15,49 @@ import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
 	.object({
-		name: z.string(),
-		email: z.email(),
-		password: z.string().nonempty(),
-		image: z.string().optional(),
-		callbackURL: z.string().optional(),
-		rememberMe: z.boolean().optional(),
+		name: z.string().meta({ description: "The name of the user" }),
+		email: z.email().meta({ description: "The email of the user" }),
+		password: z
+			.string()
+			.nonempty()
+			.meta({ description: "The password of the user" }),
+		image: z
+			.string()
+			.meta({ description: "The profile image URL of the user" })
+			.optional(),
+		callbackURL: z
+			.string()
+			.meta({ description: "The URL to use for email verification callback" })
+			.optional(),
+		rememberMe: z
+			.boolean()
+			.meta({
+				description:
+					"If this is false, the session will not be remembered. Default is `true`.",
+			})
+			.optional(),
 	})
 	.and(z.record(z.string(), z.any()));
+
+const signUpUserSchema = z.object({
+	id: z.string().meta({ description: "The unique identifier of the user" }),
+	email: z.email().meta({ description: "The email address of the user" }),
+	name: z.string().meta({ description: "The name of the user" }),
+	image: z
+		.string()
+		.nullable()
+		.meta({ description: "The profile image URL of the user" }),
+	emailVerified: z
+		.boolean()
+		.meta({ description: "Whether the email has been verified" }),
+	createdAt: z
+		.string()
+		.meta({ format: "date-time", description: "When the user was created" }),
+	updatedAt: z.string().meta({
+		format: "date-time",
+		description: "When the user was last updated",
+	}),
+});
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -32,6 +67,25 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			operationId: "signUpWithEmailAndPassword",
 			use: [formCsrfMiddleware],
 			body: signUpEmailBodySchema,
+			response: z.object({
+				token: z
+					.string()
+					.nullable()
+					.meta({ description: "Authentication token for the session" }),
+				user: signUpUserSchema,
+			}),
+			errors: [
+				"BAD_REQUEST",
+				"UNPROCESSABLE_ENTITY",
+				"EMAIL_PASSWORD_SIGN_UP_DISABLED",
+				"INVALID_EMAIL",
+				"INVALID_PASSWORD",
+				"PASSWORD_TOO_SHORT",
+				"PASSWORD_TOO_LONG",
+				"USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+				"FAILED_TO_CREATE_USER",
+				"FAILED_TO_CREATE_SESSION",
+			],
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
@@ -54,126 +108,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				openapi: {
 					operationId: "signUpWithEmailAndPassword",
 					description: "Sign up a user using email and password",
-					requestBody: {
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										name: {
-											type: "string",
-											description: "The name of the user",
-										},
-										email: {
-											type: "string",
-											description: "The email of the user",
-										},
-										password: {
-											type: "string",
-											description: "The password of the user",
-										},
-										image: {
-											type: "string",
-											description: "The profile image URL of the user",
-										},
-										callbackURL: {
-											type: "string",
-											description:
-												"The URL to use for email verification callback",
-										},
-										rememberMe: {
-											type: "boolean",
-											description:
-												"If this is false, the session will not be remembered. Default is `true`.",
-										},
-									},
-									required: ["name", "email", "password"],
-								},
-							},
-						},
-					},
-					responses: {
-						"200": {
-							description: "Successfully created user",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											token: {
-												type: "string",
-												nullable: true,
-												description: "Authentication token for the session",
-											},
-											user: {
-												type: "object",
-												properties: {
-													id: {
-														type: "string",
-														description: "The unique identifier of the user",
-													},
-													email: {
-														type: "string",
-														format: "email",
-														description: "The email address of the user",
-													},
-													name: {
-														type: "string",
-														description: "The name of the user",
-													},
-													image: {
-														type: "string",
-														format: "uri",
-														nullable: true,
-														description: "The profile image URL of the user",
-													},
-													emailVerified: {
-														type: "boolean",
-														description: "Whether the email has been verified",
-													},
-													createdAt: {
-														type: "string",
-														format: "date-time",
-														description: "When the user was created",
-													},
-													updatedAt: {
-														type: "string",
-														format: "date-time",
-														description: "When the user was last updated",
-													},
-												},
-												required: [
-													"id",
-													"email",
-													"name",
-													"emailVerified",
-													"createdAt",
-													"updatedAt",
-												],
-											},
-										},
-										required: ["user"], // token is optional
-									},
-								},
-							},
-						},
-						"422": {
-							description:
-								"Unprocessable Entity. User already exists or failed to create user.",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											message: {
-												type: "string",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},

@@ -24,62 +24,21 @@ export const listUserAccounts = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [sessionMiddleware],
+		response: z.array(
+			z.object({
+				id: z.string(),
+				providerId: z.string(),
+				createdAt: z.string().meta({ format: "date-time" }),
+				updatedAt: z.string().meta({ format: "date-time" }),
+				accountId: z.string(),
+				userId: z.string(),
+				scopes: z.array(z.string()),
+			}),
+		),
 		metadata: {
 			openapi: {
 				operationId: "listUserAccounts",
 				description: "List all accounts linked to the user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "array",
-									items: {
-										type: "object",
-										properties: {
-											id: {
-												type: "string",
-											},
-											providerId: {
-												type: "string",
-											},
-											createdAt: {
-												type: "string",
-												format: "date-time",
-											},
-											updatedAt: {
-												type: "string",
-												format: "date-time",
-											},
-											accountId: {
-												type: "string",
-											},
-											userId: {
-												type: "string",
-											},
-											scopes: {
-												type: "array",
-												items: {
-													type: "string",
-												},
-											},
-										},
-										required: [
-											"id",
-											"providerId",
-											"createdAt",
-											"updatedAt",
-											"accountId",
-											"userId",
-											"scopes",
-										],
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -175,38 +134,29 @@ export const linkSocialAccount = createAuthEndpoint(
 			additionalData: z.record(z.string(), z.any()).optional(),
 		}),
 		use: [sessionMiddleware],
+		response: z.object({
+			url: z.string().optional().meta({
+				description: "The authorization URL to redirect the user to",
+			}),
+			redirect: z.boolean().meta({
+				description:
+					"Indicates if the user should be redirected to the authorization URL",
+			}),
+			status: z.boolean().optional(),
+		}),
+		errors: [
+			"NOT_FOUND",
+			"UNAUTHORIZED",
+			"PROVIDER_NOT_FOUND",
+			"ID_TOKEN_NOT_SUPPORTED",
+			"INVALID_TOKEN",
+			"FAILED_TO_GET_USER_INFO",
+			"USER_EMAIL_NOT_FOUND",
+		],
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
 				operationId: "linkSocialAccount",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										url: {
-											type: "string",
-											description:
-												"The authorization URL to redirect the user to",
-										},
-										redirect: {
-											type: "boolean",
-											description:
-												"Indicates if the user should be redirected to the authorization URL",
-										},
-										status: {
-											type: "boolean",
-										},
-									},
-									required: ["redirect"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -391,26 +341,17 @@ export const unlinkAccount = createAuthEndpoint(
 			accountId: z.string().optional(),
 		}),
 		use: [freshSessionMiddleware],
+		response: z.object({
+			status: z.boolean(),
+		}),
+		errors: [
+			"BAD_REQUEST",
+			"FAILED_TO_UNLINK_LAST_ACCOUNT",
+			"ACCOUNT_NOT_FOUND",
+		],
 		metadata: {
 			openapi: {
 				description: "Unlink an account",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -464,39 +405,22 @@ export const getAccessToken = createAuthEndpoint(
 				})
 				.optional(),
 		}),
+		response: z.object({
+			tokenType: z.string().optional(),
+			idToken: z.string().optional(),
+			accessToken: z.string().optional(),
+			accessTokenExpiresAt: z.string().optional().meta({ format: "date-time" }),
+		}),
+		errors: [
+			"BAD_REQUEST",
+			"UNAUTHORIZED",
+			"PROVIDER_NOT_SUPPORTED",
+			"ACCOUNT_NOT_FOUND",
+			"FAILED_TO_GET_ACCESS_TOKEN",
+		],
 		metadata: {
 			openapi: {
 				description: "Get a valid access token, doing a refresh if needed",
-				responses: {
-					200: {
-						description: "A Valid access token",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										tokenType: {
-											type: "string",
-										},
-										idToken: {
-											type: "string",
-										},
-										accessToken: {
-											type: "string",
-										},
-										accessTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-									},
-								},
-							},
-						},
-					},
-					400: {
-						description: "Invalid refresh token or provider configuration",
-					},
-				},
 			},
 		},
 	},
@@ -638,46 +562,30 @@ export const refreshToken = createAuthEndpoint(
 				})
 				.optional(),
 		}),
+		response: z.object({
+			tokenType: z.string().optional(),
+			idToken: z.string().optional(),
+			accessToken: z.string().optional(),
+			refreshToken: z.string().optional(),
+			accessTokenExpiresAt: z.string().optional().meta({ format: "date-time" }),
+			refreshTokenExpiresAt: z
+				.string()
+				.optional()
+				.meta({ format: "date-time" }),
+		}),
+		errors: [
+			"BAD_REQUEST",
+			"UNAUTHORIZED",
+			"PROVIDER_NOT_SUPPORTED",
+			"TOKEN_REFRESH_NOT_SUPPORTED",
+			"ACCOUNT_NOT_FOUND",
+			"REFRESH_TOKEN_NOT_FOUND",
+			"USER_ID_OR_SESSION_REQUIRED",
+			"FAILED_TO_REFRESH_TOKEN",
+		],
 		metadata: {
 			openapi: {
 				description: "Refresh the access token using a refresh token",
-				responses: {
-					200: {
-						description: "Access token refreshed successfully",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										tokenType: {
-											type: "string",
-										},
-										idToken: {
-											type: "string",
-										},
-										accessToken: {
-											type: "string",
-										},
-										refreshToken: {
-											type: "string",
-										},
-										accessTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-										refreshTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-									},
-								},
-							},
-						},
-					},
-					400: {
-						description: "Invalid refresh token or provider configuration",
-					},
-				},
 			},
 		},
 	},
@@ -828,51 +736,26 @@ export const accountInfo = createAuthEndpoint(
 	{
 		method: "GET",
 		use: [sessionMiddleware],
+		response: z.object({
+			user: z.object({
+				id: z.string(),
+				name: z.string().optional(),
+				email: z.string().optional(),
+				image: z.string().optional(),
+				emailVerified: z.boolean(),
+			}),
+			data: z.record(z.string(), z.any()),
+		}),
+		errors: [
+			"BAD_REQUEST",
+			"INTERNAL_SERVER_ERROR",
+			"ACCOUNT_NOT_FOUND",
+			"PROVIDER_NOT_CONFIGURED",
+			"ACCESS_TOKEN_NOT_FOUND",
+		],
 		metadata: {
 			openapi: {
 				description: "Get the account info provided by the provider",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										user: {
-											type: "object",
-											properties: {
-												id: {
-													type: "string",
-												},
-												name: {
-													type: "string",
-												},
-												email: {
-													type: "string",
-												},
-												image: {
-													type: "string",
-												},
-												emailVerified: {
-													type: "boolean",
-												},
-											},
-											required: ["id", "emailVerified"],
-										},
-										data: {
-											type: "object",
-											properties: {},
-											additionalProperties: true,
-										},
-									},
-									required: ["user", "data"],
-									additionalProperties: false,
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 		query: accountInfoQuerySchema,

@@ -83,79 +83,26 @@ export const sendVerificationEmail = createAuthEndpoint(
 		body: z.object({
 			email: z.email().meta({
 				description: "The email to send the verification email to",
+				example: "user@example.com",
 			}),
 			callbackURL: z
 				.string()
 				.meta({
 					description: "The URL to use for email verification callback",
+					example: "https://example.com/callback",
 				})
 				.optional(),
 		}),
+		response: z.object({
+			status: z.boolean().meta({
+				description: "Indicates if the email was sent successfully",
+			}),
+		}),
+		errors: ["BAD_REQUEST", "VERIFICATION_EMAIL_NOT_ENABLED", "EMAIL_MISMATCH"],
 		metadata: {
 			openapi: {
 				operationId: "sendVerificationEmail",
 				description: "Send a verification email to the user",
-				requestBody: {
-					content: {
-						"application/json": {
-							schema: {
-								type: "object",
-								properties: {
-									email: {
-										type: "string",
-										description: "The email to send the verification email to",
-										example: "user@example.com",
-									},
-									callbackURL: {
-										type: "string",
-										description:
-											"The URL to use for email verification callback",
-										example: "https://example.com/callback",
-										nullable: true,
-									},
-								},
-								required: ["email"],
-							},
-						},
-					},
-				},
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										status: {
-											type: "boolean",
-											description:
-												"Indicates if the email was sent successfully",
-											example: true,
-										},
-									},
-								},
-							},
-						},
-					},
-					"400": {
-						description: "Bad Request",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										message: {
-											type: "string",
-											description: "Error message",
-											example: "Verification email isn't enabled",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},
@@ -221,53 +168,27 @@ export const verifyEmail = createAuthEndpoint(
 				.optional(),
 		}),
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		response: z.object({
+			status: z.boolean().meta({
+				description: "Indicates if the email was verified successfully",
+			}),
+			user: z
+				.record(z.string(), z.any())
+				.nullable()
+				.optional()
+				.meta({ description: "The verified user, if returned" }),
+		}),
+		errors: [
+			"UNAUTHORIZED",
+			"TOKEN_EXPIRED",
+			"INVALID_TOKEN",
+			"INVALID_USER",
+			"USER_NOT_FOUND",
+			"FAILED_TO_CREATE_SESSION",
+		],
 		metadata: {
 			openapi: {
 				description: "Verify the email of the user",
-				parameters: [
-					{
-						name: "token",
-						in: "query",
-						description: "The token to verify the email",
-						required: true,
-						schema: {
-							type: "string",
-						},
-					},
-					{
-						name: "callbackURL",
-						in: "query",
-						description: "The URL to redirect to after email verification",
-						required: false,
-						schema: {
-							type: "string",
-						},
-					},
-				],
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										user: {
-											type: "object",
-											$ref: "#/components/schemas/User",
-										},
-										status: {
-											type: "boolean",
-											description:
-												"Indicates if the email was verified successfully",
-										},
-									},
-									required: ["user", "status"],
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},

@@ -21,6 +21,12 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "updateSession",
 			body: updateSessionBodySchema,
+			response: z.object({
+				session: z
+					.record(z.string(), z.any())
+					.meta({ description: "The updated session object" }),
+			}),
+			errors: ["BAD_REQUEST"],
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
@@ -29,24 +35,6 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 				openapi: {
 					operationId: "updateSession",
 					description: "Update the current session",
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											session: {
-												type: "object",
-												$ref: "#/components/schemas/Session",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},

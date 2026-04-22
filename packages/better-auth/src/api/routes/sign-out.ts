@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import * as z from "zod";
 import { deleteSessionCookie } from "../../cookies";
 
 export const signOut = createAuthEndpoint(
@@ -7,27 +8,13 @@ export const signOut = createAuthEndpoint(
 		method: "POST",
 		operationId: "signOut",
 		requireHeaders: true,
+		response: z.object({
+			success: z.boolean(),
+		}),
 		metadata: {
 			openapi: {
 				operationId: "signOut",
 				description: "Sign out the current user",
-				responses: {
-					"200": {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										success: {
-											type: "boolean",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	},

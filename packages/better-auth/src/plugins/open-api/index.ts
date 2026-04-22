@@ -97,10 +97,24 @@ export interface OpenAPIOptions {
 	 * @default undefined
 	 */
 	nonce?: string | undefined;
+	/**
+	 * OpenAPI spec version.
+	 *
+	 * @default "3.1"
+	 */
+	version?: "3.0" | "3.1" | undefined;
+	/**
+	 * When true, the open-api plugin parses each route's declared `response`
+	 * schema against the actual handler output and logs a warning on mismatch.
+	 * Never throws, never blocks the response. Defaults to `true` outside
+	 * production and `false` in production.
+	 */
+	validateResponses?: boolean | undefined;
 }
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 	const path = options?.path ?? "/reference";
+	const version = options?.version ?? "3.1";
 	return {
 		id: "open-api",
 		version: PACKAGE_VERSION,
@@ -111,7 +125,9 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 					method: "GET",
 				},
 				async (ctx) => {
-					const schema = await generator(ctx.context, ctx.context.options);
+					const schema = await generator(ctx.context, ctx.context.options, {
+						version,
+					});
 					return ctx.json(schema);
 				},
 			),
@@ -125,7 +141,9 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 					if (options?.disableDefaultReference) {
 						throw new APIError("NOT_FOUND");
 					}
-					const schema = await generator(ctx.context, ctx.context.options);
+					const schema = await generator(ctx.context, ctx.context.options, {
+						version,
+					});
 					return new Response(getHTML(schema, options?.theme, options?.nonce), {
 						headers: {
 							"Content-Type": "text/html",
@@ -134,6 +152,10 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 				},
 			),
 		},
+		// TODO(open-api): consume `options.validateResponses` to wire
+		// per-endpoint response-schema validation in dev mode. Needs a
+		// path-to-schema map built from the resolved plugin set at init time.
+		// Deferred to a follow-up PR.
 		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

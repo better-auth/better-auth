@@ -179,6 +179,37 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "socialSignIn",
 			body: socialSignInBodySchema,
+			response: z
+				.object({
+					redirect: z.boolean().meta({
+						description:
+							"False when the user is signed in via idToken; true/false otherwise depending on whether the redirect is performed server-side",
+					}),
+					token: z.string().optional().meta({
+						description: "Session token. Present in the idToken flow.",
+					}),
+					url: z.string().nullable().optional().meta({
+						description:
+							"Authorization URL. Present in the OAuth redirect flow.",
+					}),
+					user: z.record(z.string(), z.any()).optional().meta({
+						description: "The user object. Present in the idToken flow.",
+					}),
+				})
+				.meta({
+					description:
+						"Response varies by flow: idToken returns redirect=false with token/user; OAuth redirect returns url plus a redirect flag.",
+				}),
+			errors: [
+				"NOT_FOUND",
+				"UNAUTHORIZED",
+				"PROVIDER_NOT_FOUND",
+				"ID_TOKEN_NOT_SUPPORTED",
+				"INVALID_TOKEN",
+				"FAILED_TO_GET_USER_INFO",
+				"USER_EMAIL_NOT_FOUND",
+				"OAUTH_LINK_ERROR",
+			],
 			metadata: {
 				$Infer: {
 					body: {} as z.infer<typeof socialSignInBodySchema>,
@@ -192,38 +223,6 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				openapi: {
 					description: "Sign in with a social provider",
 					operationId: "socialSignIn",
-					responses: {
-						"200": {
-							description:
-								"Success - Returns either session details or redirect URL",
-							content: {
-								"application/json": {
-									schema: {
-										// todo: we need support for multiple schema
-										type: "object",
-										description: "Session response when idToken is provided",
-										properties: {
-											token: {
-												type: "string",
-											},
-											user: {
-												type: "object",
-												$ref: "#/components/schemas/User",
-											},
-											url: {
-												type: "string",
-											},
-											redirect: {
-												type: "boolean",
-												enum: [false],
-											},
-										},
-										required: ["redirect", "token", "user"],
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -401,6 +400,24 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					.default(true)
 					.optional(),
 			}),
+			response: z.object({
+				redirect: z
+					.boolean()
+					.meta({ description: "Whether a redirect is required" }),
+				token: z.string().meta({ description: "Session token" }),
+				url: z.string().nullable().optional(),
+				user: z
+					.record(z.string(), z.any())
+					.meta({ description: "The authenticated user" }),
+			}),
+			errors: [
+				"BAD_REQUEST",
+				"UNAUTHORIZED",
+				"EMAIL_PASSWORD_DISABLED",
+				"INVALID_EMAIL",
+				"INVALID_EMAIL_OR_PASSWORD",
+				"EMAIL_NOT_VERIFIED",
+			],
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
@@ -423,40 +440,6 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				openapi: {
 					operationId: "signInEmail",
 					description: "Sign in with email and password",
-					responses: {
-						"200": {
-							description:
-								"Success - Returns either session details or redirect URL",
-							content: {
-								"application/json": {
-									schema: {
-										// todo: we need support for multiple schema
-										type: "object",
-										description: "Session response when idToken is provided",
-										properties: {
-											redirect: {
-												type: "boolean",
-												enum: [false],
-											},
-											token: {
-												type: "string",
-												description: "Session token",
-											},
-											url: {
-												type: "string",
-												nullable: true,
-											},
-											user: {
-												type: "object",
-												$ref: "#/components/schemas/User",
-											},
-										},
-										required: ["redirect", "token", "user"],
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},

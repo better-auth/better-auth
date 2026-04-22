@@ -380,7 +380,7 @@ export const error = createAuthEndpoint(
 				description: "Displays an error page",
 				responses: {
 					"200": {
-						description: "Success",
+						description: "HTML error page",
 						content: {
 							"text/html": {
 								schema: {

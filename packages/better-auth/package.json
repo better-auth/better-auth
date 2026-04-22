@@ -489,6 +489,7 @@
     }
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@better-auth/core": "workspace:*",
     "@better-auth/drizzle-adapter": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
@@ -505,10 +506,14 @@
     "jose": "^6.1.3",
     "kysely": "^0.28.14",
     "nanostores": "^1.1.1",
+    "openapi3-ts": "^4.5.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@lynx-js/react": "^0.116.3",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/sdk-trace-node": "^1.30.0",
     "@sveltejs/kit": "^2.57.1",
     "@tanstack/react-start": "^1.163.2",
     "@tanstack/solid-start": "^1.163.2",
@@ -516,9 +521,6 @@
     "@types/google.accounts": "^0.0.18",
     "@types/pg": "^8.16.0",
     "@types/react": "catalog:react19",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-trace-base": "^1.30.0",
-    "@opentelemetry/sdk-trace-node": "^1.30.0",
     "happy-dom": "^20.8.9",
     "listhen": "^1.9.0",
     "msw": "^2.12.10",
