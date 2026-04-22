@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { generateEmail, getTestInstance } from "../../test-utils/test-instance";
 import { haveIBeenPwned } from "./index";
 
 describe("have-i-been-pwned", async () => {
@@ -14,7 +14,7 @@ describe("have-i-been-pwned", async () => {
 	const ctx = await auth.$context;
 
 	it("should prevent account creation with compromised password", async () => {
-		const uniqueEmail = `test-${Date.now()}@example.com`;
+		const uniqueEmail = generateEmail();
 		const compromisedPassword = "123456789";
 
 		const result = await client.signUp.email({
@@ -30,7 +30,7 @@ describe("have-i-been-pwned", async () => {
 	});
 
 	it("should allow account creation with strong, uncompromised password", async () => {
-		const uniqueEmail = `test-${Date.now()}@example.com`;
+		const uniqueEmail = generateEmail();
 		const strongPassword = `Str0ng!P@ssw0rd-${Date.now()}`;
 
 		const result = await client.signUp.email({
@@ -42,7 +42,7 @@ describe("have-i-been-pwned", async () => {
 	});
 
 	it("should prevent password update to compromised password", async () => {
-		const uniqueEmail = `test-${Date.now()}@example.com`;
+		const uniqueEmail = generateEmail();
 		const initialPassword = `Str0ng!P@ssw0rd-${Date.now()}`;
 
 		const res = await client.signUp.email({

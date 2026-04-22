@@ -1,6 +1,6 @@
 import { normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { generateEmail, getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
 
 describe("rate-limiter", async () => {
@@ -184,7 +184,7 @@ describe("should work with custom rules", async () => {
 
 		for (let i = 0; i < 5; i++) {
 			const response = await client.signUp.email({
-				email: `${Math.random()}@test.com`,
+				email: generateEmail(),
 				password: testUser.password,
 				name: "test",
 			});
