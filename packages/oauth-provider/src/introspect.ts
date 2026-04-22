@@ -218,6 +218,13 @@ async function validateOpaqueAccessToken(
 	const resources = Array.isArray(accessToken.resources)
 		? accessToken.resources
 		: undefined;
+	const audience = resources ? [...resources] : undefined;
+	if (audience?.length && accessToken.scopes?.includes("openid")) {
+		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
+		if (!audience.includes(userInfoEndpoint)) {
+			audience.push(userInfoEndpoint);
+		}
+	}
 
 	// Add Custom Claims
 	const customClaims = opts.customAccessTokenClaims
@@ -240,7 +247,7 @@ async function validateOpaqueAccessToken(
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		aud: toAudienceClaim(resources),
+		aud: toAudienceClaim(audience),
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,

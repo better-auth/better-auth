@@ -2745,7 +2745,7 @@ describe("oauth - config", () => {
 				iat: expect.any(Number),
 				exp: expect.any(Number),
 			});
-			if (resource && !(resource && disableJwtPlugin)) {
+			if (resource) {
 				expect(payload?.aud).toStrictEqual([
 					validAudience,
 					`${authServerUrl}/oauth2/userinfo`,

@@ -771,7 +771,7 @@ describe("oauth introspect - config", async () => {
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
-			aud: validAudience,
+			aud: [validAudience, `${authServerBaseUrl}/api/auth/oauth2/userinfo`],
 		});
 	});
 
