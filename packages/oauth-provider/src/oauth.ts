@@ -393,17 +393,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							])
 							.optional(),
 					}),
-					onValidationError: ({ issues, message }) => {
-						const responseTypeIssue = issues.find(
-							(issue) => issue.path?.[0] === "response_type",
-						);
-						if (responseTypeIssue) {
-							throw new APIError("BAD_REQUEST", {
-								error: "unsupported_response_type",
-								error_description: message,
-							});
-						}
-					},
 					metadata: {
 						openapi: {
 							description: "Authorize an OAuth2 request",

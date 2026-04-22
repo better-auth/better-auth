@@ -179,31 +179,6 @@ describe("oauth authorize - unauthenticated", async () => {
 		);
 		expect(callbackRedirectUrl).not.toContain("/login");
 	});
-
-	it("should return unsupported_response_type for unknown authorize response type", async () => {
-		if (!oauthClient?.client_id) {
-			throw Error("beforeAll not run properly");
-		}
-
-		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
-		authUrl.searchParams.set("client_id", oauthClient.client_id);
-		authUrl.searchParams.set("redirect_uri", redirectUri);
-		authUrl.searchParams.set("response_type", "token");
-
-		const authorizeResponse = await unauthenticatedClient.$fetch<{
-			error?: string;
-			error_description?: string;
-		}>(authUrl.toString(), {
-			headers: {
-				accept: "application/json",
-			},
-		});
-
-		expect(authorizeResponse.error).toMatchObject({
-			status: 400,
-			error: "unsupported_response_type",
-		});
-	});
 });
 
 describe("oauth authorize - request_uri resolution", async () => {
