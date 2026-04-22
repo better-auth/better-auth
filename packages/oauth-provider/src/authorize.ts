@@ -474,22 +474,23 @@ export async function authorizeEndpoint(
 
 	// Validate the resource sent to the authorize endpoint
 	const resource = query.resource;
-	try {
-		await checkResource(ctx, opts, resource, requestedScopes);
-	} catch (err) {
-		if (err instanceof APIError) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_target",
-					err?.message ?? err.body?.message ?? "invalid_resource",
-					query.state,
-					getIssuer(ctx, opts),
-				),
-			);
-		}
-		throw err;
+	const resourceResult = await checkResource(
+		ctx,
+		opts,
+		resource,
+		requestedScopes,
+	);
+	if (!resourceResult.success) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_target",
+				"requested resource invalid",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
 	}
 
 	// Check for session
@@ -649,15 +650,17 @@ export async function authorizeEndpoint(
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
-	// Consent should be given for that resource if different than original consent
-	const consentedResources = consent?.resources;
-	const requestedResources =
-		typeof resource === "string" ? [resource] : resource;
+	// Prompt again whenever a requested resource is not covered by stored consent.
+	const requestedResources = Array.isArray(resource)
+		? resource
+		: resource
+			? [resource]
+			: [];
+	const consentedResources = consent?.resources ?? [];
 	if (
-		consentedResources &&
-		(!requestedResources ||
-			requestedResources.length === 0 ||
-			!requestedResources.every((v) => consentedResources.includes(v)))
+		requestedResources.some(
+			(requestedResource) => !consentedResources.includes(requestedResource),
+		)
 	) {
 		if (promptNone) {
 			return redirectWithPromptNoneError(

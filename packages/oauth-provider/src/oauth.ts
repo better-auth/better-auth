@@ -412,6 +412,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					redirectOnError: authorizeRedirectOnError(opts),
 					errorCodesByField: {
 						response_type: { invalid: "unsupported_response_type" },
+						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
 						openapi: {
@@ -664,6 +665,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							missing: "invalid_request",
 							invalid: "unsupported_grant_type",
 						},
+						resource: { invalid: "invalid_target" },
 					},
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],

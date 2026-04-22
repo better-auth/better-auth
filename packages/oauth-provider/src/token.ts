@@ -379,7 +379,7 @@ async function createRefreshToken(
 
 /**
  * Checks the resource parameter, if provided,
- * and returns a valid audience based on the request
+ * and returns either a valid audience or a tagged validation error.
  */
 export async function checkResource(
 	ctx: GenericEndpointContext,
@@ -411,14 +411,17 @@ export async function checkResource(
 		);
 		for (const aud of audience) {
 			if (!validAudiences.has(aud)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: "requested resource invalid",
-					error: "invalid_target",
-				});
+				return {
+					success: false,
+					error: "invalid_resource",
+				};
 			}
 		}
 	}
-	return audience?.length === 1 ? audience.at(0) : audience;
+	return {
+		success: true,
+		audience: audience?.length === 1 ? audience.at(0) : audience,
+	};
 }
 
 interface CreateUserTokensParams {
@@ -471,7 +474,19 @@ async function createUserTokens(
 		: defaultExp;
 
 	// Check requested audience if sent as the resource parameter
-	const audience = await checkResource(ctx, opts, params?.resources, scopes);
+	const resourceResult = await checkResource(
+		ctx,
+		opts,
+		params?.resources,
+		scopes,
+	);
+	if (!resourceResult.success) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "requested resource invalid",
+			error: "invalid_target",
+		});
+	}
+	const audience = resourceResult.audience;
 	const isRefreshToken =
 		user &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
