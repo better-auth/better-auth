@@ -328,7 +328,7 @@ export const router = <Option extends BetterAuthOptions>(
 			return currentRequest;
 		},
 		async onResponse(res, req) {
-			await onResponseRateLimit(req, ctx, res);
+			let currentResponse = res;
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await withSpan(
@@ -336,16 +336,18 @@ export const router = <Option extends BetterAuthOptions>(
 						{
 							[ATTR_HOOK_TYPE]: "onResponse",
 							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
-							[ATTR_HTTP_RESPONSE_STATUS_CODE]: res.status,
+							[ATTR_HTTP_RESPONSE_STATUS_CODE]: currentResponse.status,
 						},
-						() => plugin.onResponse!(res, ctx),
+						() => plugin.onResponse!(currentResponse, ctx),
 					);
 					if (response) {
-						return response.response;
+						currentResponse = response.response;
+						break;
 					}
 				}
 			}
-			return res;
+			await onResponseRateLimit(req, ctx, currentResponse);
+			return currentResponse;
 		},
 		onError(e) {
 			if (isAPIError(e) && e.status === "FOUND") {
