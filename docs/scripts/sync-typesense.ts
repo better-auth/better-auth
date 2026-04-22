@@ -12,8 +12,16 @@ export function getTypesenseSyncSkipReason(env: NodeJS.ProcessEnv) {
 		return "[Typesense] env vars not set, skipping sync.";
 	}
 
+	if (!env.VERCEL) {
+		return "[Typesense] not running on Vercel, skipping sync.";
+	}
+
+	if (!env.VERCEL_ENV) {
+		return "[Typesense] Vercel environment is missing, skipping sync.";
+	}
+
 	if (env.VERCEL_ENV !== "production") {
-		return `[Typesense] Vercel environment is "${env.VERCEL_ENV ?? "undefined"}", skipping sync.`;
+		return `[Typesense] Vercel environment is "${env.VERCEL_ENV}", skipping sync.`;
 	}
 
 	if (env.VERCEL_GIT_COMMIT_REF !== "main") {
