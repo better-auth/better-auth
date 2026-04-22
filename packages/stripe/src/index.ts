@@ -22,6 +22,7 @@ import type {
 	WithStripeCustomerId,
 } from "./types";
 import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -45,6 +46,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 	return {
 		id: "stripe",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			stripeWebhook: stripeWebhook(options),
 			...((options.subscription?.enabled
@@ -239,7 +241,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 						await client.subscriptions.update(stripeSub.id, {
 							items,
-							proration_behavior: "create_prorations",
+							proration_behavior: plan.prorationBehavior ?? "create_prorations",
 						});
 						await ctx.adapter.update({
 							model: "subscription",

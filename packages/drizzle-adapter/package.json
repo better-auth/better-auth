@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.5.0-beta.18",
+  "version": "1.6.6",
   "description": "Drizzle adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -20,10 +20,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
@@ -42,14 +43,19 @@
     }
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0",
-    "drizzle-orm": ">=0.41.0"
+    "@better-auth/core": "workspace:^",
+    "@better-auth/utils": "catalog:",
+    "drizzle-orm": "^0.45.2"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.1",
-    "drizzle-orm": ">=0.41.0",
+    "@better-auth/utils": "catalog:",
+    "drizzle-orm": "^0.45.2",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

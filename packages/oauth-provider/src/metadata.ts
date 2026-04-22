@@ -89,7 +89,9 @@ export function oidcServerMetadata(
 		claims_supported:
 			opts?.advertisedMetadata?.claims_supported ?? opts?.claims ?? [],
 		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
-		subject_types_supported: ["public"],
+		subject_types_supported: opts.pairwiseSecret
+			? ["public", "pairwise"]
+			: ["public"],
 		id_token_signing_alg_values_supported: jwtPluginOptions?.jwks?.keyPairConfig
 			?.alg
 			? [jwtPluginOptions?.jwks?.keyPairConfig?.alg]
@@ -98,9 +100,28 @@ export function oidcServerMetadata(
 				: ["EdDSA"],
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
 		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
-		prompt_values_supported: ["login", "consent", "create", "select_account"],
+		prompt_values_supported: [
+			"login",
+			"consent",
+			"create",
+			"select_account",
+			"none",
+		],
 	};
 	return metadata;
+}
+
+// Cache for 15s with a short stale window; metadata rarely changes.
+const METADATA_CACHE_CONTROL =
+	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
+
+function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
+	const headers = new Headers(extraHeaders);
+	if (!headers.has("Cache-Control")) {
+		headers.set("Cache-Control", METADATA_CACHE_CONTROL);
+	}
+	headers.set("Content-Type", "application/json");
+	return new Response(JSON.stringify(body), { status: 200, headers });
 }
 
 /**
@@ -119,24 +140,14 @@ export const oauthProviderAuthServerMetadata = <
 	},
 >(
 	auth: Auth,
-	opts?: {
-		headers?: HeadersInit;
-	},
+	opts?: { headers?: HeadersInit },
 ) => {
-	return async (_request: Request) => {
-		const res = await auth.api.getOAuthServerConfig();
-		return new Response(JSON.stringify(res), {
-			status: 200,
-			headers: {
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...opts?.headers,
-				"Content-Type": "application/json",
-			},
+	return async (request: Request) => {
+		const res = await auth.api.getOAuthServerConfig({
+			request,
+			asResponse: false,
 		});
+		return metadataResponse(res, opts?.headers);
 	};
 };
 
@@ -156,23 +167,13 @@ export const oauthProviderOpenIdConfigMetadata = <
 	},
 >(
 	auth: Auth,
-	opts?: {
-		headers?: HeadersInit;
-	},
+	opts?: { headers?: HeadersInit },
 ) => {
-	return async (_request: Request) => {
-		const res = await auth.api.getOpenIdConfig();
-		return new Response(JSON.stringify(res), {
-			status: 200,
-			headers: {
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...opts?.headers,
-				"Content-Type": "application/json",
-			},
+	return async (request: Request) => {
+		const res = await auth.api.getOpenIdConfig({
+			request,
+			asResponse: false,
 		});
+		return metadataResponse(res, opts?.headers);
 	};
 };

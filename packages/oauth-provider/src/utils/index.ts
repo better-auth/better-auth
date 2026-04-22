@@ -4,6 +4,7 @@ import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
+	makeSignature,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
@@ -54,12 +55,102 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
-		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
 };
 
+/**
+ * Normalizes timestamp-like values returned by adapters.
+ *
+ * Accepts Date instances, epoch milliseconds as numbers, and strings that are
+ * either ISO dates or numeric millisecond values such as "1774295570569.0".
+ */
+export function normalizeTimestampValue(value: unknown): Date | undefined {
+	if (value == null) {
+		return undefined;
+	}
+
+	if (value instanceof Date) {
+		return Number.isFinite(value.getTime()) ? value : undefined;
+	}
+
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+
+		const parsed = new Date(value);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed.length) {
+			return undefined;
+		}
+
+		const numeric = Number(trimmed);
+		if (Number.isFinite(numeric)) {
+			const parsed = new Date(numeric);
+			return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+		}
+
+		const parsed = new Date(trimmed);
+		return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+	}
+
+	return undefined;
+}
+
+/**
+ * Resolves a session auth time from common adapter return shapes.
+ */
+export function resolveSessionAuthTime(value: unknown): Date | undefined {
+	if (value instanceof Date) {
+		return normalizeTimestampValue(value);
+	}
+
+	if (!value || typeof value !== "object") {
+		return normalizeTimestampValue(value);
+	}
+
+	const direct =
+		normalizeTimestampValue((value as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((value as Record<string, unknown>).created_at);
+
+	if (direct) {
+		return direct;
+	}
+
+	const nested = (value as Record<string, unknown>).session;
+	if (!nested || typeof nested !== "object") {
+		return undefined;
+	}
+
+	return (
+		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
+		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
+	);
+}
+
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+
+export async function verifyOAuthQueryParams(
+	oauth_query: string,
+	secret: string,
+) {
+	const queryParams = new URLSearchParams(oauth_query);
+	const sig = queryParams.get("sig");
+	const exp = Number(queryParams.get("exp"));
+	queryParams.delete("sig");
+	const verifySig = await makeSignature(queryParams.toString(), secret);
+	return (
+		!!sig &&
+		constantTimeEqual(sig, verifySig) &&
+		new Date(exp * 1000) >= new Date()
+	);
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -113,7 +204,7 @@ export async function decryptStoredClientSecret(
 ) {
 	if (storageMethod === "encrypted") {
 		return await symmetricDecrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: storedClientSecret,
 		});
 	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
@@ -217,7 +308,7 @@ export async function storeClientSecret(
 
 	if (storageMethod === "encrypted") {
 		return await symmetricEncrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: clientSecret,
 		});
 	} else if (storageMethod === "hashed") {
@@ -419,6 +510,69 @@ export function parsePrompt(prompt: string) {
 }
 
 /**
+ * Extracts the sector identifier (hostname) from a client's first redirect URI.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+	const uri = client.redirectUris?.[0];
+	if (!uri) {
+		throw new BetterAuthError(
+			"Client has no redirect URIs for sector identifier",
+		);
+	}
+	return new URL(uri).host;
+}
+
+/**
+ * Computes a pairwise subject identifier using HMAC-SHA256.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+async function computePairwiseSub(
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	secret: string,
+): Promise<string> {
+	const sectorId = getSectorIdentifier(client);
+	return makeSignature(`${sectorId}.${userId}`, secret);
+}
+
+/**
+ * Returns the appropriate subject identifier for a user+client pair.
+ * Uses pairwise when the client opts in and the server has a secret configured.
+ *
+ * @internal
+ */
+export async function resolveSubjectIdentifier(
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	opts: OAuthOptions<Scope[]>,
+): Promise<string> {
+	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
+		return computePairwiseSub(userId, client, opts.pairwiseSecret);
+	}
+	return userId;
+}
+
+/**
+ * Converts URLSearchParams to a plain object, preserving
+ * multi-valued keys as arrays instead of discarding duplicates.
+ */
+export function searchParamsToQuery(
+	params: URLSearchParams,
+): Record<string, string | string[]> {
+	const result: Record<string, string | string[]> = Object.create(null);
+	for (const key of new Set(params.keys())) {
+		const values = params.getAll(key);
+		result[key] = values.length === 1 ? values[0]! : values;
+	}
+	return result;
+}
+
+/**
  * Deletes a prompt value
  *
  * @param ctx
@@ -433,7 +587,7 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 			? query.set("prompt", prompts.join(" "))
 			: query.delete("prompt");
 	}
-	return Object.fromEntries(query);
+	return searchParamsToQuery(query);
 }
 
 enum PKCERequirementErrors {

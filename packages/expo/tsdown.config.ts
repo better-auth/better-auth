@@ -4,15 +4,9 @@ export default defineConfig({
 	dts: { build: true, incremental: true },
 	format: ["esm"],
 	entry: ["./src/index.ts", "./src/client.ts", "./src/plugins/index.ts"],
-	external: [
-		"better-auth",
-		"better-call",
-		"@better-fetch/fetch",
-		"react-native",
-		"expo-web-browser",
-		"expo-linking",
-		"expo-constants",
-	],
-	sourcemap: true,
+	deps: {
+		neverBundle: ["better-call", "@better-fetch/fetch", "react-native"],
+	},
+	platform: "neutral",
 	treeshake: true,
 });

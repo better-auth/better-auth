@@ -7,6 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { getCurrentAuthContext } from "@better-auth/core/context";
+import { deprecate } from "@better-auth/core/utils/deprecate";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { OpenAPIParameter } from "better-call";
@@ -21,6 +22,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import { HIDE_METADATA } from "../../utils";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
@@ -273,15 +275,28 @@ const DEFAULT_CODE_EXPIRES_IN = 600;
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
 const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
 
+const warnOidcDeprecation = deprecate(
+	() => {},
+	'The "oidc-provider" plugin is deprecated and will be removed in the next major version. ' +
+		"Migrate to @better-auth/oauth-provider. " +
+		"See: https://www.better-auth.com/docs/plugins/oauth-provider",
+);
+
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
  * authorization code flow and the token exchange flow. It also implements the
  * userinfo endpoint.
  *
+ * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
+ * @see https://www.better-auth.com/docs/plugins/oauth-provider
+ *
  * @param options - The options for the OIDC plugin.
  * @returns A Better Auth plugin.
  */
 export const oidcProvider = (options: OIDCOptions) => {
+	if (!options.__skipDeprecationWarning) {
+		warnOidcDeprecation();
+	}
 	const modelName = {
 		oauthClient: "oauthApplication",
 		oauthAccessToken: "oauthAccessToken",
@@ -316,7 +331,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	) {
 		if (opts.storeClientSecret === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: clientSecret,
 			});
 		}
@@ -350,7 +365,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		if (opts.storeClientSecret === "encrypted") {
 			return (
 				(await symmetricDecrypt({
-					key: ctx.context.secret,
+					key: ctx.context.secretConfig,
 					data: storedClientSecret,
 				})) === clientSecret
 			);
@@ -381,6 +396,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 	return {
 		id: "oidc-provider",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -594,8 +610,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					if (!ctx.body.accept) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							consentCode,
 						);
 						return ctx.json({
 							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
@@ -605,8 +621,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const codeExpiresInMs =
 						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
-					await ctx.context.internalAdapter.updateVerificationValue(
-						verification.id,
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						consentCode,
 						{
 							value: JSON.stringify({
 								...value,
@@ -812,8 +828,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -921,8 +937,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");

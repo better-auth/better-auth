@@ -1,19 +1,28 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
+	Activity,
+	AppWindow,
 	Binoculars,
 	Book,
+	BotIcon,
 	CircleHelp,
 	Database,
+	FileBoxIcon,
 	FlaskConical,
 	Gauge,
 	Key,
 	KeyRound,
+	Logs,
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
+	Navigation,
 	Phone,
+	Route,
 	ScanFace,
+	ScrollTextIcon,
+	Server,
 	ShieldCheck,
 	TriangleAlertIcon,
 	UserCircle,
@@ -24,23 +33,33 @@ import {
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
-export interface ContentListItem {
+export interface SubpageItem {
 	title: string;
-	href: string;
+	href?: string;
+	icon?: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	group?: boolean;
+}
+
+export interface ListItem {
+	title: string;
+	href?: string;
 	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	group?: boolean;
+	separator?: boolean;
 	isNew?: boolean;
-	isUpdated?: boolean;
-	children?: ContentListItem[];
+	subpages?: SubpageItem[];
+	/** Navigates to a non-docs URL (e.g. `/llms.txt`) without a docs MDX page. */
+	external?: boolean;
 }
 
 interface Content {
 	title: string;
 	href?: string;
+	/** Expand this sidebar section when pathname is this URL or a child path (no extra nav row). */
+	expandSectionForPathPrefix?: string;
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	isNew?: boolean;
-	isUpdated?: boolean;
-	list: ContentListItem[];
+	list: ListItem[];
 }
 
 export function getPageTree(): Root {
@@ -66,35 +85,6 @@ export function getPageTree(): Root {
 	};
 }
 
-function contentListItemToPageTreeNode(
-	item: ContentListItem,
-): Folder | { type: "page"; url: string; name: string; icon: ReactNode } {
-	// If item has children, create a folder with nested pages
-	if (item.children && item.children.length > 0) {
-		return {
-			type: "folder",
-			name: item.title,
-			icon: <item.icon />,
-			index: {
-				type: "page",
-				url: item.href,
-				name: item.title,
-				icon: <item.icon />,
-			},
-			children: item.children
-				.filter((child) => !child.group && child.href)
-				.map((child) => contentListItemToPageTreeNode(child)),
-		};
-	}
-	// Regular page
-	return {
-		type: "page",
-		url: item.href,
-		name: item.title,
-		icon: <item.icon />,
-	};
-}
-
 function contentToPageTree(content: Content): Folder {
 	return {
 		type: "folder",
@@ -109,8 +99,21 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && item.href)
-			.map((item) => contentListItemToPageTreeNode(item)),
+			.filter((item) => !item.group && (item.href || item.separator))
+			.filter((item) => !item.external)
+			.map((item) =>
+				item.separator
+					? ({
+							type: "separator",
+							name: item.title,
+						} as const)
+					: ({
+							type: "page",
+							url: item.href!,
+							name: item.title,
+							icon: <item.icon />,
+						} as const),
+			),
 	};
 }
 
@@ -465,6 +468,7 @@ export const contents: Content[] = [
 			</svg>
 		),
 	},
+
 	{
 		title: "Authentication",
 		Icon: () => (
@@ -475,7 +479,7 @@ export const contents: Content[] = [
 				viewBox="0 0 24 24"
 			>
 				<path
-					className="fill-foreground"
+					fill="currentColor"
 					fillRule="evenodd"
 					d="M10 4h4c3.771 0 5.657 0 6.828 1.172C22 6.343 22 8.229 22 12c0 3.771 0 5.657-1.172 6.828C19.657 20 17.771 20 14 20h-4c-3.771 0-5.657 0-6.828-1.172C2 17.657 2 15.771 2 12c0-3.771 0-5.657 1.172-6.828C4.343 4 6.229 4 10 4m3.25 5a.75.75 0 0 1 .75-.75h5a.75.75 0 0 1 0 1.5h-5a.75.75 0 0 1-.75-.75m1 3a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75m1 3a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1-.75-.75M11 9a2 2 0 1 1-4 0a2 2 0 0 1 4 0m-2 8c4 0 4-.895 4-2s-1.79-2-4-2s-4 .895-4 2s0 2 4 2"
 					clipRule="evenodd"
@@ -670,6 +674,28 @@ export const contents: Content[] = [
 						<path
 							fill="currentColor"
 							d="m28.568 12.893l-.037-.094l-3.539-9.235a.92.92 0 0 0-.364-.439a.95.95 0 0 0-1.083.058a.95.95 0 0 0-.314.477l-2.39 7.31h-9.675l-2.39-7.31a.93.93 0 0 0-.313-.478a.95.95 0 0 0-1.083-.058a.93.93 0 0 0-.365.438L3.47 12.794l-.035.093a6.57 6.57 0 0 0 2.18 7.595l.011.01l.033.022l5.39 4.037l2.668 2.019l1.624 1.226c.39.297.931.297 1.322 0l1.624-1.226l2.667-2.019l5.424-4.061l.013-.01a6.574 6.574 0 0 0 2.177-7.588Z"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Railway",
+				href: "/docs/authentication/railway",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 1024 1024"
+						fill="none"
+					>
+						<path
+							d="M4.756 438.175A520.713 520.713 0 0 0 0 489.735h777.799c-2.716-5.306-6.365-10.09-10.045-14.772-132.97-171.791-204.498-156.896-306.819-161.26-34.114-1.403-57.249-1.967-193.037-1.967-72.677 0-151.688.185-228.628.39-9.96 26.884-19.566 52.942-24.243 74.14h398.571v51.909H4.756ZM783.93 541.696H.399c.82 13.851 2.112 27.517 3.978 40.999h723.39c32.248 0 50.299-18.297 56.162-40.999ZM45.017 724.306S164.941 1018.77 511.46 1024c207.112 0 385.071-123.006 465.907-299.694H45.017Z"
+							fill="currentColor"
+						/>
+						<path
+							d="M511.454 0C319.953 0 153.311 105.16 65.31 260.612c68.771-.144 202.704-.226 202.704-.226h.031v-.051c158.309 0 164.193.707 195.118 1.998l19.149.706c66.7 2.224 148.683 9.384 213.19 58.19 35.015 26.471 85.571 84.896 115.708 126.52 27.861 38.499 35.876 82.756 16.933 125.158-17.436 38.97-54.952 62.215-100.383 62.215H16.69s4.233 17.944 10.58 37.751h970.632A510.385 510.385 0 0 0 1024 512.218C1024.01 229.355 794.532 0 511.454 0Z"
+							fill="currentColor"
 						/>
 					</svg>
 				),
@@ -926,28 +952,6 @@ export const contents: Content[] = [
 				),
 			},
 			{
-				title: "Railway",
-				href: "/docs/authentication/railway",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 1024 1024"
-						fill="none"
-					>
-						<path
-							d="M4.756 438.175A520.713 520.713 0 0 0 0 489.735h777.799c-2.716-5.306-6.365-10.09-10.045-14.772-132.97-171.791-204.498-156.896-306.819-161.26-34.114-1.403-57.249-1.967-193.037-1.967-72.677 0-151.688.185-228.628.39-9.96 26.884-19.566 52.942-24.243 74.14h398.571v51.909H4.756ZM783.93 541.696H.399c.82 13.851 2.112 27.517 3.978 40.999h723.39c32.248 0 50.299-18.297 56.162-40.999ZM45.017 724.306S164.941 1018.77 511.46 1024c207.112 0 385.071-123.006 465.907-299.694H45.017Z"
-							fill="currentColor"
-						/>
-						<path
-							d="M511.454 0C319.953 0 153.311 105.16 65.31 260.612c68.771-.144 202.704-.226 202.704-.226h.031v-.051c158.309 0 164.193.707 195.118 1.998l19.149.706c66.7 2.224 148.683 9.384 213.19 58.19 35.015 26.471 85.571 84.896 115.708 126.52 27.861 38.499 35.876 82.756 16.933 125.158-17.436 38.97-54.952 62.215-100.383 62.215H16.69s4.233 17.944 10.58 37.751h970.632A510.385 510.385 0 0 0 1024 512.218C1024.01 229.355 794.532 0 511.454 0Z"
-							fill="currentColor"
-						/>
-					</svg>
-				),
-			},
-			{
 				title: "Reddit",
 				href: "/docs/authentication/reddit",
 				icon: () => (
@@ -1110,7 +1114,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			{
 				title: "Vercel",
 				href: "/docs/authentication/vercel",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1138,6 +1141,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 							fillRule="evenodd"
 							d="M17.802 12.298s1.617 1.597 2.017 2.336a.1.1 0 0 1 .018.035q.244.409.123.645c-.135.261-.592.392-.747.403h-2.858c-.199 0-.613-.052-1.117-.4c-.385-.269-.768-.712-1.139-1.145c-.554-.643-1.033-1.201-1.518-1.201a.6.6 0 0 0-.18.03c-.367.116-.833.639-.833 2.032c0 .436-.344.684-.585.684H9.674c-.446 0-2.768-.156-4.827-2.327C2.324 10.732.058 5.4.036 5.353c-.141-.345.155-.533.475-.533h2.886c.387 0 .513.234.601.444c.102.241.48 1.205 1.1 2.288c1.004 1.762 1.621 2.479 2.114 2.479a.53.53 0 0 0 .264-.07c.644-.354.524-2.654.494-3.128c0-.092-.001-1.027-.331-1.479c-.236-.324-.638-.45-.881-.496c.065-.094.203-.238.38-.323c.441-.22 1.238-.252 2.029-.252h.439c.858.012 1.08.067 1.392.146c.628.15.64.557.585 1.943c-.016.396-.033.842-.033 1.367c0 .112-.005.237-.005.364c-.019.711-.044 1.512.458 1.841a.4.4 0 0 0 .217.062c.174 0 .695 0 2.108-2.425c.62-1.071 1.1-2.334 1.133-2.429c.028-.053.112-.202.214-.262a.5.5 0 0 1 .236-.056h3.395c.37 0 .621.056.67.196c.082.227-.016.92-1.566 3.016c-.261.349-.49.651-.691.915c-1.405 1.844-1.405 1.937.083 3.337"
 							clipRule="evenodd"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "WeChat",
+				href: "/docs/authentication/wechat",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.504c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"
 						/>
 					</svg>
 				),
@@ -1453,6 +1473,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/astro",
 			},
 			{
+				title: "React Router v7",
+				icon: Icons.reactRouter,
+				href: "/docs/integrations/react-router",
+			},
+			{
 				title: "Next",
 				icon: Icons.nextJS,
 				href: "/docs/integrations/next",
@@ -1463,9 +1488,9 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/nuxt",
 			},
 			{
-				title: "React Router v7",
-				icon: Icons.reactRouter,
-				href: "/docs/integrations/react-router",
+				title: "Electron",
+				icon: Icons.electron,
+				href: "/docs/integrations/electron",
 			},
 			{
 				title: "SvelteKit",
@@ -1499,6 +1524,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/fastify",
 			},
 			{
+				title: "Encore",
+				icon: Icons.encore,
+				href: "/docs/integrations/encore",
+			},
+			{
 				title: "Express",
 				icon: Icons.express,
 				href: "/docs/integrations/express",
@@ -1530,12 +1560,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: LucideAArrowDown,
 			},
 			{
-				title: "Electron",
-				icon: Icons.electron,
-				href: "/docs/integrations/electron",
-				isNew: true,
-			},
-			{
 				title: "Expo",
 				icon: Icons.expo,
 				href: "/docs/integrations/expo",
@@ -1544,6 +1568,71 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Lynx",
 				icon: Icons.lynx,
 				href: "/docs/integrations/lynx",
+			},
+		],
+	},
+	{
+		title: "Infrastructure",
+		Icon: () => (
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				viewBox="0 0 24 24"
+				width="1.2em"
+				height="1.2em"
+			>
+				<path
+					fill="currentColor"
+					d="M2.25 5.7c0-.943.661-1.95 1.75-1.95h16c1.089 0 1.75 1.007 1.75 1.95v3.6c0 .943-.661 1.95-1.75 1.95H4c-1.089 0-1.75-1.007-1.75-1.95zM6 6.75a.75.75 0 0 0 0 1.5h2a.75.75 0 0 0 0-1.5zM2.25 14.7c0-.943.661-1.95 1.75-1.95h16c1.089 0 1.75 1.007 1.75 1.95v3.6c0 .943-.661 1.95-1.75 1.95H4c-1.089 0-1.75-1.007-1.75-1.95zM6 15.75a.75.75 0 0 0 0 1.5h2a.75.75 0 0 0 0-1.5z"
+				/>
+			</svg>
+		),
+		list: [
+			{
+				title: "Introduction",
+				href: "/docs/infrastructure/introduction",
+				icon: () => <Book className="size-4" />,
+			},
+			{
+				title: "Getting Started",
+				href: "/docs/infrastructure/getting-started",
+				icon: () => <Gauge className="size-4" />,
+			},
+			{
+				title: "Plugins",
+				group: true,
+				icon: () => <Server className="size-4" />,
+				href: "",
+			},
+			{
+				title: "Dashboard",
+				href: "/docs/infrastructure/plugins/dashboard",
+				icon: () => <AppWindow className="size-4" />,
+			},
+			{
+				title: "Audit Logs",
+				href: "/docs/infrastructure/plugins/audit-logs",
+				icon: () => <Logs className="size-4" />,
+			},
+			{
+				title: "Sentinel",
+				href: "/docs/infrastructure/plugins/sentinel",
+				icon: () => <ShieldCheck className="size-4" />,
+			},
+			{
+				title: "Services",
+				group: true,
+				icon: () => <Server className="size-4" />,
+				href: "",
+			},
+			{
+				title: "Email",
+				href: "/docs/infrastructure/services/email",
+				icon: () => <Mail className="size-4" />,
+			},
+			{
+				title: "SMS",
+				href: "/docs/infrastructure/services/sms",
+				icon: () => <Phone className="size-4" />,
 			},
 		],
 	},
@@ -1709,10 +1798,16 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Agent Auth",
+				href: "/docs/plugins/agent-auth",
+				icon: () => <BotIcon className="size-4" />,
+				isNew: true,
+			},
+			{
 				title: "API Key",
 				href: "/docs/plugins/api-key",
 				icon: () => <KeyRound className="size-4" />,
-				children: [
+				subpages: [
 					{
 						href: "/docs/plugins/api-key/advanced",
 						title: "Advanced Features",
@@ -1824,7 +1919,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 					</svg>
 				),
-				isNew: true,
 			},
 			{
 				title: "SSO",
@@ -1863,7 +1957,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					</svg>
 				),
 				href: "/docs/plugins/scim",
-				isNew: true,
 			},
 			{
 				title: "Utility",
@@ -2035,23 +2128,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						viewBox="0 0 256 257"
 					>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="M147.386 69.071L147.129 0h-38.515l.257 69.071l19.257 26.448zm-38.515 118.371v69.328h38.515v-69.328l-19.258-26.447z"
 						></path>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="m147.386 187.442l40.57 55.976l31.069-22.596l-40.57-55.975l-31.069-10.015zM108.871 69.071L68.044 13.095L36.975 35.691l40.57 55.976l31.326 10.014z"
 						></path>
 						<path
-							className="opacity-70 fill-foreground"
+							className="opacity-70 fill-current"
 							d="M77.545 91.667L11.811 70.355L0 106.816l65.733 21.569l31.069-10.271zm81.653 46.732l19.257 26.448l65.734 21.311L256 149.697l-65.733-21.312z"
 						></path>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="M190.267 128.385L256 106.816l-11.811-36.461l-65.734 21.312l-19.257 26.447zm-124.534 0L0 149.697l11.811 36.461l65.734-21.311l19.257-26.448z"
 						></path>
 						<path
-							className="fill-foreground"
+							className="fill-current"
 							d="m77.545 164.847l-40.57 55.975l31.069 22.596l40.827-55.976v-32.61zm100.91-73.18l40.57-55.976l-31.069-22.596l-40.57 55.976v32.61z"
 						></path>
 					</svg>
@@ -2062,7 +2155,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Test Utils",
 				href: "/docs/plugins/test-utils",
 				icon: () => <FlaskConical className="w-4 h-4" />,
-				isNew: true,
 			},
 			{
 				title: "Payments",
@@ -2203,24 +2295,21 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
-				title: "Commet",
-				href: "/docs/plugins/commet",
+				title: "Chargebee",
+				href: "/docs/plugins/chargebee",
 				icon: () => (
 					<svg
+						xmlns="http://www.w3.org/2000/svg"
 						width="1.2em"
 						height="1.2em"
-						viewBox="0 0 500 500"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 232 235"
+						fill="currentColor"
 					>
-						<path
-							d="M250 71L356.521 255.5H143.479L250 71Z"
-							fill="currentColor"
-						/>
-						<path
-							d="M250 440L356.521 255.5H143.479L250 440Z"
-							fill="currentColor"
-						/>
+						<path d="M77.18,117.82,231.85,80.94V.73h-80.2Z" />
+						<path d="M.54,116.41a115.52,115.52,0,0,0,3.38,27.83l73.27-26.42L3.31,91.16A117.15,117.15,0,0,0,.54,116.39Z" />
+						<path d="M27.78,41.84l49.38,76L99.93,1.88a115.43,115.43,0,0,0-72.15,40Z" />
+						<path d="M77.18,117.82l154.67,36.86v80.2h-80.2Z" />
+						<path d="M27.79,193.78l49.38-76L99.91,233.71a115.42,115.42,0,0,1-72.14-40Z" />
 					</svg>
 				),
 			},
@@ -2277,7 +2366,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 	},
 	{
 		title: "Guides",
-		href: "/docs/guides",
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -2344,6 +2432,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Dynamic Base URL",
+				href: "/docs/guides/dynamic-base-url",
+				icon: () => <Route className="w-4 h-4 text-current" />,
+			},
+			{
 				title: "SAML SSO with Okta",
 				href: "/docs/guides/saml-sso-with-okta",
 				icon: () => (
@@ -2362,6 +2455,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Optimize for Performance",
 				href: "/docs/guides/optimizing-for-performance",
 				icon: () => <Gauge className="size-4" />,
+			},
+			{
+				title: "Dynamic Base URL",
+				href: "/docs/guides/dynamic-base-url",
+				icon: () => <Navigation className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "Migration",
@@ -2586,6 +2684,63 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 		],
 	},
 	{
+		title: "AI Resources",
+		expandSectionForPathPrefix: "/docs/ai-resources",
+		Icon: () => (
+			// <svg
+			// 	xmlns="http://www.w3.org/2000/svg"
+			// 	width="1.2em"
+			// 	height="1.2em"
+			// 	viewBox="0 0 24 24"
+			// >
+			// 	<path
+			// 		fill="currentColor"
+			// 		d="M13.343 2A6 6 0 0 0 21 9.657V21a1 1 0 0 1-1 1H6.5A3.5 3.5 0 0 1 3 18.5V5a3 3 0 0 1 3-3zM6.5 17a1.5 1.5 0 0 0 0 3H19v-3zM18.53.33a.507.507 0 0 1 .94 0l.254.61a4.37 4.37 0 0 0 2.25 2.327l.718.32a.53.53 0 0 1 0 .962l-.76.338a4.36 4.36 0 0 0-2.218 2.25l-.247.566a.506.506 0 0 1-.934 0l-.246-.565a4.36 4.36 0 0 0-2.22-2.251l-.76-.338a.53.53 0 0 1 0-.963l.718-.32A4.37 4.37 0 0 0 18.276.942z"
+			// 	/>
+			// </svg>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="1.2em"
+				height="1.2em"
+				viewBox="0 0 640 640"
+			>
+				<path
+					fill="currentColor"
+					d="m295.4 37l14.8 36.8L347 88.6c3 1.2 5 4.2 5 7.4s-2 6.2-5 7.4l-36.8 14.8l-14.8 36.8c-1.2 3-4.2 5-7.4 5s-6.2-2-7.4-5l-14.8-36.8l-36.8-14.8c-3-1.2-5-4.2-5-7.4s2-6.2 5-7.4l36.8-14.8L280.6 37c1.2-3 4.2-5 7.4-5s6.2 2 7.4 5m-152.7 68.7l21.5 50.1l50.1 21.5c5.9 2.5 9.7 8.3 9.7 14.7s-3.8 12.2-9.7 14.7l-50.1 21.5l-21.5 50.1c-2.5 5.9-8.3 9.7-14.7 9.7s-12.2-3.8-14.7-9.7l-21.5-50.1l-50.1-21.5c-5.9-2.5-9.7-8.3-9.7-14.7s3.8-12.2 9.7-14.7l50.1-21.5l21.5-50.1c2.5-5.9 8.3-9.7 14.7-9.7s12.2 3.8 14.7 9.7M496 368c6.4 0 12.2 3.8 14.7 9.7l21.5 50.1l50.1 21.5c5.9 2.5 9.7 8.3 9.7 14.7s-3.8 12.2-9.7 14.7l-50.1 21.5l-21.5 50.1c-2.5 5.9-8.3 9.7-14.7 9.7s-12.2-3.8-14.7-9.7l-21.5-50.1l-50.1-21.5c-5.9-2.5-9.7-8.3-9.7-14.7s3.8-12.2 9.7-14.7l50.1-21.5l21.5-50.1c2.5-5.9 8.3-9.7 14.7-9.7m-4-304c11 0 21.6 4.4 29.5 12.2l42.3 42.3c7.8 7.9 12.2 18.5 12.2 29.5s-4.4 21.6-12.2 29.5l-88.2 88.2l-101.3-101.3l88.2-88.2C470.4 68.4 481 64 492 64M76.2 462.5l264.2-264.2l101.3 101.3l-264.2 264.2C169.6 571.6 159 576 148 576s-21.6-4.4-29.5-12.2l-42.3-42.3C68.4 513.6 64 503 64 492s4.4-21.6 12.2-29.5"
+				/>
+			</svg>
+		),
+		list: [
+			{
+				title: "MCP",
+				href: "/docs/ai-resources/mcp",
+				icon: () => (
+					<svg
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+						fill="currentColor"
+						fillRule="evenodd"
+					>
+						<path d="M15.688 2.343a2.588 2.588 0 00-3.61 0l-9.626 9.44a.863.863 0 01-1.203 0 .823.823 0 010-1.18l9.626-9.44a4.313 4.313 0 016.016 0 4.116 4.116 0 011.204 3.54 4.3 4.3 0 013.609 1.18l.05.05a4.115 4.115 0 010 5.9l-8.706 8.537a.274.274 0 000 .393l1.788 1.754a.823.823 0 010 1.18.863.863 0 01-1.203 0l-1.788-1.753a1.92 1.92 0 010-2.754l8.706-8.538a2.47 2.47 0 000-3.54l-.05-.049a2.588 2.588 0 00-3.607-.003l-7.172 7.034-.002.002-.098.097a.863.863 0 01-1.204 0 .823.823 0 010-1.18l7.273-7.133a2.47 2.47 0 00-.003-3.537z" />
+						<path d="M14.485 4.703a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a4.115 4.115 0 000 5.9 4.314 4.314 0 006.016 0l7.12-6.982a.823.823 0 000-1.18.863.863 0 00-1.204 0l-7.119 6.982a2.588 2.588 0 01-3.61 0 2.47 2.47 0 010-3.54l7.12-6.982z" />
+					</svg>
+				),
+			},
+			{
+				title: "Skills",
+				href: "/docs/ai-resources/skills",
+				icon: () => <FileBoxIcon className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "LLMs.txt",
+				href: "/llms.txt",
+				external: true,
+				icon: () => <ScrollTextIcon className="w-4 h-4 text-current" />,
+			},
+		],
+	},
+	{
 		title: "Reference",
 		Icon: () => (
 			<svg
@@ -2622,66 +2777,75 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Errors",
 				href: "/docs/reference/errors",
 				icon: () => <TriangleAlertIcon className="w-4 h-4 text-current" />,
-				children: [
+				subpages: [
 					{
 						title: "invalid_callback_request",
 						href: "/docs/reference/errors/invalid_callback_request",
-						icon: () => null,
+					},
+					{
+						title: "invalid_code",
+						href: "/docs/reference/errors/invalid_code",
+					},
+					{
+						title: "internal_server_error",
+						href: "/docs/reference/errors/internal_server_error",
 					},
 					{
 						title: "state_not_found",
 						href: "/docs/reference/errors/state_not_found",
-						icon: () => null,
 					},
 					{
 						title: "state_mismatch",
 						href: "/docs/reference/errors/state_mismatch",
-						icon: () => null,
 					},
-					{
-						title: "no_code",
-						href: "/docs/reference/errors/no_code",
-						icon: () => null,
-					},
+					{ title: "no_code", href: "/docs/reference/errors/no_code" },
 					{
 						title: "no_callback_url",
 						href: "/docs/reference/errors/no_callback_url",
-						icon: () => null,
 					},
 					{
 						title: "oauth_provider_not_found",
 						href: "/docs/reference/errors/oauth_provider_not_found",
-						icon: () => null,
 					},
 					{
 						title: "email_not_found",
 						href: "/docs/reference/errors/email_not_found",
-						icon: () => null,
 					},
 					{
 						title: "email_doesn't_match",
 						href: "/docs/reference/errors/email_doesn't_match",
-						icon: () => null,
 					},
 					{
 						title: "unable_to_get_user_info",
 						href: "/docs/reference/errors/unable_to_get_user_info",
-						icon: () => null,
 					},
 					{
 						title: "unable_to_link_account",
 						href: "/docs/reference/errors/unable_to_link_account",
-						icon: () => null,
+					},
+					{
+						title: "unable_to_create_user",
+						href: "/docs/reference/errors/unable_to_create_user",
+					},
+					{
+						title: "unable_to_create_session",
+						href: "/docs/reference/errors/unable_to_create_session",
+					},
+					{
+						title: "account_not_linked",
+						href: "/docs/reference/errors/account_not_linked",
 					},
 					{
 						title: "account_already_linked_to_different_user",
 						href: "/docs/reference/errors/account_already_linked_to_different_user",
-						icon: () => null,
 					},
 					{
 						title: "signup_disabled",
 						href: "/docs/reference/errors/signup_disabled",
-						icon: () => null,
+					},
+					{
+						title: "please_restart_the_process",
+						href: "/docs/reference/errors/please_restart_the_process",
 					},
 				],
 			},
@@ -2717,6 +2881,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Telemetry",
 				href: "/docs/reference/telemetry",
 				icon: () => <Binoculars className="w-4 h-4 text-current" />,
+			},
+			{
+				title: "Instrumentation",
+				href: "/docs/reference/instrumentation",
+				icon: () => <Activity className="w-4 h-4 text-current" />,
 			},
 			{
 				title: "FAQ",
@@ -2762,6 +2931,11 @@ export const examples: Content[] = [
 				icon: Icons.astro,
 			},
 			{
+				title: "React Router v7",
+				href: "/docs/examples/react-router",
+				icon: Icons.reactRouter,
+			},
+			{
 				title: "Next.js",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
@@ -2770,11 +2944,6 @@ export const examples: Content[] = [
 				title: "Nuxt",
 				href: "/docs/examples/nuxt",
 				icon: Icons.nuxt,
-			},
-			{
-				title: "React Router v7",
-				href: "/docs/examples/react-router",
-				icon: Icons.reactRouter,
 			},
 			{
 				title: "SvelteKit",

@@ -1,5 +1,6 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
+import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -215,7 +216,9 @@ export type BetterAuthAdvancedOptions = {
 		  }
 		| undefined;
 	/**
-	 * Use secure cookies
+	 * Force cookies to always use the `Secure` attribute. By default,
+	 * cookies are secure in production environments. Set this to `true`
+	 * to enforce secure cookies in all environments.
 	 *
 	 * @default false
 	 */
@@ -383,9 +386,11 @@ export type BetterAuthAdvancedOptions = {
 
 export type BetterAuthOptions = {
 	/**
-	 * The name of the application
+	 * The name of your application. Used as a display name in contexts
+	 * where your app needs to be identified — for example, as the default
+	 * issuer name in authenticator apps when users set up 2FA/TOTP.
 	 *
-	 * process.env.APP_NAME
+	 * Can also be set via the `APP_NAME` environment variable.
 	 *
 	 * @default "Better Auth"
 	 */
@@ -447,6 +452,19 @@ export type BetterAuthOptions = {
 	 */
 	secret?: string | undefined;
 	/**
+	 * Versioned secrets for non-destructive secret rotation.
+	 * When set, encryption uses an envelope format with key IDs.
+	 * First entry is the current key used for new encryption.
+	 * Remaining entries are decryption-only (previous rotations).
+	 *
+	 * Can also be set via BETTER_AUTH_SECRETS env var:
+	 * `BETTER_AUTH_SECRETS=2:base64secret,1:base64secret`
+	 *
+	 * When set, `secret` is only used as legacy fallback
+	 * for decrypting bare-hex payloads that predate the envelope format.
+	 */
+	secrets?: Array<{ version: number; value: string }> | undefined;
+	/**
 	 * Database configuration
 	 */
 	database?:
@@ -458,6 +476,7 @@ export type BetterAuthOptions = {
 				| DBAdapterInstance
 				| BunDatabase
 				| DatabaseSync
+				| D1Database
 				| {
 						dialect: Dialect;
 						type: KyselyDatabaseType;
@@ -703,6 +722,45 @@ export type BetterAuthOptions = {
 					data: { user: User },
 					request?: Request,
 				) => Promise<void>;
+				/**
+				 * Build a custom synthetic user for email enumeration
+				 * protection. When a sign-up attempt is made with an
+				 * email that already exists, this function is called
+				 * to build the fake user response.
+				 *
+				 * Use this when plugins add fields to the user table
+				 * (e.g. admin plugin adds `role`, `banned`, etc.)
+				 * to ensure the fake response is indistinguishable
+				 * from a real sign-up.
+				 *
+				 * @example
+				 * ```ts
+				 * customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+				 *   ...coreFields,
+				 *   role: "user",
+				 *   banned: false,
+				 *   banReason: null,
+				 *   banExpires: null,
+				 *   ...additionalFields,
+				 *   id,
+				 * })
+				 * ```
+				 */
+				customSyntheticUser?: (params: {
+					/** Core user fields: name, email, emailVerified, image, createdAt, updatedAt */
+					coreFields: {
+						name: string;
+						email: string;
+						emailVerified: boolean;
+						image: string | null;
+						createdAt: Date;
+						updatedAt: Date;
+					};
+					/** Processed additional fields from options.user.additionalFields (with defaults applied) */
+					additionalFields: Record<string, unknown>;
+					/** Generated user ID */
+					id: string;
+				}) => Record<string, unknown>;
 		  }
 		| undefined;
 	/**
@@ -1091,7 +1149,12 @@ export type BetterAuthOptions = {
 		  })
 		| undefined;
 	/**
-	 * List of trusted origins.
+	 * Additional trusted origins. By default, Better Auth trusts your
+	 * app's {@link baseURL}. Use this option to allow additional origins
+	 * (e.g. a separate frontend domain).
+	 *
+	 * Can be a static array, a function that returns origins dynamically,
+	 * or use wildcard patterns (e.g. `"https://*.example.com"`).
 	 *
 	 * @param request - The request object.
 	 * It'll be undefined if no request was

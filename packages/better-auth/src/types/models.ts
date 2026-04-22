@@ -1,9 +1,13 @@
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	InferDBFieldsFromOptionsInput,
 	InferDBFieldsFromPluginsInput,
-} from "../db";
-import type { UnionToIntersection } from "./helper";
+} from "@better-auth/core/db";
+import type {
+	ExtractPluginField,
+	InferPluginFieldFromTuple,
+	UnionToIntersection,
+} from "./helper";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferDBFieldsFromPluginsInput<"user", Options["plugins"]> &
@@ -14,15 +18,11 @@ export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
 		InferDBFieldsFromOptionsInput<Options["session"]>;
 
 export type InferPluginTypes<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
-		? UnionToIntersection<
-				P extends BetterAuthPlugin
-					? P["$Infer"] extends Record<string, any>
-						? P["$Infer"]
-						: {}
-					: {}
-			>
-		: {};
+	O["plugins"] extends readonly [unknown, ...unknown[]]
+		? InferPluginFieldFromTuple<O["plugins"], "$Infer">
+		: O["plugins"] extends Array<infer P>
+			? UnionToIntersection<ExtractPluginField<P, "$Infer">>
+			: {};
 
 export type {
 	Account,

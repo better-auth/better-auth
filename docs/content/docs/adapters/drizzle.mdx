@@ -7,6 +7,14 @@ Drizzle ORM is a powerful and flexible ORM for Node.js and TypeScript. It provid
 
 Before getting started, make sure you have Drizzle installed and configured. For more information, see [Drizzle Documentation](https://orm.drizzle.team/docs/overview/)
 
+## Installation
+
+To use the Drizzle adapter, you need to install the `@better-auth/drizzle-adapter` package:
+
+```package-install
+@better-auth/drizzle-adapter
+```
+
 ## Example Usage
 
 You can use the Drizzle adapter to connect to your database as follows.
@@ -37,19 +45,19 @@ npx auth@latest generate
 
 To generate and apply the migration, run the following commands:
 
-   <Tabs items={["generate", "migrate"]}>
-      <Tab value="generate">
-      ```package-install
-      npx drizzle-kit generate # generate the migration file
-      ```
-      </Tab>
-      <Tab value="migrate">
-      ```package-install
-      npx drizzle-kit migrate # apply the migration
-      ```
-      </Tab>
-    </Tabs>
+<Tabs items={["generate", "migrate"]}>
+  <Tab value="generate">
+    ```package-install
+    npx drizzle-kit generate # generate the migration file
+    ```
+  </Tab>
 
+  <Tab value="migrate">
+    ```package-install
+    npx drizzle-kit migrate # apply the migration
+    ```
+  </Tab>
+</Tabs>
 
 ## Joins (Experimental)
 
@@ -67,6 +75,7 @@ export const auth = betterAuth({
   experimental: { joins: true }
 });
 ```
+
 <Callout type="warn">
   Please make sure that your Drizzle schema has the necessary relations defined.
   If you do not see any relations in your Drizzle schema, you can manually add them using the [`relation`](https://orm.drizzle.team/docs/relations) drizzle-orm function
@@ -167,4 +176,4 @@ export const auth = betterAuth({
 
 ## Additional Information
 
-- If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+* If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

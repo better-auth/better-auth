@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -23,12 +24,24 @@ export interface BearerOptions {
 	requireSignature?: boolean | undefined;
 }
 
+// RFC 7235: auth-scheme is case-insensitive
+const BEARER_SCHEME = "bearer ";
+
+function tryDecode(str: string): string {
+	try {
+		return decodeURIComponent(str);
+	} catch {
+		return str;
+	}
+}
+
 /**
  * Converts bearer token to session cookie
  */
 export const bearer = (options?: BearerOptions | undefined) => {
 	return {
 		id: "bearer",
+		version: PACKAGE_VERSION,
 		hooks: {
 			before: [
 				{
@@ -39,16 +52,30 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (c) => {
-						const token =
-							c.request?.headers.get("authorization")?.replace("Bearer ", "") ||
-							c.headers?.get("Authorization")?.replace("Bearer ", "");
+						const authHeader =
+							c.request?.headers.get("authorization") ||
+							c.headers?.get("Authorization");
+						if (!authHeader) {
+							return;
+						}
+						if (
+							authHeader.slice(0, BEARER_SCHEME.length).toLowerCase() !==
+							BEARER_SCHEME
+						) {
+							return;
+						}
+						const token = authHeader.slice(BEARER_SCHEME.length).trim();
 						if (!token) {
 							return;
 						}
 
-						let signedToken = "";
+						let signedToken: string;
+						let decodedToken: string;
+
 						if (token.includes(".")) {
-							signedToken = token.replace("=", "");
+							const isEncoded = token.includes("%");
+							signedToken = isEncoded ? token : encodeURIComponent(token);
+							decodedToken = isEncoded ? tryDecode(token) : token;
 						} else {
 							if (options?.requireSignature) {
 								return;
@@ -56,9 +83,9 @@ export const bearer = (options?: BearerOptions | undefined) => {
 							signedToken = (
 								await serializeSignedCookie("", token, c.context.secret)
 							).replace("=", "");
+							decodedToken = tryDecode(signedToken);
 						}
 						try {
-							const decodedToken = decodeURIComponent(signedToken);
 							const isValid = await createHMAC(
 								"SHA-256",
 								"base64urlnopad",

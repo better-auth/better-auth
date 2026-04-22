@@ -232,8 +232,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const shouldReturnGenericDuplicateResponse =
-					ctx.context.options.emailAndPassword.autoSignIn === false ||
 					ctx.context.options.emailAndPassword.requireEmailVerification;
+				const shouldSkipAutoSignIn =
+					ctx.context.options.emailAndPassword.autoSignIn === false ||
+					shouldReturnGenericDuplicateResponse;
 				const additionalUserFields = parseUserInput(
 					ctx.context.options,
 					rest,
@@ -261,18 +263,51 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							);
 						}
 						const now = new Date();
+						const generatedId =
+							ctx.context.generateId({ model: "user" }) || generateId();
+						const coreFields = {
+							name,
+							email: normalizedEmail,
+							emailVerified: false,
+							image: image || null,
+							createdAt: now,
+							updatedAt: now,
+						};
+
+						const customSyntheticUser =
+							ctx.context.options.emailAndPassword?.customSyntheticUser;
+
+						let syntheticUser: Record<string, unknown>;
+						if (customSyntheticUser) {
+							// Extract only user-defined additionalFields (not plugin fields)
+							const additionalFieldKeys = Object.keys(
+								ctx.context.options.user?.additionalFields ?? {},
+							);
+							const additionalFields: Record<string, unknown> = {};
+							for (const key of additionalFieldKeys) {
+								if (key in additionalUserFields) {
+									additionalFields[key] = additionalUserFields[key];
+								}
+							}
+							syntheticUser = customSyntheticUser({
+								coreFields,
+								additionalFields,
+								id: generatedId,
+							});
+						} else {
+							syntheticUser = {
+								...coreFields,
+								...additionalUserFields,
+								id: generatedId,
+							};
+						}
+
 						return ctx.json({
 							token: null,
-							user: parseUserOutput(ctx.context.options, {
-								...additionalUserFields,
-								id: ctx.context.generateId({ model: "user" }) || generateId(),
-								email: normalizedEmail,
-								name,
-								image,
-								emailVerified: false,
-								createdAt: now,
-								updatedAt: now,
-							}) as User<O["user"], O["plugins"]>,
+							user: parseUserOutput(
+								ctx.context.options,
+								syntheticUser as User,
+							) as User<O["user"], O["plugins"]>,
 						});
 					}
 					throw APIError.from(
@@ -358,7 +393,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					}
 				}
 
-				if (shouldReturnGenericDuplicateResponse) {
+				if (shouldSkipAutoSignIn) {
 					return ctx.json({
 						token: null,
 						user: parseUserOutput(ctx.context.options, createdUser) as User<

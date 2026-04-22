@@ -1,7 +1,8 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { RequestEvent } from "@sveltejs/kit";
-import { parseSetCookieHeader } from "../cookies";
+import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import { PACKAGE_VERSION } from "../version";
 
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => Response | Promise<Response>;
@@ -58,6 +59,7 @@ export const sveltekitCookies = (
 ) => {
 	return {
 		id: "sveltekit-cookies",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -76,16 +78,11 @@ export const sveltekitCookies = (
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
 
-							for (const [name, { value, ...ops }] of parsed) {
+							for (const [name, attributes] of parsed) {
 								try {
-									event.cookies.set(name, decodeURIComponent(value), {
-										sameSite: ops.samesite,
-										path: ops.path || "/",
-										expires: ops.expires,
-										secure: ops.secure,
-										httpOnly: ops.httponly,
-										domain: ops.domain,
-										maxAge: ops["max-age"],
+									event.cookies.set(name, attributes.value, {
+										...toCookieOptions(attributes),
+										path: attributes.path || "/",
 									});
 								} catch {
 									// this will avoid any issue related to already streamed response

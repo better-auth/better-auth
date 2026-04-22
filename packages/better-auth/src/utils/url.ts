@@ -1,7 +1,31 @@
 import type { BaseURLConfig, DynamicBaseURLConfig } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { matchesHostPattern } from "../auth/trusted-origins";
+import { wildcardMatch } from "./wildcard";
+
+/**
+ * Minimal loopback check for dev scheme inference only. Reachable from
+ * `client/config.ts` via `getBaseURL`, so we MUST NOT import the full
+ * `@better-auth/core/utils/host` classifier here: its `utils/ip` dependency
+ * on zod would leak into the client bundle (see `e2e/smoke/test/vite.spec.ts`).
+ *
+ * Server-side SSRF/loopback checks (oauth redirect matching, trusted-origin
+ * resolution, electron fetch gate) continue to use the authoritative
+ * `isLoopbackHost` from `@better-auth/core/utils/host`. This helper's only
+ * job is picking `http` vs `https` for dev ergonomics.
+ */
+function isLoopbackForDevScheme(host: string): boolean {
+	const hostname = host
+		.replace(/:\d+$/, "")
+		.replace(/^\[|\]$/g, "")
+		.toLowerCase();
+	return (
+		hostname === "localhost" ||
+		hostname.endsWith(".localhost") ||
+		hostname === "::1" ||
+		hostname.startsWith("127.")
+	);
+}
 
 function checkHasPath(url: string): boolean {
 	try {
@@ -203,61 +227,153 @@ export function isDynamicBaseURLConfig(
 }
 
 /**
- * Extracts the host from the request headers.
- * Tries x-forwarded-host first (for proxy setups), then falls back to host header.
+ * Check if a value is a `Request`
+ * - `instanceof`: works for native Request instances
+ * - `toString`: handles where instanceof check fails but the object is still a
+ *   valid Request (e.g. cross-realm, polyfills). Paired with a shape check so
+ *   an object that only spoofs `Symbol.toStringTag` without the real shape is
+ *   rejected before downstream code tries to read `.headers` / `.url`.
  *
- * @param request The incoming request
- * @returns The host string or null if not found
+ * @param value The value to check
+ * @returns `true` if the value is a Request instance
  */
-export function getHostFromRequest(request: Request): string | null {
-	const forwardedHost = request.headers.get("x-forwarded-host");
-	if (forwardedHost && validateProxyHeader(forwardedHost, "host")) {
-		return forwardedHost;
+export function isRequestLike(value: unknown): value is Request {
+	if (value instanceof Request) return true;
+	if (
+		typeof value !== "object" ||
+		value === null ||
+		Object.prototype.toString.call(value) !== "[object Request]"
+	) {
+		return false;
+	}
+	const v = value as { url?: unknown; headers?: unknown };
+	return (
+		typeof v.url === "string" &&
+		typeof v.headers === "object" &&
+		v.headers !== null &&
+		typeof (v.headers as { get?: unknown }).get === "function"
+	);
+}
+
+/**
+ * Extracts the host from a `Request` or `Headers`.
+ * Honors `x-forwarded-host` only when `trustedProxyHeaders` is enabled,
+ * then falls back to the `host` header and finally the request URL.
+ */
+export function getHostFromSource(
+	source: Request | Headers,
+	trustedProxyHeaders?: boolean,
+): string | null {
+	const headers = isRequestLike(source) ? source.headers : source;
+
+	if (trustedProxyHeaders) {
+		const forwardedHost = headers.get("x-forwarded-host");
+		if (forwardedHost && validateProxyHeader(forwardedHost, "host")) {
+			return forwardedHost;
+		}
 	}
 
-	const host = request.headers.get("host");
+	const host = headers.get("host");
 	if (host && validateProxyHeader(host, "host")) {
 		return host;
 	}
 
-	try {
-		const url = new URL(request.url);
-		return url.host;
-	} catch {
-		return null;
+	if (isRequestLike(source)) {
+		try {
+			const url = new URL(source.url);
+			return url.host;
+		} catch {
+			return null;
+		}
 	}
+
+	return null;
 }
 
 /**
- * Extracts the protocol from the request headers.
- * Tries x-forwarded-proto first (for proxy setups), then infers from request URL.
- *
- * @param request The incoming request
- * @param configProtocol Protocol override from config
- * @returns The protocol ("http" or "https")
+ * Extracts the protocol from a `Request` or `Headers`.
+ * Honors `x-forwarded-proto` only when `trustedProxyHeaders` is enabled,
+ * then falls back to the request URL, then to "https".
  */
-export function getProtocolFromRequest(
-	request: Request,
+export function getProtocolFromSource(
+	source: Request | Headers,
 	configProtocol?: "http" | "https" | "auto" | undefined,
+	trustedProxyHeaders?: boolean,
 ): "http" | "https" {
 	if (configProtocol === "http" || configProtocol === "https") {
 		return configProtocol;
 	}
 
-	const forwardedProto = request.headers.get("x-forwarded-proto");
-	if (forwardedProto && validateProxyHeader(forwardedProto, "proto")) {
-		return forwardedProto as "http" | "https";
+	const headers = isRequestLike(source) ? source.headers : source;
+
+	if (trustedProxyHeaders) {
+		const forwardedProto = headers.get("x-forwarded-proto");
+		if (forwardedProto && validateProxyHeader(forwardedProto, "proto")) {
+			return forwardedProto as "http" | "https";
+		}
 	}
 
-	try {
-		const url = new URL(request.url);
-		if (url.protocol === "http:" || url.protocol === "https:") {
-			return url.protocol.slice(0, -1) as "http" | "https";
-		}
-	} catch {}
+	if (isRequestLike(source)) {
+		try {
+			const url = new URL(source.url);
+			if (url.protocol === "http:" || url.protocol === "https:") {
+				return url.protocol.slice(0, -1) as "http" | "https";
+			}
+		} catch {}
+	}
+
+	// Local dev: prefer `http` for loopback hosts so the headers-only path
+	// doesn't diverge from the HTTP handler's URL-derived scheme.
+	const host = getHostFromSource(source, trustedProxyHeaders);
+	if (host && isLoopbackForDevScheme(host)) {
+		return "http";
+	}
 
 	return "https";
 }
+
+/**
+ * Matches a hostname against a host pattern.
+ * Supports wildcard patterns like `*.vercel.app` or `preview-*.myapp.com`.
+ *
+ * @param host The hostname to test (e.g., "myapp.com", "preview-123.vercel.app")
+ * @param pattern The host pattern (e.g., "myapp.com", "*.vercel.app")
+ * @returns {boolean} true if the host matches the pattern, false otherwise.
+ *
+ * @example
+ * ```ts
+ * matchesHostPattern("myapp.com", "myapp.com") // true
+ * matchesHostPattern("preview-123.vercel.app", "*.vercel.app") // true
+ * matchesHostPattern("preview-123.myapp.com", "preview-*.myapp.com") // true
+ * matchesHostPattern("evil.com", "myapp.com") // false
+ * ```
+ */
+export const matchesHostPattern = (host: string, pattern: string): boolean => {
+	if (!host || !pattern) {
+		return false;
+	}
+
+	// Normalize: remove protocol if accidentally included, lowercase for case-insensitive matching
+	const normalizedHost = host
+		.replace(/^https?:\/\//, "")
+		.split("/")[0]!
+		.toLowerCase();
+	const normalizedPattern = pattern
+		.replace(/^https?:\/\//, "")
+		.split("/")[0]!
+		.toLowerCase();
+
+	// Check if pattern contains wildcard characters
+	const hasWildcard =
+		normalizedPattern.includes("*") || normalizedPattern.includes("?");
+
+	if (hasWildcard) {
+		return wildcardMatch(normalizedPattern)(normalizedHost);
+	}
+
+	// Exact match (case-insensitive for hostnames)
+	return normalizedHost.toLowerCase() === normalizedPattern.toLowerCase();
+};
 
 /**
  * Resolves the base URL from a dynamic config based on the incoming request.
@@ -271,10 +387,11 @@ export function getProtocolFromRequest(
  */
 export function resolveDynamicBaseURL(
 	config: DynamicBaseURLConfig,
-	request: Request,
+	source: Request | Headers,
 	basePath: string,
+	trustedProxyHeaders?: boolean,
 ): string {
-	const host = getHostFromRequest(request);
+	const host = getHostFromSource(source, trustedProxyHeaders);
 
 	if (!host) {
 		if (config.fallback) {
@@ -291,7 +408,11 @@ export function resolveDynamicBaseURL(
 	);
 
 	if (isAllowed) {
-		const protocol = getProtocolFromRequest(request, config.protocol);
+		const protocol = getProtocolFromSource(
+			source,
+			config.protocol,
+			trustedProxyHeaders,
+		);
 		return withPath(`${protocol}://${host}`, basePath);
 	}
 
@@ -320,13 +441,18 @@ export function resolveDynamicBaseURL(
 export function resolveBaseURL(
 	config: BaseURLConfig | undefined,
 	basePath: string,
-	request?: Request,
+	source?: Request | Headers,
 	loadEnv?: boolean,
 	trustedProxyHeaders?: boolean,
 ): string | undefined {
 	if (isDynamicBaseURLConfig(config)) {
-		if (request) {
-			return resolveDynamicBaseURL(config, request, basePath);
+		if (source) {
+			return resolveDynamicBaseURL(
+				config,
+				source,
+				basePath,
+				trustedProxyHeaders,
+			);
 		}
 		if (config.fallback) {
 			return withPath(config.fallback, basePath);
@@ -334,12 +460,14 @@ export function resolveBaseURL(
 		return getBaseURL(
 			undefined,
 			basePath,
-			request,
+			undefined,
 			loadEnv,
 			trustedProxyHeaders,
 		);
 	}
 
+	// Static config path -> getBaseURL needs a full Request for URL parsing.
+	const request = isRequestLike(source) ? source : undefined;
 	if (typeof config === "string") {
 		return getBaseURL(config, basePath, request, loadEnv, trustedProxyHeaders);
 	}

@@ -14,6 +14,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -58,6 +59,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 
 	return {
 		id: "multi-session",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -97,8 +99,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					).filter((v) => typeof v === "string");
 
 					if (!sessionTokens.length) return ctx.json([]);
-					const sessions =
-						await ctx.context.internalAdapter.findSessions(sessionTokens);
+					const sessions = await ctx.context.internalAdapter.findSessions(
+						sessionTokens,
+						{ onlyActiveSessions: true },
+					);
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);

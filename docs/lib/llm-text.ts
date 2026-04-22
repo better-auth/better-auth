@@ -1,5 +1,6 @@
 import type { InferPageType } from "fumadocs-core/source";
-import type { source } from "@/lib/source";
+import type { DocsVersion } from "./docs-versions";
+import type { source } from "./source";
 
 type PropertyDefinition = {
 	name: string;
@@ -183,7 +184,7 @@ function createClientBody(props: PropertyDefinition[]): string {
 
 		let comment = "";
 		if (!prop.required || prop.description) {
-			const comments = [];
+			const comments: string[] = [];
 			if (!prop.required) comments.push("optional");
 			if (prop.description) comments.push(prop.description);
 			comment = ` // ${comments.join(", ")}`;
@@ -219,7 +220,7 @@ function createServerBody(
 		for (const prop of relevantProps) {
 			let comment = "";
 			if (!prop.required || prop.description) {
-				const comments = [];
+				const comments: string[] = [];
 				if (!prop.required) comments.push("optional");
 				if (prop.description) comments.push(prop.description);
 				comment = ` // ${comments.join(", ")}`;
@@ -243,13 +244,21 @@ function createServerBody(
 
 export async function getLLMText(
 	docPage: InferPageType<typeof source>,
+	version?: DocsVersion,
 ): Promise<string> {
-	const mdContent = await docPage.data.getText("processed");
+	const pageData = docPage.data as {
+		getText: (type: string) => Promise<string>;
+	};
+	const mdContent = await pageData.getText("processed");
 
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(mdContent);
 
-	return `# ${docPage!.data.title}
+	const versionNote = version?.slug
+		? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
+		: ""; // no version note for latest stable release
+
+	return `${versionNote}# ${docPage!.data.title}
 
 ${docPage!.data.description || ""}
 
