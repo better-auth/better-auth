@@ -79,6 +79,11 @@ describe("SafeUrlSchema", () => {
 	});
 
 	describe("URL parsing", () => {
+		it("should reject URLs with fragments", () => {
+			const result = SafeUrlSchema.safeParse("https://api.example.com#frag");
+			expect(result.success).toBe(false);
+		});
+
 		it("should reject invalid URLs", () => {
 			const result = SafeUrlSchema.safeParse("not-a-valid-url");
 			expect(result.success).toBe(false);

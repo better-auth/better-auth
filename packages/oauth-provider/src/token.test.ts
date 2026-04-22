@@ -992,6 +992,140 @@ describe("oauth token - refresh_token", async () => {
 		});
 		expect(newTokensRefresh.error?.status).toBeDefined();
 	});
+
+	it("chained narrowing: authorize([a,b]) → refresh(a) → refresh() returns [a,b] (RFC 8707 §2.2)", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const audienceA = validAudience;
+		const scopes = ["openid", "offline_access"];
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+			additionalParams: { resource: audienceA },
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+
+		// Step 1: initial exchange (no resource narrowing – gets refresh token with [audienceA])
+		const initialTokens = await validateAuthCode({
+			code: url.searchParams.get("code")!,
+			codeVerifier,
+		});
+		expect(initialTokens.data?.refresh_token).toBeDefined();
+
+		// Step 2: refresh with resource=audienceA (same as original – no narrowing in this test)
+		const { body: body1, headers: headers1 } = createRefreshAccessTokenRequest({
+			refreshToken: initialTokens.data?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: { scope: scopes.join(" ") },
+			resource: audienceA,
+		});
+		const step2Tokens = await client.$fetch<{
+			access_token?: string;
+			refresh_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: body1,
+			headers: headers1,
+		});
+		expect(step2Tokens.data?.refresh_token).toBeDefined();
+		expect(step2Tokens.data?.access_token).toBeDefined();
+		// Verify the access token aud is audienceA (not narrowed further)
+		const step2AT = await jwtVerify(step2Tokens.data?.access_token!, jwks, {
+			audience: audienceA,
+			issuer: authServerBaseUrl,
+		});
+		expect(step2AT.payload.aud).toContain(audienceA);
+
+		// Step 3: refresh with no resource → should fall back to full original grant [audienceA]
+		const { body: body2, headers: headers2 } = createRefreshAccessTokenRequest({
+			refreshToken: step2Tokens.data?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: { scope: scopes.join(" ") },
+		});
+		const step3Tokens = await client.$fetch<{
+			access_token?: string;
+			refresh_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: body2,
+			headers: headers2,
+		});
+		expect(step3Tokens.data?.access_token).toBeDefined();
+		// With no resource in request the server falls back to the stored grant set
+		const step3AT = await jwtVerify(step3Tokens.data?.access_token!, jwks, {
+			audience: audienceA,
+			issuer: authServerBaseUrl,
+		});
+		expect(step3AT.payload.aud).toContain(audienceA);
+	});
+
+	it("refresh: body resource not in refresh token's resources emits invalid_target", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const audienceA = validAudience;
+		const disjointAudience = "https://other-api.example.com";
+		const scopes = ["openid", "offline_access"];
+
+		// Authorize with audienceA only
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+			additionalParams: { resource: audienceA },
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		const initialTokens = await validateAuthCode({
+			code: url.searchParams.get("code")!,
+			codeVerifier,
+		});
+		expect(initialTokens.data?.refresh_token).toBeDefined();
+
+		// Attempt refresh with a resource not in the original grant
+		const { body, headers } = createRefreshAccessTokenRequest({
+			refreshToken: initialTokens.data?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: { scope: scopes.join(" ") },
+			resource: disjointAudience,
+		});
+		const badTokens = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+		expect(badTokens.error?.status).toBeDefined();
+	});
 });
 
 describe("oauth token - client_credentials", async () => {
@@ -1178,6 +1312,58 @@ describe("oauth token - client_credentials", async () => {
 		expect(accessToken.payload.iat).toBeDefined();
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
+	});
+
+	it("resource produces JWT with correct aud; disallowed resource emits invalid_target", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["read:posts"];
+
+		// Valid resource → JWT access token with correct aud
+		const { body: validBody, headers: validHeaders } =
+			createClientCredentialsTokenRequest({
+				scope: scopes.join(" "),
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+				resource: validAudience,
+			});
+		const validTokens = await client.$fetch<{
+			access_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: validBody,
+			headers: validHeaders,
+		});
+		expect(validTokens.data?.access_token).toBeDefined();
+		const at = await jwtVerify(validTokens.data?.access_token!, jwks, {
+			audience: validAudience,
+			issuer: authServerBaseUrl,
+		});
+		expect(at.payload.aud).toContain(validAudience);
+
+		// Disallowed resource → invalid_target
+		const { body: badBody, headers: badHeaders } =
+			createClientCredentialsTokenRequest({
+				scope: scopes.join(" "),
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+				resource: "https://not-registered.example.com",
+			});
+		const badTokens = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: badBody,
+			headers: badHeaders,
+		});
+		expect(badTokens.error?.status).toBeDefined();
 	});
 });
 
@@ -2746,6 +2932,213 @@ describe("customTokenResponseFields", async () => {
 
 		expect(tokens.data?.access_token).toBeDefined();
 		expect(tokens.data?.server_time).toBe("2024-01-01");
+	});
+});
+
+describe("oauth token - authorization_code resource narrowing (RFC 8707)", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const audienceA = "https://api-a.example.com";
+	const audienceB = "https://api-b.example.com";
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				validAudiences: [audienceA, audienceB],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const state = "rfc8707";
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+	let oauthClient: OAuthClient | null;
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+		expect(response?.client_id).toBeDefined();
+		oauthClient = response;
+
+		const jwksResult = await client.jwks();
+		if (!jwksResult.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	async function authorizeWithResources(
+		resources: string[],
+		scopes = ["openid", "offline_access"],
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		// Append resource params directly since additionalParams uses set() (single-value only)
+		for (const r of resources) {
+			url.searchParams.append("resource", r);
+		}
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code");
+		if (!code) {
+			throw new Error(`No code in callback URL: ${callbackRedirectUrl}`);
+		}
+		return { code, codeVerifier, scopes };
+	}
+
+	async function exchangeCode(
+		code: string,
+		codeVerifier: string,
+		resource?: string | string[],
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			resource,
+		});
+		return client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			expires_at?: number;
+			scope?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+	}
+
+	it("resource is a proper subset: access token aud narrows, refresh token keeps full set", async ({
+		expect,
+	}) => {
+		// Authorize for [audienceA, audienceB]
+		const { code, codeVerifier } = await authorizeWithResources([
+			audienceA,
+			audienceB,
+		]);
+
+		// Token exchange with only audienceA (proper subset)
+		const tokens = await exchangeCode(code, codeVerifier, audienceA);
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		// Access token audience should be narrowed to audienceA only
+		const at = await jwtVerify(tokens.data?.access_token!, jwks, {
+			audience: audienceA,
+			issuer: authServerBaseUrl,
+		});
+		const audClaim = at.payload.aud;
+		const audArray = Array.isArray(audClaim) ? audClaim : [audClaim];
+		expect(audArray).toContain(audienceA);
+		expect(audArray.filter((a) => a === audienceB)).toHaveLength(0);
+
+		// Refresh with no resource: the refresh token should have kept [audienceA, audienceB],
+		// so the new access token should cover both audiences.
+		const { body: refreshBody, headers: refreshHeaders } =
+			createRefreshAccessTokenRequest({
+				refreshToken: tokens.data?.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+		const refreshedTokens = await client.$fetch<{
+			access_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: refreshBody,
+			headers: refreshHeaders,
+		});
+		expect(refreshedTokens.data?.access_token).toBeDefined();
+		// Access token should be a JWT covering the full original grant [audienceA, audienceB]
+		const refreshedAt = await jwtVerify(
+			refreshedTokens.data?.access_token!,
+			jwks,
+			{ audience: audienceA, issuer: authServerBaseUrl },
+		);
+		const refreshedAud = Array.isArray(refreshedAt.payload.aud)
+			? refreshedAt.payload.aud
+			: [refreshedAt.payload.aud];
+		expect(refreshedAud).toContain(audienceA);
+		expect(refreshedAud).toContain(audienceB);
+	});
+
+	it("resource superset of authorized emits invalid_target", async ({
+		expect,
+	}) => {
+		// Authorize for [audienceA] only
+		const { code, codeVerifier } = await authorizeWithResources([audienceA]);
+
+		// Token exchange requesting [audienceA, audienceB] — audienceB was not authorized
+		const tokens = await exchangeCode(code, codeVerifier, [
+			audienceA,
+			audienceB,
+		]);
+		expect(tokens.error?.status).toBeDefined();
+	});
+
+	it("resource disjoint from authorized emits invalid_target", async ({
+		expect,
+	}) => {
+		// Authorize for [audienceA] only
+		const { code, codeVerifier } = await authorizeWithResources([audienceA]);
+
+		// Token exchange with audienceB alone — completely disjoint
+		const tokens = await exchangeCode(code, codeVerifier, audienceB);
+		expect(tokens.error?.status).toBeDefined();
 	});
 });
 

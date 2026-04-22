@@ -6,7 +6,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
@@ -525,6 +525,7 @@ describe("oauth authorize - consented resources", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://api.example.com";
+	const secondValidAudience = "https://api.secondary.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
@@ -534,7 +535,7 @@ describe("oauth authorize - consented resources", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				validAudiences: [validAudience, secondValidAudience],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -631,5 +632,121 @@ describe("oauth authorize - consented resources", async () => {
 
 		expect(consentRedirectUrl).toContain("/consent");
 		expect(consentRedirectUrl).not.toContain(`${redirectUri}?code=`);
+	});
+
+	it("should persist multiple resource values onto OAuthConsent.resources", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClientNeedsConsent?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClientNeedsConsent.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "multiple-resources-persist");
+		authUrl.searchParams.append("resource", validAudience);
+		authUrl.searchParams.append("resource", secondValidAudience);
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(consentRedirectUrl).toContain("/consent");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentResult = await client.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				throw: true,
+			},
+		);
+
+		expect(consentResult.url).toContain(`${redirectUri}?code=`);
+
+		const context = await auth.$context;
+		const savedConsent = await context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [
+				{
+					field: "clientId",
+					value: oauthClientNeedsConsent.client_id,
+				},
+				{
+					field: "userId",
+					value: user.id,
+				},
+			],
+		});
+
+		expect(savedConsent?.resources).toEqual([
+			validAudience,
+			secondValidAudience,
+		]);
+	});
+
+	it("should return consent_required for prompt=none when requested resource is not covered by prior consent", async () => {
+		const dedicatedClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: false,
+			},
+		});
+		if (!dedicatedClient?.client_id) {
+			throw Error("unable to create dedicated client");
+		}
+
+		await auth.api.testerCreateConsent({
+			headers,
+			body: {
+				clientId: dedicatedClient.client_id,
+				userId: user.id,
+				scopes: ["openid"],
+			},
+		});
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", dedicatedClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "prompt-none-resource-consent");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("resource", validAudience);
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("error=consent_required");
+		expect(callbackRedirectUrl).toContain("state=prompt-none-resource-consent");
+		expect(callbackRedirectUrl).toContain(
+			`iss=${encodeURIComponent(authServerBaseUrl)}`,
+		);
+		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
 });

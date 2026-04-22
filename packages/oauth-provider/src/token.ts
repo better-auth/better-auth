@@ -429,6 +429,9 @@ interface CreateUserTokensParams {
 	authTime?: Date;
 	verificationValue?: VerificationValue;
 	resources?: string[];
+	/** Full original authorized resources for the grant, used to seed the refresh token
+	 * when the token request narrows the resource (RFC 8707 §2.2). */
+	originalResources?: string[];
 }
 
 async function createUserTokens(
@@ -499,7 +502,11 @@ async function createUserTokens(
 		: undefined;
 
 	// Refresh token MUST retain the full original set of resources from the previous refresh token per RFC 8707 section 2.2
-	const refreshResources = params?.refreshToken?.resources ?? params?.resources;
+	// For the initial auth-code exchange, params.originalResources carries the full authorized set (before any request narrowing).
+	const refreshResources =
+		params?.refreshToken?.resources ??
+		params?.originalResources ??
+		params?.resources;
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
@@ -700,6 +707,7 @@ async function checkVerificationValue(
 	return {
 		verificationValue,
 		effectiveResources,
+		authorizedResources: storedResources,
 	};
 }
 
@@ -764,7 +772,7 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	/** Get and check Verification Value */
-	const { verificationValue, effectiveResources } =
+	const { verificationValue, effectiveResources, authorizedResources } =
 		await checkVerificationValue(
 			ctx,
 			opts,
@@ -907,6 +915,7 @@ async function handleAuthorizationCodeGrant(
 		authTime,
 		verificationValue,
 		resources: effectiveResources,
+		originalResources: authorizedResources,
 	});
 }
 
