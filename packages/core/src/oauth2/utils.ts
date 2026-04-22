@@ -29,10 +29,12 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 }
 
 /**
- * Pick the first usable Client ID from a provider config. Accepts either the
- * single-string form or the array form (used for cross-platform ID token
- * audience verification), and returns `undefined` when neither yields a
- * non-empty string.
+ * Return the provider's primary Client ID: the single string, or the entry at
+ * array index 0 for the cross-platform form used by ID token audience
+ * verification. Index 0 is the designated primary and pairs with
+ * `clientSecret` for the authorization code flow; later array entries are
+ * only used as additional accepted audiences. Returns `undefined` when the
+ * primary value is missing or an empty string.
  */
 export function getPrimaryClientId(clientId: unknown): string | undefined {
 	const value = Array.isArray(clientId) ? clientId[0] : clientId;

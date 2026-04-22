@@ -85,7 +85,7 @@ export const apple = (options: AppleOptions) => {
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
-					"Client Id and Client Secret is required for Apple. Make sure to provide them in the options.",
+					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}

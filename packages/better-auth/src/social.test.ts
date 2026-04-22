@@ -1126,6 +1126,63 @@ describe("Google Provider — multiple client IDs", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4498
+ */
+describe("Multi-client ID support — other widened providers", () => {
+	const appleConfig = {
+		clientId: ["apple-web", "apple-ios"],
+		clientSecret: "apple-secret",
+	};
+	const facebookConfig = {
+		clientId: ["fb-web", "fb-mobile"],
+		clientSecret: "fb-secret",
+	};
+	const cognitoConfig = {
+		clientId: ["cog-web", "cog-mobile"],
+		clientSecret: "cog-secret",
+		domain: "test.auth.us-east-1.amazoncognito.com",
+		region: "us-east-1",
+		userPoolId: "us-east-1_testpool",
+	};
+
+	it.each([
+		["apple", appleConfig, "apple-web"],
+		["facebook", facebookConfig, "fb-web"],
+		["cognito", cognitoConfig, "cog-web"],
+	] as const)("%s uses the first entry of the clientId array for the auth URL", async (provider, config, firstId) => {
+		const { client } = await getTestInstance(
+			{ socialProviders: { [provider]: config } },
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider,
+			callbackURL: "/callback",
+		});
+
+		expect(res.data?.url).toContain(firstId);
+	});
+
+	it.each([
+		["apple", { ...appleConfig, clientId: [] as string[] }],
+		["facebook", { ...facebookConfig, clientId: [] as string[] }],
+		["cognito", { ...cognitoConfig, clientId: [] as string[] }],
+	] as const)("%s rejects an empty clientId array", async (provider, config) => {
+		const { client } = await getTestInstance(
+			{ socialProviders: { [provider]: config } },
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider,
+			callbackURL: "/callback",
+		});
+
+		expect(res.error?.status).toBe(500);
+	});
+});
+
 describe("Apple Provider", async () => {
 	it("should not use email as fallback for name when name is not provided", async () => {
 		const appleProfile = {
