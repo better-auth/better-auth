@@ -29,7 +29,11 @@ export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
-export { generateCodeChallenge, getOAuth2Tokens } from "./utils";
+export {
+	generateCodeChallenge,
+	getOAuth2Tokens,
+	getPrimaryClientId,
+} from "./utils";
 export {
 	authorizationCodeRequest,
 	createAuthorizationCodeRequest,

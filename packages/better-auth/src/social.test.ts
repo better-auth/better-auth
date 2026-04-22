@@ -1022,6 +1022,195 @@ describe("updateAccountOnSignIn", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4498
+ */
+describe("Google Provider — multiple client IDs", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-google-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const webClientId = "123-web.googleusercontent.com";
+	const iosClientId = "456-ios.googleusercontent.com";
+	const androidClientId = "789-android.googleusercontent.com";
+
+	const signIdToken = (audience: string) =>
+		new SignJWT({
+			email: "mobile-user@example.com",
+			email_verified: true,
+			name: "Mobile User",
+			sub: "google-sub-999",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(audience)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", async () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	it.each([
+		["web", webClientId],
+		["iOS", iosClientId],
+		["Android", androidClientId],
+	])("accepts an id token issued for the %s client", async (_, audience) => {
+		const idToken = await signIdToken(audience);
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as { user: { email: string } };
+		expect(data.user.email).toBe("mobile-user@example.com");
+	});
+
+	it("rejects an id token whose audience is not configured", async () => {
+		const idToken = await signIdToken("999-unknown.googleusercontent.com");
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("uses the first configured client id when building the authorization URL", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(signInRes.data?.url).toContain(encodeURIComponent(webClientId));
+		expect(signInRes.data?.url).not.toContain(encodeURIComponent(iosClientId));
+	});
+
+	it("rejects an empty clientId array at sign-in time", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(res.error?.status).toBe(500);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4498
+ */
+describe("Multi-client ID support — other widened providers", () => {
+	const appleConfig = {
+		clientId: ["apple-web", "apple-ios"],
+		clientSecret: "apple-secret",
+	};
+	const facebookConfig = {
+		clientId: ["fb-web", "fb-mobile"],
+		clientSecret: "fb-secret",
+	};
+	const cognitoConfig = {
+		clientId: ["cog-web", "cog-mobile"],
+		clientSecret: "cog-secret",
+		domain: "test.auth.us-east-1.amazoncognito.com",
+		region: "us-east-1",
+		userPoolId: "us-east-1_testpool",
+	};
+
+	it.each([
+		["apple", appleConfig, "apple-web"],
+		["facebook", facebookConfig, "fb-web"],
+		["cognito", cognitoConfig, "cog-web"],
+	] as const)("%s uses the first entry of the clientId array for the auth URL", async (provider, config, firstId) => {
+		const { client } = await getTestInstance(
+			{ socialProviders: { [provider]: config } },
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider,
+			callbackURL: "/callback",
+		});
+
+		expect(res.data?.url).toContain(firstId);
+	});
+
+	it.each([
+		["apple", { ...appleConfig, clientId: [] as string[] }],
+		["facebook", { ...facebookConfig, clientId: [] as string[] }],
+		["cognito", { ...cognitoConfig, clientId: [] as string[] }],
+	] as const)("%s rejects an empty clientId array", async (provider, config) => {
+		const { client } = await getTestInstance(
+			{ socialProviders: { [provider]: config } },
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider,
+			callbackURL: "/callback",
+		});
+
+		expect(res.error?.status).toBe(500);
+	});
+});
+
 describe("Apple Provider", async () => {
 	it("should not use email as fallback for name when name is not provided", async () => {
 		const appleProfile = {
@@ -2042,6 +2231,27 @@ describe("Microsoft Provider", async () => {
 			idToken: { token: wrongIssuerToken },
 		});
 		expect(invalidRes.error?.status).toBe(401);
+	});
+
+	it("builds an authorization URL without clientSecret (public client)", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "public-ms-client",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+		});
+
+		expect(res.data?.url).toContain("public-ms-client");
+		expect(res.data?.redirect).toBe(true);
 	});
 });
 

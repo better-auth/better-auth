@@ -5,6 +5,7 @@ import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -37,7 +38,7 @@ export interface GoogleProfile {
 }
 
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -65,7 +66,7 @@ export const google = (options: GoogleOptions) => {
 			display,
 			additionalParams,
 		}) {
-			if (!options.clientId || !options.clientSecret) {
+			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
 				);
