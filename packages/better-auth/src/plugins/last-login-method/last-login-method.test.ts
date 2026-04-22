@@ -753,7 +753,6 @@ describe("lastLoginMethod", async () => {
 		if (originalDescriptor) {
 			Object.defineProperty(globalThis, "document", originalDescriptor);
 		} else {
-			// @ts-expect-error - cleanup
 			globalThis.document = undefined as any;
 		}
 
