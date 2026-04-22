@@ -6,39 +6,7 @@
     "noEmit": true,
     "customConditions": [],
     "lib": ["esnext", "dom", "dom.iterable"],
-    "types": ["node", "bun"],
-    "paths": {
-      "better-auth": ["../../packages/better-auth/src/index.ts"],
-      "better-auth/db/migration": [
-        "../../packages/better-auth/src/db/get-migration.ts"
-      ],
-      "@better-auth/core": ["../../packages/core/src/index.ts"],
-      "@better-auth/core/*": [
-        "../../packages/core/src/*",
-        "../../packages/core/src/*/index.ts"
-      ],
-      "@better-auth/drizzle-adapter": [
-        "../../packages/drizzle-adapter/src/index.ts"
-      ],
-      "@better-auth/kysely-adapter": [
-        "../../packages/kysely-adapter/src/index.ts"
-      ],
-      "@better-auth/kysely-adapter/*": [
-        "../../packages/kysely-adapter/src/*.ts"
-      ],
-      "@better-auth/memory-adapter": [
-        "../../packages/memory-adapter/src/index.ts"
-      ],
-      "@better-auth/mongo-adapter": [
-        "../../packages/mongo-adapter/src/index.ts"
-      ],
-      "@better-auth/prisma-adapter": [
-        "../../packages/prisma-adapter/src/index.ts"
-      ],
-      "@better-auth/test-utils/adapter": [
-        "../../packages/test-utils/src/adapter/index.ts"
-      ]
-    }
+    "types": ["node", "bun"]
   },
   "references": [
     {
