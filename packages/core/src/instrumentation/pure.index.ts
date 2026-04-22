@@ -1,30 +1,16 @@
-import type { OpenTelemetryAPI } from "./noop";
-import { noopOpenTelemetryAPI } from "./noop";
-
 /**
  * Noop variant of `./instrumentation` for runtimes where the dynamic
- * `import("@opentelemetry/api")` in `./api` can't resolve via the normal
- * ECMAScript dynamic-import semantics.
+ * `import("@opentelemetry/api")` in `./api` throws synchronously instead of
+ * rejecting its returned promise. Convex's V8 isolate is the reproducer: bare
+ * specifiers are rejected at resolve time in `get-convex/convex-backend`
+ * `crates/isolate/src/request_scope.rs`, so the `.catch()` in
+ * `getOpenTelemetryAPI` never runs and every `withSpan` call surfaces an
+ * uncaught error.
  *
- * Convex's V8 isolate rejects bare specifiers at resolve time and throws
- * synchronously from the `import()` expression itself rather than rejecting
- * the returned promise (see `get-convex/convex-backend`
- * `crates/isolate/src/request_scope.rs` `dynamic_import_callback`, which
- * returns `None` on resolver error; V8 treats that as a pending exception).
- * The `.catch()` in `getOpenTelemetryAPI` never runs and every `withSpan`
- * call surfaces an uncaught error.
- *
- * This module is wired through `package.json` conditional exports on the
- * `./instrumentation` subpath, matching the existing `./async_hooks` pattern.
- * The noop primitives live in `./noop` and are shared with `./api` so the
- * two entries can't drift.
+ * Public surface must stay identical to `./index` (enforced by `pure.test.ts`).
  */
 
 export * from "./attributes";
-
-export function getOpenTelemetryAPI(): OpenTelemetryAPI {
-	return noopOpenTelemetryAPI;
-}
 
 export function withSpan<T>(
 	name: string,
