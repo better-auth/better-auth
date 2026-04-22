@@ -231,12 +231,18 @@ function processZodType(zodType: z.ZodType<any>): any {
 		const additionalProperties =
 			valueType instanceof z.ZodType
 				? processZodType(valueType as z.ZodType<any>)
-				: { type: "string" };
+				: {};
 		return {
 			type: "object",
 			additionalProperties,
 			description: (zodType as any).description,
 		};
+	}
+
+	// unconstrained value types: emit an empty schema so consumers don't
+	// infer a narrower shape than the runtime accepts
+	if (zodType instanceof z.ZodAny || zodType instanceof z.ZodUnknown) {
+		return { description: (zodType as any).description };
 	}
 
 	// object unwrapping

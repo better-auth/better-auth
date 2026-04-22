@@ -957,30 +957,39 @@ export const signInSSO = (options?: SSOOptions) => {
 										email: {
 											type: "string",
 											description:
-												"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+												"The email address to sign in with. Used to identify the issuer; optional if providerId is provided.",
 										},
-										issuer: {
+										organizationSlug: {
 											type: "string",
 											description:
-												"The issuer identifier, this is the URL of the provider and can be used to verify the provider and identify the provider during login. It's optional if the email is provided",
+												"The slug of the organization to sign in with.",
 										},
 										providerId: {
 											type: "string",
 											description:
-												"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+												"The ID of the provider to sign in with. Can be provided instead of email.",
+										},
+										domain: {
+											type: "string",
+											description: "The domain of the provider.",
 										},
 										callbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description: "The URL to redirect to after login.",
 										},
 										errorCallbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description: "The URL to redirect to on error.",
 										},
 										newUserCallbackURL: {
 											type: "string",
 											description:
-												"The URL to redirect to after login if the user is new",
+												"The URL to redirect to after login if the user is new.",
+										},
+										scopes: {
+											type: "array",
+											items: { type: "string" },
+											description: "Scopes to request from the provider.",
 										},
 										loginHint: {
 											type: "string",
@@ -992,6 +1001,16 @@ export const signInSSO = (options?: SSOOptions) => {
 											additionalProperties: { type: "string" },
 											description:
 												"Extra query parameters to append to the provider authorization URL. RFC 6749 reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope) are rejected.",
+										},
+										requestSignUp: {
+											type: "boolean",
+											description:
+												"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
+										},
+										providerType: {
+											type: "string",
+											enum: ["oidc", "saml"],
+											description: "The provider protocol to sign in with.",
 										},
 									},
 									required: ["callbackURL"],
