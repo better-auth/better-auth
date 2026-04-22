@@ -116,7 +116,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 
 export interface MicrosoftOptions
 	extends ProviderOptions<MicrosoftEntraIDProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
@@ -190,7 +190,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				const publicKey = await getMicrosoftPublicKey(kid, tenant, authority);
 				const verifyOptions: {
 					algorithms: [string];
-					audience: string;
+					audience: string | string[];
 					maxTokenAge: string;
 					issuer?: string;
 				} = {

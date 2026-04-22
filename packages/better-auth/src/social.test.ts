@@ -994,6 +994,117 @@ describe("updateAccountOnSignIn", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4498
+ */
+describe("Google Provider — multiple client IDs", async () => {
+	const googleKeyPair = await generateKeyPair("RS256");
+	const googleJwk = await exportJWK(googleKeyPair.publicKey);
+	const googleKid = "test-google-kid";
+	googleJwk.kid = googleKid;
+	googleJwk.alg = "RS256";
+	googleJwk.use = "sig";
+
+	const webClientId = "123-web.googleusercontent.com";
+	const iosClientId = "456-ios.googleusercontent.com";
+	const androidClientId = "789-android.googleusercontent.com";
+
+	const signIdToken = (audience: string) =>
+		new SignJWT({
+			email: "mobile-user@example.com",
+			email_verified: true,
+			name: "Mobile User",
+			sub: "google-sub-999",
+		})
+			.setProtectedHeader({ alg: "RS256", kid: googleKid })
+			.setIssuedAt()
+			.setIssuer("https://accounts.google.com")
+			.setAudience(audience)
+			.setExpirationTime("1h")
+			.sign(googleKeyPair.privateKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://www.googleapis.com/oauth2/v3/certs", async () =>
+				HttpResponse.json({ keys: [googleJwk] }),
+			),
+		);
+	});
+
+	it.each([
+		["web", webClientId],
+		["iOS", iosClientId],
+		["Android", androidClientId],
+	])("accepts an id token issued for the %s client", async (_, audience) => {
+		const idToken = await signIdToken(audience);
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as { user: { email: string } };
+		expect(data.user.email).toBe("mobile-user@example.com");
+	});
+
+	it("rejects an id token whose audience is not configured", async () => {
+		const idToken = await signIdToken("999-unknown.googleusercontent.com");
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("uses the first configured client id when building the authorization URL", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(signInRes.data?.url).toContain(encodeURIComponent(webClientId));
+		expect(signInRes.data?.url).not.toContain(encodeURIComponent(iosClientId));
+	});
+});
+
 describe("Apple Provider", async () => {
 	it("should not use email as fallback for name when name is not provided", async () => {
 		const appleProfile = {
