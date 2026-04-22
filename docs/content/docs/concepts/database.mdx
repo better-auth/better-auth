@@ -713,6 +713,16 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout type="warn">
+  **MySQL users**: Setting `generateId` to `false` on MySQL requires extra care. If your database generates non-sequential IDs (such as UUIDv4, CUID2, or any non-monotonic scheme via Drizzle's `$defaultFn()`), the adapter may not be able to safely retrieve the newly inserted row.
+
+  **With the Drizzle adapter**, this is handled automatically if your version of `drizzle-orm` is **0.32.0 or later** (which supports `$returningId()`). If `$returningId()` is not available, the adapter will throw an error.
+
+  **With the Kysely adapter**, this only works with **auto-increment integer primary keys**. Non-auto-increment PKs will cause an error.
+
+  To avoid issues on MySQL, we recommend using **Option 2** or **Option 3** below to provide a custom ID generation function instead of setting `generateId` to `false`.
+</Callout>
+
 #### Option 2: Custom ID Generation Function
 
 Use a function to generate IDs. You can return `false` or `undefined` from the function to let the database generate the ID for specific models:
@@ -838,6 +848,10 @@ This configuration allows you to:
 
 <Callout type="info">
   **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
+</Callout>
+
+<Callout type="warn">
+  **MySQL users**: When returning `false` from `generateId` for specific models, ensure those models use **auto-increment integer primary keys** in your MySQL schema. Returning `false` for models with non-sequential ID generation (UUIDv4, CUID2, etc.) on MySQL can cause the adapter to return the wrong row after insert. See the [MySQL adapter docs](/docs/adapters/mysql#id-generation-on-mysql) for details.
 </Callout>
 
 ### Database Hooks

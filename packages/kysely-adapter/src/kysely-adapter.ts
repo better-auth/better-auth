@@ -8,6 +8,7 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
@@ -110,9 +111,6 @@ export const kyselyAdapter = (
 			) => {
 				let res: any;
 				if (config?.type === "mysql") {
-					// This isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id.
-					// Change this if there is a better way.
-					await builder.execute();
 					const field = values.id
 						? "id"
 						: where.length > 0 && where[0]?.field
@@ -120,21 +118,38 @@ export const kyselyAdapter = (
 							: "id";
 
 					if (!values.id && where.length === 0) {
-						res = await db
-							.selectFrom(model)
-							.selectAll()
-							.orderBy(getFieldName({ model, field }), "desc")
-							.limit(1)
-							.executeTakeFirst();
-						return res;
+						const insertResult: any = await builder.executeTakeFirst();
+						const insertId = insertResult?.insertId;
+						if (insertId != null && insertId !== 0n && insertId !== 0) {
+							res = await db
+								.selectFrom(model)
+								.selectAll()
+								.where(
+									getFieldName({ model, field }),
+									"=",
+									typeof insertId === "bigint" ? insertId.toString() : insertId,
+								)
+								.limit(1)
+								.executeTakeFirst();
+							return res;
+						}
+						throw new BetterAuthError(
+							`[# Kysely Adapter]: Cannot safely retrieve the inserted row for model "${model}" on MySQL. ` +
+								`When using MySQL with "advanced.database.generateId" set to false, ` +
+								`the adapter cannot determine the ID of the newly inserted row. ` +
+								`To fix this, either: ` +
+								`(1) set "advanced.database.generateId" to a custom ID generation function in your Better Auth config, or ` +
+								`(2) use auto-increment integer primary keys. ` +
+								`See: https://www.better-auth.com/docs/concepts/database#generate-id`,
+						);
 					}
 
+					await builder.execute();
 					const value =
 						values[field] !== undefined ? values[field] : where[0]?.value;
 					res = await db
 						.selectFrom(model)
 						.selectAll()
-						.orderBy(getFieldName({ model, field }), "desc")
 						.where(
 							getFieldName({ model, field }),
 							value === null ? "is" : "=",
