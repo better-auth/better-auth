@@ -1,5 +1,32 @@
 # @better-auth/core
 
+## 1.6.7
+
+### Patch Changes
+
+- [#9211](https://github.com/better-auth/better-auth/pull/9211) [`307196a`](https://github.com/better-auth/better-auth/commit/307196a405e067f4a863de2ed68528e8d4bdc162) Thanks [@stewartjarod](https://github.com/stewartjarod)! - Preserve `Set-Cookie` headers accumulated on `ctx.responseHeaders` when an endpoint throws `APIError`. Cookie side-effects from `deleteSessionCookie` (and any `ctx.setCookie` / `ctx.setHeader` calls before the throw) are no longer silently discarded on the error path.
+
+- [#9281](https://github.com/better-auth/better-auth/pull/9281) [`4a180f0`](https://github.com/better-auth/better-auth/commit/4a180f0b0c084c59e7b006058d3fdbd8542face5) Thanks [@ramonclaudio](https://github.com/ramonclaudio)! - fix(core): serve noop `./instrumentation` on `browser`/`edge` conditions, matching `./async_hooks`
+
+- [#9292](https://github.com/better-auth/better-auth/pull/9292) [`4f373ee`](https://github.com/better-auth/better-auth/commit/4f373eed8a42e02460dbd2ee9973b9493cea04eb) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Accept an array of Client IDs on providers that verify ID tokens by audience (Google, Apple, Microsoft Entra, Facebook, Cognito). The first entry is used for the authorization code flow; all entries are accepted when verifying an ID token's `aud` claim, so a single backend can serve Web, iOS, and Android clients with their platform-specific Client IDs.
+
+  ```ts
+  socialProviders: {
+    google: {
+      clientId: [
+        process.env.GOOGLE_WEB_CLIENT_ID!,
+        process.env.GOOGLE_IOS_CLIENT_ID!,
+        process.env.GOOGLE_ANDROID_CLIENT_ID!,
+      ],
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+  }
+  ```
+
+  Passing a single string keeps working; no migration needed.
+
+  Also exports `getPrimaryClientId` from `@better-auth/core/oauth2` for provider authors: it returns the primary Client ID (the raw string, or the entry at array index 0), paired with `clientSecret` for the authorization code flow. Providers now reject empty arrays, empty strings, and missing config at sign-in time instead of silently producing a malformed authorization URL. Google, Apple, and Facebook require both `clientId` and `clientSecret` because each of those providers mandates a client secret for their server-side code exchange. Microsoft Entra and Cognito only require `clientId`, since both support public-client flows with PKCE alone (no secret).
+
 ## 1.6.6
 
 ### Patch Changes
