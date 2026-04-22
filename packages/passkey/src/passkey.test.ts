@@ -17,6 +17,7 @@ import { passkeyClient } from "./client";
 
 const serverMocks = vi.hoisted(() => ({
 	verifyRegistrationResponse: vi.fn(),
+	verifyAuthenticationResponse: vi.fn(),
 }));
 
 vi.mock("@simplewebauthn/server", async () => {
@@ -26,6 +27,7 @@ vi.mock("@simplewebauthn/server", async () => {
 	return {
 		...actual,
 		verifyRegistrationResponse: serverMocks.verifyRegistrationResponse,
+		verifyAuthenticationResponse: serverMocks.verifyAuthenticationResponse,
 	};
 });
 
@@ -58,6 +60,7 @@ describe("passkey", async () => {
 
 	afterEach(() => {
 		serverMocks.verifyRegistrationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockReset();
 	});
 
 	it("should generate register options", async () => {
@@ -504,6 +507,83 @@ describe("passkey", async () => {
 			where: [{ field: "id", value: passkey.id }],
 		});
 		expect(unchanged?.name).toBe("original-name");
+	});
+
+	it("should verify passkey authentication and return user", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers: headers,
+				customFetchImpl,
+			},
+		});
+
+		let passkeyCookie = "";
+		await client.passkey.generateAuthenticateOptions({
+			fetchOptions: {
+				onResponse(context) {
+					const setCookie = context.response.headers.get("Set-Cookie");
+					if (setCookie) {
+						passkeyCookie = setCookie.split(";")[0] ?? "";
+					}
+				},
+			},
+		});
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+
+		const existingCookie = headers.get("cookie") ?? "";
+		headers.set(
+			"cookie",
+			existingCookie ? `${existingCookie}; ${passkeyCookie}` : passkeyCookie,
+		);
+		headers.set("origin", "http://localhost:3000");
+
+		const response = await auth.api.verifyPasskeyAuthentication({
+			headers,
+			body: {
+				response: {
+					id: "mockCredentialID",
+					rawId: "mockRawId",
+					response: {
+						clientDataJSON: "mockClientDataJSON",
+						authenticatorData: "mockAuthenticatorData",
+						signature: "mockSignature",
+						userHandle: "mockUserHandle",
+					},
+					type: "public-key",
+					clientExtensionResults: {},
+				},
+			},
+		});
+
+		expect(response.session).toBeDefined();
+		expect(response.user).toBeDefined();
+		expect(response.user.id).toBe(user.id);
+		expect(response.user.email).toBe(user.email);
 	});
 });
 
