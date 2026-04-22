@@ -5,6 +5,7 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
+import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -22,24 +23,17 @@ import {
 } from "./utils";
 
 /**
- * OIDC Error Codes
- * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthError
- */
-type OIDCAuthError =
-	| "login_required"
-	| "consent_required"
-	| "interaction_required"
-	| "account_selection_required";
-
-/**
- * Formats an error url
+ * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
+ * implicit and hybrid flows are delivered in the URL fragment, not the query.
+ * Callers on the code flow (default) omit `mode` and get query delivery.
  */
 export function formatErrorURL(
 	url: string,
-	error: string,
+	error: OAuthErrorCode,
 	description: string,
 	state?: string,
 	iss?: string,
+	mode: "query" | "fragment" = "query",
 ) {
 	const searchParams = new URLSearchParams({
 		error,
@@ -47,7 +41,34 @@ export function formatErrorURL(
 	});
 	state && searchParams.append("state", state);
 	iss && searchParams.append("iss", iss);
+	if (mode === "fragment") {
+		return `${url}#${searchParams.toString()}`;
+	}
 	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
+}
+
+/**
+ * Selects the response mode for an error redirect to the RP. OIDC Core 1.0 §5
+ * defines defaults based on response_type: `code` → query, types containing
+ * `token` / `id_token` → fragment. An explicit `response_mode` overrides.
+ *
+ * When `response_type` is duplicated (array) or absent, we can't trust the
+ * caller's intent, so we default to query — the safer channel for
+ * unrecognized shapes.
+ */
+function deriveResponseMode(
+	raw: Record<string, unknown>,
+): "query" | "fragment" {
+	const responseMode =
+		typeof raw.response_mode === "string" ? raw.response_mode : undefined;
+	if (responseMode === "fragment") return "fragment";
+	if (responseMode === "query") return "query";
+	const responseType =
+		typeof raw.response_type === "string" ? raw.response_type : undefined;
+	if (responseType && /\b(token|id_token)\b/.test(responseType)) {
+		return "fragment";
+	}
+	return "query";
 }
 
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
@@ -67,7 +88,7 @@ function redirectWithPromptNoneError(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	query: OAuthAuthorizationQuery,
-	error: OIDCAuthError,
+	error: OAuthErrorCode,
 	description: string,
 ) {
 	return handleRedirect(
@@ -139,13 +160,122 @@ export function getIssuer(
  */
 function getErrorURL(
 	ctx: GenericEndpointContext,
-	error: string,
+	error: OAuthErrorCode,
 	description: string,
 ) {
 	const baseURL =
 		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
 	const formattedURL = formatErrorURL(baseURL, error, description);
 	return formattedURL;
+}
+
+/**
+ * Finds the matching entry in a client's registered redirect_uris for a
+ * requested redirect_uri. Honors RFC 8252 §7.3 loopback port variance for
+ * 127.0.0.1 and [::1], matching on scheme+host+path+query and ignoring
+ * port. DNS names like "localhost" are excluded per §8.3.
+ */
+function findRegisteredRedirectUri(
+	registered: readonly string[] | undefined,
+	requested: string | undefined,
+): string | undefined {
+	if (!registered || !requested) return undefined;
+
+	let req: URL | undefined;
+	try {
+		req = new URL(requested);
+	} catch {
+		// malformed requested — only exact-match branch can succeed below
+	}
+
+	// TODO(sync-from-main-9226): swap for isLoopbackIP(req.hostname) once the
+	// helper lands here, to cover the full 127.0.0.0/8 range per RFC 8252 §7.3.
+	const loopbackReq =
+		req?.hostname === "127.0.0.1" || req?.hostname === "[::1]"
+			? req
+			: undefined;
+
+	return registered.find((url) => {
+		if (url === requested) return true;
+		if (!loopbackReq) return false;
+		try {
+			const reg = new URL(url);
+			return (
+				reg.hostname === loopbackReq.hostname &&
+				reg.pathname === loopbackReq.pathname &&
+				reg.protocol === loopbackReq.protocol &&
+				reg.search === loopbackReq.search
+			);
+		} catch {
+			return false;
+		}
+	});
+}
+
+/**
+ * Loads the client, verifies it's enabled, and returns the requested
+ * redirect_uri when it matches a registered entry. Returns null whenever the
+ * RP cannot be safely reached, so callers can fall back to the server error
+ * page (avoiding open-redirect risk on validation failures).
+ */
+async function resolveTrustedRedirectUri(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	clientId: string | undefined,
+	redirectUri: string | undefined,
+): Promise<string | null> {
+	if (!clientId || !redirectUri) return null;
+	let client: Awaited<ReturnType<typeof getClient>> | undefined;
+	try {
+		client = await getClient(ctx, opts, clientId);
+	} catch {
+		return null;
+	}
+	if (!client || client.disabled) return null;
+	const matched = findRegisteredRedirectUri(client.redirectUris, redirectUri);
+	return matched ? redirectUri : null;
+}
+
+/**
+ * `redirectOnError` callback for `/oauth2/authorize`. Per RFC 6749 §4.1.2.1,
+ * authorize errors MUST be delivered to the client's `redirect_uri` with
+ * `error`, `error_description`, `state`, and (RFC 9207) `iss`. The clause
+ * carves out one case: a missing/invalid `redirect_uri` or `client_id` MUST
+ * NOT redirect to the requested URI. We implement the carve-out via
+ * `resolveTrustedRedirectUri`, falling back to the server error page.
+ *
+ * Channel (query vs fragment) follows OIDC Core §5 via `deriveResponseMode`.
+ */
+export function authorizeRedirectOnError(
+	opts: OAuthOptions<Scope[]>,
+): OAuthRedirectOnError<GenericEndpointContext> {
+	return async ({ error, error_description, ctx }) => {
+		const raw = (ctx.query ?? {}) as Record<string, unknown>;
+		const clientId =
+			typeof raw.client_id === "string" ? raw.client_id : undefined;
+		const redirectUriRaw =
+			typeof raw.redirect_uri === "string" ? raw.redirect_uri : undefined;
+		const trusted = await resolveTrustedRedirectUri(
+			ctx,
+			opts,
+			clientId,
+			redirectUriRaw,
+		);
+		if (trusted) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					trusted,
+					error,
+					error_description,
+					typeof raw.state === "string" ? raw.state : undefined,
+					getIssuer(ctx, opts),
+					deriveResponseMode(raw),
+				),
+			);
+		}
+		return handleRedirect(ctx, getErrorURL(ctx, error, error_description));
+	};
 }
 
 export async function authorizeEndpoint(
@@ -260,24 +390,10 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectUri = client.redirectUris?.find((url) => {
-		if (url === query.redirect_uri) return true;
-		try {
-			const registered = new URL(url);
-			const requested = new URL(query.redirect_uri);
-			// RFC 8252 §7.3: loopback IPs match on scheme+host+path+query, ignoring port
-			if (
-				(registered.hostname === "127.0.0.1" ||
-					registered.hostname === "[::1]") &&
-				registered.hostname === requested.hostname &&
-				registered.pathname === requested.pathname &&
-				registered.protocol === requested.protocol &&
-				registered.search === requested.search
-			)
-				return true;
-		} catch {}
-		return false;
-	});
+	const redirectUri = findRegisteredRedirectUri(
+		client.redirectUris,
+		query.redirect_uri,
+	);
 	if (!redirectUri || !query.redirect_uri) {
 		return handleRedirect(
 			ctx,
