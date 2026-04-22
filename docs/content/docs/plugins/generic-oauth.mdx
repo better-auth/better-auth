@@ -430,6 +430,37 @@ getUserInfo: async (tokens) => {
 }
 ```
 
+### IDP-Initiated Flows
+
+Some OAuth providers (e.g., [Clever](https://dev.clever.com/docs/oauth-implementation#initiating-logins)) let the identity provider redirect users to your callback URL without first having the user click a "sign in" button in your app. These callbacks arrive with a `code` parameter but no `state`, which would normally be rejected because the missing `state` breaks the standard CSRF check.
+
+Set `allowIdpInitiated: true` on the provider to accept these flows safely:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        genericOAuth({
+            config: [
+                {
+                    providerId: "clever",
+                    discoveryUrl: "https://clever.com/.well-known/openid-configuration",
+                    clientId: process.env.CLEVER_CLIENT_ID,
+                    clientSecret: process.env.CLEVER_CLIENT_SECRET,
+                    allowIdpInitiated: true,
+                },
+            ],
+        }),
+    ],
+});
+```
+
+When a stateless callback hits `/callback/:providerId`, Better Auth discards the provider-issued code and restarts the flow server-side: a fresh `state` and PKCE verifier are generated, and the user is redirected to the provider's authorize endpoint. The provider recognises the user's live session and completes the flow automatically. CSRF protection and PKCE are preserved throughout.
+
+Leave `allowIdpInitiated` off (the default) for any provider that always initiates the flow from your side — stateless callbacks to those providers indicate malformed or malicious requests and should be rejected.
+
 ### Error Handling
 
 The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.

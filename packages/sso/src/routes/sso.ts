@@ -1305,7 +1305,7 @@ export const signInSSO = (options?: SSOOptions) => {
 
 const callbackSSOQuerySchema = z.object({
 	code: z.string().optional(),
-	state: z.string(),
+	state: z.string().optional(),
 	error: z.string().optional(),
 	error_description: z.string().optional(),
 });
@@ -1342,43 +1342,7 @@ async function handleOIDCCallback(
 			}?error=${error}&error_description=${error_description}`,
 		);
 	}
-	let provider: SSOProvider<SSOOptions> | null = null;
-	if (options?.defaultSSO?.length) {
-		const matchingDefault = options.defaultSSO.find(
-			(defaultProvider) => defaultProvider.providerId === providerId,
-		);
-		if (matchingDefault) {
-			provider = {
-				...matchingDefault,
-				issuer: matchingDefault.oidcConfig?.issuer || "",
-				userId: "default",
-				...(options.domainVerification?.enabled
-					? { domainVerified: true }
-					: {}),
-			} as SSOProvider<SSOOptions>;
-		}
-	}
-	if (!provider) {
-		provider = await ctx.context.adapter
-			.findOne({
-				model: "ssoProvider",
-				where: [
-					{
-						field: "providerId",
-						value: providerId,
-					},
-				],
-			})
-			.then((res: { oidcConfig: string } | null) => {
-				if (!res) {
-					return null;
-				}
-				return {
-					...res,
-					oidcConfig: safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
-				} as SSOProvider<SSOOptions>;
-			});
-	}
+	const provider = await resolveOIDCProvider(ctx, options, providerId);
 	if (!provider) {
 		throw ctx.redirect(
 			`${
@@ -1738,12 +1702,95 @@ const callbackSSOEndpointConfig = {
 	},
 };
 
+/**
+ * Resolves an SSO provider by `providerId`, first checking `options.defaultSSO`
+ * and falling back to the `ssoProvider` table. Returns `null` when no match is
+ * found so the caller can decide how to react (redirect, silently skip, etc.).
+ */
+async function resolveOIDCProvider(
+	ctx: any,
+	options: SSOOptions | undefined,
+	providerId: string,
+): Promise<SSOProvider<SSOOptions> | null> {
+	const matchingDefault = options?.defaultSSO?.find(
+		(defaultProvider) => defaultProvider.providerId === providerId,
+	);
+	if (matchingDefault) {
+		return {
+			...matchingDefault,
+			issuer: matchingDefault.oidcConfig?.issuer || "",
+			userId: "default",
+			...(options?.domainVerification?.enabled ? { domainVerified: true } : {}),
+		} as SSOProvider<SSOOptions>;
+	}
+	return ctx.context.adapter
+		.findOne({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: providerId }],
+		})
+		.then((res: { oidcConfig: string } | null) => {
+			if (!res) return null;
+			return {
+				...res,
+				oidcConfig: safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
+			} as SSOProvider<SSOOptions>;
+		});
+}
+
+/**
+ * Restarts the OAuth flow server-side when a stateless callback arrives for
+ * an OIDC provider that opted into IDP-initiated flows. Silently returns
+ * otherwise, letting the normal handler produce its error redirect.
+ */
+async function bounceIfIdpInitiated(
+	ctx: any,
+	options: SSOOptions | undefined,
+	providerId: string,
+) {
+	const provider = await resolveOIDCProvider(ctx, options, providerId);
+	if (!provider?.oidcConfig?.allowIdpInitiated) return;
+
+	let config = provider.oidcConfig;
+	try {
+		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
+			ctx.context.isTrustedOrigin(url),
+		);
+	} catch {
+		return;
+	}
+	if (!config.authorizationEndpoint) return;
+
+	const state = await generateState(ctx, undefined, false);
+	const redirectURI = getOIDCRedirectURI(
+		ctx.context.baseURL,
+		provider.providerId,
+		options,
+	);
+	const authorizationURL = await createAuthorizationURL({
+		id: provider.issuer,
+		options: {
+			clientId: config.clientId,
+			clientSecret: config.clientSecret,
+		},
+		redirectURI,
+		state: state.state,
+		codeVerifier: config.pkce ? state.codeVerifier : undefined,
+		scopes: config.scopes || ["openid", "email", "profile", "offline_access"],
+		authorizationEndpoint: config.authorizationEndpoint,
+	});
+	throw ctx.redirect(authorizationURL.toString());
+}
+
 export const callbackSSO = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback/:providerId",
 		callbackSSOEndpointConfig,
 		async (ctx) => {
-			return handleOIDCCallback(ctx, options, ctx.params.providerId);
+			const providerId = ctx.params.providerId;
+			if (!ctx.query.state) {
+				await bounceIfIdpInitiated(ctx, options, providerId);
+			}
+			return handleOIDCCallback(ctx, options, providerId);
 		},
 	);
 };
