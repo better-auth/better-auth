@@ -1797,6 +1797,46 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		expect(location).toContain("please_restart_the_process");
 	});
 
+	it("should carry ssoProviderId in the bounced state when options.redirectURI is configured", async () => {
+		const { customFetchImpl: sharedRedirectFetch } = await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					redirectURI: "/sso/callback",
+					defaultSSO: [
+						{
+							domain: "idp-initiated-shared.com",
+							providerId: "idp-initiated-shared",
+							oidcConfig: {
+								issuer: "http://localhost:8080",
+								clientId: "idp-initiated-shared-client",
+								clientSecret: "idp-initiated-shared-secret",
+								pkce: true,
+								discoveryEndpoint:
+									"http://localhost:8080/.well-known/openid-configuration",
+								allowIdpInitiated: true,
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const res = await sharedRedirectFetch(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated-shared?code=idp-issued-code",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).toContain("http://localhost:8080/authorize");
+		const url = new URL(location);
+		expect(url.searchParams.get("redirect_uri")).toBe(
+			"http://localhost:3000/api/auth/sso/callback",
+		);
+		expect(url.searchParams.get("state")).toBeTruthy();
+	});
+
 	it("should redirect to the error page for providers without the flag", async () => {
 		const res = await customFetchImpl(
 			"http://localhost:3000/api/auth/sso/callback/strict-oidc?code=idp-issued-code",

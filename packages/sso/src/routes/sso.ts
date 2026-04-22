@@ -1760,7 +1760,13 @@ async function bounceIfIdpInitiated(
 	}
 	if (!config.authorizationEndpoint) return;
 
-	const state = await generateState(ctx, undefined, false);
+	const state = await generateState(
+		ctx,
+		undefined,
+		options?.redirectURI?.trim()
+			? { ssoProviderId: provider.providerId }
+			: false,
+	);
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
 		provider.providerId,
