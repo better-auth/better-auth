@@ -5,6 +5,7 @@ import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -30,7 +31,7 @@ export interface CognitoProfile {
 }
 
 export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * The Cognito domain (e.g., "your-app.auth.us-east-1.amazoncognito.com")
 	 */
@@ -60,7 +61,7 @@ export const cognito = (options: CognitoOptions) => {
 		id: "cognito",
 		name: "Cognito",
 		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
-			if (!options.clientId) {
+			if (!getPrimaryClientId(options.clientId)) {
 				logger.error(
 					"ClientId is required for Amazon Cognito. Make sure to provide them in the options.",
 				);
