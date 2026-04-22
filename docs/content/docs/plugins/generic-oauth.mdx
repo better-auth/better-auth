@@ -457,7 +457,7 @@ export const auth = betterAuth({
 });
 ```
 
-When a stateless callback hits `/callback/:providerId`, Better Auth discards the provider-issued code and restarts the flow server-side: a fresh `state` and PKCE verifier are generated, and the user is redirected to the provider's authorize endpoint. The provider recognises the user's live session and completes the flow automatically. CSRF protection and PKCE are preserved throughout.
+When a stateless callback hits `/callback/:providerId`, Better Auth discards the provider-issued code and restarts the flow server-side: a fresh `state` and PKCE verifier are generated, and the user is redirected to the provider's authorize endpoint. The provider recognizes the user's live session and completes the flow automatically. CSRF protection and PKCE are preserved throughout.
 
 Leave `allowIdpInitiated` off (the default) for any provider that always initiates the flow from your side — stateless callbacks to those providers indicate malformed or malicious requests and should be rejected.
 
