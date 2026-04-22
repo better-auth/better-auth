@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.6.5",
+  "version": "1.6.6",
   "description": "Better Auth integration for Expo and React Native applications.",
   "type": "module",
   "license": "MIT",
