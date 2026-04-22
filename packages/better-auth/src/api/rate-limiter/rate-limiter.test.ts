@@ -214,6 +214,59 @@ describe("rate-limiter response outcome with plugin response hooks", async () =>
 	});
 });
 
+describe("rate-limiter response outcome when plugin response hook throws", async () => {
+	const throwingPlugin: BetterAuthPlugin = {
+		id: "throwing-response-plugin",
+		async onResponse(response) {
+			if (response.status === 200) {
+				throw new Error("plugin onResponse failed");
+			}
+		},
+	};
+
+	const { auth } = await getTestInstance(
+		{
+			advanced: {
+				ipAddress: {
+					ipAddressHeaders: ["x-test-ip"],
+				},
+			},
+			plugins: [throwingPlugin],
+			rateLimit: {
+				enabled: true,
+				includeSuccessfulRequests: false,
+				customRules: {
+					"/ok": {
+						window: 10,
+						max: 1,
+					},
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should still account response-side rate limit when plugin throws", async () => {
+		const headers = {
+			"x-test-ip": "203.0.113.96",
+		};
+		const makeRequest = () =>
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+					headers,
+				}),
+			);
+
+		await expect(makeRequest()).rejects.toThrow("plugin onResponse failed");
+
+		const second = await makeRequest();
+		expect(second.status).toBe(429);
+	});
+});
+
 describe("custom rate limiting storage", async () => {
 	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();

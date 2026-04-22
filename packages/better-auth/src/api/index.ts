@@ -329,24 +329,33 @@ export const router = <Option extends BetterAuthOptions>(
 		},
 		async onResponse(res, req) {
 			let currentResponse = res;
-			for (const plugin of ctx.options.plugins || []) {
-				if (plugin.onResponse) {
-					const response = await withSpan(
-						`onResponse ${plugin.id}`,
-						{
-							[ATTR_HOOK_TYPE]: "onResponse",
-							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
-							[ATTR_HTTP_RESPONSE_STATUS_CODE]: currentResponse.status,
-						},
-						() => plugin.onResponse!(currentResponse, ctx),
-					);
-					if (response) {
-						currentResponse = response.response;
-						break;
+			try {
+				for (const plugin of ctx.options.plugins || []) {
+					if (plugin.onResponse) {
+						const response = await withSpan(
+							`onResponse ${plugin.id}`,
+							{
+								[ATTR_HOOK_TYPE]: "onResponse",
+								[ATTR_CONTEXT]: `plugin:${plugin.id}`,
+								[ATTR_HTTP_RESPONSE_STATUS_CODE]: currentResponse.status,
+							},
+							() => plugin.onResponse!(currentResponse, ctx),
+						);
+						if (response) {
+							currentResponse = response.response;
+							break;
+						}
 					}
 				}
+			} catch (error) {
+				currentResponse = new Response(null, {
+					status: 500,
+					statusText: "Internal Server Error",
+				});
+				throw error;
+			} finally {
+				await onResponseRateLimit(req, ctx, currentResponse);
 			}
-			await onResponseRateLimit(req, ctx, currentResponse);
 			return currentResponse;
 		},
 		onError(e) {
