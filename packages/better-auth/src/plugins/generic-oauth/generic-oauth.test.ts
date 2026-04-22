@@ -2148,6 +2148,34 @@ describe("oauth2", async () => {
 			expect(res.headers.get("location")).toContain("state=state_not_found");
 		});
 
+		it("should not bounce on an empty `state=` parameter, only on truly stateless callbacks", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "idp-initiated-empty-state",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								allowIdpInitiated: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/callback/idp-initiated-empty-state?code=idp-issued-code&state=",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			const location = res.headers.get("location") || "";
+			expect(location).not.toContain(`http://localhost:${port}/authorize`);
+			expect(location).toContain("state=state_not_found");
+		});
+
 		it("should not bounce when state is present even if allowIdpInitiated is on", async () => {
 			const { customFetchImpl } = await getTestInstance({
 				plugins: [

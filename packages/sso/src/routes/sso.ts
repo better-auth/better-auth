@@ -1787,7 +1787,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 		callbackSSOEndpointConfig,
 		async (ctx) => {
 			const providerId = ctx.params.providerId;
-			if (!ctx.query.state) {
+			if (ctx.query.state === undefined && ctx.query.code !== undefined) {
 				await bounceIfIdpInitiated(ctx, options, providerId);
 			}
 			return handleOIDCCallback(ctx, options, providerId);

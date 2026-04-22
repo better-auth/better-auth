@@ -81,11 +81,11 @@ export const callbackOAuth = createAuthEndpoint(
 			iss,
 		} = queryOrBody;
 
-		if (!state) {
+		if (state === undefined && code) {
 			const provider = await getAwaitableValue(c.context.socialProviders, {
 				value: c.params.id,
 			});
-			if (provider?.allowIdpInitiated && code) {
+			if (provider?.allowIdpInitiated) {
 				const { state: freshState, codeVerifier } = await generateState(
 					c,
 					undefined,
@@ -98,6 +98,9 @@ export const callbackOAuth = createAuthEndpoint(
 				});
 				throw c.redirect(authUrl.toString());
 			}
+		}
+
+		if (!state) {
 			c.context.logger.error("State not found", error);
 			const sep = defaultErrorURL.includes("?") ? "&" : "?";
 			const url = `${defaultErrorURL}${sep}state=state_not_found`;
