@@ -150,9 +150,12 @@ export const microsoft = (options: MicrosoftOptions) => {
 		id: "microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
-			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
+			// Microsoft Entra supports public clients (SPA / native apps with
+			// PKCE only), so clientSecret is intentionally not required here.
+			// See https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow
+			if (!getPrimaryClientId(options.clientId)) {
 				logger.error(
-					"Client Id and Client Secret is required for Microsoft Entra ID. Make sure to provide them in the options.",
+					"Client Id is required for Microsoft Entra ID. Make sure to provide it in the options.",
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}

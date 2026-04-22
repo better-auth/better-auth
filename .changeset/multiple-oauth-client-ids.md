@@ -20,4 +20,4 @@ socialProviders: {
 
 Passing a single string keeps working; no migration needed.
 
-Also exports `getPrimaryClientId` from `@better-auth/core/oauth2` for provider authors: it returns the first non-empty Client ID from the string or array form. All five providers now validate `clientId` + `clientSecret` at sign-in time and throw `CLIENT_ID_AND_SECRET_REQUIRED` for empty or missing values instead of silently producing a malformed authorization URL. Apple, Facebook, and Microsoft Entra previously had no such guard.
+Also exports `getPrimaryClientId` from `@better-auth/core/oauth2` for provider authors: it returns the first non-empty Client ID from the string or array form. Providers now reject empty arrays, empty strings, and missing config at sign-in time instead of silently producing a malformed authorization URL. Google, Apple, and Facebook require both `clientId` and `clientSecret` (server-side code exchange is always a confidential-client flow). Microsoft Entra and Cognito only require `clientId`, since both support public-client flows (PKCE only, no secret).

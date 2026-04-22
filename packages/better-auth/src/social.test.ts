@@ -2147,6 +2147,27 @@ describe("Microsoft Provider", async () => {
 		});
 		expect(invalidRes.error?.status).toBe(401);
 	});
+
+	it("builds an authorization URL without clientSecret (public client)", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "public-ms-client",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+		});
+
+		expect(res.data?.url).toContain("public-ms-client");
+		expect(res.data?.redirect).toBe(true);
+	});
 });
 
 describe("Railway Provider", async () => {
