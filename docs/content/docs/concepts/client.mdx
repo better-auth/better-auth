@@ -487,8 +487,8 @@ type Props = {
 
 export function SessionCard({ initialSession }: Props) {
     authClient.hydrateSession(initialSession)
-    const { data, isPending } = authClient.useSession()
-    const session = isPending ? initialSession : data
+    const { data, isPending, isRefetching } = authClient.useSession()
+    const session = isPending && !isRefetching ? initialSession : data
 
     if (!session) return <p>Not signed in</p>
     return <pre>{JSON.stringify(session, null, 2)}</pre>
