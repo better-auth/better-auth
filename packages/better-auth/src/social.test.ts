@@ -1103,6 +1103,27 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(signInRes.data?.url).toContain(encodeURIComponent(webClientId));
 		expect(signInRes.data?.url).not.toContain(encodeURIComponent(iosClientId));
 	});
+
+	it("rejects an empty clientId array at sign-in time", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: [],
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(res.error?.status).toBe(500);
+	});
 });
 
 describe("Apple Provider", async () => {

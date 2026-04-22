@@ -275,16 +275,21 @@ The OAuth 2.0 Client ID issued by the provider.
 For providers that verify ID tokens by audience (Google, Apple, Microsoft Entra, Facebook, Cognito), you can pass an array to accept tokens issued for any of the configured clients. The first entry is used when Better Auth drives the authorization code flow; all entries are accepted when verifying an ID token's `aud` claim. This enables cross-platform sign-in (Web, iOS, Android) with a single backend configuration, where each platform's native SDK issues tokens under its own Client ID.
 
 ```ts title="auth.ts"
-socialProviders: {
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Other configurations...
+  socialProviders: {
     google: {
-        clientId: [
-            process.env.GOOGLE_WEB_CLIENT_ID as string,
-            process.env.GOOGLE_IOS_CLIENT_ID as string,
-            process.env.GOOGLE_ANDROID_CLIENT_ID as string,
-        ],
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      clientId: [
+        process.env.GOOGLE_WEB_CLIENT_ID as string,
+        process.env.GOOGLE_IOS_CLIENT_ID as string,
+        process.env.GOOGLE_ANDROID_CLIENT_ID as string,
+      ],
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     },
-}
+  },
+});
 ```
 
 All Client IDs must live in the same provider project so consent is shared. For providers that don't verify ID tokens by audience, only a single string is accepted.

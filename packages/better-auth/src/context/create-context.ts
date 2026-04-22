@@ -186,7 +186,7 @@ Most of the features of Better Auth will not work correctly.`,
 	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	// TODO(#4498): allow registering the same provider multiple times under
+	// TODO(#9294): allow registering the same provider multiple times under
 	// distinct ids (e.g. `google:ios`, `google:android`) to support
 	// per-platform clientSecret/redirectURI in the authorization code flow.
 	const providers = (

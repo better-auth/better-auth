@@ -19,3 +19,5 @@ socialProviders: {
 ```
 
 Passing a single string keeps working; no migration needed.
+
+Also exports `getPrimaryClientId` from `@better-auth/core/oauth2` for provider authors: it returns the first non-empty Client ID from the string or array form. All five providers now validate `clientId` + `clientSecret` at sign-in time and throw `CLIENT_ID_AND_SECRET_REQUIRED` for empty or missing values instead of silently producing a malformed authorization URL. Apple, Facebook, and Microsoft Entra previously had no such guard.

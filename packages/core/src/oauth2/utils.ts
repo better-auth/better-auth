@@ -28,6 +28,17 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 	};
 }
 
+/**
+ * Pick the first usable Client ID from a provider config. Accepts either the
+ * single-string form or the array form (used for cross-platform ID token
+ * audience verification), and returns `undefined` when neither yields a
+ * non-empty string.
+ */
+export function getPrimaryClientId(clientId: unknown): string | undefined {
+	const value = Array.isArray(clientId) ? clientId[0] : clientId;
+	return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 export async function generateCodeChallenge(codeVerifier: string) {
 	const encoder = new TextEncoder();
 	const data = encoder.encode(codeVerifier);
