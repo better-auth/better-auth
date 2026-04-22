@@ -28,6 +28,8 @@ import {
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
+	toAudienceClaim,
+	toResourceList,
 	validateClientCredentials,
 } from "./utils";
 
@@ -96,12 +98,7 @@ async function createJwtAccessToken(
 		payload: {
 			...customClaims,
 			sub: user?.id,
-			aud:
-				typeof audience === "string"
-					? audience
-					: audience?.length === 1
-						? audience.at(0)
-						: audience,
+			aud: toAudienceClaim(audience),
 			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
@@ -387,12 +384,8 @@ export async function checkResource(
 	resource: string | string[] | undefined,
 	scopes: string[],
 ) {
-	const audience =
-		typeof resource === "string"
-			? [resource]
-			: resource
-				? [...resource]
-				: undefined;
+	const normalizedResource = toResourceList(resource);
+	const audience = normalizedResource ? [...normalizedResource] : undefined;
 	if (audience) {
 		// Adds /userinfo to audience
 		if (scopes.includes("openid")) {
@@ -420,7 +413,7 @@ export async function checkResource(
 	}
 	return {
 		success: true,
-		audience: audience?.length === 1 ? audience.at(0) : audience,
+		audience: toAudienceClaim(audience),
 	};
 }
 
@@ -685,14 +678,15 @@ async function checkVerificationValue(
 			error: "invalid_request",
 		});
 	}
-	const verificationResources =
-		typeof verificationValue.query.resource === "string"
-			? [verificationValue.query.resource]
-			: verificationValue.query.resource;
-	const effectiveResources = resource ?? verificationResources;
-	if (resource && verificationResources) {
+	// Prefer the new top-level field, but keep compatibility with legacy values in query.resource.
+	const storedResources =
+		toResourceList(verificationValue.resource) ??
+		toResourceList(verificationValue.query.resource);
+	const effectiveResources = resource ?? storedResources;
+
+	if (resource && storedResources) {
 		const requestedSet = new Set(resource);
-		const authorizedSet = new Set(verificationResources);
+		const authorizedSet = new Set(storedResources);
 		for (const r of requestedSet) {
 			if (!authorizedSet.has(r)) {
 				throw new APIError("BAD_REQUEST", {
@@ -738,7 +732,7 @@ async function handleAuthorizationCodeGrant(
 		redirect_uri?: string;
 		resource?: string | string[];
 	} = ctx.body;
-	const resources = typeof resource === "string" ? [resource] : resource;
+	const resources = toResourceList(resource);
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -937,7 +931,7 @@ async function handleClientCredentialsGrant(
 		preVerifiedClient,
 	} = destructureCredentials(credentials);
 	const { scope, resource }: { scope?: string; resource?: string } = ctx.body;
-	const _resources = typeof resource === "string" ? [resource] : resource;
+	const resources = toResourceList(resource);
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
@@ -995,7 +989,7 @@ async function handleClientCredentialsGrant(
 		client,
 		scopes: requestedScopes,
 		grantType: "client_credentials",
-		resources: _resources,
+		resources,
 	});
 }
 
@@ -1029,7 +1023,7 @@ async function handleRefreshTokenGrant(
 		scope?: string;
 		resource?: string | string[];
 	} = ctx.body;
-	const resources = typeof resource === "string" ? [resource] : resource;
+	const resources = toResourceList(resource);
 
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {

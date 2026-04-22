@@ -135,6 +135,28 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 	);
 }
 
+/**
+ * Normalizes OAuth resource values into a non-empty string array.
+ */
+export function toResourceList(
+	value: string | string[] | undefined,
+): string[] | undefined {
+	if (typeof value === "string") return [value];
+	if (!value?.length) return undefined;
+	return value;
+}
+
+/**
+ * Normalizes audience values for JWT claims.
+ */
+export function toAudienceClaim(
+	audience: string | string[] | undefined,
+): string | string[] | undefined {
+	if (typeof audience === "string") return audience;
+	if (!audience?.length) return undefined;
+	return audience.length === 1 ? audience.at(0) : audience;
+}
+
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
 
 export async function verifyOAuthQueryParams(

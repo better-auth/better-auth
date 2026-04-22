@@ -22,6 +22,7 @@ import {
 	isPKCERequired,
 	parsePrompt,
 	storeToken,
+	toResourceList,
 } from "./utils";
 
 /**
@@ -492,6 +493,7 @@ export async function authorizeEndpoint(
 			),
 		);
 	}
+	const requestedResources = toResourceList(resource) ?? [];
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
@@ -610,6 +612,7 @@ export async function authorizeEndpoint(
 			sessionId: session.session.id,
 			authTime: new Date(session.session.createdAt).getTime(),
 			referenceId,
+			resource: requestedResources,
 		});
 	}
 	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
@@ -651,11 +654,6 @@ export async function authorizeEndpoint(
 	}
 
 	// Prompt again whenever a requested resource is not covered by stored consent.
-	const requestedResources = Array.isArray(resource)
-		? resource
-		: resource
-			? [resource]
-			: [];
 	const consentedResources = consent?.resources ?? [];
 	if (
 		requestedResources.some(
@@ -681,6 +679,7 @@ export async function authorizeEndpoint(
 		sessionId: session.session.id,
 		authTime: new Date(session.session.createdAt).getTime(),
 		referenceId,
+		resource: requestedResources,
 	});
 }
 
@@ -709,6 +708,7 @@ async function redirectWithAuthorizationCode(
 		sessionId: string;
 		authTime: number;
 		referenceId?: string;
+		resource?: string[];
 	},
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
@@ -726,6 +726,7 @@ async function redirectWithAuthorizationCode(
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
 			authTime: verificationValue.authTime,
+			resource: verificationValue.resource,
 		} satisfies VerificationValue),
 	};
 	await ctx.context.internalAdapter.createVerificationValue({

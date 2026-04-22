@@ -927,7 +927,7 @@ export interface VerificationValue {
 	query: OAuthAuthorizationQuery;
 	sessionId: string;
 	userId: string;
-	resource?: string | string[];
+	resource?: string[];
 	referenceId?: string;
 	authTime?: number;
 }
