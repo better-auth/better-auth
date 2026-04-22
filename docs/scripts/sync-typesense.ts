@@ -27,40 +27,43 @@ async function main() {
 	const skipReason = getTypesenseSyncSkipReason(process.env);
 	if (skipReason) {
 		console.log(skipReason);
-		process.exit(0);
+		return;
 	}
 
 	const url = process.env.NEXT_PUBLIC_TYPESENSE_SERVER_URL;
 	const adminKey = process.env.TYPESENSE_ADMIN_API_KEY;
 	if (!url || !adminKey) {
-		process.exit(0);
+		console.warn(
+			"[Typesense] env vars not set after skip check, skipping sync.",
+		);
+		return;
 	}
 
 	const filePath = ".next/server/app/api/docs/static.json.body";
 	if (!fs.existsSync(filePath)) {
 		console.log("[Typesense] build output not found, skipping sync.");
-		process.exit(0);
+		return;
 	}
 
-	const serverUrl = new URL(url);
-	const content = fs.readFileSync(filePath);
-	const records = JSON.parse(content.toString()) as DocumentRecord[];
-
-	const client = new Client({
-		nodes: [
-			{
-				host: serverUrl.hostname,
-				port:
-					Number(serverUrl.port) ||
-					(serverUrl.protocol === "https:" ? 443 : 80),
-				protocol: serverUrl.protocol.replace(":", ""),
-			},
-		],
-		apiKey: adminKey,
-		connectionTimeoutSeconds: 30,
-	});
-
 	try {
+		const serverUrl = new URL(url);
+		const content = fs.readFileSync(filePath, "utf8");
+		const records = JSON.parse(content) as DocumentRecord[];
+
+		const client = new Client({
+			nodes: [
+				{
+					host: serverUrl.hostname,
+					port:
+						Number(serverUrl.port) ||
+						(serverUrl.protocol === "https:" ? 443 : 80),
+					protocol: serverUrl.protocol.replace(":", ""),
+				},
+			],
+			apiKey: adminKey,
+			connectionTimeoutSeconds: 30,
+		});
+
 		await sync(client, {
 			typesenseCollectionName: "better-auth-docs",
 			documents: records,
