@@ -875,41 +875,43 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+				"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 		})
 		.optional(),
 	organizationSlug: z
 		.string({})
 		.meta({
-			description: "The slug of the organization to sign in with",
+			description: "The slug of the organization to sign in with.",
 		})
 		.optional(),
 	providerId: z
 		.string({})
 		.meta({
 			description:
-				"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+				"The ID of the provider to sign in with. Can be provided instead of email.",
 		})
 		.optional(),
 	domain: z
 		.string({})
 		.meta({
-			description: "The domain of the provider.",
+			description:
+				"The email domain of the provider. Can be provided instead of email.",
 		})
 		.optional(),
 	callbackURL: z.string({}).meta({
-		description: "The URL to redirect to after login",
+		description: "The URL to redirect to after successful sign-in.",
 	}),
 	errorCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login",
+			description: "The URL to redirect to if the sign-in flow fails.",
 		})
 		.optional(),
 	newUserCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login if the user is new",
+			description:
+				"The URL to redirect to after sign-in if the user is newly registered.",
 		})
 		.optional(),
 	scopes: z
@@ -922,7 +924,7 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+				"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
 		})
 		.optional(),
 	additionalParams: additionalAuthorizationParamsSchema,
@@ -930,10 +932,15 @@ const signInSSOBodySchema = z.object({
 		.boolean({})
 		.meta({
 			description:
-				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
 		})
 		.optional(),
-	providerType: z.enum(["oidc", "saml"]).optional(),
+	providerType: z
+		.enum(["oidc", "saml"])
+		.meta({
+			description: "The provider protocol to sign in with.",
+		})
+		.optional(),
 });
 
 export const signInSSO = (options?: SSOOptions) => {
