@@ -1755,10 +1755,20 @@ async function bounceIfIdpInitiated(
 		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
 			ctx.context.isTrustedOrigin(url),
 		);
-	} catch {
+	} catch (error) {
+		ctx.context.logger.error(
+			"IDP-initiated bounce skipped: OIDC discovery failed",
+			{ providerId: provider.providerId, issuer: provider.issuer, error },
+		);
 		return;
 	}
-	if (!config.authorizationEndpoint) return;
+	if (!config.authorizationEndpoint) {
+		ctx.context.logger.error(
+			"IDP-initiated bounce skipped: authorizationEndpoint missing after discovery",
+			{ providerId: provider.providerId, issuer: provider.issuer },
+		);
+		return;
+	}
 
 	const state = await generateState(
 		ctx,
