@@ -1,5 +1,15 @@
 # @better-auth/sso
 
+## 1.6.6
+
+### Patch Changes
+
+- [#9262](https://github.com/better-auth/better-auth/pull/9262) [`fe5f36c`](https://github.com/better-auth/better-auth/commit/fe5f36c7e3630373d9b1765c28a8cd81e841eff8) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Fix ESM/CJS compat issue when loading samlify
+
+- Updated dependencies [[`b5742f9`](https://github.com/better-auth/better-auth/commit/b5742f9d08d7c6ae0848279b79c8bcc0a09082d7), [`4debfb6`](https://github.com/better-auth/better-auth/commit/4debfb600ff448f3e63ed242a2fb5a2c41654be1), [`9ea7eb1`](https://github.com/better-auth/better-auth/commit/9ea7eb1eab28d50d40836ab4e2cbe5a81c4da1aa), [`a844c7d`](https://github.com/better-auth/better-auth/commit/a844c7dd087715678787cb10bf9670fad46e535b), [`ab4c10f`](https://github.com/better-auth/better-auth/commit/ab4c10fbc09defcd851d614acecc111cc114b543), [`a61083e`](https://github.com/better-auth/better-auth/commit/a61083e023163d0a14d9e886ce556ba459677428), [`e64ff72`](https://github.com/better-auth/better-auth/commit/e64ff720fb8514cb78aedd1660223d8b948284da)]:
+  - @better-auth/core@1.6.6
+  - better-auth@1.6.6
+
 ## 1.6.5
 
 ### Patch Changes

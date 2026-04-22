@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { parseSetCookieHeader } from "../cookies";
+import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
 
 /**
@@ -44,16 +44,8 @@ export const tanstackStartCookies = () => {
 							);
 							parsed.forEach((value, key) => {
 								if (!key) return;
-								const opts = {
-									sameSite: value.samesite,
-									secure: value.secure,
-									maxAge: value["max-age"],
-									httpOnly: value.httponly,
-									domain: value.domain,
-									path: value.path,
-								} as const;
 								try {
-									setCookie(key, value.value, opts);
+									setCookie(key, value.value, toCookieOptions(value));
 								} catch {
 									// this will fail if the cookie is being set on server component
 								}
