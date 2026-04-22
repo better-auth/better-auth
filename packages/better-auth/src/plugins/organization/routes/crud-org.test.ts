@@ -445,6 +445,9 @@ describe("organization hooks", async () => {
 		expect(afterCreateTeam).toHaveBeenCalled();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9288
+	 */
 	it("should allow passing id through `beforeCreateTeam`", async () => {
 		const customTeamId = "custom-team-id";
 		const { auth, signInWithTestUser } = await getTestInstance({
