@@ -1,8 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { oAuthState } from "./oauth";
+import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -10,28 +14,68 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { getClient, parsePrompt, storeToken } from "./utils";
+
+import {
+	getClient,
+	getJwtPlugin,
+	isPKCERequired,
+	parsePrompt,
+	storeToken,
+} from "./utils";
 
 /**
- * Formats an error url
+ * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
+ * implicit and hybrid flows are delivered in the URL fragment, not the query.
+ * Callers on the code flow (default) omit `mode` and get query delivery.
  */
 export function formatErrorURL(
 	url: string,
-	error: string,
+	error: OAuthErrorCode,
 	description: string,
 	state?: string,
+	iss?: string,
+	mode: "query" | "fragment" = "query",
 ) {
 	const searchParams = new URLSearchParams({
 		error,
 		error_description: description,
 	});
 	state && searchParams.append("state", state);
+	iss && searchParams.append("iss", iss);
+	if (mode === "fragment") {
+		return `${url}#${searchParams.toString()}`;
+	}
 	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
 }
 
+/**
+ * Selects the response mode for an error redirect to the RP. OIDC Core 1.0 §5
+ * defines defaults based on response_type: `code` → query, types containing
+ * `token` / `id_token` → fragment. An explicit `response_mode` overrides.
+ *
+ * When `response_type` is duplicated (array) or absent, we can't trust the
+ * caller's intent, so we default to query — the safer channel for
+ * unrecognized shapes.
+ */
+function deriveResponseMode(
+	raw: Record<string, unknown>,
+): "query" | "fragment" {
+	const responseMode =
+		typeof raw.response_mode === "string" ? raw.response_mode : undefined;
+	if (responseMode === "fragment") return "fragment";
+	if (responseMode === "query") return "query";
+	const responseType =
+		typeof raw.response_type === "string" ? raw.response_type : undefined;
+	if (responseType && /\b(token|id_token)\b/.test(responseType)) {
+		return "fragment";
+	}
+	return "query";
+}
+
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+	const fromFetch = isBrowserFetchRequest(ctx.request?.headers);
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
-	if (acceptJson) {
+	if (fromFetch || acceptJson) {
 		return {
 			redirect: true,
 			url: uri.toString(),
@@ -41,19 +85,190 @@ export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 	}
 };
 
+function redirectWithPromptNoneError(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	query: OAuthAuthorizationQuery,
+	error: OAuthErrorCode,
+	description: string,
+) {
+	return handleRedirect(
+		ctx,
+		formatErrorURL(
+			query.redirect_uri,
+			error,
+			description,
+			query.state,
+			getIssuer(ctx, opts),
+		),
+	);
+}
+
+/**
+ * Validates that the issuer URL
+ * - MUST use HTTPS scheme (HTTP allowed for localhost in dev)
+ * - MUST NOT contain query components
+ * - MUST NOT contain fragment components
+ *
+ * @returns The validated issuer URL, or a sanitized version if invalid
+ */
+export function validateIssuerUrl(issuer: string): string {
+	try {
+		const url = new URL(issuer);
+
+		if (url.protocol !== "https:" && !isLoopbackHost(url.host)) {
+			url.protocol = "https:";
+		}
+
+		url.search = "";
+		url.hash = "";
+
+		return url.toString().replace(/\/$/, "");
+	} catch {
+		// If URL parsing fails, return as-is
+		return issuer;
+	}
+}
+
+/**
+ * Gets the issuer identifier
+ */
+export function getIssuer(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): string {
+	let issuer: string;
+
+	if (opts.disableJwtPlugin) {
+		issuer = ctx.context.baseURL;
+	} else {
+		try {
+			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+			issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
+		} catch {
+			issuer = ctx.context.baseURL;
+		}
+	}
+
+	return validateIssuerUrl(issuer);
+}
+
 /**
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
 function getErrorURL(
 	ctx: GenericEndpointContext,
-	error: string,
+	error: OAuthErrorCode,
 	description: string,
 ) {
 	const baseURL =
 		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
 	const formattedURL = formatErrorURL(baseURL, error, description);
 	return formattedURL;
+}
+
+/**
+ * Finds the matching entry in a client's registered redirect_uris for a
+ * requested redirect_uri. Honors RFC 8252 §7.3 loopback port variance for
+ * the full 127.0.0.0/8 range and [::1], matching on scheme+host+path+query
+ * and ignoring port. DNS names like "localhost" are excluded per §8.3.
+ */
+function findRegisteredRedirectUri(
+	registered: readonly string[] | undefined,
+	requested: string | undefined,
+): string | undefined {
+	if (!registered || !requested) return undefined;
+
+	let req: URL | undefined;
+	try {
+		req = new URL(requested);
+	} catch {
+		// malformed requested — only exact-match branch can succeed below
+	}
+
+	return registered.find((url) => {
+		if (url === requested) return true;
+		if (!req) return false;
+		try {
+			const reg = new URL(url);
+			return (
+				isLoopbackIP(reg.hostname) &&
+				reg.hostname === req.hostname &&
+				reg.pathname === req.pathname &&
+				reg.protocol === req.protocol &&
+				reg.search === req.search
+			);
+		} catch {
+			return false;
+		}
+	});
+}
+
+/**
+ * Loads the client, verifies it's enabled, and returns the requested
+ * redirect_uri when it matches a registered entry. Returns null whenever the
+ * RP cannot be safely reached, so callers can fall back to the server error
+ * page (avoiding open-redirect risk on validation failures).
+ */
+async function resolveTrustedRedirectUri(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	clientId: string | undefined,
+	redirectUri: string | undefined,
+): Promise<string | null> {
+	if (!clientId || !redirectUri) return null;
+	let client: Awaited<ReturnType<typeof getClient>> | undefined;
+	try {
+		client = await getClient(ctx, opts, clientId);
+	} catch {
+		return null;
+	}
+	if (!client || client.disabled) return null;
+	const matched = findRegisteredRedirectUri(client.redirectUris, redirectUri);
+	return matched ? redirectUri : null;
+}
+
+/**
+ * `redirectOnError` callback for `/oauth2/authorize`. Per RFC 6749 §4.1.2.1,
+ * authorize errors MUST be delivered to the client's `redirect_uri` with
+ * `error`, `error_description`, `state`, and (RFC 9207) `iss`. The clause
+ * carves out one case: a missing/invalid `redirect_uri` or `client_id` MUST
+ * NOT redirect to the requested URI. We implement the carve-out via
+ * `resolveTrustedRedirectUri`, falling back to the server error page.
+ *
+ * Channel (query vs fragment) follows OIDC Core §5 via `deriveResponseMode`.
+ */
+export function authorizeRedirectOnError(
+	opts: OAuthOptions<Scope[]>,
+): OAuthRedirectOnError<GenericEndpointContext> {
+	return async ({ error, error_description, ctx }) => {
+		const raw = (ctx.query ?? {}) as Record<string, unknown>;
+		const clientId =
+			typeof raw.client_id === "string" ? raw.client_id : undefined;
+		const redirectUriRaw =
+			typeof raw.redirect_uri === "string" ? raw.redirect_uri : undefined;
+		const trusted = await resolveTrustedRedirectUri(
+			ctx,
+			opts,
+			clientId,
+			redirectUriRaw,
+		);
+		if (trusted) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					trusted,
+					error,
+					error_description,
+					typeof raw.state === "string" ? raw.state : undefined,
+					getIssuer(ctx, opts),
+					deriveResponseMode(raw),
+				),
+			);
+		}
+		return handleRedirect(ctx, getErrorURL(ctx, error, error_description));
+	};
 }
 
 export async function authorizeEndpoint(
@@ -76,16 +291,53 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	// Check request
-	const query: OAuthAuthorizationQuery = ctx.query;
+	// Resolve request_uri (PAR) before processing
+	let query: OAuthAuthorizationQuery = ctx.query;
+	if (query.request_uri) {
+		if (!opts.requestUriResolver) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(ctx, "invalid_request_uri", "request_uri not supported"),
+			);
+		}
+		const resolvedParams = await opts.requestUriResolver({
+			requestUri: query.request_uri,
+			clientId: query.client_id ?? "",
+			ctx,
+		});
+		if (!resolvedParams) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(
+					ctx,
+					"invalid_request_uri",
+					"request_uri is invalid or expired",
+				),
+			);
+		}
+		// RFC 9126 §4: all params come from the stored request, not the URL.
+		// Only client_id is carried from the authorization URL.
+		const urlClientId = query.client_id;
+		query = resolvedParams as unknown as OAuthAuthorizationQuery;
+		if (urlClientId) {
+			query.client_id = urlClientId;
+		}
+	}
+	ctx.query = query;
+	await oAuthState.set({
+		query: serializeAuthorizationQuery(query).toString(),
+	});
+
 	if (!query.client_id) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 
 	if (!query.response_type) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
 	}
@@ -93,8 +345,10 @@ export async function authorizeEndpoint(
 	const promptSet = ctx.query?.prompt
 		? parsePrompt(ctx.query?.prompt)
 		: undefined;
+	const promptNone = promptSet?.has("none") ?? false;
 	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(
 				ctx,
 				`unsupported_prompt_select_account`,
@@ -104,7 +358,8 @@ export async function authorizeEndpoint(
 	}
 
 	if (!(query.response_type === "code")) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(
 				ctx,
 				"unsupported_response_type",
@@ -116,21 +371,25 @@ export async function authorizeEndpoint(
 	// Check client
 	const client = await getClient(ctx, opts, query.client_id);
 	if (!client) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 	if (client.disabled) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
 		);
 	}
 
-	const redirectUri = client.redirectUris?.find(
-		(url) => url === query.redirect_uri,
+	const redirectUri = findRegisteredRedirectUri(
+		client.redirectUris,
+		query.redirect_uri,
 	);
 	if (!redirectUri || !query.redirect_uri) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
 		);
 	}
@@ -140,20 +399,17 @@ export async function authorizeEndpoint(
 	if (requestedScopes) {
 		const validScopes = new Set(client.scopes ?? opts.scopes);
 		const invalidScopes = requestedScopes.filter((scope) => {
-			return (
-				!validScopes?.has(scope) ||
-				// offline access must be requested through PKCE
-				(scope === "offline_access" &&
-					(query.code_challenge_method !== "S256" || !query.code_challenge))
-			);
+			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_scope",
 					`The following scopes are invalid: ${invalidScopes.join(", ")}`,
 					query.state,
+					getIssuer(ctx, opts),
 				),
 			);
 		}
@@ -164,33 +420,69 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
-	if (!query.code_challenge || !query.code_challenge_method) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"pkce is required",
-				query.state,
-			),
-		);
+	// Check if PKCE is required for this client and scope
+	const pkceRequired = isPKCERequired(client, requestedScopes);
+
+	// Validate PKCE parameters if required
+	if (pkceRequired) {
+		if (!query.code_challenge || !query.code_challenge_method) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					pkceRequired.valueOf(),
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 	}
 
-	// Check code challenges
-	const codeChallengesSupported = ["S256"];
-	if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"invalid code_challenge method",
-				query.state,
-			),
-		);
+	// If PKCE parameters are provided, validate them (even if not required)
+	if (query.code_challenge || query.code_challenge_method) {
+		// Both parameters must be provided together
+		if (!query.code_challenge || !query.code_challenge_method) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"code_challenge and code_challenge_method must both be provided",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
+
+		// Check code challenge method is supported (only S256)
+		const codeChallengesSupported = ["S256"];
+		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"invalid code_challenge method, only S256 is supported",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 	}
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
 	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+		if (promptNone) {
+			return redirectWithPromptNoneError(
+				ctx,
+				opts,
+				query,
+				"login_required",
+				"authentication required",
+			);
+		}
 		return redirectWithPromptCode(
 			ctx,
 			opts,
@@ -215,6 +507,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (selectedAccountRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"account_selection_required",
+					"End-User account selection is required",
+				);
+			}
 			return redirectWithPromptCode(ctx, opts, "select_account");
 		}
 	}
@@ -228,6 +529,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (signupRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"interaction_required",
+					"End-User interaction is required",
+				);
+			}
 			return redirectWithPromptCode(
 				ctx,
 				opts,
@@ -245,6 +555,15 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (postLoginRedirect) {
+			if (promptNone) {
+				return redirectWithPromptNoneError(
+					ctx,
+					opts,
+					query,
+					"interaction_required",
+					"End-User interaction is required",
+				);
+			}
 			return redirectWithPromptCode(ctx, opts, "post_login");
 		}
 	}
@@ -267,6 +586,7 @@ export async function authorizeEndpoint(
 			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
+			authTime: new Date(session.session.createdAt).getTime(),
 			referenceId,
 		});
 	}
@@ -296,6 +616,15 @@ export async function authorizeEndpoint(
 		!consent ||
 		!requestedScopes.every((val) => consent.scopes.includes(val))
 	) {
+		if (promptNone) {
+			return redirectWithPromptNoneError(
+				ctx,
+				opts,
+				query,
+				"consent_required",
+				"End-User consent is required",
+			);
+		}
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
@@ -304,8 +633,24 @@ export async function authorizeEndpoint(
 		clientId: client.clientId,
 		userId: session.user.id,
 		sessionId: session.session.id,
+		authTime: new Date(session.session.createdAt).getTime(),
 		referenceId,
 	});
+}
+
+function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
+	const params = new URLSearchParams();
+	for (const [key, value] of Object.entries(query)) {
+		if (value == null) continue;
+		if (Array.isArray(value)) {
+			for (const v of value) {
+				params.append(key, String(v));
+			}
+		} else {
+			params.set(key, String(value));
+		}
+	}
+	return params;
 }
 
 async function redirectWithAuthorizationCode(
@@ -316,6 +661,7 @@ async function redirectWithAuthorizationCode(
 		clientId: string;
 		userId: string;
 		sessionId: string;
+		authTime: number;
 		referenceId?: string;
 	},
 ) {
@@ -329,21 +675,17 @@ async function redirectWithAuthorizationCode(
 		expiresAt: new Date(exp * 1000),
 		value: JSON.stringify({
 			type: "authorization_code",
-			query: ctx.query,
+			query: verificationValue.query,
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
+			authTime: verificationValue.authTime,
 		} satisfies VerificationValue),
 	};
-	ctx.context.verification_id
-		? await ctx.context.internalAdapter.updateVerificationValue(
-				ctx.context.verification_id,
-				data,
-			)
-		: await ctx.context.internalAdapter.createVerificationValue({
-				...data,
-				createdAt: new Date(iat * 1000),
-			});
+	await ctx.context.internalAdapter.createVerificationValue({
+		...data,
+		createdAt: new Date(iat * 1000),
+	});
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);
@@ -353,6 +695,7 @@ async function redirectWithAuthorizationCode(
 			verificationValue.query.state,
 		);
 	}
+	redirectUriWithCode.searchParams.set("iss", getIssuer(ctx, opts));
 
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }
@@ -388,7 +731,9 @@ async function signParams(
 	// Add expiration to query parameters
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
-	const params = new URLSearchParams(ctx.query);
+	const params = serializeAuthorizationQuery(
+		ctx.query as OAuthAuthorizationQuery,
+	);
 	params.set("exp", String(exp));
 
 	const signature = await makeSignature(params.toString(), ctx.context.secret);

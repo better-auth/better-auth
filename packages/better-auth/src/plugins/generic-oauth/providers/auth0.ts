@@ -1,5 +1,3 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
-import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
 export interface Auth0Options extends BaseOAuthProviderOptions {
@@ -8,17 +6,6 @@ export interface Auth0Options extends BaseOAuthProviderOptions {
 	 * This will be used to construct the discovery URL.
 	 */
 	domain: string;
-}
-
-interface Auth0Profile {
-	sub: string;
-	name?: string;
-	email?: string;
-	email_verified?: boolean;
-	picture?: string;
-	nickname?: string;
-	given_name?: string;
-	family_name?: string;
 }
 
 /**
@@ -43,39 +30,12 @@ interface Auth0Profile {
  * });
  * ```
  */
-export function auth0(options: Auth0Options): GenericOAuthConfig {
+export function auth0(options: Auth0Options): GenericOAuthConfig<"auth0"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	// Ensure domain doesn't have protocol prefix
 	const domain = options.domain.replace(/^https?:\/\//, "");
 	const discoveryUrl = `https://${domain}/.well-known/openid-configuration`;
-
-	const getUserInfo = async (
-		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
-		const userInfoUrl = `https://${domain}/userinfo`;
-
-		const { data: profile, error } = await betterFetch<Auth0Profile>(
-			userInfoUrl,
-			{
-				headers: {
-					Authorization: `Bearer ${tokens.accessToken}`,
-				},
-			},
-		);
-
-		if (error || !profile) {
-			return null;
-		}
-
-		return {
-			id: profile.sub,
-			name: profile.name ?? profile.nickname ?? undefined,
-			email: profile.email ?? undefined,
-			image: profile.picture,
-			emailVerified: profile.email_verified ?? false,
-		};
-	};
 
 	return {
 		providerId: "auth0",
@@ -88,6 +48,5 @@ export function auth0(options: Auth0Options): GenericOAuthConfig {
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
 		overrideUserInfo: options.overrideUserInfo,
-		getUserInfo,
 	};
 }

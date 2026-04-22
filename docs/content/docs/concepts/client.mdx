@@ -1,6 +1,6 @@
 ---
 title: Client
-description: Better Auth client library for authentication.
+description: Learn how to set up the Better Auth client for React, Vue, Svelte, and other frameworks, use hooks, configure fetch options, handle errors, and extend with client plugins.
 ---
 
 Better Auth offers a client library compatible with popular frontend frameworks like React, Vue, Svelte, and more. This client library includes a set of functions for interacting with the Better Auth server. Each framework's client library is built on top of a core client library that is framework-agnostic, so that all methods and hooks are consistently available across all client libraries.
@@ -9,7 +9,7 @@ Better Auth offers a client library compatible with popular frontend frameworks 
 
 If you haven't already, install better-auth.
 
-```package-install 
+```package-install
 npm i better-auth
 ```
 
@@ -18,52 +18,58 @@ npm i better-auth
 Import `createAuthClient` from the package for your framework (e.g., "better-auth/react" for React). Call the function to create your client. Pass the base URL of your auth server. If the auth server is running on the same domain as your client, you can skip this step.
 
 <Callout type="info">
-If you're using a different base path other than `/api/auth`, make sure to pass the whole URL, including the path. (e.g., `http://localhost:3000/custom-path/auth`)
+  If your auth server uses a different base path other than `/api/auth`, you can either pass the full URL including the path (e.g., `http://localhost:3000/custom-path/auth`), or use the `basePath` option separately.
 </Callout>
 
+<Tabs
+  items={["react", "vue", "svelte", "solid", 
+"vanilla"]}
+  defaultValue="react"
+>
+  <Tab value="vanilla">
+    ```ts title="lib/auth-client.ts" 
+    import { createAuthClient } from "better-auth/client" // [!code highlight]
+    export const authClient = createAuthClient({
+        baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
+    })
+    ```
+  </Tab>
 
-<Tabs items={["react", "vue", "svelte", "solid", 
-  "vanilla"]} defaultValue="react">
-    <Tab value="vanilla">
-            ```ts  title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/client"
-            export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
-            })
-            ```
-    </Tab>
-    <Tab value="react" title="lib/auth-client.ts">
-            ```ts  title="lib/auth-client.ts"  
-            import { createAuthClient } from "better-auth/react"
-            export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
-            })
-            ```
-    </Tab>
-    <Tab value="vue" title="lib/auth-client.ts">
-            ```ts  title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/vue"
-            export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
-            })
-            ```
-    </Tab>
-    <Tab value="svelte" title="lib/auth-client.ts"> 
-            ```ts  title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/svelte"
-            export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
-            })
-            ```
-    </Tab>
-    <Tab value="solid" title="lib/auth-client.ts">
-            ```ts title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/solid"
-            export const authClient = createAuthClient({
-                baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
-            })
-            ```
-    </Tab>
+  <Tab value="react" title="lib/auth-client.ts">
+    ```ts title="lib/auth-client.ts"  
+    import { createAuthClient } from "better-auth/react" // [!code highlight]
+    export const authClient = createAuthClient({
+        baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
+    })
+    ```
+  </Tab>
+
+  <Tab value="vue" title="lib/auth-client.ts">
+    ```ts title="lib/auth-client.ts" 
+    import { createAuthClient } from "better-auth/vue" // [!code highlight]
+    export const authClient = createAuthClient({
+        baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
+    })
+    ```
+  </Tab>
+
+  <Tab value="svelte" title="lib/auth-client.ts">
+    ```ts title="lib/auth-client.ts" 
+    import { createAuthClient } from "better-auth/svelte" // [!code highlight]
+    export const authClient = createAuthClient({
+        baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
+    })
+    ```
+  </Tab>
+
+  <Tab value="solid" title="lib/auth-client.ts">
+    ```ts title="lib/auth-client.ts" 
+    import { createAuthClient } from "better-auth/solid" // [!code highlight]
+    export const authClient = createAuthClient({
+        baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
+    })
+    ```
+  </Tab>
 </Tabs>
 
 ## Usage
@@ -88,118 +94,117 @@ In addition to the standard methods, the client provides hooks to easily access 
 
 **Example: useSession**
 
-
 <Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="react">
-    <Tab value="React">
-        ```tsx title="user.tsx"
-        //make sure you're using the react client
-        import { createAuthClient } from "better-auth/react"
-        const { useSession } = createAuthClient() // [!code highlight]
-    
-        export function User() {
-            const {
-                data: session,
-                isPending, //loading state
-                error, //error object 
-                refetch //refetch the session
-            } = useSession()
-            return (
-                //...
-            )
-        }
-        ```
-    </Tab>
+  <Tab value="React">
+    ```tsx title="user.tsx"
+    //make sure you're using the react client
+    import { createAuthClient } from "better-auth/react"
+    const { useSession } = createAuthClient() // [!code highlight]
 
-    <Tab value="Vue">
-        ```vue title="user.vue"
-        <script lang="ts" setup>
-        import { authClient } from '@/lib/auth-client'
-        const session = authClient.useSession()
-        </script>
-        <template>
+    export function User() {
+        const {
+            data: session,
+            isPending, //loading state
+            error, //error object 
+            refetch //refetch the session
+        } = useSession()
+        return (
+            //...
+        )
+    }
+    ```
+  </Tab>
+
+  <Tab value="Vue">
+    ```vue title="user.vue"
+    <script lang="ts" setup>
+    import { authClient } from '@/lib/auth-client'
+    const session = authClient.useSession()
+    </script>
+    <template>
+        <div>
+            <button v-if="!session.data" @click="() => authClient.signIn.social({
+                provider: 'github'
+            })">
+                Continue with GitHub
+            </button>
             <div>
-                <button v-if="!session.data" @click="() => authClient.signIn.social({
-                    provider: 'github'
-                })">
-                    Continue with GitHub
+                <pre>{{ session.data }}</pre>
+                <button v-if="session.data" @click="authClient.signOut()">
+                    Sign out
                 </button>
-                <div>
-                    <pre>{{ session.data }}</pre>
-                    <button v-if="session.data" @click="authClient.signOut()">
-                        Sign out
-                    </button>
-                </div>
             </div>
-        </template>
-        ```
-        </Tab>
+        </div>
+    </template>
+    ```
+  </Tab>
 
-        <Tab value="Svelte">
-            ```svelte title="user.svelte"
-            <script lang="ts">
-            import { client } from "$lib/client";
-            const session = client.useSession();
-            </script>
+  <Tab value="Svelte">
+    ```svelte title="user.svelte"
+    <script lang="ts">
+    import { authClient } from "$lib/auth-client";
+    const session = authClient.useSession();
+    </script>
 
-            <div
-                style="display: flex; flex-direction: column; gap: 10px; border-radius: 10px; border: 1px solid #4B453F; padding: 20px; margin-top: 10px;"
+    <div
+        style="display: flex; flex-direction: column; gap: 10px; border-radius: 10px; border: 1px solid #4B453F; padding: 20px; margin-top: 10px;"
+    >
+        <div>
+        {#if $session.data}
+            <div>
+            <p>
+                {$session.data.user.name}
+            </p>
+            <p>
+                {$session.data.user.email}
+            </p>
+            <button
+                onclick={async () => {
+                await authClient.signOut();
+                }}
             >
-                <div>
-                {#if $session.data}
-                    <div>
-                    <p>
-                        {$session.data.user.name}
-                    </p>
-                    <p>
-                        {$session.data.user.email}
-                    </p>
-                    <button
-                        onclick={async () => {
-                        await authClient.signOut();
-                        }}
-                    >
-                        Signout
-                    </button>
-                    </div>
-                {:else}
-                    <button
-                    onclick={async () => {
-                        await authClient.signIn.social({
-                        provider: "github",
-                        });
-                    }}
-                    >
-                    Continue with GitHub
-                    </button>
-                {/if}
-                </div>
+                Signout
+            </button>
             </div>
-            ```
-        </Tab>
+        {:else}
+            <button
+            onclick={async () => {
+                await authClient.signIn.social({
+                provider: "github",
+                });
+            }}
+            >
+            Continue with GitHub
+            </button>
+        {/if}
+        </div>
+    </div>
+    ```
+  </Tab>
 
-        <Tab value="Solid">
-            ```tsx title="user.tsx"
-            import { client } from "~/lib/client";
-            import { Show } from 'solid-js';
+  <Tab value="Solid">
+    ```tsx title="user.tsx"
+    import { authClient } from "~/lib/auth-client";
+    import { Show } from 'solid-js';
 
-            export default function Home() {
-                const session = client.useSession()
-                return (
-                    <Show
-                        when={session()}
-                        fallback={<button onClick={toggle}>Log in</button>}
-                    >
-                        <button onClick={toggle}>Log out</button>
-                    </Show>
-                ); 
-            }
-            ```
-            </Tab>
+    export default function Home() {
+        const session = authClient.useSession()
+        return (
+            <Show
+                when={session()}
+                fallback={<button onClick={toggle}>Log in</button>}
+            >
+                <button onClick={toggle}>Log out</button>
+            </Show>
+        ); 
+    }
+    ```
+  </Tab>
 </Tabs>
 
 ### Fetch Options
 
-The client uses a library called [better fetch](https://better-fetch.vercel.app) to make requests to the server. 
+The client uses a library called [better fetch](https://better-fetch.vercel.app) to make requests to the server.
 
 Better fetch is a wrapper around the native fetch API that provides a more convenient way to make requests. It's created by the same team behind Better Auth and is designed to work seamlessly with it.
 
@@ -213,11 +218,25 @@ const authClient = createAuthClient({
         //any better-fetch options
     },
 })
-```         
+```
+
+### Disabling Default Fetch Plugins
+
+The auth client includes default fetch plugins that handle browser-specific behaviors like automatic redirects. For non-browser environments (e.g., React Native/Expo), you can disable these by setting `disableDefaultFetchPlugins` to `true`:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+    disableDefaultFetchPlugins: true,
+})
+```
 
 You can also pass fetch options to most of the client functions. Either as the second argument or as a property in the object.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
@@ -240,6 +259,54 @@ await authClient.signIn.email({
 })
 ```
 
+### Session Options
+
+You can configure how the client handles session fetching and revalidation using the `sessionOptions` option.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+    sessionOptions: {
+        refetchInterval: 0,
+        refetchOnWindowFocus: true,
+        refetchWhenOffline: false,
+    }
+})
+```
+
+export const clientSessionOptionsType = {
+  refetchInterval: {
+    description: "Polling interval in seconds. Set to 0 to disable",
+    type: "number",
+    default: "0",
+  },
+  refetchOnWindowFocus: {
+    description: "Automatically refetch session when the user switches back to the window/tab",
+    type: "boolean",
+    default: "true",
+  },
+  refetchWhenOffline: {
+    description: "Whether to refetch when the device has no internet access",
+    type: "boolean",
+    default: "false",
+  },
+}
+
+<TypeTable type={clientSessionOptionsType} />
+
+### Disable Default Fetch Plugins
+
+The client includes a default redirect plugin that handles authentication redirects. If you need to disable this behavior, you can set `disableDefaultFetchPlugins` to `true`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+    disableDefaultFetchPlugins: true
+})
+```
+
 ### Disabling Hook Rerenders
 
 Certain endpoints, upon successful response, will trigger atom signals and cause hooks like `useSession` to rerender.
@@ -250,7 +317,9 @@ For example, when updating user preferences that don't affect the session, or wh
 
 You can disable hook rerenders for a specific endpoint call by setting `disableSignal: true` in the fetch options:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 // As the second argument
 await authClient.updateUser({
     name: "New Name"
@@ -270,7 +339,9 @@ await authClient.updateUser({
 When `disableSignal` is set to `true`, the endpoint call will complete successfully,
 but hooks like `useSession` won't automatically rerender. You can manually trigger a refetch if needed:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 const { refetch } = authClient.useSession()
 
 await authClient.updateUser({
@@ -287,15 +358,19 @@ await authClient.updateUser({
 ### Handling Errors
 
 Most of the client functions return a response object with the following properties:
-- `data`: The response data.
-- `error`: The error object if there was an error.
+
+* `data`: The response data.
+* `error`: The error object if there was an error.
 
 The error object contains the following properties:
-- `message`: The error message. (e.g., "Invalid email or password")
-- `status`: The HTTP status code.
-- `statusText`: The HTTP status text.
 
-```ts title="auth-client.ts"
+* `message`: The error message. (e.g., "Invalid email or password")
+* `status`: The HTTP status code.
+* `statusText`: The HTTP status text.
+
+```ts
+import { authClient } from "@/lib/auth-client"
+
 const { data, error } = await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234"
@@ -307,7 +382,8 @@ if (error) {
 
 If the action accepts a `fetchOptions` option, you can pass an `onError` callback to handle errors.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
 
 await authClient.signIn.email({
     email: "email@email.com",
@@ -332,7 +408,9 @@ await authClient.signIn.email({
 
 Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return an `isPending` property to indicate if the request is still pending.
 
-```ts title="auth-client.ts"
+```ts
+import { useSession } from "@/lib/auth-client"
+
 const { data, error, isPending } = useSession()
 if (error) {
     //handle error
@@ -341,7 +419,7 @@ if (error) {
 
 #### Error Codes
 
-The client instance contains $ERROR_CODES object that contains all the error codes returned by the server. You can use this to handle error translations or custom error messages.
+The client instance contains $ERROR\_CODES object that contains all the error codes returned by the server. You can use this to handle error translations or custom error messages.
 
 ```ts title="auth-client.ts"
 const authClient = createAuthClient();
@@ -381,11 +459,53 @@ if(error?.code){
 }
 ```
 
+### SSR Hydration
+
+With SSR frameworks like Next.js, Nuxt, or SvelteKit, `useSession` fetches the session on the client, causing a loading flash. Pass the server-fetched session to `hydrateSession` and use it as a fallback so the first render has data on both the server and the client:
+
+```tsx title="page.tsx (server component)"
+import { auth } from "@/lib/auth"
+import { headers } from "next/headers"
+import { SessionCard } from "./session-card"
+
+export default async function Page() {
+    const session = await auth.api.getSession({
+        headers: await headers(),
+    })
+    return <SessionCard initialSession={session} />
+}
+```
+
+```tsx title="session-card.tsx (client component)"
+"use client"
+
+import { authClient } from "@/lib/auth-client"
+
+type Props = {
+    initialSession: typeof authClient.$Infer.Session | null
+}
+
+export function SessionCard({ initialSession }: Props) {
+    authClient.hydrateSession(initialSession)
+    const { data, isPending, isRefetching } = authClient.useSession()
+    const session = isPending && !isRefetching ? initialSession : data
+
+    if (!session) return <p>Not signed in</p>
+    return <pre>{JSON.stringify(session, null, 2)}</pre>
+}
+```
+
+<Callout>
+  * Only the first non-null call to `hydrateSession` takes effect.
+  * Passing `null` is safe. It will be ignored and `useSession` will fetch as usual.
+</Callout>
+
 ### Plugins
 
-You can extend the client with plugins to add more functionality. Plugins can add new functions to the client or modify existing ones. 
+You can extend the client with plugins to add more functionality. Plugins can add new functions to the client or modify existing ones.
 
 **Example: Magic Link Plugin**
+
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client"
 import { magicLinkClient } from "better-auth/client/plugins"
@@ -399,7 +519,9 @@ const authClient = createAuthClient({
 
 once you've added the plugin, you can use the new functions provided by the plugin.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.magicLink({
     email: "test@email.com"
 })

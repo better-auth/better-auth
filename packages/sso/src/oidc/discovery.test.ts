@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
+	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
@@ -306,21 +307,21 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_post");
 		});
 
-		it("should default to client_secret_basic when only unsupported methods are advertised", () => {
+		it("should select private_key_jwt when it is the only supported method", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: ["private_key_jwt"],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
-		it("should default to client_secret_basic for tls_client_auth only", () => {
+		it("should select private_key_jwt when only tls_client_auth and private_key_jwt are supported", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [
 					"tls_client_auth",
 					"private_key_jwt",
 				],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
 		it("should default to client_secret_basic if not specified in discovery", () => {
@@ -333,6 +334,28 @@ describe("OIDC Discovery", () => {
 		it("should default to client_secret_basic for empty array", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [],
+			});
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+		});
+
+		it("should preserve explicit private_key_jwt when passed as existing", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: [
+					"private_key_jwt",
+					"client_secret_basic",
+				],
+			});
+			expect(selectTokenEndpointAuthMethod(doc, "private_key_jwt")).toBe(
+				"private_key_jwt",
+			);
+		});
+
+		it("should prefer client_secret_basic over private_key_jwt when both are supported", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: [
+					"private_key_jwt",
+					"client_secret_basic",
+				],
 			});
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
 		});
@@ -560,7 +583,7 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it.each([
+		it.for([
 			[
 				"/oauth2/token",
 				"https://idp.example.com/base",
@@ -577,8 +600,11 @@ describe("OIDC Discovery", () => {
 				"issuer with trailing slash",
 			],
 			["//oauth2/token", "https://idp.example.com/base//", "multiple slashes"],
-		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", (endpoint, issuer) => {
-			expect(normalizeUrl("url", endpoint, issuer)).toBe(
+		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", ([
+			endpoint,
+			issuer,
+		]) => {
+			expect(normalizeUrl("url", endpoint!, issuer!)).toBe(
 				"https://idp.example.com/base/oauth2/token",
 			);
 		});
@@ -625,22 +651,28 @@ describe("OIDC Discovery", () => {
 			).toBe(true);
 		});
 
-		it("should return false if both tokenEndpoint and jwksEndpoint are present", () => {
+		it("should return false if tokenEndpoint, jwksEndpoint and authorizationEndpoint are all present", () => {
+			expect(
+				needsRuntimeDiscovery({
+					tokenEndpoint: "https://idp.example.com/oauth2/token",
+					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
+					authorizationEndpoint: "https://idp.example.com/oauth2/authorize",
+				}),
+			).toBe(false);
+		});
+
+		it("should return true if authorizationEndpoint is missing", () => {
 			expect(
 				needsRuntimeDiscovery({
 					tokenEndpoint: "https://idp.example.com/oauth2/token",
 					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
 				}),
-			).toBe(false);
+			).toBe(true);
 		});
 	});
 
 	describe("fetchDiscoveryDocument", () => {
 		const mockBetterFetch = betterFetch as ReturnType<typeof vi.fn>;
-
-		beforeEach(() => {
-			vi.clearAllMocks();
-		});
 
 		it("should fetch and parse valid discovery document", async () => {
 			const expectedDoc = createMockDiscoveryDocument();
@@ -793,10 +825,6 @@ describe("OIDC Discovery", () => {
 		const mockBetterFetch = betterFetch as ReturnType<typeof vi.fn>;
 		const issuer = "https://idp.example.com";
 		const isTrustedOrigin = vi.fn().mockReturnValue(true);
-
-		beforeEach(() => {
-			vi.clearAllMocks();
-		});
 
 		it("should return hydrated config from valid discovery", async () => {
 			const discoveryDoc = createMockDiscoveryDocument({
@@ -1027,13 +1055,29 @@ describe("OIDC Discovery", () => {
 					authorization_endpoint: `${issuer}/authorize`,
 					token_endpoint: `${issuer}/token`,
 					jwks_uri: `${issuer}/jwks`,
-					token_endpoint_auth_methods_supported: ["private_key_jwt"],
+					token_endpoint_auth_methods_supported: ["tls_client_auth"],
 				},
 				error: null,
 			});
 
 			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
 			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
+		});
+
+		it("should select private_key_jwt from discovery when it is the only supported method", async () => {
+			mockBetterFetch.mockResolvedValueOnce({
+				data: {
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					jwks_uri: `${issuer}/jwks`,
+					token_endpoint_auth_methods_supported: ["private_key_jwt"],
+				},
+				error: null,
+			});
+
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
+			expect(result.tokenEndpointAuthentication).toBe("private_key_jwt");
 		});
 
 		it("should fill missing fields from discovery when existing config is partial", async () => {
@@ -1153,5 +1197,86 @@ describe("OIDC Discovery", () => {
 				}),
 			);
 		});
+	});
+});
+
+describe("ensureRuntimeDiscovery", () => {
+	const isTrustedOrigin = () => true;
+	const issuer = "https://idp.example.com";
+
+	const baseConfig = {
+		issuer,
+		clientId: "client-id",
+		clientSecret: "client-secret",
+		pkce: true,
+		discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
+	};
+
+	const mockDiscoveryDoc = createMockDiscoveryDocument();
+
+	beforeEach(() => {
+		vi.mocked(betterFetch).mockResolvedValue({
+			data: mockDiscoveryDoc,
+			error: null,
+		});
+	});
+
+	it("returns config unchanged when discovery is not needed", async () => {
+		const completeConfig = {
+			...baseConfig,
+			authorizationEndpoint: `${issuer}/oauth2/authorize`,
+			tokenEndpoint: `${issuer}/oauth2/token`,
+			jwksEndpoint: `${issuer}/.well-known/jwks.json`,
+		};
+		const result = await ensureRuntimeDiscovery(
+			completeConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result).toBe(completeConfig);
+		expect(betterFetch).not.toHaveBeenCalled();
+	});
+
+	it("hydrates missing endpoints when discovery is needed", async () => {
+		const result = await ensureRuntimeDiscovery(
+			baseConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result.authorizationEndpoint).toBe(
+			mockDiscoveryDoc.authorization_endpoint,
+		);
+		expect(result.tokenEndpoint).toBe(mockDiscoveryDoc.token_endpoint);
+		expect(result.jwksEndpoint).toBe(mockDiscoveryDoc.jwks_uri);
+		expect(result.userInfoEndpoint).toBe(mockDiscoveryDoc.userinfo_endpoint);
+	});
+
+	it("preserves existing config fields not returned by discovery", async () => {
+		const result = await ensureRuntimeDiscovery(
+			baseConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result.clientId).toBe(baseConfig.clientId);
+		expect(result.clientSecret).toBe(baseConfig.clientSecret);
+		expect(result.pkce).toBe(baseConfig.pkce);
+	});
+
+	it("throws when discovery fails", async () => {
+		vi.mocked(betterFetch).mockResolvedValue({
+			data: null,
+			error: { message: "Network error" },
+		});
+		await expect(
+			ensureRuntimeDiscovery(baseConfig, issuer, isTrustedOrigin),
+		).rejects.toThrow(DiscoveryError);
+	});
+
+	it("throws DiscoveryError for untrusted origin", async () => {
+		await expect(
+			ensureRuntimeDiscovery(baseConfig, issuer, () => false),
+		).rejects.toThrow(
+			expect.objectContaining({ code: "discovery_untrusted_origin" }),
+		);
 	});
 });

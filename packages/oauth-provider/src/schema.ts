@@ -27,6 +27,10 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
+			subjectType: {
+				type: "string",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: false,
@@ -99,6 +103,14 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			jwks: {
+				type: "string",
+				required: false,
+			},
+			jwksUri: {
+				type: "string",
+				required: false,
+			},
 			grantTypes: {
 				type: "string[]",
 				required: false,
@@ -114,6 +126,10 @@ export const schema = {
 			},
 			type: {
 				type: "string",
+				required: false,
+			},
+			requirePKCE: {
+				type: "boolean",
 				required: false,
 			},
 			// All other metadata
@@ -176,6 +192,10 @@ export const schema = {
 				type: "date",
 			},
 			revoked: {
+				type: "date",
+				required: false,
+			},
+			authTime: {
 				type: "date",
 				required: false,
 			},

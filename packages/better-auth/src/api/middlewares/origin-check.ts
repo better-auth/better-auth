@@ -1,7 +1,56 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { deprecate } from "@better-auth/core/utils/deprecate";
+import { normalizePathname } from "@better-auth/core/utils/url";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
+
+/**
+ * Checks if CSRF should be skipped for backward compatibility.
+ * Previously, disableOriginCheck also disabled CSRF checks.
+ * This maintains that behavior when disableCSRFCheck isn't explicitly set.
+ * Only triggers for skipOriginCheck === true, not for path arrays.
+ */
+function shouldSkipCSRFForBackwardCompat(ctx: GenericEndpointContext): boolean {
+	return (
+		ctx.context.skipOriginCheck === true &&
+		ctx.context.options.advanced?.disableCSRFCheck === undefined
+	);
+}
+
+/**
+ * Checks if the origin check should be skipped for the current request.
+ * Handles both boolean (skip all) and array (skip specific paths) configurations.
+ */
+function shouldSkipOriginCheck(ctx: GenericEndpointContext): boolean {
+	const skipOriginCheck = ctx.context.skipOriginCheck;
+	if (skipOriginCheck === true) {
+		return true;
+	}
+	if (Array.isArray(skipOriginCheck) && ctx.request) {
+		try {
+			const basePath = new URL(ctx.context.baseURL).pathname;
+			const currentPath = normalizePathname(ctx.request.url, basePath);
+			return skipOriginCheck.some((skipPath) =>
+				currentPath.startsWith(skipPath),
+			);
+		} catch {
+			//
+		}
+	}
+	return false;
+}
+
+/**
+ * Logs deprecation warning for users relying on coupled behavior.
+ * Only logs if user explicitly set disableOriginCheck (not test environment default).
+ */
+const logBackwardCompatWarning = deprecate(
+	function logBackwardCompatWarning() {},
+	"disableOriginCheck: true currently also disables CSRF checks. " +
+		"In a future version, disableOriginCheck will ONLY disable URL validation. " +
+		"To keep CSRF disabled, add disableCSRFCheck: true to your config.",
+);
 
 /**
  * A middleware to validate callbackURL and origin against trustedOrigins.
@@ -18,6 +67,10 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		return;
 	}
 	await validateOrigin(ctx);
+
+	if (shouldSkipOriginCheck(ctx)) {
+		return;
+	}
 
 	const { body, query } = ctx;
 	const callbackURL = body?.callbackURL || query?.callbackURL;
@@ -85,6 +138,9 @@ export const originCheck = (
 ) =>
 	createAuthMiddleware(async (ctx) => {
 		if (!ctx.request) {
+			return;
+		}
+		if (shouldSkipOriginCheck(ctx)) {
 			return;
 		}
 		const callbackURL = getValue(ctx);
@@ -156,16 +212,28 @@ async function validateOrigin(
 	const originHeader = headers.get("origin") || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
-	const shouldValidate =
-		forceValidate ||
-		(useCookies && !ctx.context.skipCSRFCheck && !ctx.context.skipOriginCheck);
+	if (ctx.context.skipCSRFCheck) {
+		return;
+	}
+
+	if (shouldSkipCSRFForBackwardCompat(ctx)) {
+		ctx.context.options.advanced?.disableOriginCheck === true &&
+			logBackwardCompatWarning();
+		return;
+	}
+
+	if (shouldSkipOriginCheck(ctx)) {
+		return;
+	}
+
+	const shouldValidate = forceValidate || useCookies;
 
 	if (!shouldValidate) {
 		return;
 	}
 
 	if (!originHeader || originHeader === "null") {
-		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 	}
 
 	const trustedOrigins: string[] = Array.isArray(
@@ -188,7 +256,7 @@ async function validateOrigin(
 			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
-		throw new APIError("FORBIDDEN", { message: "Invalid origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
 	}
 }
 
@@ -212,6 +280,14 @@ export const formCsrfMiddleware = createAuthMiddleware(async (ctx) => {
 async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 	const req = ctx.request;
 	if (!req) {
+		return;
+	}
+
+	if (ctx.context.skipCSRFCheck) {
+		return;
+	}
+
+	if (shouldSkipCSRFForBackwardCompat(ctx)) {
 		return;
 	}
 

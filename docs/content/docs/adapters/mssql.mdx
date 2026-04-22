@@ -58,8 +58,9 @@ export const auth = betterAuth({
 
 
 ```
+
 <Callout>
-    For more information, read Kysely's documentation to the [MssqlDialect](https://kysely-org.github.io/kysely-apidoc/classes/MssqlDialect.html).
+  For more information, read Kysely's documentation to the [MssqlDialect](https://kysely-org.github.io/kysely-apidoc/classes/MssqlDialect.html).
 </Callout>
 
 ## Schema generation & migration
@@ -73,11 +74,13 @@ your database schema based on your Better Auth configuration and plugins.
       <th>
         <p className="font-bold text-[16px] mb-1">MS SQL Schema Generation</p>
       </th>
+
       <th>
         <p className="font-bold text-[16px] mb-1">MS SQL Schema Migration</p>
       </th>
     </tr>
   </thead>
+
   <tbody>
     <tr className="h-10">
       <td>✅ Supported</td>
@@ -86,13 +89,19 @@ your database schema based on your Better Auth configuration and plugins.
   </tbody>
 </table>
 
-```package-install title="Schema Generation"
-npx @better-auth/cli@latest generate
-```
+<Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```package-install
+    npx auth@latest migrate
+    ```
+  </Tab>
 
-```package-install title="Schema Migration"
-npx @better-auth/cli@latest migrate
-```
+  <Tab value="generate">
+    ```package-install
+    npx auth@latest generate
+    ```
+  </Tab>
+</Tabs>
 
 ## Joins (Experimental)
 
@@ -104,10 +113,13 @@ The Kysely MS SQL dialect supports joins out of the box since version `1.4.0`.
 To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
   experimental: { joins: true }
 });
 ```
+
 <Callout type="warn">
   It's possible that you may need to run migrations after enabling this feature.
 </Callout>

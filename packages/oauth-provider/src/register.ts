@@ -3,14 +3,35 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
-import type { OAuthClient } from "./types/oauth";
-import { storeClientSecret } from "./utils";
+import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
+import { parseClientMetadata, storeClientSecret } from "./utils";
+import { isPrivateHostname } from "./utils/client-assertion";
+
+/**
+ * Resolves the auth method and type for unauthenticated DCR.
+ * Overrides confidential methods to "none" per RFC 7591 Section 3.2.1.
+ * When overriding, clears type "web" since it is only valid for confidential clients.
+ */
+function resolveUnauthenticatedAuth(body: OAuthClient): {
+	tokenEndpointAuthMethod: TokenEndpointAuthMethod;
+	type: OAuthClient["type"];
+} {
+	if (body.token_endpoint_auth_method === "none") {
+		return {
+			tokenEndpointAuthMethod: "none",
+			type: body.type,
+		};
+	}
+	return {
+		tokenEndpointAuthMethod: "none",
+		type: body.type === "web" ? undefined : body.type,
+	};
+}
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	// Check if registration endpoint is enabled
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
 			error: "access_denied",
@@ -21,7 +42,6 @@ export async function registerEndpoint(
 	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
 
-	// Check authorization
 	if (!(session || opts.allowUnauthenticatedClientRegistration)) {
 		throw new APIError("UNAUTHORIZED", {
 			error: "invalid_token",
@@ -29,24 +49,24 @@ export async function registerEndpoint(
 		});
 	}
 
-	// Determine whether registration request for public client
-	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
-	const isPublic = body.token_endpoint_auth_method === "none";
+	if (!session) {
+		if (body.grant_types?.includes("client_credentials")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"client_credentials grant requires authenticated registration",
+			});
+		}
 
-	// Check unauthenticated user is requesting a confidential client
-	if (!session && !isPublic) {
-		throw new APIError("UNAUTHORIZED", {
-			error: "invalid_request",
-			error_description:
-				"Authentication required for confidential client registration",
-		});
+		const resolved = resolveUnauthenticatedAuth(body);
+		body.token_endpoint_auth_method = resolved.tokenEndpointAuthMethod;
+		body.type = resolved.type;
 	}
 
-	// Ensure dynamically registered clients shall have a scope
-	if (!ctx.body.scope) {
-		ctx.body.scope = (
-			opts.clientRegistrationDefaultScopes ?? opts.scopes
-		)?.join(" ");
+	if (!body.scope) {
+		body.scope = (opts.clientRegistrationDefaultScopes ?? opts.scopes)?.join(
+			" ",
+		);
 	}
 
 	return createOAuthClientEndpoint(ctx, opts, {
@@ -59,6 +79,7 @@ export async function checkOAuthClient(
 	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		isRegister?: boolean;
+		ctx?: GenericEndpointContext;
 	},
 ) {
 	// Determine whether registration request for public client
@@ -110,6 +131,45 @@ export async function checkOAuthClient(
 		});
 	}
 
+	// Validate subject_type
+	if (client.subject_type !== undefined) {
+		if (
+			client.subject_type !== "public" &&
+			client.subject_type !== "pairwise"
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `subject_type must be "public" or "pairwise"`,
+			});
+		}
+		if (client.subject_type === "pairwise" && !opts.pairwiseSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
+		// a sector_identifier_uri is required (not yet supported). Reject registration
+		// until sector_identifier_uri support is added.
+		if (
+			client.subject_type === "pairwise" &&
+			client.redirect_uris &&
+			client.redirect_uris.length > 1
+		) {
+			const hosts = new Set(
+				client.redirect_uris.map((uri: string) => new URL(uri).host),
+			);
+			if (hosts.size > 1) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description:
+						"pairwise clients with redirect_uris on different hosts require a sector_identifier_uri, which is not yet supported. All redirect_uris must share the same host.",
+				});
+			}
+		}
+	}
+
 	// Check requested application scopes
 	const requestedScopes = (client?.scope as string | undefined)
 		?.split(" ")
@@ -128,6 +188,78 @@ export async function checkOAuthClient(
 			}
 		}
 	}
+
+	if (settings?.isRegister && client.require_pkce === false) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `pkce is required for registered clients.`,
+		});
+	}
+
+	// Validate private_key_jwt requirements
+	if (client.token_endpoint_auth_method === "private_key_jwt") {
+		if (client.jwks && client.jwks_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "jwks and jwks_uri are mutually exclusive",
+			});
+		}
+		if (!client.jwks && !client.jwks_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "private_key_jwt requires either jwks or jwks_uri",
+			});
+		}
+		if (client.jwks_uri) {
+			try {
+				const uri = new URL(client.jwks_uri);
+				if (uri.protocol !== "https:") {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description: "jwks_uri must use HTTPS",
+					});
+				}
+				if (isPrivateHostname(uri.hostname)) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description:
+							"jwks_uri must not point to a private or reserved address",
+					});
+				}
+				if (settings?.ctx && !settings.ctx.context.isTrustedOrigin(uri.href)) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description: "jwks_uri must belong to a trusted origin",
+					});
+				}
+			} catch (e) {
+				if (e instanceof APIError) throw e;
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description: "jwks_uri must be a valid URL",
+				});
+			}
+		}
+		if (client.jwks) {
+			// Accept both RFC 7517 JWKS object {"keys":[...]} and bare key array
+			const keys = Array.isArray(client.jwks)
+				? client.jwks
+				: (client.jwks as { keys?: unknown[] }).keys;
+			if (!Array.isArray(keys) || keys.length === 0) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description:
+						"jwks must be a non-empty array of JWK objects or a JWKS document {keys:[...]}",
+				});
+			}
+		}
+	} else if (client.jwks || client.jwks_uri) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"jwks and jwks_uri are only allowed with private_key_jwt authentication",
+		});
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -143,16 +275,21 @@ export async function createOAuthClientEndpoint(
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
 	const isPublic = body.token_endpoint_auth_method === "none";
+	const isPrivateKeyJwt = body.token_endpoint_auth_method === "private_key_jwt";
 
 	// Check if client parameters are valid combination
-	await checkOAuthClient(ctx.body, opts, settings);
+	await checkOAuthClient(ctx.body, opts, {
+		...settings,
+		ctx,
+	});
 
 	// Generate clientId and clientSecret based on its type
 	const clientId =
 		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
-	const clientSecret = isPublic
-		? undefined
-		: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
+	const clientSecret =
+		isPublic || isPrivateKeyJwt
+			? undefined
+			: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
 	const storedClientSecret = clientSecret
 		? await storeClientSecret(ctx, opts, clientSecret)
 		: undefined;
@@ -165,13 +302,10 @@ export async function createOAuthClientEndpoint(
 				session: session?.session,
 			})
 		: undefined;
-	let schema = oauthToSchema({
+	const schema = oauthToSchema({
 		...((body ?? {}) as OAuthClient),
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,
-		// Jwks unsupported
-		jwks: undefined,
-		jwks_uri: undefined,
 		// Required if client secret is issued
 		client_secret_expires_at: storedClientSecret
 			? settings.isRegister && opts?.clientRegistrationClientSecretExpiration
@@ -188,7 +322,11 @@ export async function createOAuthClientEndpoint(
 	});
 	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
 		model: "oauthClient",
-		data: schema,
+		data: {
+			...schema,
+			createdAt: new Date(iat * 1000),
+			updatedAt: new Date(iat * 1000),
+		},
 	});
 	// Format the response according to RFC7591
 	return ctx.json(
@@ -232,8 +370,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		tos_uri: tos,
 		policy_uri: policy,
 		// Jwks (only one can be used)
-		jwks: _jwks,
-		jwks_uri: _jwksUri,
+		jwks: inputJwks,
+		jwks_uri: jwksUri,
 		// User Software Identifiers
 		software_id: softwareId,
 		software_version: softwareVersion,
@@ -251,7 +389,10 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		disabled,
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
+		require_pkce: requirePKCE,
+		subject_type: subjectType,
 		reference_id: referenceId,
+		metadata: inputMetadata,
 		// All other metadata
 		...rest
 	} = input;
@@ -260,8 +401,15 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 	const expiresAt = _expiresAt ? new Date(_expiresAt * 1000) : undefined;
 	const createdAt = _createdAt ? new Date(_createdAt * 1000) : undefined;
 	const scopes = _scope?.split(" ");
-	const metadata =
-		rest && Object.keys(rest).length ? JSON.stringify(rest) : undefined;
+	const metadataObj = {
+		...(rest && Object.keys(rest).length ? rest : {}),
+		...(inputMetadata && typeof inputMetadata === "object"
+			? inputMetadata
+			: {}),
+	};
+	const metadata = Object.keys(metadataObj).length
+		? JSON.stringify(metadataObj)
+		: undefined;
 
 	return {
 		// Important Fields
@@ -290,12 +438,23 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
+		// Jwks for private_key_jwt
+		jwks: inputJwks
+			? JSON.stringify({
+					keys: Array.isArray(inputJwks)
+						? inputJwks
+						: (inputJwks as { keys: unknown[] }).keys,
+				})
+			: undefined,
+		jwksUri: jwksUri,
 		// RFC6749 Spec
 		public: _public,
 		type,
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata,
 	};
@@ -339,22 +498,27 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// RFC6749 Spec
 		public: _public,
 		type,
+		// Jwks
+		jwks,
+		jwksUri,
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
 
 	// Type conversions
 	const _expiresAt = expiresAt
-		? Math.round(expiresAt.getTime() / 1000)
+		? Math.round(new Date(expiresAt).getTime() / 1000)
 		: undefined;
 	const _createdAt = createdAt
-		? Math.round(createdAt.getTime() / 1000)
+		? Math.round(new Date(createdAt).getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
-	const _metadata = metadata ? JSON.parse(metadata) : undefined;
+	const _metadata = parseClientMetadata(metadata);
 
 	return {
 		// All other metadata
@@ -375,14 +539,16 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		tos_uri: tos ?? undefined,
 		policy_uri: policy ?? undefined,
 		// Jwks (only one can be used)
-		// jwks, // Not Stored
-		// jwks_uri: jwksUri, // Not Stored
+		jwks: jwks
+			? (JSON.parse(jwks) as { keys: Record<string, unknown>[] }).keys
+			: undefined,
+		jwks_uri: jwksUri ?? undefined,
 		// User Software Identifiers
 		software_id: softwareId ?? undefined,
 		software_version: softwareVersion ?? undefined,
 		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
-		redirect_uris: redirectUris ?? undefined,
+		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
@@ -394,6 +560,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		disabled: disabled ?? undefined,
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
+		require_pkce: requirePKCE ?? undefined,
+		subject_type: subjectType ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }

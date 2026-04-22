@@ -16,7 +16,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { anonymous } from "better-auth/plugins" // [!code highlight]
-    
+
     export const auth = betterAuth({
         // ... other config options
         plugins: [
@@ -26,25 +26,27 @@ The Anonymous plugin allows users to have an authenticated experience without re
     ```
   </Step>
 
-    <Step>
-        ### Migrate the database
+  <Step>
+    ### Migrate the database
 
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx @better-auth/cli migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx @better-auth/cli generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
 
   <Step>
     ### Add the client plugin
@@ -53,11 +55,11 @@ The Anonymous plugin allows users to have an authenticated experience without re
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { anonymousClient } from "better-auth/client/plugins"
-    
+    import { anonymousClient } from "better-auth/client/plugins" // [!code highlight]
+
     export const authClient = createAuthClient({
         plugins: [
-            anonymousClient()
+            anonymousClient() // [!code highlight]
         ]
     })
     ```
@@ -70,18 +72,22 @@ The Anonymous plugin allows users to have an authenticated experience without re
 
 To sign in a user anonymously, use the `signIn.anonymous()` method.
 
-```ts title="example.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const user = await authClient.signIn.anonymous()
 ```
 
 ### Link Account
 
-If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method, their anonymous activities can be linked to the new account.
+If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method,
+their anonymous activities can be linked to the new account.
 
 To do that you first need to provide `onLinkAccount` callback to the plugin.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -95,11 +101,31 @@ export const auth = betterAuth({
 
 Then when you call `signIn` or `signUp` with another method, the `onLinkAccount` callback will be called. And the `anonymousUser` will be deleted by default.
 
-```ts title="example.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const user = await authClient.signIn.email({
     email,
 })
 ```
+
+### Delete Anonymous User
+
+To delete an anonymous user, you can call the `/delete-anonymous-user` endpoint.
+
+<APIMethod path="/delete-anonymous-user" method="POST" noResult>
+  ```ts
+  type deleteAnonymousUser = {
+  }
+  ```
+</APIMethod>
+
+<Callout type="info">
+  **Notes:**
+
+  * The anonymous user is deleted by default when the account is linked to a new authentication method.
+  * Setting `disableDeleteAnonymousUser` to `true` will prevent the anonymous user from being able to call the `/delete-anonymous-user` endpoint.
+</Callout>
 
 ## Options
 
@@ -109,6 +135,7 @@ The domain name to use when generating an email address for anonymous users. If 
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -125,6 +152,7 @@ A custom function to generate email addresses for anonymous users. This allows y
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -139,11 +167,11 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-**Notes:**
-- If `generateRandomEmail` is provided, `emailDomainName` is ignored.
-- You are responsible for ensuring the email is unique to avoid conflicts. The returned email must be in a valid format.
-</Callout>
+  **Notes:**
 
+  * If `generateRandomEmail` is provided, `emailDomainName` is ignored.
+  * You are responsible for ensuring the email is unique to avoid conflicts. The returned email must be in a valid format.
+</Callout>
 
 ### `onLinkAccount`
 
@@ -151,7 +179,10 @@ A callback function that is called when an anonymous user links their account to
 
 ### `disableDeleteAnonymousUser`
 
-By default, the anonymous user is deleted when the account is linked to a new authentication method. Set this option to `true` to disable this behavior.
+By default, when an anonymous user links their account to a new authentication method,
+the anonymous user record is automatically deleted.
+If you set this option to `true`, this automatic deletion will be disabled,
+and the `/delete-anonymous-user` endpoint will no longer be accessible to anonymous users.
 
 ### `generateName`
 
@@ -161,8 +192,13 @@ A callback function that is called to generate a name for the anonymous user. Us
 
 The anonymous plugin requires an additional field in the user table:
 
-<DatabaseTable
-    fields={[
-        { name: "isAnonymous", type: "boolean", description: "Indicates whether the user is anonymous.", isOptional: true },
-    ]}
-/>
+export const anonymousUserTableFields = [
+	{
+		name: "isAnonymous",
+		type: "boolean",
+		description: "Indicates whether the user is anonymous.",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={anonymousUserTableFields} />

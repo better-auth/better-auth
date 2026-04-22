@@ -9,16 +9,16 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
-import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
-import { authorizeEndpoint } from "./authorize";
+import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
 import { rpInitiatedLogoutEndpoint } from "./logout";
 import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import { registerEndpoint } from "./register";
@@ -28,11 +28,27 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
-import { deleteFromPrompt, getJwtPlugin } from "./utils";
+import {
+	deleteFromPrompt,
+	getJwtPlugin,
+	mergeDiscoveryMetadata,
+	toClientDiscoveryArray,
+	verifyOAuthQueryParams,
+} from "./utils";
+import { PACKAGE_VERSION } from "./version";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"oauth-provider": {
+			creator: typeof oauthProvider;
+		};
+	}
+}
 
 export const oAuthState = defineRequestState<{ query?: string } | null>(
 	() => null,
 );
+export const getOAuthProviderState = oAuthState.get;
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -109,6 +125,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 
+	// Validate pairwiseSecret minimum length
+	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
+		throw new BetterAuthError(
+			"pairwiseSecret must be at least 32 characters long for adequate HMAC-SHA256 security",
+		);
+	}
+
 	// TODO: device_code grant also allows for refresh tokens
 	if (
 		opts.grantTypes &&
@@ -144,11 +167,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	}
 
 	return {
-		id: "oauthProvider",
-		options: opts,
+		id: "oauth-provider",
+		version: PACKAGE_VERSION,
+		options: opts as NoInfer<O>,
 		init: (ctx) => {
-			// Require session id storage on database (secondary-storage only solution not yet supported)
-			if (ctx.options.session && !ctx.options.session.storeSessionInDatabase) {
+			// OAuth provider performs adapter-level session lookups by id, so it
+			// currently requires DB-backed sessions whenever secondary storage is enabled.
+			if (
+				ctx.options.secondaryStorage &&
+				ctx.options.session?.storeSessionInDatabase !== true
+			) {
 				throw new BetterAuthError(
 					"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
 				);
@@ -157,11 +185,25 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			// Check for jwt plugin registration
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
-				const jwtPluginOptions = jwtPlugin.options;
+				const jwtPluginOptions = jwtPlugin?.options;
 
 				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
-				const issuerPath = new URL(issuer).pathname;
+				const isDynamicBaseURLInit =
+					jwtPluginOptions?.jwt?.issuer == null &&
+					typeof ctx.options.baseURL === "object" &&
+					ctx.options.baseURL !== null &&
+					"allowedHosts" in ctx.options.baseURL;
+				let issuerPath: string;
+				try {
+					issuerPath = new URL(issuer).pathname;
+				} catch (error) {
+					// baseURL may not be available during init when using dynamic baseURL config
+					if (isDynamicBaseURLInit && issuer === "") {
+						return;
+					}
+					throw error;
+				}
 				// oAuth Server Config
 				if (
 					!opts.silenceWarnings?.oauthAuthServerConfig &&
@@ -193,34 +235,24 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						// Verify query signature
 						const query = ctx.body.oauth_query;
-						let queryParams = new URLSearchParams(query);
-						const sig = queryParams.get("sig");
-						const exp = Number(queryParams.get("exp"));
-						queryParams.delete("sig");
-						queryParams = new URLSearchParams(queryParams);
-						const verifySig = await makeSignature(
-							queryParams.toString(),
+						const isValid = await verifyOAuthQueryParams(
+							query,
 							ctx.context.secret,
 						);
-						if (
-							!sig ||
-							!constantTimeEqual(sig, verifySig) ||
-							new Date(exp * 1000) < new Date()
-						) {
+						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_signature",
 							});
 						}
+						const queryParams = new URLSearchParams(query);
+						queryParams.delete("sig");
 						queryParams.delete("exp");
 						await oAuthState.set({
-							query: new URLSearchParams(queryParams).toString(),
+							query: queryParams.toString(),
 						});
 
-						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
-						if (
-							ctx.path === "/sign-in/social" ||
-							ctx.path === "/sign-in/oauth2"
-						) {
+						// If path is social sign-in, add to additional data body
+						if (ctx.path === "/sign-in/social") {
 							if (ctx.body.additionalData?.query) return;
 							if (!ctx.body.additionalData) ctx.body.additionalData = {};
 							ctx.body.additionalData.query = queryParams.toString();
@@ -257,6 +289,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!session) return;
 						ctx.context.session = session;
 
+						const secFetchMode = ctx.request?.headers
+							?.get("sec-fetch-mode")
+							?.toLowerCase();
+						const acceptHeader =
+							ctx.request?.headers?.get("accept")?.toLowerCase() ?? "";
+						const isNavigationRequest =
+							secFetchMode === "navigate" ||
+							(!secFetchMode &&
+								(acceptHeader.includes("text/html") ||
+									acceptHeader.includes("application/xhtml+xml")));
+						if (!isNavigationRequest) {
+							ctx.headers?.set("accept", "application/json");
+						}
 						ctx.query = deleteFromPrompt(query, "login");
 						return await authorizeEndpoint(ctx, opts);
 					}),
@@ -286,12 +331,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					} else {
 						const jwtPluginOptions = opts.disableJwtPlugin
 							? undefined
-							: getJwtPlugin(ctx.context).options;
+							: getJwtPlugin(ctx.context)?.options;
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							public_client_supported:
+								opts.allowUnauthenticatedClientRegistration ||
+								toClientDiscoveryArray(opts.clientDiscovery).length > 0,
+							grant_types_supported: opts.grantTypes,
+							jwt_disabled: opts.disableJwtPlugin,
 						});
-						return authMetadata;
+						return {
+							...authMetadata,
+							...mergeDiscoveryMetadata(opts.clientDiscovery),
+						};
 					}
 				},
 			),
@@ -318,30 +371,45 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return metadata;
 				},
 			),
-			oauth2Authorize: createAuthEndpoint(
+			oauth2Authorize: createOAuthEndpoint(
 				"/oauth2/authorize",
 				{
 					method: "GET",
 					query: z.object({
-						response_type: z.enum(["code"]),
+						response_type: z
+							.string()
+							.pipe(z.enum(["code"]))
+							.optional(),
 						client_id: z.string(),
 						redirect_uri: SafeUrlSchema.optional(),
 						scope: z.string().optional(),
 						state: z.string().optional(),
+						request_uri: z.string().optional(),
 						code_challenge: z.string().optional(),
-						code_challenge_method: z.enum(["S256"]).optional(),
+						code_challenge_method: z
+							.string()
+							.pipe(z.enum(["S256"]))
+							.optional(),
 						nonce: z.string().optional(),
 						prompt: z
-							.enum([
-								"consent",
-								"login",
-								"create",
-								"select_account",
-								"login consent",
-								"select_account consent",
-							])
+							.string()
+							.pipe(
+								z.enum([
+									"none",
+									"consent",
+									"login",
+									"create",
+									"select_account",
+									"login consent",
+									"select_account consent",
+								]),
+							)
 							.optional(),
 					}),
+					redirectOnError: authorizeRedirectOnError(opts),
+					errorCodesByField: {
+						response_type: { invalid: "unsupported_response_type" },
+					},
 					metadata: {
 						openapi: {
 							description: "Authorize an OAuth2 request",
@@ -349,7 +417,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								{
 									name: "response_type",
 									in: "query",
-									required: true,
+									required: false,
 									schema: { type: "string" },
 									description: "OAuth2 response type (e.g., 'code')",
 								},
@@ -380,6 +448,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									required: false,
 									schema: { type: "string" },
 									description: "OAuth2 state parameter",
+								},
+								{
+									name: "request_uri",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"Pushed Authorization Request URI referencing stored parameters",
 								},
 								{
 									name: "code_challenge",
@@ -545,18 +621,24 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return continueEndpoint(ctx, opts);
 				},
 			),
-			oauth2Token: createAuthEndpoint(
+			oauth2Token: createOAuthEndpoint(
 				"/oauth2/token",
 				{
 					method: "POST",
 					body: z.object({
-						grant_type: z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
+						grant_type: z
+							.string()
+							.pipe(
+								z.enum([
+									"authorization_code",
+									"client_credentials",
+									"refresh_token",
+								]),
+							),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						code: z.string().optional(),
 						code_verifier: z.string().optional(),
 						redirect_uri: SafeUrlSchema.optional(),
@@ -564,6 +646,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: z.string().optional(),
 						scope: z.string().optional(),
 					}),
+					errorCodesByField: {
+						grant_type: {
+							missing: "invalid_request",
+							invalid: "unsupported_grant_type",
+						},
+					},
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
@@ -694,17 +782,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return tokenEndpoint(ctx, opts);
 				},
 			),
-			oauth2Introspect: createAuthEndpoint(
+			oauth2Introspect: createOAuthEndpoint(
 				"/oauth2/introspect",
 				{
 					method: "POST",
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
-						token_type_hint: z
-							.enum(["access_token", "refresh_token"])
-							.optional(),
+						// RFC 7662 §2.1: hint, server MAY ignore. Unknown values are
+						// coerced to undefined in introspectEndpoint so detection falls
+						// back to trying both token types.
+						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -732,9 +823,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 												token_type_hint: {
 													type: "string",
-													enum: ["access_token", "refresh_token"],
 													description:
-														"Hint about the type of the token submitted for introspection",
+														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
 												},
 												resource: {
 													type: "string",
@@ -835,17 +925,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return introspectEndpoint(ctx, opts);
 				},
 			),
-			oauth2Revoke: createAuthEndpoint(
+			oauth2Revoke: createOAuthEndpoint(
 				"/oauth2/revoke",
 				{
 					method: "POST",
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
+						client_assertion: z.string().optional(),
+						client_assertion_type: z.string().optional(),
 						token: z.string(),
-						token_type_hint: z
-							.enum(["access_token", "refresh_token"])
-							.optional(),
+						// RFC 7009 §2.2.1: hint, server MAY ignore. Unknown values are
+						// coerced to undefined in revokeEndpoint; `unsupported_token_type`
+						// in RFC 7009 applies to the token itself, not the hint value.
+						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -873,9 +966,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 												token_type_hint: {
 													type: "string",
-													enum: ["access_token", "refresh_token"],
 													description:
-														"Hint about the type of the token submitted for revocation",
+														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
 												},
 											},
 											required: ["token"],
@@ -1035,7 +1127,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return userInfoEndpoint(ctx, opts);
 				},
 			),
-			oauth2EndSession: createAuthEndpoint(
+			oauth2EndSession: createOAuthEndpoint(
 				"/oauth2/end-session",
 				{
 					method: "GET",
@@ -1081,7 +1173,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return rpInitiatedLogoutEndpoint(ctx, opts);
 				},
 			),
-			registerOAuthClient: createAuthEndpoint(
+			registerOAuthClient: createOAuthEndpoint(
 				"/oauth2/register",
 				{
 					method: "POST",
@@ -1099,9 +1191,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_statement: z.string().optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.enum([
+								"none",
+								"client_secret_basic",
+								"client_secret_post",
+								"private_key_jwt",
+							])
 							.default("client_secret_basic")
 							.optional(),
+						jwks: z
+							.union([
+								z.array(z.record(z.string(), z.unknown())),
+								z.object({
+									keys: z.array(z.record(z.string(), z.unknown())),
+								}),
+							])
+							.optional(),
+						jwks_uri: z.string().optional(),
 						grant_types: z
 							.array(
 								z.enum([
@@ -1117,7 +1223,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.default(["code"])
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
+						subject_type: z.enum(["public", "pairwise"]).optional(),
+						skip_consent: z
+							.never({
+								error:
+									"skip_consent cannot be set during dynamic client registration",
+							})
+							.optional(),
 					}),
+					errorCodesByField: {
+						redirect_uris: "invalid_redirect_uri",
+						post_logout_redirect_uris: "invalid_redirect_uri",
+						software_statement: "invalid_software_statement",
+					},
+					defaultError: "invalid_client_metadata",
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
@@ -1224,6 +1343,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															"none",
 															"client_secret_basic",
 															"client_secret_post",
+															"private_key_jwt",
 														],
 													},
 													grant_types: {
@@ -1280,6 +1400,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			createOAuthClient: oauthClientEndpoints.createOAuthClient(opts),
 			getOAuthClient: oauthClientEndpoints.getOAuthClient(opts),
 			getOAuthClientPublic: oauthClientEndpoints.getOAuthClientPublic(opts),
+			getOAuthClientPublicPrelogin:
+				oauthClientEndpoints.getOAuthClientPublicPrelogin(opts),
 			getOAuthClients: oauthClientEndpoints.getOAuthClients(opts),
 			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
@@ -1291,5 +1413,67 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
+		rateLimit: [
+			// Token endpoint - critical for preventing credential stuffing
+			...(opts.rateLimit?.token !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/token",
+							window: opts.rateLimit?.token?.window ?? 60,
+							max: opts.rateLimit?.token?.max ?? 20,
+						},
+					]
+				: []),
+			// Authorize endpoint - user-facing, prevent auth floods
+			...(opts.rateLimit?.authorize !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/authorize",
+							window: opts.rateLimit?.authorize?.window ?? 60,
+							max: opts.rateLimit?.authorize?.max ?? 30,
+						},
+					]
+				: []),
+			// Introspection - high traffic API endpoint
+			...(opts.rateLimit?.introspect !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/introspect",
+							window: opts.rateLimit?.introspect?.window ?? 60,
+							max: opts.rateLimit?.introspect?.max ?? 100,
+						},
+					]
+				: []),
+			// Revocation - moderate traffic
+			...(opts.rateLimit?.revoke !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/revoke",
+							window: opts.rateLimit?.revoke?.window ?? 60,
+							max: opts.rateLimit?.revoke?.max ?? 30,
+						},
+					]
+				: []),
+			// Dynamic registration - prevent spam
+			...(opts.rateLimit?.register !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/register",
+							window: opts.rateLimit?.register?.window ?? 60,
+							max: opts.rateLimit?.register?.max ?? 5,
+						},
+					]
+				: []),
+			// UserInfo - API endpoint
+			...(opts.rateLimit?.userinfo !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/userinfo",
+							window: opts.rateLimit?.userinfo?.window ?? 60,
+							max: opts.rateLimit?.userinfo?.max ?? 60,
+						},
+					]
+				: []),
+		],
 	} satisfies BetterAuthPlugin;
 };

@@ -2,14 +2,17 @@ import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
-import { getTrustedOrigins } from "../context/helpers";
+import {
+	getTrustedOrigins,
+	getTrustedProviders,
+	resolveDynamicTrustedProxyHeaders,
+	resolveRequestContext,
+} from "../context/helpers";
 import type { Auth } from "../types";
-import { getBaseURL, getOrigin } from "../utils/url";
+import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
-	options: Options &
-		// fixme(alex): do we need Record<never, never> here?
-		Record<never, never>,
+	options: Options,
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
 	const authContext = initFn(options);
@@ -27,26 +30,54 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		handler: async (request: Request) => {
 			const ctx = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
-			if (!ctx.options.baseURL) {
-				const baseURL = getBaseURL(
-					undefined,
-					basePath,
+
+			let handlerCtx: AuthContext;
+
+			if (isDynamicBaseURLConfig(options.baseURL)) {
+				// Per-request clone avoids mutating shared ctx under concurrent
+				// requests that may resolve to different hosts.
+				handlerCtx = await resolveRequestContext(
+					ctx,
 					request,
-					undefined,
-					ctx.options.advanced?.trustedProxyHeaders,
+					resolveDynamicTrustedProxyHeaders(ctx.options),
 				);
-				if (baseURL) {
-					ctx.baseURL = baseURL;
-					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
-				} else {
-					throw new BetterAuthError(
-						"Could not get base URL from request. Please provide a valid base URL.",
+			} else {
+				handlerCtx = ctx;
+				// Static config with no baseURL: memoize on the shared ctx from
+				// the first request. A concurrent-first-requests race is
+				// harmless since both writes resolve to the same value. Cloning
+				// via `Object.create` (as the dynamic branch does) would break
+				// downstream references that depend on `ctx.options` being
+				// mutated in place.
+				if (!ctx.options.baseURL) {
+					const baseURL = getBaseURL(
+						undefined,
+						basePath,
+						request,
+						undefined,
+						ctx.options.advanced?.trustedProxyHeaders,
 					);
+					if (baseURL) {
+						ctx.baseURL = baseURL;
+						ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+					} else {
+						throw new BetterAuthError(
+							"Could not get base URL from request. Please provide a valid base URL.",
+						);
+					}
 				}
+				handlerCtx.trustedOrigins = await getTrustedOrigins(
+					ctx.options,
+					request,
+				);
+				handlerCtx.trustedProviders = await getTrustedProviders(
+					ctx.options,
+					request,
+				);
 			}
-			ctx.trustedOrigins = await getTrustedOrigins(ctx.options, request);
-			const { handler } = router(ctx, options);
-			return runWithAdapter(ctx.adapter, () => handler(request));
+
+			const { handler } = router(handlerCtx, options);
+			return runWithAdapter(handlerCtx.adapter, () => handler(request));
 		},
 		api,
 		options: options,

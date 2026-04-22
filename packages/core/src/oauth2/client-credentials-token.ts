@@ -1,17 +1,69 @@
-import { base64Url } from "@better-auth/utils/base64";
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import type { AwaitableFunction } from "../types";
+import type { ClientAssertionConfig } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
+export async function clientCredentialsTokenRequest({
+	options,
+	scope,
+	authentication,
+	clientAssertion,
+	tokenEndpoint,
+	resource,
+}: {
+	options: AwaitableFunction<ProviderOptions>;
+	scope?: string | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
+	/** Token endpoint URL. Used as the JWT `aud` claim when signing assertions. */
+	tokenEndpoint?: string | undefined;
+	resource?: (string | string[]) | undefined;
+}) {
+	options = typeof options === "function" ? await options() : options;
+
+	let extraParams: Record<string, string> | undefined;
+	if (authentication === "private_key_jwt") {
+		if (!clientAssertion) {
+			throw new Error(
+				"private_key_jwt authentication requires a clientAssertion configuration",
+			);
+		}
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		extraParams = await resolveAssertionParams({
+			clientAssertion,
+			clientId: primaryClientId,
+			tokenEndpoint,
+		});
+	}
+
+	return createClientCredentialsTokenRequest({
+		options,
+		scope,
+		authentication,
+		resource,
+		extraParams,
+	});
+}
+
+/**
+ * @deprecated use async'd clientCredentialsTokenRequest instead
+ */
 export function createClientCredentialsTokenRequest({
 	options,
 	scope,
 	authentication,
 	resource,
+	extraParams,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: ProviderOptions;
 	scope?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
 	resource?: (string | string[]) | undefined;
+	extraParams?: Record<string, string> | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -30,20 +82,25 @@ export function createClientCredentialsTokenRequest({
 			}
 		}
 	}
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
 	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		const encodedCredentials = base64Url.encode(
-			`${primaryClientId}:${options.clientSecret}`,
+		const encodedCredentials = base64.encode(
+			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		body.set("client_secret", options.clientSecret);
+		if (authentication !== "private_key_jwt" && options.clientSecret) {
+			body.set("client_secret", options.clientSecret);
+		}
+	}
+
+	if (extraParams) {
+		for (const [key, value] of Object.entries(extraParams)) {
+			if (!body.has(key)) body.append(key, value);
+		}
 	}
 
 	return {
@@ -57,18 +114,22 @@ export async function clientCredentialsToken({
 	tokenEndpoint,
 	scope,
 	authentication,
+	clientAssertion,
 	resource,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: AwaitableFunction<ProviderOptions>;
 	tokenEndpoint: string;
 	scope: string;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
 	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createClientCredentialsTokenRequest({
+	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
+		clientAssertion,
+		tokenEndpoint,
 		resource,
 	});
 

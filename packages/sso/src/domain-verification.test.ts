@@ -29,16 +29,28 @@ describe("Domain verification", async () => {
 		name: "Test User",
 	};
 
-	const createTestAuth = (options?: SSOOptions) => {
-		const data = {
+	const createTestAuth = (
+		options?: SSOOptions,
+		betterAuthOptions?: {
+			secondaryStorage?: {
+				set: (key: string, value: string, ttl?: number) => void;
+				get: (key: string) => string | null;
+				delete: (key: string) => void;
+			};
+		},
+	) => {
+		const data: Record<string, any[]> = {
 			user: [],
 			session: [],
-			verification: [],
 			account: [],
 			ssoProvider: [],
 			member: [],
 			organization: [],
 		};
+
+		if (!betterAuthOptions?.secondaryStorage) {
+			data.verification = [];
+		}
 
 		const memory = memoryAdapter(data);
 
@@ -56,6 +68,7 @@ describe("Domain verification", async () => {
 			emailAndPassword: {
 				enabled: true,
 			},
+			secondaryStorage: betterAuthOptions?.secondaryStorage,
 			plugins: [sso(ssoOptions), organization()],
 		});
 
@@ -118,7 +131,6 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
-						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
 					organizationId,
@@ -137,7 +149,6 @@ describe("Domain verification", async () => {
 	};
 
 	afterEach(() => {
-		vi.clearAllMocks();
 		vi.useRealTimers();
 	});
 
@@ -286,7 +297,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -471,7 +482,7 @@ describe("Domain verification", async () => {
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -484,6 +495,9 @@ describe("Domain verification", async () => {
 			});
 
 			expect(response.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-saml-provider-1.hello.com",
+			);
 		});
 
 		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
@@ -498,7 +512,7 @@ describe("Domain verification", async () => {
 				[
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
-				[`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
+				[`_auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
 			]);
 
 			const response = await auth.api.verifyDomain({
@@ -510,6 +524,90 @@ describe("Domain verification", async () => {
 			});
 
 			expect(response.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_auth-prefix-saml-provider-1.hello.com",
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8361
+		 */
+		it("should verify a provider domain ownership with a bare domain", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "bare-domain-provider",
+					issuer: "http://hello.com:8081",
+					domain: "hello.com",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const requestResponse = await auth.api.requestDomainVerification({
+				body: { providerId: "bare-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(requestResponse.status).toBe(201);
+			const { domainVerificationToken } = await requestResponse.json();
+
+			dnsMock.resolveTxt.mockResolvedValue([
+				[`_better-auth-token-bare-domain-provider=${domainVerificationToken}`],
+			]);
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: "bare-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(verifyResponse.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-bare-domain-provider.hello.com",
+			);
+		});
+
+		it("should return bad request when provider ID exceeds DNS label limit", async () => {
+			const longProviderId = "a".repeat(50);
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: longProviderId,
+					issuer: "http://hello.com:8081",
+					domain: "http://hello.com:8081",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: longProviderId,
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				message:
+					"Verification identifier exceeds the DNS label limit of 63 characters",
+				code: "IDENTIFIER_TOO_LONG",
+			});
 		});
 
 		it("should fail to verify an already verified domain", async () => {
@@ -519,7 +617,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -546,6 +644,63 @@ describe("Domain verification", async () => {
 				message: "Domain has already been verified",
 				code: "DOMAIN_VERIFIED",
 			});
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8348
+	 */
+	describe("with secondaryStorage (no storeInDatabase)", () => {
+		it("should request and verify domain verification via secondary storage", async () => {
+			const store = new Map<string, string>();
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth(
+				undefined,
+				{
+					secondaryStorage: {
+						set(key, value, ttl) {
+							store.set(key, value);
+						},
+						get(key) {
+							return store.get(key) || null;
+						},
+						delete(key) {
+							store.delete(key);
+						},
+					},
+				},
+			);
+
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			expect(provider.domainVerificationToken).toBeTypeOf("string");
+
+			// Re-request should return the existing token from secondary storage
+			const response = await auth.api.requestDomainVerification({
+				body: { providerId: provider.providerId },
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(201);
+			expect(await response.json()).toEqual({
+				domainVerificationToken: provider.domainVerificationToken,
+			});
+
+			// Verify domain via DNS
+			dnsMock.resolveTxt.mockResolvedValue([
+				[
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+				],
+			]);
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: provider.providerId },
+				headers,
+				asResponse: true,
+			});
+
+			expect(verifyResponse.status).toBe(204);
 		});
 	});
 });

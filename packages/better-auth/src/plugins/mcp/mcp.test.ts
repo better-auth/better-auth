@@ -4,7 +4,6 @@ import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import type { Client } from "../oidc-provider/types";
 import { mcp, withMcpAuth } from ".";
@@ -71,9 +70,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-public-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-public",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-public"],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
 			},
@@ -89,9 +86,7 @@ describe("mcp", async () => {
 			client_id: expect.any(String),
 			client_name: "test-public-client",
 			logo_uri: "",
-			redirect_uris: [
-				"http://localhost:3000/api/auth/oauth2/callback/test-public",
-			],
+			redirect_uris: ["http://localhost:3000/api/auth/callback/test-public"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "none",
@@ -122,7 +117,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-confidential-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
+					"http://localhost:3000/api/auth/callback/test-confidential",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
@@ -135,7 +130,7 @@ describe("mcp", async () => {
 			client_name: "test-confidential-client",
 			logo_uri: "",
 			redirect_uris: [
-				"http://localhost:3000/api/auth/oauth2/callback/test-confidential",
+				"http://localhost:3000/api/auth/callback/test-confidential",
 			],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
@@ -186,16 +181,15 @@ describe("mcp", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5001",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test-public",
+				provider: "test-public",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -210,14 +204,14 @@ describe("mcp", async () => {
 		expect(data.url).toContain("code_challenge_method=S256");
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
 			},
 		});
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test-public?code=",
+			"http://localhost:3000/api/auth/callback/test-public?code=",
 		);
 
 		let callbackURL = "";
@@ -282,16 +276,15 @@ describe("mcp", async () => {
 			});
 		const oAuthHeaders = new Headers();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5001",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test-confidential",
+				provider: "test-confidential",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -304,14 +297,14 @@ describe("mcp", async () => {
 		expect(data.url).toContain(`client_id=${confidentialClient.clientId}`);
 
 		let redirectURI = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context: any) {
 				redirectURI = context.response.headers.get("Location") || "";
 			},
 		});
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test-confidential?code=",
+			"http://localhost:3000/api/auth/callback/test-confidential?code=",
 		);
 
 		let callbackURL = "";
@@ -385,9 +378,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-refresh-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-refresh",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-refresh"],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
 			},
@@ -425,7 +416,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-userinfo-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-userinfo",
+					"http://localhost:3000/api/auth/callback/test-userinfo",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
@@ -463,7 +454,6 @@ describe("mcp", async () => {
 		});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5003",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
@@ -471,9 +461,9 @@ describe("mcp", async () => {
 		});
 
 		// Perform OAuth flow
-		await client.signIn.oauth2(
+		await client.signIn.social(
 			{
-				providerId: "test-userinfo",
+				provider: "test-userinfo",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -504,9 +494,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-idtoken-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-idtoken",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-idtoken"],
 				logo_uri: "",
 				token_endpoint_auth_method: "client_secret_basic",
 			},
@@ -543,9 +531,7 @@ describe("mcp", async () => {
 			method: "POST",
 			body: {
 				client_name: "test-consent-client",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-consent",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-consent"],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
 			},
@@ -649,7 +635,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-no-consent-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-no-consent",
+					"http://localhost:3000/api/auth/callback/test-no-consent",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
@@ -694,7 +680,7 @@ describe("mcp", async () => {
 			body: {
 				client_name: "test-no-state-client",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-no-state",
+					"http://localhost:3000/api/auth/callback/test-no-state",
 				],
 				logo_uri: "",
 				token_endpoint_auth_method: "none",
@@ -748,6 +734,106 @@ describe("mcp", async () => {
 			expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
 				"WWW-Authenticate",
 			);
+		});
+	});
+
+	describe("OAuth cookie persistence", () => {
+		it("should redirect back to client after login, not to /api/auth/error", async ({
+			expect,
+		}) => {
+			// Use unique email to avoid conflicts with other test runs
+			const uniqueEmail = `test-${Date.now()}@test.com`;
+			const password = "testpassword123";
+
+			// Create a test user
+			await customFetchImpl(`${baseURL}/api/auth/sign-up/email`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: uniqueEmail,
+					password: password,
+					name: "Test User",
+				}),
+			});
+
+			// Register a test client
+			const testClient = await serverClient.$fetch("/mcp/register", {
+				method: "POST",
+				body: {
+					client_name: "test-magiclink-client",
+					redirect_uris: [
+						"http://localhost:3000/api/auth/callback/magiclink-test",
+					],
+					token_endpoint_auth_method: "none",
+				},
+			});
+
+			const clientId = (testClient.data as any).client_id;
+			const redirectUri = (testClient.data as any).redirect_uris[0];
+
+			// Logout to simulate unauthenticated user
+			await serverClient.$fetch("/sign-out", {
+				method: "POST",
+			});
+
+			// Initiate OAuth authorization without being logged in
+			const authURL = new URL(`${baseURL}/api/auth/mcp/authorize`);
+			authURL.searchParams.set("client_id", clientId);
+			authURL.searchParams.set("redirect_uri", redirectUri);
+			authURL.searchParams.set("response_type", "code");
+			authURL.searchParams.set("scope", "openid profile email");
+			authURL.searchParams.set("state", "magiclink-test-state");
+			authURL.searchParams.set("code_challenge", "test-challenge-magiclink");
+			authURL.searchParams.set("code_challenge_method", "S256");
+
+			let redirectLocation = "";
+			const oidcHeaders = new Headers();
+
+			await customFetchImpl(authURL.toString(), {
+				method: "GET",
+				redirect: "manual",
+			}).then((res) => {
+				redirectLocation = res.headers.get("Location") || "";
+				// Capture oidc_login_prompt cookie
+				const setCookie = res.headers.get("set-cookie");
+				if (setCookie) {
+					oidcHeaders.set("Cookie", setCookie);
+				}
+			});
+
+			// Should redirect to login page with oidc_login_prompt cookie set
+			expect(redirectLocation).toContain("/login");
+			expect(oidcHeaders.get("Cookie")).toContain("oidc_login_prompt");
+
+			const oidcCookie = oidcHeaders.get("Cookie")?.split(";")[0] || "";
+
+			const user = await customFetchImpl(`${baseURL}/api/auth/sign-in/email`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Cookie: oidcCookie,
+				},
+				body: JSON.stringify({
+					email: uniqueEmail,
+					password: password,
+				}),
+				redirect: "manual",
+			});
+			redirectLocation = user.headers.get("Location") || "";
+
+			// Verify the redirect after authenticated login
+			expect(redirectLocation).not.toContain("error=invalid_client");
+			expect(redirectLocation).not.toContain("/api/auth/error");
+
+			// Should either redirect to consent or directly to callback with code
+			const shouldHaveValidRedirect =
+				redirectLocation.includes("consent_code=") ||
+				(redirectLocation.includes(redirectUri) &&
+					redirectLocation.includes("code="));
+
+			expect(shouldHaveValidRedirect).toBe(true);
 		});
 	});
 });

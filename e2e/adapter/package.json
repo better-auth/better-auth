@@ -1,0 +1,21 @@
+{
+  "name": "@better-auth-test/adapter-base",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.16.0",
+    "better-sqlite3": "^12.6.2",
+    "drizzle-kit": "^0.30.6",
+    "drizzle-orm": "^0.45.2",
+    "mongodb": "^7.1.0",
+    "mysql2": "^3.18.2",
+    "pg": "^8.19.0",
+    "tarn": "^3.0.2",
+    "tedious": "^18.6.2"
+  },
+  "dependencies": {
+    "deepmerge": "^4.3.1",
+    "kysely": "^0.28.14"
+  }
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
+import type { User } from "../types";
 
 describe("db", async () => {
 	it("should work with custom model names", async () => {
@@ -73,6 +74,56 @@ describe("db", async () => {
 		expect(callback).toBe(true);
 	});
 
+	it("db hooks should preserve a forced UUID on postgres when generateId is uuid", async () => {
+		const existingId = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+		const email = `forced-id-${crypto.randomUUID()}@test.com`;
+		const { auth, db } = await getTestInstance(
+			{
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							async before(user) {
+								return {
+									data: {
+										...user,
+										id: existingId,
+									},
+								};
+							},
+						},
+					},
+				},
+			},
+			{
+				testWith: "postgres",
+				disableTestUser: true,
+			},
+		);
+
+		const result = await auth.api.signUpEmail({
+			body: {
+				email,
+				name: "forced-id-user",
+				password: "password",
+			},
+		});
+
+		expect(result.user.id).toBe(existingId);
+
+		const createdUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: existingId }],
+		});
+
+		expect(createdUser?.id).toBe(existingId);
+		expect(createdUser?.email).toBe(email);
+	});
+
 	it("should work with custom field names", async () => {
 		const { client } = await getTestInstance({
 			user: {
@@ -95,6 +146,70 @@ describe("db", async () => {
 			},
 		});
 		expect(session?.user.email).toBe("test@email.com");
+	});
+
+	it("should coerce string where values to match field types", async () => {
+		// HTTP query params arrive as strings.
+		// The adapter should coerce values to match the field's schema type.
+		const { auth, db } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						age: { type: "number", required: false },
+					},
+				},
+			},
+			{
+				// Uses MongoDB because SQLite/MySQL/PostgreSQL silently cast types,
+				// which would make this test pass even without the coercion code.
+				testWith: "mongodb",
+			},
+		);
+
+		// boolean: "false" → false, "true" → true
+		const users = await db.findMany<{ emailVerified: boolean }>({
+			model: "user",
+			where: [{ field: "emailVerified", operator: "eq", value: "false" }],
+		});
+		expect(users.length).toBeGreaterThanOrEqual(1);
+		expect(users.every((u) => u.emailVerified === false)).toBe(true);
+
+		// number: "25" → 25
+		await db.update({
+			model: "user",
+			where: [{ field: "emailVerified", operator: "eq", value: false }],
+			update: { age: 25 },
+		});
+		const byAge = await db.findMany<{ age: number | null }>({
+			model: "user",
+			where: [{ field: "age", operator: "eq", value: "25" }],
+		});
+		expect(byAge.length).toBeGreaterThanOrEqual(1);
+		expect(byAge.every((u) => u.age === 25)).toBe(true);
+
+		// number array: ["25", "30"] → [25, 30]
+		await auth.api.signUpEmail({
+			body: {
+				email: "age30@test.com",
+				password: "password",
+				name: "user-30",
+				age: 30,
+			},
+		});
+		await auth.api.signUpEmail({
+			body: {
+				email: "age40@test.com",
+				password: "password",
+				name: "user-40",
+				age: 40,
+			},
+		});
+		const byAgeIn = await db.findMany<{ age: number | null }>({
+			model: "user",
+			where: [{ field: "age", operator: "in", value: ["25", "30"] }],
+		});
+		expect(byAgeIn).toHaveLength(2);
+		expect(byAgeIn.map((u) => u.age).sort()).toEqual([25, 30]);
 	});
 
 	it("delete hooks", async () => {

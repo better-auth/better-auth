@@ -5,10 +5,12 @@ import type {
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { atom, computed } from "nanostores";
 import * as z from "zod";
+import { PACKAGE_VERSION } from "../version";
 import { useAuthQuery } from "./query";
 
 const serverPlugin = {
 	id: "test",
+	version: PACKAGE_VERSION,
 	endpoints: {
 		test: createAuthEndpoint(
 			"/test",
@@ -120,6 +122,7 @@ export const testClientPlugin = () => {
 	});
 	return {
 		id: "test" as const,
+		version: PACKAGE_VERSION,
 		getActions($fetch) {
 			return {
 				setTestAtom(value: boolean) {
@@ -163,6 +166,7 @@ export const testClientPlugin2 = () => {
 	});
 	return {
 		id: "test",
+		version: PACKAGE_VERSION,
 		getAtoms($fetch) {
 			return {
 				$test2,
@@ -179,5 +183,38 @@ export const testClientPlugin2 = () => {
 				signal: "$sessionSignal",
 			},
 		],
+	} satisfies BetterAuthClientPlugin;
+};
+
+/**
+ * Test plugins for verifying deep merge of plugin actions.
+ * When multiple plugins return the same top-level action key (e.g., `signIn`),
+ * all methods should be merged together instead of the last one overwriting.
+ */
+export const testDeepMergePluginA = () => {
+	return {
+		id: "test-deep-merge-a",
+		version: PACKAGE_VERSION,
+		getActions() {
+			return {
+				signIn: {
+					methodA: async () => ({ success: true, method: "A" }),
+				},
+			};
+		},
+	} satisfies BetterAuthClientPlugin;
+};
+
+export const testDeepMergePluginB = () => {
+	return {
+		id: "test-deep-merge-b",
+		version: PACKAGE_VERSION,
+		getActions() {
+			return {
+				signIn: {
+					methodB: async () => ({ success: true, method: "B" }),
+				},
+			};
+		},
 	} satisfies BetterAuthClientPlugin;
 };

@@ -231,6 +231,181 @@ describe("oauth2 - email verification on link", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7806
+ */
+describe("oauth2 - account linking with case insensitive email", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				verifyIdToken: async () => true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("should link account when email casing differs using callback", async () => {
+		const testEmail = "casing-test@example.com";
+		const googleEmail = "Casing-Test@Example.com";
+
+		// Create user with lowercase email
+		const sessionHeaders = new Headers();
+		const signUpRes = await client.signUp.email({
+			email: testEmail,
+			password: "password123",
+			name: "Test User",
+			fetchOptions: {
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		});
+
+		expect(signUpRes.data).toBeTruthy();
+		const userId = signUpRes.data!.user.id;
+
+		// Link with Google account that has different casing
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: googleEmail,
+					email_verified: true,
+					name: "Test User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_oauth_sub_casing",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Test",
+					family_name: "User",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const linkRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/settings",
+			},
+			{
+				headers: sessionHeaders,
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(linkRes.error).toBeNull();
+		expect(linkRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state = new URL(linkRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: sessionHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("/settings");
+
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeTruthy();
+	});
+
+	it("should link account when email casing differs using idToken", async () => {
+		const testEmail = "casing-test2@example.com";
+		const googleEmail = "Casing-Test2@Example.com";
+
+		// Create user with lowercase email
+		const sessionHeaders = new Headers();
+		const signUpRes = await client.signUp.email({
+			email: testEmail,
+			password: "password123",
+			name: "Test User",
+			fetchOptions: {
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		});
+
+		expect(signUpRes.data).toBeTruthy();
+		const userId = signUpRes.data!.user.id;
+
+		const profile: GoogleProfile = {
+			email: googleEmail,
+			email_verified: true,
+			name: "Test User",
+			picture: "https://example.com/photo.jpg",
+			exp: 1234567890,
+			sub: "google_oauth_sub_casing",
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "test",
+			given_name: "Test",
+			family_name: "User",
+		};
+		const idToken = await signJWT(profile, DEFAULT_SECRET);
+
+		const linkRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/settings",
+				idToken: { token: idToken },
+			},
+			{
+				headers: sessionHeaders,
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(linkRes.error).toBeNull();
+		expect(linkRes.data).toBeTruthy();
+
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeTruthy();
+	});
+});
+
 describe("oauth2 - account linking without trustedProviders", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
@@ -392,6 +567,227 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 	});
 });
 
+describe("oauth2 - disableImplicitLinking", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				disableImplicitLinking: true,
+				trustedProviders: ["google"],
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("should block implicit linking on sign-in even for trusted providers", async () => {
+		const testEmail = "implicit-block@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "implicit-block-user",
+				email: testEmail,
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Test User",
+					sub: "google_implicit_block_123",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					iss: "test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=account_not_linked");
+
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: "implicit-block-user" }],
+		});
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeUndefined();
+	});
+
+	it("should allow new user sign-up even with disableImplicitLinking", async () => {
+		const newUserEmail = "new-user-implicit@example.com";
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					email: newUserEmail,
+					email_verified: true,
+					name: "New User",
+					sub: "google_new_user_implicit_456",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					iss: "test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).not.toContain("error");
+
+		const user = await ctx.adapter.findOne<{ id: string }>({
+			model: "user",
+			where: [{ field: "email", value: newUserEmail }],
+		});
+		expect(user).toBeTruthy();
+	});
+
+	it("should allow explicit linkSocial when disableImplicitLinking is true", async () => {
+		const testEmail = "explicit-link@example.com";
+
+		const sessionHeaders = new Headers();
+		const signUpRes = await client.signUp.email(
+			{
+				email: testEmail,
+				password: "password123",
+				name: "Test User",
+			},
+			{
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(signUpRes.data).toBeTruthy();
+		const userId = signUpRes.data!.user.id;
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Test User",
+					sub: "google_explicit_link_789",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					iss: "test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const linkRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/settings",
+			},
+			{
+				headers: sessionHeaders,
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(linkRes.error).toBeNull();
+		expect(linkRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state = new URL(linkRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: sessionHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("/settings");
+
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeTruthy();
+	});
+});
+
 describe("oauth2 - override user info on sign-in", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
@@ -484,5 +880,181 @@ describe("oauth2 - override user info on sign-in", async () => {
 		});
 
 		expect(session.data?.user.name).toBe("Updated Name");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8906
+ *
+ * Regression: linkSocial callback used findAccount(accountId) without
+ * filtering by providerId. When two different providers share the same
+ * numeric account ID, the wrong account could be matched, causing a
+ * spurious "account_already_linked_to_different_user" error or silently
+ * updating the wrong account record.
+ */
+describe("oauth2 - link-social uses provider-scoped account lookup", async () => {
+	// Shared numeric ID used by both Google and GitHub to trigger the bug
+	const SHARED_ACCOUNT_ID = "99999";
+
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+			github: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google", "github"],
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	function mockGoogleToken(email: string, sub: string) {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					sub,
+					email,
+					email_verified: true,
+					name: "Test User",
+					iat: 0,
+					exp: 9999999999,
+					aud: "test",
+					iss: "https://accounts.google.com",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "google-access-token",
+					id_token: idToken,
+				});
+			}),
+		);
+	}
+
+	function mockGithubToken(login: string, id: number, email: string) {
+		server.use(
+			http.post("https://github.com/login/oauth/access_token", async () => {
+				return HttpResponse.json({ access_token: "github-access-token" });
+			}),
+			http.get("https://api.github.com/user", async () => {
+				return HttpResponse.json({ id, login, name: login, email });
+			}),
+			http.get("https://api.github.com/user/emails", async () => {
+				return HttpResponse.json([{ email, primary: true, verified: true }]);
+			}),
+		);
+	}
+
+	it("should not match a different provider's account when the accountId is the same", async () => {
+		// User A: signed up via Google with accountId = SHARED_ACCOUNT_ID
+		const userAEmail = "user-a@example.com";
+		mockGoogleToken(userAEmail, SHARED_ACCOUNT_ID);
+
+		const userAHeaders = new Headers();
+		const googleSignIn = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(userAHeaders) },
+		});
+		const stateA =
+			new URL(googleSignIn.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state: stateA, code: "test_code" },
+			method: "GET",
+			headers: userAHeaders,
+			onError(ctx) {
+				cookieSetter(userAHeaders)(ctx as any);
+			},
+		});
+
+		const sessionA = await client.getSession({
+			fetchOptions: { headers: userAHeaders },
+		});
+		expect(sessionA.data?.user.email).toBe(userAEmail);
+		const userAId = sessionA.data!.user.id;
+
+		// User B: separate email/password account
+		const userBEmail = "user-b@example.com";
+		const userBHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: userBEmail,
+				password: "password123",
+				name: "User B",
+			},
+			{ onSuccess: cookieSetter(userBHeaders) },
+		);
+
+		// User B tries to link GitHub — GitHub returns the SAME accountId
+		// as User A's Google account. Without the fix, findAccount(SHARED_ACCOUNT_ID)
+		// would find User A's Google account and return "account_already_linked_to_different_user".
+		mockGithubToken("user-b-gh", Number(SHARED_ACCOUNT_ID), userBEmail);
+
+		const linkRes = await client.linkSocial(
+			{ provider: "github", callbackURL: "/settings" },
+			{ headers: userBHeaders, onSuccess: cookieSetter(userBHeaders) },
+		);
+		expect(linkRes.error).toBeNull();
+
+		const stateB = new URL(linkRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/github", {
+			query: { state: stateB, code: "test_code" },
+			method: "GET",
+			headers: userBHeaders,
+			onError(ctx) {
+				redirectLocation = ctx.response.headers.get("location") || "";
+				cookieSetter(userBHeaders)(ctx as any);
+			},
+		});
+
+		// Should redirect to /settings without error
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("/settings");
+
+		// User B should have a GitHub account linked
+		const sessionB = await client.getSession({
+			fetchOptions: { headers: userBHeaders },
+		});
+		const userBId = sessionB.data!.user.id;
+
+		const accountsB = await ctx.adapter.findMany<{
+			providerId: string;
+			accountId: string;
+			userId: string;
+		}>({
+			model: "account",
+			where: [{ field: "userId", value: userBId }],
+		});
+
+		const githubAccount = accountsB.find((a) => a.providerId === "github");
+		expect(githubAccount).toBeTruthy();
+		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
+		expect(githubAccount?.userId).toBe(userBId);
+
+		// User A's Google account must remain untouched
+		const accountsA = await ctx.adapter.findMany<{
+			providerId: string;
+			userId: string;
+		}>({
+			model: "account",
+			where: [{ field: "userId", value: userAId }],
+		});
+		const googleAccount = accountsA.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeTruthy();
+		expect(googleAccount?.userId).toBe(userAId);
 	});
 });

@@ -4,8 +4,40 @@ import type {
 	Session,
 	User,
 } from "better-auth";
+import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import type { subscriptions, user } from "./schema";
+import type { organization, subscriptions, user } from "./schema";
+
+export type AuthorizeReferenceAction =
+	| "upgrade-subscription"
+	| "list-subscription"
+	| "cancel-subscription"
+	| "restore-subscription"
+	| "billing-portal";
+
+export type CustomerType = "user" | "organization";
+
+export type WithStripeCustomerId = {
+	stripeCustomerId?: string;
+};
+
+// TODO: Types extended by a plugin should be moved into that plugin.
+export type WithActiveOrganizationId = {
+	activeOrganizationId?: string;
+};
+
+export type StripeCtxSession = {
+	session: Session & WithActiveOrganizationId;
+	user: User & WithStripeCustomerId;
+};
+
+export type CheckoutSessionLocale = NonNullable<
+	Stripe.Checkout.SessionCreateParams["locale"]
+>;
+
+export type CheckoutSessionLineItem = NonNullable<
+	Stripe.Checkout.SessionCreateParams["line_items"]
+>[number];
 
 export type StripePlan = {
 	/**
@@ -50,6 +82,36 @@ export type StripePlan = {
 	 * when a user can subscribe to multiple plans.
 	 */
 	group?: string | undefined;
+	/**
+	 * Per-seat billing price ID
+	 *
+	 * Requires the `organization` plugin. Member changes
+	 * automatically sync the seat quantity in Stripe.
+	 */
+	seatPriceId?: string | undefined;
+	/**
+	 * Proration behavior when updating this plan's subscription.
+	 *
+	 * Controls how Stripe handles mid-cycle price changes.
+	 * - `create_prorations`: Add proration line items to the next invoice (default)
+	 * - `always_invoice`: Create prorations and immediately invoice
+	 * - `none`: No proration; new price applies at next billing cycle
+	 *
+	 * @default "create_prorations"
+	 * @see https://docs.stripe.com/billing/subscriptions/prorations
+	 */
+	prorationBehavior?:
+		| Stripe.SubscriptionUpdateParams.ProrationBehavior
+		| undefined;
+	/**
+	 * Additional line items to include in the checkout session.
+	 *
+	 * All line items must use the same billing interval as the base price (e.g. all monthly or all yearly).
+	 * Stripe does not support mixed-interval subscriptions via Checkout Sessions.
+	 *
+	 * @see https://docs.stripe.com/billing/subscriptions/mixed-interval#limitations
+	 */
+	lineItems?: CheckoutSessionLineItem[] | undefined;
 	/**
 	 * Free trial days
 	 */
@@ -183,6 +245,17 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number | undefined;
+	/**
+	 * The billing interval for this subscription.
+	 * Indicates how often the subscription is billed.
+	 * @see https://docs.stripe.com/api/plans/object#plan_object-interval
+	 */
+	billingInterval?: "day" | "week" | "month" | "year" | undefined;
+	/**
+	 * Stripe Subscription Schedule ID, present when a scheduled
+	 * plan change is pending for this subscription.
+	 */
+	stripeScheduleId?: string | undefined;
 }
 
 export type SubscriptionOptions = {
@@ -253,12 +326,7 @@ export type SubscriptionOptions = {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
 					referenceId: string;
-					action:
-						| "upgrade-subscription"
-						| "list-subscription"
-						| "cancel-subscription"
-						| "restore-subscription"
-						| "billing-portal";
+					action: AuthorizeReferenceAction;
 				},
 				ctx: GenericEndpointContext,
 		  ) => Promise<boolean>)
@@ -313,14 +381,6 @@ export type SubscriptionOptions = {
 						options?: Stripe.RequestOptions;
 				  })
 		| undefined;
-	/**
-	 * Enable organization subscription
-	 */
-	organization?:
-		| {
-				enabled: boolean;
-		  }
-		| undefined;
 };
 
 export interface StripeOptions {
@@ -348,7 +408,7 @@ export interface StripeOptions {
 		| ((
 				data: {
 					stripeCustomer: Stripe.Customer;
-					user: User & { stripeCustomerId: string };
+					user: User & WithStripeCustomerId;
 				},
 				ctx: GenericEndpointContext,
 		  ) => Promise<void>)
@@ -379,6 +439,49 @@ export interface StripeOptions {
 		  )
 		| undefined;
 	/**
+	 * Organization Stripe integration
+	 *
+	 * Enable organizations to have their own Stripe customer ID
+	 */
+	organization?:
+		| {
+				/**
+				 * Enable organization Stripe customer
+				 */
+				enabled: true;
+				/**
+				 * A custom function to get the customer create params
+				 * for organization customers.
+				 *
+				 * @param organization - the organization
+				 * @param ctx - the context object
+				 * @returns
+				 */
+				getCustomerCreateParams?:
+					| ((
+							organization: Organization,
+							ctx: GenericEndpointContext,
+					  ) => Promise<Partial<Stripe.CustomerCreateParams>>)
+					| undefined;
+				/**
+				 * A callback to run after an organization customer has been created
+				 *
+				 * @param data - data containing stripeCustomer and organization
+				 * @param ctx - the context object
+				 * @returns
+				 */
+				onCustomerCreate?:
+					| ((
+							data: {
+								stripeCustomer: Stripe.Customer;
+								organization: Organization & WithStripeCustomerId;
+							},
+							ctx: GenericEndpointContext,
+					  ) => Promise<void>)
+					| undefined;
+		  }
+		| undefined;
+	/**
 	 * A callback to run after a stripe event is received
 	 * @param event - Stripe Event
 	 * @returns
@@ -387,7 +490,9 @@ export interface StripeOptions {
 	/**
 	 * Schema for the stripe plugin
 	 */
-	schema?: InferOptionSchema<typeof subscriptions & typeof user> | undefined;
+	schema?:
+		| InferOptionSchema<
+				typeof subscriptions & typeof user & typeof organization
+		  >
+		| undefined;
 }
-
-export interface InputSubscription extends Omit<Subscription, "id"> {}

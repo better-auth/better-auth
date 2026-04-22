@@ -1,28 +1,80 @@
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import * as z from "zod";
 
+const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
+
 /**
- * Reusable URL validation that disallows javascript: scheme
+ * Runtime schema for OAuthAuthorizationQuery.
+ * Uses passthrough to tolerate fields added by future extensions (PAR, FPA, etc.)
  */
-export const SafeUrlSchema = z
-	.url()
-	.superRefine((val, ctx) => {
-		if (!URL.canParse(val)) {
-			ctx.addIssue({
-				code: "custom",
-				message: "URL must be parseable",
-				fatal: true,
-			});
-			return z.NEVER;
-		}
+const oauthAuthorizationQuerySchema = z
+	.object({
+		response_type: z.literal("code").optional(),
+		request_uri: z.string().optional(),
+		redirect_uri: z.string(),
+		scope: z.string().optional(),
+		state: z.string().optional(),
+		client_id: z.string(),
+		prompt: z.string().optional(),
+		display: z.string().optional(),
+		ui_locales: z.string().optional(),
+		max_age: z.coerce.number().optional(),
+		acr_values: z.string().optional(),
+		login_hint: z.string().optional(),
+		id_token_hint: z.string().optional(),
+		code_challenge: z.string().optional(),
+		code_challenge_method: z.literal("S256").optional(),
+		nonce: z.string().optional(),
 	})
-	.refine(
-		(url) => {
-			const u = new URL(url);
-			return (
-				u.protocol !== "javascript:" &&
-				u.protocol !== "data:" &&
-				u.protocol !== "vbscript:"
-			);
-		},
-		{ message: "URL cannot use javascript:, data:, or vbscript: scheme" },
-	);
+	.passthrough();
+
+/**
+ * Runtime schema for the authorization code verification value.
+ * Validates structure on deserialization from the JSON blob stored in the DB.
+ * Uses passthrough so future fields (e.g. from authorization challenge) don't break parsing.
+ */
+export const verificationValueSchema = z
+	.object({
+		type: z.literal("authorization_code"),
+		query: oauthAuthorizationQuerySchema,
+		sessionId: z.string(),
+		userId: z.string(),
+		referenceId: z.string().optional(),
+		authTime: z.number().optional(),
+	})
+	.passthrough();
+
+/**
+ * Reusable URL validation for OAuth redirect URIs.
+ * - Blocks dangerous schemes (javascript:, data:, vbscript:)
+ * - For http/https: requires HTTPS (HTTP allowed only for loopback hosts: 127.0.0.0/8, [::1], *.localhost per RFC 6761)
+ * - Allows custom schemes for mobile apps (e.g., myapp://callback)
+ */
+export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
+	if (!URL.canParse(val)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "URL must be parseable",
+			fatal: true,
+		});
+		return z.NEVER;
+	}
+
+	const u = new URL(val);
+
+	if (DANGEROUS_SCHEMES.includes(u.protocol)) {
+		ctx.addIssue({
+			code: "custom",
+			message: "URL cannot use javascript:, data:, or vbscript: scheme",
+		});
+		return;
+	}
+
+	if (u.protocol === "http:" && !isLoopbackHost(u.host)) {
+		ctx.addIssue({
+			code: "custom",
+			message:
+				"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
+		});
+	}
+});

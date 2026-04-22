@@ -1,14 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { remarkNpm } from "fumadocs-core/mdx-plugins";
-import { fileGenerator, remarkDocGen } from "fumadocs-docgen";
-import { remarkInclude } from "fumadocs-mdx/config";
-import { remarkAutoTypeTable } from "fumadocs-typescript";
-import { remark } from "remark";
-import remarkGfm from "remark-gfm";
-import remarkMdx from "remark-mdx";
-import remarkStringify from "remark-stringify";
-import type { source } from "@/lib/source";
+import type { InferPageType } from "fumadocs-core/source";
+import type { DocsVersion } from "./docs-versions";
+import type { source } from "./source";
 
 type PropertyDefinition = {
 	name: string;
@@ -104,7 +96,7 @@ function parseTypeBody(typeBody: string): PropertyDefinition[] {
 			const [, name, optional, type, , exampleValue, , description] = propMatch;
 
 			let cleanType = type.trim();
-			let cleanExampleValue = exampleValue || "";
+			const cleanExampleValue = exampleValue || "";
 
 			cleanType = cleanType.replace(/,$/, "");
 
@@ -192,7 +184,7 @@ function createClientBody(props: PropertyDefinition[]): string {
 
 		let comment = "";
 		if (!prop.required || prop.description) {
-			const comments = [];
+			const comments: string[] = [];
 			if (!prop.required) comments.push("optional");
 			if (prop.description) comments.push(prop.description);
 			comment = ` // ${comments.join(", ")}`;
@@ -228,7 +220,7 @@ function createServerBody(
 		for (const prop of relevantProps) {
 			let comment = "";
 			if (!prop.required || prop.description) {
-				const comments = [];
+				const comments: string[] = [];
 				if (!prop.required) comments.push("optional");
 				if (prop.description) comments.push(prop.description);
 				comment = ` // ${comments.join(", ")}`;
@@ -250,73 +242,27 @@ function createServerBody(
 	return serverBody;
 }
 
-const processor = remark()
-	.use(remarkMdx)
-	.use(remarkInclude)
-	.use(remarkGfm)
-	.use(remarkAutoTypeTable)
-	.use(remarkDocGen, { generators: [fileGenerator()] })
-	.use(remarkNpm)
-	.use(remarkStringify);
-
-function resolveFallbackPaths(
-	docPage: ReturnType<typeof source.getPage>,
-): string[] {
-	const candidates: string[] = [];
-	const relativePath = docPage?.path;
-
-	if (!relativePath) return candidates;
-
-	const withExtension = relativePath.endsWith(".mdx")
-		? relativePath
-		: `${relativePath}.mdx`;
-
-	candidates.push(join(process.cwd(), "content", "docs", withExtension));
-
-	// Add docs prefix only if not already present
-	if (!relativePath.startsWith("docs/")) {
-		candidates.push(join(process.cwd(), "docs", withExtension));
-	}
-
-	return candidates;
-}
-
-function readDocContent(docPage: ReturnType<typeof source.getPage>): string {
-	if (!docPage) {
-		throw new Error("Missing doc page data");
-	}
-
-	try {
-		return docPage.data.content;
-	} catch (error) {
-		for (const fallbackPath of resolveFallbackPaths(docPage)) {
-			if (existsSync(fallbackPath)) {
-				return readFileSync(fallbackPath, "utf8");
-			}
-		}
-
-		throw error;
-	}
-}
-
 export async function getLLMText(
-	docPage: ReturnType<typeof source.getPage>,
+	docPage: InferPageType<typeof source>,
+	version?: DocsVersion,
 ): Promise<string> {
-	const rawContent = readDocContent(docPage);
+	const pageData = docPage.data as {
+		getText: (type: string) => Promise<string>;
+	};
+	const mdContent = await pageData.getText("processed");
 
 	// Extract APIMethod components & other nested wrapper before processing
-	const processedContent = extractAPIMethods(rawContent);
+	const processedContent = extractAPIMethods(mdContent);
 
-	const processed = await processor.process({
-		path: docPage!.path,
-		value: processedContent,
-	});
+	const versionNote = version?.slug
+		? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
+		: ""; // no version note for latest stable release
 
-	return `# ${docPage!.data.title}
+	return `${versionNote}# ${docPage!.data.title}
 
 ${docPage!.data.description || ""}
 
-${processed.toString()}
+${processedContent}
 `;
 }
 

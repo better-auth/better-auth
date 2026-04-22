@@ -3,7 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "./types";
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
@@ -46,17 +47,19 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
+		hydrateSession,
 		$fetch,
 		atomListeners,
 		$store,
 	} = getClientConfig(options);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
 	}
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		hydrateSession,
 		$fetch,
 		$store,
 	};
@@ -80,10 +83,15 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
+			hydrateSession: (session: NonNullable<Session> | null) => void;
 			useSession: Atom<{
 				data: Session;
 				error: BetterFetchError | null;
 				isPending: boolean;
+				isRefetching: boolean;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
 			}>;
 			$fetch: typeof $fetch;
 			$store: typeof $store;

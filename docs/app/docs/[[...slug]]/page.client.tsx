@@ -1,6 +1,4 @@
 "use client";
-import { cva } from "class-variance-authority";
-import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 import {
 	Popover,
 	PopoverContent,
@@ -14,11 +12,16 @@ import {
 	MessageCircle,
 } from "lucide-react";
 import type { MouseEventHandler } from "react";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { buttonVariants } from "@/components/ui/button";
+import {
+	useEffect,
+	useEffectEvent,
+	useRef,
+	useState,
+	useTransition,
+} from "react";
 import { cn } from "@/lib/utils";
 
-export function useCopyButton(
+function useCopyButton(
 	onCopy: () => void | Promise<void>,
 ): [checked: boolean, onClick: MouseEventHandler] {
 	const [checked, setChecked] = useState(false);
@@ -36,7 +39,6 @@ export function useCopyButton(
 		});
 	});
 
-	// Avoid updates after being unmounted
 	useEffect(() => {
 		return () => {
 			if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
@@ -48,54 +50,86 @@ export function useCopyButton(
 
 const cache = new Map<string, string>();
 
-export function LLMCopyButton() {
+const tocAction =
+	"inline-flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-wider whitespace-nowrap transition-all duration-200 text-foreground/60 hover:text-foreground border border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer select-none [&_svg]:size-3";
+
+function CopyMdLinkButton({ rawMdUrl }: { rawMdUrl: string }) {
+	const [checked, onClick] = useCopyButton(() => {
+		const url = new URL(
+			rawMdUrl,
+			typeof window !== "undefined"
+				? window.location.origin
+				: "https://better-auth.com",
+		);
+		return navigator.clipboard.writeText(url.toString());
+	});
+
+	return (
+		<button
+			type="button"
+			className="flex items-center gap-2.5 px-2.5 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-colors duration-150 [&_svg]:size-3.5 [&_svg]:shrink-0 w-full"
+			onClick={onClick}
+		>
+			{checked ? <Check /> : <Copy />}
+			{checked ? "Copied!" : "Copy MD Link"}
+		</button>
+	);
+}
+
+export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
 	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
-		startTransition(async () => {
-			const url = window.location.pathname + ".mdx";
-			const cached = cache.get(url);
+		const cached = cache.get(rawUrl);
 
-			if (cached) {
-				await navigator.clipboard.writeText(cached);
-			} else {
-				await navigator.clipboard.write([
-					new ClipboardItem({
-						"text/plain": fetch(url).then(async (res) => {
-							const content = await res.text();
-							cache.set(url, content);
+		if (cached) {
+			await navigator.clipboard.writeText(cached);
+			return;
+		}
 
-							return content;
-						}),
-					}),
-				]);
-			}
+		const fetchPromise = fetch(rawUrl).then(async (res) => {
+			const text = await res.text();
+			cache.set(rawUrl, text);
+			return text;
 		});
+
+		startTransition(async () => {
+			await fetchPromise;
+		});
+
+		const item = new ClipboardItem({
+			"text/plain": fetchPromise.then(
+				(text) => new Blob([text], { type: "text/plain" }),
+			),
+		});
+		await navigator.clipboard.write([item]);
 	});
 
 	return (
 		<button
 			disabled={isLoading}
 			className={cn(
-				buttonVariants({
-					variant: "secondary",
-					size: "sm",
-					className: "gap-2 [&_svg]:size-3.5 [&_svg]:text-fd-muted-foreground",
-				}),
+				tocAction,
+				checked && "text-foreground border-foreground/10 bg-foreground/5",
 			)}
 			onClick={onClick}
 		>
 			{checked ? <Check /> : <Copy />}
-			Copy Markdown
+			{checked ? "Copied" : "Copy MD"}
 		</button>
 	);
 }
 
-const optionVariants = cva(
-	"text-sm p-2 rounded-lg inline-flex items-center gap-2 hover:text-fd-accent-foreground hover:bg-fd-accent [&_svg]:size-4",
-);
-
-export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
-	const markdownUrl = new URL(props.markdownUrl, "https://better-auth.com");
+export function ViewOptions(props: {
+	markdownUrl: string;
+	githubUrl: string;
+	rawMdUrl: string;
+}) {
+	const markdownUrl = new URL(
+		props.markdownUrl,
+		typeof window !== "undefined"
+			? window.location.origin
+			: "https://better-auth.com",
+	);
 	const q = `Read ${markdownUrl}, I want to ask questions about it.`;
 
 	const claudeUrl = new URL("https://claude.ai/new");
@@ -121,22 +155,15 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 
 	return (
 		<Popover>
-			<PopoverTrigger
-				className={cn(
-					buttonVariants({
-						variant: "secondary",
-						size: "sm",
-						className: "gap-2",
-					}),
-				)}
-			>
+			<PopoverTrigger className={cn(tocAction)}>
 				Open in
-				<ChevronDown className="size-3.5 text-fd-muted-foreground" />
+				<ChevronDown />
 			</PopoverTrigger>
-			<PopoverContent className="flex flex-col overflow-auto">
+			<PopoverContent className="flex flex-col p-1 min-w-[200px]">
+				<CopyMdLinkButton rawMdUrl={props.rawMdUrl} />
 				{[
 					{
-						title: "Open in GitHub",
+						title: "GitHub",
 						href: props.githubUrl,
 						icon: (
 							<svg fill="currentColor" role="img" viewBox="0 0 24 24">
@@ -146,7 +173,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						),
 					},
 					{
-						title: "Open in ChatGPT",
+						title: "ChatGPT",
 						href: gpt,
 						icon: (
 							<svg
@@ -161,7 +188,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						),
 					},
 					{
-						title: "Open in Claude",
+						title: "Claude",
 						href: claude,
 						icon: (
 							<svg
@@ -176,12 +203,12 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						),
 					},
 					{
-						title: "Open in T3 Chat",
+						title: "T3 Chat",
 						href: t3,
 						icon: <MessageCircle />,
 					},
 					{
-						title: "Open in Copilot",
+						title: "Copilot",
 						href: copilot,
 						icon: (
 							<svg
@@ -191,12 +218,12 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 								xmlns="http://www.w3.org/2000/svg"
 							>
 								<title>Microsoft</title>
-								<path d="m711.19 265.2c-27.333 0-46.933 3.07-58.8 9.33 27.067-80.267 47.6-210.13 168-210.13 114.93 0 108.4 138.27 157.87 200.8zm107.33 112.93c-35.467 125.2-70 251.2-110.13 375.33-12.133 36.4-45.733 61.6-84 61.6h-136.27c9.3333-14 16.8-28.933 21.467-45.733 35.467-125.07 70-251.07 110.13-375.33 12.133-36.4 45.733-61.6 84-61.6h136.27c-9.3333 14-16.8 28.934-21.467 45.734m-316.13 704.8c-114.93 0-108.4-138.13-157.87-200.67h267.07c27.467 0 47.067-3.07 58.8-9.33-27.067 80.266-47.6 210-168 210m777.47-758.93h0.93c-32.667-38.266-82.267-57.866-146.67-57.866h-36.4c-34.533-2.8-65.333-26.134-76.533-58.8l-36.4-103.6c-21.463-61.737-80.263-103.74-145.73-103.74h-475.07c-175.6 0-251.2 225.07-292.27 361.33-38.267 127.07-126 341.73-24.267 462.13 46.667 55.067 116.67 57.867 183.07 57.867 34.533 2.8 65.333 26.133 76.533 58.8l36.4 103.6c21.467 61.733 80.267 103.73 145.6 103.73h475.2c175.47 0 251.07-225.07 292.27-361.33 30.8-100.8 68.133-224.93 66.267-324.8 0-50.534-11.2-100-42.933-137.33" />{" "}
+								<path d="m711.19 265.2c-27.333 0-46.933 3.07-58.8 9.33 27.067-80.267 47.6-210.13 168-210.13 114.93 0 108.4 138.27 157.87 200.8zm107.33 112.93c-35.467 125.2-70 251.2-110.13 375.33-12.133 36.4-45.733 61.6-84 61.6h-136.27c9.3333-14 16.8-28.933 21.467-45.733 35.467-125.07 70-251.07 110.13-375.33 12.133-36.4 45.733-61.6 84-61.6h136.27c-9.3333 14-16.8 28.934-21.467 45.734m-316.13 704.8c-114.93 0-108.4-138.13-157.87-200.67h267.07c27.467 0 47.067-3.07 58.8-9.33-27.067 80.266-47.6 210-168 210m777.47-758.93h0.93c-32.667-38.266-82.267-57.866-146.67-57.866h-36.4c-34.533-2.8-65.333-26.134-76.533-58.8l-36.4-103.6c-21.463-61.737-80.263-103.74-145.73-103.74h-475.07c-175.6 0-251.2 225.07-292.27 361.33-38.267 127.07-126 341.73-24.267 462.13 46.667 55.067 116.67 57.867 183.07 57.867 34.533 2.8 65.333 26.133 76.533 58.8l36.4 103.6c21.467 61.733 80.267 103.73 145.6 103.73h475.2c175.47 0 251.07-225.07 292.27-361.33 30.8-100.8 68.133-224.93 66.267-324.8 0-50.534-11.2-100-42.933-137.33" />
 							</svg>
 						),
 					},
 					{
-						title: "Open in Cursor",
+						title: "Cursor",
 						href: cursor,
 						icon: (
 							<svg
@@ -206,10 +233,7 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 								xmlns="http://www.w3.org/2000/svg"
 							>
 								<title>Cursor</title>
-								<path
-									className="st0"
-									d="M457.43,125.94L244.42,2.96c-6.84-3.95-15.28-3.95-22.12,0L9.3,125.94c-5.75,3.32-9.3,9.46-9.3,16.11v247.99c0,6.65,3.55,12.79,9.3,16.11l213.01,122.98c6.84,3.95,15.28,3.95,22.12,0l213.01-122.98c5.75-3.32,9.3-9.46,9.3-16.11v-247.99c0-6.65-3.55-12.79-9.3-16.11h-.01ZM444.05,151.99l-205.63,356.16c-1.39,2.4-5.06,1.42-5.06-1.36v-233.21c0-4.66-2.49-8.97-6.53-11.31L24.87,145.67c-2.4-1.39-1.42-5.06,1.36-5.06h411.26c5.84,0,9.49,6.33,6.57,11.39h-.01Z"
-								/>
+								<path d="M457.43,125.94L244.42,2.96c-6.84-3.95-15.28-3.95-22.12,0L9.3,125.94c-5.75,3.32-9.3,9.46-9.3,16.11v247.99c0,6.65,3.55,12.79,9.3,16.11l213.01,122.98c6.84,3.95,15.28,3.95,22.12,0l213.01-122.98c5.75-3.32,9.3-9.46,9.3-16.11v-247.99c0-6.65-3.55-12.79-9.3-16.11h-.01ZM444.05,151.99l-205.63,356.16c-1.39,2.4-5.06,1.42-5.06-1.36v-233.21c0-4.66-2.49-8.97-6.53-11.31L24.87,145.67c-2.4-1.39-1.42-5.06,1.36-5.06h411.26c5.84,0,9.49,6.33,6.57,11.39h-.01Z" />
 							</svg>
 						),
 					},
@@ -219,11 +243,11 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						href={item.href}
 						rel="noreferrer noopener"
 						target="_blank"
-						className={cn(optionVariants())}
+						className="flex items-center gap-2.5 px-2.5 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-colors duration-150 [&_svg]:size-3.5 [&_svg]:shrink-0"
 					>
 						{item.icon}
 						{item.title}
-						<ExternalLink className="text-fd-muted-foreground size-3.5 ms-auto" />
+						<ExternalLink className="size-3 text-foreground/30 ms-auto" />
 					</a>
 				))}
 			</PopoverContent>

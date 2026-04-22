@@ -1,13 +1,42 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
+import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import type { InputSubscription, StripeOptions, Subscription } from "./types";
+import { subscriptionMetadata } from "./metadata";
+import type { CustomerType, StripeOptions, Subscription } from "./types";
 import {
-	getPlanByPriceInfo,
 	isActiveOrTrialing,
 	isPendingCancel,
 	isStripePendingCancel,
+	resolvePlanItem,
+	resolveQuantity,
 } from "./utils";
+
+/**
+ * Find organization or user by stripeCustomerId.
+ * @internal
+ */
+async function findReferenceByStripeCustomerId(
+	ctx: GenericEndpointContext,
+	options: StripeOptions,
+	stripeCustomerId: string,
+): Promise<{ customerType: CustomerType; referenceId: string } | null> {
+	if (options.organization?.enabled) {
+		const org = await ctx.context.adapter.findOne<Organization>({
+			model: "organization",
+			where: [{ field: "stripeCustomerId", value: stripeCustomerId }],
+		});
+		if (org) return { customerType: "organization", referenceId: org.id };
+	}
+
+	const user = await ctx.context.adapter.findOne<User>({
+		model: "user",
+		where: [{ field: "stripeCustomerId", value: stripeCustomerId }],
+	});
+	if (user) return { customerType: "user", referenceId: user.id };
+
+	return null;
+}
 
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
@@ -23,27 +52,25 @@ export async function onCheckoutSessionCompleted(
 		const subscription = await client.subscriptions.retrieve(
 			checkoutSession.subscription as string,
 		);
-		const subscriptionItem = subscription.items.data[0];
-		if (!subscriptionItem) {
+		const resolved = await resolvePlanItem(options, subscription.items.data);
+		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscription.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscription.id} has no items matching a configured plan`,
 			);
 			return;
 		}
 
-		const priceId = subscriptionItem.price.id;
-		const priceLookupKey = subscriptionItem.price.lookup_key;
-		const plan = await getPlanByPriceInfo(
-			options,
-			priceId as string,
-			priceLookupKey,
-		);
+		const { item: subscriptionItem, plan } = resolved;
 		if (plan) {
+			const checkoutMeta = subscriptionMetadata.get(checkoutSession?.metadata);
 			const referenceId =
-				checkoutSession?.client_reference_id ||
-				checkoutSession?.metadata?.referenceId;
-			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
-			const seats = subscriptionItem.quantity;
+				checkoutSession?.client_reference_id || checkoutMeta.referenceId;
+			const { subscriptionId } = checkoutMeta;
+			const seats = resolveQuantity(
+				subscription.items.data,
+				subscriptionItem,
+				plan.seatPriceId,
+			);
 			if (referenceId && subscriptionId) {
 				const trial =
 					subscription.trial_start && subscription.trial_end
@@ -53,38 +80,36 @@ export async function onCheckoutSessionCompleted(
 							}
 						: {};
 
-				let dbSubscription =
-					await ctx.context.adapter.update<InputSubscription>({
-						model: "subscription",
-						update: {
-							plan: plan.name.toLowerCase(),
-							status: subscription.status,
-							updatedAt: new Date(),
-							periodStart: new Date(
-								subscriptionItem.current_period_start * 1000,
-							),
-							periodEnd: new Date(subscriptionItem.current_period_end * 1000),
-							stripeSubscriptionId: checkoutSession.subscription as string,
-							cancelAtPeriodEnd: subscription.cancel_at_period_end,
-							cancelAt: subscription.cancel_at
-								? new Date(subscription.cancel_at * 1000)
-								: null,
-							canceledAt: subscription.canceled_at
-								? new Date(subscription.canceled_at * 1000)
-								: null,
-							endedAt: subscription.ended_at
-								? new Date(subscription.ended_at * 1000)
-								: null,
-							seats: seats,
-							...trial,
+				let dbSubscription = await ctx.context.adapter.update<Subscription>({
+					model: "subscription",
+					update: {
+						...trial,
+						plan: plan.name.toLowerCase(),
+						status: subscription.status,
+						updatedAt: new Date(),
+						periodStart: new Date(subscriptionItem.current_period_start * 1000),
+						periodEnd: new Date(subscriptionItem.current_period_end * 1000),
+						stripeSubscriptionId: checkoutSession.subscription as string,
+						cancelAtPeriodEnd: subscription.cancel_at_period_end,
+						cancelAt: subscription.cancel_at
+							? new Date(subscription.cancel_at * 1000)
+							: null,
+						canceledAt: subscription.canceled_at
+							? new Date(subscription.canceled_at * 1000)
+							: null,
+						endedAt: subscription.ended_at
+							? new Date(subscription.ended_at * 1000)
+							: null,
+						seats: seats,
+						billingInterval: subscriptionItem.price.recurring?.interval,
+					},
+					where: [
+						{
+							field: "id",
+							value: subscriptionId,
 						},
-						where: [
-							{
-								field: "id",
-								value: subscriptionId,
-							},
-						],
-					});
+					],
+				});
 
 				if (trial.trialStart && plan.freeTrial?.onTrialStart) {
 					await plan.freeTrial.onTrialStart(dbSubscription as Subscription);
@@ -138,7 +163,9 @@ export async function onSubscriptionCreated(
 		}
 
 		// Check if subscription already exists in database
-		const subscriptionId = subscriptionCreated.metadata?.subscriptionId;
+		const { subscriptionId } = subscriptionMetadata.get(
+			subscriptionCreated.metadata,
+		);
 		const existingSubscription =
 			await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
@@ -153,42 +180,44 @@ export async function onSubscriptionCreated(
 			return;
 		}
 
-		// Find user by stripeCustomerId
-		const user = await ctx.context.adapter.findOne<User>({
-			model: "user",
-			where: [
-				{
-					field: "stripeCustomerId",
-					value: stripeCustomerId,
-				},
-			],
-		});
-		if (!user) {
+		// Find reference
+		const reference = await findReferenceByStripeCustomerId(
+			ctx,
+			options,
+			stripeCustomerId,
+		);
+		if (!reference) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: No user found with stripeCustomerId: ${stripeCustomerId}`,
+				`Stripe webhook warning: No user or organization found with stripeCustomerId: ${stripeCustomerId}`,
+			);
+			return;
+		}
+		const { referenceId, customerType } = reference;
+
+		const resolved = await resolvePlanItem(
+			options,
+			subscriptionCreated.items.data,
+		);
+		if (!resolved) {
+			ctx.context.logger.warn(
+				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items matching a configured plan`,
 			);
 			return;
 		}
 
-		const subscriptionItem = subscriptionCreated.items.data[0];
-		if (!subscriptionItem) {
-			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items`,
-			);
-			return;
-		}
-
-		const priceId = subscriptionItem.price.id;
-		const priceLookupKey = subscriptionItem.price.lookup_key || null;
-		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
+		const { item: subscriptionItem, plan } = resolved;
 		if (!plan) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: No matching plan found for priceId: ${priceId}`,
+				`Stripe webhook warning: No matching plan found for priceId: ${subscriptionItem.price.id}`,
 			);
 			return;
 		}
 
-		const seats = subscriptionItem.quantity;
+		const seats = resolveQuantity(
+			subscriptionCreated.items.data,
+			subscriptionItem,
+			plan.seatPriceId,
+		);
 		const periodStart = new Date(subscriptionItem.current_period_start * 1000);
 		const periodEnd = new Date(subscriptionItem.current_period_end * 1000);
 
@@ -204,24 +233,25 @@ export async function onSubscriptionCreated(
 		const newSubscription = await ctx.context.adapter.create<Subscription>({
 			model: "subscription",
 			data: {
-				referenceId: user.id,
-				stripeCustomerId: stripeCustomerId,
+				...trial,
+				...(plan.limits ? { limits: plan.limits } : {}),
+				referenceId,
+				stripeCustomerId,
 				stripeSubscriptionId: subscriptionCreated.id,
 				status: subscriptionCreated.status,
 				plan: plan.name.toLowerCase(),
 				periodStart,
 				periodEnd,
 				seats,
-				...(plan.limits ? { limits: plan.limits } : {}),
-				...trial,
+				billingInterval: subscriptionItem.price.recurring?.interval,
 			},
 		});
 
 		ctx.context.logger.info(
-			`Stripe webhook: Created subscription ${subscriptionCreated.id} for user ${user.id} from dashboard`,
+			`Stripe webhook: Created subscription ${subscriptionCreated.id} for ${customerType} ${referenceId} from dashboard`,
 		);
 
-		await options.subscription?.onSubscriptionCreated?.({
+		await options.subscription.onSubscriptionCreated?.({
 			event,
 			subscription: newSubscription,
 			stripeSubscription: subscriptionCreated,
@@ -242,19 +272,22 @@ export async function onSubscriptionUpdated(
 			return;
 		}
 		const subscriptionUpdated = event.data.object as Stripe.Subscription;
-		const subscriptionItem = subscriptionUpdated.items.data[0];
-		if (!subscriptionItem) {
+		const resolved = await resolvePlanItem(
+			options,
+			subscriptionUpdated.items.data,
+		);
+		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscriptionUpdated.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscriptionUpdated.id} has no items matching a configured plan`,
 			);
 			return;
 		}
 
-		const priceId = subscriptionItem.price.id;
-		const priceLookupKey = subscriptionItem.price.lookup_key;
-		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
+		const { item: subscriptionItem, plan } = resolved;
 
-		const subscriptionId = subscriptionUpdated.metadata?.subscriptionId;
+		const { subscriptionId } = subscriptionMetadata.get(
+			subscriptionUpdated.metadata,
+		);
 		const customerId = subscriptionUpdated.customer?.toString();
 		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
@@ -283,9 +316,26 @@ export async function onSubscriptionUpdated(
 			}
 		}
 
+		const seats = plan
+			? resolveQuantity(
+					subscriptionUpdated.items.data,
+					subscriptionItem,
+					plan.seatPriceId,
+				)
+			: subscriptionItem.quantity;
+
+		const trial =
+			subscriptionUpdated.trial_start && subscriptionUpdated.trial_end
+				? {
+						trialStart: new Date(subscriptionUpdated.trial_start * 1000),
+						trialEnd: new Date(subscriptionUpdated.trial_end * 1000),
+					}
+				: {};
+
 		const updatedSubscription = await ctx.context.adapter.update<Subscription>({
 			model: "subscription",
 			update: {
+				...trial,
 				...(plan
 					? {
 							plan: plan.name.toLowerCase(),
@@ -306,8 +356,14 @@ export async function onSubscriptionUpdated(
 				endedAt: subscriptionUpdated.ended_at
 					? new Date(subscriptionUpdated.ended_at * 1000)
 					: null,
-				seats: subscriptionItem.quantity,
+				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
+				billingInterval: subscriptionItem.price.recurring?.interval,
+				stripeScheduleId: subscriptionUpdated.schedule
+					? typeof subscriptionUpdated.schedule === "string"
+						? subscriptionUpdated.schedule
+						: subscriptionUpdated.schedule.id
+					: null,
 			},
 			where: [
 				{
@@ -375,6 +431,13 @@ export async function onSubscriptionDeleted(
 			],
 		});
 		if (subscription) {
+			const trial =
+				subscriptionDeleted.trial_start && subscriptionDeleted.trial_end
+					? {
+							trialStart: new Date(subscriptionDeleted.trial_start * 1000),
+							trialEnd: new Date(subscriptionDeleted.trial_end * 1000),
+						}
+					: {};
 			await ctx.context.adapter.update({
 				model: "subscription",
 				where: [
@@ -384,6 +447,7 @@ export async function onSubscriptionDeleted(
 					},
 				],
 				update: {
+					...trial,
 					status: "canceled",
 					updatedAt: new Date(),
 					cancelAtPeriodEnd: subscriptionDeleted.cancel_at_period_end,
@@ -396,6 +460,7 @@ export async function onSubscriptionDeleted(
 					endedAt: subscriptionDeleted.ended_at
 						? new Date(subscriptionDeleted.ended_at * 1000)
 						: null,
+					stripeScheduleId: null,
 				},
 			});
 			await options.subscription.onSubscriptionDeleted?.({

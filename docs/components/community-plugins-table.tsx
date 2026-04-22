@@ -41,15 +41,33 @@ const columns: ColumnDef<CommunityPlugin>[] = [
 			);
 		},
 		cell: ({ row }) => {
+			const author = row.original.author;
+
 			return (
-				<a
-					href={row.original.url}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="font-mono text-sm hover:underline text-primary"
-				>
-					{row.original.name}
-				</a>
+				<div className="w-[220px]">
+					<a
+						href={row.original.url}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="font-mono text-sm hover:underline text-primary"
+					>
+						{row.original.name}
+					</a>
+					<br />
+					<a
+						href={`https://github.com/${author?.github}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex items-center gap-2 hover:text-foreground transition-colors text-muted-foreground h-12"
+					>
+						<img
+							src={author?.avatar}
+							alt={author?.name}
+							className="rounded-full w-6 h-6 border opacity-70 m-0"
+						/>
+						<span className="text-sm">{author?.name}</span>
+					</a>
+				</div>
 			);
 		},
 	},
@@ -61,38 +79,6 @@ const columns: ColumnDef<CommunityPlugin>[] = [
 				<div className="text-sm text-muted-foreground">
 					{row.original.description}
 				</div>
-			);
-		},
-	},
-	{
-		accessorKey: "author.name",
-		header: ({ column }) => {
-			return (
-				<button
-					className="flex items-center gap-2 font-semibold hover:text-foreground transition-colors"
-					onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-				>
-					Author
-					<ArrowUpDown className="h-4 w-4" />
-				</button>
-			);
-		},
-		cell: ({ row }) => {
-			const author = row.original.author;
-			return (
-				<a
-					href={`https://github.com/${author.github}`}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="flex items-center gap-2 hover:text-foreground transition-colors"
-				>
-					<img
-						src={author.avatar}
-						alt={author.name}
-						className="rounded-full w-6 h-6 border opacity-70 m-0"
-					/>
-					<span className="text-sm">{author.name}</span>
-				</a>
 			);
 		},
 	},
@@ -249,6 +235,103 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "neiii",
 			github: "neiii",
 			avatar: "https://github.com/neiii.png",
+		},
+	},
+	{
+		name: "@sequenzy/better-auth",
+		url: "https://github.com/Sequenzy/sequenzy-better-auth",
+		description:
+			"Automatically add users to Sequenzy mailing lists on signup for seamless email marketing integration.",
+		author: {
+			name: "Sequenzy",
+			github: "sequenzy",
+			avatar: "https://sequenzy.com/logo.png",
+		},
+	},
+	{
+		name: "better-auth-nostr",
+		url: "https://github.com/leon-wbr/better-auth-nostr",
+		description: "Nostr authentication plugin for Better Auth (NIP-98).",
+		author: {
+			name: "leon-wbr",
+			github: "leon-wbr",
+			avatar: "https://github.com/leon-wbr.png",
+		},
+	},
+	{
+		name: "@ramiras123/better-auth-strapi",
+		url: "https://github.com/Ramiras123/better-auth-strapi",
+		description: "Plugin for authorization via strapi",
+		author: {
+			name: "Ramiras123",
+			github: "ramiras123",
+			avatar: "https://github.com/ramiras123.png",
+		},
+	},
+	{
+		name: "better-auth-razorpay",
+		url: "https://github.com/iamjasonkendrick/better-auth-razorpay",
+		description:
+			"Razorpay payment plugin for Better Auth — integrates Razorpay payments, webhooks, and subscription flows.",
+		author: {
+			name: "iamjasonkendrick",
+			github: "iamjasonkendrick",
+			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "better-auth-payu",
+		url: "https://github.com/iamjasonkendrick/better-auth-payu",
+		description:
+			"PayU payment plugin for Better Auth — integrates PayU payments, webhooks, and subscription flows.",
+		author: {
+			name: "iamjasonkendrick",
+			github: "iamjasonkendrick",
+			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "better-invite",
+		url: "https://github.com/better-invite/better-invite",
+		description:
+			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
+		author: {
+			name: "Sandy",
+			github: "0-Sandy",
+			avatar: "https://github.com/0-Sandy.png",
+		},
+	},
+	{
+		name: "better-auth-usos",
+		url: "https://github.com/qamarq/better-auth-usos",
+		description:
+			"USOS plugin for Better Auth - allows students to authenticate using their university credentials via the USOS API. Using oauth 1a.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
+		},
+	},
+	{
+		name: "better-auth-devtools",
+		url: "https://github.com/C-W-D-Harshit/better-auth-devtools",
+		description:
+			"A devtools panel for Better Auth that lets you create managed test users from templates, switch between sessions instantly, inspect live session data, and edit fields like roles on the fly. All from a floating React UI that only runs in development.",
+		author: {
+			name: "C-W-D-Harshit",
+			github: "C-W-D-Harshit",
+			avatar: "https://github.com/C-W-D-Harshit.png",
+		},
+	},
+	{
+		name: "better-auth-audit-logs",
+		url: "https://github.com/ejirocodes/better-auth-audit-logs",
+		description:
+			"Audit log plugin for Better Auth. Auto-captures auth events with severity inference, PII redaction, custom storage backends, and retention policies.",
+		author: {
+			name: "ejirocodes",
+			github: "ejirocodes",
+			avatar: "https://github.com/ejirocodes.png",
 		},
 	},
 ];

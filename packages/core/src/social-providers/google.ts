@@ -5,6 +5,7 @@ import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -37,7 +38,7 @@ export interface GoogleProfile {
 }
 
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -64,7 +65,7 @@ export const google = (options: GoogleOptions) => {
 			loginHint,
 			display,
 		}) {
-			if (!options.clientId || !options.clientSecret) {
+			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
 				);
@@ -81,7 +82,7 @@ export const google = (options: GoogleOptions) => {
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,
-				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
+				authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
 				scopes: _scopes,
 				state,
 				codeVerifier,
@@ -116,7 +117,7 @@ export const google = (options: GoogleOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
+						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
 		async verifyIdToken(token, nonce) {
@@ -130,22 +131,26 @@ export const google = (options: GoogleOptions) => {
 			// Verify JWT integrity
 			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
 
-			const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-			if (!kid || !jwtAlg) return false;
+			try {
+				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
+				if (!kid || !jwtAlg) return false;
 
-			const publicKey = await getGooglePublicKey(kid);
-			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-				algorithms: [jwtAlg],
-				issuer: ["https://accounts.google.com", "accounts.google.com"],
-				audience: options.clientId,
-				maxTokenAge: "1h",
-			});
+				const publicKey = await getGooglePublicKey(kid);
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: [jwtAlg],
+					issuer: ["https://accounts.google.com", "accounts.google.com"],
+					audience: options.clientId,
+					maxTokenAge: "1h",
+				});
 
-			if (nonce && jwtClaims.nonce !== nonce) {
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
+				}
+
+				return true;
+			} catch {
 				return false;
 			}
-
-			return true;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {

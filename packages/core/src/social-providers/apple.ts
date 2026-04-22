@@ -1,10 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
 
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
-import { APIError } from "../error";
+import { logger } from "../env";
+import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -70,7 +72,7 @@ export interface AppleNonConformUser {
 }
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
-	clientId: string;
+	clientId: string | string[];
 	appBundleIdentifier?: string | undefined;
 	audience?: (string | string[]) | undefined;
 }
@@ -81,6 +83,12 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
+			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
+				logger.error(
+					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
+				);
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+			}
 			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
 			if (options.scope) _scope.push(...options.scope);
 			if (scopes) _scope.push(...scopes);
@@ -112,42 +120,42 @@ export const apple = (options: AppleOptions) => {
 			if (options.verifyIdToken) {
 				return options.verifyIdToken(token, nonce);
 			}
-			const decodedHeader = decodeProtectedHeader(token);
-			const { kid, alg: jwtAlg } = decodedHeader;
-			if (!kid || !jwtAlg) return false;
-			const publicKey = await getApplePublicKey(kid);
-			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-				algorithms: [jwtAlg],
-				issuer: "https://appleid.apple.com",
-				audience:
-					options.audience && options.audience.length
-						? options.audience
-						: options.appBundleIdentifier
-							? options.appBundleIdentifier
-							: options.clientId,
-				maxTokenAge: "1h",
-			});
-			["email_verified", "is_private_email"].forEach((field) => {
-				if (jwtClaims[field] !== undefined) {
-					jwtClaims[field] = Boolean(jwtClaims[field]);
+			try {
+				const decodedHeader = decodeProtectedHeader(token);
+				const { kid, alg: jwtAlg } = decodedHeader;
+				if (!kid || !jwtAlg) return false;
+				const publicKey = await getApplePublicKey(kid);
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: [jwtAlg],
+					issuer: "https://appleid.apple.com",
+					audience:
+						options.audience && options.audience.length
+							? options.audience
+							: options.appBundleIdentifier
+								? options.appBundleIdentifier
+								: options.clientId,
+					maxTokenAge: "1h",
+				});
+				["email_verified", "is_private_email"].forEach((field) => {
+					if (jwtClaims[field] !== undefined) {
+						jwtClaims[field] = Boolean(jwtClaims[field]);
+					}
+				});
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
 				}
-			});
-			if (nonce && jwtClaims.nonce !== nonce) {
+				return !!jwtClaims;
+			} catch {
 				return false;
 			}
-			return !!jwtClaims;
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
 					return refreshAccessToken({
 						refreshToken,
-						options: {
-							clientId: options.clientId,
-							clientKey: options.clientKey,
-							clientSecret: options.clientSecret,
-						},
-						tokenEndpoint: "https://appleid.apple.com/auth/token",
+						options,
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -161,9 +169,18 @@ export const apple = (options: AppleOptions) => {
 			if (!profile) {
 				return null;
 			}
-			const name = token.user
-				? `${token.user.name?.firstName} ${token.user.name?.lastName}`
-				: profile.name || profile.email;
+
+			// TODO: "" masking will be removed when the name field is made optional
+			let name: string;
+			if (token.user?.name) {
+				const firstName = token.user.name.firstName || "";
+				const lastName = token.user.name.lastName || "";
+				const fullName = `${firstName} ${lastName}`.trim();
+				name = fullName;
+			} else {
+				name = profile.name || "";
+			}
+
 			const emailVerified =
 				typeof profile.email_verified === "boolean"
 					? profile.email_verified

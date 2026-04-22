@@ -4,6 +4,7 @@ import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
+import { PACKAGE_VERSION } from "../../version";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import {
 	deviceApprove,
@@ -13,6 +14,14 @@ import {
 	deviceVerify,
 } from "./routes";
 import { schema } from "./schema";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"device-authorization": {
+			creator: typeof deviceAuthorization;
+		};
+	}
+}
 
 const timeStringSchema = z.custom<TimeString>(
 	(val) => {
@@ -124,6 +133,7 @@ export const deviceAuthorization = (
 
 	return {
 		id: "device-authorization",
+		version: PACKAGE_VERSION,
 		schema: mergeSchema(schema, options?.schema),
 		endpoints: {
 			deviceCode: deviceCode(opts),

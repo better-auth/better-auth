@@ -42,7 +42,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		codeVerifier?: string | undefined;
 		deviceId?: string | undefined;
-	}) => Promise<OAuth2Tokens>;
+	}) => Promise<OAuth2Tokens | null>;
 	getUserInfo: (
 		token: OAuth2Tokens & {
 			/**
@@ -79,6 +79,12 @@ export interface OAuthProvider<
 	verifyIdToken?:
 		| ((token: string, nonce?: string) => Promise<boolean>)
 		| undefined;
+	/**
+	 * The expected issuer identifier for this provider (RFC 9207).
+	 * When set, the callback handler validates the `iss` query parameter
+	 * against this value to prevent authorization server mix-up attacks.
+	 */
+	issuer?: string | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -119,6 +125,12 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * whitelisted in the provider's dashboard.
 	 */
 	redirectURI?: string | undefined;
+	/**
+	 * Custom authorization endpoint URL.
+	 * Use this to override the default authorization endpoint of the provider.
+	 * Useful for testing with local OAuth servers or using sandbox environments.
+	 */
+	authorizationEndpoint?: string | undefined;
 	/**
 	 * The client key of your application
 	 * Tiktok Social Provider uses this field instead of clientId

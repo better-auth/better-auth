@@ -1,5 +1,3 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
-import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
 export interface OktaOptions extends BaseOAuthProviderOptions {
@@ -8,17 +6,6 @@ export interface OktaOptions extends BaseOAuthProviderOptions {
 	 * This will be used to construct the discovery URL.
 	 */
 	issuer: string;
-}
-
-interface OktaProfile {
-	sub: string;
-	name?: string;
-	email?: string;
-	email_verified?: boolean;
-	picture?: string;
-	preferred_username?: string;
-	given_name?: string;
-	family_name?: string;
 }
 
 /**
@@ -43,39 +30,12 @@ interface OktaProfile {
  * });
  * ```
  */
-export function okta(options: OktaOptions): GenericOAuthConfig {
+export function okta(options: OktaOptions): GenericOAuthConfig<"okta"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	// Ensure issuer ends without trailing slash for proper discovery URL construction
 	const issuer = options.issuer.replace(/\/$/, "");
 	const discoveryUrl = `${issuer}/.well-known/openid-configuration`;
-
-	const getUserInfo = async (
-		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
-		const userInfoUrl = `${issuer}/v1/userinfo`;
-
-		const { data: profile, error } = await betterFetch<OktaProfile>(
-			userInfoUrl,
-			{
-				headers: {
-					Authorization: `Bearer ${tokens.accessToken}`,
-				},
-			},
-		);
-
-		if (error || !profile) {
-			return null;
-		}
-
-		return {
-			id: profile.sub,
-			name: profile.name ?? profile.preferred_username ?? undefined,
-			email: profile.email ?? undefined,
-			image: profile.picture,
-			emailVerified: profile.email_verified ?? false,
-		};
-	};
 
 	return {
 		providerId: "okta",
@@ -88,6 +48,5 @@ export function okta(options: OktaOptions): GenericOAuthConfig {
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
 		overrideUserInfo: options.overrideUserInfo,
-		getUserInfo,
 	};
 }

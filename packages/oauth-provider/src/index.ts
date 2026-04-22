@@ -5,5 +5,14 @@ export {
 	oauthProviderOpenIdConfigMetadata,
 	oidcServerMetadata,
 } from "./metadata";
-export { oauthProvider } from "./oauth";
+export { getOAuthProviderState, oauthProvider } from "./oauth";
+export type {
+	OAuthEndpointErrorResult,
+	OAuthEndpointRedirectContext,
+	OAuthErrorCode,
+	OAuthFieldErrorCode,
+	OAuthFieldErrorCodeMap,
+	OAuthRedirectOnError,
+} from "./oauth-endpoint";
+export { checkOAuthClient, oauthToSchema } from "./register";
 export type * from "./types";

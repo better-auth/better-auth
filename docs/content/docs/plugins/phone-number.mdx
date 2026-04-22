@@ -8,57 +8,61 @@ The phone number plugin extends the authentication system by allowing users to s
 ## Installation
 
 <Steps>
-    <Step>
-        ### Add Plugin to the server
+  <Step>
+    ### Add Plugin to the server
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { phoneNumber } from "better-auth/plugins"
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { phoneNumber } from "better-auth/plugins" // [!code highlight]
 
-        const auth = betterAuth({
-            plugins: [ 
-                phoneNumber({  // [!code highlight]
-                    sendOTP: ({ phoneNumber, code }, ctx) => { // [!code highlight]
-                        // Implement sending OTP code via SMS // [!code highlight]
-                    } // [!code highlight]
-                }) // [!code highlight]
-            ] 
-        })
+    const auth = betterAuth({
+        plugins: [ 
+            phoneNumber({  // [!code highlight]
+                sendOTP: ({ phoneNumber, code }, ctx) => { // [!code highlight]
+                    // Implement sending OTP code via SMS // [!code highlight]
+                } // [!code highlight]
+            }) // [!code highlight]
+        ] 
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
         ```
-    </Step>
-    <Step>
-        ### Migrate the database
+      </Tab>
 
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
-
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx @better-auth/cli migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx @better-auth/cli generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
-    <Step>
-        ### Add the client plugin
-
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        import { phoneNumberClient } from "better-auth/client/plugins"
-
-        const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
-                phoneNumberClient() // [!code highlight]
-            ] // [!code highlight]
-        })
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
         ```
-    </Step>
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { phoneNumberClient } from "better-auth/client/plugins" // [!code highlight]
+
+    const authClient = createAuthClient({
+        plugins: [
+            phoneNumberClient() // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -68,14 +72,14 @@ The phone number plugin extends the authentication system by allowing users to s
 To send an OTP to a user's phone number for verification, you can use the `sendVerificationCode` endpoint.
 
 <APIMethod path="/phone-number/send-otp" method="POST">
-```ts
-type sendPhoneNumberOTP = {
-    /**
-     * Phone number to send OTP. 
-     */
-    phoneNumber: string = "+1234567890"
-}
-```
+  ```ts
+  type sendPhoneNumberOTP = {
+      /**
+       * Phone number to send OTP. 
+       */
+      phoneNumber: string = "+1234567890"
+  }
+  ```
 </APIMethod>
 
 ### Verify Phone Number
@@ -83,37 +87,37 @@ type sendPhoneNumberOTP = {
 After the OTP is sent, users can verify their phone number by providing the code.
 
 <APIMethod path="/phone-number/verify" method="POST">
-```ts
-type verifyPhoneNumber = {
-    /**
-     * Phone number to verify. 
-     */
-    phoneNumber: string = "+1234567890"
-    /**
-     * OTP code. 
-     */
-    code: string = "123456"
-    /**
-     * Disable session creation after verification. 
-     */
-    disableSession?: boolean = false
-    /**
-     * Check if there is a session and update the phone number. 
-     */
-    updatePhoneNumber?: boolean = true
-}
-```
+  ```ts
+  type verifyPhoneNumber = {
+      /**
+       * Phone number to verify.
+       */
+      phoneNumber: string = "+1234567890"
+      /**
+       * OTP code.
+       */
+      code: string = "123456"
+      /**
+       * Disable session creation after verification.
+       */
+      disableSession?: boolean = false
+      /**
+       * Update the phone number of an existing logged-in user.
+       * Requires an active session.
+       */
+      updatePhoneNumber?: boolean = false
+  }
+  ```
 </APIMethod>
-
-<Callout>
-When the phone number is verified, the `phoneNumberVerified` field in the user table is set to `true`. If `disableSession` is not set to `true`, a session is created for the user. Additionally, if `callbackOnVerification` is provided, it will be called.
-</Callout>
 
 ### Allow Sign-Up with Phone Number
 
 To allow users to sign up using their phone number, you can pass `signUpOnVerification` option to your plugin configuration. It requires you to pass `getTempEmail` function to generate a temporary email for the user.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { phoneNumber } from "better-auth/plugins"
+
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
@@ -135,60 +139,91 @@ export const auth = betterAuth({
 ```
 
 <Callout>
-We highly recommend not awaiting the `sendOTP` function. If you await it, it'll slow down the request and could cause timing attacks. For serverless platforms, you can use `waitUntil` to ensure the OTP is sent.
+  We highly recommend not awaiting the `sendOTP` function. If you await it, it'll slow down the request and could cause timing attacks. For serverless platforms, you can use `waitUntil` to ensure the OTP is sent.
 </Callout>
+
+If you have additional required fields in your user schema, you can pass them in the verify request body:
+
+```ts title="auth-client.ts"
+await authClient.phoneNumber.verify({
+    phoneNumber: "+1234567890",
+    code: "123456",
+    customField: "custom-value", // additional field [!code highlight]
+})
+```
 
 ### Sign In with Phone Number
 
 In addition to signing in a user using send-verify flow, you can also use phone number as an identifier and sign in a user using phone number and password.
 
+<Callout type="warn">
+  To sign in with a phone number and password, the user must have a corresponding record in the `account` table with the `providerId` set specifically to `"credential"`. If you are migrating from another auth provider or seeding users manually, ensure this record exists.
+</Callout>
+
 <APIMethod path="/sign-in/phone-number" method="POST">
-```ts
-type signInPhoneNumber = {
-    /**
-     * Phone number to sign in. 
-     */
-    phoneNumber: string = "+1234567890"
-    /**
-     * Password to use for sign in. 
-     */
-    password: string
-    /**
-     * Remember the session. 
-     */
-    rememberMe?: boolean = true
-}
-```
+  ```ts
+  type signInPhoneNumber = {
+      /**
+       * Phone number to sign in. 
+       */
+      phoneNumber: string = "+1234567890"
+      /**
+       * Password to use for sign in. 
+       */
+      password: string
+      /**
+       * Remember the session. 
+       */
+      rememberMe?: boolean = true
+  }
+  ```
 </APIMethod>
 
 ### Update Phone Number
 
-Updating phone number uses the same process as verifying a phone number. The user will receive an OTP code to verify the new phone number.
+Already logged-in users can change their phone number to a new one. First, send an OTP to the new phone number:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 await authClient.phoneNumber.sendOtp({
-    phoneNumber: "+1234567890" // New phone number
+    phoneNumber: "+1234567890" // New phone number // [!code highlight]
 })
 ```
 
-Then verify the new phone number with the OTP code. 
+Then verify the new phone number with `updatePhoneNumber: true`:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456",
-    updatePhoneNumber: true // Set to true to update the phone number [!code highlight]
+    updatePhoneNumber: true // [!code highlight]
 })
 ```
 
-If a user session exist the phone number will be updated automatically.
+### Remove Phone Number
 
+Logged-in users can release their phone number by passing `null` to `updateUser`. The plugin atomically clears the phone number and resets the verified flag, freeing the number so another account can claim it through the standard verification flow.
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+await authClient.updateUser({
+    phoneNumber: null // [!code highlight]
+})
+```
+
+For security, non-null phone number updates through `updateUser` remain blocked. Changing to a different phone number always requires OTP verification via `verify` with `updatePhoneNumber: true`.
 
 ### Disable Session Creation
 
 By default, the plugin creates a session for the user after verifying the phone number. You can disable this behavior by passing `disableSession: true` to the `verify` method.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456",
@@ -201,35 +236,35 @@ const isVerified = await authClient.phoneNumber.verify({
 To initiate a request password reset flow using `phoneNumber`, you can start by calling `requestPasswordReset` on the client to send an OTP code to the user's phone number.
 
 <APIMethod path="/phone-number/request-password-reset" method="POST">
-```ts
-type requestPasswordResetPhoneNumber = {
-    /**
-     * The phone number which is associated with the user. 
-     */
-    phoneNumber: string = "+1234567890"
-}
-```
+  ```ts
+  type requestPasswordResetPhoneNumber = {
+      /**
+       * The phone number which is associated with the user. 
+       */
+      phoneNumber: string = "+1234567890"
+  }
+  ```
 </APIMethod>
 
 Then, you can reset the password by calling `resetPassword` on the client with the OTP code and the new password.
 
 <APIMethod path="/phone-number/reset-password" method="POST">
-```ts
-type resetPasswordPhoneNumber = {
-    /**
-     * The one time password to reset the password. 
-     */
-    otp: string = "123456"
-    /**
-     * The phone number to the account which intends to reset the password for. 
-     */
-    phoneNumber: string = "+1234567890"
-    /**
-     * The new password. 
-     */
-    newPassword: string = "new-and-secure-password"
-}
-```
+  ```ts
+  type resetPasswordPhoneNumber = {
+      /**
+       * The one time password to reset the password. 
+       */
+      otp: string = "123456"
+      /**
+       * The phone number to the account which intends to reset the password for. 
+       */
+      phoneNumber: string = "+1234567890"
+      /**
+       * The new password. 
+       */
+      newPassword: string = "new-and-secure-password"
+  }
+  ```
 </APIMethod>
 
 ## Options
@@ -251,6 +286,9 @@ The time in seconds after which the OTP code expires. Default is `300` seconds.
 A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
 
 ```ts
+import { betterAuth } from "better-auth";
+import { phoneNumber } from "better-auth/plugins"
+
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
@@ -278,6 +316,9 @@ A custom function to validate the phone number. It takes the phone number as an 
 A custom function to verify the OTP code. When provided, this function will be used instead of the default internal verification logic. This is useful when you want to integrate with external SMS providers that handle OTP verification (e.g., Twilio Verify, AWS SNS). The function takes an object with `phoneNumber` and `code` properties and a request object, and returns a boolean or a promise that resolves to a boolean indicating whether the OTP is valid.
 
 ```ts
+import { betterAuth } from "better-auth";
+import { phoneNumber } from "better-auth/plugins"
+
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
@@ -299,42 +340,44 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-When using this option, ensure that proper validation is implemented, as it overrides our internal verification logic.
+  When using this option, ensure that proper validation is implemented, as it overrides our internal verification logic.
 </Callout>
 
 ### `signUpOnVerification`
 
 An object with the following properties:
-- `getTempEmail`: A function that generates a temporary email for the user. It takes the phone number as an argument and returns the temporary email.
-- `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
+
+* `getTempEmail`: A function that generates a temporary email for the user. It takes the phone number as an argument and returns the temporary email.
+* `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
 
 ### `requireVerification`
 
-When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE_NUMBER_NOT_VERIFIED) and automatically trigger an OTP send to start the verification process.
-    
+When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE\_NUMBER\_NOT\_VERIFIED) and automatically trigger an OTP send to start the verification process.
+
 ## Schema
 
-The plugin requires 2 fields to be added to the user table 
+The plugin requires 2 fields to be added to the user table
 
 ### User Table
-<DatabaseTable
-    fields={[
-        { 
-            name: "phoneNumber", 
-            type: "string", 
-            description: "The phone number of the user",
-            isUnique: true,
-            isOptional: true
-        },
-        { 
-            name: "phoneNumberVerified", 
-            type: "boolean", 
-            description: "Whether the phone number is verified or not",
-            defaultValue: false,
-            isOptional: true
-        },
-    ]}
-    />
+
+export const phoneNumberUserTableFields = [
+	{
+		name: "phoneNumber",
+		type: "string",
+		description: "The phone number of the user",
+		isUnique: true,
+		isOptional: true,
+	},
+	{
+		name: "phoneNumberVerified",
+		type: "boolean",
+		description: "Whether the phone number is verified or not",
+		defaultValue: false,
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={phoneNumberUserTableFields} />
 
 ### OTP Verification Attempts
 
@@ -348,11 +391,13 @@ phoneNumber({
 ```
 
 When a user exceeds the allowed number of verification attempts:
-- The OTP code is automatically deleted
-- Further verification attempts will return a 403 (Forbidden) status with "Too many attempts" message
-- The user will need to request a new OTP code to continue
+
+* The OTP code is automatically deleted
+* Further verification attempts will return a 403 (Forbidden) status with "Too many attempts" message
+* The user will need to request a new OTP code to continue
 
 Example error response after exceeding attempts:
+
 ```json
 {
   "error": {
@@ -363,5 +408,5 @@ Example error response after exceeding attempts:
 ```
 
 <Callout type="warning">
-When receiving a 403 status, prompt the user to request a new OTP code
+  When receiving a 403 status, prompt the user to request a new OTP code
 </Callout>

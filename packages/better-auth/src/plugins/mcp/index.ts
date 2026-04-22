@@ -8,16 +8,23 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { resolveDynamicTrustedProxyHeaders } from "../../context/helpers";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
-import { getBaseURL } from "../../utils/url";
+import {
+	getBaseURL,
+	isDynamicBaseURLConfig,
+	resolveBaseURL,
+} from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -30,6 +37,14 @@ import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		mcp: {
+			creator: typeof mcp;
+		};
+	}
+}
+
 interface MCPOptions {
 	loginPage: string;
 	resource?: string | undefined;
@@ -40,7 +55,10 @@ export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
+	const issuer =
+		typeof ctx.context.options.baseURL === "string"
+			? ctx.context.options.baseURL
+			: "";
 	const baseURL = ctx.context.baseURL;
 	if (!issuer || !baseURL) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -173,9 +191,10 @@ export const mcp = (options: MCPOptions) => {
 		oauthAccessToken: "oauthAccessToken",
 		oauthConsent: "oauthConsent",
 	};
-	const provider = oidcProvider(opts);
+	const provider = oidcProvider({ ...opts, __skipDeprecationWarning: true });
 	return {
 		id: "mcp",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -195,8 +214,9 @@ export const mcp = (options: MCPOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -209,6 +229,12 @@ export const mcp = (options: MCPOptions) => {
 						if (!session) {
 							return;
 						}
+						const parsedCookie = safeJSONParse<Record<string, string>>(cookie);
+						if (!parsedCookie) {
+							return;
+						}
+						ctx.query = parsedCookie;
+
 						// Remove "login" from prompt since user just logged in
 						const promptSet = parsePrompt(String(ctx.query?.prompt));
 						if (promptSet.has("login")) {
@@ -466,8 +492,8 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 
 					if (!client_id) {
@@ -589,8 +615,8 @@ export const mcp = (options: MCPOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
@@ -623,7 +649,7 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
+					const secretKey = {
 						alg: "HS256",
 						key: await getWebcryptoSubtle().generateKey(
 							{
@@ -962,14 +988,35 @@ export const withMcpAuth = <
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
-		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
+		const basePath = auth.options.basePath || "/api/auth";
+		const trustedProxyHeaders = resolveDynamicTrustedProxyHeaders(auth.options);
+		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? resolveBaseURL(
+					auth.options.baseURL,
+					basePath,
+					req,
+					undefined,
+					trustedProxyHeaders,
+				)
+			: getBaseURL(
+					typeof auth.options.baseURL === "string"
+						? auth.options.baseURL
+						: undefined,
+					basePath,
+				);
 		if (!baseURL && !isProduction) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
 		const session = await auth.api.getMcpSession({
+			request: req,
 			headers: req.headers,
+			asResponse: false,
 		});
-		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
+		// Omit the `resource_metadata` URL when we can't build a valid one,
+		// so clients don't follow `Bearer resource_metadata="undefined/..."`.
+		const wwwAuthenticateValue = baseURL
+			? `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`
+			: "Bearer";
 		if (!session) {
 			return Response.json(
 				{
@@ -1005,7 +1052,10 @@ export const oAuthDiscoveryMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMcpOAuthConfig();
+		const res = await auth.api.getMcpOAuthConfig({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {
@@ -1029,7 +1079,10 @@ export const oAuthProtectedResourceMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMCPProtectedResource();
+		const res = await auth.api.getMCPProtectedResource({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

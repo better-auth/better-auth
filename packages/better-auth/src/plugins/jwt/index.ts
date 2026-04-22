@@ -8,6 +8,7 @@ import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
@@ -15,10 +16,18 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
-export { signJWT } from "./sign";
+export { resolveSigningKey, signJWT } from "./sign";
 export type * from "./types";
 export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		jwt: {
+			creator: typeof jwt;
+		};
+	}
+}
 
 const signJWTBodySchema = z.object({
 	payload: z.record(z.string(), z.any()),
@@ -34,16 +43,14 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
-			"jwks_config",
-			"jwks.remoteUrl must be set when using jwt.sign",
+			"options.jwks.remoteUrl must be set when using options.jwt.sign",
 		);
 	}
 
 	// Alg is required to be specified when using remote url (needed in openid metadata)
 	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(
-			"jwks_config",
-			"must specify alg when using the oidc plugin and jwks.remoteUrl",
+			"options.jwks.keyPairConfig.alg must be specified when using the oidc plugin with options.jwks.remoteUrl",
 		);
 	}
 
@@ -55,13 +62,13 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 		jwksPath.includes("..")
 	) {
 		throw new BetterAuthError(
-			"jwks_config",
-			"jwksPath must be a non-empty string starting with '/' and not contain '..'",
+			"options.jwks.jwksPath must be a non-empty string starting with '/' and not contain '..'",
 		);
 	}
 
 	return {
 		id: "jwt",
+		version: PACKAGE_VERSION,
 		options: options as NoInfer<O>,
 		endpoints: {
 			getJwks: createAuthEndpoint(

@@ -7,33 +7,23 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import * as z from "zod";
+import type { Session, User } from "@better-auth/core/db";
 import { getSession } from "../../api";
-import type { InferSession, InferUser } from "../../types";
+import {
+	parseSetCookieHeader,
+	toCookieOptions,
+} from "../../cookies/cookie-utils";
+import { getSessionQuerySchema } from "../../cookies/session-store";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { PACKAGE_VERSION } from "../../version";
 
-const getSessionQuerySchema = z.optional(
-	z.object({
-		/**
-		 * If cookie cache is enabled, it will disable the cache
-		 * and fetch the session from the database
-		 */
-		disableCookieCache: z
-			.boolean()
-			.meta({
-				description: "Disable cookie cache and fetch session from database",
-			})
-			.or(z.string().transform((v) => v === "true"))
-			.optional(),
-		disableRefresh: z
-			.boolean()
-			.meta({
-				description:
-					"Disable session refresh. Useful for checking session status, without updating the session",
-			})
-			.optional(),
-	}),
-);
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"custom-session": {
+			creator: typeof customSession;
+		};
+	}
+}
 
 export type CustomSessionPluginOptions = {
 	/**
@@ -49,8 +39,8 @@ export const customSession = <
 >(
 	fn: (
 		session: {
-			user: InferUser<O>;
-			session: InferSession<O>;
+			user: User<O["user"], O["plugins"]>;
+			session: Session<O["session"], O["plugins"]>;
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
@@ -59,6 +49,7 @@ export const customSession = <
 ) => {
 	return {
 		id: "custom-session",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -109,6 +100,7 @@ export const customSession = <
 				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
+						method: "GET",
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
@@ -120,11 +112,13 @@ export const customSession = <
 					}
 					const fnResult = await fn(session.response as any, ctx);
 
-					const setCookie = session.headers.get("set-cookie");
-					if (setCookie) {
-						ctx.setHeader("set-cookie", setCookie);
-						session.headers.delete("set-cookie");
+					for (const cookieStr of session.headers.getSetCookie()) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						parsed.forEach((attrs, name) => {
+							ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
+						});
 					}
+					session.headers.delete("set-cookie");
 
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);

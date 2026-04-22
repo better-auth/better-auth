@@ -7,13 +7,14 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { getCurrentAuthContext } from "@better-auth/core/context";
+import { deprecate } from "@better-auth/core/utils/deprecate";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { OpenAPIParameter } from "better-call";
 import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -21,7 +22,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import { HIDE_METADATA } from "../../utils";
-import type { jwt } from "../jwt";
+import { PACKAGE_VERSION } from "../../version";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
@@ -36,11 +37,13 @@ import type {
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
-const getJwtPlugin = (ctx: GenericEndpointContext) => {
-	return ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "jwt",
-	) as ReturnType<typeof jwt>;
-};
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"oidc-provider": {
+			creator: typeof oidcProvider;
+		};
+	}
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -85,7 +88,7 @@ export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
-	const jwtPlugin = getJwtPlugin(ctx);
+	const jwtPlugin = ctx.context.getPlugin("jwt");
 	const issuer =
 		jwtPlugin && jwtPlugin.options?.jwt && jwtPlugin.options.jwt.issuer
 			? jwtPlugin.options.jwt.issuer
@@ -272,15 +275,28 @@ const DEFAULT_CODE_EXPIRES_IN = 600;
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
 const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
 
+const warnOidcDeprecation = deprecate(
+	() => {},
+	'The "oidc-provider" plugin is deprecated and will be removed in the next major version. ' +
+		"Migrate to @better-auth/oauth-provider. " +
+		"See: https://www.better-auth.com/docs/plugins/oauth-provider",
+);
+
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
  * authorization code flow and the token exchange flow. It also implements the
  * userinfo endpoint.
  *
+ * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
+ * @see https://www.better-auth.com/docs/plugins/oauth-provider
+ *
  * @param options - The options for the OIDC plugin.
  * @returns A Better Auth plugin.
  */
 export const oidcProvider = (options: OIDCOptions) => {
+	if (!options.__skipDeprecationWarning) {
+		warnOidcDeprecation();
+	}
 	const modelName = {
 		oauthClient: "oauthApplication",
 		oauthAccessToken: "oauthAccessToken",
@@ -315,7 +331,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	) {
 		if (opts.storeClientSecret === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: clientSecret,
 			});
 		}
@@ -349,7 +365,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		if (opts.storeClientSecret === "encrypted") {
 			return (
 				(await symmetricDecrypt({
-					key: ctx.context.secret,
+					key: ctx.context.secretConfig,
 					data: storedClientSecret,
 				})) === clientSecret
 			);
@@ -379,7 +395,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 	}
 
 	return {
-		id: "oidc",
+		id: "oidc-provider",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -399,8 +416,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!loginPromptCookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -578,8 +596,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					// Clear the cookie
-					ctx.setCookie("oidc_consent_prompt", "", {
-						maxAge: 0,
+					expireCookie(ctx, {
+						name: "oidc_consent_prompt",
+						attributes: { path: "/" },
 					});
 
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
@@ -591,8 +610,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					if (!ctx.body.accept) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							consentCode,
 						);
 						return ctx.json({
 							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
@@ -602,8 +621,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const codeExpiresInMs =
 						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
-					await ctx.context.internalAdapter.updateVerificationValue(
-						verification.id,
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						consentCode,
 						{
 							value: JSON.stringify({
 								...value,
@@ -809,8 +828,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -918,8 +937,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
@@ -991,7 +1010,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
 					if (options.useJWTPlugin) {
-						const jwtPlugin = getJwtPlugin(ctx);
+						const jwtPlugin = ctx.context.getPlugin("jwt");
 						if (!jwtPlugin) {
 							ctx.context.logger.error(
 								"OIDC: `useJWTPlugin` is enabled but the JWT plugin is not available. Make sure you have the JWT Plugin in your plugins array or set `useJWTPlugin` to false.",
@@ -1028,7 +1047,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									audience: client_id.toString(),
 									issuer:
 										jwtPlugin.options?.jwt?.issuer ??
-										ctx.context.options.baseURL,
+										(typeof ctx.context.options.baseURL === "string"
+											? ctx.context.options.baseURL
+											: undefined),
 									expirationTime,
 									definePayload: () => payload,
 								},
@@ -1615,7 +1636,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					// Validate id_token_hint if provided
 					if (id_token_hint) {
 						try {
-							const jwtPlugin = getJwtPlugin(ctx);
+							const jwtPlugin = ctx.context.getPlugin("jwt");
 							if (jwtPlugin && jwtPlugin.options && options?.useJWTPlugin) {
 								// For JWT plugin tokens, verify using JWKS
 								const verified = await verifyJWT(
@@ -1723,14 +1744,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						await ctx.context.internalAdapter.deleteSession(
 							session.session.token,
 						);
-						ctx.setSignedCookie(
-							ctx.context.authCookies.sessionToken.name,
-							"",
-							ctx.context.secret,
-							{
-								maxAge: 0,
-							},
-						);
+						expireCookie(ctx, ctx.context.authCookies.sessionToken);
 					}
 
 					if (post_logout_redirect_uri) {

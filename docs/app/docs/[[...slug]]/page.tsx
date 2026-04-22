@@ -1,148 +1,119 @@
-import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { File, Files, Folder } from "fumadocs-ui/components/files";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import {
+	DocsBody,
+	DocsDescription,
+	DocsPage,
+	DocsTitle,
+} from "fumadocs-ui/page";
+import { MilestoneIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
-import { Features } from "@/components/blocks/features";
-import { DividerText } from "@/components/divider-text";
-import { DocsBody, DocsPage, DocsTitle } from "@/components/docs/page";
-import { Endpoint } from "@/components/endpoint";
-import { ForkButton } from "@/components/fork-button";
-import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-import { GenerateSecret } from "@/components/generate-secret";
-import { AddToCursor } from "@/components/mdx/add-to-cursor";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { Callout } from "@/components/ui/callout";
+import { Features } from "@/components/docs/features";
 import {
-	CodeBlock,
-	CodeBlockTab,
-	CodeBlockTabs,
-	CodeBlockTabsList,
-	Pre,
-} from "@/components/ui/code-block";
-import { AnimatePresence } from "@/components/ui/fade-in";
-import { source } from "@/lib/source";
-import { absoluteUrl, cn } from "@/lib/utils";
+	AddToCursor,
+	DatabaseTable,
+	DividerText,
+	Endpoint,
+	ForkButton,
+	GenerateAppleJwt,
+	GenerateSecret,
+} from "@/components/docs/mdx-components";
+import { Callout } from "@/components/ui/callout";
+import type { DocsVersion } from "@/lib/docs-versions";
+import {
+	docsVersions,
+	resolveVersionFromSlug,
+	scopeDocsHref,
+} from "@/lib/docs-versions";
+import { createMetadata } from "@/lib/metadata";
+import { getSourceFor } from "@/lib/source";
+import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+
 export default async function Page({
 	params,
 }: {
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	let page = source.getPage(slug);
+	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
+	const src = getSourceFor(version.slug);
+	const page = src.getPage(relSlug);
 
 	if (!page) {
-		if (slug?.[0] === "errors") {
-			page = source.getPage(["errors", "unknown"])!;
-		} else {
-			return notFound();
-		}
+		return notFound();
 	}
 
-	const MDX = page.data.body;
-	const avoidLLMHeader = ["Introduction", "Comparison"];
+	const { body: MDX, toc } = await page.data.load();
+
+	// Upstream content always lives at docs/content/docs on each branch;
+	// `content/docs-beta` is only a local sync target, not in the repo tree.
+	const rawBase = `https://raw.githubusercontent.com/better-auth/better-auth/${version.branch}/docs/content/docs`;
+	const githubBase = `https://github.com/better-auth/better-auth/blob/${version.branch}/docs/content/docs`;
+
+	// Keep every absolute /docs link scoped to the version being viewed.
+	const scope = (href: string | undefined) => scopeDocsHref(href, version);
+	const DefaultAnchor = defaultMdxComponents.a;
+
 	return (
 		<DocsPage
-			toc={page.data.toc}
-			full={page.data.full}
+			toc={toc}
+			full={false}
+			tableOfContent={{
+				style: "clerk",
+			}}
+			breadcrumb={{ enabled: false }}
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				branch: "canary",
-				path: `/docs/content/docs/${page.path}`,
-			}}
-			tableOfContent={{
-				header: <div className="w-10 h-4"></div>,
+				sha: version.branch,
+				path: `docs/content/docs/${page.path}`,
 			}}
 		>
-			<DocsTitle>{page.data.title}</DocsTitle>
-			{!avoidLLMHeader.includes(page.data.title) && (
-				<div className="flex flex-row gap-2 items-center pb-3 border-b">
-					<LLMCopyButton />
+			{version.slug === "beta" && <BetaBanner version={version} />}
+			<div className="flex items-center justify-between gap-4">
+				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
+				<div className="flex items-center gap-2 not-prose shrink-0">
+					<LLMCopyButton rawUrl={`${rawBase}/${page.path}`} />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
-						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
+						githubUrl={`${githubBase}/${page.path}`}
+						rawMdUrl={`/llms.txt${page.url}.md`}
 					/>
 				</div>
+			</div>
+			{page.data.description && (
+				<DocsDescription>{page.data.description}</DocsDescription>
 			)}
 			<DocsBody>
 				<MDX
 					components={{
 						...defaultMdxComponents,
-						CodeBlockTabs: (props) => {
-							return (
-								<CodeBlockTabs
-									{...props}
-									className="p-0 rounded-lg border-0 bg-fd-secondary"
-								>
-									{props.children}
-								</CodeBlockTabs>
-							);
-						},
-						CodeBlockTabsList: (props) => {
-							return (
-								<CodeBlockTabsList
-									{...props}
-									className="pb-0 my-0 rounded-lg bg-fd-secondary"
-								/>
-							);
-						},
-						CodeBlockTab: (props) => {
-							return <CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />;
-						},
-						pre: (props) => {
-							return (
-								<CodeBlock
-									className="rounded-xl bg-fd-muted"
-									allowCopy={true}
-									{...props}
-								>
-									<div style={{ minWidth: "100%", display: "table" }}>
-										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
-											{props.children}
-										</Pre>
-									</div>
-								</CodeBlock>
-							);
-						},
-						Link: ({
-							className,
-							...props
-						}: React.ComponentProps<typeof Link>) => (
-							<Link
-								className={cn(
-									"font-medium underline underline-offset-4",
-									className,
-								)}
-								{...props}
-							/>
-						),
 						Step,
 						Steps,
-						File,
-						Folder,
-						Files,
 						Tab,
 						Tabs,
-						AutoTypeTable,
-						GenerateSecret,
-						GenerateAppleJwt,
-						AnimatePresence,
-						TypeTable,
-						Features,
-						ForkButton,
-						AddToCursor,
-						DatabaseTable,
 						Accordion,
 						Accordions,
-						Endpoint,
+						File,
+						Files,
+						Folder,
+						TypeTable,
 						APIMethod,
+						DatabaseTable,
+						ForkButton,
+						AddToCursor,
+						Features,
+						Endpoint,
+						GenerateAppleJwt,
+						GenerateSecret,
+						DividerText,
 						Callout: ({
 							children,
 							type,
@@ -156,9 +127,29 @@ export default async function Page({
 								{children}
 							</Callout>
 						),
-						DividerText,
-						iframe: (props) => (
-							<iframe {...props} className="w-full h-[500px]" />
+						iframe: (props: React.ComponentProps<"iframe">) => (
+							<iframe
+								title="Embedded content"
+								{...props}
+								className="w-full h-[500px]"
+							/>
+						),
+						a: (props: React.ComponentProps<"a">) => (
+							<DefaultAnchor {...props} href={scope(props.href)} />
+						),
+						Link: ({
+							href,
+							className,
+							...props
+						}: React.ComponentProps<typeof Link>) => (
+							<Link
+								href={typeof href === "string" ? (scope(href) ?? href) : href}
+								className={cn(
+									"font-medium underline underline-offset-4",
+									className,
+								)}
+								{...props}
+							/>
 						),
 					}}
 				/>
@@ -167,8 +158,27 @@ export default async function Page({
 	);
 }
 
+function BetaBanner({ version }: { version: DocsVersion }) {
+	return (
+		<div className="mb-2 flex items-center gap-3 py-2.5 text-sm text-blue-600 dark:text-blue-400 text-pretty">
+			<MilestoneIcon size={18} className="shrink-0" fill="currentColor" />
+			<p>
+				You are currently viewing documentation for{" "}
+				<span className="bg-blue-600/10 dark:bg-blue-400/15 px-1 py-0.5 rounded-lg font-medium tracking-wider">
+					{version.label}
+				</span>
+			</p>
+		</div>
+	);
+}
+
 export async function generateStaticParams() {
-	return source.generateParams();
+	return docsVersions.flatMap((v) => {
+		const src = getSourceFor(v.slug);
+		return src.generateParams().map((p) => ({
+			slug: v.slug ? [v.slug, ...(p.slug ?? [])] : p.slug,
+		}));
+	});
 }
 
 export async function generateMetadata({
@@ -177,33 +187,32 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	let page = source.getPage(slug);
-	if (page == null) {
-		if (slug?.[0] === "errors") {
-			page = source.getPage(["errors", "unknown"])!;
-		} else {
-			return notFound();
-		}
-	}
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
-	const url = new URL(`${baseUrl}/api/og`);
-	const { title, description } = page.data;
-	const pageSlug = page.file.path;
-	url.searchParams.set("type", "Documentation");
-	url.searchParams.set("mode", "dark");
-	url.searchParams.set("heading", `${title}`);
+	const { version, relSlug } = resolveVersionFromSlug(slug ?? []);
+	const src = getSourceFor(version.slug);
+	const page = src.getPage(relSlug);
+	if (!page) return notFound();
 
-	return {
+	const title = version.slug
+		? `${version.label} - ${page.data.title}`
+		: page.data.title;
+
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", title);
+	ogSearchParams.set("type", "documentation");
+	ogSearchParams.set("mode", "dark");
+
+	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
+
+	return createMetadata({
 		title,
-		description,
+		description: page.data.description,
 		openGraph: {
 			title,
-			description,
-			type: "website",
-			url: absoluteUrl(`docs/${pageSlug}`),
+			description: page.data.description,
+			type: "article",
 			images: [
 				{
-					url: url.toString(),
+					url: ogUrl,
 					width: 1200,
 					height: 630,
 					alt: title,
@@ -213,8 +222,8 @@ export async function generateMetadata({
 		twitter: {
 			card: "summary_large_image",
 			title,
-			description,
-			images: [url.toString()],
+			description: page.data.description,
+			images: [ogUrl],
 		},
-	};
+	});
 }

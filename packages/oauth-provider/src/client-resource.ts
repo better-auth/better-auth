@@ -7,24 +7,45 @@ import type { JWTPayload, JWTVerifyOptions } from "jose";
 import { handleMcpErrors } from "./mcp";
 import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	auth?: T,
 ) => {
-	const oauthProviderPlugin = auth ? getOAuthProviderPlugin(auth) : undefined;
-	const oauthProviderOptions = oauthProviderPlugin?.options;
-	const jwtPlugin =
-		auth && !oauthProviderOptions?.disableJwtPlugin
-			? getJwtPlugin(auth)
+	let oauthProviderPlugin:
+		| ReturnType<typeof getOAuthProviderPlugin>
+		| undefined;
+	const getOauthProviderPlugin = async () => {
+		if (!oauthProviderPlugin) {
+			oauthProviderPlugin = auth
+				? getOAuthProviderPlugin(await auth.$context)
+				: undefined;
+		}
+		return oauthProviderPlugin;
+	};
+	let jwtPlugin: ReturnType<typeof getJwtPlugin> | undefined;
+	const getJwtPluginOptions = async () => {
+		if (!jwtPlugin) {
+			jwtPlugin =
+				auth && !(await getOauthProviderPlugin())?.options?.disableJwtPlugin
+					? getJwtPlugin(await auth.$context)
+					: undefined;
+		}
+		return jwtPlugin?.options;
+	};
+	const authServerBaseUrl =
+		typeof auth?.options.baseURL === "string"
+			? auth.options.baseURL
 			: undefined;
-	const jwtPluginOptions = jwtPlugin?.options;
-	const authServerBaseUrl = auth?.options.baseURL;
+	const getAuthorizationServer = async (): Promise<string | undefined> => {
+		const jwtPluginOptions = await getJwtPluginOptions();
+		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
+	};
 	const authServerBasePath = auth?.options.basePath;
-	const authorizationServer =
-		jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 
 	return {
 		id: "oauth-provider-resource-client",
+		version: PACKAGE_VERSION,
 		getActions() {
 			return {
 				/**
@@ -47,6 +68,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						resourceMetadataMappings?: Record<string, string>;
 					},
 				): Promise<JWTPayload> => {
+					const jwtPluginOptions = await getJwtPluginOptions();
 					const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 					const issuer =
 						opts?.verifyOptions?.issuer ??
@@ -120,6 +142,8 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						| undefined,
 				): Promise<ResourceServerMetadata> => {
 					const resource = overrides?.resource ?? authServerBaseUrl;
+					const oauthProviderOptions = (await getOauthProviderPlugin())
+						?.options;
 					if (!resource) {
 						throw Error("missing required resource");
 					}
@@ -158,6 +182,8 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 							}
 						}
 					}
+
+					const authorizationServer = await getAuthorizationServer();
 
 					return {
 						resource,

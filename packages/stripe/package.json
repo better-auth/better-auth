@@ -1,10 +1,8 @@
 {
   "name": "@better-auth/stripe",
-  "author": "Bereket Engida",
-  "version": "1.5.0-beta.2",
+  "version": "1.7.0-beta.2",
+  "description": "Stripe plugin for Better Auth",
   "type": "module",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.mts",
   "license": "MIT",
   "homepage": "https://www.better-auth.com/docs/plugins/stripe",
   "repository": {
@@ -12,25 +10,33 @@
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/stripe"
   },
+  "author": "Bereket Engida",
   "keywords": [
     "stripe",
     "auth",
-    "stripe"
+    "payments",
+    "typescript",
+    "better-auth"
   ],
-  "module": "dist/index.mjs",
-  "description": "Stripe plugin for Better Auth",
-  "scripts": {
-    "test": "vitest",
-    "coverage": "vitest run --coverage",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
-  },
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
@@ -54,19 +60,20 @@
     }
   },
   "dependencies": {
-    "defu": "^6.1.4",
-    "zod": "^4.1.12"
-  },
-  "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "stripe": "^18 || ^19 || ^20"
+    "defu": "^6.1.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^20.0.0",
+    "stripe": "^22.0.1",
     "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
+    "better-call": "catalog:",
+    "stripe": "^18 || ^19 || ^20 || ^21 || ^22"
   }
 }

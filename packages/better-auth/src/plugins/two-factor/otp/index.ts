@@ -9,6 +9,8 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../../crypto";
+import { parseUserOutput } from "../../../db/schema";
+import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { defaultKeyHasher } from "../utils";
@@ -125,30 +127,40 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		}
 		if (opts.storeOTP === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: otp,
 			});
 		}
 		return otp;
 	}
 
-	async function decryptOTP(ctx: GenericEndpointContext, otp: string) {
+	async function decryptOrHashForComparison(
+		ctx: GenericEndpointContext,
+		storedOtp: string,
+		userInput: string,
+	): Promise<[string, string]> {
 		if (opts.storeOTP === "hashed") {
-			return await defaultKeyHasher(otp);
+			// For hashed storage: hash the user input and compare with stored hash
+			return [storedOtp, await defaultKeyHasher(userInput)];
 		}
 		if (opts.storeOTP === "encrypted") {
-			return await symmetricDecrypt({
-				key: ctx.context.secret,
-				data: otp,
+			// For encrypted storage: decrypt stored value and compare with plain input
+			const decrypted = await symmetricDecrypt({
+				key: ctx.context.secretConfig,
+				data: storedOtp,
 			});
+			return [decrypted, userInput];
 		}
 		if (typeof opts.storeOTP === "object" && "encrypt" in opts.storeOTP) {
-			return await opts.storeOTP.decrypt(otp);
+			const decrypted = await opts.storeOTP.decrypt(storedOtp);
+			return [decrypted, userInput];
 		}
 		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
-			return await opts.storeOTP.hash(otp);
+			// For custom hash: hash the user input and compare with stored hash
+			return [storedOtp, await opts.storeOTP.hash(userInput)];
 		}
-		return otp;
+		// Plain storage: compare directly
+		return [storedOtp, userInput];
 	}
 
 	/**
@@ -299,11 +311,10 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					`2fa-otp-${key}`,
 				);
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
-			const decryptedOtp = await decryptOTP(ctx, otp!);
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						toCheckOtp.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						`2fa-otp-${key}`,
 					);
 				}
 				throw APIError.from(
@@ -313,17 +324,22 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter!) >= allowedAttempts) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					toCheckOtp.id,
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`2fa-otp-${key}`,
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				);
 			}
+			const [storedValue, inputValue] = await decryptOrHashForComparison(
+				ctx,
+				otp!,
+				ctx.body.code,
+			);
 			const isCodeValid = constantTimeEqual(
-				new TextEncoder().encode(decryptedOtp),
-				new TextEncoder().encode(ctx.body.code),
+				new TextEncoder().encode(storedValue),
+				new TextEncoder().encode(inputValue),
 			);
 			if (isCodeValid) {
 				if (!session.user.twoFactorEnabled) {
@@ -344,30 +360,22 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						false,
 						session.session,
 					);
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
-					);
 					await setSessionCookie(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});
+					await ctx.context.internalAdapter.deleteSession(
+						session.session.token,
+					);
 					return ctx.json({
 						token: newSession.token,
-						user: {
-							id: updatedUser.id,
-							email: updatedUser.email,
-							emailVerified: updatedUser.emailVerified,
-							name: updatedUser.name,
-							image: updatedUser.image,
-							createdAt: updatedUser.createdAt,
-							updatedAt: updatedUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, updatedUser),
 					});
 				}
 				return valid(ctx);
 			} else {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					toCheckOtp.id,
+				await ctx.context.internalAdapter.updateVerificationByIdentifier(
+					`2fa-otp-${key}`,
 					{
 						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
@@ -379,6 +387,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 
 	return {
 		id: "otp",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -388,7 +397,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.send2FaOTP`
+			 * `auth.api.sendTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.sendOtp`
@@ -404,7 +413,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			 * ### API Methods
 			 *
 			 * **server:**
-			 * `auth.api.verifyOTP`
+			 * `auth.api.verifyTwoFactorOTP`
 			 *
 			 * **client:**
 			 * `authClient.twoFactor.verifyOtp`

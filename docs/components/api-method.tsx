@@ -10,14 +10,6 @@ import {
 import { Endpoint } from "./endpoint";
 import { Button } from "./ui/button";
 import { DynamicCodeBlock } from "./ui/dynamic-code-block";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "./ui/table";
 
 type Property = {
 	isOptional: boolean;
@@ -56,7 +48,9 @@ export const APIMethod = ({
 	children,
 	noResult,
 	requireSession,
+	requireHeaders,
 	requireBearerToken,
+	headersComment,
 	note,
 	clientOnlyNote,
 	serverOnlyNote,
@@ -81,6 +75,16 @@ export const APIMethod = ({
 	 * @default false
 	 */
 	requireBearerToken?: boolean;
+	/**
+	 * If enabled, we will add `headers` to the fetch options without assuming the request is backed by a session.
+	 *
+	 * @default false
+	 */
+	requireHeaders?: boolean;
+	/**
+	 * A custom comment to display above the generated `headers` line when `requireHeaders` is enabled.
+	 */
+	headersComment?: string;
 	/**
 	 * The HTTP method to the endpoint
 	 *
@@ -144,7 +148,7 @@ export const APIMethod = ({
 	 */
 	forceAsParam?: boolean;
 }) => {
-	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
+	const { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
 	const authClientMethodPath = pathToDotNotation(path);
 
@@ -160,7 +164,9 @@ export const APIMethod = ({
 		props,
 		method: method ?? "GET",
 		requireSession: requireSession ?? false,
+		requireHeaders: requireHeaders ?? false,
 		requireBearerToken: requireBearerToken ?? false,
+		headersComment,
 		forceAsQuery,
 		forceAsParam,
 		forceAsBody,
@@ -177,14 +183,9 @@ export const APIMethod = ({
 	);
 
 	const serverTabContent = (
-		<>
-			{isClientOnly ? null : (
-				<Endpoint
-					method={method || "GET"}
-					path={path}
-					isServerOnly={isServerOnly ?? false}
-					className=""
-				/>
+		<div className="border shadow-sm [&_figure]:my-0 [&_figure]:border-0 [&_figure]:shadow-none [&_figure]:rounded-none [&_.fd-scroll-container]:bg-transparent">
+			{isClientOnly || isServerOnly ? null : (
+				<Endpoint method={method || "GET"} path={path} className="" />
 			)}
 			{serverOnlyNote || note ? (
 				<Note>
@@ -206,14 +207,14 @@ export const APIMethod = ({
 				) : null}
 			</div>
 			{!isClientOnly ? <TypeTable props={props} isServer /> : null}
-		</>
+		</div>
 	);
 
 	if (isExternalOnly) {
 		return serverTabContent;
 	}
 
-	let pathId = path.replaceAll("/", "-");
+	const pathId = path.replaceAll("/", "-");
 
 	return (
 		<>
@@ -228,46 +229,53 @@ export const APIMethod = ({
 				defaultValue={isServerOnly ? "server" : "client"}
 				className="gap-0 w-full"
 			>
-				<ApiMethodTabsList className="relative flex justify-start w-full p-0 bg-transparent hover:[&>div>a>button]:opacity-100">
-					<ApiMethodTabsTrigger
-						value="client"
-						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="1em"
-							height="1em"
-							viewBox="0 0 36 36"
+				<ApiMethodTabsList className="relative flex justify-start w-full p-0 bg-background hover:[&>div>a>button]:opacity-100">
+					{(
+						[
+							{
+								value: "client",
+								label: "Client",
+								icon: (
+									<>
+										<rect width="20" height="14" x="2" y="3" rx="2" />
+										<path d="M8 21h8m-4-4v4" />
+									</>
+								),
+							},
+							{
+								value: "server",
+								label: "Server",
+								icon: (
+									<>
+										<rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+										<rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+										<path d="M6 6h.01M6 18h.01" />
+									</>
+								),
+							},
+						] as const
+					).map((tab) => (
+						<ApiMethodTabsTrigger
+							key={tab.value}
+							value={tab.value}
+							className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-fd-muted/80 hover:bg-fd-secondary/70 bg-background border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none dark:bg-[#050505] dark:hover:bg-[#0a0a0a] dark:data-[state=active]:bg-fd-muted/80 dark:border-white/[0.06] dark:hover:border-white/10 dark:data-[state=active]:border-white/10"
 						>
-							<path
-								fill="currentColor"
-								d="M23.81 26c-.35.9-.94 1.5-1.61 1.5h-8.46c-.68 0-1.26-.6-1.61-1.5H1v1.75A2.45 2.45 0 0 0 3.6 30h28.8a2.45 2.45 0 0 0 2.6-2.25V26Z"
-							/>
-							<path
-								fill="currentColor"
-								d="M7 10h22v14h3V7.57A1.54 1.54 0 0 0 30.5 6h-25A1.54 1.54 0 0 0 4 7.57V24h3Z"
-							/>
-							<path fill="none" d="M0 0h36v36H0z" />
-						</svg>
-						<span>Client</span>
-					</ApiMethodTabsTrigger>
-					<ApiMethodTabsTrigger
-						value="server"
-						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="1em"
-							height="1em"
-							viewBox="0 0 24 24"
-						>
-							<path
-								fill="currentColor"
-								d="M3 3h18v18H3zm2 2v6h14V5zm14 8H5v6h14zM7 7h2v2H7zm2 8H7v2h2z"
-							/>
-						</svg>
-						<span>Server</span>
-					</ApiMethodTabsTrigger>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1em"
+								height="1em"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								{tab.icon}
+							</svg>
+							<span>{tab.label}</span>
+						</ApiMethodTabsTrigger>
+					))}
 					<div className="absolute right-0">
 						<a href={`#api-method${pathId}`}>
 							<Button
@@ -281,43 +289,43 @@ export const APIMethod = ({
 					</div>
 				</ApiMethodTabsList>
 				<ApiMethodTabsContent value="client">
-					{isServerOnly ? null : (
-						<Endpoint
-							method={method || "GET"}
-							path={path}
-							isServerOnly={isServerOnly ?? false}
-						/>
-					)}
-					{clientOnlyNote || note ? (
-						<Note>
-							{note && tsxifyBackticks(note)}
-							{clientOnlyNote ? (
-								<>
-									{note ? <br /> : null}
-									{tsxifyBackticks(clientOnlyNote)}
-								</>
+					<div className="border shadow-sm [&_figure]:my-0 [&_figure]:border-0 [&_figure]:shadow-none [&_figure]:rounded-none [&_.fd-scroll-container]:bg-transparent">
+						{isServerOnly ? null : (
+							<Endpoint method={method || "GET"} path={path} />
+						)}
+						{clientOnlyNote || note ? (
+							<Note>
+								{note && tsxifyBackticks(note)}
+								{clientOnlyNote ? (
+									<>
+										{note ? <br /> : null}
+										{tsxifyBackticks(clientOnlyNote)}
+									</>
+								) : null}
+							</Note>
+						) : null}
+						<div className={cn("relative w-full")}>
+							<DynamicCodeBlock
+								code={`${code_prefix}${
+									noResult
+										? ""
+										: `const { data${
+												resultVariable === "data" ? "" : `: ${resultVariable}`
+											}, error } = `
+								}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
+								lang="ts"
+								allowCopy={!isServerOnly}
+							/>
+							{isServerOnly ? (
+								<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
+									<span>This is a server-only endpoint</span>
+								</div>
 							) : null}
-						</Note>
-					) : null}
-					<div className={cn("relative w-full")}>
-						<DynamicCodeBlock
-							code={`${code_prefix}${
-								noResult
-									? ""
-									: `const { data${
-											resultVariable === "data" ? "" : `: ${resultVariable}`
-										}, error } = `
-							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
-							lang="ts"
-							allowCopy={!isServerOnly}
-						/>
-						{isServerOnly ? (
-							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
-								<span>This is a server-only endpoint</span>
-							</div>
+						</div>
+						{!isServerOnly ? (
+							<TypeTable props={props} isServer={false} />
 						) : null}
 					</div>
-					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
 				</ApiMethodTabsContent>
 				<ApiMethodTabsContent value="server">
 					{serverTabContent}
@@ -372,48 +380,122 @@ function TypeTable({
 	if (isServer && !props.filter((x) => !x.isClientOnly).length) return null;
 	if (!props.length) return null;
 
+	const filteredProps = props.filter(
+		(prop) =>
+			!(prop.isServerOnly && isServer === false) &&
+			!(prop.isClientOnly && isServer === true),
+	);
+
+	if (!filteredProps.length) return null;
+
 	return (
-		<Table className="overflow-hidden mt-2 mb-0">
-			<TableHeader>
-				<TableRow>
-					<TableHead className="text-primary w-[100px]">Prop</TableHead>
-					<TableHead className="text-primary">Description</TableHead>
-					<TableHead className="text-primary w-[100px]">Type</TableHead>
-				</TableRow>
-			</TableHeader>
-			<TableBody>
-				{props.map((prop, i) =>
-					(prop.isServerOnly && isServer === false) ||
-					(prop.isClientOnly && isServer === true) ? null : (
-						<TableRow key={i}>
-							<TableCell>
-								<code>
-									{prop.path.join(".") + (prop.path.length ? "." : "")}
-									{prop.propName}
-									{prop.isOptional ? "?" : ""}
-								</code>
-								{prop.isServerOnly ? (
-									<span className="mx-2 text-xs text-muted-foreground">
-										(server-only)
-									</span>
-								) : null}
-							</TableCell>
-							<TableCell className="max-w-[500px] overflow-hidden">
-								<div className="w-full break-words h-fit text-wrap">
-									{tsxifyBackticks(prop.description ?? "")}
-								</div>
-							</TableCell>
-							<TableCell className="max-w-[200px] overflow-auto">
-								<code>
-									{prop.type}
-									{prop.isNullable ? " | null" : ""}
-								</code>
-							</TableCell>
-						</TableRow>
-					),
-				)}
-			</TableBody>
-		</Table>
+		<div className="mt-0">
+			<div className="flex items-center gap-2 px-3.5 py-2 border-y border-border bg-fd-muted/80">
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="12"
+					height="12"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					className="text-muted-foreground"
+				>
+					<path d="M16 3h5v5" />
+					<path d="M8 3H3v5" />
+					<path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
+					<path d="m15 9 6-6" />
+				</svg>
+				<span className="text-xs font-medium text-muted-foreground tracking-wider">
+					Parameters
+				</span>
+			</div>
+			<PropertyList props={filteredProps} />
+		</div>
+	);
+}
+
+function PropertyItem({ prop }: { prop: Property }) {
+	return (
+		<div className="flex items-center gap-2 flex-wrap">
+			<code className="text-xs font-semibold text-foreground/90">
+				{prop.propName}
+			</code>
+			<span className="text-xs font-mono text-foreground/60 font-medium">
+				{prop.type}
+				{prop.isNullable ? " | null" : ""}
+			</span>
+			{!prop.isOptional && (
+				<span className="text-[10px] font-mono font-medium text-amber-600 dark:text-amber-500/80">
+					required
+				</span>
+			)}
+			{prop.isServerOnly && (
+				<span className="text-[10px] font-mono font-medium text-blue-600 dark:text-blue-400/80">
+					server
+				</span>
+			)}
+		</div>
+	);
+}
+
+function PropertyList({
+	props,
+	nested = false,
+}: {
+	props: Property[];
+	nested?: boolean;
+}) {
+	const groups: { prop: Property; children: Property[] }[] = [];
+	let i = 0;
+
+	while (i < props.length) {
+		const prop = props[i];
+		if (prop.type === "Object") {
+			const parentSegments = [...prop.path, prop.propName];
+			const children: Property[] = [];
+			i++;
+			while (
+				i < props.length &&
+				props[i].path.length >= parentSegments.length &&
+				parentSegments.every((seg, idx) => props[i].path[idx] === seg)
+			) {
+				children.push(props[i]);
+				i++;
+			}
+			groups.push({ prop, children });
+		} else {
+			groups.push({ prop, children: [] });
+			i++;
+		}
+	}
+
+	return (
+		<div className="divide-y divide-border">
+			{groups.map((group) => (
+				<div
+					key={`${group.prop.path.join(".")}.${group.prop.propName}`}
+					className={cn(
+						nested ? "px-3 py-3" : "px-3.5 py-3",
+						group.children.length > 0 && "pb-3",
+					)}
+				>
+					<PropertyItem prop={group.prop} />
+					{group.prop.description && (
+						<p className="mt-1 mb-0 text-sm leading-relaxed max-w-xl">
+							{tsxifyBackticks(group.prop.description)}
+						</p>
+					)}
+					{group.children.length > 0 && (
+						<div className="mt-3 border rounded-md overflow-hidden">
+							<PropertyList props={group.children} nested />
+						</div>
+					)}
+				</div>
+			))}
+		</div>
 	);
 }
 
@@ -454,7 +536,7 @@ function parseCode(children: JSX.Element) {
 		.join("")
 		.split("\n");
 
-	let props: Property[] = [];
+	const props: Property[] = [];
 
 	let functionName: string = "";
 	let currentJSDocDescription: string = "";
@@ -463,9 +545,9 @@ function parseCode(children: JSX.Element) {
 	let hasAlreadyDefinedApiMethodType = false;
 	let isServerOnly_ = false;
 	let isClientOnly_ = false;
-	let nestPath: string[] = []; // str arr segmented-path, eg: ["data", "metadata", "something"]
-	let serverOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
-	let clientOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
+	const nestPath: string[] = []; // str arr segmented-path, eg: ["data", "metadata", "something"]
+	const serverOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
+	const clientOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
 	let isNullable = false;
 
 	let code_prefix = "";
@@ -747,7 +829,9 @@ function shouldServerUseQueryParams(
 function createServerBody({
 	props,
 	requireSession,
+	requireHeaders,
 	requireBearerToken,
+	headersComment,
 	method,
 	forceAsBody,
 	forceAsParam,
@@ -755,7 +839,9 @@ function createServerBody({
 }: {
 	props: Property[];
 	requireSession: boolean;
+	requireHeaders: boolean;
 	requireBearerToken: boolean;
+	headersComment: string | undefined;
 	method: string;
 	forceAsQuery: boolean | undefined;
 	forceAsParam: boolean | undefined;
@@ -819,6 +905,11 @@ function createServerBody({
 	if (requireSession) {
 		fetchOptions +=
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
+	} else if (requireHeaders) {
+		fetchOptions += `\n    // ${
+			headersComment ||
+			"Pass the current request headers so Better Auth can read and set cookies."
+		}\n    headers: await headers(),`;
 	}
 
 	if (requireBearerToken) {
@@ -841,11 +932,13 @@ function createServerBody({
 
 function Note({ children }: { children: ReactNode }) {
 	return (
-		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full break-words rounded-md border text-md text-wrap border-border bg-fd-secondary/50">
-			<span className="-mb-1 w-full text-xs select-none text-muted-foreground">
+		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full wrap-break-word rounded-md border-b text-md text-wrap bg-fd-muted/80">
+			<span className="-mb-1 w-full text-xs select-none text-foreground/80 font-medium">
 				Notes
 			</span>
-			<p className="mt-0 mb-0 text-sm">{children as any}</p>
+			<p className="mt-0 mb-0 text-sm text-fd-muted-foreground">
+				{children as any}
+			</p>
 		</div>
 	);
 }

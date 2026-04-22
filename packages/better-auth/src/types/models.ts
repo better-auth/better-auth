@@ -1,58 +1,28 @@
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
-import type { Session, User } from "@better-auth/core/db";
-import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
-import type { Auth } from "./auth";
-import type { StripEmptyObjects, UnionToIntersection } from "./helper";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	InferDBFieldsFromOptionsInput,
+	InferDBFieldsFromPluginsInput,
+} from "@better-auth/core/db";
+import type {
+	ExtractPluginField,
+	InferPluginFieldFromTuple,
+	UnionToIntersection,
+} from "./helper";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "user", "input"> &
-		InferFieldsFromOptions<Options, "user", "input">;
-
-export type AdditionalUserFieldsOutput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "user", "output"> &
-		InferFieldsFromOptions<Options, "user", "output">;
+	InferDBFieldsFromPluginsInput<"user", Options["plugins"]> &
+		InferDBFieldsFromOptionsInput<Options["user"]>;
 
 export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "session", "input"> &
-		InferFieldsFromOptions<Options, "session", "input">;
-
-export type AdditionalSessionFieldsOutput<Options extends BetterAuthOptions> =
-	InferFieldsFromPlugins<Options, "session", "output"> &
-		InferFieldsFromOptions<Options, "session", "output">;
-
-export type InferUser<O extends BetterAuthOptions | Auth> = UnionToIntersection<
-	StripEmptyObjects<
-		User &
-			(O extends BetterAuthOptions
-				? AdditionalUserFieldsOutput<O>
-				: O extends Auth
-					? AdditionalUserFieldsOutput<O["options"]>
-					: {})
-	>
->;
-
-export type InferSession<O extends BetterAuthOptions | Auth> =
-	UnionToIntersection<
-		StripEmptyObjects<
-			Session &
-				(O extends BetterAuthOptions
-					? AdditionalSessionFieldsOutput<O>
-					: O extends Auth
-						? AdditionalSessionFieldsOutput<O["options"]>
-						: {})
-		>
-	>;
+	InferDBFieldsFromPluginsInput<"session", Options["plugins"]> &
+		InferDBFieldsFromOptionsInput<Options["session"]>;
 
 export type InferPluginTypes<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
-		? UnionToIntersection<
-				P extends BetterAuthPlugin
-					? P["$Infer"] extends Record<string, any>
-						? P["$Infer"]
-						: {}
-					: {}
-			>
-		: {};
+	O["plugins"] extends readonly [unknown, ...unknown[]]
+		? InferPluginFieldFromTuple<O["plugins"], "$Infer">
+		: O["plugins"] extends Array<infer P>
+			? UnionToIntersection<ExtractPluginField<P, "$Infer">>
+			: {};
 
 export type {
 	Account,

@@ -13,10 +13,13 @@ import type {
 	Scope,
 } from "./types";
 import {
-	basicToClientCredentials,
+	destructureCredentials,
+	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	parseClientMetadata,
+	resolveSubjectIdentifier,
 	validateClientCredentials,
 } from "./utils";
 
@@ -101,7 +104,7 @@ async function validateJwtAccessToken(
 	}
 
 	// Validate JWT against its session if it exists
-	let sessionId = jwtPayload.sid;
+	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
@@ -218,7 +221,7 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
-				metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: parseClientMetadata(client?.metadata),
 			})
 		: {};
 
@@ -235,8 +238,8 @@ async function validateOpaqueAccessToken(
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(accessToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(accessToken.createdAt.getTime() / 1000),
+		exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
 		scope: accessToken.scopes?.join(" "),
 	} as JWTPayload;
 }
@@ -322,8 +325,8 @@ async function validateRefreshToken(
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(refreshToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(refreshToken.createdAt.getTime() / 1000),
+		exp: Math.floor(new Date(refreshToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(new Date(refreshToken.createdAt).getTime() / 1000),
 		scope: refreshToken.scopes?.join(" "),
 	} as JWTPayload;
 }
@@ -370,30 +373,57 @@ export async function validateAccessToken(
 	});
 }
 
+/**
+ * Resolves pairwise sub on an introspection payload.
+ * Applied at the presentation layer so internal validation functions
+ * keep real user.id (needed for user lookup in /userinfo).
+ */
+async function resolveIntrospectionSub(
+	opts: OAuthOptions<Scope[]>,
+	payload: JWTPayload,
+	client: SchemaClient<Scope[]>,
+): Promise<JWTPayload> {
+	if (payload.active && payload.sub) {
+		const resolvedSub = await resolveSubjectIdentifier(
+			payload.sub as string,
+			client,
+			opts,
+		);
+		return { ...payload, sub: resolvedSub };
+	}
+	return payload;
+}
+
 export async function introspectEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let {
-		client_id,
-		client_secret,
-		token,
-		token_type_hint,
-	}: {
-		client_id?: string;
-		client_secret?: string;
+	let { token, token_type_hint } = ctx.body as {
 		token: string;
-		token_type_hint?: "access_token" | "refresh_token";
-	} = ctx.body;
+		token_type_hint?: string;
+	};
 
-	// Convert basic authorization
-	const authorization = ctx.request?.headers.get("authorization") || null;
-	if (authorization?.startsWith("Basic ")) {
-		const res = basicToClientCredentials(authorization);
-		client_id = res?.client_id;
-		client_secret = res?.client_secret;
+	// RFC 7662 §2.1: unknown hints are ignored and detection falls back to
+	// trying both supported token types.
+	if (
+		token_type_hint !== "access_token" &&
+		token_type_hint !== "refresh_token"
+	) {
+		token_type_hint = undefined;
 	}
-	if (!client_id || !client_secret) {
+
+	const credentials = await extractClientCredentials(
+		ctx,
+		opts,
+		`${ctx.context.baseURL}/oauth2/introspect`,
+	);
+	const {
+		clientId: client_id,
+		clientSecret: client_secret,
+		preVerifiedClient,
+	} = destructureCredentials(credentials);
+
+	if (!client_id || (!client_secret && !preVerifiedClient)) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "missing required credentials",
 			error: "invalid_client",
@@ -417,6 +447,8 @@ export async function introspectEndpoint(
 		opts,
 		client_id,
 		client_secret,
+		undefined,
+		preVerifiedClient,
 	);
 
 	try {
@@ -428,7 +460,7 @@ export async function introspectEndpoint(
 					token,
 					client.clientId,
 				);
-				return payload;
+				return resolveIntrospectionSub(opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "access_token") {
@@ -451,7 +483,7 @@ export async function introspectEndpoint(
 					refreshToken.token,
 					client.clientId,
 				);
-				return payload;
+				return resolveIntrospectionSub(opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "refresh_token") {

@@ -1,0 +1,363 @@
+---
+title: Dashboard Plugin (dash)
+description: The `dash()` plugin connects your Better Auth instance to Better Auth Infrastructure, enabling analytics tracking, event logging, and admin dashboard APIs.
+---
+
+## Installation
+
+```ts
+import { betterAuth } from "better-auth";
+import { dash } from "@better-auth/infra";
+
+export const auth = betterAuth({
+  plugins: [
+    dash({
+      apiUrl: process.env.BETTER_AUTH_API_URL,
+      kvUrl: process.env.BETTER_AUTH_KV_URL,
+      apiKey: process.env.BETTER_AUTH_API_KEY,
+    }),
+  ],
+});
+```
+
+## Configuration Options
+
+### DashOptions
+
+| Option             | Type     | Description                        |
+| ------------------ | -------- | ---------------------------------- |
+| `apiUrl`           | `string` | Better Auth Infrastructure API URL |
+| `kvUrl`            | `string` | KV store URL for caching           |
+| `apiKey`           | `string` | Your API key for authentication    |
+| `activityTracking` | `object` | Activity tracking configuration    |
+
+### Activity Tracking
+
+```ts
+dash({
+  apiKey: process.env.BETTER_AUTH_API_KEY,
+  activityTracking: {
+    enabled: true,           // Enable activity tracking
+    updateInterval: 300000,  // Update interval in ms (default: 5 minutes)
+  },
+}),
+```
+
+When enabled, this adds a `lastActiveAt` field to your user schema that's automatically updated on user activity.
+
+## Event Tracking
+
+The dash plugin automatically tracks the following events:
+
+### User Events
+
+| Event                        | Trigger                      |
+| ---------------------------- | ---------------------------- |
+| `user_signed_up`             | New user registration        |
+| `user_profile_updated`       | User updates their profile   |
+| `user_profile_image_updated` | User changes their avatar    |
+| `user_email_verified`        | Email verification completed |
+| `user_banned`                | User is banned               |
+| `user_unbanned`              | User is unbanned             |
+| `user_deleted`               | User account deleted         |
+
+### Session Events
+
+| Event                        | Trigger                         |
+| ---------------------------- | ------------------------------- |
+| `user_signed_in`             | Successful sign-in              |
+| `user_signed_out`            | User signs out                  |
+| `session_created`            | New session created             |
+| `session_revoked`            | Single session revoked          |
+| `sessions_revoked_all`       | All sessions revoked            |
+| `user_impersonated`          | Admin starts impersonating user |
+| `user_impersonation_stopped` | Admin stops impersonating       |
+
+### Account Events
+
+| Event              | Trigger                 |
+| ------------------ | ----------------------- |
+| `account_linked`   | Social account linked   |
+| `account_unlinked` | Social account unlinked |
+| `password_changed` | Password updated        |
+
+### Verification Events
+
+| Event                      | Trigger                  |
+| -------------------------- | ------------------------ |
+| `password_reset_requested` | Password reset initiated |
+| `password_reset_completed` | Password reset finished  |
+| `email_verification_sent`  | Verification email sent  |
+
+### Organization Events
+
+If you're using the organization plugin, these events are also tracked:
+
+| Event                  | Trigger                          |
+| ---------------------- | -------------------------------- |
+| `organization_created` | New organization created         |
+| `organization_updated` | Organization settings changed    |
+| `member_added`         | Member added to organization     |
+| `member_removed`       | Member removed from organization |
+| `member_role_updated`  | Member role changed              |
+| `member_invited`       | Invitation sent                  |
+| `invite_accepted`      | Invitation accepted              |
+| `invite_rejected`      | Invitation rejected              |
+| `invite_cancelled`     | Invitation cancelled             |
+| `team_created`         | Team created                     |
+| `team_updated`         | Team updated                     |
+| `team_deleted`         | Team deleted                     |
+| `team_member_added`    | Member added to team             |
+| `team_member_removed`  | Member removed from team         |
+
+## Dashboard Endpoints
+
+The dash plugin registers numerous admin endpoints for the dashboard:
+
+### User Management
+
+| Endpoint                   | Method | Description                |
+| -------------------------- | ------ | -------------------------- |
+| `/dash/users`              | GET    | List users with pagination |
+| `/dash/users/online-count` | GET    | Get online users count     |
+| `/dash/user`               | GET    | Get user details           |
+| `/dash/user`               | POST   | Create a new user          |
+| `/dash/user`               | PATCH  | Update user                |
+| `/dash/user`               | DELETE | Delete user                |
+| `/dash/user/ban`           | POST   | Ban user                   |
+| `/dash/user/unban`         | POST   | Unban user                 |
+| `/dash/user/password`      | POST   | Set user password          |
+| `/dash/user/impersonate`   | POST   | Impersonate user           |
+
+### Session Management
+
+| Endpoint                    | Method | Description              |
+| --------------------------- | ------ | ------------------------ |
+| `/dash/sessions`            | GET    | List all sessions        |
+| `/dash/sessions`            | DELETE | Delete sessions          |
+| `/dash/session/revoke`      | POST   | Revoke single session    |
+| `/dash/sessions/revoke-all` | POST   | Revoke all user sessions |
+
+### Organization Management
+
+| Endpoint                         | Method | Description              |
+| -------------------------------- | ------ | ------------------------ |
+| `/dash/organizations`            | GET    | List organizations       |
+| `/dash/organization`             | GET    | Get organization details |
+| `/dash/organization`             | POST   | Create organization      |
+| `/dash/organization`             | PATCH  | Update organization      |
+| `/dash/organization`             | DELETE | Delete organization      |
+| `/dash/organization/members`     | GET    | List members             |
+| `/dash/organization/member`      | POST   | Add member               |
+| `/dash/organization/member`      | DELETE | Remove member            |
+| `/dash/organization/member/role` | PATCH  | Update member role       |
+
+### Team Management
+
+| Endpoint                         | Method | Description        |
+| -------------------------------- | ------ | ------------------ |
+| `/dash/organization/teams`       | GET    | List teams         |
+| `/dash/organization/team`        | POST   | Create team        |
+| `/dash/organization/team`        | PATCH  | Update team        |
+| `/dash/organization/team`        | DELETE | Delete team        |
+| `/dash/organization/team/member` | POST   | Add team member    |
+| `/dash/organization/team/member` | DELETE | Remove team member |
+
+### Invitation Management
+
+| Endpoint                           | Method | Description       |
+| ---------------------------------- | ------ | ----------------- |
+| `/dash/organization/invitations`   | GET    | List invitations  |
+| `/dash/organization/invite`        | POST   | Send invitation   |
+| `/dash/organization/invite/cancel` | POST   | Cancel invitation |
+| `/dash/organization/invite/resend` | POST   | Resend invitation |
+
+### SSO Management
+
+| Endpoint                                        | Method | Description         |
+| ----------------------------------------------- | ------ | ------------------- |
+| `/dash/organization/sso-providers`              | GET    | List SSO providers  |
+| `/dash/organization/sso-provider`               | POST   | Create SSO provider |
+| `/dash/organization/sso-provider`               | PATCH  | Update SSO provider |
+| `/dash/organization/sso-provider`               | DELETE | Delete SSO provider |
+| `/dash/organization/sso-provider/verify-domain` | POST   | Verify domain       |
+
+### Directory Sync
+
+| Endpoint                             | Method | Description      |
+| ------------------------------------ | ------ | ---------------- |
+| `/dash/organization/directories`     | GET    | List directories |
+| `/dash/organization/directory`       | POST   | Create directory |
+| `/dash/organization/directory`       | DELETE | Delete directory |
+| `/dash/organization/directory/token` | POST   | Regenerate token |
+
+### Log Drains
+
+| Endpoint                            | Method | Description      |
+| ----------------------------------- | ------ | ---------------- |
+| `/dash/organization/log-drains`     | GET    | List log drains  |
+| `/dash/organization/log-drain`      | POST   | Create log drain |
+| `/dash/organization/log-drain`      | PATCH  | Update log drain |
+| `/dash/organization/log-drain`      | DELETE | Delete log drain |
+| `/dash/organization/log-drain/test` | POST   | Test log drain   |
+
+### Events & Audit Logs
+
+| Endpoint             | Method | Description     |
+| -------------------- | ------ | --------------- |
+| `/events/list`       | GET    | Get user events |
+| `/events/audit-logs` | GET    | Get audit logs  |
+| `/events/types`      | GET    | Get event types |
+
+### Analytics
+
+| Endpoint          | Method | Description         |
+| ----------------- | ------ | ------------------- |
+| `/dash/stats`     | GET    | Get user statistics |
+| `/dash/graph`     | GET    | Get graph data      |
+| `/dash/retention` | GET    | Get retention data  |
+| `/dash/map`       | GET    | Get geographic data |
+
+### Two-Factor Management
+
+| Endpoint                               | Method | Description          |
+| -------------------------------------- | ------ | -------------------- |
+| `/dash/user/2fa/enable`                | POST   | Enable 2FA for user  |
+| `/dash/user/2fa/disable`               | POST   | Disable 2FA for user |
+| `/dash/user/2fa/totp-uri`              | GET    | Get TOTP URI         |
+| `/dash/user/2fa/backup-codes`          | GET    | View backup codes    |
+| `/dash/user/2fa/backup-codes/generate` | POST   | Generate new codes   |
+
+## Client Integration
+
+### dashClient()
+
+The client plugin provides access to audit log queries:
+
+```ts
+import { createAuthClient } from "better-auth/client";
+import { dashClient } from "@better-auth/infra/client";
+
+export const authClient = createAuthClient({
+  plugins: [dashClient()],
+});
+```
+
+**Note**: For **Expo** or **React Native**, import `dashClient` from `@better-auth/infra/native` (same API) and pair it with `sentinelNativeClient` as described in [Sentinel — Expo and React Native](/docs/infrastructure/plugins/sentinel#expo-and-react-native).
+
+### Configuration
+
+```ts
+dashClient({
+  resolveUserId: ({ userId, user, session }) => {
+    // Custom user ID resolution logic
+    return userId || user?.id || session?.user?.id;
+  },
+}),
+```
+
+### Fetching Audit Logs
+
+```ts
+const session = await authClient.getSession();
+
+const logs = await authClient.dash.getAuditLogs({
+  session: session.data,
+  limit: 50,
+  offset: 0,
+});
+
+// Access the data
+console.log(logs.data?.events);  // Array of audit log events
+console.log(logs.data?.total);   // Total count
+console.log(logs.data?.limit);   // Page size
+console.log(logs.data?.offset);  // Current offset
+```
+
+### Query Parameters
+
+| Parameter        | Type     | Description                            |
+| ---------------- | -------- | -------------------------------------- |
+| `limit`          | `number` | Results per page (max 100, default 50) |
+| `offset`         | `number` | Pagination offset (default 0)          |
+| `organizationId` | `string` | Filter by organization                 |
+| `identifier`     | `string` | Filter by identifier                   |
+| `eventType`      | `string` | Filter by event type                   |
+| `userId`         | `string` | Filter by user ID                      |
+| `user`           | `object` | User object with ID                    |
+| `session`        | `object` | Session object with user               |
+
+### Pagination Example
+
+```ts
+async function getAllAuditLogs(session: unknown) {
+  const limit = 100;
+  let offset = 0;
+  const allEvents = [];
+
+  while (true) {
+    const result = await authClient.dash.getAuditLogs({
+      session,
+      limit,
+      offset,
+    });
+    
+    const events = result.data?.events ?? [];
+    allEvents.push(...events);
+
+    if (events.length < limit) break;
+    offset += limit;
+  }
+
+  return allEvents;
+}
+```
+
+### Filtering Examples
+
+```ts
+// Filter by event type
+const signIns = await authClient.dash.getAuditLogs({
+  session,
+  eventType: "user_signed_in",
+});
+
+// Filter by organization
+const orgLogs = await authClient.dash.getAuditLogs({
+  session,
+  organizationId: "org_123",
+});
+
+// Combine filters
+const orgSignIns = await authClient.dash.getAuditLogs({
+  session,
+  organizationId: "org_123",
+  eventType: "user_signed_in",
+});
+```
+
+## Schema Extensions
+
+When activity tracking is enabled, the plugin adds fields to your user schema:
+
+```ts
+user: {
+  fields: {
+    lastActiveAt: {
+      type: "date",
+    },
+  },
+}
+```
+
+Make sure to run database migrations after enabling activity tracking.
+
+## Best Practices
+
+1. **Always set an API key** - Without it, the plugin cannot communicate with the infrastructure API.
+
+2. **Use activity tracking wisely** - The update interval affects database writes. For high-traffic apps, consider a longer interval.
+
+3. **Monitor audit log retention** - Different plans have different retention periods. Check your plan limits.
+
+4. **Secure your endpoints** - Dashboard endpoints require authentication. Make sure your dashboard users have appropriate permissions.

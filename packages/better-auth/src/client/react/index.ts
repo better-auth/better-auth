@@ -3,12 +3,12 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+import type { UnionToIntersection } from "../../types/helper";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
 import type {
@@ -51,11 +51,12 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginPathMethods,
 		pluginsActions,
 		pluginsAtoms,
+		hydrateSession,
 		$fetch,
 		$store,
 		atomListeners,
 	} = getClientConfig(options);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
@@ -63,6 +64,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		hydrateSession,
 		$fetch,
 		$store,
 	};
@@ -85,6 +87,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
 		ClientAPI &
 		InferActions<Option> & {
+			hydrateSession: (session: NonNullable<Session> | null) => void;
 			useSession: () => {
 				data: Session;
 				isPending: boolean;
@@ -99,9 +102,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;
-			$ERROR_CODES: PrettifyDeep<
-				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
-			>;
+			$ERROR_CODES: InferErrorCodes<Option> & typeof BASE_ERROR_CODES;
 		};
 }
 

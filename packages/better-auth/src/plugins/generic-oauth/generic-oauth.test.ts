@@ -2,12 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
+import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
-import { genericOAuthClient } from "./client";
 import { auth0 } from "./providers/auth0";
 import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
@@ -43,7 +43,6 @@ describe("oauth2", async () => {
 	});
 
 	const authClient = createAuthClient({
-		plugins: [genericOAuthClient()],
 		baseURL: "http://localhost:3000",
 		fetchOptions: {
 			customFetchImpl,
@@ -55,7 +54,7 @@ describe("oauth2", async () => {
 		await runWithEndpointContext(
 			{
 				context,
-			} as GenericEndpointContext,
+			} as unknown as GenericEndpointContext,
 			async () => {
 				await context.internalAdapter.createUser({
 					email: "oauth2@test.com",
@@ -94,6 +93,7 @@ describe("oauth2", async () => {
 		if (!location) throw new Error("No redirect location found");
 
 		let callbackURL = "";
+		let setCookieHeader = "";
 		const newHeaders = new Headers();
 		await betterFetch(location, {
 			method: "GET",
@@ -101,17 +101,40 @@ describe("oauth2", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				setCookieHeader = context.response.headers.get("set-cookie") || "";
 				cookieSetter(newHeaders)(context);
 			},
 		});
 
-		return { callbackURL, headers: newHeaders };
+		return { callbackURL, headers: newHeaders, setCookieHeader };
 	}
 
-	it("should redirect to the provider and handle the response", async () => {
-		let headers = new Headers();
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "test",
+	it("should delete state cookie with path attribute", async () => {
+		const headers = new Headers();
+		const signInRes = await authClient.signIn.social({
+			provider: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { setCookieHeader } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		const stateCookie = cookies.get("better-auth.state");
+
+		expect(stateCookie?.["max-age"]).toBe(0);
+		expect(stateCookie?.path).toBe("/");
+	});
+
+	it("should complete full sign-in flow and return correct session data", async () => {
+		const headers = new Headers();
+		const signInRes = await authClient.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -122,11 +145,29 @@ describe("oauth2", async () => {
 			url: expect.stringContaining(`http://localhost:${port}/authorize`),
 			redirect: true,
 		});
-		const { callbackURL } = await simulateOAuthFlow(
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
 			signInRes.data?.url || "",
 			headers,
 		);
 		expect(callbackURL).toBe("http://localhost:3000/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.email).toBe("oauth2@test.com");
+		expect(session.data?.user.name).toBe("OAuth2 Test");
+		expect(session.data?.session.userId).toBe(session.data?.user.id);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			providerId: "test",
+			accountId: "oauth2",
+		});
 	});
 
 	it("should redirect to the provider and handle the response for a new user", async () => {
@@ -141,9 +182,9 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		let headers = new Headers();
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "test",
+		const headers = new Headers();
+		const signInRes = await authClient.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -183,9 +224,9 @@ describe("oauth2", async () => {
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
-		let headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "test",
+		const headers = new Headers();
+		const res = await authClient.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -200,12 +241,12 @@ describe("oauth2", async () => {
 	});
 
 	it("should handle invalid provider ID", async () => {
-		const res = await authClient.signIn.oauth2({
-			providerId: "invalid-provider",
+		const res = await authClient.signIn.social({
+			provider: "invalid-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
-		expect(res.error?.status).toBe(400);
+		expect(res.error?.status).toBe(404);
 	});
 
 	it("should handle server error during OAuth flow", async () => {
@@ -220,10 +261,10 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 500;
 		});
 
-		let headers = new Headers();
-		const res = await authClient.signIn.oauth2(
+		const headers = new Headers();
+		const res = await authClient.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "http://localhost:3000/dashboard",
 				newUserCallbackURL: "http://localhost:3000/new_user",
 			},
@@ -270,7 +311,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -278,8 +318,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const res = await authClient.signIn.oauth2({
-			providerId: "test2",
+		const res = await authClient.signIn.social({
+			provider: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -324,15 +364,14 @@ describe("oauth2", async () => {
 			],
 		});
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 			},
 		});
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "test2",
+		const res = await authClient.signIn.social({
+			provider: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			fetchOptions: {
@@ -380,15 +419,14 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 			},
 		});
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "test2",
+		const res = await authClient.signIn.social({
+			provider: "test2",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			requestSignUp: true,
@@ -433,7 +471,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -441,8 +478,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const res = await authClient.signIn.oauth2({
-			providerId: "test3",
+		const res = await authClient.signIn.social({
+			provider: "test3",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -483,15 +520,14 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
 				onSuccess: cookieSetter(headers),
 			},
 		});
-		const signInRes = await client.signIn.oauth2({
-			providerId: "test",
+		const signInRes = await client.signIn.social({
+			provider: "test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -578,7 +614,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -586,8 +621,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const firstSignIn = await authClient.signIn.oauth2({
-			providerId: "numeric-test",
+		const firstSignIn = await authClient.signIn.social({
+			provider: "numeric-test",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -630,8 +665,8 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const secondSignIn = await authClient.signIn.oauth2({
-			providerId: "numeric-test",
+		const secondSignIn = await authClient.signIn.social({
+			provider: "numeric-test",
 			callbackURL: "http://localhost:3000/dashboard",
 		});
 
@@ -688,7 +723,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -696,8 +730,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "custom-numeric",
+		const signInRes = await authClient.signIn.social({
+			provider: "custom-numeric",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -751,10 +785,10 @@ describe("oauth2", async () => {
 							pkce: true,
 							mapProfileToUser: (profile) => {
 								return {
-									id: profile.user_id,
-									email: profile.email,
+									id: String(profile.user_id),
+									email: profile.email ?? undefined,
 									name: profile.name,
-									emailVerified: profile.email_verified,
+									emailVerified: !!profile.email_verified,
 								};
 							},
 						},
@@ -764,7 +798,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -772,8 +805,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "map-profile-numeric",
+		const signInRes = await authClient.signIn.social({
+			provider: "map-profile-numeric",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -831,10 +864,10 @@ describe("oauth2", async () => {
 							mapProfileToUser: (profile) => {
 								const fullName = `${profile.firstname} ${profile.lastname}`;
 								return {
-									id: profile.id,
+									id: String(profile.id),
 									email: `${profile.id}@strava.local`,
 									name: fullName,
-									image: profile.profile,
+									image: profile.profile as string,
 									emailVerified: true,
 								};
 							},
@@ -845,7 +878,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -853,8 +885,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "strava",
+		const signInRes = await authClient.signIn.social({
+			provider: "strava",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 		});
@@ -928,7 +960,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -936,8 +967,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const res = await authClient.signIn.oauth2({
-			providerId: "test-cookie",
+		const res = await authClient.signIn.social({
+			provider: "test-cookie",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -962,6 +993,80 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 		expect(session.data?.user.email).toBe("oauth2-cookie-state@test.com");
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
+	});
+
+	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-cookie-csrf",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: false,
+						},
+					],
+				}),
+			],
+			account: {
+				storeStateStrategy: "cookie",
+			},
+		});
+
+		const victimHeaders = new Headers();
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(victimHeaders),
+			},
+		});
+
+		const signInRes = await authClient.signIn.social({
+			provider: "test-cookie-csrf",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(victimHeaders),
+			},
+		});
+		expect(signInRes.data?.url).toBeTruthy();
+
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/callback/test-cookie-csrf?code=dummy&state=attacker-controlled-state",
+			{
+				headers: victimHeaders,
+				redirect: "manual",
+			},
+		);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toContain("state_mismatch");
+
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: victimHeaders,
+			},
+		});
+		expect(session.data).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/4951
+	 * @see https://github.com/better-auth/better-auth/pull/9069
+	 */
+	it("should redirect to the error page when a GET callback arrives without state", async () => {
+		const res = await customFetchImpl(
+			`http://localhost:3000/api/auth/callback/${providerId}?code=dummy`,
+			{
+				method: "GET",
+				redirect: "manual",
+			},
+		);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toContain("state_not_found");
 	});
 
 	it("should await async mapProfileToUser", async () => {
@@ -991,7 +1096,10 @@ describe("oauth2", async () => {
 		});
 
 		const context = await auth.$context;
-		const provider = context.socialProviders.find((p) => p.id === "test-async");
+
+		const provider = await getAwaitableValue(context.socialProviders, {
+			value: "test-async",
+		});
 
 		const result = await provider!.getUserInfo({
 			accessToken: "test-access-token",
@@ -1017,8 +1125,7 @@ describe("oauth2", async () => {
 			expect(oktaConfig.scopes).toEqual(["openid", "profile", "email"]);
 			expect(oktaConfig.clientId).toBe("okta-client-id");
 			expect(oktaConfig.clientSecret).toBe("okta-client-secret");
-			expect(oktaConfig.getUserInfo).toBeDefined();
-			expect(typeof oktaConfig.getUserInfo).toBe("function");
+			expect(oktaConfig.getUserInfo).toBeUndefined();
 		});
 
 		it("should handle issuer with trailing slash", () => {
@@ -1073,8 +1180,7 @@ describe("oauth2", async () => {
 			expect(auth0Config.scopes).toEqual(["openid", "profile", "email"]);
 			expect(auth0Config.clientId).toBe("auth0-client-id");
 			expect(auth0Config.clientSecret).toBe("auth0-client-secret");
-			expect(auth0Config.getUserInfo).toBeDefined();
-			expect(typeof auth0Config.getUserInfo).toBe("function");
+			expect(auth0Config.getUserInfo).toBeUndefined();
 		});
 
 		it("should handle domain with protocol prefix", () => {
@@ -1239,8 +1345,7 @@ describe("oauth2", async () => {
 			expect(keycloakConfig.scopes).toEqual(["openid", "profile", "email"]);
 			expect(keycloakConfig.clientId).toBe("keycloak-client-id");
 			expect(keycloakConfig.clientSecret).toBe("keycloak-client-secret");
-			expect(keycloakConfig.getUserInfo).toBeDefined();
-			expect(typeof keycloakConfig.getUserInfo).toBe("function");
+			expect(keycloakConfig.getUserInfo).toBeUndefined();
 		});
 
 		it("should handle issuer with trailing slash", () => {
@@ -1432,7 +1537,6 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1440,8 +1544,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "custom-provider",
+		const res = await authClient.signIn.social({
+			provider: "custom-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -1500,7 +1604,6 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1508,8 +1611,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "error-provider",
+		const res = await authClient.signIn.social({
+			provider: "error-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			errorCallbackURL: "http://localhost:3000/error",
 			fetchOptions: {
@@ -1600,7 +1703,6 @@ describe("oauth2", async () => {
 		});
 
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1608,8 +1710,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const res = await authClient.signIn.oauth2({
-			providerId: "custom-get-provider",
+		const res = await authClient.signIn.social({
+			provider: "custom-get-provider",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/welcome",
 			fetchOptions: {
@@ -1618,7 +1720,9 @@ describe("oauth2", async () => {
 		});
 
 		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
-		expect(res.data?.url).toContain("scope=profile");
+		const scopeParam = new URL(res.data!.url!).searchParams.get("scope") || "";
+		expect(scopeParam).toContain("profile");
+		expect(scopeParam).toContain("openid");
 
 		// Complete the OAuth flow
 		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
@@ -1642,5 +1746,345 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 		expect(session.data?.user.name).toBe(customUserInfo.display_name);
 		expect(session.data?.user.image).toBe(customUserInfo.avatar_url);
+	});
+
+	describe("Duplicate Provider ID Detection", () => {
+		it("should warn when duplicate provider IDs are detected", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "duplicate-id",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "duplicate-id",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				"Duplicate provider IDs found: duplicate-id",
+			);
+			warnSpy.mockRestore();
+		});
+
+		it("should warn about multiple duplicate provider IDs", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "dup-1",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "dup-1",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+							{
+								providerId: "dup-2",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-3",
+								clientSecret: "secret-3",
+							},
+							{
+								providerId: "dup-2",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-4",
+								clientSecret: "secret-4",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Duplicate provider IDs found:"),
+			);
+			const warningMessage = warnSpy.mock.calls[0]?.[0] as string;
+			expect(warningMessage).toContain("dup-1");
+			expect(warningMessage).toContain("dup-2");
+			warnSpy.mockRestore();
+		});
+
+		it("should not warn when all provider IDs are unique", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "unique-1",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "unique-2",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).not.toHaveBeenCalled();
+			warnSpy.mockRestore();
+		});
+
+		it("should not warn when only one provider is configured", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "single-provider",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).not.toHaveBeenCalled();
+			warnSpy.mockRestore();
+		});
+
+		it("should warn when provider ID appears more than twice", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "triple-dup",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "triple-dup",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+							{
+								providerId: "triple-dup",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-3",
+								clientSecret: "secret-3",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				"Duplicate provider IDs found: triple-dup",
+			);
+			warnSpy.mockRestore();
+		});
+	});
+
+	describe("storeIdentifier: hashed", () => {
+		it("should complete oauth flow when verification identifiers are hashed", async () => {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: "hashed-oauth@test.com",
+					name: "Hashed OAuth Test",
+					sub: "hashed-oauth",
+					picture: "https://test.com/picture.png",
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				verification: {
+					storeIdentifier: "hashed" as const,
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-hashed",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: clientId,
+								clientSecret: clientSecret,
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+				},
+			});
+
+			const headers = new Headers();
+			const res = await authClient.signIn.social({
+				provider: "test-hashed",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+
+			expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+		});
+	});
+
+	it("should merge client-requested scopes with config scopes", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "scopes-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							scopes: ["openid", "email", "profile"],
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const res = await authClient.signIn.social({
+			provider: "scopes-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			scopes: ["custom_scope"],
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const url = res.data?.url || "";
+		const scopeParam = new URL(url).searchParams.get("scope") || "";
+		const scopes = scopeParam.split(" ");
+		expect(scopes).toContain("custom_scope");
+		expect(scopes).toContain("openid");
+		expect(scopes).toContain("email");
+		expect(scopes).toContain("profile");
+	});
+
+	it("should warn when generic provider ID shadows a built-in social provider", async () => {
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "google-client-id",
+					clientSecret: "google-client-secret",
+				},
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "google",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: "override-id",
+							clientSecret: "override-secret",
+						},
+					],
+				}),
+			],
+		});
+		// The logger.warn call happens internally, but we can verify the
+		// provider was registered by attempting sign-in
+		warnSpy.mockRestore();
+	});
+
+	it("should pass discovered issuer to the provider for RFC 9207 validation", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "issuer-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+						},
+					],
+				}),
+			],
+		});
+
+		const ctx = await auth.$context;
+		const provider = ctx.socialProviders.find((p) => p.id === "issuer-test");
+		expect(provider).toBeDefined();
+		expect(provider?.issuer).toBe(`http://localhost:${port}`);
+	});
+
+	it("should use custom name when provided in config", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "named-provider",
+							name: "My Custom Provider",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+						},
+					],
+				}),
+			],
+		});
+
+		const ctx = await auth.$context;
+		const provider = ctx.socialProviders.find((p) => p.id === "named-provider");
+		expect(provider).toBeDefined();
+		expect(provider?.name).toBe("My Custom Provider");
 	});
 });

@@ -15,7 +15,6 @@ import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { oidcProvider } from ".";
 import type { OidcClientPlugin } from "./client";
@@ -142,7 +141,7 @@ describe("oidc", async () => {
 	let application: Client = {
 		clientId: "test-client-id",
 		clientSecret: "test-client-secret-oidc",
-		redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+		redirectUrls: ["http://localhost:3000/api/auth/callback/test"],
 		metadata: {},
 		type: "web",
 		disabled: false,
@@ -159,7 +158,7 @@ describe("oidc", async () => {
 			client_id: expect.any(String),
 			client_secret: expect.any(String),
 			client_name: "test",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirect_uris: ["http://localhost:3000/api/auth/callback/test"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "client_secret_basic",
@@ -219,16 +218,15 @@ describe("oidc", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5000",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -244,7 +242,7 @@ describe("oidc", async () => {
 		// Make the authorization request
 		let redirectURI = "";
 		const consentHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -263,7 +261,7 @@ describe("oidc", async () => {
 
 		// Verify we got an authorization code
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+			"http://localhost:3000/api/auth/callback/test?code=",
 		);
 
 		// Complete the OAuth flow
@@ -306,16 +304,15 @@ describe("oidc", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5000",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -330,7 +327,7 @@ describe("oidc", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -353,7 +350,7 @@ describe("oidc", async () => {
 			},
 		);
 		expect(res.redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+			"http://localhost:3000/api/auth/callback/test?code=",
 		);
 
 		let callbackURL = "";
@@ -395,16 +392,15 @@ describe("oidc", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5000",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -419,7 +415,7 @@ describe("oidc", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -444,7 +440,7 @@ describe("oidc", async () => {
 		);
 
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+			"http://localhost:3000/api/auth/callback/test?code=",
 		);
 		let callbackURL = "";
 		await client.$fetch(redirectURI, {
@@ -460,24 +456,22 @@ describe("oidc", async () => {
 		it("should return login_required error when prompt=none and user not authenticated", async ({
 			expect,
 		}) => {
-			// Create an unauthenticated client
-			const unauthClient = createAuthClient({
-				plugins: [oidcClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
+			// Create an OAuth client
+			const testClient = await serverClient.oauth2.register({
+				client_name: "test-login-required-prompt-none",
+				redirect_uris: [
+					"http://localhost:3000/api/auth/callback/login-required",
+				],
 			});
+			const clientId = testClient.data?.client_id ?? "";
+			const redirectUri = testClient.data?.redirect_uris?.[0] ?? "";
 
 			// Try to authorize with prompt=none
 			const authUrl = new URL(
 				"http://localhost:3000/api/auth/oauth2/authorize",
 			);
-			authUrl.searchParams.set("client_id", application.clientId);
-			authUrl.searchParams.set(
-				"redirect_uri",
-				application.redirectUrls[0] || "",
-			);
+			authUrl.searchParams.set("client_id", clientId);
+			authUrl.searchParams.set("redirect_uri", redirectUri);
 			authUrl.searchParams.set("response_type", "code");
 			authUrl.searchParams.set("scope", "openid profile email");
 			authUrl.searchParams.set("state", "test-state");
@@ -485,18 +479,67 @@ describe("oidc", async () => {
 			authUrl.searchParams.set("code_challenge", "test-challenge");
 			authUrl.searchParams.set("code_challenge_method", "S256");
 
-			let redirectURI = "";
-			await unauthClient.$fetch(authUrl.toString(), {
+			const response = await customFetchImpl(authUrl.toString(), {
 				method: "GET",
-				onError(context) {
-					redirectURI = context.response.headers.get("Location") || "";
-				},
+				redirect: "manual",
 			});
+			const redirectURI = response.headers.get("Location") || "";
 
 			expect(redirectURI).toContain("error=login_required");
 			expect(redirectURI).toContain("error_description=Authentication");
 			expect(redirectURI).toContain("prompt");
 			expect(redirectURI).toContain("none");
+		});
+
+		it("should not redirect to invalid redirect_uri when prompt=none", async ({
+			expect,
+		}) => {
+			const attackerRedirect = "https://malicious.com/callback";
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", application.clientId);
+			authUrl.searchParams.set("redirect_uri", attackerRedirect);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid");
+			authUrl.searchParams.set("state", "x");
+			authUrl.searchParams.set("prompt", "none");
+
+			const response = await customFetchImpl(authUrl.toString(), {
+				method: "GET",
+				redirect: "manual",
+			});
+
+			const location = response.headers.get("Location") || "";
+			expect(location === null || location === "").not.toContain(
+				"malicious.com",
+			);
+			expect([400, 302]).toContain(response.status);
+		});
+
+		it("should return 400 invalid_request when prompt=none without redirect_uri", async ({
+			expect,
+		}) => {
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", application.clientId);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid");
+			authUrl.searchParams.set("state", "x");
+			authUrl.searchParams.set("prompt", "none");
+			// No redirect_uri - must not fall through to login page
+
+			const response = await customFetchImpl(authUrl.toString(), {
+				method: "GET",
+				redirect: "manual",
+			});
+
+			expect(response.status).toBe(400);
+			const location = response.headers.get("Location") || "";
+			expect(location).not.toContain("/login");
+			const body = await response.json().catch(() => ({}));
+			expect(body.error ?? body.code).toBe("invalid_request");
 		});
 
 		it("should return consent_required error when prompt=none and consent needed", async ({
@@ -505,7 +548,7 @@ describe("oidc", async () => {
 			// Create a new OAuth application that requires consent
 			const newClient = await serverClient.oauth2.register({
 				client_name: "test-consent-required",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test2"],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test2"],
 			});
 
 			// Create a fresh user session that hasn't consented to this new client yet
@@ -548,9 +591,7 @@ describe("oidc", async () => {
 			// Create a new client for this test
 			const testClient = await serverClient.oauth2.register({
 				client_name: "test-prompt-none-success",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-none",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-none"],
 			});
 
 			// First, establish consent by doing a normal authorization flow
@@ -624,7 +665,7 @@ describe("oidc", async () => {
 			const loginConsentClient = await serverClient.oauth2.register({
 				client_name: "test-login-consent",
 				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/login-consent",
+					"http://localhost:3000/api/auth/callback/login-consent",
 				],
 			});
 
@@ -783,6 +824,9 @@ describe("oidc", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/4594
+	 */
 	describe("cookie persistence bug (issue #4594)", () => {
 		// Reproduce issue #4594: oidc_login_prompt cookie persists after OIDC flow
 		// and causes subsequent normal logins to redirect to OIDC client
@@ -792,9 +836,7 @@ describe("oidc", async () => {
 			// Step 1: Create a new OAuth client for this test
 			const testClient = await serverClient.oauth2.register({
 				client_name: "test-cookie-persistence",
-				redirect_uris: [
-					"http://localhost:3000/api/auth/oauth2/callback/test-persist",
-				],
+				redirect_uris: ["http://localhost:3000/api/auth/callback/test-persist"],
 			});
 
 			// Step 2: Logout to start fresh
@@ -891,7 +933,7 @@ describe("oidc", async () => {
 				}
 			});
 
-			expect(normalLoginRedirect).not.toContain("oauth2/callback");
+			expect(normalLoginRedirect).not.toContain("/callback/");
 			expect(normalLoginRedirect).not.toContain(
 				testClient.data?.redirect_uris[0] || "",
 			);
@@ -1003,7 +1045,7 @@ describe("oidc storage", async () => {
 		}
 	});
 
-	test.each([
+	test.for([
 		{
 			storeClientSecret: undefined,
 		},
@@ -1053,7 +1095,7 @@ describe("oidc storage", async () => {
 		let application: Client = {
 			clientId: "test-client-id",
 			clientSecret: "test-client-secret-oidc",
-			redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirectUrls: ["http://localhost:3000/api/auth/callback/test"],
 			metadata: {},
 			icon: "",
 			type: "web",
@@ -1070,7 +1112,7 @@ describe("oidc storage", async () => {
 			client_secret: expect.any(String),
 			client_name: "test",
 			logo_uri: "",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirect_uris: ["http://localhost:3000/api/auth/callback/test"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "client_secret_basic",
@@ -1116,16 +1158,15 @@ describe("oidc storage", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5000",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -1140,7 +1181,7 @@ describe("oidc storage", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -1160,7 +1201,7 @@ describe("oidc storage", async () => {
 
 		// Verify we got an authorization code
 		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+			"http://localhost:3000/api/auth/callback/test?code=",
 		);
 
 		let callbackURL = "";
@@ -1207,7 +1248,7 @@ describe("oidc token response format", async () => {
 
 		const createdClient = await serverClient.oauth2.register({
 			client_name: "test-app",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirect_uris: ["http://localhost:3000/api/auth/callback/test"],
 			logo_uri: "",
 		});
 
@@ -1237,16 +1278,15 @@ describe("oidc token response format", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5000",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -1257,7 +1297,7 @@ describe("oidc token response format", async () => {
 
 		let redirectURI = "";
 		const consentHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -1299,7 +1339,7 @@ describe("oidc token response format", async () => {
 				body: JSON.stringify({
 					grant_type: "authorization_code",
 					code,
-					redirect_uri: "http://localhost:3000/api/auth/oauth2/callback/test",
+					redirect_uri: "http://localhost:3000/api/auth/callback/test",
 					client_id: application.clientId,
 					client_secret: application.clientSecret,
 				}),
@@ -1338,7 +1378,7 @@ describe("oidc token response format", async () => {
 				body: JSON.stringify({
 					grant_type: "authorization_code",
 					code,
-					redirect_uri: "http://localhost:3000/api/auth/oauth2/callback/test",
+					redirect_uri: "http://localhost:3000/api/auth/callback/test",
 					client_id: application.clientId,
 					client_secret: application.clientSecret,
 				}),
@@ -1387,7 +1427,7 @@ describe("oidc-jwt", async () => {
 		}
 	});
 
-	test.each([
+	test.for([
 		{ useJwt: true, description: "with jwt plugin", expected: "EdDSA" },
 		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
 	])("testing oidc-provider $description to return token signed with $expected", async ({
@@ -1432,7 +1472,7 @@ describe("oidc-jwt", async () => {
 		let application: Client = {
 			clientId: "test-client-id",
 			clientSecret: "test-client-secret-oidc",
-			redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirectUrls: ["http://localhost:3000/api/auth/callback/test"],
 			metadata: {},
 			icon: "",
 			type: "web",
@@ -1449,7 +1489,7 @@ describe("oidc-jwt", async () => {
 			client_secret: expect.any(String),
 			client_name: "test",
 			logo_uri: "",
-			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirect_uris: ["http://localhost:3000/api/auth/callback/test"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
 			token_endpoint_auth_method: "client_secret_basic",
@@ -1496,16 +1536,15 @@ describe("oidc-jwt", async () => {
 			});
 
 		const client = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:5000",
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 		const oAuthHeaders = new Headers();
-		const data = await client.signIn.oauth2(
+		const data = await client.signIn.social(
 			{
-				providerId: "test",
+				provider: "test",
 				callbackURL: "/dashboard",
 			},
 			{
@@ -1520,7 +1559,7 @@ describe("oidc-jwt", async () => {
 
 		let redirectURI = "";
 		const newHeaders = new Headers();
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			onError(context) {
 				redirectURI = context.response.headers.get("Location") || "";
@@ -1553,13 +1592,13 @@ describe("oidc-jwt", async () => {
 				},
 			);
 			expect(res.redirectURI).toContain(
-				"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+				"http://localhost:3000/api/auth/callback/test?code=",
 			);
 			redirectURI = res.redirectURI;
 		} else {
 			// Direct code response (trusted client)
 			expect(redirectURI).toContain(
-				"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+				"http://localhost:3000/api/auth/callback/test?code=",
 			);
 		}
 		let authToken = undefined;
