@@ -1,5 +1,15 @@
 # @better-auth/passkey
 
+## 1.6.7
+
+### Patch Changes
+
+- [#5209](https://github.com/better-auth/better-auth/pull/5209) [`ec20325`](https://github.com/better-auth/better-auth/commit/ec20325173b28729809b13151980d11b1b13514c) Thanks [@ouwargui](https://github.com/ouwargui)! - Include `user` in the `/passkey/verify-authentication` JSON response so the body matches the endpoint's declared OpenAPI schema and the client-side `{ session, user }` return type.
+
+- Updated dependencies [[`307196a`](https://github.com/better-auth/better-auth/commit/307196a405e067f4a863de2ed68528e8d4bdc162), [`4a180f0`](https://github.com/better-auth/better-auth/commit/4a180f0b0c084c59e7b006058d3fdbd8542face5), [`4f373ee`](https://github.com/better-auth/better-auth/commit/4f373eed8a42e02460dbd2ee9973b9493cea04eb), [`e1b1cfc`](https://github.com/better-auth/better-auth/commit/e1b1cfc7a262c8bf0c383a7b2b1d140472d33e56), [`d053a45`](https://github.com/better-auth/better-auth/commit/d053a4583e0db9132e52a100ae33e13d040a6bae)]:
+  - better-auth@1.6.7
+  - @better-auth/core@1.6.7
+
 ## 1.6.6
 
 ### Patch Changes
