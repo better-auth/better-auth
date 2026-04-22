@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/kysely-adapter",
-  "version": "1.6.1",
+  "version": "1.6.7",
   "description": "Kysely adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -50,7 +50,7 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
-    "kysely": "^0.27.0 || ^0.28.0"
+    "kysely": "^0.28.14"
   },
   "peerDependenciesMeta": {
     "kysely": {

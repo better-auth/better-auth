@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
@@ -94,9 +95,7 @@ export function validateIssuerUrl(issuer: string): string {
 	try {
 		const url = new URL(issuer);
 
-		const isLocalhost =
-			url.hostname === "localhost" || url.hostname === "127.0.0.1";
-		if (url.protocol !== "https:" && !isLocalhost) {
+		if (url.protocol !== "https:" && !isLoopbackHost(url.host)) {
 			url.protocol = "https:";
 		}
 
@@ -265,10 +264,11 @@ export async function authorizeEndpoint(
 		try {
 			const registered = new URL(url);
 			const requested = new URL(query.redirect_uri);
-			// RFC 8252 §7.3: loopback IPs match on scheme+host+path+query, ignoring port
+			// RFC 8252 §7.3: loopback IP literal URIs (127.0.0.0/8, ::1) match on
+			// scheme+host+path+query, ignoring port. §8.3 excludes DNS names like
+			// "localhost" — `isLoopbackIP` enforces IP-literal-only matching.
 			if (
-				(registered.hostname === "127.0.0.1" ||
-					registered.hostname === "[::1]") &&
+				isLoopbackIP(registered.hostname) &&
 				registered.hostname === requested.hostname &&
 				registered.pathname === requested.pathname &&
 				registered.protocol === requested.protocol &&
@@ -532,7 +532,12 @@ export async function authorizeEndpoint(
 function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 	const params = new URLSearchParams();
 	for (const [key, value] of Object.entries(query)) {
-		if (value != null) {
+		if (value == null) continue;
+		if (Array.isArray(value)) {
+			for (const v of value) {
+				params.append(key, String(v));
+			}
+		} else {
 			params.set(key, String(value));
 		}
 	}
