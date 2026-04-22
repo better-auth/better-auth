@@ -8,17 +8,12 @@ import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 
 /**
- * Loopback hosts where RFC 8252 §7.3 permits `http` in local development.
+ * Loopback hostnames where RFC 8252 §7.3 permits `http` for local development.
+ * Accepts `url.hostname` (brackets and port already stripped by the URL parser).
  */
-function isLoopbackHost(host: string): boolean {
-	const lower = host.toLowerCase();
-	const hostname =
-		lower.startsWith("[") && lower.endsWith("]")
-			? lower.slice(1, -1).split("]")[0]
-			: lower.split(":")[0];
-	return (
-		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
-	);
+function isLoopbackHostname(hostname: string): boolean {
+	const lower = hostname.toLowerCase();
+	return lower === "localhost" || lower === "127.0.0.1" || lower === "::1";
 }
 
 /**
@@ -292,6 +287,15 @@ export async function checkOAuthClient(
 				error_description: "backchannel_logout_uri must be an absolute URL",
 			});
 		}
+		// Only http/https make sense for a POST target and the server will
+		// refuse anything else at fetch time; reject up front to avoid storing
+		// unreachable URIs.
+		if (url.protocol !== "https:" && url.protocol !== "http:") {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "backchannel_logout_uri must use http or https",
+			});
+		}
 		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment component."
 		if (url.hash) {
 			throw new APIError("BAD_REQUEST", {
@@ -300,15 +304,27 @@ export async function checkOAuthClient(
 					"backchannel_logout_uri must not include a fragment component",
 			});
 		}
+		const loopback = isLoopbackHostname(url.hostname);
 		// Spec §2.2: SHOULD be https for confidential clients. Enforce on
-		// confidential clients, with a loopback exception so local dev
-		// (http://127.0.0.1:<port>) works: the same carve-out OAuth 2.1 /
-		// RFC 8252 grants to redirect URIs.
-		if (!isPublic && url.protocol !== "https:" && !isLoopbackHost(url.host)) {
+		// confidential clients, with a loopback carve-out (RFC 8252 §7.3) so
+		// local development against http://127.0.0.1:<port> works.
+		if (!isPublic && url.protocol !== "https:" && !loopback) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
 					"backchannel_logout_uri must use https for confidential clients",
+			});
+		}
+		// SSRF guard: the OP issues an outbound POST to this URI on every
+		// session end, so reject private/reserved targets. Loopback is
+		// permitted only when the URI uses http (dev override above) so an
+		// attacker can't pivot https://internal-svc.example into a real
+		// private-IP request.
+		if (isPrivateHostname(url.hostname) && !loopback) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must not point to a private or reserved address",
 			});
 		}
 	}

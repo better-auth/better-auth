@@ -310,7 +310,10 @@ describe("oauth back-channel logout", async () => {
 		}
 	});
 
-	it("revokes refresh tokens issued without offline_access on session end", async () => {
+	it("revokes access tokens on session end even when no refresh token was issued", async () => {
+		// Without `offline_access` in scope, `handleAuthorizationCodeGrant` never
+		// mints a refresh token. Access tokens must still be revoked when the
+		// session ends (spec §2.7).
 		const oauthClient = await registerClient();
 		await issueTokens({
 			client: oauthClient,
@@ -325,7 +328,13 @@ describe("oauth back-channel logout", async () => {
 			model: "oauthRefreshToken",
 			where: [{ field: "clientId", value: oauthClient.client_id }],
 		});
-		expect(refreshBefore.length).toBe(0);
+		expect(refreshBefore).toHaveLength(0);
+		const accessBefore = await ctx.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		expect(accessBefore.length).toBeGreaterThan(0);
+		for (const t of accessBefore) expect(t.revoked ?? null).toBeNull();
 
 		await client.signOut({ fetchOptions: { headers } });
 		await waitForDispatches();
