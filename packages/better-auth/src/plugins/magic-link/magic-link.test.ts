@@ -809,4 +809,28 @@ describe("magic link allowedAttempts", async () => {
 			expect(betterAuthCookie).toBeDefined();
 		}
 	});
+
+	it("should call onMagicLinkRequested when sending magic link", async () => {
+		const mockOnMagicLinkRequested = vi.fn();
+		const { customFetchImpl, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink() {},
+					onMagicLinkRequested: async ({ email }) => {
+						await mockOnMagicLinkRequested(email);
+					},
+				}),
+			],
+		});
+		const testClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: { customFetchImpl },
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+		await testClient.signIn.magicLink({
+			email: testUser.email,
+		});
+		expect(mockOnMagicLinkRequested).toHaveBeenCalledWith(testUser.email);
+	});
 });

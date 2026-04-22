@@ -505,6 +505,81 @@ describe("passkey", async () => {
 		});
 		expect(unchanged?.name).toBe("original-name");
 	});
+
+	it("should call onPasskeyAdded after registration", async () => {
+		const mockOnPasskeyAdded = vi.fn();
+		const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+			await getTestInstance({
+				plugins: [
+					passkey({
+						onPasskeyAdded: mockOnPasskeyAdded,
+					}),
+				],
+			});
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: { customFetchImpl },
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const { headers, user } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+		await auth.api.verifyPasskeyRegistration({
+			headers,
+			body: { response: mockRegistrationResponse },
+		});
+		expect(mockOnPasskeyAdded).toHaveBeenCalledWith(
+			expect.objectContaining({ userId: user.id }),
+			undefined,
+		);
+	});
+
+	it("should call onPasskeyDeleted after deletion", async () => {
+		const mockOnPasskeyDeleted = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				passkey({
+					onPasskeyDeleted: mockOnPasskeyDeleted,
+				}),
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID-delete-test",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+		await auth.api.deletePasskey({
+			headers,
+			body: { id: createdPasskey.id },
+		});
+		expect(mockOnPasskeyDeleted).toHaveBeenCalledWith(
+			{ userId: user.id, passkeyId: createdPasskey.id },
+			undefined,
+		);
+	});
 });
 
 describe("passkey expirationTime per-request", () => {

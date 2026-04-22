@@ -293,6 +293,174 @@ export const auth = betterAuth({
 });
 ```
 
+## Lifecycle Callbacks
+
+Lifecycle callbacks are purpose-built event handlers for security-sensitive operations. Unlike [before/after hooks](#before-hooks) which intercept all endpoints via middleware, lifecycle callbacks target specific events and are configured directly in the relevant options section.
+
+<Callout>
+Lifecycle callbacks use `runInBackgroundOrAwait` internally — they complete before the response when no background task handler is configured, or run asynchronously when one is. See [backgroundTasks](/docs/reference/options#backgroundtasks) for more details.
+</Callout>
+
+### Core Callbacks
+
+These callbacks are configured at the top level of your auth options.
+
+#### onLogin
+
+Triggered when a user signs in and a new session is created, regardless of the authentication method (email/password, magic link, OAuth, passkey).
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    onLogin: async ({ user, session }, request) => {
+        console.log(`User ${user.email} signed in, session ${session.id}`);
+    },
+});
+```
+
+#### onLogout
+
+Triggered when a user signs out and their session is deleted.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    onLogout: async ({ userId }, request) => {
+        console.log(`User ${userId} signed out`);
+    },
+});
+```
+
+### Email & Password Callbacks
+
+These callbacks are configured inside the `emailAndPassword` options.
+
+#### onPasswordReset
+
+Triggered when a user's password is reset via the forgot-password flow (after the new password is set).
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+        onPasswordReset: async ({ user }, request) => {
+            // Notify user about password reset
+        },
+    },
+});
+```
+
+#### onPasswordChanged
+
+Triggered when a user changes their password from their profile.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+        onPasswordChanged: async ({ user }, request) => {
+            // Notify user about password change
+        },
+    },
+});
+```
+
+#### onResetPasswordRequested
+
+Triggered when a user requests a password reset. Runs alongside the `sendResetPassword` email callback. Use for logging, analytics, or security notifications.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+        sendResetPassword: async ({ user, url }) => { /* send email */ },
+        onResetPasswordRequested: async ({ user }, request) => {
+            // Log the reset request for audit
+        },
+    },
+});
+```
+
+### Email Verification Callbacks
+
+These callbacks are configured inside the `emailVerification` options.
+
+#### onEmailVerificationRequested
+
+Triggered when a verification email is sent. Runs alongside the `sendVerificationEmail` callback. Use for logging or analytics.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    emailVerification: {
+        sendVerificationEmail: async ({ user, url }) => { /* send email */ },
+        onEmailVerificationRequested: async ({ user }, request) => {
+            // Track verification requests
+        },
+    },
+});
+```
+
+### Plugin Callbacks
+
+Some plugins provide their own lifecycle callbacks, configured in the plugin options.
+
+#### Two-Factor: onTotpEnabled / onTotpDisabled
+
+```ts title="auth.ts"
+import { twoFactor } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        twoFactor({
+            onTotpEnabled: async ({ user }, request) => {
+                // Notify about 2FA activation
+            },
+            onTotpDisabled: async ({ user }, request) => {
+                // Alert about 2FA deactivation
+            },
+        }),
+    ],
+});
+```
+
+#### Passkey: onPasskeyAdded / onPasskeyDeleted
+
+```ts title="auth.ts"
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+    plugins: [
+        passkey({
+            onPasskeyAdded: async ({ userId, passkey }, request) => {
+                // Log passkey registration
+            },
+            onPasskeyDeleted: async ({ userId, passkeyId }, request) => {
+                // Log passkey removal
+            },
+        }),
+    ],
+});
+```
+
+#### Magic Link: onMagicLinkRequested
+
+Triggered when a magic link is sent. Runs alongside the `sendMagicLink` callback.
+
+```ts title="auth.ts"
+import { magicLink } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        magicLink({
+            sendMagicLink: async ({ email, url }) => { /* send email */ },
+            onMagicLinkRequested: async ({ email }, ctx) => {
+                // Track magic link requests
+            },
+        }),
+    ],
+});
+```
+
 ## Reusable Hooks
 
 If you need to reuse a hook across multiple endpoints, consider creating a plugin. Learn more in the [Plugins Documentation](/docs/concepts/plugins).

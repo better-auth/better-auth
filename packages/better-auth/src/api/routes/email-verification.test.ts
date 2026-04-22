@@ -640,4 +640,31 @@ describe("Email Verification Secondary Storage", async () => {
 			);
 		});
 	});
+
+	describe("onEmailVerificationRequested", async () => {
+		const mockOnEmailVerificationRequested = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail() {},
+				onEmailVerificationRequested: async ({ user }) => {
+					await mockOnEmailVerificationRequested(user);
+				},
+			},
+		});
+
+		it("should call onEmailVerificationRequested when sending verification email", async () => {
+			mockOnEmailVerificationRequested.mockClear();
+			await auth.api.sendVerificationEmail({
+				body: {
+					email: testUser.email,
+				},
+			});
+			expect(mockOnEmailVerificationRequested).toHaveBeenCalledWith(
+				expect.objectContaining({ email: testUser.email }),
+			);
+		});
+	});
 });
