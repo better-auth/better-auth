@@ -63,5 +63,12 @@
     "@types/babel__core": "^7.20.5",
     "@types/react": "^19.2.14",
     "babel-preset-expo": "~55.0.10"
+  },
+  "pnpm": {
+    "overrides": {
+      "node-forge": "^1.4.0",
+      "picomatch@>=4": "^4.0.4",
+      "@xmldom/xmldom": "^0.8.12"
+    }
   }
 }
