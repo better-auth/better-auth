@@ -45,7 +45,7 @@ interface TokenRow {
  * and at least one of `sub` / `sid`. A `nonce` claim MUST NOT be present, and
  * `alg: none` is forbidden (§2.6).
  */
-export async function signLogoutToken(
+async function signLogoutToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	claims: {
