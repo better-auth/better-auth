@@ -22,6 +22,13 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"],
       "passThroughEnv": [
+        "ENABLE_EXPERIMENTAL_COREPACK",
+        "ORAMA_PRIVATE_API_KEY",
+        "ORAMA_INDEX_ID",
+        "GURUBASE_SLUG",
+        "INKEEP_API_KEY",
+        "SUPPORT_EMAIL",
+        "RESEND_API_KEY",
         "TYPESENSE_ADMIN_API_KEY",
         "GITHUB_TOKEN",
         "OPENROUTER_API_KEY",

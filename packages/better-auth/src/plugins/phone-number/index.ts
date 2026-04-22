@@ -39,12 +39,40 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 	return {
 		id: "phone-number",
 		version: PACKAGE_VERSION,
+		init() {
+			return {
+				options: {
+					databaseHooks: {
+						user: {
+							update: {
+								async before(data) {
+									// Atomically reset verified flag when the number is cleared
+									if (
+										opts.phoneNumber in data &&
+										data[opts.phoneNumber] === null
+									) {
+										return {
+											data: {
+												...data,
+												[opts.phoneNumberVerified]: false,
+											},
+										};
+									}
+								},
+							},
+						},
+					},
+				},
+			};
+		},
 		hooks: {
 			before: [
 				{
-					// Stop any requests attempting to update the user's phone number
 					matcher: (ctx) =>
-						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
+						// Block phone number changes except disassociation (when phoneNumber is null)
+						ctx.path === "/update-user" &&
+						"phoneNumber" in ctx.body &&
+						ctx.body.phoneNumber !== null,
 					handler: createAuthMiddleware(async (_ctx) => {
 						throw APIError.from(
 							"BAD_REQUEST",

@@ -12,7 +12,15 @@ import {
 	SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { getTestInstance } from "./test-utils";
 
 let exporter: InMemorySpanExporter;
@@ -42,8 +50,14 @@ const createTestInstance = async () => {
 	});
 };
 
-const findSpan = (predicate: (s: ReadableSpan) => boolean) =>
-	exporter.getFinishedSpans().find(predicate);
+async function waitForSpan(
+	predicate: (s: ReadableSpan) => boolean,
+): Promise<ReadableSpan> {
+	return vi.waitUntil(() => exporter.getFinishedSpans().find(predicate), {
+		timeout: 10_000,
+		interval: 5,
+	});
+}
 
 const testUser = {
 	email: "user@test.com",
@@ -72,22 +86,23 @@ describe("database instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.signUp.email(testUser);
 
-		const span = findSpan((s) => s.name === "db create user");
-		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_DB_OPERATION_NAME]).toBe("create");
-		expect(span?.attributes[ATTR_DB_COLLECTION_NAME]).toBe("user");
+		const span = await waitForSpan((s) => s.name === "db create user");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("create");
+		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("user");
 
-		const beforeHookSpan = findSpan((s) => s.name === "db create.before user");
-		expect(beforeHookSpan).toBeDefined();
-		expect(beforeHookSpan?.attributes).toMatchObject({
+		const beforeHookSpan = await waitForSpan(
+			(s) => s.name === "db create.before user",
+		);
+		expect(beforeHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "create.before",
 			[ATTR_DB_COLLECTION_NAME]: "user",
 			[ATTR_CONTEXT]: "user",
 		});
 
-		const afterHookSpan = findSpan((s) => s.name === "db create.after user");
-		expect(afterHookSpan).toBeDefined();
-		expect(afterHookSpan?.attributes).toMatchObject({
+		const afterHookSpan = await waitForSpan(
+			(s) => s.name === "db create.after user",
+		);
+		expect(afterHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "create.after",
 			[ATTR_DB_COLLECTION_NAME]: "user",
 			[ATTR_CONTEXT]: "user",
@@ -104,10 +119,9 @@ describe("database instrumentation", () => {
 			async () => void (await instance.client.getSession()),
 		);
 
-		const span = findSpan((s) => s.name === "db findOne session");
-		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_DB_OPERATION_NAME]).toBe("findOne");
-		expect(span?.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
+		const span = await waitForSpan((s) => s.name === "db findOne session");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("findOne");
+		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
 	});
 
 	it("emits db findMany span", async () => {
@@ -120,10 +134,9 @@ describe("database instrumentation", () => {
 			async () => void (await instance.client.listSessions()),
 		);
 
-		const span = findSpan((s) => s.name === "db findMany session");
-		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_DB_OPERATION_NAME]).toBe("findMany");
-		expect(span?.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
+		const span = await waitForSpan((s) => s.name === "db findMany session");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("findMany");
+		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
 	});
 
 	it("emits db update span", async () => {
@@ -137,21 +150,22 @@ describe("database instrumentation", () => {
 				void (await instance.client.updateUser({ name: "Updated Name" })),
 		);
 
-		const span = findSpan((s) => s.name === "db update user");
-		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_DB_OPERATION_NAME]).toBe("update");
-		expect(span?.attributes[ATTR_DB_COLLECTION_NAME]).toBe("user");
+		const span = await waitForSpan((s) => s.name === "db update user");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("update");
+		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("user");
 
-		const beforeHookSpan = findSpan((s) => s.name === "db update.before user");
-		expect(beforeHookSpan).toBeDefined();
-		expect(beforeHookSpan?.attributes).toMatchObject({
+		const beforeHookSpan = await waitForSpan(
+			(s) => s.name === "db update.before user",
+		);
+		expect(beforeHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "update.before",
 			[ATTR_DB_COLLECTION_NAME]: "user",
 		});
 
-		const afterHookSpan = findSpan((s) => s.name === "db update.after user");
-		expect(afterHookSpan).toBeDefined();
-		expect(afterHookSpan?.attributes).toMatchObject({
+		const afterHookSpan = await waitForSpan(
+			(s) => s.name === "db update.after user",
+		);
+		expect(afterHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "update.after",
 			[ATTR_DB_COLLECTION_NAME]: "user",
 		});
@@ -174,23 +188,22 @@ describe("database instrumentation", () => {
 				void (await instance.client.revokeSession({ token: sessionToken! })),
 		);
 
-		const span = findSpan((s) => s.name === "db delete session");
-		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_DB_OPERATION_NAME]).toBe("delete");
-		expect(span?.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
+		const span = await waitForSpan((s) => s.name === "db delete session");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("delete");
+		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
 
-		const beforeHookSpan = findSpan(
+		const beforeHookSpan = await waitForSpan(
 			(s) => s.name === "db delete.before session",
 		);
-		expect(beforeHookSpan).toBeDefined();
-		expect(beforeHookSpan?.attributes).toMatchObject({
+		expect(beforeHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "delete.before",
 			[ATTR_DB_COLLECTION_NAME]: "session",
 		});
 
-		const afterHookSpan = findSpan((s) => s.name === "db delete.after session");
-		expect(afterHookSpan).toBeDefined();
-		expect(afterHookSpan?.attributes).toMatchObject({
+		const afterHookSpan = await waitForSpan(
+			(s) => s.name === "db delete.after session",
+		);
+		expect(afterHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "delete.after",
 			[ATTR_DB_COLLECTION_NAME]: "session",
 		});
@@ -206,23 +219,22 @@ describe("database instrumentation", () => {
 			async () => void (await instance.client.revokeSessions()),
 		);
 
-		const span = findSpan((s) => s.name === "db deleteMany session");
-		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_DB_OPERATION_NAME]).toBe("deleteMany");
-		expect(span?.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
+		const span = await waitForSpan((s) => s.name === "db deleteMany session");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("deleteMany");
+		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
 
-		const beforeHookSpan = findSpan(
+		const beforeHookSpan = await waitForSpan(
 			(s) => s.name === "db delete.before session",
 		);
-		expect(beforeHookSpan).toBeDefined();
-		expect(beforeHookSpan?.attributes).toMatchObject({
+		expect(beforeHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "delete.before",
 			[ATTR_DB_COLLECTION_NAME]: "session",
 		});
 
-		const afterHookSpan = findSpan((s) => s.name === "db delete.after session");
-		expect(afterHookSpan).toBeDefined();
-		expect(afterHookSpan?.attributes).toMatchObject({
+		const afterHookSpan = await waitForSpan(
+			(s) => s.name === "db delete.after session",
+		);
+		expect(afterHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "delete.after",
 			[ATTR_DB_COLLECTION_NAME]: "session",
 		});
@@ -251,15 +263,17 @@ describe("database instrumentation", () => {
 		});
 		await instance.client.signUp.email(testUser);
 
-		const beforeHookSpan = findSpan((s) => s.name === "db create.before user");
-		expect(beforeHookSpan).toBeDefined();
-		expect(beforeHookSpan?.attributes).toMatchObject({
+		const beforeHookSpan = await waitForSpan(
+			(s) => s.name === "db create.before user",
+		);
+		expect(beforeHookSpan.attributes).toMatchObject({
 			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
 		});
 
-		const afterHookSpan = findSpan((s) => s.name === "db create.after user");
-		expect(afterHookSpan).toBeDefined();
-		expect(afterHookSpan?.attributes).toMatchObject({
+		const afterHookSpan = await waitForSpan(
+			(s) => s.name === "db create.after user",
+		);
+		expect(afterHookSpan.attributes).toMatchObject({
 			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
 		});
 	});

@@ -29,17 +29,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { contactSchema } from "@/lib/enterprise-contact";
 
-const included = [
-	"Self-service SSO",
-	"Dashboard RBAC",
-	"Unlimited seats",
-	"Custom audit logs",
-	"Implementation assistance",
-	"Advanced support",
-	"Custom events & security",
-	"Log drain",
-];
-
 function EnterpriseHero() {
 	return (
 		<motion.div
@@ -50,65 +39,26 @@ function EnterpriseHero() {
 		>
 			<div className="space-y-6">
 				<div className="space-y-2">
-					<div className="flex items-center gap-1.5">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="0.9em"
-							height="0.9em"
-							viewBox="0 0 24 24"
-							className="text-foreground/60"
-							aria-hidden="true"
-						>
-							<path
-								fill="currentColor"
-								d="M12 7V3H2v18h20V7zM6 19H4v-2h2zm0-4H4v-2h2zm0-4H4V9h2zm0-4H4V5h2zm4 12H8v-2h2zm0-4H8v-2h2zm0-4H8V9h2zm0-4H8V5h2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8zm-2-8h-2v2h2zm0 4h-2v2h2z"
-							/>
-						</svg>
-						<span className="text-sm text-foreground/60">Enterprise</span>
-					</div>
 					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
-						Enterprise-grade
+						Own your auth
 						<br />
 						<span className="text-neutral-500 dark:text-neutral-400">
-							auth at scale.
+							at scale.
 						</span>
 					</h1>
 					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
-						Custom plans, unlimited seats, SSO, RBAC, and advanced support for
-						teams that need more.
+						Keep your users on your own infrastructure with enterprise-grade
+						auth, SSO, RBAC, and dedicated support.
 					</p>
-				</div>
-
-				<div className="border-t border-foreground/10 pt-4 space-y-0">
-					{included.map((item, i) => (
-						<motion.div
-							key={item}
-							initial={{ opacity: 0, x: -8 }}
-							animate={{ opacity: 1, x: 0 }}
-							transition={{
-								duration: 0.25,
-								delay: 0.3 + i * 0.05,
-								ease: "easeOut",
-							}}
-							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/6 last:border-0"
-						>
-							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-xs leading-none select-none shrink-0">
-								+
-							</span>
-							<span className="text-xs text-foreground/70 dark:text-foreground/50 font-mono tracking-wide">
-								{item}
-							</span>
-						</motion.div>
-					))}
 				</div>
 
 				{/* CTA */}
 				<div className="flex items-center gap-3 pt-1">
 					<Link
-						href="/products/infrastructure"
+						href="/pricing"
 						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/60 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 					>
-						View Products
+						View Pricing
 						<svg
 							className="h-2.5 w-2.5 opacity-50"
 							viewBox="0 0 10 10"
@@ -181,46 +131,28 @@ export function EnterprisePageClient() {
 					</div>
 
 					{/* Right side — Contact form */}
-					<div className="relative w-full lg:w-[60%] overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[60%] overflow-x-hidden no-scrollbar flex flex-col min-h-dvh">
 						<div className="px-5 lg:p-8 lg:pt-20 space-y-8">
 							{/* Mobile header */}
 							<div className="lg:hidden relative border-b border-foreground/6 overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
 								<HalftoneBackground />
 								<div className="relative space-y-2 py-16">
-									<div className="flex items-center gap-1.5">
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="0.9em"
-											height="0.9em"
-											viewBox="0 0 24 24"
-											className="text-foreground/60"
-											aria-hidden="true"
-										>
-											<path
-												fill="currentColor"
-												d="M12 7V3H2v18h20V7zM6 19H4v-2h2zm0-4H4v-2h2zm0-4H4V9h2zm0-4H4V5h2zm4 12H8v-2h2zm0-4H8v-2h2zm0-4H8V9h2zm0-4H8V5h2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8zm-2-8h-2v2h2zm0 4h-2v2h2z"
-											/>
-										</svg>
-										<span className="text-sm text-foreground/60">
-											Enterprise
-										</span>
-									</div>
 									<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
-										Enterprise-grade
+										Own your auth
 										<br />
 										<span className="text-neutral-500 dark:text-neutral-400">
-											auth at scale.
+											at scale.
 										</span>
 									</h1>
 									<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
-										Custom plans, unlimited seats, SSO, RBAC, and advanced
-										support for teams that need more.
+										Keep your users on your own infrastructure with
+										enterprise-grade auth, SSO, RBAC, and dedicated support.
 									</p>
 								</div>
 							</div>
 
 							<h2 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
-								ENTERPRISE
+								GET IN TOUCH
 								<span className="flex-1 h-px bg-foreground/15" />
 							</h2>
 
@@ -230,17 +162,8 @@ export function EnterprisePageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<div className="relative border overflow-hidden max-w-xl lg:mt-8 bg-card">
-									<div className="px-4 py-4 sm:px-5 sm:py-5">
-										<div className="space-y-1.5 mb-5">
-											<h2 className="text-lg text-foreground font-medium">
-												Get in touch
-											</h2>
-											<p className="text-sm text-foreground/50">
-												Fill out the form and we&apos;ll be in touch soon.
-											</p>
-										</div>
-
+								<div className="relative overflow-hidden max-w-xl lg:mt-8">
+									<div className="py-4 sm:py-5">
 										<Form {...form}>
 											<form
 												onSubmit={form.handleSubmit(onSubmit)}
@@ -395,7 +318,9 @@ export function EnterprisePageClient() {
 								</div>
 							</motion.div>
 						</div>
-						<Footer />
+						<div className="mt-auto">
+							<Footer />
+						</div>
 					</div>
 				</div>
 			</div>

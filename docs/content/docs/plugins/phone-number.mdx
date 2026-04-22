@@ -203,6 +203,20 @@ const isVerified = await authClient.phoneNumber.verify({
 })
 ```
 
+### Remove Phone Number
+
+Logged-in users can release their phone number by passing `null` to `updateUser`. The plugin atomically clears the phone number and resets the verified flag, freeing the number so another account can claim it through the standard verification flow.
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+await authClient.updateUser({
+    phoneNumber: null // [!code highlight]
+})
+```
+
+For security, non-null phone number updates through `updateUser` remain blocked. Changing to a different phone number always requires OTP verification via `verify` with `updatePhoneNumber: true`.
+
 ### Disable Session Creation
 
 By default, the plugin creates a session for the user after verifying the phone number. You can disable this behavior by passing `disableSession: true` to the `verify` method.

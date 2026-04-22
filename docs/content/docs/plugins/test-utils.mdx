@@ -6,16 +6,16 @@ description: Testing utilities for integration and E2E testing
 The Test Utils plugin provides helpers for writing integration and E2E tests against Better Auth. It includes factories, database helpers, authentication helpers, and OTP capture functionality.
 
 <Callout type="warn">
-  This plugin is designed for test environments only. Do not use it in production.
+  This plugin is designed for test environments only. It does not add public routes, but it does expose privileged helpers on `ctx.test`. Prefer keeping it out of production auth configs.
 </Callout>
 
 ## Installation
 
 <Steps>
   <Step>
-    ### Add the plugin to your auth config
+    ### Add the plugin to a test-only auth config
 
-    ```ts title="auth.ts"
+    ```ts title="auth.test.ts"
     import { betterAuth } from "better-auth"
     import { testUtils } from "better-auth/plugins" // [!code highlight]
 
@@ -26,6 +26,8 @@ The Test Utils plugin provides helpers for writing integration and E2E tests aga
         ]
     })
     ```
+
+    Keeping `testUtils()` in a separate test-only auth instance preserves type inference for `ctx.test` without adding the plugin to your production auth config.
   </Step>
 
   <Step>
@@ -37,6 +39,33 @@ The Test Utils plugin provides helpers for writing integration and E2E tests aga
     ```
   </Step>
 </Steps>
+
+## Can I include this in production?
+
+`testUtils()` does not register HTTP routes or API endpoints. Simply adding it to `plugins` does not create a public auth bypass on its own.
+
+However, it still adds privileged server-side helpers on `ctx.test`. Those helpers can create sessions, persist users and organizations, and delete records directly through the auth context. When `captureOTP: true` is enabled, the plugin also installs a verification hook and stores OTPs in memory for later retrieval.
+
+Because of that, the recommended setup is to keep `testUtils` out of your production auth config and add it from a separate test-only auth instance such as `auth.test.ts` or a dedicated test auth factory. That keeps the helpers available in tests without shipping them as part of your production server context.
+
+### TypeScript caveat
+
+Better Auth infers plugin helpers best from statically defined plugin arrays. If you conditionally spread `testUtils()` into `plugins`, TypeScript can stop inferring `ctx.test` correctly.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { testUtils } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        ...(process.env.NODE_ENV === "test"
+            ? [testUtils()]
+            : [])
+    ]
+})
+```
+
+If you include `testUtils()` unconditionally to preserve static type inference, treat that as a convenience tradeoff rather than the recommended default. It still does not expose public routes, but you should avoid using `ctx.test` in production code paths.
 
 ## Usage
 
@@ -193,7 +222,7 @@ When `captureOTP: true` is set, the plugin passively captures OTPs as they are c
   OTP capture is passive - it does not prevent OTPs from being sent via your configured `sendVerificationOTP` function. It simply stores a copy for test retrieval.
 </Callout>
 
-```ts title="auth.ts"
+```ts title="auth.test.ts"
 import { betterAuth } from "better-auth"
 import { testUtils, emailOTP } from "better-auth/plugins"
 

@@ -37,14 +37,7 @@ export async function userInfoEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	if (!ctx.request) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "request not found",
-			error: "invalid_request",
-		});
-	}
-
-	const authorization = ctx.request.headers.get("authorization");
+	const authorization = ctx.headers?.get("authorization");
 	const token =
 		typeof authorization === "string" && authorization?.startsWith("Bearer ")
 			? authorization?.replace("Bearer ", "")

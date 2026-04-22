@@ -1,0 +1,62 @@
+---
+title: please_restart_the_process
+description: The OAuth state could not be parsed. The sign-in flow must be restarted.
+---
+
+## What is it?
+
+This is a catch-all error that fires during the OAuth callback when Better Auth fails to parse or validate
+the `state` parameter and the failure is **not** a `state_security_mismatch`. It means the OAuth flow's
+state data is unrecoverable and the user must start the sign-in process again.
+
+Under the hood, `parseState` delegates to `parseGenericState` (which handles both the cookie and database
+state strategies). If that function throws a `StateError` with code `state_security_mismatch`, you are
+redirected to `?error=state_mismatch` instead. For every other failure - missing verification records,
+decryption errors, expired state, malformed data, or unexpected exceptions - the redirect lands here.
+
+## Common Causes
+
+* **The verification record was deleted or expired.** State records are valid for 10 minutes. If the user
+  took too long on the provider page, the record may have been cleaned up before the callback arrived.
+* **The encrypted state cookie could not be decrypted.** When using the `"cookie"` state strategy, rotating
+  `BETTER_AUTH_SECRET` between the start of the flow and the callback makes the cookie unreadable.
+* **The state cookie was missing entirely.** Browser cookie restrictions, cross-domain redirects, or proxy
+  stripping can prevent the state cookie from being sent back with the callback.
+* **The callback was replayed.** Refreshing the callback URL or pressing the back button after a successful
+  login deletes the verification record on first use, so a second attempt finds nothing.
+* **Multiple concurrent sign-in attempts.** Opening several sign-in tabs overwrites the state cookie; only
+  the last tab's state is valid.
+* **Secondary storage (Redis / KV) evicted the key.** If `secondaryStorage` is configured without a database
+  fallback, memory pressure or TTL expiry can silently remove the state before the callback.
+
+## How to resolve
+
+### Retry the sign-in flow
+
+In most cases, simply redirecting the user back to your login page and starting a new OAuth flow resolves the
+issue. The error page should include a clear "Try again" link or button.
+
+### Check your error page
+
+Better Auth redirects to `{onAPIError.errorURL}` (or `/api/auth/error` by default) with
+`?error=please_restart_the_process`. Make sure your error page handles this code and guides users to retry.
+
+### Investigate persistent failures
+
+If users hit this error repeatedly:
+
+* Ensure your database (or Redis) is **shared across all instances** of your application.
+* Verify that `BETTER_AUTH_SECRET` has not been rotated during active flows.
+* Confirm cookies are not being blocked or stripped - check DevTools -> Application -> Cookies for the
+  `better-auth.state` or `better-auth.oauth_state` cookie before and after the redirect.
+* If using the `"cookie"` strategy, ensure your domain and `SameSite` / `Secure` attributes are correct.
+* Review server logs for the underlying error - Better Auth logs `"Failed to parse state"` along with the
+  original exception before redirecting.
+
+### Related errors
+
+This error is closely related to `state_mismatch`. The difference is that `state_mismatch` is used for the
+specific case where the signed state cookie does not match (`state_security_mismatch` internally), while
+`please_restart_the_process` covers all other state parsing failures. See the
+[state\_mismatch](/docs/reference/errors/state_mismatch) page for a detailed breakdown of every state error
+code and strategy-specific debugging guidance.
