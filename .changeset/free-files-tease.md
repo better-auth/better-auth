@@ -6,9 +6,11 @@ Follow the resource indicator spec RFC 8707.
 
 Improvements:
 
-- Prevents resource value changes between /authorize and /token
-- Restricts refresh and access tokens to resources specified at issuance
+- Prevents resource value changes between `/authorize` and `/token`
+- Restricts refresh and access tokens to resources specified at authorization
 - `resource` supported across all grant types: authorization_code, client_credentials, refresh_token
+- Access tokens with resource provides `aud` field at introspection
+- Ensures consent re-prompting changes in resource
 
 Deprecations:
 
