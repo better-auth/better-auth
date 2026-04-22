@@ -1,5 +1,12 @@
 # @better-auth/redis-storage
 
+## 1.7.0-beta.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.2
+
 ## 1.7.0-beta.1
 
 ## 1.6.7
