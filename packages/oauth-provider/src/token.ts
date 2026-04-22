@@ -84,7 +84,6 @@ async function createJwtAccessToken(
 				user,
 				scopes,
 				resources,
-				resource: ctx.body.resource,
 				referenceId,
 				metadata: parseClientMetadata(client.metadata),
 			})
