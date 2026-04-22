@@ -448,6 +448,7 @@ describe("base context creation", () => {
 			const res = await initBase({});
 			expect(res.rateLimit.window).toBe(10);
 			expect(res.rateLimit.max).toBe(100);
+			expect(res.rateLimit.includeSuccessfulRequests).toBe(true);
 		});
 
 		it("should allow custom rate limit values", async () => {
@@ -455,10 +456,12 @@ describe("base context creation", () => {
 				rateLimit: {
 					window: 60,
 					max: 500,
+					includeSuccessfulRequests: false,
 				},
 			});
 			expect(res.rateLimit.window).toBe(60);
 			expect(res.rateLimit.max).toBe(500);
+			expect(res.rateLimit.includeSuccessfulRequests).toBe(false);
 		});
 	});
 

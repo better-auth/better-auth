@@ -165,6 +165,15 @@ export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> &
 			  }
 			| undefined;
 		/**
+		 * Whether to count successful responses (`status < 400`)
+		 * towards the rate limit.
+		 *
+		 * Set to `false` to only count failed responses.
+		 *
+		 * @default true
+		 */
+		includeSuccessfulRequests?: boolean | undefined;
+		/**
 		 * Storage configuration
 		 *
 		 * By default, rate limiting is stored in memory. If you passed a
