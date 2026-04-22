@@ -964,7 +964,7 @@ export const signInSSO = (options?: SSOOptions) => {
 										email: {
 											type: "string",
 											description:
-												"The email address to sign in with. Used to identify the issuer; optional if providerId is provided.",
+												"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 										},
 										organizationSlug: {
 											type: "string",
@@ -978,20 +978,23 @@ export const signInSSO = (options?: SSOOptions) => {
 										},
 										domain: {
 											type: "string",
-											description: "The domain of the provider.",
+											description:
+												"The email domain of the provider. Can be provided instead of email.",
 										},
 										callbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login.",
+											description:
+												"The URL to redirect to after successful sign-in.",
 										},
 										errorCallbackURL: {
 											type: "string",
-											description: "The URL to redirect to on error.",
+											description:
+												"The URL to redirect to if the sign-in flow fails.",
 										},
 										newUserCallbackURL: {
 											type: "string",
 											description:
-												"The URL to redirect to after login if the user is new.",
+												"The URL to redirect to after sign-in if the user is newly registered.",
 										},
 										scopes: {
 											type: "array",
