@@ -564,8 +564,6 @@ export interface OAuthOptions<
 		scopes: Scopes;
 		/** The resources requested. */
 		resources?: string[];
-		/** The resource requesting. Provided by the token endpoint. @deprecated */
-		resource?: string;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
 	}) => Awaitable<Record<string, any>>;
