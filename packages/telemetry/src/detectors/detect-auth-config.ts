@@ -70,8 +70,7 @@ export async function getTelemetryAuthConfig(
 			additionalFields: options.user?.additionalFields,
 			changeEmail: {
 				enabled: options.user?.changeEmail?.enabled,
-				sendChangeEmailConfirmation:
-					!!options.user?.changeEmail?.sendChangeEmailConfirmation,
+				revokeOtherSessions: options.user?.changeEmail?.revokeOtherSessions,
 			},
 		},
 		verification: {

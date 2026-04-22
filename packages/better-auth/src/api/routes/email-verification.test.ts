@@ -381,9 +381,7 @@ describe("Email Verification Secondary Storage", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					async sendChangeEmailConfirmation(data, request) {
-						token = data.token;
-					},
+					sendVerificationEmail: async (_data, _request) => {},
 				},
 			},
 		});
@@ -412,7 +410,15 @@ describe("Email Verification Secondary Storage", async () => {
 		expect(session.data?.user.emailVerified).toBe(true);
 	});
 
-	it("should change email", async () => {
+	it("should change email via Verification table", async () => {
+		let verificationUrl = "";
+		// Capture the verification URL from changeEmail.sendVerificationEmail
+		if (auth.options.user?.changeEmail) {
+			auth.options.user.changeEmail.sendVerificationEmail = async (data) => {
+				verificationUrl = data.url;
+			};
+		}
+
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async (headers) => {
 			await auth.api.changeEmail({
@@ -422,42 +428,26 @@ describe("Email Verification Secondary Storage", async () => {
 				headers,
 			});
 
-			// 1. Verify confirmation token (sent to old email)
-			const confirmationHeaders = new Headers();
-			await client.verifyEmail({
-				query: {
-					token,
-				},
-				fetchOptions: {
-					onSuccess: cookieSetter(confirmationHeaders),
-					headers,
-				},
-			});
+			// Extract userId and token from verification URL
+			const tokenMatch = verificationUrl.match(
+				/\/verify-email-change\/([^/]+)\/([^?]+)/,
+			);
+			expect(tokenMatch).toBeTruthy();
+			const [, userId, verifyToken] = tokenMatch!;
 
-			// Check that email is NOT updated yet
-			const sessionAfterConfirmation = await client.getSession({
-				fetchOptions: {
-					headers: confirmationHeaders,
-				},
-			});
-			expect(sessionAfterConfirmation.data?.user.email).toBe(testUser.email);
+			// Verify via the new endpoint
+			try {
+				await client.$fetch(`/verify-email-change/${userId}/${verifyToken}`, {
+					method: "GET",
+					query: { callbackURL: "/" },
+				});
+			} catch {
+				// Redirect throws — expected
+			}
 
-			// 2. Verify new email token (token variable was updated by sendVerificationEmail mock)
-			const verificationHeaders = new Headers();
-			await client.verifyEmail({
-				query: {
-					token,
-				},
-				fetchOptions: {
-					onSuccess: cookieSetter(verificationHeaders),
-					headers: confirmationHeaders,
-				},
-			});
-
+			// Email should now be updated
 			const session = await client.getSession({
-				fetchOptions: {
-					headers: verificationHeaders,
-				},
+				fetchOptions: { headers },
 			});
 			expect(session.data?.user.email).toBe("new@email.com");
 			expect(session.data?.user.emailVerified).toBe(true);
@@ -582,30 +572,24 @@ describe("Email Verification Secondary Storage", async () => {
 		expect(secondSignInSession.data?.user.emailVerified).toBe(true);
 	});
 
-	it("should call hooks when verifying email change (change-email-verification)", async () => {
-		const afterEmailVerificationMock = vi.fn();
-		let capturedToken: string;
+	it("should call onChangeEmailCompleted when verifying email change", async () => {
+		const onChangeEmailCompleted = vi.fn();
+		let verificationUrl = "";
 
-		const { client, auth, signInWithTestUser, cookieSetter } =
-			await getTestInstance({
-				emailAndPassword: {
+		const { client, auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			user: {
+				changeEmail: {
 					enabled: true,
-				},
-				emailVerification: {
-					async sendVerificationEmail({ token: _token }) {
-						capturedToken = _token;
+					async sendVerificationEmail({ url }) {
+						verificationUrl = url;
 					},
-					afterEmailVerification: afterEmailVerificationMock,
+					onChangeEmailCompleted,
 				},
-				user: {
-					changeEmail: {
-						enabled: true,
-						async sendChangeEmailConfirmation(data) {
-							capturedToken = data.token;
-						},
-					},
-				},
-			});
+			},
+		});
 
 		const { runWithUser } = await signInWithTestUser();
 
@@ -618,26 +602,25 @@ describe("Email Verification Secondary Storage", async () => {
 				headers,
 			});
 
-			// Verify new email (change-email-verification flow)
-			const verificationHeaders = new Headers();
-			await client.verifyEmail({
-				query: {
-					token: capturedToken,
-				},
-				fetchOptions: {
-					onSuccess: cookieSetter(verificationHeaders),
-					headers,
-				},
-			});
-
-			// Hooks should be called when email is verified
-			expect(afterEmailVerificationMock).toHaveBeenCalledWith(
-				expect.objectContaining({
-					email: "newemail@example.com",
-					emailVerified: true,
-				}),
-				expect.any(Object),
+			// Extract userId and token
+			const tokenMatch = verificationUrl.match(
+				/\/verify-email-change\/([^/]+)\/([^?]+)/,
 			);
+			expect(tokenMatch).toBeTruthy();
+			const [, userId, token] = tokenMatch!;
+
+			// Verify
+			try {
+				await client.$fetch(`/verify-email-change/${userId}/${token}`, {
+					method: "GET",
+					query: { callbackURL: "/" },
+				});
+			} catch {
+				// Redirect throws — expected
+			}
+
+			// onChangeEmailCompleted should have been called
+			expect(onChangeEmailCompleted).toHaveBeenCalled();
 		});
 	});
 });
