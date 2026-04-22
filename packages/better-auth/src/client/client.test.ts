@@ -118,6 +118,240 @@ describe("run time proxy", async () => {
 		vi.useRealTimers();
 	});
 
+	it("should hydrate session on an existing client", async () => {
+		vi.useFakeTimers();
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(
+						JSON.stringify({
+							user: {
+								id: "2",
+								email: "fresh@email.com",
+							},
+							session: {
+								id: "session-2",
+							},
+						}),
+					),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession({
+			user: {
+				id: "1",
+				name: "Hydrated User",
+				email: "hydrated@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "session-token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const session = client.useSession();
+
+		expect(session()).toMatchObject({
+			data: {
+				user: {
+					id: "1",
+					email: "hydrated@email.com",
+				},
+				session: {
+					id: "session-1",
+				},
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+
+		await vi.runAllTimersAsync();
+
+		expect(session()).toMatchObject({
+			data: {
+				user: {
+					id: "2",
+					email: "fresh@email.com",
+				},
+				session: {
+					id: "session-2",
+				},
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+	});
+
+	it("should not overwrite session when already hydrated", async () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(
+						JSON.stringify({
+							user: { id: "1", email: "fresh@email.com" },
+							session: { id: "session-1" },
+						}),
+					),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession({
+			user: {
+				id: "1",
+				name: "First",
+				email: "first@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		// Second call should be a no-op
+		client.hydrateSession({
+			user: {
+				id: "2",
+				name: "Second",
+				email: "second@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-2",
+				userId: "2",
+				expiresAt: new Date(),
+				token: "token-2",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const session = client.useSession();
+		expect(session().data?.user?.email).toBe("first@email.com");
+	});
+
+	it("should not hydrate when session is null", () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession(null);
+
+		const session = client.useSession();
+		expect(session().data).toBeNull();
+		expect(session().isPending).toBe(true);
+	});
+
+	/**
+	 * Re-running hydrateSession on a later render (e.g. after sign-out cleared
+	 * the atom) must not restore the stale initial session. Hydration is
+	 * one-shot per client instance.
+	 */
+	it("should not re-hydrate after the session atom has been cleared", () => {
+		const client = createVanillaClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const initialSession = {
+			user: {
+				id: "1",
+				name: "Hydrated",
+				email: "hydrated@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		};
+
+		client.hydrateSession(initialSession);
+
+		// Simulate sign-out clearing the session atom.
+		const sessionAtom = client.$store.atoms.session!;
+		sessionAtom.set({
+			...sessionAtom.get(),
+			data: null,
+			isPending: false,
+		});
+
+		// A later render calls hydrateSession again with the same initialSession.
+		client.hydrateSession(initialSession);
+
+		expect(sessionAtom.get().data).toBeNull();
+	});
+
+	/**
+	 * The auth client is a module-level singleton, so the session atom is shared
+	 * across concurrent SSR requests. Writing during server render would leak one
+	 * request's session into another. Hydration must be a no-op on the server.
+	 */
+	it("should not write to the shared atom during server render", () => {
+		const client = createVanillaClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		vi.stubGlobal("window", undefined);
+		try {
+			client.hydrateSession({
+				user: {
+					id: "user-a",
+					name: "User A",
+					email: "a@email.com",
+					emailVerified: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				session: {
+					id: "session-a",
+					userId: "user-a",
+					expiresAt: new Date(),
+					token: "token-a",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		expect(client.$store.atoms.session!.get().data).toBeNull();
+	});
+
 	it("should allow second argument fetch options", async () => {
 		let called = false;
 		const client = createSolidClient({
@@ -200,6 +434,21 @@ describe("type", () => {
 			error: BetterFetchError | null;
 			isPending: boolean;
 		}>();
+	});
+	it("should infer hydrateSession react", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async () => {
+					return new Response();
+				},
+			},
+		});
+		type HydrateSession = typeof client.hydrateSession;
+		expectTypeOf<HydrateSession>().toMatchTypeOf<
+			(session: ReturnType<typeof client.useSession>["data"]) => void
+		>();
 	});
 	it("should infer resolved hooks react", () => {
 		const client = createReactClient({
