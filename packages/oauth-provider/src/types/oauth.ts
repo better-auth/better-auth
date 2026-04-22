@@ -190,6 +190,28 @@ export interface AuthServerMetadata {
 	 * it on its own.
 	 */
 	client_id_metadata_document_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP supports back-channel logout,
+	 * with true indicating support.
+	 *
+	 * Registered in the "OAuth Authorization Server Metadata" IANA registry
+	 * under OpenID Connect Back-Channel Logout 1.0, so this may appear at both
+	 * `.well-known/oauth-authorization-server` and `.well-known/openid-configuration`.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#OPMetadata
+	 */
+	backchannel_logout_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP can pass a `sid` (session ID)
+	 * Claim in the Logout Token to identify the RP session with the OP.
+	 *
+	 * When true, the OP also includes `sid` in ID Tokens it issues.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#OPMetadata
+	 */
+	backchannel_logout_session_supported?: boolean;
 }
 
 /**
@@ -297,6 +319,22 @@ export interface OAuthClient {
 	//---- Authentication Metadata ----//
 	redirect_uris: string[];
 	post_logout_redirect_uris?: string[];
+	/**
+	 * RP URL that the OP POSTs a signed Logout Token to when a session at the OP
+	 * ends. The RP uses the token to terminate its own session state for that
+	 * user (including any access tokens it has bound to the session).
+	 *
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
+	 */
+	backchannel_logout_uri?: string;
+	/**
+	 * When true, the RP requires the `sid` Claim in every Logout Token it
+	 * receives; the OP will not dispatch user-scoped (sid-less) logouts to it.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
+	 */
+	backchannel_logout_session_required?: boolean;
 	token_endpoint_auth_method?:
 		| "none"
 		| "client_secret_basic"

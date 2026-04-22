@@ -107,6 +107,17 @@ export async function signJWT(
 		payload: JWTPayloadWithOptional;
 		/** Pre-resolved key from resolveSigningKey. Skips redundant DB lookup. */
 		resolvedKey?: ResolvedSigningKey;
+		/**
+		 * Extra JWS Protected Header parameters to merge with the defaults
+		 * (`alg` and `kid`). Used by token profiles that require an explicit
+		 * media type, such as OIDC Back-Channel Logout's `typ: "logout+jwt"`.
+		 *
+		 * @see https://www.rfc-editor.org/rfc/rfc8725#section-3.11
+		 */
+		header?: {
+			typ?: string;
+			cty?: string;
+		};
 	},
 ) {
 	const { options } = config;
@@ -162,6 +173,7 @@ export async function signJWT(
 		.setProtectedHeader({
 			alg,
 			kid,
+			...config.header,
 		})
 		.setExpirationTime(exp)
 		.setIssuer(iss ?? defaultIss)

@@ -8,6 +8,20 @@ import { parseClientMetadata, storeClientSecret } from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 
 /**
+ * Loopback hosts where RFC 8252 §7.3 permits `http` in local development.
+ */
+function isLoopbackHost(host: string): boolean {
+	const lower = host.toLowerCase();
+	const hostname =
+		lower.startsWith("[") && lower.endsWith("]")
+			? lower.slice(1, -1).split("]")[0]
+			: lower.split(":")[0];
+	return (
+		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+	);
+}
+
+/**
  * Resolves the auth method and type for unauthenticated DCR.
  * Overrides confidential methods to "none" per RFC 7591 Section 3.2.1.
  * When overriding, clears type "web" since it is only valid for confidential clients.
@@ -260,6 +274,44 @@ export async function checkOAuthClient(
 				"jwks and jwks_uri are only allowed with private_key_jwt authentication",
 		});
 	}
+
+	if (client.backchannel_logout_uri !== undefined) {
+		if (opts.disableJwtPlugin) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri requires the jwt plugin (disableJwtPlugin must be false)",
+			});
+		}
+		let url: URL;
+		try {
+			url = new URL(client.backchannel_logout_uri);
+		} catch {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "backchannel_logout_uri must be an absolute URL",
+			});
+		}
+		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment component."
+		if (url.hash) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must not include a fragment component",
+			});
+		}
+		// Spec §2.2: SHOULD be https for confidential clients. Enforce on
+		// confidential clients, with a loopback exception so local dev
+		// (http://127.0.0.1:<port>) works: the same carve-out OAuth 2.1 /
+		// RFC 8252 grants to redirect URIs.
+		if (!isPublic && url.protocol !== "https:" && !isLoopbackHost(url.host)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"backchannel_logout_uri must use https for confidential clients",
+			});
+		}
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -379,6 +431,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// Authentication Metadata
 		redirect_uris: redirectUris,
 		post_logout_redirect_uris: postLogoutRedirectUris,
+		backchannel_logout_uri: backchannelLogoutUri,
+		backchannel_logout_session_required: backchannelLogoutSessionRequired,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -435,6 +489,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
+		backchannelLogoutUri,
+		backchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -492,6 +548,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Authentication Metadata
 		redirectUris,
 		postLogoutRedirectUris,
+		backchannelLogoutUri,
+		backchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -550,6 +608,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Authentication Metadata
 		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
+		backchannel_logout_uri: backchannelLogoutUri ?? undefined,
+		backchannel_logout_session_required:
+			backchannelLogoutSessionRequired ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
 		response_types: responseTypes ?? undefined,

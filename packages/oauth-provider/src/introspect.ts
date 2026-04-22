@@ -103,20 +103,18 @@ async function validateJwtAccessToken(
 		}
 	}
 
-	// Validate JWT against its session if it exists
+	// A JWT access token carrying `sid` is bound to that OP session; once the
+	// session has ended (sign-out, admin revoke, back-channel logout...) the
+	// token is revoked per OIDC Back-Channel Logout §2.7 even though the JWT
+	// itself is still within its TTL.
 	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
+			where: [{ field: "id", value: sessionId }],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			jwtPayload.sid = undefined;
+			return { active: false };
 		}
 	}
 
@@ -174,6 +172,11 @@ async function validateOpaqueAccessToken(
 		});
 	}
 	if (!accessToken.expiresAt || accessToken.expiresAt < new Date()) {
+		return {
+			active: false,
+		};
+	}
+	if (accessToken.revoked) {
 		return {
 			active: false,
 		};

@@ -653,6 +653,42 @@ await auth.api.adminCreateOAuthClient({
   If `disableJwtPlugin: true`, public clients will never be able to logout using this endpoint since no `id_token` is sent.
 </Callout>
 
+### Back-Channel Logout
+
+[Back-Channel Logout](https://openid.net/specs/openid-connect-backchannel-1_0.html) is the server-to-server counterpart to RP-Initiated Logout: when a user's session ends at the OP (sign-out, `/oauth2/end-session`, admin revoke, etc.), the OP POSTs a signed Logout Token to each registered Relying Party so they can terminate their own session state and revoke bound API access.
+
+To opt a client in, register a `backchannel_logout_uri`:
+
+```ts title="admin-create-oauth.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: [redirectUri],
+    enable_end_session: true,
+    backchannel_logout_uri: "https://rp.example.com/logout/backchannel", // [!code highlight]
+    backchannel_logout_session_required: true, // [!code highlight]
+  }
+});
+```
+
+When `backchannel_logout_session_required` is `true`, the RP requires a `sid` claim in every Logout Token; user-scoped (sid-less) logouts are not dispatched to that client.
+
+The OP enumerates clients with active tokens bound to the ending session, POSTs one `logout_token` each in parallel (5s per-RP timeout, no retry per spec §2.5), then applies the revocation policy from spec §2.7:
+
+* **Access tokens** bound to the session are marked revoked.
+* **Refresh tokens** without `offline_access` are marked revoked.
+* **Refresh tokens** with `offline_access` are preserved so long-lived API access can survive the browser session.
+
+The Logout Token conforms to spec §2.4 — `iss`, `aud`, `iat`, `exp`, `jti`, `events`, `sub`, `sid`, `typ: logout+jwt` in the protected header, `exp − iat ≤ 120s`, no `nonce` — and is signed with the same key as ID Tokens, so any RP that validates ID Tokens through your JWKS can validate Logout Tokens without extra configuration.
+
+<Callout type="warn">
+  Back-channel logout requires the `jwt` plugin. Registering a `backchannel_logout_uri` while `disableJwtPlugin: true` is rejected with `invalid_client_metadata`.
+</Callout>
+
+<Callout type="info">
+  The OP advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` on both `.well-known/openid-configuration` and `.well-known/oauth-authorization-server`. RPs use these fields during dynamic client registration to decide whether to register a `backchannel_logout_uri`.
+</Callout>
+
 ### UserInfo Endpoint
 
 The UserInfo Endpoint provides [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant user information. Available at `/oauth2/userinfo`, the endpoint requires a valid access token with at least the scope `openid`.
@@ -1844,6 +1880,20 @@ export const oauthClientTableFields = [
     isOptional: true,
   },
   {
+    name: "backchannelLogoutUri",
+    type: "string",
+    description:
+      "RP URL that receives signed Logout Tokens when the user's OP session ends (OIDC Back-Channel Logout 1.0)",
+    isOptional: true,
+  },
+  {
+    name: "backchannelLogoutSessionRequired",
+    type: "boolean",
+    description:
+      "When true, the RP requires a `sid` claim in every Logout Token and user-scoped logouts are skipped",
+    isOptional: true,
+  },
+  {
     name: "tokenEndpointAuthMethod",
     type: "string",
     description:
@@ -2038,6 +2088,13 @@ export const oauthAccessTokenTableFields = [
     name: "expiresAt",
     type: "Date",
     description: "Timestamp when the token will expire",
+  },
+  {
+    name: "revoked",
+    type: "Date",
+    description:
+      "When the token was revoked. Populated on session end and by back-channel logout; introspection and token use reject revoked tokens.",
+    isOptional: true,
   },
 ];
 

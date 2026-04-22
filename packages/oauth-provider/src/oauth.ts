@@ -16,7 +16,7 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
-import { rpInitiatedLogoutEndpoint } from "./logout";
+import { dispatchBackchannelLogout, rpInitiatedLogoutEndpoint } from "./logout";
 import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
@@ -200,7 +200,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				} catch (error) {
 					// baseURL may not be available during init when using dynamic baseURL config
 					if (isDynamicBaseURLInit && issuer === "") {
-						return;
+						return {};
 					}
 					throw error;
 				}
@@ -224,6 +224,24 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
+
+			return {
+				options: {
+					databaseHooks: {
+						session: {
+							delete: {
+								async before(session, hookCtx) {
+									if (!hookCtx) return;
+									await dispatchBackchannelLogout(hookCtx, opts, {
+										sessionId: session.id,
+										userId: session.userId,
+									});
+								},
+							},
+						},
+					},
+				},
+			};
 		},
 		hooks: {
 			before: [
@@ -1190,6 +1208,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+						backchannel_logout_uri: SafeUrlSchema.optional(),
+						backchannel_logout_session_required: z.boolean().optional(),
 						token_endpoint_auth_method: z
 							.enum([
 								"none",
@@ -1334,6 +1354,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															format: "uri",
 														},
 														description: "List of allowed logout redirect uris",
+													},
+													backchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL to receive signed Logout Tokens when the end-user's OP session terminates",
+													},
+													backchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the RP requires a `sid` claim in every Logout Token",
 													},
 													token_endpoint_auth_method: {
 														type: "string",
