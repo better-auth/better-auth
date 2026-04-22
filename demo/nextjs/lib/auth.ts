@@ -196,7 +196,6 @@ const authOptions = {
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			subscription: {
 				enabled: true,
-				allowReTrialsForDifferentPlans: true,
 				plans: () => {
 					const PRO_PRICE_ID = {
 						default:
