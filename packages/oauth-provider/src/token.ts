@@ -388,20 +388,20 @@ export async function checkResource(
 	const audience = normalizedResource ? [...normalizedResource] : undefined;
 	if (audience) {
 		// Adds /userinfo to audience
-		if (scopes.includes("openid")) {
-			audience.push(`${ctx.context.baseURL}/oauth2/userinfo`);
+		const hasOpenId = scopes.includes("openid");
+		const baseUrl = ctx.context.baseURL;
+		const userInfoEndpoint = `${baseUrl}/oauth2/userinfo`;
+		if (hasOpenId) {
+			audience.push(userInfoEndpoint);
 		}
 		// Check valid audiences
-		const validAudiences = new Set(
-			[
-				...(opts.validAudiences ?? [ctx.context.baseURL]),
-				scopes?.includes("openid")
-					? `${ctx.context.baseURL}/oauth2/userinfo`
-					: undefined,
-			]
-				.flat()
-				.filter((v) => v?.length),
+		const filteredValidAudiences = opts.validAudiences?.filter(
+			(aud) => aud.length,
 		);
+		const validAudiences = new Set(
+			filteredValidAudiences?.length ? filteredValidAudiences : [baseUrl],
+		);
+		if (hasOpenId) validAudiences.add(userInfoEndpoint);
 		for (const aud of audience) {
 			if (!validAudiences.has(aud)) {
 				return {
