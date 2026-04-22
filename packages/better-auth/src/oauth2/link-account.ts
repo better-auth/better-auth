@@ -208,7 +208,7 @@ export async function handleOAuthUserInfo(
 			logger.error(e);
 			if (isAPIError(e)) {
 				return {
-					error: e.message || e.body?.code || "unable to create user",
+					error: e.body?.code || e.message || "unable to create user",
 					data: null,
 					isRegister: false,
 				};
