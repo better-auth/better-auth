@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { additionalAuthorizationParamsSchema } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
@@ -164,6 +165,12 @@ const socialSignInBodySchema = z.object({
 			description: "The login hint to use for the authorization code request",
 		})
 		.optional(),
+	/**
+	 * Extra query parameters to append to the provider authorization URL.
+	 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
+	 * code_challenge, code_challenge_method, scope) are rejected.
+	 */
+	additionalParams: additionalAuthorizationParamsSchema,
 	/**
 	 * Additional data to be passed through the OAuth flow
 	 */
@@ -344,6 +351,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
+				additionalParams: c.body.additionalParams,
 			});
 
 			if (!c.body.disableRedirect) {

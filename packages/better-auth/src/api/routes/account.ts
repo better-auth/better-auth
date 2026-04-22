@@ -2,6 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Account } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { additionalAuthorizationParamsSchema } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
@@ -169,6 +170,22 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * The login hint to forward to the provider authorization endpoint.
+			 */
+			loginHint: z
+				.string()
+				.meta({
+					description:
+						"The login hint to use for the authorization code request",
+				})
+				.optional(),
+			/**
+			 * Extra query parameters to append to the provider authorization URL.
+			 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
+			 * code_challenge, code_challenge_method, scope) are rejected.
+			 */
+			additionalParams: additionalAuthorizationParamsSchema,
 			/**
 			 * Any additional data to pass through the oauth flow.
 			 */
@@ -370,6 +387,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
+			additionalParams: c.body.additionalParams,
 		});
 
 		if (!c.body.disableRedirect) {

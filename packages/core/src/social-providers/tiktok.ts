@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
+import {
+	RESERVED_AUTHORIZATION_PARAMS,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 /**
  * [More info](https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info/)
@@ -131,17 +135,28 @@ export const tiktok = (options: TiktokOptions) => {
 	return {
 		id: "tiktok",
 		name: "TikTok",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			return new URL(
-				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
-					",",
-				)}&response_type=code&client_key=${options.clientKey}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}`,
-			);
+			// TikTok uses `client_key` instead of the standard `client_id`, so the
+			// shared createAuthorizationURL helper cannot be used directly.
+			const url = new URL("https://www.tiktok.com/v2/auth/authorize");
+			url.searchParams.set("scope", _scopes.join(","));
+			url.searchParams.set("response_type", "code");
+			url.searchParams.set("client_key", options.clientKey);
+			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
+			url.searchParams.set("state", state);
+			if (additionalParams) {
+				for (const [key, value] of Object.entries(additionalParams)) {
+					if (
+						(RESERVED_AUTHORIZATION_PARAMS as readonly string[]).includes(key)
+					)
+						continue;
+					url.searchParams.set(key, value);
+				}
+			}
+			return url;
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {

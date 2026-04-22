@@ -64,7 +64,13 @@ export const salesforce = (options: SalesforceOptions) => {
 		id: "salesforce",
 		name: "Salesforce",
 
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret are required for Salesforce. Make sure to provide them in the options.",
@@ -89,6 +95,7 @@ export const salesforce = (options: SalesforceOptions) => {
 				state,
 				codeVerifier,
 				redirectURI: options.redirectURI || redirectURI,
+				additionalParams,
 			});
 		},
 

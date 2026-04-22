@@ -1882,6 +1882,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "null",
                     ],
                   },
+                  "additionalParams": {
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
                   "callbackURL": {
                     "description": "The URL to redirect to after the user has signed in",
                     "type": [
@@ -1944,6 +1951,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     ],
                     "type": [
                       "object",
+                      "null",
+                    ],
+                  },
+                  "loginHint": {
+                    "description": "The login hint to use for the authorization code request",
+                    "type": [
+                      "string",
                       "null",
                     ],
                   },
@@ -3939,6 +3953,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "properties": {
                   "additionalData": {
                     "description": undefined,
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
+                  "additionalParams": {
+                    "description": "Extra query parameters to append to the provider authorization URL (e.g. Cognito identity_provider, Google hd).",
                     "type": [
                       "string",
                       "null",

@@ -20,7 +20,10 @@ import {
 } from "better-auth/api";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
-import { handleOAuthUserInfo } from "better-auth/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	handleOAuthUserInfo,
+} from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import * as z from "zod";
@@ -922,6 +925,7 @@ const signInSSOBodySchema = z.object({
 				"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
 		})
 		.optional(),
+	additionalParams: additionalAuthorizationParamsSchema,
 	requestSignUp: z
 		.boolean({})
 		.meta({
@@ -1215,6 +1219,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
 					authorizationEndpoint: config.authorizationEndpoint,
+					additionalParams: ctx.body.additionalParams,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),

@@ -33,7 +33,13 @@ export const kick = (options: KickOptions) => {
 	return {
 		id: "kick",
 		name: "Kick",
-		createAuthorizationURL({ state, scopes, redirectURI, codeVerifier }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			codeVerifier,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope ? [] : ["user:read"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -46,6 +52,7 @@ export const kick = (options: KickOptions) => {
 				scopes: _scopes,
 				codeVerifier,
 				state,
+				additionalParams,
 			});
 		},
 		async validateAuthorizationCode({ code, redirectURI, codeVerifier }) {

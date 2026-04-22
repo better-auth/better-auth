@@ -1,3 +1,4 @@
+export { additionalAuthorizationParamsSchema } from "./authorization-params";
 export type {
 	AssertionSigningAlgorithm,
 	ClientAssertionConfig,
@@ -13,7 +14,10 @@ export {
 	clientCredentialsTokenRequest,
 	createClientCredentialsTokenRequest,
 } from "./client-credentials-token";
-export { createAuthorizationURL } from "./create-authorization-url";
+export {
+	createAuthorizationURL,
+	RESERVED_AUTHORIZATION_PARAMS,
+} from "./create-authorization-url";
 export type {
 	OAuth2Tokens,
 	OAuth2UserInfo,

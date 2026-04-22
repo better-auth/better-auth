@@ -78,7 +78,12 @@ export const paypal = (options: PayPalOptions) => {
 	return {
 		id: "paypal",
 		name: "PayPal",
-		async createAuthorizationURL({ state, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for PayPal. Make sure to provide them in the options.",
@@ -103,6 +108,7 @@ export const paypal = (options: PayPalOptions) => {
 				codeVerifier,
 				redirectURI,
 				prompt: options.prompt,
+				additionalParams,
 			});
 			return url;
 		},

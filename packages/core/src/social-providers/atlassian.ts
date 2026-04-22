@@ -35,7 +35,13 @@ export const atlassian = (options: AtlassianOptions) => {
 		id: "atlassian",
 		name: "Atlassian",
 
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error("Client Id and Secret are required for Atlassian");
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
@@ -60,6 +66,7 @@ export const atlassian = (options: AtlassianOptions) => {
 				redirectURI,
 				additionalParams: {
 					audience: "api.atlassian.com",
+					...(additionalParams ?? {}),
 				},
 				prompt: options.prompt,
 			});

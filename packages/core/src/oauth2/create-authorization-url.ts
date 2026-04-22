@@ -2,6 +2,26 @@ import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { generateCodeChallenge } from "./utils";
 
+/**
+ * Query-parameter names that are populated by the framework as part of the
+ * authorization request and must not be overridden by caller-supplied
+ * `additionalParams`. Overriding `state`, PKCE, or `redirect_uri` would
+ * break the callback correlation and session pinning guarantees.
+ */
+export const RESERVED_AUTHORIZATION_PARAMS = [
+	"state",
+	"client_id",
+	"redirect_uri",
+	"response_type",
+	"code_challenge",
+	"code_challenge_method",
+	"scope",
+] as const;
+
+const RESERVED_AUTHORIZATION_PARAMS_SET = new Set<string>(
+	RESERVED_AUTHORIZATION_PARAMS,
+);
+
 export async function createAuthorizationURL({
 	id,
 	options,
@@ -81,9 +101,10 @@ export async function createAuthorizationURL({
 		);
 	}
 	if (additionalParams) {
-		Object.entries(additionalParams).forEach(([key, value]) => {
+		for (const [key, value] of Object.entries(additionalParams)) {
+			if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
 			url.searchParams.set(key, value);
-		});
+		}
 	}
 	return url;
 }

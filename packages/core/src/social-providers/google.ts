@@ -63,6 +63,7 @@ export const google = (options: GoogleOptions) => {
 			redirectURI,
 			loginHint,
 			display,
+			additionalParams,
 		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
@@ -93,6 +94,7 @@ export const google = (options: GoogleOptions) => {
 				hd: options.hd,
 				additionalParams: {
 					include_granted_scopes: "true",
+					...(additionalParams ?? {}),
 				},
 			});
 			return url;

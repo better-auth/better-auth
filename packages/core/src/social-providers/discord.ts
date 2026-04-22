@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
 	id: string;
@@ -84,26 +88,26 @@ export const discord = (options: DiscordOptions) => {
 	return {
 		id: "discord",
 		name: "Discord",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
 			if (scopes) _scopes.push(...scopes);
 			if (options.scope) _scopes.push(...options.scope);
 			const hasBotScope = _scopes.includes("bot");
-			const permissionsParam =
-				hasBotScope && options.permissions !== undefined
-					? `&permissions=${options.permissions}`
-					: "";
-			return new URL(
-				`https://discord.com/api/oauth2/authorize?scope=${_scopes.join(
-					"+",
-				)}&response_type=code&client_id=${
-					options.clientId
-				}&redirect_uri=${encodeURIComponent(
-					options.redirectURI || redirectURI,
-				)}&state=${state}&prompt=${
-					options.prompt || "none"
-				}${permissionsParam}`,
-			);
+			return createAuthorizationURL({
+				id: "discord",
+				options,
+				authorizationEndpoint: "https://discord.com/api/oauth2/authorize",
+				scopes: _scopes,
+				state,
+				redirectURI,
+				prompt: options.prompt || "none",
+				additionalParams: {
+					...(hasBotScope && options.permissions !== undefined
+						? { permissions: String(options.permissions) }
+						: {}),
+					...(additionalParams ?? {}),
+				},
+			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
 			return validateAuthorizationCode({

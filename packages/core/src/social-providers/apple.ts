@@ -80,7 +80,12 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
 			if (options.scope) _scope.push(...options.scope);
 			if (scopes) _scope.push(...scopes);
@@ -93,6 +98,7 @@ export const apple = (options: AppleOptions) => {
 				redirectURI,
 				responseMode: "form_post",
 				responseType: "code id_token",
+				additionalParams,
 			});
 			return url;
 		},
