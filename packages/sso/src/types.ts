@@ -36,6 +36,15 @@ export interface OIDCConfig {
 		| undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
+	/**
+	 * Accept callbacks from OIDC providers that initiate the OAuth flow
+	 * without sending a `state` parameter. When enabled, stateless callbacks
+	 * restart the OAuth flow server-side with a fresh `state` and PKCE
+	 * verifier. See the SSO docs for details.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
 }
 
 export interface SAMLConfig {

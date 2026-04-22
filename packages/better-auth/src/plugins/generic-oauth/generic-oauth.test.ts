@@ -2331,4 +2331,95 @@ describe("oauth2", async () => {
 			expect(callbackURL).toBe("http://localhost:3000/dashboard");
 		});
 	});
+
+	describe("IDP-initiated bounce (allowIdpInitiated)", () => {
+		it("should bounce a stateless callback to the provider's authorize endpoint when the provider opts in", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "idp-initiated",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								allowIdpInitiated: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/callback/idp-initiated?code=idp-issued-code",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			const location = res.headers.get("location") || "";
+			expect(location).toContain(`http://localhost:${port}/authorize`);
+			const url = new URL(location);
+			expect(url.searchParams.get("state")).toBeTruthy();
+			expect(url.searchParams.get("client_id")).toBe(clientId);
+			expect(url.searchParams.get("redirect_uri")).toBe(
+				"http://localhost:3000/api/auth/oauth2/callback/idp-initiated",
+			);
+			expect(url.searchParams.get("code")).toBeNull();
+		});
+
+		it("should redirect to the error page when a stateless callback arrives for a provider without the flag", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "strict",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/callback/strict?code=idp-issued-code",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			expect(res.headers.get("location")).toContain(
+				"please_restart_the_process",
+			);
+		});
+
+		it("should not bounce when state is present even if allowIdpInitiated is on", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "idp-initiated-with-state",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								allowIdpInitiated: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/callback/idp-initiated-with-state?code=abc&state=unknown-state",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			const location = res.headers.get("location") || "";
+			expect(location).not.toContain(`http://localhost:${port}/authorize`);
+			expect(location).toContain("please_restart_the_process");
+		});
+	});
 });

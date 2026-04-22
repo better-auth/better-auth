@@ -304,6 +304,54 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				});
 			}
 
+			// TODO: on sync to the next branch, relocate this bounce branch
+			// into the shared callback at
+			// packages/better-auth/src/api/routes/callback.ts; generic-oauth's
+			// own /oauth2/callback/:providerId route no longer exists there.
+			if (!ctx.query.state && providerConfig.allowIdpInitiated) {
+				let finalAuthUrl = providerConfig.authorizationUrl;
+				if (providerConfig.discoveryUrl) {
+					const discovery = await betterFetch<{
+						authorization_endpoint: string;
+					}>(providerConfig.discoveryUrl, {
+						method: "GET",
+						headers: providerConfig.discoveryHeaders,
+					});
+					if (discovery.data?.authorization_endpoint) {
+						finalAuthUrl = discovery.data.authorization_endpoint;
+					}
+				}
+				if (!finalAuthUrl) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+					);
+				}
+				const { state, codeVerifier } = await generateState(
+					ctx,
+					undefined,
+					undefined,
+				);
+				const authUrl = await createAuthorizationURL({
+					id: providerId,
+					options: {
+						clientId: providerConfig.clientId,
+						clientSecret: providerConfig.clientSecret,
+						redirectURI: providerConfig.redirectURI,
+					},
+					authorizationEndpoint: finalAuthUrl,
+					state,
+					codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
+					scopes: providerConfig.scopes || [],
+					redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerId}`,
+					prompt: providerConfig.prompt,
+					accessType: providerConfig.accessType,
+					responseType: providerConfig.responseType,
+					responseMode: providerConfig.responseMode,
+				});
+				throw ctx.redirect(authUrl.toString());
+			}
+
 			let tokens: OAuth2Tokens | undefined = undefined;
 			const parsedState = await parseState(ctx);
 			const {

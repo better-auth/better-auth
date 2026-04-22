@@ -445,6 +445,8 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
 
 ### IdP-Initiated SSO
 
+For OIDC providers that initiate logins without sending a `state` parameter, set `allowIdpInitiated: true` on the provider's `oidcConfig`. When a stateless callback arrives at `/sso/callback/:providerId`, the IdP-issued code is discarded and a new OAuth flow is started server-side with a fresh `state` and PKCE verifier. CSRF protection remains in effect. This flag defaults to `false`.
+
 For IdP-initiated flows (e.g., via Okta dashboard), your framework may require an explicit route handler to manage the redirect if the default handler doesn't support the `GET` request following the SAML POST.
 
 <Tabs items={["next-js-app-router"]}>
