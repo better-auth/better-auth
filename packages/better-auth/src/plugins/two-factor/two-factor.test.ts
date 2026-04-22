@@ -8,6 +8,7 @@ import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { anonymous } from "../anonymous";
+import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
@@ -2345,4 +2346,215 @@ describe("twoFactorMethods in sign-in response", () => {
 			expect((signInRes as any).twoFactorMethods).toEqual(["otp"]);
 		});
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/9205
+ *
+ * 2FA enforcement is intentionally scoped to credential sign-in paths
+ * only. These tests lock that scope in so a future refactor does not
+ * accidentally broaden enforcement to non-credential sign-in flows
+ * without a dedicated release.
+ */
+describe("2FA enforcement scope", async () => {
+	let magicLinkURL = "";
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP() {},
+				},
+				skipVerificationOnEnable: true,
+			}),
+			magicLink({
+				sendMagicLink({ url }) {
+					magicLinkURL = url;
+				},
+			}),
+		],
+	});
+
+	it("should not challenge 2FA on magic-link sign-in", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		await auth.api.signInMagicLink({
+			body: { email: testUser.email },
+			headers: new Headers(),
+		});
+
+		const url = new URL(magicLinkURL);
+		const token = url.searchParams.get("token")!;
+
+		const verifyRes = await auth.api.magicLinkVerify({
+			query: { token },
+			headers: new Headers(),
+			asResponse: true,
+		});
+
+		const json = await verifyRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+	});
+
+	it("should not challenge 2FA on authenticated non-sign-in endpoints", async () => {
+		const {
+			auth: instance,
+			signInWithTestUser: signIn,
+			testUser: user,
+		} = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: { sendOTP() {} },
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+		let { headers } = await signIn();
+		const enableRes = await instance.api.enableTwoFactor({
+			body: { password: user.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const session = await instance.api.getSession({ headers });
+		expect(session?.user.twoFactorEnabled).toBe(true);
+
+		const updateRes = await instance.api.updateUser({
+			body: { name: "updated-name" },
+			headers,
+			asResponse: true,
+		});
+
+		expect(updateRes.ok).toBe(true);
+		const json = await updateRes.json();
+		expect(json.twoFactorRedirect).toBeUndefined();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/7231
+ */
+describe("backup codes storage configurations", () => {
+	const customEncrypt = async (data: string) =>
+		Buffer.from(data).toString("base64") + ":custom";
+	const customDecrypt = async (data: string) => {
+		const [encoded] = data.split(":custom");
+		return Buffer.from(encoded!, "base64").toString("utf-8");
+	};
+
+	const modes = [
+		{
+			name: "plain",
+			config: "plain" as const,
+			decodeStored: (raw: string) => JSON.parse(raw) as string[],
+			verifyFormat: (_raw: string) => {},
+		},
+		{
+			name: "encrypted",
+			config: "encrypted" as const,
+			decodeStored: async (raw: string) =>
+				JSON.parse(
+					await symmetricDecrypt({ key: DEFAULT_SECRET, data: raw }),
+				) as string[],
+			verifyFormat: (raw: string) => {
+				expect(() => JSON.parse(raw)).toThrow();
+			},
+		},
+		{
+			name: "custom",
+			config: { encrypt: customEncrypt, decrypt: customDecrypt },
+			decodeStored: async (raw: string) =>
+				JSON.parse(await customDecrypt(raw)) as string[],
+			verifyFormat: (raw: string) => {
+				expect(raw).toContain(":custom");
+			},
+		},
+	];
+
+	for (const mode of modes) {
+		it(`should preserve ${mode.name} storage format after backup code verification`, async () => {
+			const { client, testUser, sessionSetter, db } = await getTestInstance(
+				{
+					secret: DEFAULT_SECRET,
+					plugins: [
+						twoFactor({
+							backupCodeOptions: { storeBackupCodes: mode.config },
+							skipVerificationOnEnable: true,
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [twoFactorClient()] } },
+			);
+
+			const headers = new Headers();
+			const session = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: { onSuccess: sessionSetter(headers) },
+			});
+
+			const enableRes = await client.twoFactor.enable({
+				password: testUser.password,
+				fetchOptions: { headers },
+			});
+
+			const initialCodes = enableRes.data?.backupCodes!;
+			expect(initialCodes).toHaveLength(10);
+
+			// Verify initial storage format
+			const twoFactorBefore = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: session.data?.user.id as string }],
+			});
+			mode.verifyFormat(twoFactorBefore!.backupCodes);
+			const storedCodes = await mode.decodeStored(twoFactorBefore!.backupCodes);
+			expect(storedCodes).toEqual(initialCodes);
+
+			// Use a backup code
+			const signInHeaders = new Headers();
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					onSuccess(context) {
+						const parsed = parseSetCookieHeader(
+							context.response.headers.get("Set-Cookie") || "",
+						);
+						signInHeaders.append(
+							"cookie",
+							`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
+						);
+					},
+				},
+			});
+
+			const usedCode = initialCodes[0]!;
+			await client.twoFactor.verifyBackupCode({
+				code: usedCode,
+				fetchOptions: { headers: signInHeaders },
+			});
+
+			// Verify storage format is preserved and used code is removed
+			const twoFactorAfter = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: session.data?.user.id as string }],
+			});
+			mode.verifyFormat(twoFactorAfter!.backupCodes);
+			const remainingCodes = await mode.decodeStored(
+				twoFactorAfter!.backupCodes,
+			);
+			expect(remainingCodes).toHaveLength(9);
+			expect(remainingCodes).not.toContain(usedCode);
+			expect(remainingCodes).toEqual(
+				initialCodes.filter((code) => code !== usedCode),
+			);
+		});
+	}
 });

@@ -20,7 +20,12 @@ export const auth = betterAuth({
 
 ## `baseURL`
 
-Base URL for Better Auth. This is typically the root URL where your application server is hosted. Note: If you include a path in the baseURL, it will take precedence over the default path.
+Base URL for Better Auth. This is typically the root URL where your application server is hosted. You can configure it as either:
+
+* a static string for single-domain deployments
+* an object for dynamic per-request resolution across multiple allowed hosts
+
+If you include a path in the baseURL string, it will take precedence over the default path.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -34,6 +39,38 @@ If not explicitly set, the system will check for the environment variable `BETTE
 <Callout type="warn">
   Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
 </Callout>
+
+### Dynamic Base URL
+
+Use the object form when your app can be reached through multiple domains, such as preview deployments, branch environments, or multiple production hosts. Better Auth derives the host from the incoming request, validates it against `allowedHosts`, and constructs the request-specific base URL from that match.
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: [
+			"myapp.com",
+			"www.myapp.com",
+			"*.vercel.app",
+		],
+		protocol: "https",
+		fallback: "https://myapp.com",
+	},
+})
+```
+
+* `allowedHosts`: List of accepted host patterns. Supports exact matches (`myapp.com`), wildcards (`*.vercel.app`, `preview-*.myapp.com`), and port wildcards (`localhost:*`). Automatically added to [`trustedOrigins`](#trustedorigins) (localhost entries get both `http` and `https`)
+* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` derives from `x-forwarded-proto`, then request URL, then defaults to HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
+* `fallback`: URL to use when the incoming host does not match. Without it, unknown hosts throw. Its origin is also added to `trustedOrigins`
+
+<Callout type="warn">
+  Use `fallback` carefully. It can hide deployment or proxy misconfiguration that would otherwise fail loudly.
+</Callout>
+
+When `crossSubDomainCookies` is enabled, the cookie domain is derived from the resolved request host unless you set `domain` explicitly.
+
+For deployment patterns and end-to-end examples, see the [Dynamic Base URL guide](/docs/guides/dynamic-base-url).
 
 ## `basePath`
 
@@ -611,6 +648,26 @@ export const auth = betterAuth({
 * `backgroundTasks`: Configure background task handling for deferred operations
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 * OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+
+<h3 id="advanced-database"><code>database</code></h3>
+
+Set custom strategies for ID generation and findMany queries.
+
+* `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
+* `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	advanced: {
+		database: {
+			generateId: "uuid",
+			defaultFindManyLimit: 50,
+		},
+	},
+});
+```
 
 ### `backgroundTasks`
 
