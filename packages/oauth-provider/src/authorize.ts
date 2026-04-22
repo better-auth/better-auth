@@ -237,10 +237,14 @@ async function resolveTrustedRedirectUri(
 }
 
 /**
- * Builds the `redirectOnError` callback for `/oauth2/authorize`: redirects
- * back to the RP with the RFC 6749 error query params when the already-parsed
- * query maps to a trusted registered redirect_uri, otherwise falls back to
- * the server error page (to avoid open-redirect risk on validation failures).
+ * `redirectOnError` callback for `/oauth2/authorize`. Per RFC 6749 §4.1.2.1,
+ * authorize errors MUST be delivered to the client's `redirect_uri` with
+ * `error`, `error_description`, `state`, and (RFC 9207) `iss`. The clause
+ * carves out one case: a missing/invalid `redirect_uri` or `client_id` MUST
+ * NOT redirect to the requested URI. We implement the carve-out via
+ * `resolveTrustedRedirectUri`, falling back to the server error page.
+ *
+ * Channel (query vs fragment) follows OIDC Core §5 via `deriveResponseMode`.
  */
 export function authorizeRedirectOnError(
 	opts: OAuthOptions<Scope[]>,
