@@ -1875,11 +1875,22 @@ Sets the given team as the current active team. If `teamId` is `null` the curren
 
 #### List User Teams
 
-List all teams that the current user is a part of.
+List all teams that a user is a part of. Defaults to the current user and returns teams across every organization the user belongs to.
+
+* Pass `userId` to list teams for another member. This is gated behind the `member:update` permission in the target organization.
+* Pass `organizationId` to scope the result to a single organization without having to switch the session's active organization. When omitted, queries for another user use the session's active organization.
 
 <APIMethod path="/organization/list-user-teams" method="GET" requireSession>
   ```ts
   type listUserTeams = {
+    /**
+     * The user ID to list teams for. Defaults to the current session user.
+     */
+    userId?: string
+    /**
+     * The organization ID to scope the team list to. When omitted on a self-query, teams are returned across every organization the user belongs to. When querying another user, falls back to the session's active organization.
+     */
+    organizationId?: string
   }
   ```
 </APIMethod>

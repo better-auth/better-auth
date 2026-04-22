@@ -103,6 +103,14 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			jwks: {
+				type: "string",
+				required: false,
+			},
+			jwksUri: {
+				type: "string",
+				required: false,
+			},
 			grantTypes: {
 				type: "string[]",
 				required: false,

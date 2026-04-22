@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@better-auth/cimd':
+        specifier: link:../../packages/cimd
+        version: link:../../packages/cimd
+      '@better-auth/dash':
+        specifier: ^0.1.6
+        version: 0.1.6(better-auth@..+packages+better-auth)(zod@4.3.6)
       '@better-auth/electron':
         specifier: link:../../packages/electron
         version: link:../../packages/electron
@@ -273,6 +279,11 @@ packages:
       '@opentelemetry/api':
         optional: true
 
+  '@better-auth/dash@0.1.6':
+    resolution: {integrity: sha512-5FTWeto6oZVhZRHvHiAEM0D6ifQKbjdVTBUidd9gUn5f+SSa1Zxn4qPtW+iWyJPDLWanXZNXoXGvggtj1TQn9w==}
+    peerDependencies:
+      better-auth: '>=1.4.0'
+
   '@better-auth/infra@0.2.5':
     resolution: {integrity: sha512-TYY5OUV/pnG3OYZlHHcFo4jaIQBTWb2K8QR3fKiugTa9OJ1W3JcPbS5xSdTxcBeUFScLEFTTO59oCZ9a7f16AQ==}
     peerDependencies:
@@ -296,6 +307,9 @@ packages:
         optional: true
       react-native:
         optional: true
+
+  '@better-auth/utils@0.3.1':
+    resolution: {integrity: sha512-+CGp4UmZSUrHHnpHhLPYu6cV+wSUSvVbZbNykxhUDocpVNTo9uFFxw/NqJlh1iC4wQ9HKKWGCKuZ5wUgS0v6Kg==}
 
   '@better-auth/utils@0.4.0':
     resolution: {integrity: sha512-RpMtLUIQAEWMgdPLNVbIF5ON2mm+CH0U3rCdUCU1VyeAUui4m38DyK7/aXMLZov2YDjG684pS1D0MBllrmgjQA==}
@@ -2266,6 +2280,10 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
+  mailchecker@6.0.20:
+    resolution: {integrity: sha512-mZ3kmtfXzGj06prtNm6d8an7D++Kf1G4jEkPZ1QQyhknYNLkmGoMtfaNPNHJU6E8J+Bm3AcZlIIfq5D6L4MS2g==}
+    engines: {node: '>=0.10'}
+
   marked@15.0.12:
     resolution: {integrity: sha512-8dD6FusOQSrpv9Z1rdNMdlSgQOIP880DHqnohobOmYLElGEqAL/JvxvuxZO16r4HtjTlfPRDC1hbvxC9dPN2nA==}
     engines: {node: '>= 18'}
@@ -2811,6 +2829,18 @@ snapshots:
       nanostores: 1.3.0
       zod: 4.3.6
 
+  '@better-auth/dash@0.1.6(better-auth@..+packages+better-auth)(zod@4.3.6)':
+    dependencies:
+      '@better-auth/utils': 0.3.1
+      '@better-fetch/fetch': 1.1.21
+      better-auth: link:../../packages/better-auth
+      better-call: 1.3.5(zod@4.3.6)
+      jose: 6.2.2
+      libphonenumber-js: 1.12.41
+      mailchecker: 6.0.20
+    transitivePeerDependencies:
+      - zod
+
   '@better-auth/infra@0.2.5(@better-auth/core@1.6.6(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.3.6))(jose@6.2.2)(kysely@0.28.16)(nanostores@1.3.0))(@better-auth/sso@..+packages+sso)(better-auth@..+packages+better-auth)(zod@4.3.6)':
     dependencies:
       '@better-auth/core': 1.6.6(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.3.6))(jose@6.2.2)(kysely@0.28.16)(nanostores@1.3.0)
@@ -2821,6 +2851,8 @@ snapshots:
       jose: 6.2.2
       libphonenumber-js: 1.12.41
       zod: 4.3.6
+
+  '@better-auth/utils@0.3.1': {}
 
   '@better-auth/utils@0.4.0':
     dependencies:
@@ -4623,6 +4655,8 @@ snapshots:
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  mailchecker@6.0.20: {}
 
   marked@15.0.12: {}
 
