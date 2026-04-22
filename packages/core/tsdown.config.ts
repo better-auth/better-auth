@@ -23,6 +23,7 @@ export default defineConfig({
 		"!./src/utils/*.test.ts",
 		"./src/error/index.ts",
 		"./src/instrumentation/index.ts",
+		"./src/instrumentation/pure.index.ts",
 	],
 	deps: {
 		neverBundle: ["@better-auth/core/async_hooks"],
