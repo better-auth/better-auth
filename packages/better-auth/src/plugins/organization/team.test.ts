@@ -1,4 +1,3 @@
-import type { APIError } from "@better-auth/core/error";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
@@ -695,9 +694,7 @@ describe("setActiveTeam org scoping", async () => {
 		if (!isAPIError(error)) {
 			throw new Error("Expected setActiveTeam to throw an APIError");
 		}
-		expect(error.message).toBe(
-			ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND.message,
-		);
+		expect(error.message).toBe(ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND.message);
 
 		const sessionAfterRefreshAttempt = await client.getSession({
 			fetchOptions: { headers },
