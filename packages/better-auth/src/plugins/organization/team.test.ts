@@ -680,19 +680,22 @@ describe("setActiveTeam org scoping", async () => {
 			},
 		});
 
-		let error: APIError | null = null;
+		let error: unknown = null;
 		await auth.api
 			.setActiveTeam({
 				body: {},
 				headers,
 			})
-			.catch((e: APIError) => {
+			.catch((e) => {
 				error = e;
 			});
 
 		expect(error).not.toBeNull();
 		expect(isAPIError(error)).toBeTruthy();
-		expect(error?.message).toBe(
+		if (!isAPIError(error)) {
+			throw new Error("Expected setActiveTeam to throw an APIError");
+		}
+		expect(error.message).toBe(
 			ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND.message,
 		);
 
