@@ -310,20 +310,19 @@ export function listApiKeys({
 					}
 				}
 
-				// Query each unique storage backend and merge results
-				const seenIds = new Set<string>();
-				for (const opts of storageGroups.values()) {
-					const { apiKeys } = await listApiKeysFromStorage(
-						ctx,
-						referenceId,
-						opts,
-						{
+				// Query each unique storage backend in parallel and merge results
+				const groupResults = await Promise.all(
+					[...storageGroups.values()].map((opts) =>
+						listApiKeysFromStorage(ctx, referenceId, opts, {
 							limit: undefined,
 							offset: undefined,
 							sortBy: ctx.query?.sortBy,
 							sortDirection: ctx.query?.sortDirection,
-						},
-					);
+						}),
+					),
+				);
+				const seenIds = new Set<string>();
+				for (const { apiKeys } of groupResults) {
 					for (const key of apiKeys) {
 						if (!seenIds.has(key.id)) {
 							seenIds.add(key.id);

@@ -1,4 +1,5 @@
 import type { InferPageType } from "fumadocs-core/source";
+import type { DocsVersion } from "./docs-versions";
 import type { source } from "./source";
 
 type PropertyDefinition = {
@@ -243,6 +244,7 @@ function createServerBody(
 
 export async function getLLMText(
 	docPage: InferPageType<typeof source>,
+	version?: DocsVersion,
 ): Promise<string> {
 	const pageData = docPage.data as {
 		getText: (type: string) => Promise<string>;
@@ -252,7 +254,11 @@ export async function getLLMText(
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(mdContent);
 
-	return `# ${docPage!.data.title}
+	const versionNote = version?.slug
+		? `> You are reading Better Auth documentation for \`${version.label}\`. This is not the current stable release. APIs may differ from the latest stable version.\n\n`
+		: ""; // no version note for latest stable release
+
+	return `${versionNote}# ${docPage!.data.title}
 
 ${docPage!.data.description || ""}
 

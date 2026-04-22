@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
@@ -115,9 +116,7 @@ export function validateIssuerUrl(issuer: string): string {
 	try {
 		const url = new URL(issuer);
 
-		const isLocalhost =
-			url.hostname === "localhost" || url.hostname === "127.0.0.1";
-		if (url.protocol !== "https:" && !isLocalhost) {
+		if (url.protocol !== "https:" && !isLoopbackHost(url.host)) {
 			url.protocol = "https:";
 		}
 
@@ -172,8 +171,8 @@ function getErrorURL(
 /**
  * Finds the matching entry in a client's registered redirect_uris for a
  * requested redirect_uri. Honors RFC 8252 §7.3 loopback port variance for
- * 127.0.0.1 and [::1], matching on scheme+host+path+query and ignoring
- * port. DNS names like "localhost" are excluded per §8.3.
+ * the full 127.0.0.0/8 range and [::1], matching on scheme+host+path+query
+ * and ignoring port. DNS names like "localhost" are excluded per §8.3.
  */
 function findRegisteredRedirectUri(
 	registered: readonly string[] | undefined,
@@ -188,23 +187,17 @@ function findRegisteredRedirectUri(
 		// malformed requested — only exact-match branch can succeed below
 	}
 
-	// TODO(sync-from-main-9226): swap for isLoopbackIP(req.hostname) once the
-	// helper lands here, to cover the full 127.0.0.0/8 range per RFC 8252 §7.3.
-	const loopbackReq =
-		req?.hostname === "127.0.0.1" || req?.hostname === "[::1]"
-			? req
-			: undefined;
-
 	return registered.find((url) => {
 		if (url === requested) return true;
-		if (!loopbackReq) return false;
+		if (!req) return false;
 		try {
 			const reg = new URL(url);
 			return (
-				reg.hostname === loopbackReq.hostname &&
-				reg.pathname === loopbackReq.pathname &&
-				reg.protocol === loopbackReq.protocol &&
-				reg.search === loopbackReq.search
+				isLoopbackIP(reg.hostname) &&
+				reg.hostname === req.hostname &&
+				reg.pathname === req.pathname &&
+				reg.protocol === req.protocol &&
+				reg.search === req.search
 			);
 		} catch {
 			return false;

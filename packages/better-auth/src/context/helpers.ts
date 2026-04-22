@@ -6,6 +6,7 @@ import type {
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
 import { createCookieGetter, getCookies } from "../cookies";
@@ -115,7 +116,7 @@ export async function getTrustedOrigins(
 		for (const host of allowedHosts) {
 			if (!host.includes("://")) {
 				trustedOrigins.push(`https://${host}`);
-				if (host.includes("localhost") || host.includes("127.0.0.1")) {
+				if (isLoopbackHost(host)) {
 					trustedOrigins.push(`http://${host}`);
 				}
 			} else {

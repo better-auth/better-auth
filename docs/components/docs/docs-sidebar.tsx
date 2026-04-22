@@ -2,7 +2,7 @@
 
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useSearchContext } from "fumadocs-ui/contexts/search";
-import { ChevronDownIcon, Search } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -11,6 +11,12 @@ import type { ListItem } from "@/components/sidebar-content";
 import { contents } from "@/components/sidebar-content";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
+import { SidebarVersionSwitcher } from "@/components/version-switcher";
+import {
+	getVersionFromPathname,
+	stripVersionPrefix,
+	versionedDocsHref,
+} from "@/lib/docs-versions";
 import { cn } from "@/lib/utils";
 
 type Section = (typeof contents)[number];
@@ -18,6 +24,10 @@ type Section = (typeof contents)[number];
 export function DocsSidebar() {
 	const pathname = usePathname();
 	const { setOpenSearch } = useSearchContext();
+	const currentVersion = getVersionFromPathname(pathname);
+	const prefixHref = (href: string) => versionedDocsHref(href, currentVersion);
+	// For matching, strip the version prefix from pathname so we can compare against canonical href
+	const canonicalPathname = stripVersionPrefix(pathname, currentVersion);
 	const [currentOpen, setCurrentOpen] = useState(0);
 	const navRef = useRef<HTMLElement>(null);
 
@@ -26,17 +36,20 @@ export function DocsSidebar() {
 			const prefix = item.expandSectionForPathPrefix;
 			if (
 				prefix &&
-				(pathname === prefix || pathname.startsWith(`${prefix}/`))
+				(canonicalPathname === prefix ||
+					canonicalPathname.startsWith(`${prefix}/`))
 			) {
 				return true;
 			}
 			return item.list.some(
 				(listItem) =>
-					listItem.href === pathname ||
+					listItem.href === canonicalPathname ||
 					(listItem.subpages &&
 						listItem.subpages.length > 0 &&
-						pathname.startsWith(`${listItem.href}/`)) ||
-					listItem.subpages?.some((sp) => sp.href && pathname === sp.href),
+						canonicalPathname.startsWith(`${listItem.href}/`)) ||
+					listItem.subpages?.some(
+						(sp) => sp.href && canonicalPathname === sp.href,
+					),
 			);
 		});
 		return defaultValue === -1 ? 0 : defaultValue;
@@ -76,12 +89,25 @@ export function DocsSidebar() {
 			transition={{ duration: 0.28, ease: "easeOut" }}
 			className="fixed left-0 top-(--landing-topbar-height) bottom-0 w-[22vw] max-w-[300px] hidden lg:flex flex-col z-30 bg-background border-r border-foreground/5 transition-[width] duration-300 ease-out"
 		>
+			<SidebarVersionSwitcher />
+
 			<button
 				type="button"
-				className="flex w-full items-center gap-2 px-4 py-[9px] border-y border-foreground/5 text-sm text-foreground/55 hover:text-foreground/80 hover:bg-foreground/3 transition-colors"
+				className="group/search flex w-full items-center gap-2 px-4 py-[9px] border-b border-foreground/5 text-sm text-foreground/55 hover:text-foreground/80 hover:bg-foreground/3 transition-colors"
 				onClick={() => setOpenSearch(true)}
 			>
-				<Search className="size-4 shrink-0" />
+				<svg
+					className="size-4 shrink-0 text-foreground opacity-55 group-hover/search:opacity-80 transition-opacity"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="1.5"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				>
+					<circle cx="11" cy="11" r="5.5" />
+					<path d="m15 15l4 4" />
+				</svg>
 				<span className="truncate">Search</span>
 				<kbd className="ml-auto inline-flex items-center gap-0.5 shrink-0 text-[10px] font-mono text-foreground/40 border border-foreground/10 rounded-md px-1.5 py-0.5">
 					<span className="text-[11px]">&#8984;</span>K
@@ -134,7 +160,11 @@ export function DocsSidebar() {
 											className="relative overflow-hidden"
 										>
 											<motion.div className="text-sm">
-												<SidebarSection section={section} pathname={pathname} />
+												<SidebarSection
+													section={section}
+													pathname={canonicalPathname}
+													prefixHref={prefixHref}
+												/>
 											</motion.div>
 										</motion.div>
 									)}
@@ -176,14 +206,19 @@ export function DocsSidebar() {
 function SidebarSection({
 	section,
 	pathname,
+	prefixHref,
 }: {
 	section: Section;
 	pathname: string;
+	prefixHref: (href: string) => string;
 }) {
 	return (
 		<div className="pt-0 pb-1">
 			{section.href && (
-				<SidebarLink href={section.href} active={pathname === section.href}>
+				<SidebarLink
+					href={prefixHref(section.href)}
+					active={pathname === section.href}
+				>
 					Overview
 				</SidebarLink>
 			)}
@@ -240,6 +275,7 @@ function SidebarSection({
 						active={active}
 						pathname={pathname}
 						hasSubpages={hasSubpages}
+						prefixHref={prefixHref}
 					/>
 				);
 			})}
@@ -254,18 +290,20 @@ function SidebarItemWithSubpages({
 	active,
 	pathname,
 	hasSubpages,
+	prefixHref,
 }: {
 	item: ListItem;
 	active: boolean;
 	pathname: string;
 	hasSubpages: boolean | undefined;
+	prefixHref: (href: string) => string;
 }) {
 	const showSubpages = hasSubpages && active;
 
 	return (
 		<div>
 			<SidebarLink
-				href={item.href || ""}
+				href={prefixHref(item.href || "")}
 				active={active}
 				icon={
 					<span className="flex size-5 shrink-0 items-center justify-center [&>svg]:size-[14px]">
@@ -304,7 +342,7 @@ function SidebarItemWithSubpages({
 								return (
 									<SubpageLink
 										key={subpage.href}
-										href={subpage.href}
+										href={prefixHref(subpage.href)}
 										active={pathname === subpage.href}
 										icon={
 											subpage.icon ? (
