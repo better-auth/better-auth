@@ -52,7 +52,6 @@ const mockRegistrationVerification = {
 	},
 };
 
-
 describe("passkey", async () => {
 	const { auth, client, signInWithTestUser, sessionSetter, customFetchImpl } =
 		await getTestInstance({
@@ -545,37 +544,26 @@ describe("passkey", async () => {
 				onResponse(context) {
 					const setCookie = context.response.headers.get("Set-Cookie");
 					if (setCookie) {
-						passkeyCookie = setCookie;
+						passkeyCookie = setCookie.split(";")[0] ?? "";
 					}
 				},
 			},
 		});
 
-		// Mock the verification response
-		const { verifyAuthenticationResponse } = await import(
-			"@simplewebauthn/server"
-		);
-		const mockedVerify = verifyAuthenticationResponse as unknown as ReturnType<
-			typeof vi.fn
-		>;
-		mockedVerify.mockResolvedValueOnce({
+		serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
 			verified: true,
-			authenticationInfo: {
-				newCounter: 1,
-			},
+			authenticationInfo: { newCounter: 1 },
 		});
 
-		const currentCookie = (headers as any).cookie || "";
-		const combinedCookie = currentCookie
-			? `${currentCookie}; ${passkeyCookie}`
-			: passkeyCookie;
+		const existingCookie = headers.get("cookie") ?? "";
+		headers.set(
+			"cookie",
+			existingCookie ? `${existingCookie}; ${passkeyCookie}` : passkeyCookie,
+		);
+		headers.set("origin", "http://localhost:3000");
 
 		const response = await auth.api.verifyPasskeyAuthentication({
-			headers: {
-				...headers,
-				cookie: combinedCookie,
-				origin: "http://localhost:3000",
-			},
+			headers,
 			body: {
 				response: {
 					id: "mockCredentialID",
@@ -592,9 +580,10 @@ describe("passkey", async () => {
 			},
 		});
 
-		expect(response).toHaveProperty("user");
-		expect(response.user).toHaveProperty("id", user.id);
-		expect(response.user).toHaveProperty("email", user.email);
+		expect(response.session).toBeDefined();
+		expect(response.user).toBeDefined();
+		expect(response.user.id).toBe(user.id);
+		expect(response.user.email).toBe(user.email);
 	});
 });
 
