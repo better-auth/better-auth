@@ -567,6 +567,13 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 							[opts.phoneNumberVerified]: true,
 						},
 					);
+				await opts?.callbackOnVerification?.(
+					{
+						phoneNumber: ctx.body.phoneNumber,
+						user,
+					},
+					ctx,
+				);
 				return ctx.json({
 					status: true,
 					token: session.session.token,
