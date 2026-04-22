@@ -96,6 +96,63 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
+	 * Custom redirect URI validation function for composable validation logic.
+	 *
+	 * By default, the OAuth provider validates redirect URIs with:
+	 * 1. Exact string matching against registered redirect URIs
+	 * 2. RFC 8252 §7.3 loopback IP support (127.0.0.1/[::1] with flexible ports)
+	 *
+	 * The `defaultResult` parameter provides the result of the default validation,
+	 * enabling flexible composition patterns:
+	 *
+	 * @example
+	 * ```ts
+	 * // Extend: add preview deployment support while preserving defaults
+	 * validateRedirectUri: (uri, registered, defaultResult) => {
+	 *   return defaultResult || uri.includes('.preview.example.com');
+	 * }
+	 *
+	 * // Replace: full custom control (use with caution)
+	 * validateRedirectUri: (uri, registered, _defaultResult) => {
+	 *   return myCustomValidation(uri, registered);
+	 * }
+	 *
+	 * // Restrict: add extra constraints on top of defaults
+	 * validateRedirectUri: (uri, registered, defaultResult) => {
+	 *   return defaultResult && !isBlocklisted(uri);
+	 * }
+	 * ```
+	 *
+	 * **Use Cases:**
+	 * - **Preview deployments**: Match `*.preview.example.com` for platforms
+	 *   like Vercel, Netlify, or Cloudflare Pages.
+	 * - **Multi-tenant applications**: Dynamic tenant subdomains.
+	 *
+	 * **Security Considerations:**
+	 * - Never allow overly broad patterns like `*` or `*.com`
+	 * - Validate the full URI (protocol, host, path) - not just the hostname
+	 * - Consider using a library like `tldts` to prevent matches on
+	 *   public suffixes (e.g., `*.co.uk`, `*.github.io`)
+	 * - Always require HTTPS (except for localhost)
+	 * - If the validator throws, the request is rejected (fail-closed)
+	 *
+	 * **Pairwise Subject Note:** For clients using pairwise subject identifiers,
+	 * the sector identifier is derived from the client's first registered
+	 * redirect URI. Custom-validated URIs that are not that registered URI
+	 * will still share the same sector derived from the first registered
+	 * redirect URI.
+	 *
+	 * @param redirectUri - The redirect_uri from the authorization request
+	 * @param registeredUris - Array of registered redirect URIs for the client
+	 * @param defaultResult - Result of the default validation (exact match + RFC 8252 loopback)
+	 * @returns `true` if the redirect URI is valid, `false` otherwise.
+	 */
+	validateRedirectUri?: (
+		redirectUri: string,
+		registeredUris: string[],
+		defaultResult: boolean,
+	) => Awaitable<boolean>;
+	/**
 	 * List of valid audiences if there are multiple.
 	 *
 	 * @default baseURL
