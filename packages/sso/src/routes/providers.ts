@@ -29,7 +29,7 @@ export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
 	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
 }
 
-export async function isOrgAdmin(
+async function isOrgAdmin(
 	ctx: {
 		context: {
 			adapter: {
