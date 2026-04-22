@@ -3,7 +3,7 @@ import { isDevelopment } from "@better-auth/core/env";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
 import { base64 } from "@better-auth/utils/base64";
 import electron from "electron";
-import type { ElectronClientOptions } from "./client";
+import type { ElectronClientOptions } from "./client.js";
 
 const { net } = electron;
 

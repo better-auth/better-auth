@@ -1,7 +1,7 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { anonymous } from ".";
-import { ANONYMOUS_ERROR_CODES } from "./error-codes";
+import { PACKAGE_VERSION } from "../../version.js";
+import { ANONYMOUS_ERROR_CODES } from "./error-codes.js";
+import type { anonymous } from "./index.js";
 
 export const anonymousClient = () => {
 	return {
@@ -22,6 +22,6 @@ export const anonymousClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export * from "./error-codes";
-export type * from "./schema";
-export type * from "./types";
+export * from "./error-codes.js";
+export type * from "./schema.js";
+export type * from "./types.js";

@@ -1,9 +1,9 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { router } from "../api";
-import type { InferAPI } from "./api";
-import type { InferPluginTypes, Session, User } from "./models";
-import type { InferPluginContext, InferPluginErrorCodes } from "./plugins";
+import type { router } from "../api/index.js";
+import type { InferAPI } from "./api.js";
+import type { InferPluginTypes, Session, User } from "./models.js";
+import type { InferPluginContext, InferPluginErrorCodes } from "./plugins.js";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;

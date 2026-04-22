@@ -1,4 +1,4 @@
-import type { Awaitable, LiteralString } from "../types";
+import type { Awaitable, LiteralString } from "../types/index.js";
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;

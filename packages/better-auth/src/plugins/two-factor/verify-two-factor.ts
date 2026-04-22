@@ -1,17 +1,17 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { getSessionFromCtx } from "../../api";
-import { expireCookie, setSessionCookie } from "../../cookies";
-import { generateRandomString } from "../../crypto/random";
-import { parseUserOutput } from "../../db/schema";
+import { getSessionFromCtx } from "../../api/index.js";
+import { expireCookie, setSessionCookie } from "../../cookies/index.js";
+import { generateRandomString } from "../../crypto/random.js";
+import { parseUserOutput } from "../../db/schema.js";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
-} from "./constant";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import type { UserWithTwoFactor } from "./types";
+} from "./constant.js";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code.js";
+import type { UserWithTwoFactor } from "./types.js";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {

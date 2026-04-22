@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mapConcurrent } from "./async";
+import { mapConcurrent } from "./async.js";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

@@ -9,15 +9,15 @@ import {
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
-import { setSessionCookie } from "../../cookies";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { generateState, parseState } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
-import type { User } from "../../types";
-import { HIDE_METADATA } from "../../utils";
-import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
-import type { GenericOAuthOptions } from "./types";
+import { APIError, sessionMiddleware } from "../../api/index.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { handleOAuthUserInfo } from "../../oauth2/link-account.js";
+import { generateState, parseState } from "../../oauth2/state.js";
+import { setTokenUtil } from "../../oauth2/utils.js";
+import type { User } from "../../types/index.js";
+import { HIDE_METADATA } from "../../utils/index.js";
+import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes.js";
+import type { GenericOAuthOptions } from "./types.js";
 
 const signInWithOAuth2BodySchema = z.object({
 	providerId: z.string().meta({

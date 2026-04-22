@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getHostnameFromDomain, validateEmailDomain } from "./utils";
+import { getHostnameFromDomain, validateEmailDomain } from "./utils.js";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/7324

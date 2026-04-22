@@ -1,9 +1,9 @@
 import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
-import type { InferOptionSchema, User } from "../../types";
-import type { BackupCodeOptions } from "./backup-codes";
-import type { OTPOptions } from "./otp";
-import type { schema } from "./schema";
-import type { TOTPOptions } from "./totp";
+import type { InferOptionSchema, User } from "../../types/index.js";
+import type { BackupCodeOptions } from "./backup-codes/index.js";
+import type { OTPOptions } from "./otp/index.js";
+import type { schema } from "./schema.js";
+import type { TOTPOptions } from "./totp/index.js";
 
 export interface TwoFactorOptions {
 	/**

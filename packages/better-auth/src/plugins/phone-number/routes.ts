@@ -1,15 +1,15 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
-import { setSessionCookie } from "../../cookies";
-import { generateRandomString } from "../../crypto/random";
-import { parseUserInput } from "../../db";
-import { parseUserOutput } from "../../db/schema";
-import type { Account } from "../../types";
-import { getDate } from "../../utils/date";
-import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
-import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
+import { getSessionFromCtx } from "../../api/index.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { generateRandomString } from "../../crypto/random.js";
+import { parseUserInput } from "../../db/index.js";
+import { parseUserOutput } from "../../db/schema.js";
+import type { Account } from "../../types/index.js";
+import { getDate } from "../../utils/date.js";
+import { PHONE_NUMBER_ERROR_CODES } from "./error-codes.js";
+import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types.js";
 
 export type RequiredPhoneNumberOptions = PhoneNumberOptions & {
 	expiresIn: number;

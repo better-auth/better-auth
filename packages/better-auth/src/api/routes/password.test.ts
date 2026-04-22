@@ -1,7 +1,7 @@
 import { APIError } from "better-call";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils";
-import type { Account } from "../../types";
+import { getTestInstance } from "../../test-utils/index.js";
+import type { Account } from "../../types/index.js";
 
 describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();

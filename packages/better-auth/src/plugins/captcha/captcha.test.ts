@@ -1,7 +1,7 @@
 import * as betterFetchModule from "@better-fetch/fetch";
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { captcha } from ".";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { captcha } from "./index.js";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
 	const actual = (await importOriginal()) as typeof betterFetchModule;

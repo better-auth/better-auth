@@ -1,6 +1,6 @@
-import type { AwaitableFunction } from "../types";
-import type { ProviderOptions } from "./index";
-import { generateCodeChallenge } from "./utils";
+import type { AwaitableFunction } from "../types/index.js";
+import type { ProviderOptions } from "./index.js";
+import { generateCodeChallenge } from "./utils.js";
 
 export async function createAuthorizationURL({
 	id,

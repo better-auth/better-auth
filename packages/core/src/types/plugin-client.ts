@@ -4,9 +4,9 @@ import type {
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
 import type { Atom, WritableAtom } from "nanostores";
-import type { LiteralString } from "./helper";
-import type { BetterAuthOptions } from "./init-options";
-import type { BetterAuthPlugin } from "./plugin";
+import type { LiteralString } from "./helper.js";
+import type { BetterAuthOptions } from "./init-options.js";
+import type { BetterAuthPlugin } from "./plugin.js";
 
 export interface ClientStore {
 	notify: (signal: string) => void;

@@ -3,9 +3,9 @@ import { makeSignature } from "better-auth/crypto";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { oauthProviderClient } from "../client";
-import { oauthProvider } from "../oauth";
-import type { OAuthClient } from "../types/oauth";
+import { oauthProviderClient } from "../client.js";
+import { oauthProvider } from "../oauth.js";
+import type { OAuthClient } from "../types/oauth.js";
 
 describe("oauthClient", async () => {
 	const providerId = "test";

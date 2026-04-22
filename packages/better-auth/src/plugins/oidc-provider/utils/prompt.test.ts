@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { InvalidRequest } from "../error";
-import { parsePrompt } from "./prompt";
+import { InvalidRequest } from "../error.js";
+import { parsePrompt } from "./prompt.js";
 
 describe("parsePrompt", () => {
 	it("should parse single prompt value", () => {

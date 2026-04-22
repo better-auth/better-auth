@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { expoAuthorizationProxy } from "./routes";
-import { PACKAGE_VERSION } from "./version";
+import { expoAuthorizationProxy } from "./routes.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export interface ExpoOptions {
 	/**

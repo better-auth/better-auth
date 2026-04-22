@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { noopOpenTelemetryAPI } from "./noop";
+import { noopOpenTelemetryAPI } from "./noop.js";
 
 // @see https://github.com/better-auth/better-auth/issues/8765
 describe("instrumentation noop", () => {

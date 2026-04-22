@@ -1,10 +1,10 @@
 import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "../../api";
-import { HIDE_METADATA } from "../../utils";
-import { PACKAGE_VERSION } from "../../version";
-import { generator } from "./generator";
-import { logo } from "./logo";
+import { APIError } from "../../api/index.js";
+import { HIDE_METADATA } from "../../utils/index.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { generator } from "./generator.js";
+import { logo } from "./logo.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -14,7 +14,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export type { FieldSchema, OpenAPIModelSchema, Path } from "./generator";
+export type { FieldSchema, OpenAPIModelSchema, Path } from "./generator.js";
 
 type ScalarTheme =
 	| "alternate"
@@ -138,4 +138,4 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type * from "./generator";
+export type * from "./generator.js";

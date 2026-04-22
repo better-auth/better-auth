@@ -1,9 +1,9 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import { getKyselyDatabaseType } from "@better-auth/kysely-adapter";
-import { getAdapter } from "../db/adapter-kysely";
-import { getMigrations } from "../db/get-migration";
-import type { BetterAuthOptions } from "../types";
-import { createAuthContext } from "./create-context";
+import { getAdapter } from "../db/adapter-kysely.js";
+import { getMigrations } from "../db/get-migration.js";
+import type { BetterAuthOptions } from "../types/index.js";
+import { createAuthContext } from "./create-context.js";
 
 export const init = async (options: BetterAuthOptions) => {
 	const adapter = await getAdapter(options);

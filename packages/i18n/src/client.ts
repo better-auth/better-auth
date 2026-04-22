@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { i18n } from ".";
-import { PACKAGE_VERSION } from "./version";
+import type { i18n } from "./index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 /**
  * i18n client plugin for Better Auth

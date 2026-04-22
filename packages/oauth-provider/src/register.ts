@@ -2,9 +2,9 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
-import type { OAuthOptions, SchemaClient, Scope } from "./types";
-import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import type { OAuthOptions, SchemaClient, Scope } from "./types/index.js";
+import type { OAuthClient, TokenEndpointAuthMethod } from "./types/oauth.js";
+import { parseClientMetadata, storeClientSecret } from "./utils/index.js";
 
 /**
  * Resolves the auth method and type for unauthenticated DCR.

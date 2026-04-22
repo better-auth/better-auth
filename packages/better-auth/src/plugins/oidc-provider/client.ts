@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { oidcProvider } from ".";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { oidcProvider } from "./index.js";
 
 /**
  * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
@@ -16,4 +16,4 @@ export const oidcClient = () => {
 
 export type OidcClientPlugin = ReturnType<typeof oidcClient>;
 
-export type * from "./types";
+export type * from "./types.js";

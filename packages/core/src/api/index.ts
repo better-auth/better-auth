@@ -8,9 +8,9 @@ import {
 	createMiddleware,
 	kAPIErrorHeaderSymbol,
 } from "better-call";
-import { runWithEndpointContext } from "../context";
-import type { AuthContext } from "../types";
-import { isAPIError } from "../utils/is-api-error";
+import { runWithEndpointContext } from "../context/index.js";
+import type { AuthContext } from "../types/index.js";
+import { isAPIError } from "../utils/is-api-error.js";
 
 /**
  * Better-call's createEndpoint re-throws APIError without exposing the headers

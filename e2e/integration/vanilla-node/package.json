@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "typecheck": "tsc --build tsconfig.json",
     "start:client": "vite"
   },
   "devDependencies": {

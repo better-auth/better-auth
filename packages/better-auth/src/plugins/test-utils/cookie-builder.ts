@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
-import { makeSignature } from "../../crypto";
-import type { TestCookie } from "./types";
+import { makeSignature } from "../../crypto/index.js";
+import type { TestCookie } from "./types.js";
 
 /**
  * Signs a cookie value using HMAC-SHA256

@@ -5,11 +5,11 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import * as z from "zod";
-import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
-import { validateConfigAlgorithms } from "../saml";
-import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
-import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { updateSSOProviderBodySchema } from "./schemas";
+import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants.js";
+import { validateConfigAlgorithms } from "../saml/index.js";
+import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types.js";
+import { maskClientId, parseCertificate, safeJsonParse } from "../utils.js";
+import { updateSSOProviderBodySchema } from "./schemas.js";
 
 interface SSOProviderRecord {
 	id: string;

@@ -12,7 +12,7 @@ import {
 	jwtVerify,
 	UnsecuredJWT,
 } from "jose";
-import { logger } from "../env";
+import { logger } from "../env/index.js";
 
 /** Last fetched jwks used locally in getJwks @internal */
 let jwks: JSONWebKeySet | undefined;

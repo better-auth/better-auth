@@ -1,11 +1,11 @@
 import * as z from "zod";
-import type { Prettify } from "../../types";
-import type { BetterAuthOptions } from "../../types/init-options";
+import type { Prettify } from "../../types/index.js";
+import type { BetterAuthOptions } from "../../types/init-options.js";
 import type {
 	InferDBFieldsFromOptions,
 	InferDBFieldsFromPlugins,
-} from "../type";
-import { coreSchema } from "./shared";
+} from "../type.js";
+import { coreSchema } from "./shared.js";
 
 export const accountSchema = coreSchema.extend({
 	providerId: z.string(),

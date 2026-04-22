@@ -7,12 +7,12 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
-import { setSessionCookie } from "../../cookies";
-import { generateRandomString } from "../../crypto";
-import type { Session, User } from "../../types";
-import { PACKAGE_VERSION } from "../../version";
-import { defaultKeyHasher } from "./utils";
+import { sessionMiddleware } from "../../api/index.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { generateRandomString } from "../../crypto/index.js";
+import type { Session, User } from "../../types/index.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { defaultKeyHasher } from "./utils.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

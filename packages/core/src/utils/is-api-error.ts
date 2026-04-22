@@ -1,5 +1,5 @@
 import { APIError as BaseAPIError } from "better-call";
-import { APIError } from "../error";
+import { APIError } from "../error/index.js";
 
 export function isAPIError(error: unknown): error is APIError {
 	return (

@@ -9,9 +9,9 @@ import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
 import * as z from "zod";
-import type { ElectronClientOptions } from "./types/client";
-import { normalizeUserOutput } from "./user";
-import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
+import type { ElectronClientOptions } from "./types/client.js";
+import { normalizeUserOutput } from "./user.js";
+import { getChannelPrefixWithDelimiter, isProcessType } from "./utils.js";
 
 export const kElectron = Symbol.for("better-auth:electron");
 

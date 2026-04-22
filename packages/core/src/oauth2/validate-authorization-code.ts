@@ -1,9 +1,9 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import type { AwaitableFunction } from "../types";
-import type { ProviderOptions } from "./index";
-import { getOAuth2Tokens } from "./index";
+import type { AwaitableFunction } from "../types/index.js";
+import type { ProviderOptions } from "./index.js";
+import { getOAuth2Tokens } from "./index.js";
 
 export async function authorizationCodeRequest({
 	code,

@@ -25,10 +25,10 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProviderResourceClient } from "./client-resource";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "./types/oauth";
+import { oauthProviderClient } from "./client.js";
+import { oauthProviderResourceClient } from "./client-resource.js";
+import { oauthProvider } from "./oauth.js";
+import type { OAuthClient } from "./types/oauth.js";
 
 function isRedirectResult(
 	value: unknown,

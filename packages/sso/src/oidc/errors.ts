@@ -6,7 +6,7 @@
  */
 
 import { APIError } from "better-auth/api";
-import type { DiscoveryError } from "./types";
+import type { DiscoveryError } from "./types.js";
 
 /**
  * Maps a DiscoveryError to an appropriate APIError for HTTP responses.

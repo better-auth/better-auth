@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countAssertions, validateSingleAssertion } from "./assertions";
+import { countAssertions, validateSingleAssertion } from "./assertions.js";
 
 describe("validateSingleAssertion", () => {
 	const encode = (xml: string) => Buffer.from(xml).toString("base64");

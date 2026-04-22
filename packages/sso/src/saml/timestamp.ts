@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import * as constants from "../constants";
+import * as constants from "../constants.js";
 
 export interface TimestampValidationOptions {
 	clockSkew?: number;

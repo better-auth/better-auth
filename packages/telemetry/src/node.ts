@@ -6,14 +6,17 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { ENV, getBooleanEnvVar, isTest, logger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
 import type { PackageJson } from "type-fest";
-import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
-import { detectPackageManager } from "./detectors/detect-project-info";
-import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
-import type { TelemetryContext, TelemetryEvent } from "./types";
-import { hashToBase64 } from "./utils/hash";
-import { generateId } from "./utils/id";
+import { getTelemetryAuthConfig } from "./detectors/detect-auth-config.js";
+import { detectPackageManager } from "./detectors/detect-project-info.js";
+import {
+	detectEnvironment,
+	detectRuntime,
+} from "./detectors/detect-runtime.js";
+import type { TelemetryContext, TelemetryEvent } from "./types.js";
+import { hashToBase64 } from "./utils/hash.js";
+import { generateId } from "./utils/id.js";
 export { getTelemetryAuthConfig };
-export type { TelemetryEvent } from "./types";
+export type { TelemetryEvent } from "./types.js";
 
 // --- Node-specific: package.json reading ---
 

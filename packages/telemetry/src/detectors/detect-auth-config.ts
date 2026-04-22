@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { TelemetryAuthConfig, TelemetryContext } from "../types";
+import type { TelemetryAuthConfig, TelemetryContext } from "../types.js";
 
 export async function getTelemetryAuthConfig(
 	options: BetterAuthOptions,

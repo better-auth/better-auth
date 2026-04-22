@@ -1,8 +1,8 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { getTestInstance } from "../test-utils";
-import type { BetterAuthOptions } from "../types";
+import { getTestInstance } from "../test-utils/index.js";
+import type { BetterAuthOptions } from "../types/index.js";
 
 async function createAuthTestInstance(overrides?: Partial<BetterAuthOptions>) {
 	const testServerPlugin = {

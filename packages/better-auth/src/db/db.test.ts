@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../test-utils/test-instance";
-import type { User } from "../types";
+import { getTestInstance } from "../test-utils/test-instance.js";
+import type { User } from "../types/index.js";
 
 describe("db", async () => {
 	it("should work with custom model names", async () => {

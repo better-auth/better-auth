@@ -1,9 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { username } from ".";
-import { USERNAME_ERROR_CODES } from "./error-codes";
+import { PACKAGE_VERSION } from "../../version.js";
+import { USERNAME_ERROR_CODES } from "./error-codes.js";
+import type { username } from "./index.js";
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 
 export const usernameClient = () => {
 	return {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { drizzleAdapter } from "./drizzle-adapter";
+import { drizzleAdapter } from "./drizzle-adapter.js";
 
 describe("drizzle-adapter", () => {
 	it("should create drizzle adapter", () => {

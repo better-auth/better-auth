@@ -3,7 +3,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { PACKAGE_VERSION } from "../../version";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

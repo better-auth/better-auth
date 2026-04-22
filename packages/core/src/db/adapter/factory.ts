@@ -1,19 +1,19 @@
-import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
-import { BetterAuthError } from "../../error";
+import { createLogger, getColorDepth, TTY_COLORS } from "../../env/index.js";
+import { BetterAuthError } from "../../error/index.js";
 import {
 	ATTR_DB_COLLECTION_NAME,
 	ATTR_DB_OPERATION_NAME,
 	withSpan,
-} from "../../instrumentation";
-import type { BetterAuthOptions } from "../../types";
-import { safeJSONParse } from "../../utils/json";
-import { getAuthTables } from "../get-tables";
-import { initGetDefaultFieldName } from "./get-default-field-name";
-import { initGetDefaultModelName } from "./get-default-model-name";
-import { initGetFieldAttributes } from "./get-field-attributes";
-import { initGetFieldName } from "./get-field-name";
-import { initGetIdField } from "./get-id-field";
-import { initGetModelName } from "./get-model-name";
+} from "../../instrumentation/index.js";
+import type { BetterAuthOptions } from "../../types/index.js";
+import { safeJSONParse } from "../../utils/json.js";
+import { getAuthTables } from "../get-tables.js";
+import { initGetDefaultFieldName } from "./get-default-field-name.js";
+import { initGetDefaultModelName } from "./get-default-model-name.js";
+import { initGetFieldAttributes } from "./get-field-attributes.js";
+import { initGetFieldName } from "./get-field-name.js";
+import { initGetIdField } from "./get-id-field.js";
+import { initGetModelName } from "./get-model-name.js";
 import type {
 	CleanedWhere,
 	DBAdapter,
@@ -21,13 +21,13 @@ import type {
 	JoinConfig,
 	JoinOption,
 	Where,
-} from "./index";
+} from "./index.js";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
-} from "./types";
-import { withApplyDefault } from "./utils";
+} from "./types.js";
+import { withApplyDefault } from "./utils.js";
 
 export {
 	initGetDefaultModelName,
@@ -37,7 +37,7 @@ export {
 	initGetFieldAttributes,
 	initGetIdField,
 };
-export * from "./types";
+export * from "./types.js";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;

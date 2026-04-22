@@ -13,28 +13,28 @@ import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
-import defu from "defu";
+import { defu } from "defu";
 import type { Entries } from "type-fest";
-import { checkEndpointConflicts } from "../api";
-import { matchesOriginPattern } from "../auth/trusted-origins";
-import { createCookieGetter, getCookies } from "../cookies";
-import { hashPassword, verifyPassword } from "../crypto/password";
-import { createInternalAdapter } from "../db/internal-adapter";
-import { DEFAULT_SECRET } from "../utils/constants";
-import { isPromise } from "../utils/is-promise";
-import { checkPassword } from "../utils/password";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import { checkEndpointConflicts } from "../api/index.js";
+import { matchesOriginPattern } from "../auth/trusted-origins.js";
+import { createCookieGetter, getCookies } from "../cookies/index.js";
+import { hashPassword, verifyPassword } from "../crypto/password.js";
+import { createInternalAdapter } from "../db/internal-adapter.js";
+import { DEFAULT_SECRET } from "../utils/constants.js";
+import { isPromise } from "../utils/is-promise.js";
+import { checkPassword } from "../utils/password.js";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url.js";
 import {
 	getInternalPlugins,
 	getTrustedOrigins,
 	getTrustedProviders,
 	runPluginInit,
-} from "./helpers";
+} from "./helpers.js";
 import {
 	buildSecretConfig,
 	parseSecretsEnv,
 	validateSecretsArray,
-} from "./secret-utils";
+} from "./secret-utils.js";
 
 /**
  * Estimates the entropy of a string in bits.

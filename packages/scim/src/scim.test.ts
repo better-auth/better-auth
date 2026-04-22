@@ -6,9 +6,9 @@ import { setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { scim } from ".";
-import { scimClient } from "./client";
-import type { SCIMOptions } from "./types";
+import { scimClient } from "./client.js";
+import { scim } from "./index.js";
+import type { SCIMOptions } from "./types.js";
 
 const createTestInstance = (scimOptions?: SCIMOptions) => {
 	const testUser = {

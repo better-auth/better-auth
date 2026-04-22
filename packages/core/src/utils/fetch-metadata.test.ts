@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBrowserFetchRequest } from "./fetch-metadata";
+import { isBrowserFetchRequest } from "./fetch-metadata.js";
 
 describe("isBrowserFetchRequest", () => {
 	it("returns true for browser fetch requests", () => {

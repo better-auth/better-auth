@@ -1,7 +1,7 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { describe, expect, it, vi } from "vitest";
-import { parseSetCookieHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
 
 /**
  * More test can be found in `session.test.ts`

@@ -10,14 +10,14 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
-import type { oauthProvider } from "../oauth";
+import type { oauthProvider } from "../oauth.js";
 import type {
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
 	Scope,
 	StoreTokenType,
-} from "../types";
+} from "../types/index.js";
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();

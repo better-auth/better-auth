@@ -1,18 +1,18 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
-import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
-import { assignOrganizationByDomain } from "./linking";
+import { SAML_SESSION_BY_ID_PREFIX } from "./constants.js";
+import { assignOrganizationByDomain } from "./linking/index.js";
 import {
 	requestDomainVerification,
 	verifyDomain,
-} from "./routes/domain-verification";
+} from "./routes/domain-verification.js";
 import {
 	deleteSSOProvider,
 	getSSOProvider,
 	listSSOProviders,
 	updateSSOProvider,
-} from "./routes/providers";
+} from "./routes/providers.js";
 import {
 	acsEndpoint,
 	callbackSSO,
@@ -23,20 +23,20 @@ import {
 	signInSSO,
 	sloEndpoint,
 	spMetadata,
-} from "./routes/sso";
-import { saml } from "./samlify";
+} from "./routes/sso.js";
+import { saml } from "./samlify.js";
 
 export {
 	DEFAULT_CLOCK_SKEW_MS,
 	DEFAULT_MAX_SAML_METADATA_SIZE,
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
-} from "./constants";
+} from "./constants.js";
 
 export {
 	type SAMLConditions,
 	type TimestampValidationOptions,
 	validateSAMLTimestamp,
-} from "./routes/sso";
+} from "./routes/sso.js";
 
 export {
 	type AlgorithmValidationOptions,
@@ -45,10 +45,15 @@ export {
 	DigestAlgorithm,
 	KeyEncryptionAlgorithm,
 	SignatureAlgorithm,
-} from "./saml";
+} from "./saml/index.js";
 
-import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
-import { PACKAGE_VERSION } from "./version";
+import type {
+	OIDCConfig,
+	SAMLConfig,
+	SSOOptions,
+	SSOProvider,
+} from "./types.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 
@@ -77,7 +82,7 @@ export {
 	selectTokenEndpointAuthMethod,
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
-} from "./oidc";
+} from "./oidc/index.js";
 
 const fastValidator = {
 	async validate(xml: string) {

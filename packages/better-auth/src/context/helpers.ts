@@ -9,16 +9,16 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
 import type { EndpointContext, InputContext } from "better-call";
 import { defu } from "defu";
-import { createCookieGetter, getCookies } from "../cookies";
-import { createInternalAdapter } from "../db";
-import { isPromise } from "../utils/is-promise";
+import { createCookieGetter, getCookies } from "../cookies/index.js";
+import { createInternalAdapter } from "../db/index.js";
+import { isPromise } from "../utils/is-promise.js";
 import {
 	getBaseURL,
 	getOrigin,
 	isDynamicBaseURLConfig,
 	isRequestLike,
 	resolveBaseURL,
-} from "../utils/url";
+} from "../utils/url.js";
 
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;

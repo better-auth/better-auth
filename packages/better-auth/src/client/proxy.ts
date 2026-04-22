@@ -5,8 +5,8 @@ import type {
 } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
-import { isAtom } from "../utils/is-atom";
-import type { ProxyRequest } from "./path-to-object";
+import { isAtom } from "../utils/is-atom.js";
+import type { ProxyRequest } from "./path-to-object.js";
 
 function getMethod(
 	path: string,

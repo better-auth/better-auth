@@ -10,23 +10,23 @@ import {
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
-import { originCheck } from "../../api";
-import { parseJSON } from "../../client/parser";
-import { setSessionCookie } from "../../cookies";
-import { parseSetCookieHeader } from "../../cookies/cookie-utils";
-import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import type { StateData } from "../../state";
-import { parseGenericState } from "../../state";
-import type { Account, User } from "../../types";
-import { getOrigin } from "../../utils/url";
-import { PACKAGE_VERSION } from "../../version";
+import { originCheck } from "../../api/index.js";
+import { parseJSON } from "../../client/parser.js";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto/index.js";
+import { handleOAuthUserInfo } from "../../oauth2/link-account.js";
+import type { StateData } from "../../state.js";
+import { parseGenericState } from "../../state.js";
+import type { Account, User } from "../../types/index.js";
+import { getOrigin } from "../../utils/url.js";
+import { PACKAGE_VERSION } from "../../version.js";
 import {
 	checkSkipProxy,
 	redirectOnError,
 	resolveCurrentURL,
 	stripTrailingSlash,
-} from "./utils";
+} from "./utils.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

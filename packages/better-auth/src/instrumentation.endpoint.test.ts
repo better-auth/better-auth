@@ -23,8 +23,8 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { createAuthMiddleware } from "./api";
-import { getTestInstance } from "./test-utils";
+import { createAuthMiddleware } from "./api/index.js";
+import { getTestInstance } from "./test-utils/index.js";
 
 let exporter: InMemorySpanExporter;
 let provider: NodeTracerProvider;

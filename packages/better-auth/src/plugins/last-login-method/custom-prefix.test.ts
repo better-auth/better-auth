@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseCookies } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { lastLoginMethod } from ".";
-import { lastLoginMethodClient } from "./client";
+import { parseCookies } from "../../cookies/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { lastLoginMethodClient } from "./client.js";
+import { lastLoginMethod } from "./index.js";
 
 describe("lastLoginMethod custom cookie prefix", async () => {
 	it("should work with default cookie name regardless of custom prefix", async () => {

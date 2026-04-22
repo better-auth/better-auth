@@ -1,5 +1,5 @@
-import type { BetterAuthOptions } from "../../types";
-import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
+import type { BetterAuthOptions } from "../../types/index.js";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type.js";
 
 export type DBAdapterDebugLogOption =
 	| boolean
@@ -562,6 +562,6 @@ export interface DBAdapterInstance<
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
 
-export * from "./factory";
-export * from "./types";
-export * from "./utils";
+export * from "./factory.js";
+export * from "./types.js";
+export * from "./utils.js";

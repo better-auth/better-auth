@@ -2,20 +2,20 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
-import { sessionMiddleware } from "../../../api";
-import type { SecretConfig } from "../../../crypto";
-import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
-import { generateRandomString } from "../../../crypto/random";
-import { parseUserOutput } from "../../../db/schema";
-import { shouldRequirePassword } from "../../../utils/password";
-import { PACKAGE_VERSION } from "../../../version";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { sessionMiddleware } from "../../../api/index.js";
+import type { SecretConfig } from "../../../crypto/index.js";
+import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto/index.js";
+import { generateRandomString } from "../../../crypto/random.js";
+import { parseUserOutput } from "../../../db/schema.js";
+import { shouldRequirePassword } from "../../../utils/password.js";
+import { PACKAGE_VERSION } from "../../../version.js";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code.js";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
-} from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+} from "../types.js";
+import { verifyTwoFactor } from "../verify-two-factor.js";
 
 export interface BackupCodeOptions {
 	/**

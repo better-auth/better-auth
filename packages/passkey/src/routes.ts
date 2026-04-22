@@ -22,15 +22,15 @@ import {
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
-import { PASSKEY_ERROR_CODES } from "./error-codes";
+import { PASSKEY_ERROR_CODES } from "./error-codes.js";
 import type {
 	Passkey,
 	PasskeyExtensionsResolver,
 	PasskeyOptions,
 	PasskeyRegistrationUser,
 	WebAuthnChallengeValue,
-} from "./types";
-import { getRpID } from "./utils";
+} from "./types.js";
+import { getRpID } from "./utils.js";
 
 type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 

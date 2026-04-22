@@ -1,12 +1,12 @@
 import { listen } from "listhen";
 import { afterAll, describe, expect, it } from "vitest";
-import { toNodeHandler } from "../../../integrations/node";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { jwt } from "../../jwt";
-import { mcp } from "../index";
-import { mcpAuthMcpUse } from "./adapters";
-import type { McpSession } from "./index";
-import { createMcpAuthClient } from "./index";
+import { toNodeHandler } from "../../../integrations/node.js";
+import { getTestInstance } from "../../../test-utils/test-instance.js";
+import { jwt } from "../../jwt/index.js";
+import { mcp } from "../index.js";
+import { mcpAuthMcpUse } from "./adapters.js";
+import type { McpSession } from "./index.js";
+import { createMcpAuthClient } from "./index.js";
 
 describe("mcp-client", async () => {
 	const tempServer = await listen(

@@ -1,9 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { emailOTP } from ".";
-import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
+import { PACKAGE_VERSION } from "../../version.js";
+import { EMAIL_OTP_ERROR_CODES } from "./error-codes.js";
+import type { emailOTP } from "./index.js";
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 
 export const emailOTPClient = () => {
 	return {

@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getClientConfig } from "./config";
-import { createDynamicPathProxy } from "./proxy";
+import { getClientConfig } from "./config.js";
+import { createDynamicPathProxy } from "./proxy.js";
 
 describe("createDynamicPathProxy", () => {
 	afterEach(() => {

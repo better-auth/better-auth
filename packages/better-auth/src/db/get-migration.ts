@@ -17,7 +17,7 @@ import type {
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { getSchema } from "./get-schema";
+import { getSchema } from "./get-schema.js";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],

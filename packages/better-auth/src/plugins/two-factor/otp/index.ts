@@ -2,19 +2,19 @@ import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../../cookies";
+import { setSessionCookie } from "../../../cookies/index.js";
 import {
 	constantTimeEqual,
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
-} from "../../../crypto";
-import { parseUserOutput } from "../../../db/schema";
-import { PACKAGE_VERSION } from "../../../version";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
-import { defaultKeyHasher } from "../utils";
-import { verifyTwoFactor } from "../verify-two-factor";
+} from "../../../crypto/index.js";
+import { parseUserOutput } from "../../../db/schema.js";
+import { PACKAGE_VERSION } from "../../../version.js";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code.js";
+import type { TwoFactorProvider, UserWithTwoFactor } from "../types.js";
+import { defaultKeyHasher } from "../utils.js";
+import { verifyTwoFactor } from "../verify-two-factor.js";
 
 export interface OTPOptions {
 	/**

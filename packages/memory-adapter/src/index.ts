@@ -2,4 +2,4 @@ export {
 	type MemoryAdapterConfig,
 	type MemoryDB,
 	memoryAdapter,
-} from "./memory-adapter";
+} from "./memory-adapter.js";

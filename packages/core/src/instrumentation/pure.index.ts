@@ -10,7 +10,7 @@
  * Public surface must stay identical to `./index` (enforced by `pure.test.ts`).
  */
 
-export * from "./attributes";
+export * from "./attributes.js";
 
 export function withSpan<T>(
 	name: string,

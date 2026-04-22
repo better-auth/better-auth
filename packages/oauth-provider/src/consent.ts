@@ -1,9 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize";
-import { oAuthState } from "./oauth";
-import type { OAuthConsent, OAuthOptions, Scope } from "./types";
-import { deleteFromPrompt } from "./utils";
+import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize.js";
+import { oAuthState } from "./oauth.js";
+import type { OAuthConsent, OAuthOptions, Scope } from "./types/index.js";
+import { deleteFromPrompt } from "./utils/index.js";
 
 export async function consentEndpoint(
 	ctx: GenericEndpointContext,

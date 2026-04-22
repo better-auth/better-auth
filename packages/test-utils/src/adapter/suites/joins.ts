@@ -1,6 +1,6 @@
 import { expect } from "vitest";
-import { createTestSuite } from "../create-test-suite";
-import { getNormalTestSuiteTests } from "./basic";
+import { createTestSuite } from "../create-test-suite.js";
+import { getNormalTestSuiteTests } from "./basic.js";
 
 export const joinsTestSuite = createTestSuite(
 	"joins",

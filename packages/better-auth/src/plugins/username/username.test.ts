@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { USERNAME_ERROR_CODES, username } from ".";
-import { usernameClient } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { usernameClient } from "./client.js";
+import { USERNAME_ERROR_CODES, username } from "./index.js";
 
 describe("username", async () => {
 	const { client, sessionSetter, signInWithTestUser } = await getTestInstance(

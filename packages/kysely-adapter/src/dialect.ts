@@ -7,7 +7,7 @@ import {
 	PostgresDialect,
 	SqliteDialect,
 } from "kysely";
-import type { KyselyDatabaseType } from "./types";
+import type { KyselyDatabaseType } from "./types.js";
 
 export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],
@@ -108,7 +108,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	if ("fileControl" in db) {
-		const { BunSqliteDialect } = await import("./bun-sqlite-dialect");
+		const { BunSqliteDialect } = await import("./bun-sqlite-dialect.js");
 		dialect = new BunSqliteDialect({
 			database: db,
 		});
@@ -137,7 +137,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			}
 		}
 		if (DatabaseSync && db instanceof DatabaseSync) {
-			const { NodeSqliteDialect } = await import("./node-sqlite-dialect");
+			const { NodeSqliteDialect } = await import("./node-sqlite-dialect.js");
 			dialect = new NodeSqliteDialect({
 				database: db,
 			});
@@ -146,7 +146,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	// Cloudflare D1
 	if ("batch" in db && "exec" in db && "prepare" in db) {
-		const { D1SqliteDialect } = await import("./d1-sqlite-dialect");
+		const { D1SqliteDialect } = await import("./d1-sqlite-dialect.js");
 		dialect = new D1SqliteDialect({
 			database: db,
 		});

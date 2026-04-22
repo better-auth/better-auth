@@ -1,11 +1,11 @@
 import { decodeJwt } from "jose";
-import { logger } from "../env";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { logger } from "../env/index.js";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "../oauth2/index.js";
 
 /**
  * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#requesting-claims

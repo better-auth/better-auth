@@ -22,29 +22,29 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "typecheck": "tsc --build tsconfig.json",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --build tsconfig.build.json",
     "test": "vitest"
   },
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./node-sqlite-dialect": {
       "dev-source": "./src/node-sqlite-dialect.ts",
-      "types": "./dist/node-sqlite-dialect.d.mts",
-      "default": "./dist/node-sqlite-dialect.mjs"
+      "types": "./dist/node-sqlite-dialect.d.ts",
+      "default": "./dist/node-sqlite-dialect.js"
     }
   },
   "peerDependencies": {
@@ -62,7 +62,6 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
     "kysely": "^0.28.14",
-    "tsdown": "catalog:",
     "typescript": "catalog:"
   }
 }

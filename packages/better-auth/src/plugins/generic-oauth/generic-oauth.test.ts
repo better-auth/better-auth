@@ -3,17 +3,17 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createAuthClient } from "../../client";
-import { getAwaitableValue } from "../../context/helpers";
-import { parseSetCookieHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { genericOAuth } from ".";
-import { genericOAuthClient } from "./client";
-import { auth0 } from "./providers/auth0";
-import { keycloak } from "./providers/keycloak";
-import { microsoftEntraId } from "./providers/microsoft-entra-id";
-import { okta } from "./providers/okta";
-import { slack } from "./providers/slack";
+import { createAuthClient } from "../../client/index.js";
+import { getAwaitableValue } from "../../context/helpers.js";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { genericOAuthClient } from "./client.js";
+import { genericOAuth } from "./index.js";
+import { auth0 } from "./providers/auth0.js";
+import { keycloak } from "./providers/keycloak.js";
+import { microsoftEntraId } from "./providers/microsoft-entra-id.js";
+import { okta } from "./providers/okta.js";
+import { slack } from "./providers/slack.js";
 
 describe("oauth2", async () => {
 	const providerId = "test";

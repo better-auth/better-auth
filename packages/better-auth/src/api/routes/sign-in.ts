@@ -4,13 +4,13 @@ import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
-import { getAwaitableValue } from "../../context/helpers";
-import { setSessionCookie } from "../../cookies";
-import { parseUserOutput } from "../../db/schema";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { generateState } from "../../utils";
-import { formCsrfMiddleware } from "../middlewares/origin-check";
-import { createEmailVerificationToken } from "./email-verification";
+import { getAwaitableValue } from "../../context/helpers.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { parseUserOutput } from "../../db/schema.js";
+import { handleOAuthUserInfo } from "../../oauth2/link-account.js";
+import { generateState } from "../../utils/index.js";
+import { formCsrfMiddleware } from "../middlewares/origin-check.js";
+import { createEmailVerificationToken } from "./email-verification.js";
 
 const socialSignInBodySchema = z.object({
 	/**

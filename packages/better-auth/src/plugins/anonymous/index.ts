@@ -9,21 +9,21 @@ import {
 	APIError,
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
-} from "../../api";
+} from "../../api/index.js";
 import {
 	deleteSessionCookie,
 	parseSetCookieHeader,
 	setSessionCookie,
-} from "../../cookies";
-import { mergeSchema, parseUserOutput } from "../../db/schema";
-import { PACKAGE_VERSION } from "../../version";
-import { ANONYMOUS_ERROR_CODES } from "./error-codes";
-import { schema } from "./schema";
+} from "../../cookies/index.js";
+import { mergeSchema, parseUserOutput } from "../../db/schema.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { ANONYMOUS_ERROR_CODES } from "./error-codes.js";
+import { schema } from "./schema.js";
 import type {
 	AnonymousOptions,
 	AnonymousSession,
 	UserWithAnonymous,
-} from "./types";
+} from "./types.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -333,4 +333,4 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type * from "./types";
+export type * from "./types.js";

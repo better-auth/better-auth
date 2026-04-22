@@ -21,11 +21,11 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "typecheck": "tsc --build tsconfig.json",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --build tsconfig.build.json",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
@@ -34,123 +34,123 @@
     "src",
     "!src/**/*.test.ts"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./api": {
       "dev-source": "./src/api/index.ts",
-      "types": "./dist/api/index.d.mts",
-      "default": "./dist/api/index.mjs"
+      "types": "./dist/api/index.d.ts",
+      "default": "./dist/api/index.js"
     },
     "./async_hooks": {
       "dev-source": "./src/async_hooks/index.ts",
-      "types": "./dist/async_hooks/index.d.mts",
-      "node": "./dist/async_hooks/index.mjs",
-      "deno": "./dist/async_hooks/index.mjs",
-      "bun": "./dist/async_hooks/index.mjs",
-      "edge": "./dist/async_hooks/pure.index.mjs",
-      "workerd": "./dist/async_hooks/index.mjs",
-      "browser": "./dist/async_hooks/pure.index.mjs",
-      "default": "./dist/async_hooks/index.mjs"
+      "types": "./dist/async_hooks/index.d.ts",
+      "node": "./dist/async_hooks/index.js",
+      "deno": "./dist/async_hooks/index.js",
+      "bun": "./dist/async_hooks/index.js",
+      "edge": "./dist/async_hooks/pure.index.js",
+      "workerd": "./dist/async_hooks/index.js",
+      "browser": "./dist/async_hooks/pure.index.js",
+      "default": "./dist/async_hooks/index.js"
     },
     "./context": {
       "dev-source": "./src/context/index.ts",
-      "types": "./dist/context/index.d.mts",
-      "default": "./dist/context/index.mjs"
+      "types": "./dist/context/index.d.ts",
+      "default": "./dist/context/index.js"
     },
     "./env": {
       "dev-source": "./src/env/index.ts",
-      "types": "./dist/env/index.d.mts",
-      "default": "./dist/env/index.mjs"
+      "types": "./dist/env/index.d.ts",
+      "default": "./dist/env/index.js"
     },
     "./error": {
       "dev-source": "./src/error/index.ts",
-      "types": "./dist/error/index.d.mts",
-      "default": "./dist/error/index.mjs"
+      "types": "./dist/error/index.d.ts",
+      "default": "./dist/error/index.js"
     },
     "./utils/*": {
       "dev-source": "./src/utils/*.ts",
-      "types": "./dist/utils/*.d.mts",
-      "default": "./dist/utils/*.mjs"
+      "types": "./dist/utils/*.d.ts",
+      "default": "./dist/utils/*.js"
     },
     "./social-providers": {
       "dev-source": "./src/social-providers/index.ts",
-      "types": "./dist/social-providers/index.d.mts",
-      "default": "./dist/social-providers/index.mjs"
+      "types": "./dist/social-providers/index.d.ts",
+      "default": "./dist/social-providers/index.js"
     },
     "./db": {
       "dev-source": "./src/db/index.ts",
-      "types": "./dist/db/index.d.mts",
-      "default": "./dist/db/index.mjs"
+      "types": "./dist/db/index.d.ts",
+      "default": "./dist/db/index.js"
     },
     "./db/adapter": {
       "dev-source": "./src/db/adapter/index.ts",
-      "types": "./dist/db/adapter/index.d.mts",
-      "default": "./dist/db/adapter/index.mjs"
+      "types": "./dist/db/adapter/index.d.ts",
+      "default": "./dist/db/adapter/index.js"
     },
     "./oauth2": {
       "dev-source": "./src/oauth2/index.ts",
-      "types": "./dist/oauth2/index.d.mts",
-      "default": "./dist/oauth2/index.mjs"
+      "types": "./dist/oauth2/index.d.ts",
+      "default": "./dist/oauth2/index.js"
     },
     "./instrumentation": {
       "dev-source": "./src/instrumentation/index.ts",
-      "types": "./dist/instrumentation/index.d.mts",
-      "node": "./dist/instrumentation/index.mjs",
-      "deno": "./dist/instrumentation/index.mjs",
-      "bun": "./dist/instrumentation/index.mjs",
-      "edge": "./dist/instrumentation/pure.index.mjs",
-      "workerd": "./dist/instrumentation/index.mjs",
-      "browser": "./dist/instrumentation/pure.index.mjs",
-      "default": "./dist/instrumentation/index.mjs"
+      "types": "./dist/instrumentation/index.d.ts",
+      "node": "./dist/instrumentation/index.js",
+      "deno": "./dist/instrumentation/index.js",
+      "bun": "./dist/instrumentation/index.js",
+      "edge": "./dist/instrumentation/pure.index.js",
+      "workerd": "./dist/instrumentation/index.js",
+      "browser": "./dist/instrumentation/pure.index.js",
+      "default": "./dist/instrumentation/index.js"
     }
   },
   "typesVersions": {
     "*": {
       ".": [
-        "dist/index.d.mts"
+        "dist/index.d.ts"
       ],
       "api": [
-        "dist/api/index.d.mts"
+        "dist/api/index.d.ts"
       ],
       "async_hooks": [
-        "dist/async_hooks/index.d.mts"
+        "dist/async_hooks/index.d.ts"
       ],
       "context": [
-        "dist/context/index.d.mts"
+        "dist/context/index.d.ts"
       ],
       "env": [
-        "dist/env/index.d.mts"
+        "dist/env/index.d.ts"
       ],
       "error": [
-        "dist/error/index.d.mts"
+        "dist/error/index.d.ts"
       ],
       "utils": [
-        "dist/utils/index.d.mts"
+        "dist/utils/index.d.ts"
       ],
       "utils/*": [
-        "dist/utils/*.d.mts"
+        "dist/utils/*.d.ts"
       ],
       "social-providers": [
-        "dist/social-providers/index.d.mts"
+        "dist/social-providers/index.d.ts"
       ],
       "db": [
-        "dist/db/index.d.mts"
+        "dist/db/index.d.ts"
       ],
       "db/adapter": [
-        "dist/db/adapter/index.d.mts"
+        "dist/db/adapter/index.d.ts"
       ],
       "oauth2": [
-        "dist/oauth2/index.d.mts"
+        "dist/oauth2/index.d.ts"
       ],
       "instrumentation": [
-        "dist/instrumentation/index.d.mts"
+        "dist/instrumentation/index.d.ts"
       ]
     }
   },
@@ -169,8 +169,7 @@
     "@cloudflare/workers-types": "^4.20250121.0",
     "jose": "^6.1.3",
     "kysely": "^0.28.14",
-    "nanostores": "^1.1.1",
-    "tsdown": "catalog:"
+    "nanostores": "^1.1.1"
   },
   "peerDependencies": {
     "@better-auth/utils": "catalog:",

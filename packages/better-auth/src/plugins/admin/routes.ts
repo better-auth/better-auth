@@ -7,24 +7,24 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
+import { getSessionFromCtx } from "../../api/index.js";
 import {
 	deleteSessionCookie,
 	expireCookie,
 	setSessionCookie,
-} from "../../cookies";
-import { parseSessionOutput, parseUserOutput } from "../../db/schema";
-import { getDate } from "../../utils/date";
-import type { AccessControl, ArrayElement } from "../access";
-import type { defaultStatements } from "./access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
-import { hasPermission } from "./has-permission";
+} from "../../cookies/index.js";
+import { parseSessionOutput, parseUserOutput } from "../../db/schema.js";
+import { getDate } from "../../utils/date.js";
+import type { AccessControl, ArrayElement } from "../access/index.js";
+import type { defaultStatements } from "./access/index.js";
+import { ADMIN_ERROR_CODES } from "./error-codes.js";
+import { hasPermission } from "./has-permission.js";
 import type {
 	AdminOptions,
 	InferAdminRolesFromOption,
 	SessionWithImpersonatedBy,
 	UserWithRole,
-} from "./types";
+} from "./types.js";
 
 /**
  * Ensures a valid session, if not will throw.

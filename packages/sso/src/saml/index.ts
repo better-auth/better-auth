@@ -8,6 +8,6 @@ export {
 	SignatureAlgorithm,
 	validateConfigAlgorithms,
 	validateSAMLAlgorithms,
-} from "./algorithms";
+} from "./algorithms.js";
 
-export { validateSingleAssertion } from "./assertions";
+export { validateSingleAssertion } from "./assertions.js";

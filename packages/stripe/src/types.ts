@@ -6,7 +6,7 @@ import type {
 } from "better-auth";
 import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import type { organization, subscriptions, user } from "./schema";
+import type { organization, subscriptions, user } from "./schema.js";
 
 export type AuthorizeReferenceAction =
 	| "upgrade-subscription"

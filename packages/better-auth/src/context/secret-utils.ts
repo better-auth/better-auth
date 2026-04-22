@@ -1,7 +1,7 @@
 import type { SecretConfig } from "@better-auth/core";
 import type { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { DEFAULT_SECRET } from "../utils/constants";
+import { DEFAULT_SECRET } from "../utils/constants.js";
 
 /**
  * Estimates the entropy of a string in bits.

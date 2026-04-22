@@ -8,8 +8,8 @@ import {
 } from "better-auth/plugins/organization/access";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
-import { apiKeyClient } from "./client";
+import { apiKeyClient } from "./client.js";
+import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from "./index.js";
 
 describe("organization API keys", async () => {
 	afterEach(() => {

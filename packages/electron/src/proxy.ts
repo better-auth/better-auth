@@ -1,9 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { parseCookies } from "better-auth/cookies";
-import type { electron } from "./index";
-import type { ElectronProxyClientOptions } from "./types/client";
-import { parseProtocolScheme } from "./utils";
-import { PACKAGE_VERSION } from "./version";
+import type { electron } from "./index.js";
+import type { ElectronProxyClientOptions } from "./types/client.js";
+import { parseProtocolScheme } from "./utils.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 	const opts = {

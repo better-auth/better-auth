@@ -4,10 +4,10 @@ import { verifyAccessToken } from "better-auth/oauth2";
 import type { Auth, BetterAuthClientPlugin } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
-import { handleMcpErrors } from "./mcp";
-import type { ResourceServerMetadata } from "./types/oauth";
-import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
-import { PACKAGE_VERSION } from "./version";
+import { handleMcpErrors } from "./mcp.js";
+import type { ResourceServerMetadata } from "./types/oauth.js";
+import { getJwtPlugin, getOAuthProviderPlugin } from "./utils/index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	auth?: T,

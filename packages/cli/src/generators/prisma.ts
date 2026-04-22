@@ -6,8 +6,8 @@ import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
-import { getPrismaVersion } from "../utils/get-package-info";
-import type { SchemaGenerator } from "./types";
+import { getPrismaVersion } from "../utils/get-package-info.js";
+import type { SchemaGenerator } from "./types.js";
 
 export const generatePrismaSchema: SchemaGenerator = async ({
 	adapter,

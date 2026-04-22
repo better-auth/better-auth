@@ -1,12 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
-import { getSessionFromCtx } from "../../api";
-import { generateRandomString } from "../../crypto";
-import { InvalidClient, InvalidRequest } from "./error";
-import { getClient } from "./index";
-import type { AuthorizationQuery, OIDCOptions } from "./types";
-import { parsePrompt } from "./utils/prompt";
+import { getSessionFromCtx } from "../../api/index.js";
+import { generateRandomString } from "../../crypto/index.js";
+import { InvalidClient, InvalidRequest } from "./error.js";
+import { getClient } from "./index.js";
+import type { AuthorizationQuery, OIDCOptions } from "./types.js";
+import { parsePrompt } from "./utils/prompt.js";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${url}${

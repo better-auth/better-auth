@@ -1,5 +1,5 @@
 import type { Awaitable, OAuth2Tokens, User } from "better-auth";
-import type { AlgorithmValidationOptions } from "./saml/algorithms";
+import type { AlgorithmValidationOptions } from "./saml/algorithms.js";
 
 export interface OIDCMapping {
 	id?: string | undefined;

@@ -1,14 +1,14 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
-import { validateIssuerUrl } from "./authorize";
-import type { OAuthOptions, Scope } from "./types";
+import { validateIssuerUrl } from "./authorize.js";
+import type { OAuthOptions, Scope } from "./types/index.js";
 import type {
 	AuthServerMetadata,
 	GrantType,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
-} from "./types/oauth";
-import { getJwtPlugin } from "./utils";
+} from "./types/oauth.js";
+import { getJwtPlugin } from "./utils/index.js";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,

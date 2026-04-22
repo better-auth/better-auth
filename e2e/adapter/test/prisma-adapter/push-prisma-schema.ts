@@ -41,7 +41,7 @@ export default defineConfig({
 	const schemaKey = schemaContent.replace(/\s*output\s*=\s*"[^"]*"\n?/, "");
 
 	const outputMatch = schemaContent.match(/output\s*=\s*"([^"]*)"/);
-	const outputDir = outputMatch ? join(cwd, outputMatch[1]) : null;
+	const outputDir = outputMatch?.[1] ? join(cwd, outputMatch[1]) : null;
 
 	try {
 		execSync(

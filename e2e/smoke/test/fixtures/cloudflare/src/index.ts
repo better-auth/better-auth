@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt } from "better-auth/plugins/jwt";
 import { Hono } from "hono";
-import { createDrizzle } from "./db";
+import { createDrizzle } from "./db.js";
 
 interface CloudflareBindings {
 	DB: D1Database;

@@ -1,6 +1,6 @@
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import type { OAuthOptions, Scope } from "../types";
-import { verifyOAuthQueryParams } from "../utils";
+import type { OAuthOptions, Scope } from "../types/index.js";
+import { verifyOAuthQueryParams } from "../utils/index.js";
 
 export const publicSessionMiddleware = (opts: OAuthOptions<Scope[]>) =>
 	createAuthMiddleware(async (ctx) => {

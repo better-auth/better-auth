@@ -1,9 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { phoneNumber } from ".";
-import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
+import { PACKAGE_VERSION } from "../../version.js";
+import { PHONE_NUMBER_ERROR_CODES } from "./error-codes.js";
+import type { phoneNumber } from "./index.js";
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 
 export const phoneNumberClient = () => {
 	return {
@@ -26,4 +26,4 @@ export const phoneNumberClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "./types";
+export type * from "./types.js";

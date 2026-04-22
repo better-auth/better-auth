@@ -12,10 +12,10 @@ import type {
 	SchemaClient,
 	Scope,
 	VerificationValue,
-} from "./types";
-import type { GrantType } from "./types/oauth";
-import { verificationValueSchema } from "./types/zod";
-import { userNormalClaims } from "./userinfo";
+} from "./types/index.js";
+import type { GrantType } from "./types/oauth.js";
+import { verificationValueSchema } from "./types/zod.js";
+import { userNormalClaims } from "./userinfo.js";
 import {
 	basicToClientCredentials,
 	decryptStoredClientSecret,
@@ -28,7 +28,7 @@ import {
 	resolveSubjectIdentifier,
 	storeToken,
 	validateClientCredentials,
-} from "./utils";
+} from "./utils/index.js";
 
 /**
  * Handles the /oauth2/token endpoint by delegating

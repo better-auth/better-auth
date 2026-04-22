@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { openAPI } from ".";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { openAPI } from "./index.js";
 
 describe("open-api", async () => {
 	const { auth } = await getTestInstance({

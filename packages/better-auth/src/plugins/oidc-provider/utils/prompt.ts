@@ -1,4 +1,4 @@
-import { InvalidRequest } from "../error";
+import { InvalidRequest } from "../error.js";
 
 export type AuthorizePrompt = "login" | "consent" | "select_account" | "none";
 export type AuthorizePromptSet = ReadonlySet<AuthorizePrompt>;

@@ -1,7 +1,7 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
-import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
-import { __getBetterAuthGlobal } from "./global";
+import type { DBAdapter, DBTransactionAdapter } from "../db/adapter/index.js";
+import { __getBetterAuthGlobal } from "./global.js";
 
 type HookContext = {
 	adapter: DBTransactionAdapter;

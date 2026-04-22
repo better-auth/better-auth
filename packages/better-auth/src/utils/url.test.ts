@@ -8,7 +8,7 @@ import {
 	matchesHostPattern,
 	resolveBaseURL,
 	resolveDynamicBaseURL,
-} from "./url";
+} from "./url.js";
 
 describe("getBaseURL", () => {
 	describe("trustedProxyHeaders validation", () => {

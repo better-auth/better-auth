@@ -1,16 +1,16 @@
 import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import type { schema } from "../schema";
-import type { Awaitable } from "./helpers";
-import type { GrantType } from "./oauth";
+import type { schema } from "../schema.js";
+import type { Awaitable } from "./helpers.js";
+import type { GrantType } from "./oauth.js";
 
 export type {
 	AuthServerMetadata,
 	OAuthClient,
 	OIDCMetadata,
 	ResourceServerMetadata,
-} from "./oauth";
+} from "./oauth.js";
 
 export type StoreTokenType =
 	| "access_token"

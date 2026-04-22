@@ -3,7 +3,7 @@ import { passkey } from "@better-auth/passkey";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, username } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
-import { generateDrizzleSchema } from "../src/generators/drizzle";
+import { generateDrizzleSchema } from "../src/generators/drizzle.js";
 
 describe("generate drizzle schema for all databases", async () => {
 	it("should generate drizzle schema for MySQL", async () => {

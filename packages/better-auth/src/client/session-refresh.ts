@@ -1,11 +1,11 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
-import type { Session, User } from "../types";
-import { getGlobalBroadcastChannel } from "./broadcast-channel";
-import { getGlobalFocusManager } from "./focus-manager";
-import { getGlobalOnlineManager } from "./online-manager";
-import type { AuthQueryAtom } from "./query";
+import type { Session, User } from "../types/index.js";
+import { getGlobalBroadcastChannel } from "./broadcast-channel.js";
+import { getGlobalFocusManager } from "./focus-manager.js";
+import { getGlobalOnlineManager } from "./online-manager.js";
+import type { AuthQueryAtom } from "./query.js";
 
 const now = () => Math.floor(Date.now() / 1000);
 

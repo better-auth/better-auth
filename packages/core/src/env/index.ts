@@ -1,4 +1,4 @@
-export { getColorDepth } from "./color-depth";
+export { getColorDepth } from "./color-depth.js";
 export {
 	ENV,
 	type EnvObject,
@@ -9,7 +9,7 @@ export {
 	isProduction,
 	isTest,
 	nodeENV,
-} from "./env-impl";
+} from "./env-impl.js";
 export {
 	createLogger,
 	type InternalLogger,
@@ -20,4 +20,4 @@ export {
 	logger,
 	shouldPublishLog,
 	TTY_COLORS,
-} from "./logger";
+} from "./logger.js";

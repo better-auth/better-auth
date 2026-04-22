@@ -6,11 +6,11 @@ import {
 import { APIError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { getEndpoints, router } from "./api";
-import { createAuthClient } from "./client";
-import { init } from "./context/init";
-import { bearer } from "./plugins";
-import { isAPIError } from "./utils/is-api-error";
+import { getEndpoints, router } from "./api/index.js";
+import { createAuthClient } from "./client/index.js";
+import { init } from "./context/init.js";
+import { bearer } from "./plugins/index.js";
+import { isAPIError } from "./utils/is-api-error.js";
 
 describe("call", async () => {
 	const q = z.optional(

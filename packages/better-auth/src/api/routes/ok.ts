@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { HIDE_METADATA } from "../../utils/hide-metadata";
+import { HIDE_METADATA } from "../../utils/hide-metadata.js";
 
 export const ok = createAuthEndpoint(
 	"/ok",

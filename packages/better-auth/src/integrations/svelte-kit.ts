@@ -1,8 +1,8 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { RequestEvent } from "@sveltejs/kit";
-import { parseSetCookieHeader, toCookieOptions } from "../cookies";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
-import { PACKAGE_VERSION } from "../version";
+import { parseSetCookieHeader, toCookieOptions } from "../cookies/index.js";
+import type { BetterAuthOptions, BetterAuthPlugin } from "../types/index.js";
+import { PACKAGE_VERSION } from "../version.js";
 
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => Response | Promise<Response>;

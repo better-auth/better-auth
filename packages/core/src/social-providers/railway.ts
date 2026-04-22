@@ -1,10 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "../oauth2/index.js";
 
 const authorizationEndpoint = "https://backboard.railway.com/oauth/auth";
 const tokenEndpoint = "https://backboard.railway.com/oauth/token";

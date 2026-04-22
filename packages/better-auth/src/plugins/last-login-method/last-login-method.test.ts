@@ -10,19 +10,19 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { createAuthMiddleware } from "../../api";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
-import { signJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { DEFAULT_SECRET } from "../../utils/constants";
-import { genericOAuthClient } from "../generic-oauth/client";
-import { genericOAuth } from "../generic-oauth/index";
-import { magicLink } from "../magic-link";
-import { magicLinkClient } from "../magic-link/client";
-import { siwe } from "../siwe";
-import { siweClient } from "../siwe/client";
-import { lastLoginMethod } from ".";
-import { lastLoginMethodClient } from "./client";
+import { createAuthMiddleware } from "../../api/index.js";
+import { parseCookies, parseSetCookieHeader } from "../../cookies/index.js";
+import { signJWT } from "../../crypto/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { DEFAULT_SECRET } from "../../utils/constants.js";
+import { genericOAuthClient } from "../generic-oauth/client.js";
+import { genericOAuth } from "../generic-oauth/index.js";
+import { magicLinkClient } from "../magic-link/client.js";
+import { magicLink } from "../magic-link/index.js";
+import { siweClient } from "../siwe/client.js";
+import { siwe } from "../siwe/index.js";
+import { lastLoginMethodClient } from "./client.js";
+import { lastLoginMethod } from "./index.js";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];

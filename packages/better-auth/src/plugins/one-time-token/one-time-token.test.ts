@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { isAPIError } from "../../utils/is-api-error";
-import { oneTimeToken } from ".";
-import { oneTimeTokenClient } from "./client";
-import { defaultKeyHasher } from "./utils";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { isAPIError } from "../../utils/is-api-error.js";
+import { oneTimeTokenClient } from "./client.js";
+import { oneTimeToken } from "./index.js";
+import { defaultKeyHasher } from "./utils.js";
 
 describe("One-time token", async () => {
 	const { auth, signInWithTestUser, client } = await getTestInstance(

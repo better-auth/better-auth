@@ -4,8 +4,8 @@ import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
-import { sso } from ".";
-import { ssoClient } from "./client";
+import { ssoClient } from "./client.js";
+import { sso } from "./index.js";
 
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;

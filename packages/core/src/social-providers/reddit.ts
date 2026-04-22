@@ -1,11 +1,11 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
-} from "../oauth2";
+} from "../oauth2/index.js";
 
 export interface RedditProfile {
 	id: string;

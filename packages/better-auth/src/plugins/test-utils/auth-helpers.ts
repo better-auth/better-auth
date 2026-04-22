@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
-import { createCookieHeaders, createTestCookie } from "./cookie-builder";
-import type { LoginResult, TestCookie } from "./types";
+import { createCookieHeaders, createTestCookie } from "./cookie-builder.js";
+import type { LoginResult, TestCookie } from "./types.js";
 
 export function createLogin(ctx: AuthContext) {
 	return async (opts: { userId: string }): Promise<LoginResult> => {

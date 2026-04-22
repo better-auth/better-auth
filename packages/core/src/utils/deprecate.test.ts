@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deprecate } from "./deprecate";
+import { deprecate } from "./deprecate.js";
 
 describe("deprecate", () => {
 	it("should warn once when called multiple times", () => {

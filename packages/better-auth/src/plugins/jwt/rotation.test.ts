@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { jwt } from ".";
-import type { Jwk } from "./types";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { jwt } from "./index.js";
+import type { Jwk } from "./types.js";
 
 describe("jwt rotation", async () => {
 	afterEach(() => {

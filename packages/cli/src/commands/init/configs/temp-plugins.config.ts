@@ -1,9 +1,9 @@
 // This is a temporary plugin config file until we support actually using the plugin config files.
 
 import * as z from "zod";
-import type { GetArgumentsOptions } from "../generate-auth";
-import type { ImportGroup } from "../utility/imports";
-import { createImport } from "../utility/imports";
+import type { GetArgumentsOptions } from "../generate-auth.js";
+import type { ImportGroup } from "../utility/imports.js";
+import { createImport } from "../utility/imports.js";
 
 export type Plugin = keyof typeof tempPluginsConfig;
 

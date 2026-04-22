@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { magicLink } from ".";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { magicLink } from "./index.js";
 
 export const magicLinkClient = () => {
 	return {

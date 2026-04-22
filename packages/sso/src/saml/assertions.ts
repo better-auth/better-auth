@@ -1,6 +1,6 @@
 import { base64 } from "@better-auth/utils/base64";
 import { APIError } from "better-auth/api";
-import { countAllNodes, xmlParser } from "./parser";
+import { countAllNodes, xmlParser } from "./parser.js";
 
 export interface AssertionCounts {
 	assertions: number;

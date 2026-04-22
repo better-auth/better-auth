@@ -9,16 +9,16 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
-import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
-import { getClientConfig } from "./config";
-import { createDynamicPathProxy } from "./proxy";
+import type { PrettifyDeep, UnionToIntersection } from "../types/helper.js";
+import { getClientConfig } from "./config.js";
+import { createDynamicPathProxy } from "./proxy.js";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 	SessionQueryParams,
-} from "./types";
+} from "./types.js";
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	plugins: Array<infer Plugin>;

@@ -5,8 +5,8 @@ import {
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
-import type { SSOOptions, SSOProvider } from "../types";
-import { getHostnameFromDomain } from "../utils";
+import type { SSOOptions, SSOProvider } from "../types.js";
+import { getHostnameFromDomain } from "../utils.js";
 
 const DNS_LABEL_MAX_LENGTH = 63;
 const DEFAULT_TOKEN_PREFIX = "better-auth-token";

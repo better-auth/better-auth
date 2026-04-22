@@ -11,9 +11,9 @@ import {
 	it,
 	vi,
 } from "vitest";
-import type { Passkey } from ".";
-import { passkey } from ".";
-import { passkeyClient } from "./client";
+import { passkeyClient } from "./client.js";
+import type { Passkey } from "./index.js";
+import { passkey } from "./index.js";
 
 const serverMocks = vi.hoisted(() => ({
 	verifyRegistrationResponse: vi.fn(),

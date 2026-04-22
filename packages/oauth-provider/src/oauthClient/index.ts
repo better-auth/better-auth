@@ -4,10 +4,10 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import * as z from "zod";
-import { publicSessionMiddleware } from "../middleware";
-import { createOAuthClientEndpoint } from "../register";
-import type { OAuthOptions, Scope } from "../types";
-import { SafeUrlSchema } from "../types/zod";
+import { publicSessionMiddleware } from "../middleware/index.js";
+import { createOAuthClientEndpoint } from "../register.js";
+import type { OAuthOptions, Scope } from "../types/index.js";
+import { SafeUrlSchema } from "../types/zod.js";
 import {
 	assertClientPrivileges,
 	deleteClientEndpoint,
@@ -16,7 +16,7 @@ import {
 	getClientsEndpoint,
 	rotateClientSecretEndpoint,
 	updateClientEndpoint,
-} from "./endpoints";
+} from "./endpoints.js";
 
 export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(

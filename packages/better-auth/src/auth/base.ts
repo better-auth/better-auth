@@ -1,15 +1,15 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
-import { getEndpoints, router } from "../api";
+import { getEndpoints, router } from "../api/index.js";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
-} from "../context/helpers";
-import type { Auth } from "../types";
-import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
+} from "../context/helpers.js";
+import type { Auth } from "../types/index.js";
+import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url.js";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,

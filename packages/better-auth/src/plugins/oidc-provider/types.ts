@@ -1,5 +1,5 @@
-import type { InferOptionSchema, User } from "../../types";
-import type { OAuthApplication, schema } from "./schema";
+import type { InferOptionSchema, User } from "../../types/index.js";
+import type { OAuthApplication, schema } from "./schema.js";
 
 export interface OIDCOptions {
 	/** @internal */

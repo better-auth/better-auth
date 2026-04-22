@@ -6,15 +6,15 @@ import {
 	getCookies,
 	getSessionCookie,
 	parseCookies,
-} from "../cookies";
-import { getTestInstance } from "../test-utils/test-instance";
+} from "../cookies/index.js";
+import { getTestInstance } from "../test-utils/test-instance.js";
 import {
 	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	stripSecureCookiePrefix,
 	toCookieOptions,
-} from "./cookie-utils";
+} from "./cookie-utils.js";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -114,7 +114,7 @@ describe("cookies", async () => {
 
 			// Re-import modules after NODE_ENV change
 			const { getTestInstance: getTestInstanceReloaded } = await import(
-				"../test-utils/test-instance"
+				"../test-utils/test-instance.js"
 			);
 
 			const { client, testUser } = await getTestInstanceReloaded({

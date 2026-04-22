@@ -1,6 +1,7 @@
 {
   "name": "@better-auth-test/fixtures-cloudflare",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
@@ -14,6 +15,7 @@
     "wrangler": "4.61.0"
   },
   "scripts": {
+    "typecheck": "tsc --build tsconfig.json",
     "check": "tsc && wrangler build",
     "dev": "wrangler dev",
     "migrate:local": "wrangler d1 migrations apply db --local",

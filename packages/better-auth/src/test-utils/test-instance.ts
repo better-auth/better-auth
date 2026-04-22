@@ -7,14 +7,14 @@ import type {
 import type { SuccessContext } from "@better-fetch/fetch";
 import { sql } from "kysely";
 import { afterAll } from "vitest";
-import { betterAuth } from "../auth/full";
-import { createAuthClient } from "../client";
-import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import { getAdapter } from "../db/adapter-kysely";
-import { getMigrations } from "../db/get-migration";
-import { bearer } from "../plugins";
-import type { Session, User } from "../types";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import { betterAuth } from "../auth/full.js";
+import { createAuthClient } from "../client/index.js";
+import { parseSetCookieHeader, setCookieToHeader } from "../cookies/index.js";
+import { getAdapter } from "../db/adapter-kysely.js";
+import { getMigrations } from "../db/get-migration.js";
+import { bearer } from "../plugins/index.js";
+import type { Session, User } from "../types/index.js";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url.js";
 
 const cleanupSet = new Set<Function>();
 
@@ -105,7 +105,7 @@ export async function getTestInstance<
 				: testWith === "mongodb"
 					? await Promise.all([
 							mongodbClient(),
-							await import("../adapters/mongodb-adapter"),
+							await import("../adapters/mongodb-adapter/index.js"),
 						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
 						? { db: await getMysql(), type: "mysql" }

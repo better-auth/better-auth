@@ -1,6 +1,6 @@
 import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
-import { __getBetterAuthGlobal } from "./global";
+import { __getBetterAuthGlobal } from "./global.js";
 
 export type RequestStateWeakMap = WeakMap<object, any>;
 

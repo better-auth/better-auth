@@ -1,6 +1,6 @@
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, it } from "vitest";
-import { initMinimal } from "./init-minimal";
+import { initMinimal } from "./init-minimal.js";
 
 describe("init-minimal (without Kysely)", () => {
 	const db: Record<string, any[]> = {};

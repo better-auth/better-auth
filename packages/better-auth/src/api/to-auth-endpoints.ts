@@ -1,5 +1,6 @@
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import type { AuthMiddleware } from "@better-auth/core/api";
+import type { RequestStateWeakMap } from "@better-auth/core/context";
 import {
 	hasRequestState,
 	runWithEndpointContext,
@@ -26,9 +27,9 @@ import {
 	pickSource,
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
-} from "../context/helpers";
-import { isAPIError } from "../utils/is-api-error";
-import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
+} from "../context/helpers.js";
+import { isAPIError } from "../utils/is-api-error.js";
+import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url.js";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -357,7 +358,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 			if (await hasRequestState()) {
 				return run();
 			} else {
-				const store = new WeakMap();
+				const store: RequestStateWeakMap = new WeakMap();
 				return runWithRequestState(store, run);
 			}
 		};

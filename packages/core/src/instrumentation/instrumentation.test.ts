@@ -14,9 +14,12 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { withSpan } from ".";
-import { getOpenTelemetryAPI } from "./api";
-import { ATTR_DB_COLLECTION_NAME, ATTR_DB_OPERATION_NAME } from "./attributes";
+import { getOpenTelemetryAPI } from "./api.js";
+import {
+	ATTR_DB_COLLECTION_NAME,
+	ATTR_DB_OPERATION_NAME,
+} from "./attributes.js";
+import { withSpan } from "./index.js";
 
 const spanWaitDefaults = { timeout: 10_000, interval: 5 } as const;
 
@@ -224,7 +227,7 @@ describe("instrumentation", () => {
 			throw new Error("simulated missing optional peer");
 		});
 
-		const { withSpan } = await import("./tracer");
+		const { withSpan } = await import("./tracer.js");
 		expect(withSpan("fallback", { k: 1 }, () => 99)).toBe(99);
 	});
 });

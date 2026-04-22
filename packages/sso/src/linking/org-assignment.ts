@@ -1,7 +1,7 @@
 import type { GenericEndpointContext, OAuth2Tokens, User } from "better-auth";
-import type { SSOOptions, SSOProvider } from "../types";
-import { domainMatches } from "../utils";
-import type { NormalizedSSOProfile } from "./types";
+import type { SSOOptions, SSOProvider } from "../types.js";
+import { domainMatches } from "../utils.js";
+import type { NormalizedSSOProfile } from "./types.js";
 
 export interface OrganizationProvisioningOptions {
 	disabled?: boolean;

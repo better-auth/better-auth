@@ -7,10 +7,10 @@ import {
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
-import type { OAuthClient } from "./types/oauth";
+import { oauthProviderClient } from "./client.js";
+import { oauthProvider } from "./oauth.js";
+import type { OAuthOptions, Scope } from "./types/index.js";
+import type { OAuthClient } from "./types/oauth.js";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 

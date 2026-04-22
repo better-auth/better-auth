@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { RequestStateWeakMap } from "./request-state";
+import type { RequestStateWeakMap } from "./request-state.js";
 import {
 	defineRequestState,
 	getCurrentRequestState,
 	hasRequestState,
 	runWithRequestState,
-} from "./request-state";
+} from "./request-state.js";
 
 describe("request-state", () => {
 	describe("runWithRequestState", () => {

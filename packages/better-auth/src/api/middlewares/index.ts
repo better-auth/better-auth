@@ -1,6 +1,6 @@
-export { requireOrgRole, requireResourceOwnership } from "./authorization";
+export { requireOrgRole, requireResourceOwnership } from "./authorization.js";
 export {
 	formCsrfMiddleware,
 	originCheck,
 	originCheckMiddleware,
-} from "./origin-check";
+} from "./origin-check.js";

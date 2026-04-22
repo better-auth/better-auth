@@ -7,10 +7,10 @@ export type {
 	StoreIdentifierOption,
 } from "@better-auth/core";
 export type * from "@better-auth/core/social-providers";
-export * from "../client/types";
-export type * from "./adapter";
-export * from "./api";
-export type * from "./auth";
-export type * from "./helper";
-export type * from "./models";
-export type * from "./plugins";
+export * from "../client/types.js";
+export type * from "./adapter.js";
+export * from "./api.js";
+export type * from "./auth.js";
+export type * from "./helper.js";
+export type * from "./models.js";
+export type * from "./plugins.js";

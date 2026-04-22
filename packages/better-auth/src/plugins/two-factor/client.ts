@@ -1,9 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { twoFactor as twoFa } from ".";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { PACKAGE_VERSION } from "../../version.js";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code.js";
+import type { twoFactor as twoFa } from "./index.js";
 
-export * from "./error-code";
+export * from "./error-code.js";
 
 export const twoFactorClient = (
 	options?:
@@ -80,7 +80,7 @@ export const twoFactorClient = (
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "./backup-codes";
-export type * from "./otp";
-export type * from "./totp";
-export type * from "./types";
+export type * from "./backup-codes/index.js";
+export type * from "./otp/index.js";
+export type * from "./totp/index.js";
+export type * from "./types.js";

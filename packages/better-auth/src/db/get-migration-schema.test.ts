@@ -3,8 +3,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { betterAuth } from "../auth/full";
-import { getMigrations } from "./get-migration";
+import { betterAuth } from "../auth/full.js";
+import { getMigrations } from "./get-migration.js";
 
 const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";
 // Check if PostgreSQL is available

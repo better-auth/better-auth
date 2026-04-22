@@ -1,7 +1,7 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
-import { STRIPE_ERROR_CODES } from "./error-codes";
-import type { StripePlan, stripe } from "./index";
-import { PACKAGE_VERSION } from "./version";
+import { STRIPE_ERROR_CODES } from "./error-codes.js";
+import type { StripePlan, stripe } from "./index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export const stripeClient = <
 	O extends {
@@ -37,4 +37,4 @@ export const stripeClient = <
 		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
-export * from "./error-codes";
+export * from "./error-codes.js";

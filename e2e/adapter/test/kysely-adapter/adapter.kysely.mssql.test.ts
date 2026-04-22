@@ -308,7 +308,7 @@ const resetDB = async (retryCount: number = 0) => {
 
 const { execute } = await testAdapter({
 	adapter: () => {
-		return kyselyAdapter(kyselyDB, {
+		return kyselyAdapter(kyselyDB as any, {
 			type: "mssql",
 			debugLogs: { isRunningAdapterTests: true },
 		});
@@ -318,7 +318,7 @@ const { execute } = await testAdapter({
 		await resetDB();
 		console.log(`Finished resetting MSSQL database`);
 		const opts = Object.assign(betterAuthOptions, {
-			database: { db: kyselyDB, type: "mssql" },
+			database: { db: kyselyDB as any, type: "mssql" },
 		} satisfies BetterAuthOptions);
 		console.log(`Running MSSQL migrations`);
 		const { runMigrations, compileMigrations } = await getMigrations(opts);

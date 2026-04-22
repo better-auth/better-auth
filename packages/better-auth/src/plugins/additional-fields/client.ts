@@ -4,7 +4,7 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { PACKAGE_VERSION } from "../../version";
+import { PACKAGE_VERSION } from "../../version.js";
 
 export const inferAdditionalFields = <
 	T,

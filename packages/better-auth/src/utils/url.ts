@@ -1,7 +1,7 @@
 import type { BaseURLConfig, DynamicBaseURLConfig } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { wildcardMatch } from "./wildcard";
+import { wildcardMatch } from "./wildcard.js";
 
 /**
  * Minimal loopback check for dev scheme inference only. Reachable from

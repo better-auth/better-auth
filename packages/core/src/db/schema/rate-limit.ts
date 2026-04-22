@@ -1,9 +1,9 @@
 import * as z from "zod";
-import type { BetterAuthOptions, Prettify } from "../../types";
+import type { BetterAuthOptions, Prettify } from "../../types/index.js";
 import type {
 	InferDBFieldsFromOptions,
 	InferDBFieldsFromPlugins,
-} from "../type";
+} from "../type.js";
 
 export const rateLimitSchema = z.object({
 	/**

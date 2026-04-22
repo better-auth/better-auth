@@ -11,7 +11,7 @@
     "build": "next build",
     "postbuild": "pnpm sync-typesense",
     "start": "next start",
-    "typecheck": "next typegen && fumadocs-mdx && tsc --project tsconfig.json",
+    "typecheck": "next typegen && fumadocs-mdx && tsc --build tsconfig.json",
     "lint": "next lint",
     "lint:fix": "pnpm -w biome check docs/ --fix --unsafe",
     "sync-beta": "node scripts/sync-beta-content.ts",

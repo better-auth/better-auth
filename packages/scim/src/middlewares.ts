@@ -1,8 +1,8 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createAuthMiddleware } from "better-auth/api";
-import { SCIMAPIError } from "./scim-error";
-import { verifySCIMToken } from "./scim-tokens";
-import type { SCIMOptions, SCIMProvider } from "./types";
+import { SCIMAPIError } from "./scim-error.js";
+import { verifySCIMToken } from "./scim-tokens.js";
+import type { SCIMOptions, SCIMProvider } from "./types.js";
 
 export type AuthMiddleware = ReturnType<typeof authMiddlewareFactory>;
 

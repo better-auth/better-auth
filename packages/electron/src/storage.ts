@@ -1,7 +1,7 @@
 import type { Options as ConfOptions } from "conf";
 import Conf from "conf";
 import electron from "electron";
-import type { Storage } from "./client";
+import type { Storage } from "./client.js";
 
 const { app } = electron;
 

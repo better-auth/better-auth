@@ -5,10 +5,10 @@ import {
 } from "@better-auth/core/api";
 import type { router } from "better-auth/api";
 import { describe, expect, expectTypeOf, test } from "vitest";
-import { createAuthClient } from "../client";
-import { getTestInstance } from "../test-utils";
-import type { Auth } from "../types";
-import { betterAuth } from "./full";
+import { createAuthClient } from "../client/index.js";
+import { getTestInstance } from "../test-utils/index.js";
+import type { Auth } from "../types/index.js";
+import { betterAuth } from "./full.js";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {

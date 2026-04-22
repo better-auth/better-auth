@@ -3,15 +3,15 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
-import { toZodSchema } from "../../../db";
-import type { User } from "../../../types";
-import type { AccessControl } from "../../access";
-import { orgSessionMiddleware } from "../call";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import type { Member, OrganizationRole } from "../schema";
-import type { OrganizationOptions } from "../types";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/index.js";
+import { toZodSchema } from "../../../db/index.js";
+import type { User } from "../../../types/index.js";
+import type { AccessControl } from "../../access/index.js";
+import { orgSessionMiddleware } from "../call.js";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes.js";
+import { hasPermission } from "../has-permission.js";
+import type { Member, OrganizationRole } from "../schema.js";
+import type { OrganizationOptions } from "../types.js";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}

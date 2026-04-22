@@ -7,12 +7,16 @@ import {
 	batchMigrateLegacyMetadata,
 	listApiKeys as listApiKeysFromStorage,
 	parseDoubleStringifiedMetadata,
-} from "../adapter";
-import { checkOrgApiKeyPermission } from "../org-authorization";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
-import { configIdMatches, isDefaultConfigId, resolveConfiguration } from ".";
+} from "../adapter.js";
+import { checkOrgApiKeyPermission } from "../org-authorization.js";
+import type { apiKeySchema } from "../schema.js";
+import type { ApiKey } from "../types.js";
+import type { PredefinedApiKeyOptions } from "./index.js";
+import {
+	configIdMatches,
+	isDefaultConfigId,
+	resolveConfiguration,
+} from "./index.js";
 
 /**
  * Generate a unique identifier for a configuration's storage backend.

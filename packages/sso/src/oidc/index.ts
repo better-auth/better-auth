@@ -17,9 +17,9 @@ export {
 	selectTokenEndpointAuthMethod,
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
-} from "./discovery";
+} from "./discovery.js";
 
-export { mapDiscoveryErrorToAPIError } from "./errors";
+export { mapDiscoveryErrorToAPIError } from "./errors.js";
 
 export {
 	type DiscoverOIDCConfigParams,
@@ -29,4 +29,4 @@ export {
 	type OIDCDiscoveryDocument,
 	REQUIRED_DISCOVERY_FIELDS,
 	type RequiredDiscoveryField,
-} from "./types";
+} from "./types.js";

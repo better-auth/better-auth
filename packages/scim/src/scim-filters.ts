@@ -1,4 +1,4 @@
-import { SCIMUserResourceSchema } from "./user-schemas";
+import { SCIMUserResourceSchema } from "./user-schemas.js";
 
 export type DBFilter = {
 	field: string;

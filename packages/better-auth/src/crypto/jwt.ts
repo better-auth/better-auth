@@ -9,7 +9,7 @@ import {
 	jwtVerify,
 	SignJWT,
 } from "jose";
-import type { SecretConfig } from "./index";
+import type { SecretConfig } from "./index.js";
 
 export async function signJWT(
 	payload: any,

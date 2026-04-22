@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --build tsconfig.json"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

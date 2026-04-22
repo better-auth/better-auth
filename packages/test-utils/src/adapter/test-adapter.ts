@@ -4,7 +4,7 @@ import { deepmerge, initGetModelName } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { getAuthTables } from "better-auth/db";
 import { afterAll, beforeAll, describe } from "vitest";
-import type { createTestSuite, TestSuiteStats } from "./create-test-suite";
+import type { createTestSuite, TestSuiteStats } from "./create-test-suite.js";
 
 export type Logger = {
 	info: (...args: any[]) => void;

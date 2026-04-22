@@ -6,7 +6,7 @@ import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
-import type { Session, SessionQueryParams } from "../types";
+import type { Session, SessionQueryParams } from "../types/index.js";
 import {
 	adminClient,
 	deviceAuthorizationClient,
@@ -17,18 +17,18 @@ import {
 	oidcClient,
 	organizationClient,
 	twoFactorClient,
-} from "./plugins";
-import { createAuthClient as createReactClient } from "./react";
-import { createAuthClient as createSolidClient } from "./solid";
-import { createAuthClient as createSvelteClient } from "./svelte";
+} from "./plugins/index.js";
+import { createAuthClient as createReactClient } from "./react/index.js";
+import { createAuthClient as createSolidClient } from "./solid/index.js";
+import { createAuthClient as createSvelteClient } from "./svelte/index.js";
 import {
 	testClientPlugin,
 	testClientPlugin2,
 	testDeepMergePluginA,
 	testDeepMergePluginB,
-} from "./test-plugin";
-import { createAuthClient as createVanillaClient } from "./vanilla";
-import { createAuthClient as createVueClient } from "./vue";
+} from "./test-plugin.js";
+import { createAuthClient as createVanillaClient } from "./vanilla.js";
+import { createAuthClient as createVueClient } from "./vue/index.js";
 
 describe("run time proxy", async () => {
 	afterEach(() => {

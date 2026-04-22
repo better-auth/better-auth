@@ -2,12 +2,12 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
-import { getAwaitableValue } from "../../context/helpers";
-import { setSessionCookie } from "../../cookies";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { parseState } from "../../oauth2/state";
-import { setTokenUtil } from "../../oauth2/utils";
-import { HIDE_METADATA } from "../../utils/hide-metadata";
+import { getAwaitableValue } from "../../context/helpers.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { handleOAuthUserInfo } from "../../oauth2/link-account.js";
+import { parseState } from "../../oauth2/state.js";
+import { setTokenUtil } from "../../oauth2/utils.js";
+import { HIDE_METADATA } from "../../utils/hide-metadata.js";
 
 const schema = z.object({
 	code: z.string().optional(),

@@ -1,6 +1,6 @@
 import { exec } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
-import { testWithTmpDir } from "./test-utils";
+import { testWithTmpDir } from "./test-utils.js";
 
 vi.mock("node:child_process", () => ({
 	exec: vi.fn(),
@@ -8,7 +8,7 @@ vi.mock("node:child_process", () => ({
 
 const mockExec = vi.mocked(exec);
 
-import { installDependencies } from "../src/utils/install-dependencies";
+import { installDependencies } from "../src/utils/install-dependencies.js";
 
 describe("installDependencies", () => {
 	beforeEach(() => {

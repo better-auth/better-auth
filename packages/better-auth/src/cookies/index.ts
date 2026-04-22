@@ -17,20 +17,20 @@ import {
 	symmetricDecodeJWT,
 	symmetricEncodeJWT,
 	verifyJWT,
-} from "../crypto/jwt";
-import { parseUserOutput } from "../db/schema";
-import type { Session, User } from "../types";
-import { getDate } from "../utils/date";
-import { isPromise } from "../utils/is-promise";
-import { sec } from "../utils/time";
-import { isDynamicBaseURLConfig } from "../utils/url";
-import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
+} from "../crypto/jwt.js";
+import { parseUserOutput } from "../db/schema.js";
+import type { Session, User } from "../types/index.js";
+import { getDate } from "../utils/date.js";
+import { isPromise } from "../utils/is-promise.js";
+import { sec } from "../utils/time.js";
+import { isDynamicBaseURLConfig } from "../utils/url.js";
+import { SECURE_COOKIE_PREFIX } from "./cookie-utils.js";
 import {
 	createAccountStore,
 	createSessionStore,
 	getAccountCookie,
 	setAccountCookie,
-} from "./session-store";
+} from "./session-store.js";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const baseURLString =
@@ -580,9 +580,9 @@ export const getCookieCache = async <
 	return null;
 };
 
-export * from "./cookie-utils";
+export * from "./cookie-utils.js";
 export {
 	createSessionStore,
 	getAccountCookie,
 	getChunkedCookie,
-} from "./session-store";
+} from "./session-store.js";

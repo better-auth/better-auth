@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { bearer } from "../bearer";
-import { phoneNumber } from ".";
-import { phoneNumberClient } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { bearer } from "../bearer/index.js";
+import { phoneNumberClient } from "./client.js";
+import { phoneNumber } from "./index.js";
 
 describe("phone-number", async () => {
 	let otp = "";

@@ -4,8 +4,8 @@ import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { sso } from ".";
-import { ssoClient } from "./client";
+import { ssoClient } from "./client.js";
+import { sso } from "./index.js";
 
 const server = new OAuth2Server();
 

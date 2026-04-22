@@ -16,10 +16,13 @@ import {
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
-import type { OverrideMerge, UnionToIntersection } from "../types";
-import { isAPIError } from "../utils/is-api-error";
-import { originCheckMiddleware } from "./middlewares";
-import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
+import type { OverrideMerge, UnionToIntersection } from "../types/index.js";
+import { isAPIError } from "../utils/is-api-error.js";
+import { originCheckMiddleware } from "./middlewares/index.js";
+import {
+	onRequestRateLimit,
+	onResponseRateLimit,
+} from "./rate-limiter/index.js";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -52,8 +55,8 @@ import {
 	updateUser,
 	verifyEmail,
 	verifyPassword,
-} from "./routes";
-import { toAuthEndpoints } from "./to-auth-endpoints";
+} from "./routes/index.js";
+import { toAuthEndpoints } from "./to-auth-endpoints.js";
 
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
@@ -409,12 +412,12 @@ export {
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
-export { getIp } from "../utils/get-request-ip";
-export { isAPIError } from "../utils/is-api-error";
-export * from "./middlewares";
-export * from "./routes";
-export { getOAuthState } from "./state/oauth";
+export { getIp } from "../utils/get-request-ip.js";
+export { isAPIError } from "../utils/is-api-error.js";
+export * from "./middlewares/index.js";
+export * from "./routes/index.js";
+export { getOAuthState } from "./state/oauth.js";
 export {
 	getShouldSkipSessionRefresh,
 	setShouldSkipSessionRefresh,
-} from "./state/should-session-refresh";
+} from "./state/should-session-refresh.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { getTestInstance } from "../../test-utils/test-instance.js";
 
 describe("bearer", async () => {
 	const { client, auth, testUser } = await getTestInstance(

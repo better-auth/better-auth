@@ -1,9 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
-import { authorizeEndpoint } from "./authorize";
-import { oAuthState } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
-import { deleteFromPrompt, searchParamsToQuery } from "./utils";
+import { authorizeEndpoint } from "./authorize.js";
+import { oAuthState } from "./oauth.js";
+import type { OAuthOptions, Scope } from "./types/index.js";
+import { deleteFromPrompt, searchParamsToQuery } from "./utils/index.js";
 
 export async function continueEndpoint(
 	ctx: GenericEndpointContext,

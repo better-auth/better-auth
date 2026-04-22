@@ -17,7 +17,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import type { Auth } from "better-auth";
 import { betterAuth } from "better-auth";
 import { test } from "vitest";
-import type { Logger } from "./test-adapter";
+import type { Logger } from "./test-adapter.js";
 
 /**
  * Test entry type that supports both callback and object formats.

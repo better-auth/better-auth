@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import type { PluginConfig } from "../configs/temp-plugins.config";
-import { tempPluginsConfig } from "../configs/temp-plugins.config";
-import type { GetArgumentsFn } from "../generate-auth";
-import { formatCode } from "./format";
-import { getAuthClientPluginsCode, getAuthPluginsCode } from "./plugin";
+import type { PluginConfig } from "../configs/temp-plugins.config.js";
+import { tempPluginsConfig } from "../configs/temp-plugins.config.js";
+import type { GetArgumentsFn } from "../generate-auth.js";
+import { formatCode } from "./format.js";
+import { getAuthClientPluginsCode, getAuthPluginsCode } from "./plugin.js";
 
 const formatPluginCode = async (code: string) => {
 	return (await formatCode(`[${code}]`)).trim().slice(0, -1);

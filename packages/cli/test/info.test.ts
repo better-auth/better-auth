@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cliPath } from "./utils";
+import { cliPath } from "./utils.js";
 
 const execAsync = promisify(exec);
 

@@ -2,11 +2,11 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
-import { APIError } from "../../api";
-import { setSessionCookie } from "../../cookies";
-import { parseUserOutput } from "../../db/schema";
-import { toBoolean } from "../../utils/boolean";
-import { PACKAGE_VERSION } from "../../version";
+import { APIError } from "../../api/index.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { parseUserOutput } from "../../db/schema.js";
+import { toBoolean } from "../../utils/boolean.js";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

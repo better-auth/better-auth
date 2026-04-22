@@ -1,10 +1,10 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import { logger } from "../env";
-import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL } from "../oauth2";
+import { logger } from "../env/index.js";
+import { BetterAuthError } from "../error/index.js";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
+import { createAuthorizationURL } from "../oauth2/index.js";
 
 export interface PayPalProfile {
 	user_id: string;

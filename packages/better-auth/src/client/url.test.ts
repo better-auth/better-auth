@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { testClientPlugin } from "./test-plugin";
-import { createAuthClient } from "./vanilla";
+import { testClientPlugin } from "./test-plugin.js";
+import { createAuthClient } from "./vanilla.js";
 
 describe("url", () => {
 	it("should not require base url", async () => {

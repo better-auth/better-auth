@@ -1,5 +1,5 @@
-import type { BetterAuthOptions } from "../../types";
-import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
+import type { BetterAuthOptions } from "../../types/index.js";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type.js";
 import type {
 	CleanedWhere,
 	CustomAdapter,
@@ -7,7 +7,7 @@ import type {
 	JoinConfig,
 	DBTransactionAdapter as TransactionAdapter,
 	Where,
-} from "./index";
+} from "./index.js";
 
 export type AdapterFactoryOptions = {
 	config: AdapterFactoryConfig;

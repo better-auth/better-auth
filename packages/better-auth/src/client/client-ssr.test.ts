@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { expect, it, vi } from "vitest";
-import { createAuthClient as createVueClient } from "./vue";
+import { createAuthClient as createVueClient } from "./vue/index.js";
 
 it("should call '/api/auth' for vue client", async () => {
 	const customFetchImpl = vi.fn(async (url: string | Request | URL) => {

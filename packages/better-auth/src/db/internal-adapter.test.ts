@@ -2,16 +2,16 @@ import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { betterAuth } from "../auth/full";
-import { init } from "../context/init";
-import { getTestInstance } from "../test-utils/test-instance";
+import { betterAuth } from "../auth/full.js";
+import { init } from "../context/init.js";
+import { getTestInstance } from "../test-utils/test-instance.js";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Session,
 	User,
-} from "../types";
-import { getMigrations } from "./get-migration";
+} from "../types/index.js";
+import { getMigrations } from "./get-migration.js";
 
 describe("internal adapter test", async () => {
 	const map = new Map();

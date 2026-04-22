@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { parseSetCookieHeader, toCookieOptions } from "../cookies";
-import { PACKAGE_VERSION } from "../version";
+import { parseSetCookieHeader, toCookieOptions } from "../cookies/index.js";
+import { PACKAGE_VERSION } from "../version.js";
 
 /**
  * TanStack Start cookie plugin for Solid.js.

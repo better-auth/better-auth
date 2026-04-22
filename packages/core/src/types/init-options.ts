@@ -9,7 +9,11 @@ import type {
 	PostgresPool,
 	SqliteDatabase,
 } from "kysely";
-import type { AuthMiddleware } from "../api";
+import type { AuthMiddleware } from "../api/index.js";
+import type {
+	DBAdapterDebugLogOption,
+	DBAdapterInstance,
+} from "../db/adapter/index.js";
 import type {
 	Account,
 	DBFieldAttribute,
@@ -19,18 +23,20 @@ import type {
 	Session,
 	User,
 	Verification,
-} from "../db";
-import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
-import type { BaseAccount } from "../db/schema/account";
-import type { BaseRateLimit } from "../db/schema/rate-limit";
-import type { BaseSession } from "../db/schema/session";
-import type { BaseUser } from "../db/schema/user";
-import type { BaseVerification } from "../db/schema/verification";
-import type { Logger } from "../env";
-import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type { AuthContext, GenericEndpointContext } from "./context";
-import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
-import type { BetterAuthPlugin } from "./plugin";
+} from "../db/index.js";
+import type { BaseAccount } from "../db/schema/account.js";
+import type { BaseRateLimit } from "../db/schema/rate-limit.js";
+import type { BaseSession } from "../db/schema/session.js";
+import type { BaseUser } from "../db/schema/user.js";
+import type { BaseVerification } from "../db/schema/verification.js";
+import type { Logger } from "../env/index.js";
+import type {
+	SocialProviderList,
+	SocialProviders,
+} from "../social-providers/index.js";
+import type { AuthContext, GenericEndpointContext } from "./context.js";
+import type { Awaitable, LiteralString, LiteralUnion } from "./helper.js";
+import type { BetterAuthPlugin } from "./plugin.js";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type Optional<T> = {

@@ -1,6 +1,6 @@
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { i18n } from ".";
+import { i18n } from "./index.js";
 
 const translations = {
 	en: {

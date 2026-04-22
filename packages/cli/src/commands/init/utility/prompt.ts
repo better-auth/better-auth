@@ -1,6 +1,6 @@
 import prompts from "prompts";
-import type { PluginConfig } from "../configs/temp-plugins.config";
-import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth";
+import type { PluginConfig } from "../configs/temp-plugins.config.js";
+import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth.js";
 
 export const getFlagVariable = (flag: string) => {
 	return flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());

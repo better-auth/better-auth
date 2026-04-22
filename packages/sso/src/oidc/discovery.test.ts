@@ -10,9 +10,9 @@ import {
 	selectTokenEndpointAuthMethod,
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
-} from "./discovery";
-import type { OIDCDiscoveryDocument } from "./types";
-import { DiscoveryError } from "./types";
+} from "./discovery.js";
+import type { OIDCDiscoveryDocument } from "./types.js";
+import { DiscoveryError } from "./types.js";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),

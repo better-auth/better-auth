@@ -1,15 +1,15 @@
 import { betterFetch } from "@better-fetch/fetch";
 
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
-import { logger } from "../env";
-import { APIError, BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { logger } from "../env/index.js";
+import { APIError, BetterAuthError } from "../error/index.js";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "../oauth2/index.js";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject

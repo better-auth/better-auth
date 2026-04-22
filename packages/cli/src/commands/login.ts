@@ -1,6 +1,6 @@
 import { log } from "@clack/prompts";
 import { Command } from "commander";
-import { spawnCommand } from "../utils/helper";
+import { spawnCommand } from "../utils/helper.js";
 
 async function loginAction() {
 	try {

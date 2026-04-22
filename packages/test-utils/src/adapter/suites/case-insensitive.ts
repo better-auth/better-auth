@@ -1,6 +1,6 @@
 import type { User } from "@better-auth/core/db";
-import { createTestSuite } from "@better-auth/test-utils/adapter";
 import { expect } from "vitest";
+import { createTestSuite } from "../index.js";
 
 /**
  * Test suite for case-insensitive string operations across adapters.

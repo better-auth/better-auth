@@ -1,6 +1,6 @@
 import type { Span } from "@opentelemetry/api";
-import { getOpenTelemetryAPI } from "./api";
-import { ATTR_HTTP_RESPONSE_STATUS_CODE } from "./attributes";
+import { getOpenTelemetryAPI } from "./api.js";
+import { ATTR_HTTP_RESPONSE_STATUS_CODE } from "./attributes.js";
 
 const INSTRUMENTATION_SCOPE = "better-auth";
 const INSTRUMENTATION_VERSION = import.meta.env?.BETTER_AUTH_VERSION ?? "1.0.0";

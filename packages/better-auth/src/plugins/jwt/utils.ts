@@ -1,10 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { exportJWK, generateKeyPair } from "jose";
-import { symmetricEncrypt } from "../../crypto";
-import type { TimeString } from "../../utils/time";
-import { sec } from "../../utils/time";
-import { getJwksAdapter } from "./adapter";
-import type { Jwk, JwtOptions } from "./types";
+import { symmetricEncrypt } from "../../crypto/index.js";
+import type { TimeString } from "../../utils/time.js";
+import { sec } from "../../utils/time.js";
+import { getJwksAdapter } from "./adapter.js";
+import type { Jwk, JwtOptions } from "./types.js";
 
 /**
  * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)

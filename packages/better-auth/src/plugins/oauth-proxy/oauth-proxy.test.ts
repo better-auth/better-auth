@@ -2,11 +2,15 @@ import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { parseJSON } from "../../client/parser";
-import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { DEFAULT_SECRET } from "../../utils/constants";
-import { oAuthProxy } from ".";
+import { parseJSON } from "../../client/parser.js";
+import {
+	signJWT,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "../../crypto/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { DEFAULT_SECRET } from "../../utils/constants.js";
+import { oAuthProxy } from "./index.js";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];

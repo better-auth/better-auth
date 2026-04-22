@@ -8,11 +8,11 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { generateSchema } from "../src/generators";
-import { generateDrizzleSchema } from "../src/generators/drizzle";
-import { generateKyselySchema } from "../src/generators/kysely";
-import { generatePrismaSchema } from "../src/generators/prisma";
-import { getPrismaVersion } from "../src/utils/get-package-info";
+import { generateDrizzleSchema } from "../src/generators/drizzle.js";
+import { generateSchema } from "../src/generators/index.js";
+import { generateKyselySchema } from "../src/generators/kysely.js";
+import { generatePrismaSchema } from "../src/generators/prisma.js";
+import { getPrismaVersion } from "../src/utils/get-package-info.js";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {

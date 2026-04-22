@@ -4,13 +4,13 @@ import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
-import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter";
-import { checkOrgApiKeyPermission } from "../org-authorization";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
-import { configIdMatches, resolveConfiguration } from ".";
+import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter.js";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from "../index.js";
+import { checkOrgApiKeyPermission } from "../org-authorization.js";
+import type { apiKeySchema } from "../schema.js";
+import type { ApiKey } from "../types.js";
+import type { PredefinedApiKeyOptions } from "./index.js";
+import { configIdMatches, resolveConfiguration } from "./index.js";
 
 const getApiKeyQuerySchema = z.object({
 	configId: z

@@ -1,8 +1,8 @@
 import { describe, it } from "vitest";
-import { betterAuth } from "../../auth/full";
-import { createAuthClient } from "../../client";
-import { inferOrgAdditionalFields, organizationClient } from "./client";
-import { organization } from "./organization";
+import { betterAuth } from "../../auth/full.js";
+import { createAuthClient } from "../../client/index.js";
+import { inferOrgAdditionalFields, organizationClient } from "./client.js";
+import { organization } from "./organization.js";
 
 describe("organization", () => {
 	const auth = betterAuth({

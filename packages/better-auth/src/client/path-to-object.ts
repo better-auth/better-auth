@@ -9,12 +9,12 @@ import type {
 	IsAny,
 	Prettify,
 	UnionToIntersection,
-} from "../types/helper";
+} from "../types/helper.js";
 import type {
 	InferAdditionalFromClient,
 	InferSessionFromClient,
 	InferUserFromClient,
-} from "./types";
+} from "./types.js";
 
 type KeepNullishFromOriginal<Original, Replaced> =
 	| Replaced

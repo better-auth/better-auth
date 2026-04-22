@@ -1,2 +1,2 @@
-export { convertSetCookieToCookie } from "./headers";
-export { getTestInstance } from "./test-instance";
+export { convertSetCookieToCookie } from "./headers.js";
+export { getTestInstance } from "./test-instance.js";

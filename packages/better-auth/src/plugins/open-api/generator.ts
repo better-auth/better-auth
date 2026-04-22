@@ -11,8 +11,8 @@ import type {
 	OpenAPISchemaType,
 } from "better-call";
 import * as z from "zod";
-import { getEndpoints } from "../../api";
-import { getAuthTables } from "../../db";
+import { getEndpoints } from "../../api/index.js";
+import { getAuthTables } from "../../db/index.js";
 
 export interface Path {
 	get?:

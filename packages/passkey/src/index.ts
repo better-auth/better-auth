@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { mergeSchema } from "better-auth/db";
-import { PASSKEY_ERROR_CODES } from "./error-codes";
+import { PASSKEY_ERROR_CODES } from "./error-codes.js";
 import {
 	deletePasskey,
 	generatePasskeyAuthenticationOptions,
@@ -9,10 +9,10 @@ import {
 	updatePasskey,
 	verifyPasskeyAuthentication,
 	verifyPasskeyRegistration,
-} from "./routes";
-import { schema } from "./schema";
-import type { Passkey, PasskeyOptions } from "./types";
-import { PACKAGE_VERSION } from "./version";
+} from "./routes.js";
+import { schema } from "./schema.js";
+import type { Passkey, PasskeyOptions } from "./types.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -22,7 +22,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export { PASSKEY_ERROR_CODES } from "./error-codes";
+export { PASSKEY_ERROR_CODES } from "./error-codes.js";
 
 const MAX_AGE_IN_SECONDS = 60 * 5; // 5 minutes
 

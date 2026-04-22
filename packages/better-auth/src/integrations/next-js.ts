@@ -1,8 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
-import { parseSetCookieHeader, toCookieOptions } from "../cookies";
-import { PACKAGE_VERSION } from "../version";
+import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh.js";
+import { parseSetCookieHeader, toCookieOptions } from "../cookies/index.js";
+import { PACKAGE_VERSION } from "../version.js";
 
 export function toNextJsHandler(
 	auth:

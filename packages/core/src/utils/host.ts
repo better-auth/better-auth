@@ -1,4 +1,4 @@
-import { isValidIP, normalizeIP } from "./ip";
+import { isValidIP, normalizeIP } from "./ip.js";
 
 /**
  * Host classification per RFC 6890 (Special-Purpose IP Address Registries),

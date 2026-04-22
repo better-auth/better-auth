@@ -14,27 +14,31 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
 import * as z from "zod";
-import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
-import type { AuthMiddleware } from "./middlewares";
-import { buildUserPatch } from "./patch-operations";
-import { SCIMAPIError, SCIMErrorOpenAPISchemas } from "./scim-error";
-import type { DBFilter } from "./scim-filters";
-import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
+import {
+	getAccountId,
+	getUserFullName,
+	getUserPrimaryEmail,
+} from "./mappings.js";
+import type { AuthMiddleware } from "./middlewares.js";
+import { buildUserPatch } from "./patch-operations.js";
+import { SCIMAPIError, SCIMErrorOpenAPISchemas } from "./scim-error.js";
+import type { DBFilter } from "./scim-filters.js";
+import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters.js";
 import {
 	ResourceTypeOpenAPISchema,
 	SCIMSchemaOpenAPISchema,
 	ServiceProviderOpenAPISchema,
-} from "./scim-metadata";
-import { createUserResource } from "./scim-resources";
-import { storeSCIMToken } from "./scim-tokens";
-import type { SCIMOptions, SCIMProvider } from "./types";
+} from "./scim-metadata.js";
+import { createUserResource } from "./scim-resources.js";
+import { storeSCIMToken } from "./scim-tokens.js";
+import type { SCIMOptions, SCIMProvider } from "./types.js";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
 	SCIMUserResourceSchema,
 	SCIMUserResourceType,
-} from "./user-schemas";
-import { getResourceURL } from "./utils";
+} from "./user-schemas.js";
+import { getResourceURL } from "./utils.js";
 
 const supportedSCIMSchemas = [SCIMUserResourceSchema];
 const supportedSCIMResourceTypes = [SCIMUserResourceType];

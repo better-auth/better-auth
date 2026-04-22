@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { init } from "../context/init";
-import type { Auth } from "../types";
-import { createBetterAuth } from "./base";
+import { init } from "../context/init.js";
+import type { Auth } from "../types/index.js";
+import { createBetterAuth } from "./base.js";
 
 /**
  * Better Auth initializer for full mode (with Kysely)

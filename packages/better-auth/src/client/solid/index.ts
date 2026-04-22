@@ -9,17 +9,17 @@ import type {
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { Accessor } from "solid-js";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import { getClientConfig } from "../config";
-import { createDynamicPathProxy } from "../proxy";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper.js";
+import { getClientConfig } from "../config.js";
+import { createDynamicPathProxy } from "../proxy.js";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 	SessionQueryParams,
-} from "../types";
-import { useStore } from "./solid-store";
+} from "../types.js";
+import { useStore } from "./solid-store.js";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -104,5 +104,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
-export type * from "../../types/helper";
-export type { UnionToIntersection } from "../../types/helper";
+export type * from "../../types/helper.js";
+export type { UnionToIntersection } from "../../types/helper.js";

@@ -7,12 +7,12 @@ export type {
 	InfoContext,
 	InternalAdapter,
 	PluginContext,
-} from "./context";
+} from "./context.js";
 export type {
 	BetterAuthCookie,
 	BetterAuthCookies,
-} from "./cookie";
-export type * from "./helper";
+} from "./cookie.js";
+export type * from "./helper.js";
 export type {
 	BaseURLConfig,
 	BetterAuthAdvancedOptions,
@@ -24,17 +24,17 @@ export type {
 	DynamicBaseURLConfig,
 	GenerateIdFn,
 	StoreIdentifierOption,
-} from "./init-options";
+} from "./init-options.js";
 export type {
 	BetterAuthPlugin,
 	BetterAuthPluginErrorCodePart,
 	HookEndpointContext,
-} from "./plugin";
+} from "./plugin.js";
 export type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 	ClientAtomListener,
 	ClientFetchOption,
 	ClientStore,
-} from "./plugin-client";
-export type { SecretConfig } from "./secret";
+} from "./plugin-client.js";
+export type { SecretConfig } from "./secret.js";

@@ -2,7 +2,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { GenericEndpointContext } from "better-auth";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
-import type { SCIMOptions } from "./types";
+import type { SCIMOptions } from "./types.js";
 
 const defaultKeyHasher = async (token: string) => {
 	const hash = await createHash("SHA-256").digest(

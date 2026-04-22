@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { getOrigin } from "../../utils/url";
-import type { OAuthProxyOptions } from "./index";
+import { getOrigin } from "../../utils/url.js";
+import type { OAuthProxyOptions } from "./index.js";
 
 /**
  * Strip trailing slashes from URL to prevent double slashes

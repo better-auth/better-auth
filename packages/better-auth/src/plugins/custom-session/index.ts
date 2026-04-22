@@ -8,14 +8,14 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session, User } from "@better-auth/core/db";
-import { getSession } from "../../api";
+import { getSession } from "../../api/index.js";
 import {
 	parseSetCookieHeader,
 	toCookieOptions,
-} from "../../cookies/cookie-utils";
-import { getSessionQuerySchema } from "../../cookies/session-store";
-import { getEndpointResponse } from "../../utils/plugin-helper";
-import { PACKAGE_VERSION } from "../../version";
+} from "../../cookies/cookie-utils.js";
+import { getSessionQuerySchema } from "../../cookies/session-store.js";
+import { getEndpointResponse } from "../../utils/plugin-helper.js";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

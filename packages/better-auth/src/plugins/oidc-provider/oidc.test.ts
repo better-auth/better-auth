@@ -10,17 +10,17 @@ import {
 	it,
 	test,
 } from "vitest";
-import type { AuthClient } from "../../client";
-import { createAuthClient } from "../../client";
-import { toNodeHandler } from "../../integrations/node";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
-import { jwt } from "../jwt";
-import { oidcProvider } from ".";
-import type { OidcClientPlugin } from "./client";
-import { oidcClient } from "./client";
-import type { Client } from "./types";
+import type { AuthClient } from "../../client/index.js";
+import { createAuthClient } from "../../client/index.js";
+import { toNodeHandler } from "../../integrations/node.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { genericOAuthClient } from "../generic-oauth/client.js";
+import { genericOAuth } from "../generic-oauth/index.js";
+import { jwt } from "../jwt/index.js";
+import type { OidcClientPlugin } from "./client.js";
+import { oidcClient } from "./client.js";
+import { oidcProvider } from "./index.js";
+import type { Client } from "./types.js";
 
 // Type for the server client with OIDC plugin
 type ServerClient = AuthClient<{

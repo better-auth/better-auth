@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { deleteSessionCookie } from "../../cookies";
+import { deleteSessionCookie } from "../../cookies/index.js";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",

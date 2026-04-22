@@ -1,27 +1,27 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { atom } from "nanostores";
-import { useAuthQuery } from "../../client";
+import { useAuthQuery } from "../../client/index.js";
 import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
 	InferTeam,
 	Member,
-} from "../../plugins/organization/schema";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
-import type { Prettify } from "../../types/helper";
-import { PACKAGE_VERSION } from "../../version";
-import type { AccessControl, ArrayElement, Role } from "../access";
-import type { defaultStatements } from "./access";
-import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import type { OrganizationPlugin } from "./organization";
-import type { HasPermissionBaseInput } from "./permission";
-import { hasPermissionFn } from "./permission";
-import type { OrganizationOptions } from "./types";
+} from "../../plugins/organization/schema.js";
+import type { Prettify } from "../../types/helper.js";
+import type { BetterAuthOptions, BetterAuthPlugin } from "../../types/index.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { AccessControl, ArrayElement, Role } from "../access/index.js";
+import type { defaultStatements } from "./access/index.js";
+import { adminAc, defaultRoles, memberAc, ownerAc } from "./access/index.js";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes.js";
+import type { OrganizationPlugin } from "./organization.js";
+import type { HasPermissionBaseInput } from "./permission.js";
+import { hasPermissionFn } from "./permission.js";
+import type { OrganizationOptions } from "./types.js";
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
@@ -330,4 +330,4 @@ export const inferOrgAdditionalFields = <
 	return {} as undefined extends S ? Schema : S;
 };
 
-export type * from "./schema";
+export type * from "./schema.js";

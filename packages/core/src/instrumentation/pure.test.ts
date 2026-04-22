@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withSpan } from "./pure.index";
+import { withSpan } from "./pure.index.js";
 
 // @see https://github.com/better-auth/better-auth/issues/8765
 describe("instrumentation (pure entry)", () => {
@@ -33,13 +33,13 @@ describe("instrumentation (pure entry)", () => {
 	});
 
 	it("does not reference `@opentelemetry/api` at runtime", async () => {
-		const mod = await import("./pure.index");
+		const mod = await import("./pure.index.js");
 		expect(mod.withSpan.toString()).not.toContain("opentelemetry");
 	});
 
 	it("does not export symbols beyond the public surface of ./index", async () => {
-		const pure = await import("./pure.index");
-		const main = await import("./index");
+		const pure = await import("./pure.index.js");
+		const main = await import("./index.js");
 		expect(Object.keys(pure).sort()).toEqual(Object.keys(main).sort());
 	});
 });

@@ -4,7 +4,7 @@ import {
 	isLoopbackHost,
 	isLoopbackIP,
 	isPublicRoutableHost,
-} from "./host";
+} from "./host.js";
 
 describe("Host Classification", () => {
 	describe("Input Normalization", () => {

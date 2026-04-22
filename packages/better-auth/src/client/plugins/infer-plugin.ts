@@ -2,7 +2,7 @@ import type {
 	BetterAuthClientPlugin,
 	BetterAuthOptions,
 } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
+import { PACKAGE_VERSION } from "../../version.js";
 
 export const InferServerPlugin = <
 	AuthOrOption extends

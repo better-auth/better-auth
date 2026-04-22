@@ -2,7 +2,7 @@ import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import { atom, onMount } from "nanostores";
-import type { SessionQueryParams } from "./types";
+import type { SessionQueryParams } from "./types.js";
 
 // SSR detection
 const isServer = () => typeof window === "undefined";

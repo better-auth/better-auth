@@ -25,7 +25,7 @@ const kyselyDB = new Kysely({
 
 const { execute } = await testAdapter({
 	adapter: () =>
-		kyselyAdapter(kyselyDB, {
+		kyselyAdapter(kyselyDB as any, {
 			type: "mysql",
 			debugLogs: { isRunningAdapterTests: true },
 		}),

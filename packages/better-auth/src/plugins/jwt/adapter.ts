@@ -3,7 +3,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import type { Jwk, JwtOptions } from "./types";
+import type { Jwk, JwtOptions } from "./types.js";
 
 export const getJwksAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,

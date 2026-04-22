@@ -3,24 +3,24 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../version";
+import { PACKAGE_VERSION } from "../version.js";
 
-export * from "./broadcast-channel";
+export * from "./broadcast-channel.js";
 export {
 	type FocusListener,
 	type FocusManager,
 	kFocusManager,
-} from "./focus-manager";
+} from "./focus-manager.js";
 export {
 	kOnlineManager,
 	type OnlineListener,
 	type OnlineManager,
-} from "./online-manager";
-export * from "./parser";
-export * from "./query";
-export * from "./session-refresh";
-export * from "./types";
-export * from "./vanilla";
+} from "./online-manager.js";
+export * from "./parser.js";
+export * from "./query.js";
+export * from "./session-refresh.js";
+export * from "./types.js";
+export * from "./vanilla.js";
 
 export const InferPlugin = <T extends BetterAuthPlugin>() => {
 	return {
@@ -39,9 +39,9 @@ export type * from "@better-auth/core/db";
 export type { DBPrimitive } from "@better-auth/core/db";
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
-export type * from "../plugins/access";
-export type * from "../plugins/organization";
-export type * from "../types/helper";
-export type { UnionToIntersection } from "../types/helper";
-export type * from "./path-to-object";
+export type * from "../plugins/access/index.js";
+export type * from "../plugins/organization/index.js";
+export type * from "../types/helper.js";
+export type { UnionToIntersection } from "../types/helper.js";
+export type * from "./path-to-object.js";
 //#endregion

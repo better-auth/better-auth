@@ -1,5 +1,5 @@
 import type { User } from "better-auth";
-import { getUserFullName } from "./mappings";
+import { getUserFullName } from "./mappings.js";
 
 type Operation = {
 	op: "add" | "remove" | "replace";

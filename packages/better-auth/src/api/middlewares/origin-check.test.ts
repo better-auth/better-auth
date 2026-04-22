@@ -1,10 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect, it, vi } from "vitest";
 import * as z from "zod";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { originCheck } from "./origin-check";
+import { createAuthClient } from "../../client/index.js";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { originCheck } from "./origin-check.js";
 
 describe("Origin Check", async () => {
 	const { customFetchImpl, testUser } = await getTestInstance({

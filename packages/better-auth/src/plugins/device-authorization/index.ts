@@ -1,19 +1,19 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import * as z from "zod";
-import { mergeSchema } from "../../db";
-import type { InferOptionSchema } from "../../types/plugins";
-import type { TimeString } from "../../utils/time";
-import { ms } from "../../utils/time";
-import { PACKAGE_VERSION } from "../../version";
-import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
+import { mergeSchema } from "../../db/index.js";
+import type { InferOptionSchema } from "../../types/plugins.js";
+import type { TimeString } from "../../utils/time.js";
+import { ms } from "../../utils/time.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes.js";
 import {
 	deviceApprove,
 	deviceCode,
 	deviceDeny,
 	deviceToken,
 	deviceVerify,
-} from "./routes";
-import { schema } from "./schema";
+} from "./routes.js";
+import { schema } from "./schema.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -147,4 +147,4 @@ export const deviceAuthorization = (
 	} satisfies BetterAuthPlugin;
 };
 
-export type * from "../../utils/time";
+export type * from "../../utils/time.js";

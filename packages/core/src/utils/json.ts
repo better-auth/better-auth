@@ -1,4 +1,4 @@
-import { logger } from "../env";
+import { logger } from "../env/index.js";
 
 const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 

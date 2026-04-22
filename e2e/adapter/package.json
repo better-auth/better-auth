@@ -2,6 +2,9 @@
   "name": "@better-auth-test/adapter-base",
   "type": "module",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --build tsconfig.json"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.16.0",

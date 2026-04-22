@@ -22,11 +22,11 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "typecheck": "tsc --build tsconfig.json",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --build tsconfig.build.json",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
@@ -75,12 +75,11 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "expo-constants": "~55.0.7",
+    "expo-constants": "~55.0.15",
     "expo-linking": "~55.0.7",
     "expo-network": "~55.0.8",
     "expo-web-browser": "~55.0.9",
-    "react-native": "~0.84.1",
-    "tsdown": "catalog:"
+    "react-native": "~0.84.1"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",

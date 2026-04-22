@@ -4,7 +4,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
+import { APIError, sessionMiddleware } from "../../api/index.js";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -12,9 +12,9 @@ import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	setSessionCookie,
-} from "../../cookies";
-import { parseSessionOutput, parseUserOutput } from "../../db/schema";
-import { PACKAGE_VERSION } from "../../version";
+} from "../../cookies/index.js";
+import { parseSessionOutput, parseUserOutput } from "../../db/schema.js";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -33,9 +33,9 @@ export interface MultiSessionConfig {
 	maximumSessions?: number | undefined;
 }
 
-import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes.js";
 
-export { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
+export { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes.js";
 
 const setActiveSessionBodySchema = z.object({
 	sessionToken: z.string().meta({

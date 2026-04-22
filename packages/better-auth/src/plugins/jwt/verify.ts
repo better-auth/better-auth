@@ -3,8 +3,8 @@ import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import type { JWTPayload } from "jose";
 import { importJWK, jwtVerify } from "jose";
-import { getJwksAdapter } from "./adapter";
-import type { JwtOptions } from "./types";
+import { getJwksAdapter } from "./adapter.js";
+import type { JwtOptions } from "./types.js";
 
 /**
  * Verify a JWT token using the JWKS public keys

@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["dom", "dom.iterable", "esnext"],
+    "noEmit": true,
     "skipLibCheck": true,
     "strict": true,
     "module": "esnext",

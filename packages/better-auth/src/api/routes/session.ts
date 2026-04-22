@@ -19,14 +19,14 @@ import {
 	getChunkedCookie,
 	setCookieCache,
 	setSessionCookie,
-} from "../../cookies";
-import { getSessionQuerySchema } from "../../cookies/session-store";
-import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
-import { parseSessionOutput, parseUserOutput } from "../../db";
-import type { Prettify, Session, User } from "../../types";
-import { getDate } from "../../utils/date";
-import { isAPIError } from "../../utils/is-api-error";
-import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
+} from "../../cookies/index.js";
+import { getSessionQuerySchema } from "../../cookies/session-store.js";
+import { symmetricDecodeJWT, verifyJWT } from "../../crypto/index.js";
+import { parseSessionOutput, parseUserOutput } from "../../db/index.js";
+import type { Prettify, Session, User } from "../../types/index.js";
+import { getDate } from "../../utils/date.js";
+import { isAPIError } from "../../utils/is-api-error.js";
+import { getShouldSkipSessionRefresh } from "../state/should-session-refresh.js";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(

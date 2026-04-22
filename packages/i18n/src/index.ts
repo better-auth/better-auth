@@ -4,14 +4,14 @@ import type {
 } from "@better-auth/core";
 import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { parseCookies } from "better-auth/cookies";
-import type { I18nOptions, LocaleDetectionStrategy } from "./types";
-import { PACKAGE_VERSION } from "./version";
+import type { I18nOptions, LocaleDetectionStrategy } from "./types.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export type {
 	I18nOptions,
 	LocaleDetectionStrategy,
 	TranslationDictionary,
-} from "./types";
+} from "./types.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -191,4 +191,4 @@ export const i18n = <Locales extends string[]>(
 	} satisfies BetterAuthPlugin;
 };
 
-export type * from "./types";
+export type * from "./types.js";

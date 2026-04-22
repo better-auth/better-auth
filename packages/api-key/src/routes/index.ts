@@ -1,15 +1,15 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { APIError } from "better-auth/api";
-import { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from "..";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyConfigurationOptions } from "../types";
-import { createApiKey } from "./create-api-key";
-import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
-import { deleteApiKey } from "./delete-api-key";
-import { getApiKey } from "./get-api-key";
-import { listApiKeys } from "./list-api-keys";
-import { updateApiKey } from "./update-api-key";
-import { verifyApiKey } from "./verify-api-key";
+import { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from "../index.js";
+import type { apiKeySchema } from "../schema.js";
+import type { ApiKey, ApiKeyConfigurationOptions } from "../types.js";
+import { createApiKey } from "./create-api-key.js";
+import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys.js";
+import { deleteApiKey } from "./delete-api-key.js";
+import { getApiKey } from "./get-api-key.js";
+import { listApiKeys } from "./list-api-keys.js";
+import { updateApiKey } from "./update-api-key.js";
+import { verifyApiKey } from "./verify-api-key.js";
 
 export type PredefinedApiKeyOptions = ApiKeyConfigurationOptions &
 	Required<
