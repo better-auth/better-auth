@@ -12,12 +12,13 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
-import { authorizeEndpoint } from "./authorize";
+import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
 import { rpInitiatedLogoutEndpoint } from "./logout";
 import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import { registerEndpoint } from "./register";
@@ -370,32 +371,45 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return metadata;
 				},
 			),
-			oauth2Authorize: createAuthEndpoint(
+			oauth2Authorize: createOAuthEndpoint(
 				"/oauth2/authorize",
 				{
 					method: "GET",
 					query: z.object({
-						response_type: z.enum(["code"]).optional(),
+						response_type: z
+							.string()
+							.pipe(z.enum(["code"]))
+							.optional(),
 						client_id: z.string(),
 						redirect_uri: SafeUrlSchema.optional(),
 						scope: z.string().optional(),
 						state: z.string().optional(),
 						request_uri: z.string().optional(),
 						code_challenge: z.string().optional(),
-						code_challenge_method: z.enum(["S256"]).optional(),
+						code_challenge_method: z
+							.string()
+							.pipe(z.enum(["S256"]))
+							.optional(),
 						nonce: z.string().optional(),
 						prompt: z
-							.enum([
-								"none",
-								"consent",
-								"login",
-								"create",
-								"select_account",
-								"login consent",
-								"select_account consent",
-							])
+							.string()
+							.pipe(
+								z.enum([
+									"none",
+									"consent",
+									"login",
+									"create",
+									"select_account",
+									"login consent",
+									"select_account consent",
+								]),
+							)
 							.optional(),
 					}),
+					redirectOnError: authorizeRedirectOnError(opts),
+					errorCodesByField: {
+						response_type: { invalid: "unsupported_response_type" },
+					},
 					metadata: {
 						openapi: {
 							description: "Authorize an OAuth2 request",
@@ -607,16 +621,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return continueEndpoint(ctx, opts);
 				},
 			),
-			oauth2Token: createAuthEndpoint(
+			oauth2Token: createOAuthEndpoint(
 				"/oauth2/token",
 				{
 					method: "POST",
 					body: z.object({
-						grant_type: z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
+						grant_type: z
+							.string()
+							.pipe(
+								z.enum([
+									"authorization_code",
+									"client_credentials",
+									"refresh_token",
+								]),
+							),
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
 						client_assertion: z.string().optional(),
@@ -628,6 +646,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: z.string().optional(),
 						scope: z.string().optional(),
 					}),
+					errorCodesByField: {
+						grant_type: {
+							missing: "invalid_request",
+							invalid: "unsupported_grant_type",
+						},
+					},
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
@@ -758,7 +782,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return tokenEndpoint(ctx, opts);
 				},
 			),
-			oauth2Introspect: createAuthEndpoint(
+			oauth2Introspect: createOAuthEndpoint(
 				"/oauth2/introspect",
 				{
 					method: "POST",
@@ -768,9 +792,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						client_assertion: z.string().optional(),
 						client_assertion_type: z.string().optional(),
 						token: z.string(),
-						token_type_hint: z
-							.enum(["access_token", "refresh_token"])
-							.optional(),
+						// RFC 7662 §2.1: hint, server MAY ignore. Unknown values are
+						// coerced to undefined in introspectEndpoint so detection falls
+						// back to trying both token types.
+						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -798,9 +823,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 												token_type_hint: {
 													type: "string",
-													enum: ["access_token", "refresh_token"],
 													description:
-														"Hint about the type of the token submitted for introspection",
+														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
 												},
 												resource: {
 													type: "string",
@@ -901,7 +925,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return introspectEndpoint(ctx, opts);
 				},
 			),
-			oauth2Revoke: createAuthEndpoint(
+			oauth2Revoke: createOAuthEndpoint(
 				"/oauth2/revoke",
 				{
 					method: "POST",
@@ -911,9 +935,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						client_assertion: z.string().optional(),
 						client_assertion_type: z.string().optional(),
 						token: z.string(),
-						token_type_hint: z
-							.enum(["access_token", "refresh_token"])
-							.optional(),
+						// RFC 7009 §2.2.1: hint, server MAY ignore. Unknown values are
+						// coerced to undefined in revokeEndpoint; `unsupported_token_type`
+						// in RFC 7009 applies to the token itself, not the hint value.
+						token_type_hint: z.string().optional(),
 					}),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -941,9 +966,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 												token_type_hint: {
 													type: "string",
-													enum: ["access_token", "refresh_token"],
 													description:
-														"Hint about the type of the token submitted for revocation",
+														"Hint about the token type. Recognized values: `access_token`, `refresh_token`.",
 												},
 											},
 											required: ["token"],
@@ -1103,7 +1127,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return userInfoEndpoint(ctx, opts);
 				},
 			),
-			oauth2EndSession: createAuthEndpoint(
+			oauth2EndSession: createOAuthEndpoint(
 				"/oauth2/end-session",
 				{
 					method: "GET",
@@ -1149,7 +1173,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return rpInitiatedLogoutEndpoint(ctx, opts);
 				},
 			),
-			registerOAuthClient: createAuthEndpoint(
+			registerOAuthClient: createOAuthEndpoint(
 				"/oauth2/register",
 				{
 					method: "POST",
@@ -1207,6 +1231,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							})
 							.optional(),
 					}),
+					errorCodesByField: {
+						redirect_uris: "invalid_redirect_uri",
+						post_logout_redirect_uris: "invalid_redirect_uri",
+						software_statement: "invalid_software_statement",
+					},
+					defaultError: "invalid_client_metadata",
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
