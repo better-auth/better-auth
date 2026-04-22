@@ -29,4 +29,7 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 		"You are not allowed to set a non-existent role value",
 	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
 	INVALID_ROLE_TYPE: "Invalid role type",
+	ENROLLMENT_TOKEN_NOT_FOUND_OR_EXPIRED:
+		"Enrollment token not found or expired",
+	USER_ALREADY_HAS_PASSWORD: "User already has a password set",
 });

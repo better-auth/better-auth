@@ -83,6 +83,7 @@ export const adminClient = <O extends AdminClientOptions>(
 		pathMethods: {
 			"/admin/list-users": "GET",
 			"/admin/stop-impersonating": "POST",
+			"/admin/complete-enrollment": "POST",
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;

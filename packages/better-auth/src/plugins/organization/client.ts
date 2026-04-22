@@ -234,6 +234,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
 			"/organization/list-user-teams": "GET",
+			"/organization/get-invitation": "GET",
+			"/organization/get-invitation-preview": "GET",
+			"/organization/signup-with-invitation": "POST",
 		},
 		atomListeners: [
 			{
@@ -260,7 +263,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 						path === "/organization/delete" ||
 						path === "/organization/remove-member" ||
 						path === "/organization/leave" ||
-						path === "/organization/accept-invitation"
+						path === "/organization/accept-invitation" ||
+						path === "/organization/signup-with-invitation"
 					);
 				},
 				signal: "$sessionSignal",

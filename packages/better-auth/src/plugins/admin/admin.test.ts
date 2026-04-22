@@ -1832,3 +1832,249 @@ describe("edge cases: userId validation", async () => {
 		).rejects.toThrow("user not found");
 	});
 });
+
+describe("user enrollment flow", async () => {
+	let enrollmentToken: string | undefined;
+	let blockEnrollmentVerificationCreate = false;
+	let blockEnrollmentVerificationUpdate = false;
+
+	const { auth, signInWithTestUser, customFetchImpl, db } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						sendEnrollmentEmail: async (data) => {
+							enrollmentToken = data.token;
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "EnrollAdmin") {
+									return { data: { ...user, role: "admin" } };
+								}
+							},
+						},
+						update: {
+							before: async (user) => {
+								if (
+									blockEnrollmentVerificationUpdate &&
+									user.emailVerified === true
+								) {
+									return false;
+								}
+							},
+						},
+					},
+					verification: {
+						create: {
+							before: async () => {
+								if (blockEnrollmentVerificationCreate) {
+									return false;
+								}
+							},
+						},
+					},
+				},
+			},
+			{ testUser: { name: "EnrollAdmin" } },
+		);
+
+	const client = createAuthClient({
+		fetchOptions: { customFetchImpl },
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("should send enrollment email when createUser is called without password", async () => {
+		enrollmentToken = undefined;
+		const res = await client.admin.createUser(
+			{
+				name: "Enroll Me",
+				email: "enroll@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("enroll@test.com");
+		expect(res.data?.user?.emailVerified).toBe(false);
+		expect(enrollmentToken).toBeDefined();
+	});
+
+	it("should rollback enrollment user creation if verification creation fails", async () => {
+		const prevToken = enrollmentToken;
+		enrollmentToken = undefined;
+		blockEnrollmentVerificationCreate = true;
+
+		const res = await client.admin.createUser(
+			{
+				name: "Broken Enrollment",
+				email: "broken-enrollment@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+
+		blockEnrollmentVerificationCreate = false;
+
+		expect(res.error?.code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(enrollmentToken).toBeUndefined();
+
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "broken-enrollment@test.com" }],
+		});
+		expect(users).toHaveLength(0);
+		enrollmentToken = prevToken;
+	});
+
+	it("should not send enrollment email when password is provided", async () => {
+		const prevToken = enrollmentToken;
+		enrollmentToken = undefined;
+		const res = await client.admin.createUser(
+			{
+				name: "Has Password",
+				email: "haspassword@test.com",
+				password: "securepass",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.user?.email).toBe("haspassword@test.com");
+		expect(enrollmentToken).toBeUndefined();
+		// Restore the enroll@test.com token for subsequent tests
+		enrollmentToken = prevToken;
+	});
+
+	it("should complete enrollment with valid token", async () => {
+		expect(enrollmentToken).toBeDefined();
+		const res = await auth.api.completeEnrollment({
+			body: { token: enrollmentToken!, password: "newpassword123" },
+		});
+		expect(res.user?.email).toBe("enroll@test.com");
+		expect(res.user?.emailVerified).toBe(true);
+	});
+
+	it("should allow sign-in after enrollment", async () => {
+		const signInRes = await client.signIn.email({
+			email: "enroll@test.com",
+			password: "newpassword123",
+		});
+		expect(signInRes.data?.user?.email).toBe("enroll@test.com");
+	});
+
+	it("should reject invalid enrollment token", async () => {
+		await expect(
+			auth.api.completeEnrollment({
+				body: { token: "invalid-token", password: "newpassword123" },
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject completeEnrollment with ENROLLMENT_TOKEN_NOT_FOUND_OR_EXPIRED when token is already consumed", async () => {
+		// Token was already used above; create a fresh token by calling createUser again
+		enrollmentToken = undefined;
+		await client.admin.createUser(
+			{
+				name: "Double Enroll",
+				email: "doubleenroll@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		expect(enrollmentToken).toBeDefined();
+
+		// First enrollment — consumes and deletes the token
+		await auth.api.completeEnrollment({
+			body: { token: enrollmentToken!, password: "firstpass123" },
+		});
+
+		// Try to re-enroll — token is deleted after first use, so it fails with token-not-found
+		const err: any = await auth.api
+			.completeEnrollment({
+				body: { token: enrollmentToken!, password: "secondpass123" },
+			})
+			.catch((e) => e);
+		expect(err.body?.code).toBe("ENROLLMENT_TOKEN_NOT_FOUND_OR_EXPIRED");
+	});
+
+	/**
+	 * Ensures USER_ALREADY_HAS_PASSWORD is returned when a valid token exists
+	 * but the user already has a credential account (e.g. another enrollment
+	 * token was issued after the first one was used to set the password).
+	 */
+	it("should reject completeEnrollment with USER_ALREADY_HAS_PASSWORD when a credential already exists", async () => {
+		enrollmentToken = undefined;
+		const createRes = await client.admin.createUser(
+			{
+				name: "Already Has Pass",
+				email: "alreadyhaspass@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		const userId = createRes.data?.user?.id!;
+		const firstToken = enrollmentToken!;
+		expect(firstToken).toBeDefined();
+
+		// Complete enrollment using the first token — user now has a credential account
+		await auth.api.completeEnrollment({
+			body: { token: firstToken, password: "firstpassword123" },
+		});
+
+		// Simulate a second enrollment token being issued for the same user
+		// (e.g. admin created another invite link before the user used the first)
+		const secondToken = "secondenrolltoken";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: `user-enrollment:${secondToken}`,
+				value: userId,
+				expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		// Token is still valid but user already has a credential — should return USER_ALREADY_HAS_PASSWORD
+		const err: any = await auth.api
+			.completeEnrollment({
+				body: { token: secondToken, password: "secondpassword123" },
+			})
+			.catch((e) => e);
+		expect(err.body?.code).toBe("USER_ALREADY_HAS_PASSWORD");
+	});
+
+	it("should allow retrying enrollment when credential creation succeeded before email verification update failed", async () => {
+		enrollmentToken = undefined;
+		await client.admin.createUser(
+			{
+				name: "Retry Verification",
+				email: "retryverification@test.com",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		const retryToken = enrollmentToken!;
+
+		blockEnrollmentVerificationUpdate = true;
+		const firstErr: any = await auth.api
+			.completeEnrollment({
+				body: { token: retryToken, password: "retrypass123" },
+			})
+			.catch((e) => e);
+		blockEnrollmentVerificationUpdate = false;
+
+		expect(firstErr.body?.code).toBe("FAILED_TO_UPDATE_USER");
+
+		const retryRes = await auth.api.completeEnrollment({
+			body: { token: retryToken, password: "differentpass123" },
+		});
+		expect(retryRes.user?.email).toBe("retryverification@test.com");
+		expect(retryRes.user?.emailVerified).toBe(true);
+	});
+});
