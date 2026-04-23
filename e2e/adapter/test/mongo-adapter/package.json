@@ -11,6 +11,7 @@
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
     "@prisma/client": "^5.22.0",
-    "better-auth": "workspace:*"
+    "better-auth": "workspace:*",
+    "mongodb": "^7.1.0"
   }
 }
