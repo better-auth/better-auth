@@ -13,7 +13,7 @@ export interface FacebookProfile {
 	id: string;
 	name: string;
 	email?: string;
-	email_verified: boolean;
+	email_verified?: boolean;
 	picture: {
 		data: {
 			height: number;
@@ -204,7 +204,7 @@ export const facebook = (options: FacebookOptions) => {
 					name: profile.name,
 					email: profile.email,
 					image: profile.picture.data.url,
-					emailVerified: profile.email_verified,
+					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
 				data: profile,

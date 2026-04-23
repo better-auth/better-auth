@@ -17,7 +17,7 @@ export interface LinkedInProfile {
 		language: string;
 	};
 	email?: string;
-	email_verified: boolean;
+	email_verified?: boolean;
 }
 
 export interface LinkedInOptions extends ProviderOptions<LinkedInProfile> {

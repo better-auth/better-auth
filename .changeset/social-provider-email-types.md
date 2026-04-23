@@ -9,12 +9,12 @@ Social sign-in with OAuth providers that may return no email address (Discord ph
 
 Provider profile types now reflect where `email` can be `null` or absent:
 
-- `DiscordProfile.email` is `string | null`
+- `DiscordProfile.email` is `string | null` and optional (absent when the `email` scope is not granted)
 - `AppleProfile.email` is optional
 - `GithubProfile.email` is `string | null`
-- `FacebookProfile.email` is optional
-- `LinkedInProfile.email` is optional
-- `MicrosoftEntraIdProfile.email` is optional
+- `FacebookProfile.email` and `FacebookProfile.email_verified` are optional
+- `LinkedInProfile.email` and `LinkedInProfile.email_verified` are optional
+- `MicrosoftEntraIDProfile.email` is optional
 
 TypeScript consumers who previously dereferenced `profile.email` directly inside `mapProfileToUser` will see a compile error that matches the runtime reality; use a nullish-coalescing fallback (`profile.email ?? ...`) or null-check the field.
 
