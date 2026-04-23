@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { findNode, xmlParser } from "./parser";
+import { findNode, xmlParser } from "./parser.js";
 
 export const SignatureAlgorithm = {
 	RSA_SHA1: "http://www.w3.org/2000/09/xmldsig#rsa-sha1",

@@ -4,7 +4,7 @@ import type { InternalLogger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
-import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
+import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto/index.js";
 
 // Cookie size constants based on browser limits
 const ALLOWED_COOKIE_SIZE = 4096;

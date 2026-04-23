@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getPasskeyActions } from "./client";
+import { getPasskeyActions } from "./client.js";
 
 const mocks = vi.hoisted(() => ({
 	startRegistration: vi.fn(),

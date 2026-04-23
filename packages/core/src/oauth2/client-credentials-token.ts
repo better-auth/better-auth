@@ -1,7 +1,7 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import type { AwaitableFunction } from "../types";
-import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
+import type { AwaitableFunction } from "../types/index.js";
+import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider.js";
 
 export async function clientCredentialsTokenRequest({
 	options,

@@ -5,27 +5,32 @@ import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
-} from "../../client";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
-import { nextCookies } from "../../integrations/next-js";
-import { getTestInstance } from "../../test-utils/test-instance";
-import type { User } from "../../types";
-import type { PrettifyDeep } from "../../types/helper";
-import { isAPIError } from "../../utils/is-api-error";
-import { createAccessControl } from "../access";
-import { admin } from "../admin";
-import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
-import { inferOrgAdditionalFields, organizationClient } from "./client";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { organization } from "./organization";
+} from "../../client/index.js";
+import { createAuthClient } from "../../client/index.js";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { nextCookies } from "../../integrations/next-js.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import type { PrettifyDeep } from "../../types/helper.js";
+import type { User } from "../../types/index.js";
+import { isAPIError } from "../../utils/is-api-error.js";
+import { createAccessControl } from "../access/index.js";
+import { admin } from "../admin/index.js";
+import {
+	adminAc,
+	defaultStatements,
+	memberAc,
+	ownerAc,
+} from "./access/index.js";
+import { inferOrgAdditionalFields, organizationClient } from "./client.js";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes.js";
+import { organization } from "./organization.js";
 import type {
 	InferInvitation,
 	InferMember,
 	InferTeam,
 	InvitationStatus,
-} from "./schema";
-import type { OrganizationOptions } from "./types";
+} from "./schema.js";
+import type { OrganizationOptions } from "./types.js";
 
 describe("organization type", () => {
 	it("empty org type should works", () => {

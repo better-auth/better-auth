@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { getTestInstance } from "../../test-utils/test-instance.js";
 
 describe("sign-out", async () => {
 	const afterSessionDeleted = vi.fn();

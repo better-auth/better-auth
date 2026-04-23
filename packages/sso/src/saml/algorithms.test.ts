@@ -1,6 +1,6 @@
 /* cspell:ignore xenc */
 import { describe, expect, it, vi } from "vitest";
-import * as alg from "./algorithms";
+import * as alg from "./algorithms.js";
 
 const encryptedAssertionXml = `
 <samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">

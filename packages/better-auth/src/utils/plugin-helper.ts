@@ -1,4 +1,4 @@
-import { isAPIError } from "./is-api-error";
+import { isAPIError } from "./is-api-error.js";
 
 export const getEndpointResponse = async <T>(ctx: {
 	context: {

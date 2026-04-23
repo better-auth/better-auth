@@ -17,22 +17,21 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
-import type { BindingContext } from "samlify/types/src/entity";
-import type { IdentityProvider } from "samlify/types/src/entity-idp";
+import type { IdentityProviderInstance } from "samlify";
 import * as z from "zod";
-import * as constants from "../constants";
-import { assignOrganizationFromProvider } from "../linking";
-import type { HydratedOIDCConfig } from "../oidc";
+import * as constants from "../constants.js";
+import { assignOrganizationFromProvider } from "../linking/index.js";
+import type { HydratedOIDCConfig } from "../oidc/index.js";
 import {
 	DiscoveryError,
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
-} from "../oidc";
-import { validateConfigAlgorithms } from "../saml";
-import { SAML_ERROR_CODES } from "../saml/error-codes";
-import { generateRelayState } from "../saml-state";
-import { saml } from "../samlify";
+} from "../oidc/index.js";
+import { SAML_ERROR_CODES } from "../saml/error-codes.js";
+import { validateConfigAlgorithms } from "../saml/index.js";
+import { generateRelayState } from "../saml-state.js";
+import { saml } from "../samlify.js";
 import type {
 	AuthnRequestRecord,
 	OIDCConfig,
@@ -41,16 +40,16 @@ import type {
 	SAMLSessionRecord,
 	SSOOptions,
 	SSOProvider,
-} from "../types";
-import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
-import { getVerificationIdentifier } from "./domain-verification";
+} from "../types.js";
+import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils.js";
+import { getVerificationIdentifier } from "./domain-verification.js";
 import {
 	createIdP,
 	createSAMLPostForm,
 	createSP,
 	findSAMLProvider,
-} from "./helpers";
-import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+} from "./helpers.js";
+import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline.js";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -81,7 +80,7 @@ export {
 	type SAMLConditions,
 	type TimestampValidationOptions,
 	validateSAMLTimestamp,
-} from "../saml/timestamp";
+} from "../saml/timestamp.js";
 
 const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
@@ -1283,7 +1282,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				});
 
 				const idpData = parsedSamlConfig.idpMetadata;
-				let idp: IdentityProvider;
+				let idp: IdentityProviderInstance;
 				if (!idpData?.metadata) {
 					idp = saml.IdentityProvider({
 						entityID: idpData?.entityID || parsedSamlConfig.issuer,
@@ -1310,14 +1309,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						encPrivateKeyPass: idpData.encPrivateKeyPass,
 					});
 				}
-				const loginRequest = sp.createLoginRequest(
-					idp,
-					"redirect",
-				) as BindingContext & {
-					entityEndpoint: string;
-					type: string;
-					id: string;
-				};
+				const loginRequest = sp.createLoginRequest(idp, "redirect");
 				if (!loginRequest) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Invalid SAML request",

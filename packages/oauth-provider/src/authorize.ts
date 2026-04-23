@@ -5,14 +5,14 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
-import { oAuthState } from "./oauth";
+import { oAuthState } from "./oauth.js";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthOptions,
 	Scope,
 	VerificationValue,
-} from "./types";
+} from "./types/index.js";
 
 import {
 	getClient,
@@ -20,7 +20,7 @@ import {
 	isPKCERequired,
 	parsePrompt,
 	storeToken,
-} from "./utils";
+} from "./utils/index.js";
 
 /**
  * OIDC Error Codes

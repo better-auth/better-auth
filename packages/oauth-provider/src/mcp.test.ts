@@ -20,11 +20,11 @@ import { decodeJwt } from "jose";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProviderResourceClient } from "./client-resource";
-import { handleMcpErrors, mcpHandler } from "./mcp";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "./types/oauth";
+import { oauthProviderClient } from "./client.js";
+import { oauthProviderResourceClient } from "./client-resource.js";
+import { handleMcpErrors, mcpHandler } from "./mcp.js";
+import { oauthProvider } from "./oauth.js";
+import type { OAuthClient } from "./types/oauth.js";
 
 describe("mcp", async () => {
 	const authServerUrl = `http://localhost:3000`;
@@ -123,7 +123,7 @@ describe("mcp - server-client flows", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const authClient = createAuthClient({
-		plugins: [oauthProviderClient(), oauthProviderResourceClient(auth)],
+		plugins: [oauthProviderClient(), oauthProviderResourceClient(auth as any)],
 		baseURL: authServerUrl,
 		fetchOptions: {
 			customFetchImpl,

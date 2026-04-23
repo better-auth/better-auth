@@ -7,15 +7,15 @@ import {
 	APIError,
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
-} from "../../api";
-import { setCookieCache, setSessionCookie } from "../../cookies";
-import { generateRandomString, symmetricDecrypt } from "../../crypto";
-import { parseUserInput, parseUserOutput } from "../../db/schema";
-import { getDate } from "../../utils/date";
-import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
-import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
-import { splitAtLastColon, toOTPIdentifier } from "./utils";
+} from "../../api/index.js";
+import { setCookieCache, setSessionCookie } from "../../cookies/index.js";
+import { generateRandomString, symmetricDecrypt } from "../../crypto/index.js";
+import { parseUserInput, parseUserOutput } from "../../db/schema.js";
+import { getDate } from "../../utils/date.js";
+import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes.js";
+import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token.js";
+import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types.js";
+import { splitAtLastColon, toOTPIdentifier } from "./utils.js";
 
 const types = [
 	"email-verification",

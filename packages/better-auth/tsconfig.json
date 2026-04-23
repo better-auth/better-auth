@@ -1,31 +1,33 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*.ts", "package.json"],
   "compilerOptions": {
     "lib": ["esnext", "dom", "dom.iterable"],
-    "types": ["node", "bun"]
+    "types": ["node", "bun"],
+    "outDir": "./dist",
+    "rootDir": "./src"
   },
+  "include": ["src/**/*", "package.json"],
   "references": [
     {
-      "path": "../core/tsconfig.json"
+      "path": "../core/tsconfig.build.json"
     },
     {
-      "path": "../telemetry/tsconfig.json"
+      "path": "../telemetry/tsconfig.build.json"
     },
     {
-      "path": "../drizzle-adapter/tsconfig.json"
+      "path": "../drizzle-adapter/tsconfig.build.json"
     },
     {
-      "path": "../kysely-adapter/tsconfig.json"
+      "path": "../kysely-adapter/tsconfig.build.json"
     },
     {
-      "path": "../memory-adapter/tsconfig.json"
+      "path": "../memory-adapter/tsconfig.build.json"
     },
     {
-      "path": "../mongo-adapter/tsconfig.json"
+      "path": "../mongo-adapter/tsconfig.build.json"
     },
     {
-      "path": "../prisma-adapter/tsconfig.json"
+      "path": "../prisma-adapter/tsconfig.build.json"
     }
   ]
 }

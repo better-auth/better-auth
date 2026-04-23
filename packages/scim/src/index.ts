@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { authMiddlewareFactory } from "./middlewares";
+import { authMiddlewareFactory } from "./middlewares.js";
 import {
 	createSCIMUser,
 	deleteSCIMProviderConnection,
@@ -16,9 +16,9 @@ import {
 	listSCIMUsers,
 	patchSCIMUser,
 	updateSCIMUser,
-} from "./routes";
-import type { SCIMOptions } from "./types";
-import { PACKAGE_VERSION } from "./version";
+} from "./routes.js";
+import type { SCIMOptions } from "./types.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -89,4 +89,4 @@ export const scim = (options?: SCIMOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export * from "./types";
+export * from "./types.js";

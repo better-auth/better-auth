@@ -1,6 +1,6 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { StoreIdentifierOption } from "../types";
+import type { StoreIdentifierOption } from "../types/index.js";
 
 const defaultKeyHasher = async (identifier: string) => {
 	const hash = await createHash("SHA-256").digest(

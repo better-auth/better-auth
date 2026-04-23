@@ -30,10 +30,10 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { sso, validateSAMLTimestamp } from ".";
-import { ssoClient } from "./client";
-import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
-import { saml } from "./samlify";
+import { ssoClient } from "./client.js";
+import { DEFAULT_CLOCK_SKEW_MS } from "./constants.js";
+import { sso, validateSAMLTimestamp } from "./index.js";
+import { saml } from "./samlify.js";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -2795,7 +2795,7 @@ describe("SAML SSO with custom fields", () => {
 	});
 });
 
-import { safeJsonParse } from "./utils";
+import { safeJsonParse } from "./utils.js";
 
 describe("safeJsonParse", () => {
 	it("returns object as-is when value is already an object", () => {
@@ -4204,7 +4204,7 @@ describe("SAML Response Security", () => {
 describe("SAML SSO - Size Limit Validation", () => {
 	it("should export default size limit constants", async () => {
 		const { DEFAULT_MAX_SAML_RESPONSE_SIZE, DEFAULT_MAX_SAML_METADATA_SIZE } =
-			await import("./constants");
+			await import("./constants.js");
 
 		expect(DEFAULT_MAX_SAML_RESPONSE_SIZE).toBe(256 * 1024);
 		expect(DEFAULT_MAX_SAML_METADATA_SIZE).toBe(100 * 1024);

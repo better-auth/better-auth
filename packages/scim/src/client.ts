@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
-import type { scim } from "./index";
-import { PACKAGE_VERSION } from "./version";
+import type { scim } from "./index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export const scimClient = () => {
 	return {

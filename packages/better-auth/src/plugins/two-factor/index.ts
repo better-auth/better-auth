@@ -7,35 +7,38 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
+import { sessionMiddleware } from "../../api/index.js";
 import {
 	deleteSessionCookie,
 	expireCookie,
 	setSessionCookie,
-} from "../../cookies";
-import { symmetricEncrypt } from "../../crypto";
-import { generateRandomString } from "../../crypto/random";
-import { mergeSchema } from "../../db/schema";
-import { shouldRequirePassword, validatePassword } from "../../utils/password";
-import { PACKAGE_VERSION } from "../../version";
-import type { BackupCodeOptions } from "./backup-codes";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+} from "../../cookies/index.js";
+import { symmetricEncrypt } from "../../crypto/index.js";
+import { generateRandomString } from "../../crypto/random.js";
+import { mergeSchema } from "../../db/schema.js";
+import {
+	shouldRequirePassword,
+	validatePassword,
+} from "../../utils/password.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { BackupCodeOptions } from "./backup-codes/index.js";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes/index.js";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
-} from "./constant";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
-import { otp2fa } from "./otp";
-import { schema } from "./schema";
-import { totp2fa } from "./totp";
+} from "./constant.js";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code.js";
+import { otp2fa } from "./otp/index.js";
+import { schema } from "./schema.js";
+import { totp2fa } from "./totp/index.js";
 import type {
 	TwoFactorOptions,
 	TwoFactorTable,
 	UserWithTwoFactor,
-} from "./types";
+} from "./types.js";
 
-export * from "./error-code";
+export * from "./error-code.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -548,5 +551,5 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export * from "./client";
-export * from "./types";
+export * from "./client.js";
+export * from "./types.js";

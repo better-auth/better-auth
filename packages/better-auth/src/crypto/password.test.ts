@@ -1,7 +1,7 @@
 import { hex } from "@better-auth/utils/hex";
 import { scryptAsync } from "@noble/hashes/scrypt.js";
 import { describe, expect, it } from "vitest";
-import { hashPassword, verifyPassword } from "./password";
+import { hashPassword, verifyPassword } from "./password.js";
 
 describe("Password hashing and verification", () => {
 	it("should hash a password", async () => {

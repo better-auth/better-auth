@@ -1,5 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
+import type {
+	OAuth2Tokens,
+	OAuthProvider,
+	ProviderOptions,
+} from "../oauth2/index.js";
 
 /**
  * WeChat user profile information

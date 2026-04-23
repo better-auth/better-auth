@@ -7,18 +7,18 @@ import {
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { PACKAGE_VERSION } from "../../version";
-import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
+import { PACKAGE_VERSION } from "../../version.js";
+import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes.js";
 import {
 	getUserInfo,
 	oAuth2Callback,
 	oAuth2LinkAccount,
 	signInWithOAuth2,
-} from "./routes";
-import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
+} from "./routes.js";
+import type { GenericOAuthConfig, GenericOAuthOptions } from "./types.js";
 
-export * from "./providers";
-export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
+export * from "./providers/index.js";
+export type { GenericOAuthConfig, GenericOAuthOptions } from "./types.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

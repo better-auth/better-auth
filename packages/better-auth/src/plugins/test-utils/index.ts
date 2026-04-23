@@ -3,26 +3,26 @@ import {
 	createGetAuthHeaders,
 	createGetCookies,
 	createLogin,
-} from "./auth-helpers";
+} from "./auth-helpers.js";
 import {
 	createAddMember,
 	createDeleteOrganization,
 	createDeleteUser,
 	createSaveOrganization,
 	createSaveUser,
-} from "./db-helpers";
-import { createOrganizationFactory, createUserFactory } from "./factories";
-import { createOTPStore } from "./otp-sink";
-import type { TestHelpers, TestUtilsOptions } from "./types";
+} from "./db-helpers.js";
+import { createOrganizationFactory, createUserFactory } from "./factories.js";
+import { createOTPStore } from "./otp-sink.js";
+import type { TestHelpers, TestUtilsOptions } from "./types.js";
 
 export type {
 	LoginResult,
 	TestCookie,
 	TestHelpers,
 	TestUtilsOptions,
-} from "./types";
+} from "./types.js";
 
-import { PACKAGE_VERSION } from "../../version";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

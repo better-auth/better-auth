@@ -1,4 +1,4 @@
-import type { InternalLogger } from "../env";
+import type { InternalLogger } from "../env/index.js";
 
 /**
  * Wraps a function to log a deprecation warning at once.

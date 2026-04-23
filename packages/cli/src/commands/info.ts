@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
-import { getConfig } from "../utils/get-config";
-import { getPackageInfo } from "../utils/get-package-info";
+import { getConfig } from "../utils/get-config.js";
+import { getPackageInfo } from "../utils/get-package-info.js";
 
 function getSystemInfo() {
 	const platform = os.platform();

@@ -1,12 +1,12 @@
 import type { JSONWebKeySet } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
-import { createAuthClient } from "../../client";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { jwt } from ".";
-import { jwtClient } from "./client";
-import type { JWKOptions, Jwk, JwtOptions } from "./types";
-import { generateExportedKeyPair, toExpJWT } from "./utils";
+import { createAuthClient } from "../../client/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { jwtClient } from "./client.js";
+import { jwt } from "./index.js";
+import type { JWKOptions, Jwk, JwtOptions } from "./types.js";
+import { generateExportedKeyPair, toExpJWT } from "./utils.js";
 
 describe("jwt", async () => {
 	// Testing the default behavior

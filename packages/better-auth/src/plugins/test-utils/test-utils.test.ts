@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { emailOTP } from "../email-otp";
-import { organization } from "../organization";
-import { testUtils } from "./index";
-import type { TestHelpers } from "./types";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { emailOTP } from "../email-otp/index.js";
+import { organization } from "../organization/index.js";
+import { testUtils } from "./index.js";
+import type { TestHelpers } from "./types.js";
 
 describe("testUtils plugin", async () => {
 	describe("basic functionality", async () => {

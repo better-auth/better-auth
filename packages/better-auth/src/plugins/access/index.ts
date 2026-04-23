@@ -1,2 +1,2 @@
-export * from "./access";
-export * from "./types";
+export * from "./access.js";
+export * from "./types.js";

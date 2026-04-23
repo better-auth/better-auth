@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "customConditions": [],
+    "noEmit": false
+  },
+  "exclude": ["src/**/*.test.*", "test/**/*"]
+}

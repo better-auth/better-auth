@@ -17,12 +17,12 @@ let db = new DatabaseSync(":memory:");
 let betterAuthKysely = new Kysely({
 	dialect: new NodeSqliteDialect({
 		database: db,
-	}),
+	}) as any,
 });
 
 const { execute } = await testAdapter({
 	adapter: () => {
-		return kyselyAdapter(betterAuthKysely, {
+		return kyselyAdapter(betterAuthKysely as any, {
 			type: "sqlite",
 			debugLogs: { isRunningAdapterTests: true },
 		});
@@ -34,7 +34,7 @@ const { execute } = await testAdapter({
 		betterAuthKysely = new Kysely({
 			dialect: new NodeSqliteDialect({
 				database: db,
-			}),
+			}) as any,
 		});
 		const opts = Object.assign(betterAuthOptions, { database: db });
 		const { runMigrations } = await getMigrations(opts);

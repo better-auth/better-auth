@@ -123,7 +123,7 @@ export const makeSignature = async (
 	return btoa(String.fromCharCode(...new Uint8Array(signature)));
 };
 
-export * from "./buffer";
-export * from "./jwt";
-export * from "./password";
-export * from "./random";
+export * from "./buffer.js";
+export * from "./jwt.js";
+export * from "./password.js";
+export * from "./random.js";

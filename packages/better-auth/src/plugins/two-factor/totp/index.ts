@@ -2,19 +2,19 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sessionMiddleware } from "../../../api";
-import { setSessionCookie } from "../../../cookies";
-import { symmetricDecrypt } from "../../../crypto";
-import { shouldRequirePassword } from "../../../utils/password";
-import { PACKAGE_VERSION } from "../../../version";
-import type { BackupCodeOptions } from "../backup-codes";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { sessionMiddleware } from "../../../api/index.js";
+import { setSessionCookie } from "../../../cookies/index.js";
+import { symmetricDecrypt } from "../../../crypto/index.js";
+import { shouldRequirePassword } from "../../../utils/password.js";
+import { PACKAGE_VERSION } from "../../../version.js";
+import type { BackupCodeOptions } from "../backup-codes/index.js";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code.js";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
-} from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+} from "../types.js";
+import { verifyTwoFactor } from "../verify-two-factor.js";
 
 export type TOTPOptions = {
 	/**

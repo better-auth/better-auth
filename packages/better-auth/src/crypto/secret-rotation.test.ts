@@ -4,14 +4,14 @@ import {
 	buildSecretConfig,
 	parseSecretsEnv,
 	validateSecretsArray,
-} from "../context/secret-utils";
+} from "../context/secret-utils.js";
 import {
 	formatEnvelope,
 	parseEnvelope,
 	symmetricDecrypt,
 	symmetricEncrypt,
-} from "./index";
-import { symmetricDecodeJWT, symmetricEncodeJWT } from "./jwt";
+} from "./index.js";
+import { symmetricDecodeJWT, symmetricEncodeJWT } from "./jwt.js";
 
 describe("secret rotation", () => {
 	const secretA = "secret-a-at-least-32-chars-long!!";

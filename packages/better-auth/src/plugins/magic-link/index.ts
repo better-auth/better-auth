@@ -5,12 +5,12 @@ import type {
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { originCheck } from "../../api";
-import { setSessionCookie } from "../../cookies";
-import { generateRandomString } from "../../crypto";
-import { parseSessionOutput, parseUserOutput } from "../../db";
-import { PACKAGE_VERSION } from "../../version";
-import { defaultKeyHasher } from "./utils";
+import { originCheck } from "../../api/index.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { generateRandomString } from "../../crypto/index.js";
+import { parseSessionOutput, parseUserOutput } from "../../db/index.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { defaultKeyHasher } from "./utils.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

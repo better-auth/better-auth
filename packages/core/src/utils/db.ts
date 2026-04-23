@@ -1,4 +1,4 @@
-import type { DBFieldAttribute } from "../db";
+import type { DBFieldAttribute } from "../db/index.js";
 
 /**
  * Filters output data by removing fields with the `returned: false` attribute.

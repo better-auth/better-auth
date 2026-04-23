@@ -3,9 +3,9 @@ import { getCurrentAuthContext } from "@better-auth/core/context";
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "../../api";
-import { isAPIError } from "../../utils/is-api-error";
-import { PACKAGE_VERSION } from "../../version";
+import { APIError } from "../../api/index.js";
+import { isAPIError } from "../../utils/is-api-error.js";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

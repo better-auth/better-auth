@@ -10,10 +10,10 @@ export * from "@better-auth/core/utils/error-codes";
 export * from "@better-auth/core/utils/id";
 export * from "@better-auth/core/utils/json";
 //#endregion
-export { betterAuth } from "./auth/full";
+export { betterAuth } from "./auth/full.js";
 // @ts-expect-error
-export * from "./types";
-export * from "./utils";
+export * from "./types/index.js";
+export * from "./utils/index.js";
 
 // export this as we are referencing OAuth2Tokens in the `refresh-token` api as return type
 
@@ -28,4 +28,4 @@ export {
 export type * from "better-call";
 export type { JSONWebKeySet, JWTPayload } from "jose";
 export type * from "zod";
-export { APIError } from "./api";
+export { APIError } from "./api/index.js";

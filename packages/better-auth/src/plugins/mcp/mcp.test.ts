@@ -1,13 +1,13 @@
 import { listen } from "listhen";
 import { afterAll, describe, it } from "vitest";
-import { createAuthClient } from "../../client";
-import { toNodeHandler } from "../../integrations/node";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
-import { jwt } from "../jwt";
-import type { Client } from "../oidc-provider/types";
-import { mcp, withMcpAuth } from ".";
+import { createAuthClient } from "../../client/index.js";
+import { toNodeHandler } from "../../integrations/node.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { genericOAuthClient } from "../generic-oauth/client.js";
+import { genericOAuth } from "../generic-oauth/index.js";
+import { jwt } from "../jwt/index.js";
+import type { Client } from "../oidc-provider/types.js";
+import { mcp, withMcpAuth } from "./index.js";
 
 describe("mcp", async () => {
 	// Start server on ephemeral port first to get available port

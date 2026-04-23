@@ -1,11 +1,11 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
-import { mergeSchema } from "../../db/schema";
-import { getEndpointResponse } from "../../utils/plugin-helper";
-import { PACKAGE_VERSION } from "../../version";
-import { defaultRoles } from "./access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
+import { mergeSchema } from "../../db/schema.js";
+import { getEndpointResponse } from "../../utils/plugin-helper.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { defaultRoles } from "./access/index.js";
+import { ADMIN_ERROR_CODES } from "./error-codes.js";
 import {
 	adminUpdateUser,
 	banUser,
@@ -22,13 +22,13 @@ import {
 	stopImpersonating,
 	unbanUser,
 	userHasPermission,
-} from "./routes";
-import { schema } from "./schema";
+} from "./routes.js";
+import { schema } from "./schema.js";
 import type {
 	AdminOptions,
 	SessionWithImpersonatedBy,
 	UserWithRole,
-} from "./types";
+} from "./types.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

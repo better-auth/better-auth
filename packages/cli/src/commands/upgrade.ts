@@ -6,10 +6,10 @@ import prompts from "prompts";
 import * as semver from "semver";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
-import { detectPackageManager } from "../utils/check-package-managers";
-import { fetchLatestVersion } from "../utils/fetch-latest-version";
-import { getPackageInfo } from "../utils/get-package-info";
-import { installDependencies } from "../utils/install-dependencies";
+import { detectPackageManager } from "../utils/check-package-managers.js";
+import { fetchLatestVersion } from "../utils/fetch-latest-version.js";
+import { getPackageInfo } from "../utils/get-package-info.js";
+import { installDependencies } from "../utils/install-dependencies.js";
 
 function isBetterAuthPackage(name: string): boolean {
 	return name === "better-auth" || name.startsWith("@better-auth/");

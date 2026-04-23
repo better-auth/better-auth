@@ -1,4 +1,4 @@
-import type { Session, User } from "../../types";
+import type { Session, User } from "../../types/index.js";
 
 export interface TestUtilsOptions {
 	/** Capture OTPs in memory when created (doesn't prevent sending) */

@@ -1,4 +1,4 @@
-import type { Providers } from "./constants";
+import type { Providers } from "./constants.js";
 
 export type Provider = (typeof Providers)[keyof typeof Providers];
 

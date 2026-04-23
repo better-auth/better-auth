@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { tryCatch } from "./helper";
+import { tryCatch } from "./helper.js";
 
 export function getPackageInfo(cwd?: string) {
 	const packageJsonPath = cwd

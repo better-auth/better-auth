@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
-import { getConfig } from "../src/utils/get-config";
+import { getConfig } from "../src/utils/get-config.js";
 
 interface TmpDirFixture {
 	tmpdir: string;
@@ -57,7 +57,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "@server/db/db";
 
 			 export const auth = betterAuth({
@@ -76,7 +76,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -111,7 +111,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "prismaDbClient";
 
 			 export const auth = betterAuth({
@@ -130,7 +130,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -166,7 +166,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "@server/db/db";
 
 			 export const auth = betterAuth({
@@ -185,7 +185,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -221,7 +221,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "prismaDbClient";
 
 			 export const auth = betterAuth({
@@ -240,7 +240,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -276,7 +276,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "../db/db";
 
 			 export const auth = betterAuth({
@@ -295,7 +295,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -330,7 +330,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "@server/db/db";
 
 			 export const auth = betterAuth({
@@ -349,7 +349,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -440,7 +440,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "@shared/db";
 
 			 export const auth = betterAuth({
@@ -459,7 +459,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -616,7 +616,7 @@ describe("getConfig", async () => {
 		await fs.writeFile(
 			path.join(authPath, "auth.ts"),
 			`import {betterAuth} from "better-auth";
-			 import {prismaAdapter} from "better-auth/adapters/prisma";			
+			 import {prismaAdapter} from "better-auth/adapters/prisma";
 			 import {db} from "@shared/db/db";
 
 			 export const auth = betterAuth({
@@ -635,7 +635,7 @@ describe("getConfig", async () => {
 			`class PrismaClient {
 				constructor() {}
 			}
-			
+
 			export const db = new PrismaClient()`,
 		);
 
@@ -779,7 +779,7 @@ describe("getConfig", async () => {
 						}
 					}
 			 });
-			 
+
 			 export default auth;`,
 		);
 
@@ -819,7 +819,7 @@ describe("getConfig", async () => {
 						}
 					}
 			 });
-			 
+
 			 export { auth };
 
 			 export default auth;`,

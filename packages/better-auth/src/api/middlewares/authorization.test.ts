@@ -1,10 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { organization } from "../../plugins";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthEndpoint, sessionMiddleware } from "..";
-import { requireOrgRole } from "./authorization";
+import { organization } from "../../plugins/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { createAuthEndpoint, sessionMiddleware } from "../index.js";
+import { requireOrgRole } from "./authorization.js";
 
 const checkOrgAdmin = createAuthEndpoint(
 	"/test-check-org-admin",

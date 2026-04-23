@@ -3,7 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import { normalizePathname } from "@better-auth/core/utils/url";
-import { matchesOriginPattern } from "../../auth/trusted-origins";
+import { matchesOriginPattern } from "../../auth/trusted-origins.js";
 
 /**
  * Checks if CSRF should be skipped for backward compatibility.

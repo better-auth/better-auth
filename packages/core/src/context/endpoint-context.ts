@@ -1,8 +1,8 @@
 import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { EndpointContext, InputContext } from "better-call";
-import type { AuthContext } from "../types";
-import { __getBetterAuthGlobal } from "./global";
+import type { AuthContext } from "../types/index.js";
+import { __getBetterAuthGlobal } from "./global.js";
 
 export type AuthEndpointContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>

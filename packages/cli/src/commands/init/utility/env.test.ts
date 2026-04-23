@@ -1,7 +1,7 @@
 import path from "node:path";
 import { vol } from "memfs";
 import { describe, expect, it, vi } from "vitest";
-import { testWithTmpDir } from "../../../../test/test-utils";
+import { testWithTmpDir } from "../../../../test/test-utils.js";
 
 const fs = vol.promises;
 vi.mock("node:fs", () => ({
@@ -19,7 +19,7 @@ import {
 	getMissingEnvVars,
 	parseEnvFiles,
 	updateEnvFiles,
-} from "./env";
+} from "./env.js";
 
 describe("Init CLI - env utility functions", () => {
 	describe("getEnvFiles", () => {

@@ -8,15 +8,15 @@ import { defu } from "defu";
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
 import * as z from "zod";
-import { STRIPE_ERROR_CODES } from "./error-codes";
+import { STRIPE_ERROR_CODES } from "./error-codes.js";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionCreated,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
-} from "./hooks";
-import { customerMetadata, subscriptionMetadata } from "./metadata";
-import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
+} from "./hooks.js";
+import { customerMetadata, subscriptionMetadata } from "./metadata.js";
+import { referenceMiddleware, stripeSessionMiddleware } from "./middleware.js";
 import type {
 	CheckoutSessionLocale,
 	CustomerType,
@@ -25,7 +25,7 @@ import type {
 	Subscription,
 	SubscriptionOptions,
 	WithStripeCustomerId,
-} from "./types";
+} from "./types.js";
 import {
 	escapeStripeSearchValue,
 	getPlanByName,
@@ -34,7 +34,7 @@ import {
 	isPendingCancel,
 	resolvePlanItem,
 	resolveQuantity,
-} from "./utils";
+} from "./utils.js";
 
 /**
  * Resolves a Stripe price object, either from a lookup key or by retrieving

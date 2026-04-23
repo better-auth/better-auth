@@ -9,10 +9,13 @@ import type {
 	InferDBFieldsOutput,
 } from "@better-auth/core/db";
 import type { RawError } from "@better-auth/core/utils/error-codes";
-import type { InferFieldsInputClient } from "../db/field";
-import type { Auth, Session, User } from "../types";
-import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
-import type { InferRoutes } from "./path-to-object";
+import type { InferFieldsInputClient } from "../db/field.js";
+import type {
+	StripEmptyObjects,
+	UnionToIntersection,
+} from "../types/helper.js";
+import type { Auth, Session, User } from "../types/index.js";
+import type { InferRoutes } from "./path-to-object.js";
 export type {
 	ClientStore,
 	ClientAtomListener,

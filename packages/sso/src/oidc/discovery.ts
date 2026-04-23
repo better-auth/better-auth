@@ -9,13 +9,13 @@
  */
 
 import { betterFetch } from "@better-fetch/fetch";
-import type { OIDCConfig } from "../types";
+import type { OIDCConfig } from "../types.js";
 import type {
 	DiscoverOIDCConfigParams,
 	HydratedOIDCConfig,
 	OIDCDiscoveryDocument,
-} from "./types";
-import { DiscoveryError, REQUIRED_DISCOVERY_FIELDS } from "./types";
+} from "./types.js";
+import { DiscoveryError, REQUIRED_DISCOVERY_FIELDS } from "./types.js";
 
 /** Default timeout for discovery requests (10 seconds) */
 const DEFAULT_DISCOVERY_TIMEOUT = 10000;

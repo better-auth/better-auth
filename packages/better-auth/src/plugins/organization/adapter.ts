@@ -3,10 +3,10 @@ import { getCurrentAdapter } from "@better-auth/core/context";
 import type { WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
-import { parseJSON } from "../../client/parser";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
-import type { Session, User } from "../../types";
-import { getDate } from "../../utils/date";
+import { parseJSON } from "../../client/parser.js";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db/index.js";
+import type { Session, User } from "../../types/index.js";
+import { getDate } from "../../utils/date.js";
 import type {
 	InferInvitation,
 	InferMember,
@@ -19,8 +19,8 @@ import type {
 	Team,
 	TeamInput,
 	TeamMember,
-} from "./schema";
-import type { OrganizationOptions } from "./types";
+} from "./schema.js";
+import type { OrganizationOptions } from "./types.js";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,

@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
-import { generateRandomString } from "../../crypto";
-import type { User } from "../../types";
+import { generateRandomString } from "../../crypto/index.js";
+import type { User } from "../../types/index.js";
 
 export function createUserFactory(ctx: AuthContext) {
 	return (overrides: Partial<User> & Record<string, unknown> = {}): User => {

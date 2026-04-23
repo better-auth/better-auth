@@ -13,9 +13,9 @@ import {
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import { setupExpoFocusManager } from "./focus-manager";
-import { setupExpoOnlineManager } from "./online-manager";
-import { PACKAGE_VERSION } from "./version";
+import { setupExpoFocusManager } from "./focus-manager.js";
+import { setupExpoOnlineManager } from "./online-manager.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
@@ -503,5 +503,5 @@ export const expoClient = (opts: ExpoClientOptions) => {
 };
 
 export { parseSetCookieHeader } from "better-auth/cookies";
-export * from "./focus-manager";
-export * from "./online-manager";
+export * from "./focus-manager.js";
+export * from "./online-manager.js";

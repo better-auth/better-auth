@@ -1,10 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getIp } from "../../utils/get-request-ip";
-import { middlewareResponse } from "../../utils/middleware-response";
-import { PACKAGE_VERSION } from "../../version";
-import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
-import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
-import type { CaptchaOptions } from "./types";
+import { getIp } from "../../utils/get-request-ip.js";
+import { middlewareResponse } from "../../utils/middleware-response.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { defaultEndpoints, Providers, siteVerifyMap } from "./constants.js";
+import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes.js";
+import type { CaptchaOptions } from "./types.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -14,9 +14,9 @@ declare module "@better-auth/core" {
 	}
 }
 
-import * as verifyHandlers from "./verify-handlers";
+import * as verifyHandlers from "./verify-handlers/index.js";
 
-export type * from "./types";
+export type * from "./types.js";
 
 export const captcha = (options: CaptchaOptions) =>
 	({

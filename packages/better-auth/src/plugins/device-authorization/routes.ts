@@ -1,12 +1,12 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api/routes/session";
-import { generateRandomString } from "../../crypto";
-import { ms } from "../../utils/time";
-import type { DeviceAuthorizationOptions } from ".";
-import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
-import type { DeviceCode } from "./schema";
+import { getSessionFromCtx } from "../../api/routes/session.js";
+import { generateRandomString } from "../../crypto/index.js";
+import { ms } from "../../utils/time.js";
+import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes.js";
+import type { DeviceAuthorizationOptions } from "./index.js";
+import type { DeviceCode } from "./schema.js";
 
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

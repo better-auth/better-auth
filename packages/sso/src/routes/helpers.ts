@@ -1,7 +1,7 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import { saml } from "../samlify";
-import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { safeJsonParse } from "../utils";
+import { saml } from "../samlify.js";
+import type { SAMLConfig, SSOOptions, SSOProvider } from "../types.js";
+import { safeJsonParse } from "../utils.js";
 
 export async function findSAMLProvider(
 	providerId: string,

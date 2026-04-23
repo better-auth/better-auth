@@ -36,15 +36,15 @@
  * ```
  */
 
-export { type Auth0Options, auth0 } from "./auth0";
-export { type GumroadOptions, gumroad } from "./gumroad";
-export { type HubSpotOptions, hubspot } from "./hubspot";
-export { type KeycloakOptions, keycloak } from "./keycloak";
-export { type LineOptions, line } from "./line";
+export { type Auth0Options, auth0 } from "./auth0.js";
+export { type GumroadOptions, gumroad } from "./gumroad.js";
+export { type HubSpotOptions, hubspot } from "./hubspot.js";
+export { type KeycloakOptions, keycloak } from "./keycloak.js";
+export { type LineOptions, line } from "./line.js";
 export {
 	type MicrosoftEntraIdOptions,
 	microsoftEntraId,
-} from "./microsoft-entra-id";
-export { type OktaOptions, okta } from "./okta";
-export { type PatreonOptions, patreon } from "./patreon";
-export { type SlackOptions, slack } from "./slack";
+} from "./microsoft-entra-id.js";
+export { type OktaOptions, okta } from "./okta.js";
+export { type PatreonOptions, patreon } from "./patreon.js";
+export { type SlackOptions, slack } from "./slack.js";

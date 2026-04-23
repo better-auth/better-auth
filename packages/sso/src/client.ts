@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
-import type { SSOPlugin } from "./index";
-import { PACKAGE_VERSION } from "./version";
+import type { SSOPlugin } from "./index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 interface SSOClientOptions {
 	domainVerification?:

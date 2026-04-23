@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createAuthClient } from "../../client";
-import { setCookieToHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organizationClient } from "./client";
-import { organization } from "./organization";
+import { createAuthClient } from "../../client/index.js";
+import { setCookieToHeader } from "../../cookies/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { organizationClient } from "./client.js";
+import { organization } from "./organization.js";
 
 describe("team", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({

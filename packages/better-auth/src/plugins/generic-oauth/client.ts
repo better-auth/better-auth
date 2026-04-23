@@ -1,7 +1,7 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { genericOAuth } from ".";
-import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
+import { PACKAGE_VERSION } from "../../version.js";
+import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes.js";
+import type { genericOAuth } from "./index.js";
 
 export const genericOAuthClient = () => {
 	return {
@@ -12,10 +12,10 @@ export const genericOAuthClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 export type {
 	BaseOAuthProviderOptions,
 	GenericOAuthConfig,
 	GenericOAuthOptions,
-} from "./index";
-export type * from "./providers";
+} from "./index.js";
+export type * from "./providers/index.js";

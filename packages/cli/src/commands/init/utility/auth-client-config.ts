@@ -1,7 +1,7 @@
 import type { Awaitable } from "@better-auth/core";
-import type { DatabasesConfig } from "../configs/databases.config";
-import type { PluginConfig } from "../configs/temp-plugins.config";
-import { getAuthClientPluginsCode } from "./plugin";
+import type { DatabasesConfig } from "../configs/databases.config.js";
+import type { PluginConfig } from "../configs/temp-plugins.config.js";
+import { getAuthClientPluginsCode } from "./plugin.js";
 
 type GenerateAuthClientConfigStringOptions = {
 	database?: DatabasesConfig | null;

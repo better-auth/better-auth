@@ -2,10 +2,10 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../cookies";
-import { parseSessionInput, parseSessionOutput } from "../../db/schema";
-import type { AdditionalSessionFieldsInput } from "../../types";
-import { sessionMiddleware } from "./session";
+import { setSessionCookie } from "../../cookies/index.js";
+import { parseSessionInput, parseSessionOutput } from "../../db/schema.js";
+import type { AdditionalSessionFieldsInput } from "../../types/index.js";
+import { sessionMiddleware } from "./session.js";
 
 const updateSessionBodySchema = z.record(
 	z.string().meta({

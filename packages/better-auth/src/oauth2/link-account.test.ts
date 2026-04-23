@@ -10,10 +10,10 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { signJWT } from "../crypto";
-import { getTestInstance } from "../test-utils/test-instance";
-import type { User } from "../types";
-import { DEFAULT_SECRET } from "../utils/constants";
+import { signJWT } from "../crypto/index.js";
+import { getTestInstance } from "../test-utils/test-instance.js";
+import type { User } from "../types/index.js";
+import { DEFAULT_SECRET } from "../utils/constants.js";
 
 let mockEmail = "";
 let mockEmailVerified = true;

@@ -6,7 +6,7 @@ import type {
 } from "@better-auth/core";
 import type { Statements } from "better-auth/plugins/access";
 import type { InferOptionSchema } from "better-auth/types";
-import type { apiKeySchema } from "./schema";
+import type { apiKeySchema } from "./schema.js";
 
 export interface ApiKeyOptions {
 	schema?: InferOptionSchema<ReturnType<typeof apiKeySchema>> | undefined;

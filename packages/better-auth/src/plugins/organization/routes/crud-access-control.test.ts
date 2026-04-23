@@ -1,13 +1,18 @@
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { createAuthClient } from "../../../client";
-import { parseSetCookieHeader } from "../../../cookies";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { createAccessControl } from "../../access";
-import { adminAc, defaultStatements, memberAc, ownerAc } from "../access";
-import { inferOrgAdditionalFields, organizationClient } from "../client";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { organization } from "../organization";
+import { createAuthClient } from "../../../client/index.js";
+import { parseSetCookieHeader } from "../../../cookies/index.js";
+import { getTestInstance } from "../../../test-utils/test-instance.js";
+import { createAccessControl } from "../../access/index.js";
+import {
+	adminAc,
+	defaultStatements,
+	memberAc,
+	ownerAc,
+} from "../access/index.js";
+import { inferOrgAdditionalFields, organizationClient } from "../client.js";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes.js";
+import { organization } from "../organization.js";
 
 describe("dynamic access control", async () => {
 	const ac = createAccessControl({

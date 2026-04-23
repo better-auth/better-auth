@@ -1,5 +1,5 @@
-import type { BetterAuthDBSchema } from "../type";
-import { initGetDefaultModelName } from "./get-default-model-name";
+import type { BetterAuthDBSchema } from "../type.js";
+import { initGetDefaultModelName } from "./get-default-model-name.js";
 
 export const initGetModelName = ({
 	usePlural,

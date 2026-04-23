@@ -11,9 +11,9 @@ import { decodeJwt } from "jose";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "./types/oauth";
+import { oauthProviderClient } from "./client.js";
+import { oauthProvider } from "./oauth.js";
+import type { OAuthClient } from "./types/oauth.js";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 

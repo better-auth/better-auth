@@ -3,9 +3,9 @@
 import { createFetch } from "@better-fetch/fetch";
 import { atom } from "nanostores";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useAuthQuery } from "./query";
-import { createAuthClient } from "./solid";
-import { testClientPlugin } from "./test-plugin";
+import { useAuthQuery } from "./query.js";
+import { createAuthClient } from "./solid/index.js";
+import { testClientPlugin } from "./test-plugin.js";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/8420

@@ -1,9 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import type { User } from "better-auth/types";
-import { validateAccessToken } from "./introspect";
-import type { OAuthOptions, Scope } from "./types";
-import { getClient, resolveSubjectIdentifier } from "./utils";
+import { validateAccessToken } from "./introspect.js";
+import type { OAuthOptions, Scope } from "./types/index.js";
+import { getClient, resolveSubjectIdentifier } from "./utils/index.js";
 
 /**
  * Provides shared /userinfo and id_token claims functionality

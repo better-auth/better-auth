@@ -3,19 +3,19 @@ import { logger } from "@better-auth/core/env";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
-import { decodeRefreshToken } from "./token";
+import { decodeRefreshToken } from "./token.js";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
 	OAuthRefreshToken,
 	Scope,
-} from "./types";
+} from "./types/index.js";
 import {
 	basicToClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
 	validateClientCredentials,
-} from "./utils";
+} from "./utils/index.js";
 
 /**
  * IMPORTANT NOTES:

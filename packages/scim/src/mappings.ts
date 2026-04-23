@@ -1,4 +1,4 @@
-import type { SCIMEmail, SCIMName } from "./types";
+import type { SCIMEmail, SCIMName } from "./types.js";
 
 export const getAccountId = (userName: string, externalId?: string) => {
 	return externalId ?? userName;

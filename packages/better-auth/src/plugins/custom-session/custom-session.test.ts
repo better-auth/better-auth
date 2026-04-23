@@ -1,15 +1,15 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
-import type { BetterAuthOptions } from "../../types";
-import { inferAdditionalFields } from "../additional-fields/client";
-import { admin } from "../admin";
-import { adminClient } from "../admin/client";
-import { multiSession } from "../multi-session";
-import { multiSessionClient } from "../multi-session/client";
-import { customSession } from ".";
-import { customSessionClient } from "./client";
+import { createAuthClient } from "../../client/index.js";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import type { BetterAuthOptions } from "../../types/index.js";
+import { inferAdditionalFields } from "../additional-fields/client.js";
+import { adminClient } from "../admin/client.js";
+import { admin } from "../admin/index.js";
+import { multiSessionClient } from "../multi-session/client.js";
+import { multiSession } from "../multi-session/index.js";
+import { customSessionClient } from "./client.js";
+import { customSession } from "./index.js";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {

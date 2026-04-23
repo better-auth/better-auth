@@ -22,8 +22,8 @@ import {
 	insensitiveIn,
 	insensitiveNe,
 	insensitiveNotIn,
-} from "./query-builders";
-import type { KyselyDatabaseType } from "./types";
+} from "./query-builders.js";
+import type { KyselyDatabaseType } from "./types.js";
 
 interface KyselyAdapterConfig {
 	/**

@@ -1,12 +1,12 @@
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import type { OAuthOptions, Scope } from "../types";
+import type { OAuthOptions, Scope } from "../types/index.js";
 import {
 	deleteConsentEndpoint,
 	getConsentEndpoint,
 	getConsentsEndpoint,
 	updateConsentEndpoint,
-} from "./endpoints";
+} from "./endpoints.js";
 
 export const getOAuthConsent = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(

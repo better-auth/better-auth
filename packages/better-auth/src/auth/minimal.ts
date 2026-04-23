@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { initMinimal } from "../context/init-minimal";
-import type { Auth } from "../types";
-import { createBetterAuth } from "./base";
+import { initMinimal } from "../context/init-minimal.js";
+import type { Auth } from "../types/index.js";
+import { createBetterAuth } from "./base.js";
 
 export type { BetterAuthOptions };
 

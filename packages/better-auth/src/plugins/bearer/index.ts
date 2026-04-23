@@ -2,8 +2,8 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
-import { parseSetCookieHeader } from "../../cookies";
-import { PACKAGE_VERSION } from "../../version";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

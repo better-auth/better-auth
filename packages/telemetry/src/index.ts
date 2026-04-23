@@ -1,16 +1,19 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { ENV, getBooleanEnvVar, isTest, logger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
-import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
-import { detectDatabase } from "./detectors/detect-database";
-import { detectFramework } from "./detectors/detect-framework";
-import { detectPackageManager } from "./detectors/detect-project-info";
-import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
-import { detectSystemInfo } from "./detectors/detect-system-info";
-import { getProjectId } from "./project-id";
-import type { TelemetryContext, TelemetryEvent } from "./types";
+import { getTelemetryAuthConfig } from "./detectors/detect-auth-config.js";
+import { detectDatabase } from "./detectors/detect-database.js";
+import { detectFramework } from "./detectors/detect-framework.js";
+import { detectPackageManager } from "./detectors/detect-project-info.js";
+import {
+	detectEnvironment,
+	detectRuntime,
+} from "./detectors/detect-runtime.js";
+import { detectSystemInfo } from "./detectors/detect-system-info.js";
+import { getProjectId } from "./project-id.js";
+import type { TelemetryContext, TelemetryEvent } from "./types.js";
 export { getTelemetryAuthConfig };
-export type { TelemetryEvent } from "./types";
+export type { TelemetryEvent } from "./types.js";
 
 const noop: (event: TelemetryEvent) => Promise<void> = async function noop() {};
 

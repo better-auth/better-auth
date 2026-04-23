@@ -1,5 +1,5 @@
-import { defaultRoles } from "./access";
-import type { AdminOptions } from "./types";
+import { defaultRoles } from "./access/index.js";
+import type { AdminOptions } from "./types.js";
 
 type PermissionExclusive = {
 	permissions: { [key: string]: string[] };

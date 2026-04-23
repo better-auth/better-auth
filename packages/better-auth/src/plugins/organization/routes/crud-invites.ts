@@ -1,24 +1,24 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api/routes";
-import { setSessionCookie } from "../../../cookies";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
-import { toZodSchema } from "../../../db";
-import { getDate } from "../../../utils/date";
-import { defaultRoles } from "../access/statement";
-import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { parseRoles } from "../organization";
+import { getSessionFromCtx } from "../../../api/routes/index.js";
+import { setSessionCookie } from "../../../cookies/index.js";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/index.js";
+import { toZodSchema } from "../../../db/index.js";
+import { getDate } from "../../../utils/date.js";
+import { defaultRoles } from "../access/statement.js";
+import { getOrgAdapter } from "../adapter.js";
+import { orgMiddleware, orgSessionMiddleware } from "../call.js";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes.js";
+import { hasPermission } from "../has-permission.js";
+import { parseRoles } from "../organization.js";
 import type {
 	InferInvitation,
 	InferOrganizationRolesFromOption,
 	Invitation,
 	Member,
-} from "../schema";
-import type { OrganizationOptions } from "../types";
+} from "../schema.js";
+import type { OrganizationOptions } from "../types.js";
 
 const baseInvitationSchema = z.object({
 	email: z.string().meta({

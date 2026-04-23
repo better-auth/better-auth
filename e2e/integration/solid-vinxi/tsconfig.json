@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext",
+    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
@@ -11,6 +12,15 @@
     "strict": true,
     "noEmit": true,
     "types": ["vinxi/types/client"],
-    "isolatedModules": true
-  }
+    "isolatedModules": true,
+    "skipLibCheck": true
+  },
+  "references": [
+    {
+      "path": "../../../packages/better-auth/tsconfig.build.json"
+    },
+    {
+      "path": "../../../packages/core/tsconfig.build.json"
+    }
+  ]
 }

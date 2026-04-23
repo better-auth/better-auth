@@ -1,8 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { Auth } from "../types";
-import { betterAuth } from "./minimal";
+import type { Auth } from "../types/index.js";
+import { betterAuth } from "./minimal.js";
 
 describe("auth-minimal", () => {
 	const db: Record<string, any[]> = {};

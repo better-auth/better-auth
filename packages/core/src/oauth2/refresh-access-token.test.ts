@@ -5,7 +5,7 @@ vi.mock("@better-fetch/fetch", () => ({
 }));
 
 import { betterFetch } from "@better-fetch/fetch";
-import { refreshAccessToken } from "./refresh-access-token";
+import { refreshAccessToken } from "./refresh-access-token.js";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 

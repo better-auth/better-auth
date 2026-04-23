@@ -4,7 +4,7 @@ import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import prettier from "prettier";
-import type { SchemaGenerator } from "./types";
+import type { SchemaGenerator } from "./types.js";
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {

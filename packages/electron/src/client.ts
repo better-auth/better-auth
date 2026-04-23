@@ -6,23 +6,23 @@ import electron from "electron";
 import type {
 	ElectronAuthenticateOptions,
 	ElectronRequestAuthOptions,
-} from "./authenticate";
-import { authenticate, requestAuth } from "./authenticate";
-import { setupMain, withGetWindowFallback } from "./browser";
+} from "./authenticate.js";
+import { authenticate, requestAuth } from "./authenticate.js";
+import { setupMain, withGetWindowFallback } from "./browser.js";
 import {
 	getCookie,
 	getSetCookie,
 	hasBetterAuthCookies,
 	hasSessionCookieChanged,
-} from "./cookies";
-import type { ExposedBridges } from "./preload";
-import type { ElectronClientOptions, Storage } from "./types/client";
+} from "./cookies.js";
+import type { ExposedBridges } from "./preload.js";
+import type { ElectronClientOptions, Storage } from "./types/client.js";
 import {
 	getChannelPrefixWithDelimiter,
 	isProcessType,
 	parseProtocolScheme,
-} from "./utils";
-import { PACKAGE_VERSION } from "./version";
+} from "./utils.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 const { app, safeStorage, webContents } = electron;
 
@@ -259,6 +259,6 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export { handleDeepLink } from "./browser";
-export type * from "./types/client";
-export { normalizeUserOutput } from "./user";
+export { handleDeepLink } from "./browser.js";
+export type * from "./types/client.js";
+export { normalizeUserOutput } from "./user.js";

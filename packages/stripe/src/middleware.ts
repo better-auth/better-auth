@@ -1,13 +1,13 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { sessionMiddleware } from "better-auth/api";
-import { STRIPE_ERROR_CODES } from "./error-codes";
+import { STRIPE_ERROR_CODES } from "./error-codes.js";
 import type {
 	AuthorizeReferenceAction,
 	CustomerType,
 	StripeCtxSession,
 	SubscriptionOptions,
-} from "./types";
+} from "./types.js";
 
 export const stripeSessionMiddleware = createAuthMiddleware(
 	{

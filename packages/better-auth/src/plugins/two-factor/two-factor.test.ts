@@ -1,16 +1,16 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
-import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
-import { symmetricDecrypt } from "../../crypto";
-import { convertSetCookieToCookie } from "../../test-utils/headers";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { DEFAULT_SECRET } from "../../utils/constants";
-import { anonymous } from "../anonymous";
-import { magicLink } from "../magic-link";
-import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
+import { createAuthClient } from "../../client/index.js";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { symmetricDecrypt } from "../../crypto/index.js";
+import { convertSetCookieToCookie } from "../../test-utils/headers.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { DEFAULT_SECRET } from "../../utils/constants.js";
+import { anonymous } from "../anonymous/index.js";
+import { magicLink } from "../magic-link/index.js";
+import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from "./index.js";
+import type { TwoFactorTable, UserWithTwoFactor } from "./types.js";
 
 describe("two factor", async () => {
 	let OTP = "";

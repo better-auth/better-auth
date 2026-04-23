@@ -1,8 +1,8 @@
 import type {
 	DatabaseAdapter,
 	DatabasesConfig,
-} from "../configs/databases.config";
-import { databasesConfig } from "../configs/databases.config";
+} from "../configs/databases.config.js";
+import { databasesConfig } from "../configs/databases.config.js";
 
 export const getDatabaseCode = <A extends DatabaseAdapter | null>(
 	adapter: A,

@@ -1,10 +1,10 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import { atom, onMount } from "nanostores";
-import type { Session, User } from "../types";
-import type { AuthQueryAtom } from "./query";
-import { useAuthQuery } from "./query";
-import { createSessionRefreshManager } from "./session-refresh";
+import type { Session, User } from "../types/index.js";
+import type { AuthQueryAtom } from "./query.js";
+import { useAuthQuery } from "./query.js";
+import { createSessionRefreshManager } from "./session-refresh.js";
 
 export type SessionAtom = AuthQueryAtom<{
 	user: User;

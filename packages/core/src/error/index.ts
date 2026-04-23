@@ -9,7 +9,7 @@ export class BetterAuthError extends Error {
 	}
 }
 
-export { type APIErrorCode, BASE_ERROR_CODES } from "./codes";
+export { type APIErrorCode, BASE_ERROR_CODES } from "./codes.js";
 
 export class APIError extends BaseAPIError {
 	constructor(...args: ConstructorParameters<typeof BaseAPIError>) {

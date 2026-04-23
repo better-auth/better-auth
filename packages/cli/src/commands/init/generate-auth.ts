@@ -1,16 +1,16 @@
 import type { Awaitable } from "@better-auth/core";
 import type { ZodSchema } from "zod";
-import type { DatabaseAdapter } from "./configs/databases.config";
-import type { Framework } from "./configs/frameworks.config";
-import type { Plugin } from "./configs/temp-plugins.config";
+import type { DatabaseAdapter } from "./configs/databases.config.js";
+import type { Framework } from "./configs/frameworks.config.js";
+import type { Plugin } from "./configs/temp-plugins.config.js";
+import type { ImportGroup } from "./utility/imports.js";
+import { createImport, getImportString } from "./utility/imports.js";
 import {
 	formatCode,
 	generateInnerAuthConfigCode,
 	getDatabaseCode,
-} from "./utility";
-import type { ImportGroup } from "./utility/imports";
-import { createImport, getImportString } from "./utility/imports";
-import { getPluginConfigs } from "./utility/plugin";
+} from "./utility/index.js";
+import { getPluginConfigs } from "./utility/plugin.js";
 
 export type BaseGetArgumentsOptions = {
 	/**

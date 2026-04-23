@@ -1,14 +1,14 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
-import { logger } from "../env";
-import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { logger } from "../env/index.js";
+import { BetterAuthError } from "../error/index.js";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "../oauth2/index.js";
 export interface FacebookProfile {
 	id: string;
 	name: string;

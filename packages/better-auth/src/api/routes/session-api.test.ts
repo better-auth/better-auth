@@ -12,11 +12,11 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { parseCookies, parseSetCookieHeader } from "../../cookies";
-import { signJWT, verifyJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { getDate } from "../../utils/date";
-import { freshSessionMiddleware } from "./session";
+import { parseCookies, parseSetCookieHeader } from "../../cookies/index.js";
+import { signJWT, verifyJWT } from "../../crypto/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { getDate } from "../../utils/date.js";
+import { freshSessionMiddleware } from "./session.js";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =

@@ -1,6 +1,6 @@
-import type { BetterAuthDBSchema } from "../type";
-import { initGetDefaultFieldName } from "./get-default-field-name";
-import { initGetDefaultModelName } from "./get-default-model-name";
+import type { BetterAuthDBSchema } from "../type.js";
+import { initGetDefaultFieldName } from "./get-default-field-name.js";
+import { initGetDefaultModelName } from "./get-default-model-name.js";
 
 export const initGetFieldName = ({
 	schema,

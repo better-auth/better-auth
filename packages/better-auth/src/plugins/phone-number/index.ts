@@ -1,19 +1,19 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { mergeSchema } from "../../db/schema";
-import { PACKAGE_VERSION } from "../../version";
-import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
-import type { RequiredPhoneNumberOptions } from "./routes";
+import { mergeSchema } from "../../db/schema.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { PHONE_NUMBER_ERROR_CODES } from "./error-codes.js";
+import type { RequiredPhoneNumberOptions } from "./routes.js";
 import {
 	requestPasswordResetPhoneNumber,
 	resetPasswordPhoneNumber,
 	sendPhoneNumberOTP,
 	signInPhoneNumber,
 	verifyPhoneNumber,
-} from "./routes";
-import { schema } from "./schema";
-import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
+} from "./routes.js";
+import { schema } from "./schema.js";
+import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types.js";
 
 export type { PhoneNumberOptions, UserWithPhoneNumber };
 

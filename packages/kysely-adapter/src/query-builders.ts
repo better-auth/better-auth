@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import type { KyselyDatabaseType } from "./types";
+import type { KyselyDatabaseType } from "./types.js";
 
 /**
  * Case-insensitive ILIKE/LIKE for pattern matching.

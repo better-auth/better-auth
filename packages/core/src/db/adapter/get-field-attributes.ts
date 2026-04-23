@@ -1,9 +1,9 @@
-import { BetterAuthError } from "../../error";
-import type { BetterAuthOptions } from "../../types";
-import type { BetterAuthDBSchema } from "../type";
-import { initGetDefaultFieldName } from "./get-default-field-name";
-import { initGetDefaultModelName } from "./get-default-model-name";
-import { initGetIdField } from "./get-id-field";
+import { BetterAuthError } from "../../error/index.js";
+import type { BetterAuthOptions } from "../../types/index.js";
+import type { BetterAuthDBSchema } from "../type.js";
+import { initGetDefaultFieldName } from "./get-default-field-name.js";
+import { initGetDefaultModelName } from "./get-default-model-name.js";
+import { initGetIdField } from "./get-id-field.js";
 
 export const initGetFieldAttributes = ({
 	usePlural,

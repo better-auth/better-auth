@@ -7,49 +7,49 @@ import open from "open";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
-import { cliVersion } from "../..";
-import { generateDrizzleSchema } from "../../generators/drizzle";
-import { generatePrismaSchema } from "../../generators/prisma";
+import { generateDrizzleSchema } from "../../generators/drizzle.js";
+import { generatePrismaSchema } from "../../generators/prisma.js";
+import { cliVersion } from "../../index.js";
 import {
 	detectPackageManager,
 	getPkgManagerStr,
 	PACKAGE_MANAGER,
-} from "../../utils/check-package-managers";
+} from "../../utils/check-package-managers.js";
 import {
 	possibleAuthConfigPaths,
 	possibleClientConfigPaths,
-} from "../../utils/config-paths";
-import { getPackageInfo, hasDependency } from "../../utils/get-package-info";
-import { generateSecretHash, tryCatch } from "../../utils/helper";
-import { installDependencies } from "../../utils/install-dependencies";
-import type { DatabaseAdapter } from "./configs/databases.config";
-import type { Framework } from "./configs/frameworks.config";
-import { FRAMEWORKS } from "./configs/frameworks.config";
+} from "../../utils/config-paths.js";
+import { getPackageInfo, hasDependency } from "../../utils/get-package-info.js";
+import { generateSecretHash, tryCatch } from "../../utils/helper.js";
+import { installDependencies } from "../../utils/install-dependencies.js";
+import type { DatabaseAdapter } from "./configs/databases.config.js";
+import type { Framework } from "./configs/frameworks.config.js";
+import { FRAMEWORKS } from "./configs/frameworks.config.js";
 import {
 	SOCIAL_PROVIDER_CONFIGS,
 	SOCIAL_PROVIDERS,
-} from "./configs/social-providers.config";
-import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config";
-import { tempPluginsConfig } from "./configs/temp-plugins.config";
-import type { GetArgumentsOptions } from "./generate-auth";
-import { generateAuthConfigCode } from "./generate-auth";
-import { generateAuthClientConfigCode } from "./generate-auth-client";
+} from "./configs/social-providers.config.js";
+import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config.js";
+import { tempPluginsConfig } from "./configs/temp-plugins.config.js";
+import type { GetArgumentsOptions } from "./generate-auth.js";
+import { generateAuthConfigCode } from "./generate-auth.js";
+import { generateAuthClientConfigCode } from "./generate-auth-client.js";
 import {
 	getAvailableORMs,
 	getDatabaseCode,
 	getDialectsForORM,
 	isDirectAdapter,
 	isKyselyDialect,
-} from "./utility/database";
+} from "./utility/database.js";
 import {
 	createEnvFile,
 	getEnvFiles,
 	getMissingEnvVars,
 	parseEnvFiles,
 	updateEnvFiles,
-} from "./utility/env";
-import { detectFramework } from "./utility/framework";
-import { getFlagVariable } from "./utility/prompt";
+} from "./utility/env.js";
+import { detectFramework } from "./utility/framework.js";
+import { getFlagVariable } from "./utility/prompt.js";
 
 // Helper functions to replace @clack/prompts
 const confirm = async (options: { message: string; initial?: boolean }) => {

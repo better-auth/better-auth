@@ -1,14 +1,17 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
-import { setSessionCookie } from "../../../cookies";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
-import { toZodSchema } from "../../../db";
-import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
+import {
+	getSessionFromCtx,
+	requestOnlySessionMiddleware,
+} from "../../../api/index.js";
+import { setSessionCookie } from "../../../cookies/index.js";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/index.js";
+import { toZodSchema } from "../../../db/index.js";
+import { getOrgAdapter } from "../adapter.js";
+import { orgMiddleware, orgSessionMiddleware } from "../call.js";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes.js";
+import { hasPermission } from "../has-permission.js";
 import type {
 	InferInvitation,
 	InferMember,
@@ -16,8 +19,8 @@ import type {
 	InferTeam,
 	Member,
 	TeamMember,
-} from "../schema";
-import type { OrganizationOptions } from "../types";
+} from "../schema.js";
+import type { OrganizationOptions } from "../types.js";
 
 const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({

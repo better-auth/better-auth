@@ -34,8 +34,8 @@ describe("next-js integration", () => {
 		}));
 
 		const [{ getTestInstance }, { nextCookies }] = await Promise.all([
-			import("../test-utils/test-instance"),
-			import("./next-js"),
+			import("../test-utils/test-instance.js"),
+			import("./next-js.js"),
 		]);
 
 		const { auth, testUser } = await getTestInstance({
@@ -124,8 +124,8 @@ describe("next-js integration", () => {
 		}));
 
 		const [{ getTestInstance }, { nextCookies }] = await Promise.all([
-			import("../test-utils/test-instance"),
-			import("./next-js"),
+			import("../test-utils/test-instance.js"),
+			import("./next-js.js"),
 		]);
 
 		const { auth, testUser } = await getTestInstance({

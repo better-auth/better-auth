@@ -7,7 +7,7 @@ import type {
 import { getAuthTables } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
-import type { Account, Session, User } from "../types";
+import type { Account, Session, User } from "../types/index.js";
 
 type Mode = "input" | "output";
 

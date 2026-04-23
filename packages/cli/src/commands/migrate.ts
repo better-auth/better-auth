@@ -11,7 +11,7 @@ import { Command } from "commander";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
-import { getConfig } from "../utils/get-config";
+import { getConfig } from "../utils/get-config.js";
 
 /** @internal */
 export async function migrateAction(opts: any) {

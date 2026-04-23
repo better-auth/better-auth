@@ -8,7 +8,7 @@ import type {
 	VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
 import type { InferOptionSchema } from "better-auth/types";
-import type { schema } from "./schema";
+import type { schema } from "./schema.js";
 
 /**
  * @internal

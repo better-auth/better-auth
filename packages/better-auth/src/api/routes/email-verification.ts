@@ -5,12 +5,12 @@ import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
 import * as z from "zod";
-import { setSessionCookie } from "../../cookies";
-import { signJWT } from "../../crypto/jwt";
-import { parseUserOutput } from "../../db/schema";
-import type { User } from "../../types";
-import { originCheck } from "../middlewares";
-import { getSessionFromCtx } from "./session";
+import { setSessionCookie } from "../../cookies/index.js";
+import { signJWT } from "../../crypto/jwt.js";
+import { parseUserOutput } from "../../db/schema.js";
+import type { User } from "../../types/index.js";
+import { originCheck } from "../middlewares/index.js";
+import { getSessionFromCtx } from "./session.js";
 
 export async function createEmailVerificationToken(
 	secret: string,

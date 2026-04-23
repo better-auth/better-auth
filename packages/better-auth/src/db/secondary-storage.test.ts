@@ -1,6 +1,6 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getTestInstance } from "../test-utils/test-instance";
+import { getTestInstance } from "../test-utils/test-instance.js";
 
 describe("secondary storage - get returns JSON string", async () => {
 	const store = new Map<string, string>();

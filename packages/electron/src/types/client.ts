@@ -1,6 +1,6 @@
 import type { Awaitable } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import type { ElectronSharedOptions } from "./options";
+import type { ElectronSharedOptions } from "./options.js";
 
 export interface Storage {
 	getItem: (name: string) => unknown | null;
@@ -147,7 +147,7 @@ export interface ElectronProxyClientOptions
 	cookiePrefix?: string | undefined;
 }
 
-export type * from "../authenticate";
-export type * from "../preload";
-export type * from "../user";
+export type * from "../authenticate.js";
+export type * from "../preload.js";
+export type * from "../user.js";
 export type { ElectronSharedOptions };

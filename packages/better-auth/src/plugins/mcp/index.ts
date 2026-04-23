@@ -14,28 +14,28 @@ import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
-import { resolveDynamicTrustedProxyHeaders } from "../../context/helpers";
-import { expireCookie, parseSetCookieHeader } from "../../cookies";
-import { generateRandomString } from "../../crypto";
-import { HIDE_METADATA } from "../../utils";
+import { APIError, getSessionFromCtx } from "../../api/index.js";
+import { resolveDynamicTrustedProxyHeaders } from "../../context/helpers.js";
+import { expireCookie, parseSetCookieHeader } from "../../cookies/index.js";
+import { generateRandomString } from "../../crypto/index.js";
+import { HIDE_METADATA } from "../../utils/index.js";
 import {
 	getBaseURL,
 	isDynamicBaseURLConfig,
 	resolveBaseURL,
-} from "../../utils/url";
-import { PACKAGE_VERSION } from "../../version";
+} from "../../utils/url.js";
+import { PACKAGE_VERSION } from "../../version.js";
 import type {
 	Client,
 	CodeVerificationValue,
 	OAuthAccessToken,
 	OIDCMetadata,
 	OIDCOptions,
-} from "../oidc-provider";
-import { oidcProvider } from "../oidc-provider";
-import { schema } from "../oidc-provider/schema";
-import { parsePrompt } from "../oidc-provider/utils/prompt";
-import { authorizeMCPOAuth } from "./authorize";
+} from "../oidc-provider/index.js";
+import { oidcProvider } from "../oidc-provider/index.js";
+import { schema } from "../oidc-provider/schema.js";
+import { parsePrompt } from "../oidc-provider/utils/prompt.js";
+import { authorizeMCPOAuth } from "./authorize.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

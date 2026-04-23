@@ -1,11 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import * as z from "zod";
-import { APIError } from "../../api";
-import type { Role } from "../access";
-import { defaultRoles } from "./access";
-import type { HasPermissionBaseInput } from "./permission";
-import { cacheAllRoles, hasPermissionFn } from "./permission";
-import type { OrganizationRole } from "./schema";
+import { APIError } from "../../api/index.js";
+import type { Role } from "../access/index.js";
+import { defaultRoles } from "./access/index.js";
+import type { HasPermissionBaseInput } from "./permission.js";
+import { cacheAllRoles, hasPermissionFn } from "./permission.js";
+import type { OrganizationRole } from "./schema.js";
 
 export const hasPermission = async (
 	input: {

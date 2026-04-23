@@ -21,63 +21,63 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "typecheck": "tsc --build tsconfig.json",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./client": {
       "dev-source": "./src/client.ts",
-      "types": "./dist/client.d.mts",
-      "default": "./dist/client.mjs"
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
     },
     "./proxy": {
       "dev-source": "./src/proxy.ts",
-      "types": "./dist/proxy.d.mts",
-      "default": "./dist/proxy.mjs"
+      "types": "./dist/proxy.d.ts",
+      "default": "./dist/proxy.js"
     },
     "./preload": {
       "dev-source": "./src/preload.ts",
-      "types": "./dist/preload.d.mts",
-      "default": "./dist/preload.mjs"
+      "types": "./dist/preload.d.ts",
+      "default": "./dist/preload.js"
     },
     "./storage": {
       "dev-source": "./src/storage.ts",
-      "types": "./dist/storage.d.mts",
-      "default": "./dist/storage.mjs"
+      "types": "./dist/storage.d.ts",
+      "default": "./dist/storage.js"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.mts"
+        "./dist/index.d.ts"
       ],
       "client": [
-        "./dist/client.d.mts"
+        "./dist/client.d.ts"
       ],
       "proxy": [
-        "./dist/proxy.d.mts"
+        "./dist/proxy.d.ts"
       ],
       "preload": [
-        "./dist/preload.d.mts"
+        "./dist/preload.d.ts"
       ],
       "storage": [
-        "./dist/storage.d.mts"
+        "./dist/storage.d.ts"
       ]
     }
   },
@@ -89,8 +89,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.6.2",
-    "electron": "^41.2.2",
-    "tsdown": "catalog:"
+    "electron": "^41.2.2"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",

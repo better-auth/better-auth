@@ -4,17 +4,17 @@ import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetch } from "@better-fetch/fetch";
 import electron from "electron";
-import { authenticate, requestAuth } from "./authenticate";
+import { authenticate, requestAuth } from "./authenticate.js";
 import type {
 	ElectronClientOptions,
 	ElectronRequestAuthOptions,
-} from "./client";
-import { fetchUserImage, normalizeUserOutput } from "./user";
+} from "./client.js";
+import { fetchUserImage, normalizeUserOutput } from "./user.js";
 import {
 	getChannelPrefixWithDelimiter,
 	isProcessType,
 	parseProtocolScheme,
-} from "./utils";
+} from "./utils.js";
 
 const { app, session, protocol, BrowserWindow, ipcMain, webContents } =
 	electron;

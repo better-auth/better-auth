@@ -1,4 +1,4 @@
-import type { ElectronClientOptions } from "./types/client";
+import type { ElectronClientOptions } from "./types/client.js";
 
 export function isProcessType(type: typeof process.type) {
 	return typeof process !== "undefined" && process.type === type;

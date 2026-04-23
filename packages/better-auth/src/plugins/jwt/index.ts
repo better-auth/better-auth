@@ -6,20 +6,20 @@ import {
 import { BetterAuthError } from "@better-auth/core/error";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
-import { mergeSchema } from "../../db/schema";
-import { PACKAGE_VERSION } from "../../version";
-import { getJwksAdapter } from "./adapter";
-import { schema } from "./schema";
-import { getJwtToken, signJWT } from "./sign";
-import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
-import { verifyJWT as verifyJWTHelper } from "./verify";
+import { APIError, sessionMiddleware } from "../../api/index.js";
+import { mergeSchema } from "../../db/schema.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { getJwksAdapter } from "./adapter.js";
+import { schema } from "./schema.js";
+import { getJwtToken, signJWT } from "./sign.js";
+import type { JwtOptions } from "./types.js";
+import { createJwk } from "./utils.js";
+import { verifyJWT as verifyJWTHelper } from "./verify.js";
 
-export { signJWT } from "./sign";
-export type * from "./types";
-export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
-export { verifyJWT } from "./verify";
+export { signJWT } from "./sign.js";
+export type * from "./types.js";
+export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils.js";
+export { verifyJWT } from "./verify.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

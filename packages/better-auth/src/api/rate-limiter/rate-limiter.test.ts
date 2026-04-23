@@ -1,7 +1,7 @@
 import { normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import type { RateLimit } from "../../types";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import type { RateLimit } from "../../types/index.js";
 
 describe("rate-limiter", async () => {
 	const { client, testUser } = await getTestInstance({
@@ -336,7 +336,7 @@ describe("missing client IP warning", () => {
 		vi.resetModules();
 
 		const { getTestInstance: getTestInstanceReloaded } = await import(
-			"../../test-utils/test-instance"
+			"../../test-utils/test-instance.js"
 		);
 		const log = vi.fn();
 		const { client } = await getTestInstanceReloaded({

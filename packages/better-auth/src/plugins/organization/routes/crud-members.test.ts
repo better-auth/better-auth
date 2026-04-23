@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createAuthClient } from "../../../client";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { organizationClient } from "../client";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { organization } from "../organization";
+import { createAuthClient } from "../../../client/index.js";
+import { getTestInstance } from "../../../test-utils/test-instance.js";
+import { organizationClient } from "../client.js";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes.js";
+import { organization } from "../organization.js";
 
 describe("listMembers", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({

@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { siwe } from ".";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { siwe } from "./index.js";
 
 export const siweClient = () => {
 	return {

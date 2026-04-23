@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createTelemetry } from "./index";
-import type { TelemetryEvent } from "./types";
+import { createTelemetry } from "./index.js";
+import type { TelemetryEvent } from "./types.js";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(async () => ({ status: 200 })),

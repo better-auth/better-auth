@@ -1,11 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-} from "../oauth2";
+} from "../oauth2/index.js";
 
 export interface LineIdTokenPayload {
 	iss: string;

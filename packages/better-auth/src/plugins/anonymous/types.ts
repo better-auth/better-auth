@@ -4,8 +4,8 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import type { EndpointContext } from "better-call";
-import type { InferOptionSchema, Session, User } from "../../types";
-import type { schema } from "./schema";
+import type { InferOptionSchema, Session, User } from "../../types/index.js";
+import type { schema } from "./schema.js";
 
 export type AnonymousSession = { session: Session; user: User } & {
 	user: { isAnonymous: boolean | null };

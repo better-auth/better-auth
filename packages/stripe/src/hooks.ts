@@ -2,15 +2,15 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import { subscriptionMetadata } from "./metadata";
-import type { CustomerType, StripeOptions, Subscription } from "./types";
+import { subscriptionMetadata } from "./metadata.js";
+import type { CustomerType, StripeOptions, Subscription } from "./types.js";
 import {
 	isActiveOrTrialing,
 	isPendingCancel,
 	isStripePendingCancel,
 	resolvePlanItem,
 	resolveQuantity,
-} from "./utils";
+} from "./utils.js";
 
 /**
  * Find organization or user by stripeCustomerId.

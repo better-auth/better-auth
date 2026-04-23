@@ -1,9 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { setOAuthState } from "../api/state/oauth";
-import { generateRandomString } from "../crypto";
-import type { StateData } from "../state";
-import { generateGenericState, parseGenericState, StateError } from "../state";
+import { setOAuthState } from "../api/state/oauth.js";
+import { generateRandomString } from "../crypto/index.js";
+import type { StateData } from "../state.js";
+import {
+	generateGenericState,
+	parseGenericState,
+	StateError,
+} from "../state.js";
 
 export async function generateState(
 	c: GenericEndpointContext,

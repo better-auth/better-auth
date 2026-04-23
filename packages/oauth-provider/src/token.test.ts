@@ -12,11 +12,11 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope, VerificationValue } from "./types";
-import type { OAuthClient } from "./types/oauth";
-import { verificationValueSchema } from "./types/zod";
+import { oauthProviderClient } from "./client.js";
+import { oauthProvider } from "./oauth.js";
+import type { OAuthOptions, Scope, VerificationValue } from "./types/index.js";
+import type { OAuthClient } from "./types/oauth.js";
+import { verificationValueSchema } from "./types/zod.js";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 

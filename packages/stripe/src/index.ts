@@ -3,8 +3,8 @@ import { APIError } from "better-auth";
 import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
-import { STRIPE_ERROR_CODES } from "./error-codes";
-import { customerMetadata } from "./metadata";
+import { STRIPE_ERROR_CODES } from "./error-codes.js";
+import { customerMetadata } from "./metadata.js";
 import {
 	cancelSubscription,
 	createBillingPortal,
@@ -13,16 +13,20 @@ import {
 	stripeWebhook,
 	subscriptionSuccess,
 	upgradeSubscription,
-} from "./routes";
-import { getSchema } from "./schema";
+} from "./routes.js";
+import { getSchema } from "./schema.js";
 import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
 	WithStripeCustomerId,
-} from "./types";
-import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
-import { PACKAGE_VERSION } from "./version";
+} from "./types.js";
+import {
+	escapeStripeSearchValue,
+	getPlans,
+	isActiveOrTrialing,
+} from "./utils.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -459,4 +463,4 @@ export type StripePlugin<O extends StripeOptions> = ReturnType<
 	typeof stripe<O>
 >;
 
-export type * from "./types";
+export type * from "./types.js";

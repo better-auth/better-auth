@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeTimestampValue, resolveSessionAuthTime } from "./index";
+import { normalizeTimestampValue, resolveSessionAuthTime } from "./index.js";
 
 describe("normalizeTimestampValue", () => {
 	it("parses epoch-millis text values", () => {

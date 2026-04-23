@@ -1,1 +1,1 @@
-export * from "./last-login-method";
+export * from "./last-login-method.js";

@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
-import { deviceAuthorizationClient } from "./client";
-import type { DeviceCode } from "./schema";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { deviceAuthorizationClient } from "./client.js";
+import {
+	deviceAuthorization,
+	deviceAuthorizationOptionsSchema,
+} from "./index.js";
+import type { DeviceCode } from "./schema.js";
 
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {

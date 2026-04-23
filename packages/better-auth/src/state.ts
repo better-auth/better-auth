@@ -1,12 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import * as z from "zod";
-import { expireCookie } from "./cookies";
+import { expireCookie } from "./cookies/index.js";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
-} from "./crypto";
+} from "./crypto/index.js";
 
 const stateDataSchema = z.looseObject({
 	callbackURL: z.string(),

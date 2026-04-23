@@ -6,17 +6,17 @@ import {
 import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { createEmailVerificationToken } from "../../api";
-import { getSessionFromCtx } from "../../api/routes/session";
-import { setSessionCookie } from "../../cookies";
-import { mergeSchema, parseUserOutput } from "../../db";
-import type { InferOptionSchema } from "../../types/plugins";
-import { PACKAGE_VERSION } from "../../version";
-import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import type { UsernameSchema } from "./schema";
-import { getSchema } from "./schema";
+import { createEmailVerificationToken } from "../../api/index.js";
+import { getSessionFromCtx } from "../../api/routes/session.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { mergeSchema, parseUserOutput } from "../../db/index.js";
+import type { InferOptionSchema } from "../../types/plugins.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes.js";
+import type { UsernameSchema } from "./schema.js";
+import { getSchema } from "./schema.js";
 
-export { USERNAME_ERROR_CODES } from "./error-codes";
+export { USERNAME_ERROR_CODES } from "./error-codes.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

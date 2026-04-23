@@ -1,5 +1,5 @@
-import type { OpenTelemetryAPI } from "./noop";
-import { noopOpenTelemetryAPI } from "./noop";
+import type { OpenTelemetryAPI } from "./noop.js";
+import { noopOpenTelemetryAPI } from "./noop.js";
 
 let openTelemetryAPIPromise: Promise<void> | undefined;
 let openTelemetryAPI: OpenTelemetryAPI | undefined;

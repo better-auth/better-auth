@@ -1,5 +1,5 @@
 import type { JWSAlgorithms } from "better-auth/plugins";
-import type { Prompt } from ".";
+import type { Prompt } from "./index.js";
 
 /**
  * Supported grant types of the token endpoint

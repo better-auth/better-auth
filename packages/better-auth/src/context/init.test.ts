@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { init } from "./init";
+import { init } from "./init.js";
 
 describe("init (with Kysely)", () => {
 	const database = new DatabaseSync(":memory:");

@@ -5,8 +5,8 @@ import type {
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { atom, computed } from "nanostores";
 import * as z from "zod";
-import { PACKAGE_VERSION } from "../version";
-import { useAuthQuery } from "./query";
+import { PACKAGE_VERSION } from "../version.js";
+import { useAuthQuery } from "./query.js";
 
 const serverPlugin = {
 	id: "test",

@@ -7,7 +7,7 @@ import type {
 	ExtractPluginField,
 	InferPluginFieldFromTuple,
 	UnionToIntersection,
-} from "./helper";
+} from "./helper.js";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferDBFieldsFromPluginsInput<"user", Options["plugins"]> &

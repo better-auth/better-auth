@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deleteFromPrompt, searchParamsToQuery } from "./index";
+import { deleteFromPrompt, searchParamsToQuery } from "./index.js";
 
 describe("searchParamsToQuery", () => {
 	it("preserves single-valued params as strings", () => {

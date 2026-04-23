@@ -2,7 +2,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { InternalLogger, LogLevel } from "@better-auth/core/env";
 import { createEndpoint } from "better-call";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { checkEndpointConflicts, createAuthEndpoint } from "./index";
+import { checkEndpointConflicts, createAuthEndpoint } from "./index.js";
 
 let mockLoggerLevel: LogLevel = "debug";
 const mockLogger = {

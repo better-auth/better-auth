@@ -13,7 +13,7 @@ import type {
 } from "better-auth/plugins/organization";
 import { organization } from "better-auth/plugins/organization";
 import { expect } from "vitest";
-import { createTestSuite } from "../create-test-suite";
+import { createTestSuite } from "../create-test-suite.js";
 
 /**
  * This test suite tests the basic CRUD operations of the adapter.

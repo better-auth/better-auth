@@ -6,6 +6,7 @@
     "e2e:integration": "vitest run"
   },
   "devDependencies": {
+    "@better-auth/core": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
     "better-auth": "workspace:*"

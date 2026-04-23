@@ -1,6 +1,10 @@
 {
   "name": "@better-auth-test/fixtures-esbuild",
   "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --build tsconfig.json"
+  },
   "dependencies": {
     "better-auth": "workspace:*"
   },

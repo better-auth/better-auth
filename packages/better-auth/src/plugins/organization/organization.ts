@@ -3,23 +3,23 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
-import { shimContext } from "../../utils/shim";
-import { PACKAGE_VERSION } from "../../version";
-import type { AccessControl, ArrayElement } from "../access";
-import type { defaultStatements } from "./access";
-import { defaultRoles } from "./access";
-import { getOrgAdapter } from "./adapter";
-import { orgSessionMiddleware } from "./call";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { hasPermission } from "./has-permission";
+import { getSessionFromCtx } from "../../api/index.js";
+import { shimContext } from "../../utils/shim.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { AccessControl, ArrayElement } from "../access/index.js";
+import type { defaultStatements } from "./access/index.js";
+import { defaultRoles } from "./access/index.js";
+import { getOrgAdapter } from "./adapter.js";
+import { orgSessionMiddleware } from "./call.js";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes.js";
+import { hasPermission } from "./has-permission.js";
 import {
 	createOrgRole,
 	deleteOrgRole,
 	getOrgRole,
 	listOrgRoles,
 	updateOrgRole,
-} from "./routes/crud-access-control";
+} from "./routes/crud-access-control.js";
 import {
 	acceptInvitation,
 	cancelInvitation,
@@ -28,7 +28,7 @@ import {
 	listInvitations,
 	listUserInvitations,
 	rejectInvitation,
-} from "./routes/crud-invites";
+} from "./routes/crud-invites.js";
 import {
 	addMember,
 	getActiveMember,
@@ -37,7 +37,7 @@ import {
 	listMembers,
 	removeMember,
 	updateMemberRole,
-} from "./routes/crud-members";
+} from "./routes/crud-members.js";
 import {
 	checkOrganizationSlug,
 	createOrganization,
@@ -46,7 +46,7 @@ import {
 	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
-} from "./routes/crud-org";
+} from "./routes/crud-org.js";
 import {
 	addTeamMember,
 	createTeam,
@@ -57,7 +57,7 @@ import {
 	removeTeamMember,
 	setActiveTeam,
 	updateTeam,
-} from "./routes/crud-team";
+} from "./routes/crud-team.js";
 import type {
 	InferInvitation,
 	InferMember,
@@ -65,8 +65,8 @@ import type {
 	InferTeam,
 	OrganizationSchema,
 	TeamMember,
-} from "./schema";
-import type { OrganizationOptions } from "./types";
+} from "./schema.js";
+import type { OrganizationOptions } from "./types.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -76,8 +76,8 @@ declare module "@better-auth/core" {
 	}
 }
 
-export { hasPermission } from "./has-permission";
-export type { OrganizationOptions } from "./types";
+export { hasPermission } from "./has-permission.js";
+export type { OrganizationOptions } from "./types.js";
 
 export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 	id: "organization";

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAuthClient } from "../../client";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { bearer } from "../bearer";
-import { emailOTP } from ".";
-import { emailOTPClient } from "./client";
-import { splitAtLastColon } from "./utils";
+import { createAuthClient } from "../../client/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { bearer } from "../bearer/index.js";
+import { emailOTPClient } from "./client.js";
+import { emailOTP } from "./index.js";
+import { splitAtLastColon } from "./utils.js";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();

@@ -1,10 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
-import { createEmailVerificationToken } from "../api";
-import { setAccountCookie } from "../cookies/session-store";
-import type { Account, User } from "../types";
-import { isAPIError } from "../utils/is-api-error";
-import { setTokenUtil } from "./utils";
+import { createEmailVerificationToken } from "../api/index.js";
+import { setAccountCookie } from "../cookies/session-store.js";
+import type { Account, User } from "../types/index.js";
+import { isAPIError } from "../utils/is-api-error.js";
+import { setTokenUtil } from "./utils.js";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,

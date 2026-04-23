@@ -3,10 +3,10 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
-import { getDate } from "../../utils/date";
-import { validatePassword } from "../../utils/password";
-import { originCheck } from "../middlewares";
-import { sensitiveSessionMiddleware } from "./session";
+import { getDate } from "../../utils/date.js";
+import { validatePassword } from "../../utils/password.js";
+import { originCheck } from "../middlewares/index.js";
+import { sensitiveSessionMiddleware } from "./session.js";
 
 function redirectError(
 	ctx: AuthContext,

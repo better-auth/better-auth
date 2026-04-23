@@ -12,20 +12,20 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import type { Account, Session, User, Verification } from "../types";
-import { getDate } from "../utils/date";
-import { getIp } from "../utils/get-request-ip";
+import type { Account, Session, User, Verification } from "../types/index.js";
+import { getDate } from "../utils/date.js";
+import { getIp } from "../utils/get-request-ip.js";
 import {
 	getSessionDefaultFields,
 	parseSessionOutput,
 	parseUserOutput,
-} from "./schema";
+} from "./schema.js";
 import {
 	getStorageOption,
 	processIdentifier,
-} from "./verification-token-storage";
-import type { DatabaseHooksEntry } from "./with-hooks";
-import { getWithHooks } from "./with-hooks";
+} from "./verification-token-storage.js";
+import type { DatabaseHooksEntry } from "./with-hooks.js";
+import { getWithHooks } from "./with-hooks.js";
 
 function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	const expiresMs =

@@ -1,4 +1,4 @@
-import type { PasskeyOptions } from "./types";
+import type { PasskeyOptions } from "./types.js";
 
 export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
 	return (

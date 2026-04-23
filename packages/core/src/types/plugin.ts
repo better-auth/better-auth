@@ -5,12 +5,12 @@ import type {
 	Middleware,
 } from "better-call";
 import type { Migration } from "kysely";
-import type { AuthMiddleware } from "../api";
-import type { BetterAuthPluginDBSchema } from "../db";
-import type { RawError } from "../utils/error-codes";
-import type { AuthContext } from "./context";
-import type { Awaitable, LiteralString } from "./helper";
-import type { BetterAuthOptions } from "./init-options";
+import type { AuthMiddleware } from "../api/index.js";
+import type { BetterAuthPluginDBSchema } from "../db/index.js";
+import type { RawError } from "../utils/error-codes.js";
+import type { AuthContext } from "./context.js";
+import type { Awaitable, LiteralString } from "./helper.js";
+import type { BetterAuthOptions } from "./init-options.js";
 
 type DeepPartial<T> = T extends Function
 	? T

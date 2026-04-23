@@ -1,13 +1,13 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { AccessControl, ArrayElement, Role } from "../access";
-import type { defaultStatements } from "./access";
-import { adminAc, userAc } from "./access";
-import type { admin } from "./admin";
-import { ADMIN_ERROR_CODES } from "./error-codes";
-import { hasPermission } from "./has-permission";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { AccessControl, ArrayElement, Role } from "../access/index.js";
+import type { defaultStatements } from "./access/index.js";
+import { adminAc, userAc } from "./access/index.js";
+import type { admin } from "./admin.js";
+import { ADMIN_ERROR_CODES } from "./error-codes.js";
+import { hasPermission } from "./has-permission.js";
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 
 interface AdminClientOptions {
 	ac?: AccessControl | undefined;
@@ -88,4 +88,4 @@ export const adminClient = <O extends AdminClientOptions>(
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "./types";
+export type * from "./types.js";

@@ -2,17 +2,17 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { generateRandomString } from "../../crypto";
-import { parseUserInput, parseUserOutput } from "../../db/schema";
-import type { AdditionalUserFieldsInput } from "../../types";
-import { originCheck } from "../middlewares";
-import { createEmailVerificationToken } from "./email-verification";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies/index.js";
+import { generateRandomString } from "../../crypto/index.js";
+import { parseUserInput, parseUserOutput } from "../../db/schema.js";
+import type { AdditionalUserFieldsInput } from "../../types/index.js";
+import { originCheck } from "../middlewares/index.js";
+import { createEmailVerificationToken } from "./email-verification.js";
 import {
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 	sessionMiddleware,
-} from "./session";
+} from "./session.js";
 
 const updateUserBodySchema = z.record(
 	z.string().meta({

@@ -1,8 +1,8 @@
-import { logger } from "../../env";
-import type { BetterAuthOptions } from "../../types";
-import { generateId as defaultGenerateId } from "../../utils/id";
-import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
-import { initGetDefaultModelName } from "./get-default-model-name";
+import { logger } from "../../env/index.js";
+import type { BetterAuthOptions } from "../../types/index.js";
+import { generateId as defaultGenerateId } from "../../utils/id.js";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type.js";
+import { initGetDefaultModelName } from "./get-default-model-name.js";
 
 export const initGetIdField = ({
 	usePlural,

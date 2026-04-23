@@ -4,7 +4,7 @@ import type {
 	BetterAuthOptions,
 	LiteralString,
 	UnionToIntersection,
-} from "../types";
+} from "../types/index.js";
 
 export type BaseModelNames = "user" | "account" | "session" | "verification";
 

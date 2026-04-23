@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import type { OAuthConsent, OAuthOptions, Scope } from "../types";
-import { getClient } from "../utils";
+import type { OAuthConsent, OAuthOptions, Scope } from "../types/index.js";
+import { getClient } from "../utils/index.js";
 
 async function getConsent(
 	ctx: GenericEndpointContext & { query: { id: string } },

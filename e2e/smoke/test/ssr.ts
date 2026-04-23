@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
+import { apiKey } from "@better-auth/api-key";
+import type { ApiKeyClientPlugin } from "@better-auth/api-key/client";
+import { apiKeyClient } from "@better-auth/api-key/client";
 import { betterAuth } from "better-auth";
 import type { AuthClient } from "better-auth/client";
 import { createAuthClient } from "better-auth/client";
-import type { ApiKeyClientPlugin } from "better-auth/client/plugins";
-import { apiKeyClient } from "better-auth/client/plugins";
 import { getMigrations } from "better-auth/db/migration";
-import { apiKey } from "better-auth/plugins";
 
 describe("server side client", () => {
 	test("can use api key on server side", async () => {
@@ -56,7 +56,7 @@ describe("server side client", () => {
 			},
 		});
 
-		const { key, id, userId } = await auth.api.createApiKey({
+		const { key, id } = await auth.api.createApiKey({
 			body: {
 				name: "my-api-key",
 				userId: user.id,
@@ -67,7 +67,7 @@ describe("server side client", () => {
 		assert.equal(ret.length, 1);
 		const first = ret.at(-1)!;
 		assert.equal(first.id, id);
-		assert.equal(first.userId, userId);
+		assert.equal(first.userId, user.id);
 
 		await authClient.getSession({
 			fetchOptions: {

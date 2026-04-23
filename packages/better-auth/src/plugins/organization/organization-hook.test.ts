@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from ".";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { organization } from "./index.js";
 
 describe("organization creation in database hooks", async () => {
 	it("should create organization in user creation after hook within transaction", async () => {

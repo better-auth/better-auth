@@ -9,7 +9,7 @@ import type {
 	ExtractPluginField,
 	InferPluginFieldFromTuple,
 	UnionToIntersection,
-} from "./helper";
+} from "./helper.js";
 
 export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 	S extends Record<string, { fields: infer Fields }>

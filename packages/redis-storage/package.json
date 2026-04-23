@@ -21,24 +21,24 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "typecheck": "tsc --build tsconfig.json",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --noEmit",
     "test": "vitest"
   },
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "peerDependencies": {
@@ -49,7 +49,6 @@
     "@better-auth/core": "workspace:*",
     "@types/node": "^25.3.2",
     "ioredis": "^5.9.3",
-    "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
   }

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { ai } from "./commands/ai";
-import { generate } from "./commands/generate";
-import { info } from "./commands/info";
-import { init } from "./commands/init";
-import { login, logout } from "./commands/login";
-import { mcp } from "./commands/mcp";
-import { migrate } from "./commands/migrate";
-import { generateSecret } from "./commands/secret";
-import { upgrade } from "./commands/upgrade";
-import { getPackageInfo } from "./utils/get-package-info";
+import { ai } from "./commands/ai.js";
+import { generate } from "./commands/generate.js";
+import { info } from "./commands/info.js";
+import { init } from "./commands/init/index.js";
+import { login, logout } from "./commands/login.js";
+import { mcp } from "./commands/mcp.js";
+import { migrate } from "./commands/migrate.js";
+import { generateSecret } from "./commands/secret.js";
+import { upgrade } from "./commands/upgrade.js";
+import { getPackageInfo } from "./utils/get-package-info.js";
 
 import "dotenv/config";
 

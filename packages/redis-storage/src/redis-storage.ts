@@ -1,5 +1,5 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
-import type Redis from "ioredis";
+import type { Redis } from "ioredis";
 
 export interface RedisStorageConfig {
 	/**

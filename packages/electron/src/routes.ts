@@ -12,8 +12,8 @@ import { setSessionCookie } from "better-auth/cookies";
 import type { User } from "better-auth/db";
 import { parseUserOutput } from "better-auth/db";
 import * as z from "zod";
-import { ELECTRON_ERROR_CODES } from "./error-codes";
-import type { ElectronOptions } from "./types";
+import { ELECTRON_ERROR_CODES } from "./error-codes.js";
+import type { ElectronOptions } from "./types/index.js";
 
 const electronTokenBodySchema = z.object({
 	token: z.string().nonempty(),

@@ -2,10 +2,10 @@
 
 import { atom } from "nanostores";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getGlobalBroadcastChannel } from "./broadcast-channel";
-import { getGlobalOnlineManager } from "./online-manager";
-import type { SessionAtom } from "./session-atom";
-import { createSessionRefreshManager } from "./session-refresh";
+import { getGlobalBroadcastChannel } from "./broadcast-channel.js";
+import { getGlobalOnlineManager } from "./online-manager.js";
+import type { SessionAtom } from "./session-atom.js";
+import { createSessionRefreshManager } from "./session-refresh.js";
 
 describe("session-refresh", () => {
 	beforeEach(() => {

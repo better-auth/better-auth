@@ -1,17 +1,4 @@
-import { defineErrorCodes } from "../utils/error-codes";
-
-declare module "@better-auth/core" {
-	interface BetterAuthPluginRegistry<AuthOptions, Options> {
-		/**
-		 * This plugin does not exist, do not use it in runtime.
-		 */
-		"$internal:base": {
-			creator: () => {
-				$ERROR_CODES: typeof BASE_ERROR_CODES;
-			};
-		};
-	}
-}
+import { defineErrorCodes } from "../utils/error-codes.js";
 
 export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",

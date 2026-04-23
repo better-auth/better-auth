@@ -1,7 +1,7 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { JSONWebKeySet } from "jose";
-import { PACKAGE_VERSION } from "../../version";
-import type { jwt } from "./index";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { jwt } from "./index.js";
 
 interface JwtClientOptions {
 	jwks?: {
@@ -36,4 +36,4 @@ export const jwtClient = (options?: JwtClientOptions) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "./types";
+export type * from "./types.js";

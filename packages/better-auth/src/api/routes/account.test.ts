@@ -13,11 +13,11 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { parseSetCookieHeader } from "../../cookies";
-import { signJWT, symmetricDecodeJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
-import type { Account } from "../../types";
-import { DEFAULT_SECRET } from "../../utils/constants";
+import { parseSetCookieHeader } from "../../cookies/index.js";
+import { signJWT, symmetricDecodeJWT } from "../../crypto/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import type { Account } from "../../types/index.js";
+import { DEFAULT_SECRET } from "../../utils/constants.js";
 
 let email = "";
 let handlers: ReturnType<typeof http.post>[];

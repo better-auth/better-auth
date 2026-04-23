@@ -1,2 +1,2 @@
-export * from "./attributes";
-export * from "./tracer";
+export * from "./attributes.js";
+export * from "./tracer.js";

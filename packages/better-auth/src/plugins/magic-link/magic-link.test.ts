@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAuthClient } from "../../client";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { magicLink } from ".";
-import { magicLinkClient } from "./client";
-import { defaultKeyHasher } from "./utils";
+import { createAuthClient } from "../../client/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { magicLinkClient } from "./client.js";
+import { magicLink } from "./index.js";
+import { defaultKeyHasher } from "./utils.js";
 
 type VerificationEmail = {
 	email: string;

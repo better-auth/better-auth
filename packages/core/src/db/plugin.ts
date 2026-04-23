@@ -1,4 +1,4 @@
-import type { DBFieldAttribute } from "./type";
+import type { DBFieldAttribute } from "./type.js";
 
 export type BetterAuthPluginDBSchema = {
 	[table in string]: {

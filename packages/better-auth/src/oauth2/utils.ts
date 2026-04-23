@@ -1,5 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
-import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../crypto/index.js";
 
 /**
  * Check if a string looks like encrypted data

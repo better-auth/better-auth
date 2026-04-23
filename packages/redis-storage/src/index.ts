@@ -1,1 +1,1 @@
-export { type RedisStorageConfig, redisStorage } from "./redis-storage";
+export { type RedisStorageConfig, redisStorage } from "./redis-storage.js";

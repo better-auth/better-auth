@@ -1,22 +1,22 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { APIError } from "../../api";
-import { setSessionCookie } from "../../cookies";
-import { mergeSchema } from "../../db/schema";
-import type { InferOptionSchema, User } from "../../types";
-import { toChecksumAddress } from "../../utils/hashing";
-import { isAPIError } from "../../utils/is-api-error";
-import { getOrigin } from "../../utils/url";
-import { PACKAGE_VERSION } from "../../version";
-import type { WalletAddressSchema } from "./schema";
-import { schema } from "./schema";
+import { APIError } from "../../api/index.js";
+import { setSessionCookie } from "../../cookies/index.js";
+import { mergeSchema } from "../../db/schema.js";
+import type { InferOptionSchema, User } from "../../types/index.js";
+import { toChecksumAddress } from "../../utils/hashing.js";
+import { isAPIError } from "../../utils/is-api-error.js";
+import { getOrigin } from "../../utils/url.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import type { WalletAddressSchema } from "./schema.js";
+import { schema } from "./schema.js";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,
 	SIWEVerifyMessageArgs,
 	WalletAddress,
-} from "./types";
+} from "./types.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

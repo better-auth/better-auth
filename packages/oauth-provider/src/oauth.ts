@@ -12,27 +12,27 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
-import { authorizeEndpoint } from "./authorize";
-import { consentEndpoint } from "./consent";
-import { continueEndpoint } from "./continue";
-import { introspectEndpoint } from "./introspect";
-import { rpInitiatedLogoutEndpoint } from "./logout";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
-import * as oauthClientEndpoints from "./oauthClient";
-import * as oauthConsentEndpoints from "./oauthConsent";
-import { registerEndpoint } from "./register";
-import { revokeEndpoint } from "./revoke";
-import { schema } from "./schema";
-import { tokenEndpoint } from "./token";
-import type { OAuthOptions, Scope } from "./types";
-import { SafeUrlSchema } from "./types/zod";
-import { userInfoEndpoint } from "./userinfo";
+import { authorizeEndpoint } from "./authorize.js";
+import { consentEndpoint } from "./consent.js";
+import { continueEndpoint } from "./continue.js";
+import { introspectEndpoint } from "./introspect.js";
+import { rpInitiatedLogoutEndpoint } from "./logout.js";
+import { authServerMetadata, oidcServerMetadata } from "./metadata.js";
+import * as oauthClientEndpoints from "./oauthClient/index.js";
+import * as oauthConsentEndpoints from "./oauthConsent/index.js";
+import { registerEndpoint } from "./register.js";
+import { revokeEndpoint } from "./revoke.js";
+import { schema } from "./schema.js";
+import { tokenEndpoint } from "./token.js";
+import type { OAuthOptions, Scope } from "./types/index.js";
+import { SafeUrlSchema } from "./types/zod.js";
+import { userInfoEndpoint } from "./userinfo.js";
 import {
 	deleteFromPrompt,
 	getJwtPlugin,
 	verifyOAuthQueryParams,
-} from "./utils";
-import { PACKAGE_VERSION } from "./version";
+} from "./utils/index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

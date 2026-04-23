@@ -24,7 +24,7 @@ let kyselyDB = new Kysely({
 
 const { execute } = await testAdapter({
 	adapter: () => {
-		return kyselyAdapter(kyselyDB, {
+		return kyselyAdapter(kyselyDB as any, {
 			type: "sqlite",
 			debugLogs: { isRunningAdapterTests: true },
 		});

@@ -5,19 +5,19 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
-import { getAwaitableValue } from "../../context/helpers";
+import { getAwaitableValue } from "../../context/helpers.js";
 import {
 	getAccountCookie,
 	setAccountCookie,
-} from "../../cookies/session-store";
-import { parseAccountOutput } from "../../db/schema";
-import { generateState } from "../../oauth2/state";
-import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
+} from "../../cookies/session-store.js";
+import { parseAccountOutput } from "../../db/schema.js";
+import { generateState } from "../../oauth2/state.js";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils.js";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
-} from "./session";
+} from "./session.js";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",

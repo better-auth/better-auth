@@ -3,8 +3,8 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
-import { sso } from "..";
-import { assignOrganizationByDomain } from "./org-assignment";
+import { sso } from "../index.js";
+import { assignOrganizationByDomain } from "./org-assignment.js";
 
 describe("assignOrganizationByDomain", () => {
 	const createTestContext = () => {

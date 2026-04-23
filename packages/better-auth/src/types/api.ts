@@ -1,5 +1,5 @@
 import type { Endpoint } from "better-call";
-import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
+import type { PrettifyDeep, UnionToIntersection } from "../types/helper.js";
 
 export type FilteredAPI<API> = Omit<
 	API,

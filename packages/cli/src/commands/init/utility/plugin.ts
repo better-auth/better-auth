@@ -1,9 +1,9 @@
 import type { Awaitable } from "@better-auth/core";
-import type { Plugin, PluginConfig } from "../configs/temp-plugins.config";
-import { tempPluginsConfig } from "../configs/temp-plugins.config";
-import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth";
-import { formatCode } from "./format";
-import { getArgumentsPrompt } from "./prompt";
+import type { Plugin, PluginConfig } from "../configs/temp-plugins.config.js";
+import { tempPluginsConfig } from "../configs/temp-plugins.config.js";
+import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth.js";
+import { formatCode } from "./format.js";
+import { getArgumentsPrompt } from "./prompt.js";
 
 export const getPluginConfigs = (plugins: Plugin[]) => {
 	return plugins.map((plugin) => {

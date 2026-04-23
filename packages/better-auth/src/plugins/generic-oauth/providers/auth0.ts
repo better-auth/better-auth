@@ -1,4 +1,4 @@
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index.js";
 
 export interface Auth0Options extends BaseOAuthProviderOptions {
 	/**

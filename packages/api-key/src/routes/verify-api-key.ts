@@ -4,20 +4,23 @@ import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { role } from "better-auth/plugins/access";
 import * as z from "zod";
-import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
-import { defaultKeyHasher } from "../";
 import {
 	deleteApiKey,
 	getApiKey,
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
-} from "../adapter";
-import { isRateLimited } from "../rate-limit";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import { isAPIError } from "../utils";
-import type { PredefinedApiKeyOptions } from ".";
-import { resolveConfiguration } from ".";
+} from "../adapter.js";
+import {
+	API_KEY_TABLE_NAME,
+	defaultKeyHasher,
+	API_KEY_ERROR_CODES as ERROR_CODES,
+} from "../index.js";
+import { isRateLimited } from "../rate-limit.js";
+import type { apiKeySchema } from "../schema.js";
+import type { ApiKey } from "../types.js";
+import { isAPIError } from "../utils.js";
+import type { PredefinedApiKeyOptions } from "./index.js";
+import { resolveConfiguration } from "./index.js";
 
 export async function validateApiKey({
 	hashedKey,

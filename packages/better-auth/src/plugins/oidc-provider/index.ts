@@ -13,29 +13,33 @@ import { createHash } from "@better-auth/utils/hash";
 import type { OpenAPIParameter } from "better-call";
 import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
-import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
-import { expireCookie, parseSetCookieHeader } from "../../cookies";
+import {
+	APIError,
+	getSessionFromCtx,
+	sessionMiddleware,
+} from "../../api/index.js";
+import { expireCookie, parseSetCookieHeader } from "../../cookies/index.js";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
-} from "../../crypto";
-import { mergeSchema } from "../../db";
-import { HIDE_METADATA } from "../../utils";
-import { PACKAGE_VERSION } from "../../version";
-import { getJwtToken, verifyJWT } from "../jwt";
-import { authorize } from "./authorize";
-import type { OAuthApplication } from "./schema";
-import { schema } from "./schema";
+} from "../../crypto/index.js";
+import { mergeSchema } from "../../db/index.js";
+import { HIDE_METADATA } from "../../utils/index.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { getJwtToken, verifyJWT } from "../jwt/index.js";
+import { authorize } from "./authorize.js";
+import type { OAuthApplication } from "./schema.js";
+import { schema } from "./schema.js";
 import type {
 	Client,
 	CodeVerificationValue,
 	OAuthAccessToken,
 	OIDCMetadata,
 	OIDCOptions,
-} from "./types";
-import { defaultClientSecretHasher } from "./utils";
-import { parsePrompt } from "./utils/prompt";
+} from "./types.js";
+import { parsePrompt } from "./utils/prompt.js";
+import { defaultClientSecretHasher } from "./utils.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -1775,4 +1779,4 @@ export const oidcProvider = (options: OIDCOptions) => {
 		},
 	} satisfies BetterAuthPlugin;
 };
-export type * from "./types";
+export type * from "./types.js";

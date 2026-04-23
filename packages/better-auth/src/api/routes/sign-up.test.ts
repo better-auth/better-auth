@@ -1,7 +1,7 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { admin } from "../../plugins/admin/admin";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { admin } from "../../plugins/admin/admin.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
 
 describe("sign-up with custom fields", async () => {
 	const mockFn = vi.fn();

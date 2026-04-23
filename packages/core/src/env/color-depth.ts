@@ -1,5 +1,5 @@
 // Source code copied & modified from node internals: https://github.com/nodejs/node/blob/5b32bb1573dace2dd058c05ac4fab1e4e446c775/lib/internal/tty.js#L123
-import { env, getEnvVar } from "./env-impl";
+import { env, getEnvVar } from "./env-impl.js";
 
 const COLORS_2 = 1;
 const COLORS_16 = 4;

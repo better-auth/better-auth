@@ -4,9 +4,9 @@ import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization } from "better-auth/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sso } from ".";
-import { ssoClient } from "./client";
-import type { SSOOptions } from "./types";
+import { ssoClient } from "./client.js";
+import { sso } from "./index.js";
+import type { SSOOptions } from "./types.js";
 
 const dnsMock = vi.hoisted(() => {
 	return {

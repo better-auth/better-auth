@@ -1,9 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
-import type { multiSession } from ".";
-import { MULTI_SESSION_ERROR_CODES } from "./error-codes";
+import { PACKAGE_VERSION } from "../../version.js";
+import { MULTI_SESSION_ERROR_CODES } from "./error-codes.js";
+import type { multiSession } from "./index.js";
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 
 export const multiSessionClient = () => {
 	return {
@@ -22,4 +22,4 @@ export const multiSessionClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type { MultiSessionConfig } from "./index";
+export type { MultiSessionConfig } from "./index.js";

@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { middlewareResponse } from "../../../utils/middleware-response";
-import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
-import { encodeToURLParams } from "../utils";
+import { middlewareResponse } from "../../../utils/middleware-response.js";
+import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes.js";
+import { encodeToURLParams } from "../utils.js";
 
 type Params = {
 	siteVerifyURL: string;

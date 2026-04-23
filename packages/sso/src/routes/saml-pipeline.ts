@@ -3,14 +3,16 @@ import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
-import type { FlowResult } from "samlify/types/src/flow";
 
-import * as constants from "../constants";
-import { assignOrganizationFromProvider } from "../linking";
-import { validateSAMLAlgorithms, validateSingleAssertion } from "../saml";
-import type { SAMLConditions } from "../saml/timestamp";
-import { validateSAMLTimestamp } from "../saml/timestamp";
-import { parseRelayState } from "../saml-state";
+import * as constants from "../constants.js";
+import { assignOrganizationFromProvider } from "../linking/index.js";
+import {
+	validateSAMLAlgorithms,
+	validateSingleAssertion,
+} from "../saml/index.js";
+import type { SAMLConditions } from "../saml/timestamp.js";
+import { validateSAMLTimestamp } from "../saml/timestamp.js";
+import { parseRelayState } from "../saml-state.js";
 import type {
 	AuthnRequestRecord,
 	SAMLAssertionExtract,
@@ -18,9 +20,9 @@ import type {
 	SAMLSessionRecord,
 	SSOOptions,
 	SSOProvider,
-} from "../types";
-import { safeJsonParse, validateEmailDomain } from "../utils";
-import { createIdP, createSP, findSAMLProvider } from "./helpers";
+} from "../types.js";
+import { safeJsonParse, validateEmailDomain } from "../utils.js";
+import { createIdP, createSP, findSAMLProvider } from "./helpers.js";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -204,7 +206,7 @@ export async function processSAMLResponse(
 	validateSingleAssertion(SAMLResponse);
 
 	// 9. Response parsing
-	let parsedResponse: FlowResult;
+	let parsedResponse: Awaited<ReturnType<typeof sp.parseLoginResponse>>;
 	try {
 		parsedResponse = await sp.parseLoginResponse(idp, "post", {
 			body: {

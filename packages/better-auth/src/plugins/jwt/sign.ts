@@ -2,10 +2,10 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { JWTPayload } from "jose";
 import { importJWK, SignJWT } from "jose";
-import { symmetricDecrypt } from "../../crypto";
-import { getJwksAdapter } from "./adapter";
-import type { JwtOptions } from "./types";
-import { createJwk, toExpJWT } from "./utils";
+import { symmetricDecrypt } from "../../crypto/index.js";
+import { getJwksAdapter } from "./adapter.js";
+import type { JwtOptions } from "./types.js";
+import { createJwk, toExpJWT } from "./utils.js";
 
 type JWTPayloadWithOptional = {
 	/**

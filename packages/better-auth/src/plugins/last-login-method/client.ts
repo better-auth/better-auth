@@ -1,5 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
+import { PACKAGE_VERSION } from "../../version.js";
 
 /**
  * Configuration for the client-side last login method plugin

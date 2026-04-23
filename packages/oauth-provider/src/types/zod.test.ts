@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SafeUrlSchema } from "./zod";
+import { SafeUrlSchema } from "./zod.js";
 
 describe("SafeUrlSchema", () => {
 	describe("HTTPS enforcement", () => {

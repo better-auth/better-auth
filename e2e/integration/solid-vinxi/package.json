@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vinxi dev",
+    "typecheck": "tsc --build tsconfig.json",
     "build": "vinxi build",
     "start": "vinxi start"
   },

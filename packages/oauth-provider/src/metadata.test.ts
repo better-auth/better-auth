@@ -4,14 +4,14 @@ import type { JwtOptions } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProviderResourceClient } from "./client-resource";
+import { oauthProviderClient } from "./client.js";
+import { oauthProviderResourceClient } from "./client-resource.js";
 import {
 	oauthProviderAuthServerMetadata,
 	oauthProviderOpenIdConfigMetadata,
-} from "./metadata";
-import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
+} from "./metadata.js";
+import { oauthProvider } from "./oauth.js";
+import type { OAuthOptions, Scope } from "./types/index.js";
 
 describe("oauth metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -345,7 +345,7 @@ describe("oauth resource metadata", async () => {
 	});
 
 	const authClient = createAuthClient({
-		plugins: [oauthProviderResourceClient(auth)],
+		plugins: [oauthProviderResourceClient(auth as any)],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,

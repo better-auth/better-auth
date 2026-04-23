@@ -6,14 +6,14 @@ import { BetterAuthError } from "better-auth";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
-import { API_KEY_ERROR_CODES } from "./error-codes";
-import type { PredefinedApiKeyOptions } from "./routes";
-import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
-import { validateApiKey } from "./routes/verify-api-key";
-import { apiKeySchema } from "./schema";
-import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
-import { getDate, getIp } from "./utils";
-import { PACKAGE_VERSION } from "./version";
+import { API_KEY_ERROR_CODES } from "./error-codes.js";
+import type { PredefinedApiKeyOptions } from "./routes/index.js";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes/index.js";
+import { validateApiKey } from "./routes/verify-api-key.js";
+import { apiKeySchema } from "./schema.js";
+import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types.js";
+import { getDate, getIp } from "./utils.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -33,7 +33,7 @@ export const defaultKeyHasher = async (key: string) => {
 	return hashed;
 };
 
-export { API_KEY_ERROR_CODES } from "./error-codes";
+export { API_KEY_ERROR_CODES } from "./error-codes.js";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
@@ -385,4 +385,4 @@ export function apiKey(
 	} satisfies BetterAuthPlugin;
 }
 
-export type * from "./types";
+export type * from "./types.js";

@@ -1,4 +1,4 @@
-export { getOrgAdapter } from "./adapter";
-export * from "./organization";
-export type * from "./schema";
-export type * from "./types";
+export { getOrgAdapter } from "./adapter.js";
+export * from "./organization.js";
+export type * from "./schema.js";
+export type * from "./types.js";

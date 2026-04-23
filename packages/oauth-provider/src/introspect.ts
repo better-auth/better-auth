@@ -4,14 +4,14 @@ import { verifyJwsAccessToken } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import { decodeRefreshToken } from "./token";
+import { decodeRefreshToken } from "./token.js";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
 	OAuthRefreshToken,
 	SchemaClient,
 	Scope,
-} from "./types";
+} from "./types/index.js";
 import {
 	basicToClientCredentials,
 	getClient,
@@ -20,7 +20,7 @@ import {
 	parseClientMetadata,
 	resolveSubjectIdentifier,
 	validateClientCredentials,
-} from "./utils";
+} from "./utils/index.js";
 
 /**
  * IMPORTANT NOTES:

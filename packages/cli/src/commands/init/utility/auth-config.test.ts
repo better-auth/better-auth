@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { tempPluginsConfig } from "../configs/temp-plugins.config";
-import { generateInnerAuthConfigCode } from "./auth-config";
-import { getDatabaseCode } from "./database";
-import { formatCode } from "./format";
+import { tempPluginsConfig } from "../configs/temp-plugins.config.js";
+import { generateInnerAuthConfigCode } from "./auth-config.js";
+import { getDatabaseCode } from "./database.js";
+import { formatCode } from "./format.js";
 
 const formatConfigCode = async (code: string) => {
 	let formatted = await formatCode(`const config = {${code}}`);

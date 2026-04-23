@@ -1,11 +1,11 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { generateRandomString } from "../../crypto";
-import { getDate } from "../../utils/date";
-import { getEndpointResponse } from "../../utils/plugin-helper";
-import { PACKAGE_VERSION } from "../../version";
-import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
-import { storeOTP } from "./otp-token";
+import { generateRandomString } from "../../crypto/index.js";
+import { getDate } from "../../utils/date.js";
+import { getEndpointResponse } from "../../utils/plugin-helper.js";
+import { PACKAGE_VERSION } from "../../version.js";
+import { EMAIL_OTP_ERROR_CODES } from "./error-codes.js";
+import { storeOTP } from "./otp-token.js";
 import {
 	changeEmailEmailOTP,
 	checkVerificationOTP,
@@ -18,9 +18,9 @@ import {
 	sendVerificationOTP,
 	signInEmailOTP,
 	verifyEmailOTP,
-} from "./routes";
-import type { EmailOTPOptions } from "./types";
-import { toOTPIdentifier } from "./utils";
+} from "./routes.js";
+import type { EmailOTPOptions } from "./types.js";
+import { toOTPIdentifier } from "./utils.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -30,7 +30,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export type { EmailOTPOptions } from "./types";
+export type { EmailOTPOptions } from "./types.js";
 
 const defaultOTPGenerator = (options: EmailOTPOptions) =>
 	generateRandomString(options.otpLength ?? 6, "0-9");

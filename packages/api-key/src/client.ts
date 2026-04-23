@@ -1,9 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { apiKey } from ".";
-import { API_KEY_ERROR_CODES } from "./error-codes";
-import { PACKAGE_VERSION } from "./version";
+import { API_KEY_ERROR_CODES } from "./error-codes.js";
+import type { apiKey } from "./index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
-export * from "./error-codes";
+export * from "./error-codes.js";
 
 export const apiKeyClient = () => {
 	return {
@@ -21,4 +21,4 @@ export const apiKeyClient = () => {
 
 export type ApiKeyClientPlugin = ReturnType<typeof apiKeyClient>;
 
-export type * from "./types";
+export type * from "./types.js";

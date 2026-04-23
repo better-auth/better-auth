@@ -1,12 +1,19 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
   "include": ["./src", "./package.json"],
   "references": [
     {
-      "path": "../better-auth/tsconfig.json"
+      "path": "../better-auth/tsconfig.build.json"
     },
     {
-      "path": "../core/tsconfig.json"
+      "path": "../core/tsconfig.build.json"
+    },
+    {
+      "path": "../sso/tsconfig.build.json"
     }
   ]
 }

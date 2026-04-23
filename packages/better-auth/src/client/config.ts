@@ -5,10 +5,10 @@ import type {
 import { createFetch } from "@better-fetch/fetch";
 import { defu } from "defu";
 import type { WritableAtom } from "nanostores";
-import { getBaseURL } from "../utils/url";
-import { redirectPlugin } from "./fetch-plugins";
-import { parseJSON } from "./parser";
-import { getSessionAtom } from "./session-atom";
+import { getBaseURL } from "../utils/url.js";
+import { redirectPlugin } from "./fetch-plugins.js";
+import { parseJSON } from "./parser.js";
+import { getSessionAtom } from "./session-atom.js";
 
 const resolvePublicAuthUrl = (basePath?: string) => {
 	if (typeof process === "undefined") return undefined;

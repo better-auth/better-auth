@@ -3,10 +3,10 @@ import {
 	constantTimeEqual,
 	symmetricDecrypt,
 	symmetricEncrypt,
-} from "../../crypto";
-import { getDate } from "../../utils/date";
-import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
-import { defaultKeyHasher, splitAtLastColon } from "./utils";
+} from "../../crypto/index.js";
+import { getDate } from "../../utils/date.js";
+import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types.js";
+import { defaultKeyHasher, splitAtLastColon } from "./utils.js";
 
 export async function storeOTP(
 	ctx: GenericEndpointContext,

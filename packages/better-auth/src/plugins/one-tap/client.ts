@@ -3,7 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../../version";
+import { PACKAGE_VERSION } from "../../version.js";
 
 declare global {
 	interface Window {

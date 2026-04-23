@@ -1,4 +1,5 @@
 import type { CookieOptions, EndpointContext } from "better-call";
+import type { DBAdapter, Where } from "../db/adapter/index.js";
 import type {
 	Account,
 	BetterAuthDBSchema,
@@ -7,18 +8,17 @@ import type {
 	Session,
 	User,
 	Verification,
-} from "../db";
-import type { DBAdapter, Where } from "../db/adapter";
-import type { createLogger } from "../env";
-import type { OAuthProvider } from "../oauth2";
-import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
-import type { Awaitable, LiteralString } from "./helper";
+} from "../db/index.js";
+import type { createLogger } from "../env/index.js";
+import type { OAuthProvider } from "../oauth2/index.js";
+import type { BetterAuthCookie, BetterAuthCookies } from "./cookie.js";
+import type { Awaitable, LiteralString } from "./helper.js";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
-} from "./init-options";
-import type { BetterAuthPlugin } from "./plugin";
-import type { SecretConfig } from "./secret";
+} from "./init-options.js";
+import type { BetterAuthPlugin } from "./plugin.js";
+import type { SecretConfig } from "./secret.js";
 
 /**
  * @internal

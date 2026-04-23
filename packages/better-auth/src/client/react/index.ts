@@ -8,17 +8,17 @@ import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { UnionToIntersection } from "../../types/helper";
-import { getClientConfig } from "../config";
-import { createDynamicPathProxy } from "../proxy";
+import type { UnionToIntersection } from "../../types/helper.js";
+import { getClientConfig } from "../config.js";
+import { createDynamicPathProxy } from "../proxy.js";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 	SessionQueryParams,
-} from "../types";
-import { useStore } from "./react-store";
+} from "../types.js";
+import { useStore } from "./react-store.js";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -106,5 +106,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 export { useStore };
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
-export type * from "../../types/helper";
-export type { UnionToIntersection } from "../../types/helper";
+export type * from "../../types/helper.js";
+export type { UnionToIntersection } from "../../types/helper.js";

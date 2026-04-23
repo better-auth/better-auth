@@ -3,16 +3,19 @@ import path from "node:path";
 import { vol } from "memfs";
 import prompts from "prompts";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
-import { initAction } from "../src/commands/init";
-import { generateDrizzleSchema } from "../src/generators/drizzle";
-import { generatePrismaSchema } from "../src/generators/prisma";
-import { detectPackageManager } from "../src/utils/check-package-managers";
-import { getPackageInfo, hasDependency } from "../src/utils/get-package-info";
-import { installDependencies } from "../src/utils/install-dependencies";
-import { testWithTmpDir } from "./test-utils";
+import { initAction } from "../src/commands/init/index.js";
+import { generateDrizzleSchema } from "../src/generators/drizzle.js";
+import { generatePrismaSchema } from "../src/generators/prisma.js";
+import { detectPackageManager } from "../src/utils/check-package-managers.js";
+import {
+	getPackageInfo,
+	hasDependency,
+} from "../src/utils/get-package-info.js";
+import { installDependencies } from "../src/utils/install-dependencies.js";
+import { testWithTmpDir } from "./test-utils.js";
 
-// Mock src/index.ts to prevent it from executing during tests
-vi.mock("../src/index.ts", () => ({
+// Mock index.ts to prevent it from executing during tests
+vi.mock("../index.ts", () => ({
 	cliVersion: "1.0.0",
 }));
 
@@ -33,7 +36,7 @@ vi.mock("prompts", () => ({
 vi.mock("node:child_process", () => ({
 	exec: vi.fn(),
 }));
-vi.mock("../src/utils/get-package-info", () => {
+vi.mock("../utils/get-package-info", () => {
 	const mockGetPackageInfo = vi.fn();
 
 	mockGetPackageInfo.mockResolvedValue({
@@ -45,23 +48,23 @@ vi.mock("../src/utils/get-package-info", () => {
 		hasDependency: vi.fn(),
 	};
 });
-vi.mock("../src/utils/check-package-managers", async () => {
+vi.mock("../utils/check-package-managers", async () => {
 	const actual = await vi.importActual<
-		typeof import("../src/utils/check-package-managers")
-	>("../src/utils/check-package-managers");
+		typeof import("../src/utils/check-package-managers.js")
+	>("../utils/check-package-managers.js");
 	return {
 		...actual,
 		detectPackageManager: vi.fn(),
 		getPkgManagerStr: vi.fn(({ packageManager }) => packageManager),
 	};
 });
-vi.mock("../src/utils/install-dependencies", () => ({
+vi.mock("../utils/install-dependencies", () => ({
 	installDependencies: vi.fn(),
 }));
-vi.mock("../src/generators/prisma", () => ({
+vi.mock("../generators/prisma", () => ({
 	generatePrismaSchema: vi.fn(),
 }));
-vi.mock("../src/generators/drizzle", () => ({
+vi.mock("../generators/drizzle", () => ({
 	generateDrizzleSchema: vi.fn(),
 }));
 

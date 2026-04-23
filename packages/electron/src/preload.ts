@@ -3,9 +3,9 @@ import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import electron, { contextBridge } from "electron";
-import type { ElectronRequestAuthOptions } from "./authenticate";
-import type { ElectronClientOptions } from "./types/client";
-import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
+import type { ElectronRequestAuthOptions } from "./authenticate.js";
+import type { ElectronClientOptions } from "./types/client.js";
+import { getChannelPrefixWithDelimiter, isProcessType } from "./utils.js";
 
 const { ipcRenderer } = electron;
 

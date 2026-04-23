@@ -1,6 +1,6 @@
 import { Kysely, SqliteDialect } from "kysely";
 import { describe, expect, it } from "vitest";
-import { kyselyAdapter } from "./kysely-adapter";
+import { kyselyAdapter } from "./kysely-adapter.js";
 
 describe("kysely-adapter", () => {
 	it("should create kysely adapter", () => {

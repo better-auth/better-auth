@@ -1,11 +1,11 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { createAuthEndpoint } from "../api";
-import type { InferCtx } from "../client/path-to-object";
-import { organization, twoFactor } from "../plugins";
-import { getTestInstance } from "../test-utils/test-instance";
-import type { Auth } from "./auth";
-import type { HasRequiredKeys } from "./helper";
+import { createAuthEndpoint } from "../api/index.js";
+import type { InferCtx } from "../client/path-to-object.js";
+import { organization, twoFactor } from "../plugins/index.js";
+import { getTestInstance } from "../test-utils/test-instance.js";
+import type { Auth } from "./auth.js";
+import type { HasRequiredKeys } from "./helper.js";
 
 type TestTypeOptions = {
 	test: boolean;

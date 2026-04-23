@@ -3,16 +3,19 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	deleteApiKey as deleteApiKeyFromStorage,
 	getApiKeyById,
-} from "../adapter";
-import { checkOrgApiKeyPermission } from "../org-authorization";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
-import { configIdMatches, resolveConfiguration } from ".";
+} from "../adapter.js";
+import {
+	API_KEY_TABLE_NAME,
+	API_KEY_ERROR_CODES as ERROR_CODES,
+} from "../index.js";
+import { checkOrgApiKeyPermission } from "../org-authorization.js";
+import type { apiKeySchema } from "../schema.js";
+import type { ApiKey } from "../types.js";
+import type { PredefinedApiKeyOptions } from "./index.js";
+import { configIdMatches, resolveConfiguration } from "./index.js";
 
 const deleteApiKeyBodySchema = z.object({
 	configId: z

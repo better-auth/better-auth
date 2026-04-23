@@ -1,9 +1,9 @@
 import { readdirSync } from "node:fs";
 import type { Awaitable } from "@better-auth/core";
 import type { PackageJson } from "type-fest";
-import { hasDependency } from "../../../utils/get-package-info";
-import type { Framework } from "../configs/frameworks.config";
-import { FRAMEWORKS } from "../configs/frameworks.config";
+import { hasDependency } from "../../../utils/get-package-info.js";
+import type { Framework } from "../configs/frameworks.config.js";
+import { FRAMEWORKS } from "../configs/frameworks.config.js";
 
 export async function detectFramework(cwd: string, packageJson: PackageJson) {
 	for (const strategy of [packageJsonStrategy, fileStrategy]) {

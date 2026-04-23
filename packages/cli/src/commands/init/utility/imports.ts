@@ -1,4 +1,4 @@
-import { formatCode } from "./format";
+import { formatCode } from "./format.js";
 
 export type NamedImportGroup = {
 	/**

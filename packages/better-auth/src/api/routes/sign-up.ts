@@ -5,13 +5,13 @@ import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
-import { setSessionCookie } from "../../cookies";
-import { parseUserInput } from "../../db";
-import { parseUserOutput } from "../../db/schema";
-import type { AdditionalUserFieldsInput, User } from "../../types";
-import { isAPIError } from "../../utils/is-api-error";
-import { formCsrfMiddleware } from "../middlewares/origin-check";
-import { createEmailVerificationToken } from "./email-verification";
+import { setSessionCookie } from "../../cookies/index.js";
+import { parseUserInput } from "../../db/index.js";
+import { parseUserOutput } from "../../db/schema.js";
+import type { AdditionalUserFieldsInput, User } from "../../types/index.js";
+import { isAPIError } from "../../utils/is-api-error.js";
+import { formCsrfMiddleware } from "../middlewares/origin-check.js";
+import { createEmailVerificationToken } from "./email-verification.js";
 
 const signUpEmailBodySchema = z
 	.object({

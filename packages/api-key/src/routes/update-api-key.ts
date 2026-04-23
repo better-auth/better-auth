@@ -4,18 +4,21 @@ import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
-import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	getApiKeyById,
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
-} from "../adapter";
-import { checkOrgApiKeyPermission } from "../org-authorization";
-import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import { getDate } from "../utils";
-import type { PredefinedApiKeyOptions } from ".";
-import { configIdMatches, resolveConfiguration } from ".";
+} from "../adapter.js";
+import {
+	API_KEY_TABLE_NAME,
+	API_KEY_ERROR_CODES as ERROR_CODES,
+} from "../index.js";
+import { checkOrgApiKeyPermission } from "../org-authorization.js";
+import type { apiKeySchema } from "../schema.js";
+import type { ApiKey } from "../types.js";
+import { getDate } from "../utils.js";
+import type { PredefinedApiKeyOptions } from "./index.js";
+import { configIdMatches, resolveConfiguration } from "./index.js";
 
 const updateApiKeyBodySchema = z.object({
 	configId: z

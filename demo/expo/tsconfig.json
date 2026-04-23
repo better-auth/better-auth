@@ -10,7 +10,6 @@
     "isolatedModules": true,
     "incremental": true,
     "disableSourceOfProjectReferenceRedirect": true,
-    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "checkJs": false,
@@ -29,7 +28,5 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts"
-  ],
-  "exclude": ["node_modules", "build", "dist", ".next", ".expo"],
-  "extends": "expo/tsconfig.base"
+  ]
 }

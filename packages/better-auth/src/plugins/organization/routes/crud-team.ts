@@ -1,17 +1,17 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api";
-import { setSessionCookie } from "../../../cookies";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
-import { toZodSchema } from "../../../db";
-import type { PrettifyDeep } from "../../../types/helper";
-import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { teamSchema } from "../schema";
-import type { OrganizationOptions } from "../types";
+import { getSessionFromCtx } from "../../../api/index.js";
+import { setSessionCookie } from "../../../cookies/index.js";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/index.js";
+import { toZodSchema } from "../../../db/index.js";
+import type { PrettifyDeep } from "../../../types/helper.js";
+import { getOrgAdapter } from "../adapter.js";
+import { orgMiddleware, orgSessionMiddleware } from "../call.js";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes.js";
+import { hasPermission } from "../has-permission.js";
+import { teamSchema } from "../schema.js";
+import type { OrganizationOptions } from "../types.js";
 
 const teamBaseSchema = z.object({
 	name: z.string().meta({

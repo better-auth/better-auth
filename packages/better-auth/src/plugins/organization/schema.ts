@@ -5,8 +5,8 @@ import * as z from "zod";
 import type {
 	FieldAttributeToObject,
 	RemoveFieldsWithReturnedFalse,
-} from "../../db";
-import type { OrganizationOptions } from "./types";
+} from "../../db/index.js";
+import type { OrganizationOptions } from "./types.js";
 
 type InferSchema<
 	Schema extends BetterAuthPluginDBSchema,

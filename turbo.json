@@ -14,8 +14,8 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "tsconfig.json", "tsdown.config.*"],
-      "outputs": ["dist/**", "node_modules/.cache/ts/**"]
+      "inputs": ["$TURBO_DEFAULT$", "tsconfig.json", "tsconfig.build.json"],
+      "outputs": ["dist/**"]
     },
     "docs#build": {
       "dependsOn": ["^build"],

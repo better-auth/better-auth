@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
-import { prismaAdapter } from "./prisma-adapter";
+import { prismaAdapter } from "./prisma-adapter.js";
 
 describe("prisma-adapter", () => {
 	const createTestAdapter = (prisma: Record<string, unknown>) =>

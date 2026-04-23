@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatCode } from ".";
-import { getDatabaseCode } from "./database";
+import { getDatabaseCode } from "./database.js";
+import { formatCode } from "./index.js";
 
 describe("init CLI - database generation", () => {
 	describe("prisma", () => {

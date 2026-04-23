@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAuthClient } from "../../client";
-import { inferAdditionalFields } from "../../client/plugins";
-import { getTestInstance } from "../../test-utils/test-instance";
-import type { Account, Session } from "../../types";
+import { createAuthClient } from "../../client/index.js";
+import { inferAdditionalFields } from "../../client/plugins/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import type { Account, Session } from "../../types/index.js";
 
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();

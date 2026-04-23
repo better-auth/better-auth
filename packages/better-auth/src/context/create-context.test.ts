@@ -1,11 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
-import { createAuthEndpoint } from "../api";
-import { getAdapter } from "../db/adapter-kysely";
-import { getTestInstance } from "../test-utils/test-instance";
-import type { BetterAuthOptions } from "../types";
-import { createAuthContext } from "./create-context";
-import { getAwaitableValue } from "./helpers";
+import { createAuthEndpoint } from "../api/index.js";
+import { getAdapter } from "../db/adapter-kysely.js";
+import { getTestInstance } from "../test-utils/test-instance.js";
+import type { BetterAuthOptions } from "../types/index.js";
+import { createAuthContext } from "./create-context.js";
+import { getAwaitableValue } from "./helpers.js";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
@@ -1419,7 +1419,7 @@ describe("base context creation", () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
 
-			const { DEFAULT_SECRET } = await import("../utils/constants");
+			const { DEFAULT_SECRET } = await import("../utils/constants.js");
 
 			const ctx = await initBase({
 				secret: DEFAULT_SECRET,
@@ -1435,7 +1435,7 @@ describe("base context creation", () => {
 			vi.stubEnv("AUTH_SECRET", "");
 			const originalNodeEnv = process.env.NODE_ENV;
 
-			const { DEFAULT_SECRET } = await import("../utils/constants");
+			const { DEFAULT_SECRET } = await import("../utils/constants.js");
 
 			const expectedErrorMessage =
 				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.";
@@ -1451,8 +1451,10 @@ describe("base context creation", () => {
 
 			vi.resetModules();
 
-			const { createAuthContext } = await import("../context/create-context");
-			const { getAdapter } = await import("../db/adapter-kysely");
+			const { createAuthContext } = await import(
+				"../context/create-context.js"
+			);
+			const { getAdapter } = await import("../db/adapter-kysely.js");
 
 			const initBaseProduction = async (
 				options: Partial<BetterAuthOptions> = {},
@@ -1507,8 +1509,10 @@ describe("base context creation", () => {
 
 			vi.resetModules();
 
-			const { createAuthContext } = await import("../context/create-context");
-			const { getAdapter } = await import("../db/adapter-kysely");
+			const { createAuthContext } = await import(
+				"../context/create-context.js"
+			);
+			const { getAdapter } = await import("../db/adapter-kysely.js");
 
 			const initBaseNonTest = async (
 				options: Partial<BetterAuthOptions> = {},
@@ -1541,7 +1545,7 @@ describe("base context creation", () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
 
-			const { DEFAULT_SECRET } = await import("../utils/constants");
+			const { DEFAULT_SECRET } = await import("../utils/constants.js");
 
 			const ctx = await initBase({
 				secret: "",

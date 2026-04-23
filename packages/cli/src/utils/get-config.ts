@@ -10,8 +10,8 @@ import { loadConfig } from "c12";
 import type { TsConfigResult } from "get-tsconfig";
 import { createPathsMatcher, getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
-import { addCloudflareModules } from "./add-cloudflare-modules";
-import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+import { addCloudflareModules } from "./add-cloudflare-modules.js";
+import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules.js";
 
 let possiblePaths = [
 	"auth.ts",

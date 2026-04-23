@@ -1,10 +1,10 @@
 import * as z from "zod";
-import type { BetterAuthOptions, Prettify } from "../../types";
+import type { BetterAuthOptions, Prettify } from "../../types/index.js";
 import type {
 	InferDBFieldsFromOptions,
 	InferDBFieldsFromPlugins,
-} from "../type";
-import { coreSchema } from "./shared";
+} from "../type.js";
+import { coreSchema } from "./shared.js";
 
 export const userSchema = coreSchema.extend({
 	email: z.string().transform((val) => val.toLowerCase()),

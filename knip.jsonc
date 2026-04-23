@@ -11,7 +11,14 @@
 		// CI scripts used by GitHub Actions workflows, not by packages
 		".github/scripts/**"
 	],
-	"ignoreBinaries": ["playwright", "changeset", "open", "remark", "tsx"],
+	"ignoreBinaries": [
+		"playwright",
+		"changeset",
+		"open",
+		"remark",
+		"tsx",
+		"typecheck"
+	],
 	// exports used only by tests — invisible to --production mode
 	"ignoreIssues": {
 		"packages/cli/src/commands/init/index.ts": ["exports"],
@@ -30,6 +37,10 @@
 			"entry": ["src/index.ts!"],
 			"project": ["src/**/*.ts!"]
 		},
+		"packages/cli": {
+			"entry": ["src/index.ts!", "src/api.ts!"],
+			"project": ["src/**/*.ts!"]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
@@ -39,6 +50,7 @@
 			]
 		},
 		"packages/core": {
+			"project": ["src/**/*.ts!"],
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",

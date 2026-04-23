@@ -1,13 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
-import { getSessionFromCtx } from "../../api";
-import { generateRandomString } from "../../crypto";
-import type { OAuthApplication } from "../oidc-provider/schema";
+import { getSessionFromCtx } from "../../api/index.js";
+import { generateRandomString } from "../../crypto/index.js";
+import type { OAuthApplication } from "../oidc-provider/schema.js";
 import type {
 	AuthorizationQuery,
 	Client,
 	OIDCOptions,
-} from "../oidc-provider/types";
+} from "../oidc-provider/types.js";
 
 function redirectErrorURL(url: string, error: string, description: string) {
 	return `${url}${

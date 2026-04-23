@@ -1,5 +1,5 @@
 import { getEnvVar, isTest } from "@better-auth/core/env";
-import { isCI } from "./detect-system-info";
+import { isCI } from "./detect-system-info.js";
 
 export function detectRuntime() {
 	// @ts-expect-error: TS doesn't know about Deno global

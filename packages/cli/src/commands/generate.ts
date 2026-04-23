@@ -12,8 +12,8 @@ import { Command } from "commander";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
-import { generateSchema } from "../generators";
-import { getConfig } from "../utils/get-config";
+import { generateSchema } from "../generators/index.js";
+import { getConfig } from "../utils/get-config.js";
 
 function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 	// Map dialect to provider format for each adapter

@@ -4,8 +4,8 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { Session, User } from "../../types";
-import type { AccessControl, Role } from "../access";
+import type { Session, User } from "../../types/index.js";
+import type { AccessControl, Role } from "../access/index.js";
 import type {
 	Invitation,
 	Member,
@@ -13,7 +13,7 @@ import type {
 	OrganizationRole,
 	Team,
 	TeamMember,
-} from "./schema";
+} from "./schema.js";
 
 export interface OrganizationOptions {
 	/**

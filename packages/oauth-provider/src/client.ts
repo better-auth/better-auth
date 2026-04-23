@@ -1,7 +1,7 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { BetterAuthClientPlugin } from "better-auth/types";
-import type { oauthProvider } from "./oauth";
-import { PACKAGE_VERSION } from "./version";
+import type { oauthProvider } from "./oauth.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 function parseSignedQuery(search: string) {
 	const params = new URLSearchParams(search);

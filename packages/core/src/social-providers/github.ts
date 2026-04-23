@@ -1,12 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { logger } from "../env";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { logger } from "../env/index.js";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
-} from "../oauth2";
-import { createAuthorizationCodeRequest } from "../oauth2/validate-authorization-code";
+} from "../oauth2/index.js";
+import { createAuthorizationCodeRequest } from "../oauth2/validate-authorization-code.js";
 
 export interface GithubProfile {
 	login: string;

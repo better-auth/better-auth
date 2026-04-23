@@ -1,4 +1,4 @@
-import type { Awaitable } from "../types/helper";
+import type { Awaitable } from "../types/helper.js";
 
 export interface MapConcurrentOptions {
 	/**

@@ -11,14 +11,14 @@ import type { BetterAuthPlugin } from "better-auth";
 import { safeJSONParse } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
-import { ELECTRON_ERROR_CODES } from "./error-codes";
+import { ELECTRON_ERROR_CODES } from "./error-codes.js";
 import {
 	electronInitOAuthProxy,
 	electronToken,
 	electronTransferUser,
-} from "./routes";
-import type { ElectronOptions } from "./types";
-import { PACKAGE_VERSION } from "./version";
+} from "./routes.js";
+import type { ElectronOptions } from "./types/index.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -232,4 +232,4 @@ export const electron = (options?: ElectronOptions | undefined) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type * from "./types";
+export type * from "./types/index.js";

@@ -10,12 +10,12 @@ import {
 	it,
 	vi,
 } from "vitest";
-import * as apiModule from "../../api";
-import { signJWT } from "../../crypto";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { DEFAULT_SECRET } from "../../utils/constants";
-import { anonymous } from ".";
-import { anonymousClient } from "./client";
+import * as apiModule from "../../api/index.js";
+import { signJWT } from "../../crypto/index.js";
+import { getTestInstance } from "../../test-utils/test-instance.js";
+import { DEFAULT_SECRET } from "../../utils/constants.js";
+import { anonymousClient } from "./client.js";
+import { anonymous } from "./index.js";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];

@@ -1,7 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { BetterAuthError } from "../error/index.js";
+import type { OAuthProvider, ProviderOptions } from "../oauth2/index.js";
+import {
+	createAuthorizationURL,
+	validateAuthorizationCode,
+} from "../oauth2/index.js";
 
 export interface VercelProfile {
 	sub: string;

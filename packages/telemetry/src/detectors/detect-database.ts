@@ -1,5 +1,5 @@
-import type { DetectionInfo } from "../types";
-import { getPackageVersion } from "../utils/package-json";
+import type { DetectionInfo } from "../types.js";
+import { getPackageVersion } from "../utils/package-json.js";
 
 const DATABASES: Record<string, string> = {
 	pg: "postgresql",

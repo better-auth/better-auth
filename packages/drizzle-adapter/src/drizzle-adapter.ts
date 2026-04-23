@@ -35,7 +35,7 @@ import {
 	insensitiveInArray,
 	insensitiveNe,
 	insensitiveNotInArray,
-} from "./query-builders";
+} from "./query-builders.js";
 
 export interface DB {
 	[key: string]: any;

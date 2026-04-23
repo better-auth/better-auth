@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toZodSchema } from "./to-zod";
+import { toZodSchema } from "./to-zod.js";
 
 describe("toZodSchema", () => {
 	/**

@@ -1,10 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
-import type { OAuthOptions, SchemaClient, Scope } from "../types";
-import type { OAuthClient } from "../types/oauth";
-import { getClient, storeClientSecret } from "../utils";
+import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register.js";
+import type { OAuthOptions, SchemaClient, Scope } from "../types/index.js";
+import type { OAuthClient } from "../types/oauth.js";
+import { getClient, storeClientSecret } from "../utils/index.js";
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { query: { client_id: string } },

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { testWithTmpDir } from "../../../../test/test-utils";
-import { FRAMEWORKS } from "../configs/frameworks.config";
-import { detectFramework } from "./framework";
+import { testWithTmpDir } from "../../../../test/test-utils.js";
+import { FRAMEWORKS } from "../configs/frameworks.config.js";
+import { detectFramework } from "./framework.js";
 
 const { vol } = vi.hoisted(() => {
 	const { vol } = require("memfs");
@@ -18,7 +18,7 @@ vi.mock("node:fs/promises", () => ({
 }));
 vi.mock("../../../utils/get-package-info", async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import("../../../utils/get-package-info")>();
+		await importOriginal<typeof import("../../../utils/get-package-info.js")>();
 	return {
 		...actual,
 		hasDependency: vi.fn((...args: Parameters<typeof actual.hasDependency>) =>
@@ -27,7 +27,7 @@ vi.mock("../../../utils/get-package-info", async (importOriginal) => {
 	};
 });
 
-import { hasDependency } from "../../../utils/get-package-info";
+import { hasDependency } from "../../../utils/get-package-info.js";
 
 const mockHasDependency = vi.mocked(hasDependency);
 

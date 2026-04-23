@@ -1,2 +1,2 @@
-export * from "./org-assignment";
-export * from "./types";
+export * from "./org-assignment.js";
+export * from "./types.js";

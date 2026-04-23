@@ -25,466 +25,466 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "typecheck": "tsc --build tsconfig.json",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
-    "test:adapters": "vitest run --config vitest.config.adapters.ts",
-    "typecheck": "tsc --project tsconfig.json"
+    "test:adapters": "vitest run --config vitest.config.adapters.ts"
   },
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./minimal": {
       "dev-source": "./src/auth/minimal.ts",
-      "types": "./dist/auth/minimal.d.mts",
-      "default": "./dist/auth/minimal.mjs"
+      "types": "./dist/auth/minimal.d.ts",
+      "default": "./dist/auth/minimal.js"
     },
     "./social-providers": {
       "dev-source": "./src/social-providers/index.ts",
-      "types": "./dist/social-providers/index.d.mts",
-      "default": "./dist/social-providers/index.mjs"
+      "types": "./dist/social-providers/index.d.ts",
+      "default": "./dist/social-providers/index.js"
     },
     "./client": {
       "dev-source": "./src/client/index.ts",
-      "types": "./dist/client/index.d.mts",
-      "default": "./dist/client/index.mjs"
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
     },
     "./client/plugins": {
       "dev-source": "./src/client/plugins/index.ts",
-      "types": "./dist/client/plugins/index.d.mts",
-      "default": "./dist/client/plugins/index.mjs"
+      "types": "./dist/client/plugins/index.d.ts",
+      "default": "./dist/client/plugins/index.js"
     },
     "./types": {
       "dev-source": "./src/types/index.ts",
-      "types": "./dist/types/index.d.mts",
-      "default": "./dist/types/index.mjs"
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
     },
     "./crypto": {
       "dev-source": "./src/crypto/index.ts",
-      "types": "./dist/crypto/index.d.mts",
-      "default": "./dist/crypto/index.mjs"
+      "types": "./dist/crypto/index.d.ts",
+      "default": "./dist/crypto/index.js"
     },
     "./cookies": {
       "dev-source": "./src/cookies/index.ts",
-      "types": "./dist/cookies/index.d.mts",
-      "default": "./dist/cookies/index.mjs"
+      "types": "./dist/cookies/index.d.ts",
+      "default": "./dist/cookies/index.js"
     },
     "./oauth2": {
       "dev-source": "./src/oauth2/index.ts",
-      "types": "./dist/oauth2/index.d.mts",
-      "default": "./dist/oauth2/index.mjs"
+      "types": "./dist/oauth2/index.d.ts",
+      "default": "./dist/oauth2/index.js"
     },
     "./react": {
       "dev-source": "./src/client/react/index.ts",
-      "types": "./dist/client/react/index.d.mts",
-      "default": "./dist/client/react/index.mjs"
+      "types": "./dist/client/react/index.d.ts",
+      "default": "./dist/client/react/index.js"
     },
     "./solid": {
       "dev-source": "./src/client/solid/index.ts",
-      "types": "./dist/client/solid/index.d.mts",
-      "default": "./dist/client/solid/index.mjs"
+      "types": "./dist/client/solid/index.d.ts",
+      "default": "./dist/client/solid/index.js"
     },
     "./lynx": {
       "dev-source": "./src/client/lynx/index.ts",
-      "types": "./dist/client/lynx/index.d.mts",
-      "default": "./dist/client/lynx/index.mjs"
+      "types": "./dist/client/lynx/index.d.ts",
+      "default": "./dist/client/lynx/index.js"
     },
     "./test": {
       "dev-source": "./src/test-utils/index.ts",
-      "types": "./dist/test-utils/index.d.mts",
-      "default": "./dist/test-utils/index.mjs"
+      "types": "./dist/test-utils/index.d.ts",
+      "default": "./dist/test-utils/index.js"
     },
     "./api": {
       "dev-source": "./src/api/index.ts",
-      "types": "./dist/api/index.d.mts",
-      "default": "./dist/api/index.mjs"
+      "types": "./dist/api/index.d.ts",
+      "default": "./dist/api/index.js"
     },
     "./db": {
       "dev-source": "./src/db/index.ts",
-      "types": "./dist/db/index.d.mts",
-      "default": "./dist/db/index.mjs"
+      "types": "./dist/db/index.d.ts",
+      "default": "./dist/db/index.js"
     },
     "./vue": {
       "dev-source": "./src/client/vue/index.ts",
-      "types": "./dist/client/vue/index.d.mts",
-      "default": "./dist/client/vue/index.mjs"
+      "types": "./dist/client/vue/index.d.ts",
+      "default": "./dist/client/vue/index.js"
     },
     "./plugins": {
       "dev-source": "./src/plugins/index.ts",
-      "types": "./dist/plugins/index.d.mts",
-      "default": "./dist/plugins/index.mjs"
+      "types": "./dist/plugins/index.d.ts",
+      "default": "./dist/plugins/index.js"
     },
     "./svelte-kit": {
       "dev-source": "./src/integrations/svelte-kit.ts",
-      "types": "./dist/integrations/svelte-kit.d.mts",
-      "default": "./dist/integrations/svelte-kit.mjs"
+      "types": "./dist/integrations/svelte-kit.d.ts",
+      "default": "./dist/integrations/svelte-kit.js"
     },
     "./solid-start": {
       "dev-source": "./src/integrations/solid-start.ts",
-      "types": "./dist/integrations/solid-start.d.mts",
-      "default": "./dist/integrations/solid-start.mjs"
+      "types": "./dist/integrations/solid-start.d.ts",
+      "default": "./dist/integrations/solid-start.js"
     },
     "./svelte": {
       "dev-source": "./src/client/svelte/index.ts",
-      "types": "./dist/client/svelte/index.d.mts",
-      "default": "./dist/client/svelte/index.mjs"
+      "types": "./dist/client/svelte/index.d.ts",
+      "default": "./dist/client/svelte/index.js"
     },
     "./next-js": {
       "dev-source": "./src/integrations/next-js.ts",
-      "types": "./dist/integrations/next-js.d.mts",
-      "default": "./dist/integrations/next-js.mjs"
+      "types": "./dist/integrations/next-js.d.ts",
+      "default": "./dist/integrations/next-js.js"
     },
     "./tanstack-start": {
       "dev-source": "./src/integrations/tanstack-start.ts",
-      "types": "./dist/integrations/tanstack-start.d.mts",
-      "default": "./dist/integrations/tanstack-start.mjs"
+      "types": "./dist/integrations/tanstack-start.d.ts",
+      "default": "./dist/integrations/tanstack-start.js"
     },
     "./tanstack-start/solid": {
       "dev-source": "./src/integrations/tanstack-start-solid.ts",
-      "types": "./dist/integrations/tanstack-start-solid.d.mts",
-      "default": "./dist/integrations/tanstack-start-solid.mjs"
+      "types": "./dist/integrations/tanstack-start-solid.d.ts",
+      "default": "./dist/integrations/tanstack-start-solid.js"
     },
     "./node": {
       "dev-source": "./src/integrations/node.ts",
-      "types": "./dist/integrations/node.d.mts",
-      "default": "./dist/integrations/node.mjs"
+      "types": "./dist/integrations/node.d.ts",
+      "default": "./dist/integrations/node.js"
     },
     "./db/adapter": {
       "dev-source": "./src/db/adapter-kysely.ts",
-      "types": "./dist/db/adapter-kysely.d.mts",
-      "default": "./dist/db/adapter-kysely.mjs"
+      "types": "./dist/db/adapter-kysely.d.ts",
+      "default": "./dist/db/adapter-kysely.js"
     },
     "./db/adapter/minimal": {
       "dev-source": "./src/db/adapter-base.ts",
-      "types": "./dist/db/adapter-base.d.mts",
-      "default": "./dist/db/adapter-base.mjs"
+      "types": "./dist/db/adapter-base.d.ts",
+      "default": "./dist/db/adapter-base.js"
     },
     "./db/migration": {
       "dev-source": "./src/db/get-migration.ts",
-      "types": "./dist/db/get-migration.d.mts",
-      "default": "./dist/db/get-migration.mjs"
+      "types": "./dist/db/get-migration.d.ts",
+      "default": "./dist/db/get-migration.js"
     },
     "./adapters/prisma": {
       "dev-source": "./src/adapters/prisma-adapter/index.ts",
-      "types": "./dist/adapters/prisma-adapter/index.d.mts",
-      "default": "./dist/adapters/prisma-adapter/index.mjs"
+      "types": "./dist/adapters/prisma-adapter/index.d.ts",
+      "default": "./dist/adapters/prisma-adapter/index.js"
     },
     "./adapters/drizzle": {
       "dev-source": "./src/adapters/drizzle-adapter/index.ts",
-      "types": "./dist/adapters/drizzle-adapter/index.d.mts",
-      "default": "./dist/adapters/drizzle-adapter/index.mjs"
+      "types": "./dist/adapters/drizzle-adapter/index.d.ts",
+      "default": "./dist/adapters/drizzle-adapter/index.js"
     },
     "./adapters/mongodb": {
       "dev-source": "./src/adapters/mongodb-adapter/index.ts",
-      "types": "./dist/adapters/mongodb-adapter/index.d.mts",
-      "default": "./dist/adapters/mongodb-adapter/index.mjs"
+      "types": "./dist/adapters/mongodb-adapter/index.d.ts",
+      "default": "./dist/adapters/mongodb-adapter/index.js"
     },
     "./adapters/memory": {
       "dev-source": "./src/adapters/memory-adapter/index.ts",
-      "types": "./dist/adapters/memory-adapter/index.d.mts",
-      "default": "./dist/adapters/memory-adapter/index.mjs"
+      "types": "./dist/adapters/memory-adapter/index.d.ts",
+      "default": "./dist/adapters/memory-adapter/index.js"
     },
     "./adapters": {
       "dev-source": "./src/adapters/index.ts",
-      "types": "./dist/adapters/index.d.mts",
-      "default": "./dist/adapters/index.mjs"
+      "types": "./dist/adapters/index.d.ts",
+      "default": "./dist/adapters/index.js"
     },
     "./plugins/access": {
       "dev-source": "./src/plugins/access/index.ts",
-      "types": "./dist/plugins/access/index.d.mts",
-      "default": "./dist/plugins/access/index.mjs"
+      "types": "./dist/plugins/access/index.d.ts",
+      "default": "./dist/plugins/access/index.js"
     },
     "./plugins/admin": {
       "dev-source": "./src/plugins/admin/index.ts",
-      "types": "./dist/plugins/admin/index.d.mts",
-      "default": "./dist/plugins/admin/index.mjs"
+      "types": "./dist/plugins/admin/index.d.ts",
+      "default": "./dist/plugins/admin/index.js"
     },
     "./plugins/admin/access": {
       "dev-source": "./src/plugins/admin/access/index.ts",
-      "types": "./dist/plugins/admin/access/index.d.mts",
-      "default": "./dist/plugins/admin/access/index.mjs"
+      "types": "./dist/plugins/admin/access/index.d.ts",
+      "default": "./dist/plugins/admin/access/index.js"
     },
     "./plugins/anonymous": {
       "dev-source": "./src/plugins/anonymous/index.ts",
-      "types": "./dist/plugins/anonymous/index.d.mts",
-      "default": "./dist/plugins/anonymous/index.mjs"
+      "types": "./dist/plugins/anonymous/index.d.ts",
+      "default": "./dist/plugins/anonymous/index.js"
     },
     "./plugins/bearer": {
       "dev-source": "./src/plugins/bearer/index.ts",
-      "types": "./dist/plugins/bearer/index.d.mts",
-      "default": "./dist/plugins/bearer/index.mjs"
+      "types": "./dist/plugins/bearer/index.d.ts",
+      "default": "./dist/plugins/bearer/index.js"
     },
     "./plugins/custom-session": {
       "dev-source": "./src/plugins/custom-session/index.ts",
-      "types": "./dist/plugins/custom-session/index.d.mts",
-      "default": "./dist/plugins/custom-session/index.mjs"
+      "types": "./dist/plugins/custom-session/index.d.ts",
+      "default": "./dist/plugins/custom-session/index.js"
     },
     "./plugins/email-otp": {
       "dev-source": "./src/plugins/email-otp/index.ts",
-      "types": "./dist/plugins/email-otp/index.d.mts",
-      "default": "./dist/plugins/email-otp/index.mjs"
+      "types": "./dist/plugins/email-otp/index.d.ts",
+      "default": "./dist/plugins/email-otp/index.js"
     },
     "./plugins/generic-oauth": {
       "dev-source": "./src/plugins/generic-oauth/index.ts",
-      "types": "./dist/plugins/generic-oauth/index.d.mts",
-      "default": "./dist/plugins/generic-oauth/index.mjs"
+      "types": "./dist/plugins/generic-oauth/index.d.ts",
+      "default": "./dist/plugins/generic-oauth/index.js"
     },
     "./plugins/jwt": {
       "dev-source": "./src/plugins/jwt/index.ts",
-      "types": "./dist/plugins/jwt/index.d.mts",
-      "default": "./dist/plugins/jwt/index.mjs"
+      "types": "./dist/plugins/jwt/index.d.ts",
+      "default": "./dist/plugins/jwt/index.js"
     },
     "./plugins/haveibeenpwned": {
       "dev-source": "./src/plugins/haveibeenpwned/index.ts",
-      "types": "./dist/plugins/haveibeenpwned/index.d.mts",
-      "default": "./dist/plugins/haveibeenpwned/index.mjs"
+      "types": "./dist/plugins/haveibeenpwned/index.d.ts",
+      "default": "./dist/plugins/haveibeenpwned/index.js"
     },
     "./plugins/oidc-provider": {
       "dev-source": "./src/plugins/oidc-provider/index.ts",
-      "types": "./dist/plugins/oidc-provider/index.d.mts",
-      "default": "./dist/plugins/oidc-provider/index.mjs"
+      "types": "./dist/plugins/oidc-provider/index.d.ts",
+      "default": "./dist/plugins/oidc-provider/index.js"
     },
     "./plugins/magic-link": {
       "dev-source": "./src/plugins/magic-link/index.ts",
-      "types": "./dist/plugins/magic-link/index.d.mts",
-      "default": "./dist/plugins/magic-link/index.mjs"
+      "types": "./dist/plugins/magic-link/index.d.ts",
+      "default": "./dist/plugins/magic-link/index.js"
     },
     "./plugins/multi-session": {
       "dev-source": "./src/plugins/multi-session/index.ts",
-      "types": "./dist/plugins/multi-session/index.d.mts",
-      "default": "./dist/plugins/multi-session/index.mjs"
+      "types": "./dist/plugins/multi-session/index.d.ts",
+      "default": "./dist/plugins/multi-session/index.js"
     },
     "./plugins/oauth-proxy": {
       "dev-source": "./src/plugins/oauth-proxy/index.ts",
-      "types": "./dist/plugins/oauth-proxy/index.d.mts",
-      "default": "./dist/plugins/oauth-proxy/index.mjs"
+      "types": "./dist/plugins/oauth-proxy/index.d.ts",
+      "default": "./dist/plugins/oauth-proxy/index.js"
     },
     "./plugins/organization": {
       "dev-source": "./src/plugins/organization/index.ts",
-      "types": "./dist/plugins/organization/index.d.mts",
-      "default": "./dist/plugins/organization/index.mjs"
+      "types": "./dist/plugins/organization/index.d.ts",
+      "default": "./dist/plugins/organization/index.js"
     },
     "./plugins/organization/access": {
       "dev-source": "./src/plugins/organization/access/index.ts",
-      "types": "./dist/plugins/organization/access/index.d.mts",
-      "default": "./dist/plugins/organization/access/index.mjs"
+      "types": "./dist/plugins/organization/access/index.d.ts",
+      "default": "./dist/plugins/organization/access/index.js"
     },
     "./plugins/one-time-token": {
       "dev-source": "./src/plugins/one-time-token/index.ts",
-      "types": "./dist/plugins/one-time-token/index.d.mts",
-      "default": "./dist/plugins/one-time-token/index.mjs"
+      "types": "./dist/plugins/one-time-token/index.d.ts",
+      "default": "./dist/plugins/one-time-token/index.js"
     },
     "./plugins/phone-number": {
       "dev-source": "./src/plugins/phone-number/index.ts",
-      "types": "./dist/plugins/phone-number/index.d.mts",
-      "default": "./dist/plugins/phone-number/index.mjs"
+      "types": "./dist/plugins/phone-number/index.d.ts",
+      "default": "./dist/plugins/phone-number/index.js"
     },
     "./plugins/two-factor": {
       "dev-source": "./src/plugins/two-factor/index.ts",
-      "types": "./dist/plugins/two-factor/index.d.mts",
-      "default": "./dist/plugins/two-factor/index.mjs"
+      "types": "./dist/plugins/two-factor/index.d.ts",
+      "default": "./dist/plugins/two-factor/index.js"
     },
     "./plugins/username": {
       "dev-source": "./src/plugins/username/index.ts",
-      "types": "./dist/plugins/username/index.d.mts",
-      "default": "./dist/plugins/username/index.mjs"
+      "types": "./dist/plugins/username/index.d.ts",
+      "default": "./dist/plugins/username/index.js"
     },
     "./plugins/siwe": {
       "dev-source": "./src/plugins/siwe/index.ts",
-      "types": "./dist/plugins/siwe/index.d.mts",
-      "default": "./dist/plugins/siwe/index.mjs"
+      "types": "./dist/plugins/siwe/index.d.ts",
+      "default": "./dist/plugins/siwe/index.js"
     },
     "./plugins/device-authorization": {
       "dev-source": "./src/plugins/device-authorization/index.ts",
-      "types": "./dist/plugins/device-authorization/index.d.mts",
-      "default": "./dist/plugins/device-authorization/index.mjs"
+      "types": "./dist/plugins/device-authorization/index.d.ts",
+      "default": "./dist/plugins/device-authorization/index.js"
     },
     "./plugins/mcp/client": {
       "dev-source": "./src/plugins/mcp/client/index.ts",
-      "types": "./dist/plugins/mcp/client/index.d.mts",
-      "default": "./dist/plugins/mcp/client/index.mjs"
+      "types": "./dist/plugins/mcp/client/index.d.ts",
+      "default": "./dist/plugins/mcp/client/index.js"
     },
     "./plugins/mcp/client/adapters": {
       "dev-source": "./src/plugins/mcp/client/adapters.ts",
-      "types": "./dist/plugins/mcp/client/adapters.d.mts",
-      "default": "./dist/plugins/mcp/client/adapters.mjs"
+      "types": "./dist/plugins/mcp/client/adapters.d.ts",
+      "default": "./dist/plugins/mcp/client/adapters.js"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.mts"
+        "./dist/index.d.ts"
       ],
       "minimal": [
-        "./dist/auth/minimal.d.mts"
+        "./dist/auth/minimal.d.ts"
       ],
       "node": [
-        "./dist/integrations/node.d.mts"
+        "./dist/integrations/node.d.ts"
       ],
       "react": [
-        "./dist/client/react/index.d.mts"
+        "./dist/client/react/index.d.ts"
       ],
       "vue": [
-        "./dist/client/vue/index.d.mts"
+        "./dist/client/vue/index.d.ts"
       ],
       "svelte": [
-        "./dist/client/svelte/index.d.mts"
+        "./dist/client/svelte/index.d.ts"
       ],
       "social-providers": [
-        "./dist/social-providers/index.d.mts"
+        "./dist/social-providers/index.d.ts"
       ],
       "client": [
-        "./dist/client/index.d.mts"
+        "./dist/client/index.d.ts"
       ],
       "client/plugins": [
-        "./dist/client/plugins/index.d.mts"
+        "./dist/client/plugins/index.d.ts"
       ],
       "types": [
-        "./dist/types/index.d.mts"
+        "./dist/types/index.d.ts"
       ],
       "crypto": [
-        "./dist/crypto/index.d.mts"
+        "./dist/crypto/index.d.ts"
       ],
       "cookies": [
-        "./dist/cookies/index.d.mts"
+        "./dist/cookies/index.d.ts"
       ],
       "oauth2": [
-        "./dist/oauth2/index.d.mts"
+        "./dist/oauth2/index.d.ts"
       ],
       "solid": [
-        "./dist/client/solid/index.d.mts"
+        "./dist/client/solid/index.d.ts"
       ],
       "lynx": [
-        "./dist/client/lynx/index.d.mts"
+        "./dist/client/lynx/index.d.ts"
       ],
       "api": [
-        "./dist/api/index.d.mts"
+        "./dist/api/index.d.ts"
       ],
       "db": [
-        "./dist/db/index.d.mts"
+        "./dist/db/index.d.ts"
       ],
       "db/adapter": [
-        "./dist/db/adapter-kysely.d.mts"
+        "./dist/db/adapter-kysely.d.ts"
       ],
       "db/adapter/minimal": [
-        "./dist/db/adapter-base.d.mts"
+        "./dist/db/adapter-base.d.ts"
       ],
       "db/migration": [
-        "./dist/db/get-migration.d.mts"
+        "./dist/db/get-migration.d.ts"
       ],
       "svelte-kit": [
-        "./dist/integrations/svelte-kit.d.mts"
+        "./dist/integrations/svelte-kit.d.ts"
       ],
       "solid-start": [
-        "./dist/integrations/solid-start.d.mts"
+        "./dist/integrations/solid-start.d.ts"
       ],
       "next-js": [
-        "./dist/integrations/next-js.d.mts"
+        "./dist/integrations/next-js.d.ts"
       ],
       "tanstack-start": [
-        "./dist/integrations/tanstack-start.d.mts"
+        "./dist/integrations/tanstack-start.d.ts"
       ],
       "tanstack-start/solid": [
-        "./dist/integrations/tanstack-start-solid.d.mts"
+        "./dist/integrations/tanstack-start-solid.d.ts"
       ],
       "adapters": [
-        "./dist/adapters/index.d.mts"
+        "./dist/adapters/index.d.ts"
       ],
       "adapters/prisma": [
-        "./dist/adapters/prisma-adapter/index.d.mts"
+        "./dist/adapters/prisma-adapter/index.d.ts"
       ],
       "adapters/drizzle": [
-        "./dist/adapters/drizzle-adapter/index.d.mts"
+        "./dist/adapters/drizzle-adapter/index.d.ts"
       ],
       "adapters/mongodb": [
-        "./dist/adapters/mongodb-adapter/index.d.mts"
+        "./dist/adapters/mongodb-adapter/index.d.ts"
       ],
       "adapters/memory": [
-        "./dist/adapters/memory-adapter/index.d.mts"
+        "./dist/adapters/memory-adapter/index.d.ts"
       ],
       "plugins": [
-        "./dist/plugins/index.d.mts"
+        "./dist/plugins/index.d.ts"
       ],
       "plugins/access": [
-        "./dist/plugins/access/index.d.mts"
+        "./dist/plugins/access/index.d.ts"
       ],
       "plugins/admin": [
-        "./dist/plugins/admin/index.d.mts"
+        "./dist/plugins/admin/index.d.ts"
       ],
       "plugins/admin/access": [
-        "./dist/plugins/admin/access/index.d.mts"
+        "./dist/plugins/admin/access/index.d.ts"
       ],
       "plugins/anonymous": [
-        "./dist/plugins/anonymous/index.d.mts"
+        "./dist/plugins/anonymous/index.d.ts"
       ],
       "plugins/bearer": [
-        "./dist/plugins/bearer/index.d.mts"
+        "./dist/plugins/bearer/index.d.ts"
       ],
       "plugins/custom-session": [
-        "./dist/plugins/custom-session/index.d.mts"
+        "./dist/plugins/custom-session/index.d.ts"
       ],
       "plugins/email-otp": [
-        "./dist/plugins/email-otp/index.d.mts"
+        "./dist/plugins/email-otp/index.d.ts"
       ],
       "plugins/generic-oauth": [
-        "./dist/plugins/generic-oauth/index.d.mts"
+        "./dist/plugins/generic-oauth/index.d.ts"
       ],
       "plugins/haveibeenpwned": [
-        "./dist/plugins/haveibeenpwned/index.d.mts"
+        "./dist/plugins/haveibeenpwned/index.d.ts"
       ],
       "plugins/oauth-proxy": [
-        "./dist/plugins/oauth-proxy/index.d.mts"
+        "./dist/plugins/oauth-proxy/index.d.ts"
       ],
       "plugins/one-time-token": [
-        "./dist/plugins/one-time-token/index.d.mts"
+        "./dist/plugins/one-time-token/index.d.ts"
       ],
       "plugins/oidc-provider": [
-        "./dist/plugins/oidc-provider/index.d.mts"
+        "./dist/plugins/oidc-provider/index.d.ts"
       ],
       "plugins/jwt": [
-        "./dist/plugins/jwt/index.d.mts"
+        "./dist/plugins/jwt/index.d.ts"
       ],
       "plugins/magic-link": [
-        "./dist/plugins/magic-link/index.d.mts"
+        "./dist/plugins/magic-link/index.d.ts"
       ],
       "plugins/organization": [
-        "./dist/plugins/organization/index.d.mts"
+        "./dist/plugins/organization/index.d.ts"
       ],
       "plugins/organization/access": [
-        "./dist/plugins/organization/access/index.d.mts"
+        "./dist/plugins/organization/access/index.d.ts"
       ],
       "plugins/phone-number": [
-        "./dist/plugins/phone-number/index.d.mts"
+        "./dist/plugins/phone-number/index.d.ts"
       ],
       "plugins/two-factor": [
-        "./dist/plugins/two-factor/index.d.mts"
+        "./dist/plugins/two-factor/index.d.ts"
       ],
       "plugins/username": [
-        "./dist/plugins/username/index.d.mts"
+        "./dist/plugins/username/index.d.ts"
       ],
       "plugins/siwe": [
-        "./dist/plugins/siwe/index.d.mts"
+        "./dist/plugins/siwe/index.d.ts"
       ],
       "plugins/device-authorization": [
-        "./dist/plugins/device-authorization/index.d.mts"
+        "./dist/plugins/device-authorization/index.d.ts"
       ],
       "plugins/mcp/client": [
-        "./dist/plugins/mcp/client/index.d.mts"
+        "./dist/plugins/mcp/client/index.d.ts"
       ],
       "plugins/mcp/client/adapters": [
-        "./dist/plugins/mcp/client/adapters.d.mts"
+        "./dist/plugins/mcp/client/adapters.d.ts"
       ]
     }
   },
@@ -527,7 +527,6 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "solid-js": "^1.9.11",
-    "tsdown": "catalog:",
     "type-fest": "^5.4.4",
     "typescript": "catalog:",
     "vitest": "^4.0.18",

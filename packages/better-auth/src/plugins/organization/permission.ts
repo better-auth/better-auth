@@ -1,5 +1,5 @@
-import type { Role } from "../access";
-import type { OrganizationOptions } from "./types";
+import type { Role } from "../access/index.js";
+import type { OrganizationOptions } from "./types.js";
 
 export const hasPermissionFn = (
 	input: HasPermissionBaseInput,

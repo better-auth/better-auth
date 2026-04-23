@@ -13,7 +13,7 @@ import {
 	insensitiveIn,
 	insensitiveNotIn,
 	insensitiveStartsWith,
-} from "./query-builders";
+} from "./query-builders.js";
 
 export interface MemoryDB {
 	[key: string]: any[];

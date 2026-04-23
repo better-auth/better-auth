@@ -18,7 +18,7 @@ import {
 	insensitiveNe,
 	insensitiveNotIn,
 	insensitiveStartsWith,
-} from "./query-builders";
+} from "./query-builders.js";
 
 class MongoAdapterError extends Error {
 	constructor(

@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import type { StripeOptions, StripePlan, Subscription } from "./types";
+import type { StripeOptions, StripePlan, Subscription } from "./types.js";
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],

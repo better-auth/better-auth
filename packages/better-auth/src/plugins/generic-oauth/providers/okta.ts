@@ -1,4 +1,4 @@
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index.js";
 
 export interface OktaOptions extends BaseOAuthProviderOptions {
 	/**

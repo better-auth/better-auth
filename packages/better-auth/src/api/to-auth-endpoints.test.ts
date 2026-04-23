@@ -6,10 +6,10 @@ import { APIError } from "@better-auth/core/error";
 import { kAPIErrorHeaderSymbol } from "better-call";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { init } from "../context/init";
-import { getTestInstance } from "../test-utils/test-instance";
-import { isAPIError } from "../utils/is-api-error";
-import { toAuthEndpoints } from "./to-auth-endpoints";
+import { init } from "../context/init.js";
+import { getTestInstance } from "../test-utils/test-instance.js";
+import { isAPIError } from "../utils/is-api-error.js";
+import { toAuthEndpoints } from "./to-auth-endpoints.js";
 
 describe("before hook", async () => {
 	describe("context", async () => {

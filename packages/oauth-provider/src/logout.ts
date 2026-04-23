@@ -4,9 +4,13 @@ import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
-import { handleRedirect } from "./authorize";
-import type { OAuthOptions, Scope } from "./types";
-import { decryptStoredClientSecret, getClient, getJwtPlugin } from "./utils";
+import { handleRedirect } from "./authorize.js";
+import type { OAuthOptions, Scope } from "./types/index.js";
+import {
+	decryptStoredClientSecret,
+	getClient,
+	getJwtPlugin,
+} from "./utils/index.js";
 
 /**
  * IMPORTANT NOTES:

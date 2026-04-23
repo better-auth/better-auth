@@ -3,8 +3,8 @@ export {
 	getCurrentAuthContext,
 	getCurrentAuthContextAsyncLocalStorage,
 	runWithEndpointContext,
-} from "./endpoint-context";
-export { getBetterAuthVersion } from "./global";
+} from "./endpoint-context.js";
+export { getBetterAuthVersion } from "./global.js";
 export {
 	defineRequestState,
 	getCurrentRequestState,
@@ -13,11 +13,11 @@ export {
 	type RequestState,
 	type RequestStateWeakMap,
 	runWithRequestState,
-} from "./request-state";
+} from "./request-state.js";
 export {
 	getCurrentAdapter,
 	getCurrentDBAdapterAsyncLocalStorage,
 	queueAfterTransactionHook,
 	runWithAdapter,
 	runWithTransaction,
-} from "./transaction";
+} from "./transaction.js";

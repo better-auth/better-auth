@@ -21,8 +21,9 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch"
+    "build": "tsc --build tsconfig.build.json",
+    "dev": "tsc --build tsconfig.build.json --watch",
+    "typecheck": "tsc --build tsconfig.json"
   },
   "files": [
     "dist"
@@ -30,14 +31,13 @@
   "exports": {
     "./adapter": {
       "dev-source": "./src/adapter/index.ts",
-      "default": "./dist/adapter.mjs",
-      "types": "./dist/adapter.d.mts"
+      "default": "./dist/adapter/index.js",
+      "types": "./dist/adapter/index.d.ts"
     }
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "tsdown": "catalog:",
     "vitest": "catalog:vitest"
   },
   "peerDependencies": {

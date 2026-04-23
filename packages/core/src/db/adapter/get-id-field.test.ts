@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { BetterAuthOptions } from "../../types";
-import type { BetterAuthDBSchema } from "../type";
-import { initGetIdField } from "./get-id-field";
+import type { BetterAuthOptions } from "../../types/index.js";
+import type { BetterAuthDBSchema } from "../type.js";
+import { initGetIdField } from "./get-id-field.js";
 
 const minimalSchema: BetterAuthDBSchema = {
 	user: {

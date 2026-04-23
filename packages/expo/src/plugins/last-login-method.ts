@@ -1,5 +1,5 @@
 import type { Awaitable, BetterAuthClientPlugin } from "@better-auth/core";
-import { PACKAGE_VERSION } from "../version";
+import { PACKAGE_VERSION } from "../version.js";
 
 export interface LastLoginMethodClientConfig {
 	storage: {

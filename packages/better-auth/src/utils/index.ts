@@ -1,5 +1,5 @@
-export * from "../oauth2/state";
-export type { StateData } from "../state";
-export { generateGenericState, parseGenericState } from "../state";
-export * from "./hide-metadata";
-export * from "./url";
+export * from "../oauth2/state.js";
+export type { StateData } from "../state.js";
+export { generateGenericState, parseGenericState } from "../state.js";
+export * from "./hide-metadata.js";
+export * from "./url.js";

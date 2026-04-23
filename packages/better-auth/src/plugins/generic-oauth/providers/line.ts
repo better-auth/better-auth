@@ -1,7 +1,7 @@
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index.js";
 
 export interface LineOptions extends BaseOAuthProviderOptions {
 	/**

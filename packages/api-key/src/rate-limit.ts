@@ -1,6 +1,6 @@
-import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
-import type { PredefinedApiKeyOptions } from "./routes";
-import type { ApiKey } from "./types";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from "./index.js";
+import type { PredefinedApiKeyOptions } from "./routes/index.js";
+import type { ApiKey } from "./types.js";
 
 interface RateLimitResult {
 	success: boolean;

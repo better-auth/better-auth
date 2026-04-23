@@ -22,10 +22,10 @@ import type {
 import { useAuthQuery } from "better-auth/client";
 import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
-import type { passkey } from ".";
-import { PASSKEY_ERROR_CODES } from "./error-codes";
-import type { Passkey } from "./types";
-import { PACKAGE_VERSION } from "./version";
+import { PASSKEY_ERROR_CODES } from "./error-codes.js";
+import type { passkey } from "./index.js";
+import type { Passkey } from "./types.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 export const getPasskeyActions = (
 	$fetch: BetterFetch,
@@ -340,5 +340,5 @@ export const passkeyClient = () => {
 };
 
 export type * from "@simplewebauthn/server";
-export * from "./error-codes";
-export type * from "./types";
+export * from "./error-codes.js";
+export type * from "./types.js";

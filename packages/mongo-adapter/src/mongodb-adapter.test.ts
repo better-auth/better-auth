@@ -1,6 +1,6 @@
 import { ObjectId, UUID } from "mongodb";
 import { describe, expect, it, vi } from "vitest";
-import { mongodbAdapter } from "./mongodb-adapter";
+import { mongodbAdapter } from "./mongodb-adapter.js";
 
 describe("mongodb-adapter", () => {
 	it("should create mongodb adapter", () => {

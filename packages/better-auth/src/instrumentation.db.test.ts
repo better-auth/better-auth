@@ -21,7 +21,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { getTestInstance } from "./test-utils";
+import { getTestInstance } from "./test-utils/index.js";
 
 let exporter: InMemorySpanExporter;
 let provider: NodeTracerProvider;

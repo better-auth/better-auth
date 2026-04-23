@@ -10,9 +10,9 @@ import type { Organization } from "better-auth/plugins/organization";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
-import { oauthProviderClient } from "./client";
-import { oauthProvider } from "./oauth";
-import type { OAuthClient } from "./types/oauth";
+import { oauthProviderClient } from "./client.js";
+import { oauthProvider } from "./oauth.js";
+import type { OAuthClient } from "./types/oauth.js";
 
 describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";

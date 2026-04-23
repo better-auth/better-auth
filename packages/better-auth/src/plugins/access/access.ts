@@ -1,5 +1,5 @@
 import { BetterAuthError } from "@better-auth/core/error";
-import type { Statements, Subset } from "./types";
+import type { Statements, Subset } from "./types.js";
 
 export type AuthorizeResponse =
 	| { success: false; error: string }
