@@ -49,7 +49,17 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
    pnpm install
    ```
 
-5. Build the project:
+5. Create a `.env` file from the example:
+   * On Unix-based systems:
+     ```bash
+     cp -n ./landing/.env.example ./landing/.env
+     ```
+   * On Windows:
+     ```batch
+     copy /Y .\landing\.env.example .\landing\.env
+     ```
+
+6. Build the project:
 
    ```bash
    pnpm build
