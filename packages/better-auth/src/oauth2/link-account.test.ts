@@ -788,6 +788,221 @@ describe("oauth2 - disableImplicitLinking", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8742
+ */
+describe("oauth2 - updateUserInfoOnLink via callback", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+				updateUserInfoOnLink: true,
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("should update user name and image when linking via OAuth callback", async () => {
+		const testEmail = "update-on-link@example.com";
+
+		const sessionHeaders = new Headers();
+		const signUpRes = await client.signUp.email(
+			{
+				email: testEmail,
+				password: "password123",
+				name: "Original Name",
+			},
+			{
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(signUpRes.data).toBeTruthy();
+		const userId = signUpRes.data!.user.id;
+
+		// Verify initial state - no image, original name
+		let user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(user?.name).toBe("Original Name");
+		expect(user?.image).toBeNull();
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Updated Name From Google",
+					picture: "https://example.com/avatar.jpg",
+					exp: 1234567890,
+					sub: "google_update_on_link_123",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Updated",
+					family_name: "Name From Google",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const linkRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/settings",
+			},
+			{
+				headers: sessionHeaders,
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(linkRes.error).toBeNull();
+
+		const state = new URL(linkRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: sessionHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+			},
+		});
+
+		// Verify user info was updated
+		user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(user?.name).toBe("Updated Name From Google");
+		expect(user?.image).toBe("https://example.com/avatar.jpg");
+	});
+
+	it("should not update user info when updateUserInfoOnLink is not set", async () => {
+		const {
+			client: client2,
+			auth: auth2,
+			cookieSetter: cookieSetter2,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: ["google"],
+				},
+			},
+		});
+
+		const ctx2 = await auth2.$context;
+		const testEmail = "no-update-on-link@example.com";
+
+		const sessionHeaders = new Headers();
+		const signUpRes = await client2.signUp.email(
+			{
+				email: testEmail,
+				password: "password123",
+				name: "Should Not Change",
+			},
+			{
+				onSuccess: cookieSetter2(sessionHeaders),
+			},
+		);
+
+		expect(signUpRes.data).toBeTruthy();
+		const userId = signUpRes.data!.user.id;
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Google Name",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_no_update_456",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Google",
+					family_name: "Name",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const linkRes = await client2.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/settings",
+			},
+			{
+				headers: sessionHeaders,
+				onSuccess: cookieSetter2(sessionHeaders),
+			},
+		);
+
+		expect(linkRes.error).toBeNull();
+
+		const state = new URL(linkRes.data!.url!).searchParams.get("state") || "";
+		await client2.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: sessionHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+			},
+		});
+
+		// Verify user info was NOT updated
+		const user = await ctx2.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(user?.name).toBe("Should Not Change");
+		expect(user?.image).toBeNull();
+	});
+});
+
 describe("oauth2 - override user info on sign-in", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {

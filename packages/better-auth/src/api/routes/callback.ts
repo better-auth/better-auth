@@ -231,6 +231,20 @@ export const callbackOAuth = createAuthEndpoint(
 					return redirectOnError("unable_to_link_account");
 				}
 			}
+
+			if (
+				c.context.options.account?.accountLinking?.updateUserInfoOnLink === true
+			) {
+				try {
+					await c.context.internalAdapter.updateUser(link.userId, {
+						name: userInfo.name,
+						image: userInfo.image,
+					});
+				} catch (e) {
+					c.context.logger.warn("Could not update user", e);
+				}
+			}
+
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
