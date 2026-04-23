@@ -12,7 +12,7 @@ import {
 export interface FacebookProfile {
 	id: string;
 	name: string;
-	email: string;
+	email?: string;
 	email_verified: boolean;
 	picture: {
 		data: {

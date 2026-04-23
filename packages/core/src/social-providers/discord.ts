@@ -41,7 +41,7 @@ export interface DiscordProfile extends Record<string, any> {
 	/** whether the email on this account has been verified */
 	verified: boolean;
 	/** the user's email */
-	email: string;
+	email: string | null;
 	/**
 	 * the flags on a user's account:
 	 * https://discord.com/developers/docs/resources/user#user-object-user-flags

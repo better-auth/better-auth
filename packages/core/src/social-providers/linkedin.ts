@@ -16,7 +16,7 @@ export interface LinkedInProfile {
 		country: string;
 		language: string;
 	};
-	email: string;
+	email?: string;
 	email_verified: boolean;
 }
 
