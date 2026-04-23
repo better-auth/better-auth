@@ -5,7 +5,10 @@
     <img src="https://github.com/better-auth/better-auth/blob/main/banner-light.png?raw=true" alt="Better Auth Logo"/>
   </picture>
 
-  <br/>
+  [![npm](https://img.shields.io/npm/dm/better-auth?style=flat&colorA=000000&colorB=000000)](https://npm.chart.dev/better-auth?primary=neutral&gray=neutral&theme=dark)
+  [![npm version](https://img.shields.io/npm/v/better-auth.svg?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/better-auth)
+  [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth?style=flat&colorA=000000&colorB=000000)](https://github.com/better-auth/better-auth/stargazers)
+
   <p>
     <a href="https://discord.gg/better-auth">Discord</a>
     ·
@@ -13,10 +16,6 @@
     ·
     <a href="https://github.com/better-auth/better-auth/issues">Issues</a>
   </p>
-
-  [![npm](https://img.shields.io/npm/dm/better-auth?style=flat&colorA=000000&colorB=000000)](https://npm.chart.dev/better-auth?primary=neutral&gray=neutral&theme=dark)
-  [![npm version](https://img.shields.io/npm/v/better-auth.svg?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/better-auth)
-  [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth?style=flat&colorA=000000&colorB=000000)](https://github.com/better-auth/better-auth/stargazers)
 </div>
 
 ## Better Auth
