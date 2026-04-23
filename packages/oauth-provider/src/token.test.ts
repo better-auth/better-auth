@@ -190,6 +190,35 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload.email).toBeUndefined();
 	});
 
+	it("should exchange a PKCE authorization code when state is omitted", async () => {
+		const scopes = ["openid"];
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+		});
+		authUrl.searchParams.delete("state");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).not.toContain("state=");
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await validateAuthCode({
+			code: url.searchParams.get("code")!,
+			codeVerifier,
+		});
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe(scopes.join(" "));
+	});
+
 	it("scope openid+profile should provide access_token and id_token", async ({
 		expect,
 	}) => {
@@ -2478,6 +2507,23 @@ describe("verificationValueSchema", () => {
 				redirect_uri: "https://example.com/callback",
 				scope: "openid",
 				state: "abc123",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should validate a verification value without state", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
 			},
 			userId: "user-1",
 			sessionId: "session-1",
