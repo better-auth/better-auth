@@ -312,7 +312,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						}).verify(code);
 						const backupCodeResult = await verifyBackupCode(
 							{
-								backupCodes: twoFactor?.backupCodes,
+								backupCodes: twoFactor.backupCodes,
 								code,
 							},
 							ctx.context.secretConfig,
