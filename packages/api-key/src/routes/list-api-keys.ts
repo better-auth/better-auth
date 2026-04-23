@@ -344,7 +344,7 @@ export function listApiKeys({
 				const referencesType = keyConfig?.references ?? "user";
 				return (
 					referencesType === expectedReferencesType &&
-					key.referenceId === referenceId
+					String(key.referenceId) === String(referenceId)
 				);
 			});
 
