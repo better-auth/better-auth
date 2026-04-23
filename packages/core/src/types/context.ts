@@ -153,6 +153,17 @@ export interface InternalAdapter<
 
 	deleteAccount(accountId: string): Promise<void>;
 
+	deleteWithHooks<T extends Record<string, any>>(
+		where: Where[],
+		model: Exclude<ModelNames, "rate-limit">,
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<T | null | void>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
+	): Promise<T | null>;
+
 	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
 
 	findOAuthUser(

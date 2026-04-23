@@ -1,6 +1,10 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAdapter } from "@better-auth/core/context";
-import type { WhereOperator } from "@better-auth/core/db/adapter";
+import {
+	getCurrentAdapter,
+	getCurrentDBAdapterAsyncLocalStorage,
+	runWithAdapter,
+} from "@better-auth/core/context";
+import type { Where, WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { parseJSON } from "../../client/parser";
@@ -342,33 +346,56 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			} else {
 				userId = _userId;
 			}
-			const member = await adapter.delete<InferMember<O, false>>({
-				model: "member",
-				where: [
+			const deleteMemberWithHooks = async () =>
+				context.internalAdapter.deleteWithHooks<InferMember<O, false>>(
+					[
+						{
+							field: "id",
+							value: memberId,
+						},
+					],
+					"member",
 					{
-						field: "id",
-						value: memberId,
+						executeMainFn: false,
+						fn: async (where: Where[]) => {
+							const member = await adapter.findOne<InferMember<O, false>>({
+								model: "member",
+								where,
+							});
+							if (!member) {
+								return null;
+							}
+							await adapter.delete({
+								model: "member",
+								where,
+							});
+							if (options?.teams?.enabled) {
+								const teams = await adapter.findMany<Team>({
+									model: "team",
+									where: [{ field: "organizationId", value: organizationId }],
+								});
+								await Promise.all(
+									teams.map((team) =>
+										adapter.deleteMany({
+											model: "teamMember",
+											where: [
+												{ field: "teamId", value: team.id },
+												{ field: "userId", value: userId },
+											],
+										}),
+									),
+								);
+							}
+							return member;
+						},
 					},
-				],
-			});
-			// remove member from all teams they're part of
-			if (options?.teams?.enabled) {
-				const teams = await adapter.findMany<Team>({
-					model: "team",
-					where: [{ field: "organizationId", value: organizationId }],
-				});
-				await Promise.all(
-					teams.map((team) =>
-						adapter.deleteMany({
-							model: "teamMember",
-							where: [
-								{ field: "teamId", value: team.id },
-								{ field: "userId", value: userId },
-							],
-						}),
-					),
 				);
-			}
+			const adapterStore = await getCurrentDBAdapterAsyncLocalStorage().catch(
+				() => null,
+			);
+			const member = adapterStore?.getStore()
+				? await deleteMemberWithHooks()
+				: await runWithAdapter(baseAdapter, deleteMemberWithHooks);
 			return member;
 		},
 		updateOrganization: async (
