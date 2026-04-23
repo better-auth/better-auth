@@ -50,6 +50,7 @@
 			]
 		},
 		"packages/core": {
+			"project": ["src/**/*.ts!"],
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",
