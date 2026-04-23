@@ -268,6 +268,31 @@ describe("getBaseURL", () => {
 
 			expect(result).toBe("https://api.v1.staging.example.com/auth");
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8898
+		 */
+		it("should reject malicious x-forwarded-host without catastrophic backtracking", () => {
+			// Crafted payload: many labels each ending in a hyphen, with an
+			// invalid trailing character. Against the previous nested-quantifier
+			// regex this triggered exponential backtracking on engines without
+			// the v8 hardening (e.g. JavaScriptCore in Bun).
+			const label = `a${"-".repeat(60)}`;
+			const malicious = `${Array(160).fill(label).join(".")}!`;
+			const request = new Request("http://localhost:3000/test", {
+				headers: {
+					"x-forwarded-host": malicious,
+					"x-forwarded-proto": "https",
+				},
+			});
+
+			const t0 = Date.now();
+			const result = getBaseURL(undefined, "/auth", request, false, true);
+			const elapsed = Date.now() - t0;
+
+			expect(result).toBe("http://localhost:3000/auth");
+			expect(elapsed).toBeLessThan(50);
+		});
 	});
 });
 

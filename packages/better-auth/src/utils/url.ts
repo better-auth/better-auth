@@ -78,6 +78,41 @@ function withPath(url: string, path = "/api/auth") {
 	return `${trimmedUrl}${path}`;
 }
 
+/**
+ * Validates an RFC 1123 DNS label. Linear-time per character — no regex
+ * backtracking. Used by the host-header validator below.
+ */
+function isValidDnsLabel(label: string): boolean {
+	const len = label.length;
+	if (len === 0 || len > 63) return false;
+	for (let i = 0; i < len; i++) {
+		const c = label.charCodeAt(i);
+		const isDigit = c >= 48 && c <= 57;
+		const isUpper = c >= 65 && c <= 90;
+		const isLower = c >= 97 && c <= 122;
+		const isHyphen = c === 45;
+		if (!(isDigit || isUpper || isLower || isHyphen)) return false;
+		// Hyphen not allowed at start or end of a label.
+		if (isHyphen && (i === 0 || i === len - 1)) return false;
+	}
+	return true;
+}
+
+/**
+ * Validates a port substring (already split off the host). Empty string is
+ * treated as "no port" by the caller — this only sees a non-empty value.
+ */
+function isValidPort(port: string): boolean {
+	if (port.length === 0 || port.length > 5) return false;
+	let n = 0;
+	for (let i = 0; i < port.length; i++) {
+		const c = port.charCodeAt(i);
+		if (c < 48 || c > 57) return false;
+		n = n * 10 + (c - 48);
+	}
+	return n >= 1 && n <= 65535;
+}
+
 function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 	if (!header || header.trim() === "") {
 		return false;
@@ -104,26 +139,55 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 			return false;
 		}
 
-		// Basic hostname validation (allows localhost, IPs, and domains with ports)
-		// This is a simple check, not exhaustive RFC validation
-		const hostnameRegex =
-			/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/;
+		// Split off optional port. IPv6 literals are wrapped in `[...]`, so the
+		// port (if any) is the last `:`-segment after the closing bracket.
+		let host = header;
+		let port: string | undefined;
+		if (header.startsWith("[")) {
+			const close = header.indexOf("]");
+			if (close === -1) return false;
+			host = header.slice(0, close + 1);
+			const tail = header.slice(close + 1);
+			if (tail.length > 0) {
+				if (tail[0] !== ":") return false;
+				port = tail.slice(1);
+			}
+		} else {
+			const colon = header.lastIndexOf(":");
+			// Multiple colons in an unbracketed host means it's neither a valid
+			// hostname nor IPv4 — reject. Bracketed IPv6 already handled above.
+			if (colon !== -1 && header.indexOf(":") !== colon) return false;
+			if (colon !== -1) {
+				host = header.slice(0, colon);
+				port = header.slice(colon + 1);
+			}
+		}
 
-		// Also allow IPv4 addresses
-		const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:[0-9]{1,5})?$/;
+		if (port !== undefined && !isValidPort(port)) return false;
+		if (host.length === 0) return false;
 
-		// Also allow IPv6 addresses in brackets
-		const ipv6Regex = /^\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$/;
+		// IPv6 literal in brackets: validate hex/colon contents. No nested
+		// quantifiers — this is a flat character class.
+		if (host.startsWith("[") && host.endsWith("]")) {
+			const inner = host.slice(1, -1);
+			if (inner.length === 0) return false;
+			for (let i = 0; i < inner.length; i++) {
+				const c = inner.charCodeAt(i);
+				const isHex =
+					(c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102);
+				if (!isHex && c !== 58) return false; // 58 is ':'
+			}
+			return true;
+		}
 
-		// Allow localhost variations
-		const localhostRegex = /^localhost(:[0-9]{1,5})?$/i;
-
-		return (
-			hostnameRegex.test(header) ||
-			ipv4Regex.test(header) ||
-			ipv6Regex.test(header) ||
-			localhostRegex.test(header)
-		);
+		// Hostname (or dotted IPv4): validate each dot-separated label.
+		// Splitting first then per-label scanning is O(n) overall, with no
+		// nested quantifiers and therefore no ReDoS exposure.
+		const labels = host.split(".");
+		for (const label of labels) {
+			if (!isValidDnsLabel(label)) return false;
+		}
+		return true;
 	}
 
 	return false;
