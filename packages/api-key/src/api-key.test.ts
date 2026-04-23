@@ -4641,3 +4641,77 @@ describe("api-key", async () => {
 		});
 	});
 });
+
+// Regression for https://github.com/better-auth/better-auth/issues/9336
+//
+// listApiKeys post-filters the adapter results with strict `===`:
+//
+//   key.referenceId === referenceId
+//
+// `referenceId` on the right is derived from `session.user.id`, which the core
+// adapter factory always stringifies on output. `key.referenceId` on the left
+// is whatever the adapter returned — the api-key schema declares it as a plain
+// `string` field with no `references` entry, so the factory's output transform
+// never coerces it. Adapters that store/return `referenceId` as a non-string
+// (e.g. Postgres integer columns, MongoDB ObjectId) therefore made the strict
+// equality silently fail for every row.
+describe("api-key (regression #9336) — list tolerates non-string referenceId", async () => {
+	// Secondary-storage mode exercises the list endpoint's post-filter
+	// directly: keys are returned from the KV as-is, without any pre-filter
+	// strict-equality gating. This mirrors how real SQL/BSON adapters behave —
+	// their findMany tolerates int-vs-string via implicit coercion, so the
+	// mismatched types only bite at the JS-level post-filter inside the route.
+	const store = new Map<string, string>();
+	const secondaryStorage: SecondaryStorage = {
+		set(key, value) {
+			store.set(key, value as string);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			secondaryStorage,
+			plugins: [apiKey({ storage: "secondary-storage" })],
+			advanced: {
+				// SERIAL ids — user.id is numeric in the DB. The core factory
+				// still stringifies it on output, so session.user.id is the
+				// string "1" at the plugin boundary. This mirrors the original
+				// report's Postgres setup.
+				database: { generateId: "serial" },
+			},
+		},
+		{
+			clientOptions: { plugins: [apiKeyClient()] },
+		},
+	);
+	const { headers, user } = await signInWithTestUser();
+
+	it("returns API keys whose stored referenceId is a Number (e.g. Postgres integer column)", async () => {
+		const created = await auth.api.createApiKey({ body: {}, headers });
+
+		// Rewrite the stored key so referenceId is a JS Number that String()-
+		// equals session.user.id. The list route's post-filter runs
+		// `key.referenceId === referenceId` and `referenceId` is always a
+		// string because the core factory stringifies id outputs. Without the
+		// fix, `1 === "1"` is false and the row is silently dropped.
+		const storageKey = `api-key:by-id:${created.id}`;
+		const raw = store.get(storageKey);
+		expect(raw).toBeDefined();
+		const stored = JSON.parse(raw!);
+		const numericReferenceId = Number(user.id);
+		expect(Number.isFinite(numericReferenceId)).toBe(true);
+		stored.referenceId = numericReferenceId;
+		store.set(storageKey, JSON.stringify(stored));
+
+		const result = await auth.api.listApiKeys({ headers });
+
+		expect(result.total).toBeGreaterThan(0);
+		expect(result.apiKeys.find((k) => k.id === created.id)).toBeDefined();
+	});
+});

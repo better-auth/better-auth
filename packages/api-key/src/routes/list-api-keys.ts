@@ -342,9 +342,16 @@ export function listApiKeys({
 					return c.configId === key.configId;
 				});
 				const referencesType = keyConfig?.references ?? "user";
+				// Coerce both sides to string before comparison. `referenceId` is derived
+				// from `session.user.id`, which the core adapter factory always stringifies
+				// on output. `key.referenceId` is not stringified by the factory because the
+				// api-key schema declares it as a plain `string` field with no `references`
+				// entry, so adapters that store it as a non-string type (e.g. Postgres
+				// integer columns, MongoDB ObjectId) would otherwise cause strict `===` to
+				// silently drop every matching row. See #9336.
 				return (
 					referencesType === expectedReferencesType &&
-					key.referenceId === referenceId
+					String(key.referenceId) === String(referenceId)
 				);
 			});
 
