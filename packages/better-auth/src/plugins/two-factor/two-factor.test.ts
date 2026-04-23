@@ -2666,7 +2666,7 @@ describe("disable two factor respects custom TOTP config", async () => {
 	});
 	let { headers } = await signInWithTestUser();
 
-	it("should reject default 6-digit code when TOTP is configured with 8 digits", async () => {
+	it("should disable with a valid code generated from custom TOTP config", async () => {
 		const enableRes = await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
 			headers,
