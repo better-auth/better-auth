@@ -7,7 +7,9 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
+    "@better-auth/cimd": "workspace:*",
     "@better-auth/core": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/redis-storage": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
