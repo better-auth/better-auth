@@ -573,6 +573,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			// TODO(#9124): `session.user.email` becomes nullable in v2 — this
+			// comparison and its mirrors in rejectInvitation, getInvitation, and
+			// listUserInvitations need null handling.
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw APIError.from(
 					"FORBIDDEN",

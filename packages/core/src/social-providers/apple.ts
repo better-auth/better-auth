@@ -22,7 +22,7 @@ export interface AppleProfile {
 	 * The email address is either the user's real email address or the proxy
 	 * address, depending on their status private email relay service.
 	 */
-	email: string;
+	email?: string;
 	/**
 	 * A string or Boolean value that indicates whether the service verifies
 	 * the email. The value can either be a string ("true" or "false") or a
