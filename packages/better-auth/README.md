@@ -1,4 +1,4 @@
-<div>
+<div align="center">
   <picture>
     <source srcset="https://github.com/better-auth/better-auth/blob/main/banner-dark.png?raw=true" media="(prefers-color-scheme: dark)"/>
     <source srcset="https://github.com/better-auth/better-auth/blob/main/banner-light.png?raw=true" media="(prefers-color-scheme: light)"/>
