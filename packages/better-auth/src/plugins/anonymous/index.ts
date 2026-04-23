@@ -65,6 +65,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				"/sign-in/anonymous",
 				{
 					method: "POST",
+					disableBody: true,
 					metadata: {
 						openapi: {
 							description: "Sign in anonymously",
@@ -145,6 +146,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				"/delete-anonymous-user",
 				{
 					method: "POST",
+					disableBody: true,
 					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
