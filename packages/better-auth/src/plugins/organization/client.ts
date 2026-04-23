@@ -31,7 +31,7 @@ export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 		[x: string]: Role<any> | undefined;
 	} = input.options.roles || defaultRoles;
 
-	return hasPermissionFn(input, acRoles);
+	return hasPermissionFn(input, acRoles).success;
 };
 
 interface OrganizationClientOptions {
