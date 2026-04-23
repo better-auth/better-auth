@@ -1875,11 +1875,15 @@ Sets the given team as the current active team. If `teamId` is `null` the curren
 
 #### List User Teams
 
-List all teams that the current user is a part of.
+List all teams that a user is a part of. Defaults to the current user.
 
 <APIMethod path="/organization/list-user-teams" method="GET" requireSession>
   ```ts
   type listUserTeams = {
+    /**
+    * The user ID to list teams for. Defaults to the current session user. Viewing other users requires 'member:update' permission.
+    */
+    userId?: string = "user-id"
   }
   ```
 </APIMethod>
