@@ -575,11 +575,35 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				filterOutputFields(team, teamAdditionalFields),
 			);
 
+			let teamsWithMembers = filteredTeams;
+			if (includeTeams && filteredTeams && filteredTeams.length > 0) {
+				const teamIds = filteredTeams.map((team) => team.id);
+				const teamMembers =
+					teamIds.length > 0
+						? await adapter.findMany<TeamMember>({
+								model: "teamMember",
+								where: [{ field: "teamId", value: teamIds, operator: "in" }],
+							})
+						: [];
+
+				const teamMembersByTeamId = new Map<string, TeamMember[]>();
+				for (const tm of teamMembers) {
+					const existing = teamMembersByTeamId.get(tm.teamId) || [];
+					existing.push(tm);
+					teamMembersByTeamId.set(tm.teamId, existing);
+				}
+
+				teamsWithMembers = filteredTeams.map((team) => ({
+					...team,
+					members: teamMembersByTeamId.get(team.id) || [],
+				}));
+			}
+
 			return {
 				...filteredOrg,
 				invitations: filteredInvitations,
 				members: membersWithUsers,
-				teams: filteredTeams,
+				teams: teamsWithMembers,
 			};
 		},
 		listOrganizations: async (
