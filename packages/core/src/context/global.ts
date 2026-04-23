@@ -1,4 +1,5 @@
 import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
+import { BETTER_AUTH_VERSION } from "../constants.js";
 
 interface BetterAuthGlobal {
 	/**
@@ -21,8 +22,6 @@ const symbol = Symbol.for("better-auth:global");
 let bind: BetterAuthGlobal | null = null;
 
 const __context: Record<string, AsyncLocalStorage<unknown>> = {};
-const __betterAuthVersion: string = import.meta.env
-	.BETTER_AUTH_VERSION as string;
 
 /**
  * We store context instance in the globalThis.
@@ -37,15 +36,15 @@ const __betterAuthVersion: string = import.meta.env
 export function __getBetterAuthGlobal(): BetterAuthGlobal {
 	if (!(globalThis as any)[symbol]) {
 		(globalThis as any)[symbol] = {
-			version: __betterAuthVersion,
+			version: BETTER_AUTH_VERSION,
 			epoch: 1,
 			context: __context,
 		};
 		bind = (globalThis as any)[symbol] as BetterAuthGlobal;
 	}
 	bind = (globalThis as any)[symbol] as BetterAuthGlobal;
-	if (bind.version !== __betterAuthVersion) {
-		bind.version = __betterAuthVersion;
+	if (bind.version !== BETTER_AUTH_VERSION) {
+		bind.version = BETTER_AUTH_VERSION;
 		// Different versions of BetterAuth are loaded in the same process.
 		bind.epoch++;
 	}

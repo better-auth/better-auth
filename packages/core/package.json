@@ -22,6 +22,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc --build tsconfig.build.json",
+    "postbuild": "node scripts/env.ts",
     "dev": "tsc --build tsconfig.build.json --watch",
     "typecheck": "tsc --build tsconfig.json",
     "lint:package": "publint run --strict --pack false",

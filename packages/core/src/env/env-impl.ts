@@ -2,6 +2,8 @@
 /// <reference types="bun" />
 //https://github.com/unjs/std-env/blob/main/src/env.ts
 
+import { BETTER_AUTH_TELEMETRY_ENDPOINT } from "../constants.js";
+
 const _envShim = Object.create(null);
 
 export type EnvObject = Record<string, string | undefined>;
@@ -118,7 +120,7 @@ export const ENV = Object.freeze({
 	get BETTER_AUTH_TELEMETRY_ENDPOINT(): string | undefined {
 		return getEnvVar(
 			"BETTER_AUTH_TELEMETRY_ENDPOINT",
-			import.meta.env.BETTER_AUTH_TELEMETRY_ENDPOINT,
+			BETTER_AUTH_TELEMETRY_ENDPOINT,
 		);
 	},
 });
