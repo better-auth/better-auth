@@ -98,7 +98,7 @@ export const linkedin = (options: LinkedInOptions) => {
 					id: profile.sub,
 					name: profile.name,
 					email: profile.email,
-					emailVerified: profile.email_verified || false,
+					emailVerified: profile.email_verified ?? false,
 					image: profile.picture,
 					...userMap,
 				},
