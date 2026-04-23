@@ -31,7 +31,7 @@ afterAll(async () => {
 });
 
 export async function getTestInstance<
-	O extends Partial<BetterAuthOptions>,
+	const O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
 >(
 	options?: O | undefined,

@@ -6,6 +6,7 @@ import {
 import type { router } from "better-auth/api";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { createAuthClient } from "../client";
+import { organization } from "../plugins/organization";
 import { getTestInstance } from "../test-utils";
 import type { Auth } from "../types";
 import { betterAuth } from "./full";
@@ -37,6 +38,28 @@ describe("auth type", () => {
 			code: string;
 			message: string;
 		}>();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8986
+	 */
+	test("preserves typed plugin contributions when an untyped plugin is present", () => {
+		const auth = betterAuth({
+			plugins: [organization(), {} as any],
+		});
+
+		// Without the `const` modifier on Options, TS collapses `plugins` to
+		// `any[]`, the tuple walk (InferPluginFieldFromTuple) never fires, and
+		// the org plugin's `$ERROR_CODES` / `$Infer` contributions are lost.
+		// Accessing `$ERROR_CODES.ORGANIZATION_NOT_FOUND` or `$Infer.Organization`
+		// would be a compile error. With `const`, the literal tuple is preserved,
+		// the walk fires, and the contributions survive alongside the `any`.
+		expectTypeOf<
+			(typeof auth.$ERROR_CODES)["ORGANIZATION_NOT_FOUND"]["code"]
+		>().toEqualTypeOf<"ORGANIZATION_NOT_FOUND">();
+		expectTypeOf<
+			(typeof auth.$Infer)["Organization"]["id"]
+		>().toEqualTypeOf<string>();
 	});
 
 	test("plugin endpoints", () => {
