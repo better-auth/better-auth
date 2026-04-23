@@ -7,7 +7,6 @@ import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
-import { checkResource } from "./token";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -17,6 +16,7 @@ import type {
 } from "./types";
 
 import {
+	checkResource,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,

@@ -17,6 +17,7 @@ import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 import { userNormalClaims } from "./userinfo";
 import {
+	checkResource,
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
@@ -370,49 +371,6 @@ async function createRefreshToken(
 	return {
 		id: refreshToken.id,
 		token: await encodeRefreshToken(opts, token, sessionId),
-	};
-}
-
-/**
- * Checks the resource parameter, if provided,
- * and returns either a valid audience or a tagged validation error.
- */
-export async function checkResource(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-	resource: string | string[] | undefined,
-	scopes: string[],
-) {
-	const normalizedResource = toResourceList(resource);
-	const audience = normalizedResource ? [...normalizedResource] : undefined;
-	if (audience) {
-		// Adds /userinfo to audience
-		const hasOpenId = scopes.includes("openid");
-		const baseUrl = ctx.context.baseURL;
-		const userInfoEndpoint = `${baseUrl}/oauth2/userinfo`;
-		if (hasOpenId) {
-			audience.push(userInfoEndpoint);
-		}
-		// Check valid audiences
-		const filteredValidAudiences = opts.validAudiences?.filter(
-			(aud) => aud.length,
-		);
-		const validAudiences = new Set(
-			filteredValidAudiences?.length ? filteredValidAudiences : [baseUrl],
-		);
-		if (hasOpenId) validAudiences.add(userInfoEndpoint);
-		for (const aud of audience) {
-			if (!validAudiences.has(aud)) {
-				return {
-					success: false,
-					error: "invalid_resource",
-				};
-			}
-		}
-	}
-	return {
-		success: true,
-		audience: toAudienceClaim(audience),
 	};
 }
 
@@ -938,7 +896,8 @@ async function handleClientCredentialsGrant(
 		clientSecret: client_secret,
 		preVerifiedClient,
 	} = destructureCredentials(credentials);
-	const { scope, resource }: { scope?: string; resource?: string } = ctx.body;
+	const { scope, resource }: { scope?: string; resource?: string | string[] } =
+		ctx.body;
 	const resources = toResourceList(resource);
 
 	if (!client_id) {
