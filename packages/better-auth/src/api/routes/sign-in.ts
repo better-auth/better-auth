@@ -182,7 +182,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			body: socialSignInBodySchema,
 			metadata: {
 				$Infer: {
-					body: {} as z.infer<typeof socialSignInBodySchema>,
+					body: socialSignInBodySchema,
 					returned: {} as {
 						redirect: boolean;
 						token?: string | undefined;
@@ -557,7 +557,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request,
+							ctx.request?.clone(),
 						),
 					);
 				}
