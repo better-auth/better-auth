@@ -2649,6 +2649,57 @@ describe("disable two factor requires code when TOTP is enabled", async () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/pull/9256
+ */
+describe("disable two factor respects custom TOTP config", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				skipVerificationOnEnable: true,
+				totpOptions: {
+					digits: 8,
+					period: 60,
+				},
+			}),
+		],
+	});
+	let { headers } = await signInWithTestUser();
+
+	it("should reject default 6-digit code when TOTP is configured with 8 digits", async () => {
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const session = await auth.api.getSession({ headers });
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session?.user.id as string }],
+		});
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor!.secret,
+		});
+		const code = await createOTP(decrypted, {
+			digits: 8,
+			period: 60,
+		}).totp();
+		expect(code.length).toBe(8);
+
+		const res = await auth.api.disableTwoFactor({
+			headers,
+			body: { code },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/9248
  */
 describe("disable two factor with OTP-only account (no TOTP row)", async () => {

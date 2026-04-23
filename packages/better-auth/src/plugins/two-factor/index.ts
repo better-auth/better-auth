@@ -307,8 +307,8 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							data: twoFactor.secret,
 						});
 						const isValidTOTP = await createOTP(decryptedSecret, {
-							period: 30,
-							digits: 6,
+							digits: options?.totpOptions?.digits || 6,
+							period: options?.totpOptions?.period,
 						}).verify(code);
 						const backupCodeResult = await verifyBackupCode(
 							{
