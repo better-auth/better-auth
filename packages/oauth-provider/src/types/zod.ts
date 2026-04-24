@@ -13,7 +13,7 @@ const oauthAuthorizationQuerySchema = z
 		request_uri: z.string().optional(),
 		redirect_uri: z.string(),
 		scope: z.string().optional(),
-		state: z.string(),
+		state: z.string().optional(),
 		client_id: z.string(),
 		prompt: z.string().optional(),
 		display: z.string().optional(),
