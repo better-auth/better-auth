@@ -875,19 +875,9 @@ export const revokeOtherSessions = createAuthEndpoint(
 				code: "UNAUTHORIZED",
 			});
 		}
-		const sessions = await ctx.context.internalAdapter.listSessions(
+		await ctx.context.internalAdapter.deleteOtherSessions(
 			session.user.id,
-		);
-		const activeSessions = sessions.filter((session) => {
-			return session.expiresAt > new Date();
-		});
-		const otherSessions = activeSessions.filter(
-			(session) => session.token !== ctx.context.session.session.token,
-		);
-		await Promise.all(
-			otherSessions.map((session) =>
-				ctx.context.internalAdapter.deleteSession(session.token),
-			),
+			session.session.token,
 		);
 		return ctx.json({
 			status: true,

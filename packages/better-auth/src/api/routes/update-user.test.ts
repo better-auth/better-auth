@@ -243,26 +243,79 @@ describe("updateUser", async () => {
 		expect(signInAttempt.data).toBeNull();
 	});
 
-	it("should revoke other sessions", async () => {
-		await globalRunWithClient(async (headers) => {
-			const newHeaders = new Headers();
-			await client.changePassword({
-				newPassword: "newPassword",
-				currentPassword: testUser.password,
-				revokeOtherSessions: true,
-				fetchOptions: {
-					onSuccess: sessionSetter(newHeaders),
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6881
+	 */
+	it("should revoke other sessions while preserving the current session", async () => {
+		const { client: multiSessionClient, sessionSetter: multiSessionSetter } =
+			await getTestInstance(
+				{},
+				{
+					disableTestUser: true,
 				},
-			});
-			const cookie = newHeaders.get("cookie");
-			const oldCookie = headers.get("cookie");
-			expect(cookie).not.toBe(oldCookie);
-			// Try to use the old session - it should be revoked
-			const sessionAttempt = await client.getSession();
-			// The old session should still be invalidated even though we're using runWithClient
-			// because revokeOtherSessions should have invalidated it on the server
-			expect(sessionAttempt.data).toBeNull();
+			);
+
+		const email = `multi-session-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await multiSessionClient.signUp.email({
+			email,
+			password,
+			name: "Multi Session Test User",
 		});
+
+		const currentHeaders = new Headers();
+		await multiSessionClient.signIn.email({
+			email,
+			password,
+			fetchOptions: {
+				onSuccess: multiSessionSetter(currentHeaders),
+			},
+		});
+
+		const otherHeaders = new Headers();
+		await multiSessionClient.signIn.email({
+			email,
+			password,
+			fetchOptions: {
+				onSuccess: multiSessionSetter(otherHeaders),
+			},
+		});
+
+		const currentBefore = await multiSessionClient.getSession({
+			fetchOptions: {
+				headers: currentHeaders,
+			},
+		});
+		expect(currentBefore.data?.session.id).toBeDefined();
+
+		const result = await multiSessionClient.changePassword({
+			newPassword: "newSecurePassword123",
+			currentPassword: password,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers: currentHeaders,
+			},
+		});
+		expect(result.data?.user.email).toBe(email);
+		expect(result.data?.token).toBeNull();
+
+		const currentAfter = await multiSessionClient.getSession({
+			fetchOptions: {
+				headers: currentHeaders,
+			},
+		});
+		expect(currentAfter.data?.user.email).toBe(email);
+		expect(currentAfter.data?.session.id).toBe(currentBefore.data?.session.id);
+		expect(currentAfter.data?.session.token).toBe(
+			currentBefore.data?.session.token,
+		);
+
+		const otherAfter = await multiSessionClient.getSession({
+			fetchOptions: {
+				headers: otherHeaders,
+			},
+		});
+		expect(otherAfter.data).toBeNull();
 	});
 
 	it("shouldn't pass defaults", async () => {
@@ -679,7 +732,19 @@ describe("delete user", async () => {
 			},
 		});
 
-		expect(sessionAfterPasswordChange.data).toBeNull();
+		expect(sessionAfterPasswordChange.data?.user.email).toBe(uniqueEmail);
+
+		const staleSignIn = await cacheClient.signIn.email({
+			email: uniqueEmail,
+			password: testPassword,
+		});
+		expect(staleSignIn.data).toBeNull();
+
+		const freshSignIn = await cacheClient.signIn.email({
+			email: uniqueEmail,
+			password: "newSecurePassword123",
+		});
+		expect(freshSignIn.data?.user.email).toBe(uniqueEmail);
 	});
 });
 

@@ -981,6 +981,79 @@ describe("internal adapter test", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6881
+	 */
+	it("deleteOtherSessions preserves the exceptToken survivor (db-only)", async () => {
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-except-db",
+			email: "test-except-db@email.com",
+		});
+
+		const survivor = await testInternalAdapter.createSession(user.id);
+		await testInternalAdapter.createSession(user.id);
+
+		await testInternalAdapter.deleteOtherSessions(user.id, survivor.token);
+
+		const remaining = await testInternalAdapter.listSessions(user.id);
+		expect(remaining.length).toBe(1);
+		expect(remaining[0]!.token).toBe(survivor.token);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6881
+	 */
+	it("deleteOtherSessions preserves the exceptToken survivor (secondary storage)", async () => {
+		const testMap = new Map<string, string>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				set(key: string, value: string) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-except-secondary",
+			email: "test-except-secondary@email.com",
+		});
+
+		const survivor = await testInternalAdapter.createSession(user.id);
+		const sibling = await testInternalAdapter.createSession(user.id);
+
+		await testInternalAdapter.deleteOtherSessions(user.id, survivor.token);
+
+		expect(testMap.has(survivor.token)).toBe(true);
+		expect(testMap.has(sibling.token)).toBe(false);
+		expect(
+			safeJSONParse<{ token: string; expiresAt: number }[]>(
+				testMap.get(`active-sessions-${user.id}`)!,
+			),
+		).toEqual([{ token: survivor.token, expiresAt: expect.any(Number) }]);
+	});
+
 	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();

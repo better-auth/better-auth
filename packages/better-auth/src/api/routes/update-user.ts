@@ -187,9 +187,8 @@ export const changePassword = createAuthEndpoint(
 									properties: {
 										token: {
 											type: "string",
-											nullable: true, // Only present if revokeOtherSessions is true
-											description:
-												"New session token if other sessions were revoked",
+											nullable: true,
+											description: "Always null; current session preserved.",
 										},
 										user: {
 											type: "object",
@@ -286,28 +285,15 @@ export const changePassword = createAuthEndpoint(
 		await ctx.context.internalAdapter.updateAccount(account.id, {
 			password: passwordHash,
 		});
-		let token = null;
 		if (revokeOtherSessions) {
-			await ctx.context.internalAdapter.deleteSessions(session.user.id);
-			const newSession = await ctx.context.internalAdapter.createSession(
+			await ctx.context.internalAdapter.deleteOtherSessions(
 				session.user.id,
+				session.session.token,
 			);
-			if (!newSession) {
-				throw APIError.from(
-					"INTERNAL_SERVER_ERROR",
-					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
-				);
-			}
-			// set the new session cookie
-			await setSessionCookie(ctx, {
-				session: newSession,
-				user: session.user,
-			});
-			token = newSession.token;
 		}
 
 		return ctx.json({
-			token,
+			token: null,
 			user: parseUserOutput(ctx.context.options, session.user),
 		});
 	},

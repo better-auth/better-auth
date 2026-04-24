@@ -785,6 +785,56 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
+		deleteOtherSessions: async (userId: string, exceptToken: string) => {
+			if (secondaryStorage) {
+				const activeSession = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+				const sessions = activeSession
+					? safeJSONParse<{ token: string; expiresAt: number }[]>(activeSession)
+					: [];
+				if (!sessions) return;
+				const now = Date.now();
+				const survivor = sessions.find(
+					(s) => s.token === exceptToken && s.expiresAt > now,
+				);
+				for (const session of sessions) {
+					if (session.token === exceptToken) continue;
+					await secondaryStorage.delete(session.token);
+				}
+				if (survivor) {
+					await secondaryStorage.set(
+						`active-sessions-${userId}`,
+						JSON.stringify([survivor]),
+						getTTLSeconds(survivor.expiresAt, now),
+					);
+				} else {
+					await secondaryStorage.delete(`active-sessions-${userId}`);
+				}
+
+				if (
+					!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase
+				) {
+					return;
+				}
+			}
+			await deleteManyWithHooks(
+				[
+					{
+						field: "userId",
+						value: userId,
+					},
+					{
+						field: "token",
+						value: exceptToken,
+						operator: "ne",
+					} satisfies Where,
+				],
+				"session",
+				undefined,
+			);
+		},
 		findOAuthUser: async (
 			email: string,
 			accountId: string,
