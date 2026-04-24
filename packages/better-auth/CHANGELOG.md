@@ -1,5 +1,18 @@
 # better-auth
 
+## 1.6.9
+
+### Patch Changes
+
+- Updated dependencies [[`815ecf6`](https://github.com/better-auth/better-auth/commit/815ecf62b6f6c5bf656ab55da393ce63d7eed0a6)]:
+  - @better-auth/core@1.6.9
+  - @better-auth/drizzle-adapter@1.6.9
+  - @better-auth/kysely-adapter@1.6.9
+  - @better-auth/memory-adapter@1.6.9
+  - @better-auth/mongo-adapter@1.6.9
+  - @better-auth/prisma-adapter@1.6.9
+  - @better-auth/telemetry@1.6.9
+
 ## 1.6.8
 
 ### Patch Changes

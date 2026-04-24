@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.6.9
+
+### Patch Changes
+
+- [#9340](https://github.com/better-auth/better-auth/pull/9340) [`815ecf6`](https://github.com/better-auth/better-auth/commit/815ecf62b6f6c5bf656ab55da393ce63d7eed0a6) Thanks [@erquhart](https://github.com/erquhart)! - fix(core): self-reference `./instrumentation` in the adapter factory so the `exports` map routes edge/browser to the pure variant
+
 ## 1.6.8
 
 ### Patch Changes
