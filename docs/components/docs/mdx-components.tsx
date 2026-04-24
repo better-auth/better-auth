@@ -310,11 +310,17 @@ const drizzleProviders: { key: DrizzleProvider; label: string }[] = [
 	{ key: "sqlite", label: "SQLite" },
 ];
 
-export function DatabaseTable({ fields }: { fields: Field[] }) {
+export function DatabaseTable({
+	fields,
+	name,
+}: {
+	fields: Field[];
+	name?: string;
+}) {
 	const [view, setView] = useState<ViewMode>("table");
 	const [sqlDialect, setSqlDialect] = useState<SQLDialect>("postgresql");
 	const [drizzleProvider, setDrizzleProvider] = useState<DrizzleProvider>("pg");
-	const tableName = "table";
+	const tableName = name || "table";
 
 	return (
 		<div className="my-4 border shadow-sm overflow-hidden dark:bg-[#030303]">
