@@ -147,8 +147,7 @@ export async function consentEndpoint(
 		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
 	}
 	ctx.query = searchParamsToQuery(authorizationQuery);
-	(ctx.context as Record<string, unknown>).postLogin = true;
-	const { url } = await authorizeEndpoint(ctx, opts);
+	const { url } = await authorizeEndpoint(ctx, opts, { postLogin: true });
 	return {
 		redirect: true,
 		url,

@@ -980,6 +980,7 @@ describe("oauth - prompt", async () => {
 	let enableSelectAccount = false;
 	let enablePostLogin = false;
 	let selectedPostLogin = false;
+	let forcePostLoginRedirect = false;
 	let isUserRegistered = true;
 	const {
 		auth: authorizationServer,
@@ -1015,6 +1016,7 @@ describe("oauth - prompt", async () => {
 					shouldRedirect({ session }) {
 						if (!enablePostLogin) return false;
 						if (selectedPostLogin) return false;
+						if (forcePostLoginRedirect) return true;
 						return !session?.activeOrganizationId;
 					},
 					consentReferenceId({ session }) {
@@ -2360,6 +2362,95 @@ describe("oauth - prompt", async () => {
 		expect(consentRes.url).toContain(`code=`);
 
 		enablePostLogin = false;
+	});
+
+	it("consent accept should not re-trigger postLogin redirect", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		onTestFinished(() => {
+			enablePostLogin = false;
+			forcePostLoginRedirect = false;
+		});
+
+		const freshHeaders = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(freshHeaders) },
+		);
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({ prompt: "consent" });
+		const client = createAuthClient({
+			plugins: [genericOAuthClient(), organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{ providerId, callbackURL: "/success" },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onSuccess: rpCookieSetter(oauthHeaders),
+			},
+		);
+
+		let selectOrgRedirectUri = "";
+		await serverClient.$fetch(data.url!, {
+			method: "GET",
+			headers: freshHeaders,
+			onError(context) {
+				selectOrgRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(freshHeaders)(context);
+			},
+		});
+		expect(selectOrgRedirectUri).toContain("/select-organization");
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const setActiveResponse = await serverClient.organization.setActive(
+			{ organizationId: org.id, organizationSlug: org.slug },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onSuccess: cookieSetter(freshHeaders),
+			},
+		);
+		if (!isRedirectResult(setActiveResponse)) {
+			expect.unreachable();
+		}
+		const consentRedirectUri = setActiveResponse.url;
+		expect(consentRedirectUri).toContain(`/consent`);
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUri, authServerBaseUrl).search,
+			},
+		});
+
+		forcePostLoginRedirect = true;
+
+		const consentRes = await serverClient.oauth2.consent(
+			{ accept: true },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onResponse: cookieSetter(freshHeaders),
+			},
+		);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain("code=");
+		expect(consentRes.url).not.toContain("/select-organization");
 	});
 });
 
