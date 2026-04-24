@@ -20,7 +20,6 @@ import type {
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
-import * as saml from "samlify";
 import {
 	afterAll,
 	afterEach,
@@ -34,6 +33,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { saml } from "./samlify";
 
 const spMetadata = `
 <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
