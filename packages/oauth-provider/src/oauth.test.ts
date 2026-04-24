@@ -2401,9 +2401,12 @@ describe("oauth - prompt", async () => {
 				onSuccess: rpCookieSetter(oauthHeaders),
 			},
 		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 
 		let selectOrgRedirectUri = "";
-		await serverClient.$fetch(data.url!, {
+		await serverClient.$fetch(data.url, {
 			method: "GET",
 			headers: freshHeaders,
 			onError(context) {
