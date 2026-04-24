@@ -19,6 +19,7 @@ import {
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
+	signedQueryIssuedAtParam,
 	storeToken,
 } from "./utils";
 
@@ -620,12 +621,14 @@ async function signParams(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	// Add expiration to query parameters
-	const iat = Math.floor(Date.now() / 1000);
+	const issuedAt = Date.now();
+	const iat = Math.floor(issuedAt / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
 	const params = serializeAuthorizationQuery(
 		ctx.query as OAuthAuthorizationQuery,
 	);
 	params.set("exp", String(exp));
+	params.set(signedQueryIssuedAtParam, String(issuedAt));
 
 	const signature = await makeSignature(params.toString(), ctx.context.secret);
 	params.append("sig", signature);

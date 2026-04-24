@@ -1199,6 +1199,9 @@ describe("oauth - prompt", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
@@ -1936,6 +1939,9 @@ describe("oauth - prompt", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
@@ -1952,9 +1958,11 @@ describe("oauth - prompt", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
+		const loginRedirectSearch = new URL(loginRedirectUri, authServerBaseUrl)
+			.search;
 		vi.stubGlobal("window", {
 			location: {
-				search: new URL(loginRedirectUri, authServerBaseUrl).search,
+				search: loginRedirectSearch,
 			},
 		});
 		onTestFinished(() => {
@@ -1969,11 +1977,117 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(signInResponse.redirect).toBe(true);
 		expect(signInResponse.url).toContain("/consent");
 		expect(signInResponse.url).toContain("prompt=consent");
+		expect(signInResponse.url).not.toContain("prompt=login");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: loginRedirectSearch,
+			},
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+		expect(consentRes.redirect).toBe(true);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain("code=");
+		expect(consentRes.url).not.toContain("/login");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/discussions/9261
+	 */
+	it("login+consent - should not accept stale login prompt without reauthentication", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authHeaders = new Headers();
+		const { user } = await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(authHeaders),
+			},
+		);
+		expect(user.id).toBeDefined();
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({
+				prompt: "login consent",
+			});
+		const client = createAuthClient({
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		const data = await client.signIn.social(
+			{
+				provider: providerId,
+				callbackURL: "/success",
+			},
+			{
+				headers: authHeaders,
+				throw: true,
+				onSuccess: rpCookieSetter(authHeaders),
+			},
+		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
+
+		let loginRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers: authHeaders,
+			onError(context) {
+				loginRedirectUri = context.response.headers.get("Location") || "";
+				rpCookieSetter(authHeaders)(context);
+			},
+		});
+		expect(loginRedirectUri).toContain("/login");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{
+				accept: true,
+			},
+			{
+				headers: authHeaders,
+				throw: true,
+			},
+		);
+		expect(consentRes.redirect).toBe(true);
+		expect(consentRes.url).toContain("/login");
+		expect(consentRes.url).toContain("prompt=login");
+		expect(consentRes.url).not.toContain("code=");
 	});
 
 	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async ({

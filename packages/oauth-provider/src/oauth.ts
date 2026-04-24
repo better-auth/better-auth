@@ -28,8 +28,11 @@ import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
-	deleteFromPrompt,
 	getJwtPlugin,
+	getSignedQueryIssuedAt,
+	removePromptFromQuery,
+	searchParamsToQuery,
+	signedQueryIssuedAtParam,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -42,9 +45,10 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const oAuthState = defineRequestState<{ query?: string } | null>(
-	() => null,
-);
+export const oAuthState = defineRequestState<{
+	query?: string;
+	signedQueryIssuedAt?: Date;
+} | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
 
 /**
@@ -241,11 +245,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								error: "invalid_signature",
 							});
 						}
+						const signedQueryIssuedAt = getSignedQueryIssuedAt(
+							query,
+							opts.codeExpiresIn ?? 600,
+						);
 						const queryParams = new URLSearchParams(query);
 						queryParams.delete("sig");
 						queryParams.delete("exp");
+						queryParams.delete(signedQueryIssuedAtParam);
 						await oAuthState.set({
 							query: queryParams.toString(),
+							signedQueryIssuedAt: signedQueryIssuedAt ?? undefined,
 						});
 
 						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
@@ -302,7 +312,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!isNavigationRequest) {
 							ctx.headers?.set("accept", "application/json");
 						}
-						ctx.query = deleteFromPrompt(query, "login");
+						ctx.query = searchParamsToQuery(
+							removePromptFromQuery(query, "login"),
+						);
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},

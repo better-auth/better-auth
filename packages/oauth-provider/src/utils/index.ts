@@ -572,22 +572,43 @@ export function searchParamsToQuery(
 	return result;
 }
 
-/**
- * Deletes a prompt value
- *
- * @param ctx
- * @param prompt - the prompt value to delete
- */
-export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	const prompts = query.get("prompt")?.split(" ");
+export const signedQueryIssuedAtParam = "ba_iat";
+
+export function getSignedQueryIssuedAt(
+	oauthQuery: string,
+	codeExpiresIn: number,
+) {
+	const params = new URLSearchParams(oauthQuery);
+	const issuedAtParam = params.get(signedQueryIssuedAtParam);
+	if (issuedAtParam) {
+		const issuedAt = Number(issuedAtParam);
+		return Number.isFinite(issuedAt) && issuedAt > 0
+			? new Date(issuedAt)
+			: null;
+	}
+
+	const expiresAtParam = params.get("exp");
+	if (!expiresAtParam) {
+		return null;
+	}
+	const expiresAt = Number(expiresAtParam);
+	if (!Number.isFinite(expiresAt)) {
+		return null;
+	}
+	return new Date((expiresAt - codeExpiresIn) * 1000);
+}
+
+export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
+	const nextQuery = new URLSearchParams(query);
+	const prompts = nextQuery.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
 		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
+			? nextQuery.set("prompt", prompts.join(" "))
+			: nextQuery.delete("prompt");
 	}
-	return searchParamsToQuery(query);
+	return nextQuery;
 }
 
 enum PKCERequirementErrors {
