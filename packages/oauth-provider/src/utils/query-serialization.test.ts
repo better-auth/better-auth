@@ -115,31 +115,29 @@ describe("getSignedQueryIssuedAt", () => {
 		const issuedAt = 1777026004123;
 		const params = new URLSearchParams({
 			client_id: "abc",
-			exp: "1777026604",
 			[signedQueryIssuedAtParam]: String(issuedAt),
 		});
 
-		expect(getSignedQueryIssuedAt(params.toString(), 600)).toEqual(
+		expect(getSignedQueryIssuedAt(params.toString())).toEqual(
 			new Date(issuedAt),
 		);
 	});
 
-	it("falls back to the expiration window for existing signed queries", () => {
+	it("returns null when ba_iat is absent", () => {
 		const params = new URLSearchParams({
 			client_id: "abc",
 			exp: "1777026604",
 		});
 
-		expect(getSignedQueryIssuedAt(params.toString(), 600)).toEqual(
-			new Date(1777026004 * 1000),
-		);
+		expect(getSignedQueryIssuedAt(params.toString())).toBeNull();
 	});
 
-	it("returns null when no signed timing parameter is available", () => {
+	it("returns null when ba_iat is not a positive finite number", () => {
 		const params = new URLSearchParams({
 			client_id: "abc",
+			[signedQueryIssuedAtParam]: "not-a-number",
 		});
 
-		expect(getSignedQueryIssuedAt(params.toString(), 600)).toBeNull();
+		expect(getSignedQueryIssuedAt(params.toString())).toBeNull();
 	});
 });

@@ -247,10 +247,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								error: "invalid_signature",
 							});
 						}
-						const signedQueryIssuedAt = getSignedQueryIssuedAt(
-							query,
-							opts.codeExpiresIn ?? 600,
-						);
+						const signedQueryIssuedAt = getSignedQueryIssuedAt(query);
 						const queryParams = new URLSearchParams(query);
 						const postLoginCleared =
 							queryParams.get(postLoginClearedParam) === "1";

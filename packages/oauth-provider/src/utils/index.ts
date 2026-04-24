@@ -575,28 +575,12 @@ export function searchParamsToQuery(
 export const signedQueryIssuedAtParam = "ba_iat";
 export const postLoginClearedParam = "ba_pl";
 
-export function getSignedQueryIssuedAt(
-	oauthQuery: string,
-	codeExpiresIn: number,
-) {
-	const params = new URLSearchParams(oauthQuery);
-	const issuedAtParam = params.get(signedQueryIssuedAtParam);
-	if (issuedAtParam) {
-		const issuedAt = Number(issuedAtParam);
-		if (Number.isFinite(issuedAt) && issuedAt > 0) {
-			return new Date(issuedAt);
-		}
-	}
-
-	const expiresAtParam = params.get("exp");
-	if (!expiresAtParam) {
-		return null;
-	}
-	const expiresAt = Number(expiresAtParam);
-	if (!Number.isFinite(expiresAt)) {
-		return null;
-	}
-	return new Date((expiresAt - codeExpiresIn) * 1000);
+export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
+	const raw = new URLSearchParams(oauthQuery).get(signedQueryIssuedAtParam);
+	if (!raw) return null;
+	const issuedAt = Number(raw);
+	if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+	return new Date(issuedAt);
 }
 
 export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
