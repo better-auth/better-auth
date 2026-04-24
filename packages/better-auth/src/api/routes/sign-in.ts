@@ -7,6 +7,7 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -287,9 +288,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				if (!userInfo.user.email) {
-					c.context.logger.error("User email not found", {
-						provider: c.body.provider,
-					});
+					c.context.logger.error(
+						missingEmailLogMessage(c.body.provider, { source: "id_token" }),
+						{ provider: c.body.provider },
+					);
 					throw APIError.from(
 						"UNAUTHORIZED",
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,

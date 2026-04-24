@@ -42,6 +42,10 @@ description: Facebook provider setup and usage.
       BetterAuth also supports Facebook Login for Business, all you need
       to do is provide the `configId` as listed in **Facebook Login For Business > Configurations** alongside your `clientId` and `clientSecret`. Note that the app must be a Business app and, since BetterAuth expects to have an email address and account id, the configuration must be of the "User access token" type. "System-user access token" is not supported.
     </Callout>
+
+    <Callout>
+      Facebook may omit `email` even when the permission is granted (phone-only accounts, revoked consent, or addresses Meta has marked invalid). See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the recommended `mapProfileToUser` fallback.
+    </Callout>
   </Step>
 
   <Step>
