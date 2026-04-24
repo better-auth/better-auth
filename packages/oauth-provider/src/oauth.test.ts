@@ -2016,7 +2016,7 @@ describe("oauth - prompt", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const authHeaders = new Headers();
+		const staleHeaders = new Headers();
 		const { user } = await serverClient.signIn.email(
 			{
 				email: testUser.email,
@@ -2024,7 +2024,7 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				throw: true,
-				onSuccess: cookieSetter(authHeaders),
+				onSuccess: cookieSetter(staleHeaders),
 			},
 		);
 		expect(user.id).toBeDefined();
@@ -2034,21 +2034,22 @@ describe("oauth - prompt", async () => {
 				prompt: "login consent",
 			});
 		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,
 			fetchOptions: {
 				customFetchImpl: customFetchImplRP,
 			},
 		});
 
-		const data = await client.signIn.social(
+		const rpHeaders = new Headers();
+		const data = await client.signIn.oauth2(
 			{
-				provider: providerId,
+				providerId,
 				callbackURL: "/success",
 			},
 			{
-				headers: authHeaders,
+				headers: rpHeaders,
 				throw: true,
-				onSuccess: rpCookieSetter(authHeaders),
 			},
 		);
 		if (!data.url) {
@@ -2058,13 +2059,14 @@ describe("oauth - prompt", async () => {
 		let loginRedirectUri = "";
 		await serverClient.$fetch(data.url, {
 			method: "GET",
-			headers: authHeaders,
+			headers: rpHeaders,
 			onError(context) {
 				loginRedirectUri = context.response.headers.get("Location") || "";
-				rpCookieSetter(authHeaders)(context);
+				rpCookieSetter(rpHeaders)(context);
 			},
 		});
 		expect(loginRedirectUri).toContain("/login");
+		expect(loginRedirectUri).toContain("prompt=login");
 
 		vi.stubGlobal("window", {
 			location: {
@@ -2080,7 +2082,7 @@ describe("oauth - prompt", async () => {
 				accept: true,
 			},
 			{
-				headers: authHeaders,
+				headers: staleHeaders,
 				throw: true,
 			},
 		);
