@@ -4,6 +4,7 @@ import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
+	normalizeTimestampValue,
 	parsePrompt,
 	removePromptFromQuery,
 	searchParamsToQuery,
@@ -147,7 +148,9 @@ export async function consentEndpoint(
 		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
 	}
 	ctx.query = searchParamsToQuery(authorizationQuery);
-	const { url } = await authorizeEndpoint(ctx, opts, { postLogin: true });
+	const { url } = await authorizeEndpoint(ctx, opts, {
+		postLogin: oauthRequest?.postLoginCleared === true,
+	});
 	return {
 		redirect: true,
 		url,
@@ -160,8 +163,8 @@ function sessionSatisfiesLoginPrompt(
 	sessionCreatedAt: Date | string | undefined,
 	signedQueryIssuedAt: Date | undefined,
 ) {
-	if (!sessionCreatedAt || !signedQueryIssuedAt) {
-		return false;
-	}
-	return new Date(sessionCreatedAt).getTime() >= signedQueryIssuedAt.getTime();
+	if (!signedQueryIssuedAt) return false;
+	const normalized = normalizeTimestampValue(sessionCreatedAt);
+	if (!normalized) return false;
+	return normalized.getTime() >= signedQueryIssuedAt.getTime();
 }

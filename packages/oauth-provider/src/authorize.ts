@@ -19,6 +19,7 @@ import {
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
+	postLoginClearedParam,
 	signedQueryIssuedAtParam,
 	storeToken,
 } from "./utils";
@@ -598,7 +599,11 @@ async function redirectWithPromptCode(
 	type: "login" | "create" | "consent" | "select_account" | "post_login",
 	page?: string,
 ) {
-	const queryParams = await signParams(ctx, opts);
+	// `consent` is the only type reachable past the postLogin gate in
+	// authorize, so its signed query attests that postLogin is cleared.
+	const queryParams = await signParams(ctx, opts, {
+		postLoginCleared: type === "consent",
+	});
 	let path = opts.loginPage;
 	if (type === "select_account") {
 		path = opts.selectAccount?.page ?? opts.loginPage;
@@ -619,6 +624,7 @@ async function redirectWithPromptCode(
 async function signParams(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	flags?: { postLoginCleared?: boolean },
 ) {
 	// Add expiration to query parameters
 	const issuedAt = Date.now();
@@ -629,6 +635,9 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 	params.set(signedQueryIssuedAtParam, String(issuedAt));
+	if (flags?.postLoginCleared) {
+		params.set(postLoginClearedParam, "1");
+	}
 
 	const signature = await makeSignature(params.toString(), ctx.context.secret);
 	params.append("sig", signature);

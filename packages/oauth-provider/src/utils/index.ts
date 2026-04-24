@@ -573,6 +573,7 @@ export function searchParamsToQuery(
 }
 
 export const signedQueryIssuedAtParam = "ba_iat";
+export const postLoginClearedParam = "ba_pl";
 
 export function getSignedQueryIssuedAt(
 	oauthQuery: string,
@@ -582,9 +583,9 @@ export function getSignedQueryIssuedAt(
 	const issuedAtParam = params.get(signedQueryIssuedAtParam);
 	if (issuedAtParam) {
 		const issuedAt = Number(issuedAtParam);
-		return Number.isFinite(issuedAt) && issuedAt > 0
-			? new Date(issuedAt)
-			: null;
+		if (Number.isFinite(issuedAt) && issuedAt > 0) {
+			return new Date(issuedAt);
+		}
 	}
 
 	const expiresAtParam = params.get("exp");

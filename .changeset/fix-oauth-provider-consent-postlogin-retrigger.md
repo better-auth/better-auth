@@ -2,12 +2,13 @@
 "@better-auth/oauth-provider": patch
 ---
 
-fix(oauth-provider): skip postLogin re-check when consent is accepted
+fix(oauth-provider): gate consent-accept postLogin skip on signed query marker
 
-Consent accept now passes `{ postLogin: true }` to the authorize endpoint so
-the post-consent pass does not re-evaluate `postLogin.shouldRedirect`. Prior
-behavior could bounce the user back to the postLogin page after accepting
-consent whenever `shouldRedirect` returned true at that point (for example,
-when session state that `setActive` wrote is not visible to the consent
-request, or when the integration's `shouldRedirect` logic depends on a flag
-that is not session-persistent).
+When `authorize` emits a signed redirect past the postLogin gate it now
+records a `ba_pl=1` marker in the signed authorization query. On consent
+accept, `authorizeEndpoint` is called with `{ postLogin: true }` only when
+the incoming signed query carries that marker; otherwise it re-enters
+`authorize` with `postLogin.shouldRedirect` still enforced. Resolves the
+post-consent bounce back to the postLogin page for `setActive`-driven
+flows, and prevents a direct POST to `/oauth2/consent` with a pre-postLogin
+signed query from skipping `shouldRedirect` to issue an authorization code.

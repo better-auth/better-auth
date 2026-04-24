@@ -30,6 +30,7 @@ import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
 	getSignedQueryIssuedAt,
+	postLoginClearedParam,
 	removePromptFromQuery,
 	searchParamsToQuery,
 	signedQueryIssuedAtParam,
@@ -48,6 +49,7 @@ declare module "@better-auth/core" {
 export const oAuthState = defineRequestState<{
 	query?: string;
 	signedQueryIssuedAt?: Date;
+	postLoginCleared?: boolean;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
 
@@ -250,12 +252,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							opts.codeExpiresIn ?? 600,
 						);
 						const queryParams = new URLSearchParams(query);
+						const postLoginCleared =
+							queryParams.get(postLoginClearedParam) === "1";
 						queryParams.delete("sig");
 						queryParams.delete("exp");
 						queryParams.delete(signedQueryIssuedAtParam);
+						queryParams.delete(postLoginClearedParam);
 						await oAuthState.set({
 							query: queryParams.toString(),
 							signedQueryIssuedAt: signedQueryIssuedAt ?? undefined,
+							postLoginCleared,
 						});
 
 						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body

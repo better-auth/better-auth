@@ -981,6 +981,7 @@ describe("oauth - prompt", async () => {
 	let enablePostLogin = false;
 	let selectedPostLogin = false;
 	let forcePostLoginRedirect = false;
+	let bypassReferenceIdCheck = false;
 	let isUserRegistered = true;
 	const {
 		auth: authorizationServer,
@@ -1022,6 +1023,7 @@ describe("oauth - prompt", async () => {
 					consentReferenceId({ session }) {
 						if (!enablePostLogin) return undefined;
 						if (selectedPostLogin) return undefined;
+						if (bypassReferenceIdCheck) return undefined;
 						const activeOrganizationId = (session?.activeOrganizationId ??
 							undefined) as string | undefined;
 						if (!activeOrganizationId)
@@ -1197,13 +1199,13 @@ describe("oauth - prompt", async () => {
 				throw: true,
 			},
 		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 		expect(data.url).toContain(
 			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
-		if (!data.url) {
-			throw new Error("missing authorization URL");
-		}
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
@@ -1937,13 +1939,13 @@ describe("oauth - prompt", async () => {
 				throw: true,
 			},
 		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 		expect(data.url).toContain(
 			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		);
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
-		if (!data.url) {
-			throw new Error("missing authorization URL");
-		}
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
@@ -2451,6 +2453,78 @@ describe("oauth - prompt", async () => {
 		expect(consentRes.url).toContain(redirectUri);
 		expect(consentRes.url).toContain("code=");
 		expect(consentRes.url).not.toContain("/select-organization");
+	});
+
+	it("consent accept should not bypass postLogin when posted with a pre-postLogin signed query", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		bypassReferenceIdCheck = true;
+		onTestFinished(() => {
+			enablePostLogin = false;
+			bypassReferenceIdCheck = false;
+		});
+
+		const freshHeaders = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(freshHeaders) },
+		);
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({ prompt: "consent" });
+		const client = createAuthClient({
+			plugins: [genericOAuthClient(), organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{ providerId, callbackURL: "/success" },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onSuccess: rpCookieSetter(oauthHeaders),
+			},
+		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
+
+		let selectOrgRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers: freshHeaders,
+			onError(context) {
+				selectOrgRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(freshHeaders)(context);
+			},
+		});
+		expect(selectOrgRedirectUri).toContain("/select-organization");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{ accept: true },
+			{
+				headers: freshHeaders,
+				throw: true,
+				onResponse: cookieSetter(freshHeaders),
+			},
+		);
+		expect(consentRes.url).toContain("/select-organization");
+		expect(consentRes.url).not.toContain("code=");
 	});
 });
 
