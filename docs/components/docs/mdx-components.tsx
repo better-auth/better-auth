@@ -438,6 +438,15 @@ export function DatabaseTable({ fields }: { fields: Field[] }) {
 						>
 							<div className="px-4 py-2 font-mono text-[13px] text-foreground/80 break-all">
 								{field.name}
+								{field.isOptional && (
+									<span
+										title="Optional"
+										aria-label="Optional"
+										className="text-foreground/40 text-[11px] font-medium select-none"
+									>
+										{" ?"}
+									</span>
+								)}
 							</div>
 							<div className="px-4 py-2 flex items-center gap-1.5">
 								<TypeIcon type={field.type} />
@@ -458,16 +467,9 @@ export function DatabaseTable({ fields }: { fields: Field[] }) {
 										FK
 									</span>
 								)}
-								{field.isOptional && (
-									<span className="font-mono text-[13px] text-foreground/60 uppercase">
-										?
-									</span>
+								{!field.isPrimaryKey && !field.isForeignKey && (
+									<span className="text-foreground/20 uppercase">-</span>
 								)}
-								{!field.isPrimaryKey &&
-									!field.isForeignKey &&
-									!field.isOptional && (
-										<span className="text-foreground/20 uppercase">-</span>
-									)}
 							</div>
 							<div className="px-4 py-2 text-[13px] text-foreground/70 leading-relaxed">
 								{field.description}
