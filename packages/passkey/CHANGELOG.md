@@ -1,5 +1,27 @@
 # @better-auth/passkey
 
+## 1.6.9
+
+### Patch Changes
+
+- Updated dependencies [[`815ecf6`](https://github.com/better-auth/better-auth/commit/815ecf62b6f6c5bf656ab55da393ce63d7eed0a6)]:
+  - @better-auth/core@1.6.9
+  - better-auth@1.6.9
+
+## 1.6.8
+
+### Patch Changes
+
+- [#9270](https://github.com/better-auth/better-auth/pull/9270) [`a02e07c`](https://github.com/better-auth/better-auth/commit/a02e07cb8953f1450d29527a12c7801989dd08a1) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix(passkey): restore `exactOptionalPropertyTypes: true` compatibility
+
+  The passkey registration endpoints emitted `use: Middleware[] | undefined` in their generated type declarations, which is not assignable to `EndpointOptions.use?: Middleware[]` under `exactOptionalPropertyTypes: true`. The plugin no longer satisfied `BetterAuthPlugin`, which cascaded into lost inference on `auth.api.*` from unrelated plugins and on `authClient.passkey.*`. The declarations now emit `use: Middleware[]`; runtime behavior is unchanged.
+
+  Resolves [#9212](https://github.com/better-auth/better-auth/issues/9212).
+
+- Updated dependencies [[`856ab24`](https://github.com/better-auth/better-auth/commit/856ab2426c0dce7377ee1ca26dbb7d9e52fb6429), [`9aa8e63`](https://github.com/better-auth/better-auth/commit/9aa8e63de84549634216e13e407cf6d8aa61acc3)]:
+  - better-auth@1.6.8
+  - @better-auth/core@1.6.8
+
 ## 1.6.7
 
 ### Patch Changes
