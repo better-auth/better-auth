@@ -921,6 +921,57 @@ describe("oauth2", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9124
+	 */
+	it("redirects with email_is_missing when both the provider and mapProfileToUser omit email", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "no-email-no-synthesis",
+				name: "No Email User",
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-email-unresolved",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "no-email-unresolved",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		const { callbackURL } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toContain("error=email_is_missing");
+	});
+
 	it("should work with cookie-based state storage", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
@@ -989,6 +1040,9 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8897
+	 */
 	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
@@ -1045,6 +1099,22 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(session.data).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/4951
+	 */
+	it("should redirect to the error page when a GET callback arrives without state", async () => {
+		const res = await customFetchImpl(
+			`http://localhost:3000/api/auth/oauth2/callback/${providerId}?code=dummy`,
+			{
+				method: "GET",
+				redirect: "manual",
+			},
+		);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toContain("please_restart_the_process");
 	});
 
 	it("should await async mapProfileToUser", async () => {

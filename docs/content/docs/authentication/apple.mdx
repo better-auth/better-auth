@@ -121,6 +121,10 @@ description: Apple provider setup and usage.
     ```
 
     On native iOS, it doesn't use the service ID but the app ID (bundle ID) as client ID, so if using the service ID as `clientId` in `signIn.social` with `idToken`, it throws an error: `JWTClaimValidationFailed: unexpected "aud" claim value`. So you need to provide the `appBundleIdentifier` when you want to sign in with Apple using the ID Token.
+
+    <Callout type="warn">
+      Apple emits the `email` claim only on the first authorization; every subsequent sign-in omits it, and Apple provides no user-info endpoint to fetch it later. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for persistence guidance and the `mapProfileToUser` fallback.
+    </Callout>
   </Step>
 </Steps>
 
