@@ -1040,6 +1040,9 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8897
+	 */
 	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
