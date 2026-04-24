@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/redis-storage",
-  "version": "1.6.4",
+  "version": "1.6.9",
   "description": "Redis storage for Better Auth secondary storage",
   "type": "module",
   "license": "MIT",

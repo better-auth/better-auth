@@ -466,9 +466,11 @@ Important notes:
 
 **State**
 
-We require sending a state to mitigate cross-site request forgery (CSRF) attacks. This works by ensuring your client only responds to requests that your client initially requested.
+Clients should send a state value to mitigate cross-site request forgery (CSRF) attacks. This works by ensuring your client only responds to requests that your client initially requested.
 
 Generate a state value from your client and store on your client such as in a secure, HTTP-only cookie or database.
+
+The authorization server accepts requests without `state` for compatibility with OAuth and OpenID Connect, and echoes `state` back when it is provided. Better Auth's client helpers generate and validate `state` for you.
 
 **Code Challenge**
 
@@ -2040,7 +2042,9 @@ To improve lookup performance, database adapters may map the field `client_id` o
 
 ## Migrations
 
-### From [OIDC Provider Plugin](/docs/plugins/oidc-provider)
+### From OIDC Provider Plugin
+
+See [OIDC Provider Plugin](/docs/plugins/oidc-provider) for the previous implementation.
 
 #### Configuration
 
@@ -2128,7 +2132,9 @@ Migrate all tables (you may need to create a clone of `oauthAccessToken` into `o
 }
 ```
 
-### From [MCP Plugin](/docs/plugins/mcp)
+### From MCP Plugin
+
+See [MCP Plugin](/docs/plugins/mcp) for prior MCP-specific endpoints.
 
 The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 
