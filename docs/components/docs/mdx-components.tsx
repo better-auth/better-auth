@@ -310,17 +310,11 @@ const drizzleProviders: { key: DrizzleProvider; label: string }[] = [
 	{ key: "sqlite", label: "SQLite" },
 ];
 
-export function DatabaseTable({
-	fields,
-	name,
-}: {
-	fields: Field[];
-	name?: string;
-}) {
+export function DatabaseTable({ fields }: { fields: Field[] }) {
 	const [view, setView] = useState<ViewMode>("table");
 	const [sqlDialect, setSqlDialect] = useState<SQLDialect>("postgresql");
 	const [drizzleProvider, setDrizzleProvider] = useState<DrizzleProvider>("pg");
-	const tableName = name || "table";
+	const tableName = "table";
 
 	return (
 		<div className="my-4 border shadow-sm overflow-hidden dark:bg-[#030303]">
@@ -343,16 +337,9 @@ export function DatabaseTable({
 						<path d="M3 5v14a9 3 0 0 0 18 0V5" />
 						<path d="M3 12a9 3 0 0 0 18 0" />
 					</svg>
-					{name ? (
-						<span className="font-mono text-[13px] text-foreground/80">
-							<span className="text-foreground/40">table </span>
-							{name}
-						</span>
-					) : (
-						<span className="text-xs text-foreground/60 font-mono font-medium uppercase tracking-wider">
-							Table
-						</span>
-					)}
+					<span className="text-[11px] leading-0 text-foreground/60 font-mono font-medium uppercase tracking-wider">
+						Table
+					</span>
 				</div>
 				<div className="flex items-center">
 					{(
