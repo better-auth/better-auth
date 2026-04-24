@@ -38,31 +38,34 @@ your database schema based on your Better Auth configuration and plugins.
       <th>
         <p className="font-bold text-[16px] mb-1">PostgreSQL Schema Generation</p>
       </th>
+
       <th>
         <p className="font-bold text-[16px] mb-1">PostgreSQL Schema Migration</p>
       </th>
     </tr>
   </thead>
+
   <tbody>
     <tr className="h-10">
-      <td>&#9989; Supported</td>
-      <td>&#9989; Supported</td>
+      <td>✅ Supported</td>
+      <td>✅ Supported</td>
     </tr>
   </tbody>
 </table>
 
-   <Tabs items={["migrate", "generate"]}>
-      <Tab value="migrate">
-      ```package-install
-      npx auth@latest migrate
-      ```
-      </Tab>
-      <Tab value="generate">
-      ```package-install
-      npx auth@latest generate
-      ```
-      </Tab>
-    </Tabs>
+<Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```package-install
+    npx auth@latest migrate
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```package-install
+    npx auth@latest generate
+    ```
+  </Tab>
+</Tabs>
 
 ## Joins (Experimental)
 
@@ -80,6 +83,7 @@ export const auth = betterAuth({
   experimental: { joins: true }
 });
 ```
+
 <Callout type="warn">
   It's possible that you may need to run migrations after enabling this feature.
 </Callout>
@@ -89,7 +93,7 @@ export const auth = betterAuth({
 In most cases, the default schema is `public`. To have Better Auth use a
 non-default schema (e.g., `auth`) for its tables, you have several options:
 
-### Option 1: Set search_path in connection string (Recommended)
+### Option 1: Set search\_path in connection string (Recommended)
 
 Append the `options` parameter to your connection URI:
 
@@ -106,7 +110,7 @@ export const auth = betterAuth({
 
 URL-encode if needed: `?options=-c%20search_path%3Dauth`.
 
-### Option 2: Set search_path using Pool options
+### Option 2: Set search\_path using Pool options
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -154,28 +158,28 @@ Before using a non-default schema, ensure:
 
 The Better Auth CLI migration system automatically detects your configured `search_path`:
 
-- When running `npx auth migrate`, it inspects only the tables in your configured schema
-- Tables in other schemas (e.g., `public`) are ignored, preventing conflicts
-- All new tables are created in your specified schema
+* When running `npx auth migrate`, it inspects only the tables in your configured schema
+* Tables in other schemas (e.g., `public`) are ignored, preventing conflicts
+* All new tables are created in your specified schema
 
 ### Troubleshooting
 
 <Callout type="warning">
-**Issue:** "relation does not exist" error during migration
+  **Issue:** "relation does not exist" error during migration
 
-**Solution:** This usually means the schema doesn't exist or the user lacks permissions. Create the schema and grant permissions as shown above.
+  **Solution:** This usually means the schema doesn't exist or the user lacks permissions. Create the schema and grant permissions as shown above.
 </Callout>
 
 <Callout type="info">
-**Verifying your schema configuration:**
+  **Verifying your schema configuration:**
 
-You can verify which schema Better Auth will use by checking the `search_path`:
+  You can verify which schema Better Auth will use by checking the `search_path`:
 
-```sql
-SHOW search_path;
-```
+  ```sql
+  SHOW search_path;
+  ```
 
-This should return your custom schema (e.g., `auth`) as the first value.
+  This should return your custom schema (e.g., `auth`) as the first value.
 </Callout>
 
 ## Additional Information

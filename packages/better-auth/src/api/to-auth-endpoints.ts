@@ -6,7 +6,7 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import {
 	ATTR_CONTEXT,
 	ATTR_HOOK_TYPE,
@@ -17,28 +17,21 @@ import {
 import type {
 	Endpoint,
 	EndpointContext,
-	EndpointRuntimeOptions,
+	EndpointOptions,
 	InputContext,
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
+import {
+	pickSource,
+	resolveDynamicTrustedProxyHeaders,
+	resolveRequestContext,
+} from "../context/helpers";
 import { isAPIError } from "../utils/is-api-error";
+import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 
 type InternalContext = Partial<
-	InputContext<string, any, any, any, any, any> &
-		EndpointContext<
-			string,
-			any,
-			any,
-			any,
-			any,
-			any,
-			any,
-			AuthContext & {
-				returned?: unknown | undefined;
-				responseHeaders?: Headers | undefined;
-			}
-		>
+	InputContext<string, any> & EndpointContext<string, any>
 > & {
 	path: string;
 	asResponse?: boolean | undefined;
@@ -76,9 +69,50 @@ function getOperationId(endpoint: Endpoint | undefined, key: string): string {
 }
 
 type UserInputContext = Partial<
-	InputContext<string, any, any, any, any, any> &
-		EndpointContext<string, any, any, any, any, any, any, any>
+	InputContext<string, any> & EndpointContext<string, any>
 >;
+
+/**
+ * Resolves the per-call `AuthContext` for endpoints with a dynamic `baseURL`.
+ *
+ * - `rawCtx.baseURL` already set: HTTP handler rehydrated upstream; return as-is.
+ * - Direct `auth.api` call with a source or a configured `fallback`: resolve here.
+ * - Neither: throw `APIError` with a helpful message. Leaving `baseURL = ""`
+ *   would let plugins build `new URL("")` and crash cryptically downstream.
+ */
+async function resolveDynamicContext(
+	rawCtx: AuthContext,
+	input: UserInputContext | undefined,
+): Promise<AuthContext> {
+	if (rawCtx.baseURL) return rawCtx;
+
+	const source = pickSource(input);
+	const config = rawCtx.options.baseURL;
+	const hasFallback =
+		isDynamicBaseURLConfig(config) && Boolean(config.fallback);
+
+	if (source === undefined && !hasFallback) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message:
+				"Dynamic baseURL could not be resolved for this direct auth.api call. " +
+				"Pass `headers: request.headers` (or `request`) to the call, " +
+				"or add `fallback` to your baseURL config.",
+		});
+	}
+
+	try {
+		return await resolveRequestContext(
+			rawCtx,
+			source,
+			resolveDynamicTrustedProxyHeaders(rawCtx.options),
+		);
+	} catch (err) {
+		if (err instanceof BetterAuthError) {
+			throw new APIError("INTERNAL_SERVER_ERROR", { message: err.message });
+		}
+		throw err;
+	}
+}
 
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
@@ -87,11 +121,10 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	const api: Record<
 		string,
 		((
-			context: EndpointContext<string, any, any, any, any, any, any, any> &
-				InputContext<string, any, any, any, any, any>,
+			context: EndpointContext<string, any> & InputContext<string, any>,
 		) => Promise<any>) & {
 			path?: string | undefined;
-			options?: EndpointRuntimeOptions | undefined;
+			options?: EndpointOptions | undefined;
 		}
 	> = {};
 
@@ -104,10 +137,14 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				: endpointMethod;
 
 			const run = async () => {
-				const authContext = await ctx;
+				const rawContext = await ctx;
 				const methodName =
 					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
-				const pathName = context?.path ?? endpoint.path ?? "/:virtual";
+				const route = endpoint.path ?? "/:virtual";
+
+				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
+					? await resolveDynamicContext(rawContext, context)
+					: rawContext;
 
 				let internalContext: InternalContext = {
 					...context,
@@ -120,12 +157,12 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
-				const hasRequest = context?.request instanceof Request;
+				const hasRequest = isRequestLike(context?.request);
 				const shouldReturnResponse = context?.asResponse ?? hasRequest;
 				return withSpan(
-					`${methodName} ${pathName}`,
+					`${methodName} ${route}`,
 					{
-						[ATTR_HTTP_ROUTE]: pathName,
+						[ATTR_HTTP_ROUTE]: route,
 						[ATTR_OPERATION_ID]: operationId,
 					},
 					async () =>
@@ -181,9 +218,9 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								internalContext,
 								() =>
 									withSpan(
-										`handler ${pathName}`,
+										`handler ${route}`,
 										{
-											[ATTR_HTTP_ROUTE]: pathName,
+											[ATTR_HTTP_ROUTE]: route,
 											[ATTR_OPERATION_ID]: operationId,
 										},
 										() => (endpoint as any)(internalContext as any),
@@ -192,12 +229,45 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								if (isAPIError(e)) {
 									/**
 									 * API Errors from response are caught
-									 * and returned to hooks
+									 * and returned to hooks.
+									 *
+									 * Headers come from two sources that must both
+									 * survive:
+									 * - `kAPIErrorHeaderSymbol`: ctx.responseHeaders
+									 *   accumulated via c.setCookie / c.setHeader
+									 *   before the throw.
+									 * - `e.headers`: explicit headers on the APIError
+									 *   (e.g. `location` from c.redirect).
+									 *
+									 * Start from the accumulated ctx headers, then
+									 * apply e.headers on top — appending `set-cookie`
+									 * and setting others — so explicit APIError
+									 * headers override while cookies accumulate.
 									 */
+									const ctxHeaders = (
+										e as {
+											[kAPIErrorHeaderSymbol]?: Headers;
+										}
+									)[kAPIErrorHeaderSymbol];
+									const errHeaders = e.headers ? new Headers(e.headers) : null;
+									let headers: Headers | null = null;
+									if (ctxHeaders || errHeaders) {
+										headers = new Headers();
+										ctxHeaders?.forEach((value, key) => {
+											headers!.append(key, value);
+										});
+										errHeaders?.forEach((value, key) => {
+											if (key.toLowerCase() === "set-cookie") {
+												headers!.append(key, value);
+											} else {
+												headers!.set(key, value);
+											}
+										});
+									}
 									return {
 										response: e,
 										status: e.statusCode,
-										headers: e.headers ? new Headers(e.headers) : null,
+										headers,
 									};
 								}
 								throw e;
@@ -235,6 +305,29 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 							}
 
 							if (isAPIError(result.response) && !shouldReturnResponse) {
+								/**
+								 * Non-response path: we re-throw the raw APIError
+								 * to callers of `auth.api.*`. `result.headers`
+								 * holds the merged ctx + explicit headers (see
+								 * catch block above) — rewrite
+								 * `kAPIErrorHeaderSymbol` with the merged set so
+								 * downstream pipelines (e.g. better-call's
+								 * response builder, or an outer hook catch) see
+								 * the same headers we'd have written on the
+								 * response.
+								 */
+								if (result.headers) {
+									Object.defineProperty(
+										result.response,
+										kAPIErrorHeaderSymbol,
+										{
+											enumerable: false,
+											configurable: true,
+											writable: false,
+											value: result.headers,
+										},
+									);
+								}
 								throw result.response;
 							}
 
@@ -300,12 +393,12 @@ async function runBeforeHooks(
 		}
 		if (matched) {
 			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
-			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const route = endpoint.path ?? "/:virtual";
 			const result = await withSpan(
-				`hook before ${path} ${hookSource}`,
+				`hook before ${route} ${hookSource}`,
 				{
 					[ATTR_HOOK_TYPE]: "before",
-					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_HTTP_ROUTE]: route,
 					[ATTR_CONTEXT]: hookSource,
 					[ATTR_OPERATION_ID]: operationId,
 				},
@@ -357,12 +450,12 @@ async function runAfterHooks(
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
 			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
-			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const route = endpoint.path ?? "/:virtual";
 			const result = (await withSpan(
-				`hook after ${path} ${hookSource}`,
+				`hook after ${route} ${hookSource}`,
 				{
 					[ATTR_HOOK_TYPE]: "after",
-					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_HTTP_ROUTE]: route,
 					[ATTR_CONTEXT]: hookSource,
 					[ATTR_OPERATION_ID]: operationId,
 				},
