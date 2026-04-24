@@ -9,8 +9,9 @@ When using the **cookie** state storage strategy (`storeStateStrategy: "cookie"`
 data into a cookie. During the callback, this cookie is decrypted and parsed. The `state_invalid` error means the cookie
 exists but could not be decrypted or the decrypted content could not be parsed as valid JSON.
 
-This error only occurs with the cookie strategy. If you are using the default database strategy, you will see
-`state_mismatch` instead.
+This error only occurs with the cookie strategy. If you are using the default database strategy, state-related
+failures may surface as other errors instead, such as `state_mismatch` or `state_security_mismatch`, depending on
+what failed.
 
 ## Common Causes
 
