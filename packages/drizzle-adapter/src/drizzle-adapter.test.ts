@@ -176,9 +176,10 @@ describe("drizzle-adapter", () => {
 						const chunks = expr.queryChunks;
 						if (Array.isArray(chunks)) {
 							for (const chunk of chunks) {
-								if (typeof chunk === "string" && chunk.length > 0) {
-									chain._whereId = chunk;
+								if (chunk && typeof chunk === "object" && "value" in chunk) {
+									chain._whereId = (chunk as any).value;
 									break;
+								}
 								}
 							}
 						}
