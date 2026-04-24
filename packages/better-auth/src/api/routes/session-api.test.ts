@@ -749,7 +749,12 @@ describe("cookie cache with JWT strategy", async () => {
 				headers,
 			},
 		});
-		expect(res.data).toBeNull();
+		// When session_data verification fails, fall through to session_token DB validation.
+		// This is secure because the tampered data is not used, the real session from DB is returned.
+		// This behavior also handles cross-subdomain cookie migrations correctly.
+		expect(res.data).not.toBeNull();
+		expect(res.data?.user.id).not.toBe("tampered-id");
+		expect(res.data?.user.email).toBe(testUser.email);
 	});
 
 	it("should have max age expiry", async () => {
