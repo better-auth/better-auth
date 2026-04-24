@@ -1042,7 +1042,6 @@ describe("oauth2", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8897
-	 * @see https://github.com/better-auth/better-auth/pull/8949
 	 */
 	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
