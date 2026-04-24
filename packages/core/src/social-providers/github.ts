@@ -31,7 +31,7 @@ export interface GithubProfile {
 	company: string;
 	blog: string;
 	location: string;
-	email: string;
+	email: string | null;
 	hireable: boolean;
 	bio: string;
 	twitter_username: string;

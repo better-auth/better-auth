@@ -330,6 +330,7 @@ However, if you're starting a new project or facing challenges with your current
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="User"
           fields={[
 {
 name: "id",
@@ -367,6 +368,7 @@ isOptional: true,
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="user"
           fields={[
 {
 name: "id",
@@ -416,6 +418,7 @@ description: "Timestamp of the last update to the user's information",
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="Session"
           fields={[
 {
 name: "id",
@@ -446,6 +449,7 @@ description: "The time when the session expires",
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="session"
           fields={[
 {
 name: "id",
@@ -503,6 +507,7 @@ description: "Timestamp of when the session was updated",
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="Account"
           fields={[
 {
 name: "id",
@@ -580,6 +585,7 @@ isOptional: true,
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="account"
           fields={[
 {
 name: "id",
@@ -668,6 +674,7 @@ description: "Timestamp of when the account was updated",
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
         <DatabaseTable
+          name="VerificationToken"
           fields={[
 {
 name: "identifier",
@@ -692,6 +699,7 @@ description: "The time when the verification token expires",
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="verification"
           fields={[
 {
 name: "id",
