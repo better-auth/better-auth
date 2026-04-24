@@ -14,7 +14,15 @@ import {
 	SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthMiddleware } from "./api";
 import { getTestInstance } from "./test-utils";
 
@@ -59,8 +67,14 @@ async function createTestInstance() {
 	});
 }
 
-const findSpan = (predicate: (s: ReadableSpan) => boolean) =>
-	exporter.getFinishedSpans().find(predicate);
+async function waitForSpan(
+	predicate: (s: ReadableSpan) => boolean,
+): Promise<ReadableSpan> {
+	return vi.waitUntil(() => exporter.getFinishedSpans().find(predicate), {
+		timeout: 10_000,
+		interval: 5,
+	});
+}
 
 describe("endpoints instrumentation", () => {
 	beforeAll(() => {
@@ -83,9 +97,8 @@ describe("endpoints instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const span = findSpan((s) => s.name === "GET /get-session");
-		expect(span).toBeDefined();
-		expect(span?.attributes).toMatchObject({
+		const span = await waitForSpan((s) => s.name === "GET /get-session");
+		expect(span.attributes).toMatchObject({
 			[ATTR_OPERATION_ID]: "getSession",
 			[ATTR_HTTP_ROUTE]: expect.any(String),
 		});
@@ -95,9 +108,8 @@ describe("endpoints instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const span = findSpan((s) => s.name === "handler /get-session");
-		expect(span).toBeDefined();
-		expect(span?.attributes).toMatchObject({
+		const span = await waitForSpan((s) => s.name === "handler /get-session");
+		expect(span.attributes).toMatchObject({
 			[ATTR_HTTP_ROUTE]: expect.any(String),
 			[ATTR_OPERATION_ID]: "getSession",
 		});
@@ -107,11 +119,10 @@ describe("endpoints instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const afterHookSpan = findSpan(
+		const afterHookSpan = await waitForSpan(
 			(s) => s.name === "hook after /get-session plugin:bearer",
 		);
-		expect(afterHookSpan).toBeDefined();
-		expect(afterHookSpan?.attributes).toMatchObject({
+		expect(afterHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "after",
 			[ATTR_CONTEXT]: "plugin:bearer",
 			[ATTR_OPERATION_ID]: "getSession",
@@ -122,21 +133,19 @@ describe("endpoints instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const beforeHookSpan = findSpan(
+		const beforeHookSpan = await waitForSpan(
 			(s) => s.name === "hook before /get-session user",
 		);
-		expect(beforeHookSpan).toBeDefined();
-		expect(beforeHookSpan?.attributes).toMatchObject({
+		expect(beforeHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "before",
 			[ATTR_CONTEXT]: "user",
 			[ATTR_OPERATION_ID]: "getSession",
 		});
 
-		const afterHookSpan = findSpan(
+		const afterHookSpan = await waitForSpan(
 			(s) => s.name === "hook after /get-session user",
 		);
-		expect(afterHookSpan).toBeDefined();
-		expect(afterHookSpan?.attributes).toMatchObject({
+		expect(afterHookSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "after",
 			[ATTR_CONTEXT]: "user",
 			[ATTR_OPERATION_ID]: "getSession",
@@ -147,11 +156,10 @@ describe("endpoints instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const middlewareSpan = findSpan(
+		const middlewareSpan = await waitForSpan(
 			(s) => s.name === "middleware /** test-plugin",
 		);
-		expect(middlewareSpan).toBeDefined();
-		expect(middlewareSpan?.attributes).toMatchObject({
+		expect(middlewareSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "middleware",
 			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
 			[ATTR_HTTP_ROUTE]: expect.any(String),
@@ -162,27 +170,29 @@ describe("endpoints instrumentation", () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const onRequestSpan = findSpan((s) => s.name === "onRequest test-plugin");
-		expect(onRequestSpan).toBeDefined();
-		expect(onRequestSpan?.attributes).toMatchObject({
+		const onRequestSpan = await waitForSpan(
+			(s) => s.name === "onRequest test-plugin",
+		);
+		expect(onRequestSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "onRequest",
 			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
 		});
-		expect(onRequestSpan?.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
+		expect(onRequestSpan.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
 	});
 
 	it("emits a span for onResponse hooks", async () => {
 		const instance = await createTestInstance();
 		await instance.client.getSession();
 
-		const onResponseSpan = findSpan((s) => s.name === "onResponse test-plugin");
-		expect(onResponseSpan).toBeDefined();
-		expect(onResponseSpan?.attributes).toMatchObject({
+		const onResponseSpan = await waitForSpan(
+			(s) => s.name === "onResponse test-plugin",
+		);
+		expect(onResponseSpan.attributes).toMatchObject({
 			[ATTR_HOOK_TYPE]: "onResponse",
 			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
 			[ATTR_HTTP_RESPONSE_STATUS_CODE]: expect.any(Number),
 		});
-		expect(onResponseSpan?.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
+		expect(onResponseSpan.attributes[ATTR_HTTP_ROUTE]).toBeUndefined();
 	});
 
 	it("uses the route template for http.route on parameterized endpoints", async () => {
@@ -191,8 +201,9 @@ describe("endpoints instrumentation", () => {
 			method: "GET",
 		});
 
-		const span = findSpan((s) => s.name === "GET /route-with-params/:slug");
-		expect(span).toBeDefined();
-		expect(span?.attributes[ATTR_HTTP_ROUTE]).toBe("/route-with-params/:slug");
+		const span = await waitForSpan(
+			(s) => s.name === "GET /route-with-params/:slug",
+		);
+		expect(span.attributes[ATTR_HTTP_ROUTE]).toBe("/route-with-params/:slug");
 	});
 });
