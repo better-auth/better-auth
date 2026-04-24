@@ -2529,6 +2529,100 @@ describe("oauth - prompt", async () => {
 		expect(consentRes.url).toContain("/select-organization");
 		expect(consentRes.url).not.toContain("code=");
 	});
+
+	it("consent accept should not skip postLogin when the ba_pl marker is from another session", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		bypassReferenceIdCheck = true;
+		onTestFinished(() => {
+			enablePostLogin = false;
+			bypassReferenceIdCheck = false;
+		});
+
+		// Session A: sign in, complete setActive, capture the signed /consent URL (marker from A).
+		const headersA = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(headersA) },
+		);
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter: rpCookieSetter } =
+			await createTestInstance({ prompt: "consent" });
+		const client = createAuthClient({
+			plugins: [genericOAuthClient(), organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const oauthHeadersA = new Headers();
+		const dataA = await client.signIn.oauth2(
+			{ providerId, callbackURL: "/success" },
+			{
+				headers: headersA,
+				throw: true,
+				onSuccess: rpCookieSetter(oauthHeadersA),
+			},
+		);
+		if (!dataA.url) {
+			throw new Error("missing authorization URL");
+		}
+
+		let selectOrgUriA = "";
+		await serverClient.$fetch(dataA.url, {
+			method: "GET",
+			headers: headersA,
+			onError(context) {
+				selectOrgUriA = context.response.headers.get("Location") || "";
+				cookieSetter(headersA)(context);
+			},
+		});
+		expect(selectOrgUriA).toContain("/select-organization");
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgUriA, authServerBaseUrl).search,
+			},
+		});
+
+		const setActiveResponse = await serverClient.organization.setActive(
+			{ organizationId: org.id, organizationSlug: org.slug },
+			{ headers: headersA, throw: true, onSuccess: cookieSetter(headersA) },
+		);
+		if (!isRedirectResult(setActiveResponse)) {
+			expect.unreachable();
+		}
+		const consentUrlWithMarker = setActiveResponse.url;
+		expect(consentUrlWithMarker).toContain("/consent");
+
+		// Session B: a fresh sign-in for the same user. A new session row, no active org.
+		const headersB = new Headers();
+		await serverClient.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ throw: true, onSuccess: cookieSetter(headersB) },
+		);
+
+		// Session B posts to /consent using session A's marker.
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentUrlWithMarker, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{ accept: true },
+			{ headers: headersB, throw: true, onResponse: cookieSetter(headersB) },
+		);
+
+		// Session B must not be granted a code using session A's marker.
+		expect(consentRes.url).toContain("/select-organization");
+		expect(consentRes.url).not.toContain("code=");
+	});
 });
 
 describe("oauth - config", () => {

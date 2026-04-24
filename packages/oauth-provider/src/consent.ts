@@ -148,8 +148,11 @@ export async function consentEndpoint(
 		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
 	}
 	ctx.query = searchParamsToQuery(authorizationQuery);
+	const postLoginClearedForThisSession =
+		oauthRequest?.postLoginClearedForSession !== undefined &&
+		oauthRequest.postLoginClearedForSession === session?.session.id;
 	const { url } = await authorizeEndpoint(ctx, opts, {
-		postLogin: oauthRequest?.postLoginCleared === true,
+		postLogin: postLoginClearedForThisSession,
 	});
 	return {
 		redirect: true,

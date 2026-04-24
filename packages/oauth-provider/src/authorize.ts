@@ -431,12 +431,9 @@ export async function authorizeEndpoint(
 					"End-User interaction is required",
 				);
 			}
-			return redirectWithPromptCode(
-				ctx,
-				opts,
-				"create",
-				typeof signupRedirect === "string" ? signupRedirect : undefined,
-			);
+			return redirectWithPromptCode(ctx, opts, "create", {
+				page: typeof signupRedirect === "string" ? signupRedirect : undefined,
+			});
 		}
 	}
 
@@ -463,7 +460,9 @@ export async function authorizeEndpoint(
 
 	// Force consent screen
 	if (promptSet?.has("consent")) {
-		return redirectWithPromptCode(ctx, opts, "consent");
+		return redirectWithPromptCode(ctx, opts, "consent", {
+			sessionId: session.session.id,
+		});
 	}
 
 	const referenceId = await opts.postLogin?.consentReferenceId?.({
@@ -518,7 +517,9 @@ export async function authorizeEndpoint(
 				"End-User consent is required",
 			);
 		}
-		return redirectWithPromptCode(ctx, opts, "consent");
+		return redirectWithPromptCode(ctx, opts, "consent", {
+			sessionId: session.session.id,
+		});
 	}
 
 	return redirectWithAuthorizationCode(ctx, opts, {
@@ -597,12 +598,14 @@ async function redirectWithPromptCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	type: "login" | "create" | "consent" | "select_account" | "post_login",
-	page?: string,
+	options?: { page?: string; sessionId?: string },
 ) {
 	// `consent` is the only type reachable past the postLogin gate in
-	// authorize, so its signed query attests that postLogin is cleared.
+	// authorize, so its signed query attests that postLogin is cleared
+	// for the specific session recorded in the marker.
 	const queryParams = await signParams(ctx, opts, {
-		postLoginCleared: type === "consent",
+		postLoginClearedForSession:
+			type === "consent" ? options?.sessionId : undefined,
 	});
 	let path = opts.loginPage;
 	if (type === "select_account") {
@@ -618,13 +621,13 @@ async function redirectWithPromptCode(
 	} else if (type === "create") {
 		path = opts.signup?.page ?? opts.loginPage;
 	}
-	return handleRedirect(ctx, `${page ?? path}?${queryParams}`);
+	return handleRedirect(ctx, `${options?.page ?? path}?${queryParams}`);
 }
 
 async function signParams(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	flags?: { postLoginCleared?: boolean },
+	flags?: { postLoginClearedForSession?: string },
 ) {
 	// Add expiration to query parameters
 	const issuedAt = Date.now();
@@ -635,8 +638,8 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 	params.set(signedQueryIssuedAtParam, String(issuedAt));
-	if (flags?.postLoginCleared) {
-		params.set(postLoginClearedParam, "1");
+	if (flags?.postLoginClearedForSession) {
+		params.set(postLoginClearedParam, flags.postLoginClearedForSession);
 	}
 
 	const signature = await makeSignature(params.toString(), ctx.context.secret);

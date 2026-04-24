@@ -49,7 +49,7 @@ declare module "@better-auth/core" {
 export const oAuthState = defineRequestState<{
 	query?: string;
 	signedQueryIssuedAt?: Date;
-	postLoginCleared?: boolean;
+	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
 
@@ -249,8 +249,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						}
 						const signedQueryIssuedAt = getSignedQueryIssuedAt(query);
 						const queryParams = new URLSearchParams(query);
-						const postLoginCleared =
-							queryParams.get(postLoginClearedParam) === "1";
+						const postLoginClearedForSession =
+							queryParams.get(postLoginClearedParam) ?? undefined;
 						queryParams.delete("sig");
 						queryParams.delete("exp");
 						queryParams.delete(signedQueryIssuedAtParam);
@@ -258,7 +258,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						await oAuthState.set({
 							query: queryParams.toString(),
 							signedQueryIssuedAt: signedQueryIssuedAt ?? undefined,
-							postLoginCleared,
+							postLoginClearedForSession,
 						});
 
 						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
