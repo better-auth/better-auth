@@ -601,11 +601,13 @@ async function redirectWithPromptCode(
 	options?: { page?: string; sessionId?: string },
 ) {
 	// `consent` is the only type reachable past the postLogin gate in
-	// authorize, so its signed query attests that postLogin is cleared
-	// for the specific session recorded in the marker.
+	// authorize, so when `opts.postLogin` is configured its signed query
+	// attests that postLogin is cleared for the specific session recorded
+	// in the marker. Skip the marker otherwise: there is no postLogin gate
+	// to clear, and an unused session id does not belong in the URL.
 	const queryParams = await signParams(ctx, opts, {
 		postLoginClearedForSession:
-			type === "consent" ? options?.sessionId : undefined,
+			type === "consent" && opts.postLogin ? options?.sessionId : undefined,
 	});
 	let path = opts.loginPage;
 	if (type === "select_account") {
