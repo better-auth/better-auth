@@ -69,6 +69,23 @@ afterEach(() => {
 });
 
 describe("parseState error mapping", () => {
+	it("should redirect to ?error=state_not_found when StateError code is state_not_found", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("State not found in OAuth callback", {
+			code: "state_not_found",
+		});
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext();
+
+		try {
+			await parseState(ctx as unknown as GenericEndpointContext);
+		} catch {}
+
+		expect(redirectCalls[0]).toContain("state_not_found");
+		expect(redirectCalls[0]).not.toContain("please_restart_the_process");
+	});
+
 	it("should redirect to ?error=state_mismatch when StateError code is state_security_mismatch", async () => {
 		const { StateError } = await import("../state");
 		errorToThrow = new StateError(
