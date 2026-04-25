@@ -1,5 +1,6 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type { ErrorContext } from "@better-fetch/fetch";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type { MockInstance } from "vitest";
@@ -993,6 +994,111 @@ describe("account", async () => {
 		expect(secondAccessToken.error).toBeFalsy();
 		expect(secondAccessToken.data?.idToken).toBe(newIdToken);
 		expect(refreshTokenCalls).toBeGreaterThan(0);
+	});
+
+	it("should skip internalAdapter.updateAccount during getAccessToken auto-refresh when no database is configured", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database: undefined,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+		const ctx = await auth.$context;
+		const updateAccountSpy = vi.spyOn(ctx.internalAdapter, "updateAccount");
+
+		const headers = new Headers();
+		email = "skip-update-no-db@test.com";
+
+		const now = Math.floor(Date.now() / 1000);
+		const idToken = await signJWT(
+			{
+				email,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: now + 3600,
+				sub: "skip-update-no-db",
+				iat: now,
+				aud: "test",
+				azp: "test",
+				nbf: now,
+				iss: "test",
+				locale: "en",
+				jti: "skip-update-no-db-id-token",
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+
+		let refreshTokenCalls = 0;
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const body = await request.text();
+				const grantType = new URLSearchParams(body).get("grant_type");
+
+				if (grantType === "refresh_token") {
+					refreshTokenCalls += 1;
+					return HttpResponse.json({
+						access_token: "refreshed-access-token",
+						refresh_token: "refreshed-refresh-token",
+						expires_in: 3600,
+						id_token: idToken,
+					});
+				}
+
+				return HttpResponse.json({
+					access_token: "initial-access-token",
+					refresh_token: "initial-refresh-token",
+					expires_in: 1,
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError: (context: ErrorContext) => {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		updateAccountSpy.mockClear();
+
+		const accessToken = await client.getAccessToken(
+			{ providerId: "google" },
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+
+		expect(accessToken.error).toBeFalsy();
+		expect(accessToken.data?.accessToken).toBe("refreshed-access-token");
+		expect(refreshTokenCalls).toBe(1);
+		expect(updateAccountSpy).not.toHaveBeenCalled();
+
+		updateAccountSpy.mockRestore();
 	});
 
 	it("should NOT chunk account data cookies when exceeding 4KB", async () => {
