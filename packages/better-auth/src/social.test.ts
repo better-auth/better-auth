@@ -1104,6 +1104,56 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(signInRes.data?.url).not.toContain(encodeURIComponent(iosClientId));
 	});
 
+	it("includes granted scopes in the authorization URL by default", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: webClientId,
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
+	});
+
+	it("omits granted scopes from the authorization URL when disabled", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: webClientId,
+						clientSecret: "test-secret",
+						includeGrantedScopes: false,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			scopes: ["https://www.googleapis.com/auth/drive.file"],
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.has("include_granted_scopes")).toBe(false);
+		expect(authUrl.searchParams.get("scope")).toContain("openid");
+		expect(authUrl.searchParams.get("scope")).toContain(
+			"https://www.googleapis.com/auth/drive.file",
+		);
+	});
+
 	it("rejects an empty clientId array at sign-in time", async () => {
 		const { client } = await getTestInstance(
 			{
