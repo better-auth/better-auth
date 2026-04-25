@@ -563,7 +563,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				verificationToken,
 				{ cleanupBeforeFind: true },
 			);
-			if (!data) {
+			const expiresAt = data?.expiresAt
+				? new Date(data.expiresAt).getTime()
+				: Number.NaN;
+			if (!data || Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
