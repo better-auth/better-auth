@@ -3,7 +3,7 @@ name: Auto Changeset
 
 on:
   issue_comment:
-    types: [created]
+    types: [created, edited]
 
 permissions: {}
 
@@ -17,6 +17,7 @@ jobs:
   # making it safe for both team and fork PRs.
   changeset:
     if: >
+      github.event.action == 'created' &&
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/changeset') &&
       github.repository_owner == 'better-auth' &&
@@ -185,8 +186,191 @@ jobs:
             "### Changeset recommendation" "" \
             "${EXISTING_NOTE}" \
             "Copy into \`.changeset/pr-${PR_NUMBER}.md\`:" "" \
-            '```md' "$CHANGESET" '```' > "$TMPFILE"
+            '```md' "$CHANGESET" '```' "" \
+            "---" "" \
+            "- [ ] **Commit this changeset** to the PR" > "$TMPFILE"
 
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$TMPFILE"
           rm -f "$TMPFILE"
           echo "Posted changeset recommendation on PR #${PR_NUMBER}"
+
+  # Apply changeset — triggered when someone checks the commit checkbox
+  # on a bot-posted changeset recommendation comment.
+  apply:
+    if: >
+      github.event.action == 'edited' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '<!-- auto-changeset -->') &&
+      contains(github.event.comment.body, '- [x] **Commit this changeset**') &&
+      (github.event.comment.user.login == 'better-release[bot]' || github.event.comment.user.login == 'github-actions[bot]') &&
+      github.repository_owner == 'better-auth'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Verify sender authorization
+        id: auth
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          SENDER: ${{ github.event.sender.login }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # Match the /changeset command's MEMBER/OWNER/COLLABORATOR gate.
+          # author_association is role-based (not permission-based), so we
+          # check repo collaborator status and org membership separately.
+          if gh api "repos/${GITHUB_REPOSITORY}/collaborators/${SENDER}" --silent 2>/dev/null; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          elif gh api "orgs/${GITHUB_REPOSITORY_OWNER}/members/${SENDER}" --silent 2>/dev/null; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          else
+            PR_AUTHOR=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --json author --jq '.author.login' 2>/dev/null || echo "")
+            if [[ -n "$PR_AUTHOR" && "$SENDER" == "$PR_AUTHOR" ]]; then
+              echo "authorized=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::${SENDER} is not authorized"
+              echo "authorized=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Get PR details
+        if: steps.auth.outputs.authorized == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json headRefName,isCrossRepository)
+          HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
+          IS_FORK=$(echo "$PR_JSON" | jq -r '.isCrossRepository')
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+
+          if [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "next" || "$HEAD_REF" == release/* ]]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "blocked_reason=Cannot commit to protected branch (${HEAD_REF}) — this would trigger release automation." >> "$GITHUB_OUTPUT"
+          elif [[ "$IS_FORK" == "true" ]]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "blocked_reason=Cannot auto-commit to fork PRs — please copy the changeset manually." >> "$GITHUB_OUTPUT"
+          else
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Abort if blocked
+        if: steps.auth.outputs.authorized == 'true' && steps.pr.outputs.blocked == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          BLOCKED_REASON: ${{ steps.pr.outputs.blocked_reason }}
+        run: |
+          BODY=$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" --jq '.body')
+          TMPFILE=$(mktemp)
+          awk -v reason="$BLOCKED_REASON" '{
+            sub(/- \[x\] \*\*Commit this changeset\*\* to the PR/,
+                "- [ ] **Commit this changeset** to the PR\n\n> ⚠️ " reason)
+            print
+          }' <<< "$BODY" > "$TMPFILE"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" \
+            -X PATCH --input <(jq -n --rawfile body "$TMPFILE" '{body: $body}')
+          rm -f "$TMPFILE"
+          echo "::warning::${BLOCKED_REASON}"
+
+      - name: Commit changeset
+        if: steps.auth.outputs.authorized == 'true' && steps.pr.outputs.blocked != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+
+          # Fetch comment body via API (safer than env var for special characters)
+          BODY=$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" --jq '.body')
+
+          # Extract changeset from the ```md code block
+          CHANGESET=$(awk '/^```md$/{found=1;next} found && /^```$/{exit} found{print}' <<< "$BODY")
+
+          if [ -z "$CHANGESET" ]; then
+            echo "::error::Could not extract changeset content from comment"
+            exit 1
+          fi
+
+          FILE_PATH=".changeset/pr-${PR_NUMBER}.md"
+
+          # ── Use Git Data API for an atomic single commit ──
+          # This adds pr-N.md and deletes any superseded changeset files
+          # in one commit, preventing duplicate changesets on the branch.
+
+          # Get branch head
+          COMMIT_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq '.object.sha')
+          TREE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${COMMIT_SHA}" --jq '.tree.sha')
+
+          # Create blob for the new changeset
+          BLOB_SHA=$(jq -n --arg content "$(printf '%s\n' "$CHANGESET" | base64 -w 0)" \
+            '{content: $content, encoding: "base64"}' | \
+            gh api "repos/${GITHUB_REPOSITORY}/git/blobs" --input - --jq '.sha')
+
+          # Start tree with the new changeset entry
+          TREE_FILE=$(mktemp)
+          jq -n --arg path "$FILE_PATH" --arg sha "$BLOB_SHA" \
+            '[{path: $path, mode: "100644", type: "blob", sha: $sha}]' > "$TREE_FILE"
+
+          # Only supersede changeset files that THIS PR introduced —
+          # never touch files inherited from parent branches (stacked PRs).
+          SUPERSEDED=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --paginate --jq '.[] | select(.filename | startswith(".changeset/")) |
+              select(.filename | endswith(".md")) |
+              select(.filename | endswith("README.md") | not) |
+              .filename' 2>/dev/null \
+            | grep -v "^${FILE_PATH}$" || true)
+
+          if [ -n "$SUPERSEDED" ]; then
+            while IFS= read -r old_path; do
+              [ -z "$old_path" ] && continue
+              # Setting sha to null tells the Git tree API to delete the file
+              jq --arg path "$old_path" \
+                '. + [{path: $path, mode: "100644", type: "blob", sha: null}]' \
+                "$TREE_FILE" > "${TREE_FILE}.tmp" && mv "${TREE_FILE}.tmp" "$TREE_FILE"
+              echo "Superseding: ${old_path}"
+            done <<< "$SUPERSEDED"
+          fi
+
+          # Create tree, commit, and update ref
+          NEW_TREE_SHA=$(jq -n --arg base "$TREE_SHA" --argjson tree "$(cat "$TREE_FILE")" \
+            '{base_tree: $base, tree: $tree}' | \
+            gh api "repos/${GITHUB_REPOSITORY}/git/trees" --input - --jq '.sha')
+          rm -f "$TREE_FILE"
+
+          NEW_COMMIT_SHA=$(jq -n \
+            --arg message "chore: add changeset for PR #${PR_NUMBER}" \
+            --arg tree "$NEW_TREE_SHA" \
+            --arg parent "$COMMIT_SHA" \
+            '{message: $message, tree: $tree, parents: [$parent]}' | \
+            gh api "repos/${GITHUB_REPOSITORY}/git/commits" --input - --jq '.sha')
+
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs/heads/${HEAD_REF}" \
+            -X PATCH -f sha="$NEW_COMMIT_SHA"
+
+          # Update comment: replace checkbox with committed confirmation
+          TMPFILE=$(mktemp)
+          awk -v sender="$SENDER" '{
+            sub(/- \[x\] \*\*Commit this changeset\*\* to the PR/,
+                "✅ Committed by @" sender)
+            print
+          }' <<< "$BODY" > "$TMPFILE"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" \
+            -X PATCH --input <(jq -n --rawfile body "$TMPFILE" '{body: $body}')
+          rm -f "$TMPFILE"
+
+          echo "Committed ${FILE_PATH} to ${HEAD_REF}"
