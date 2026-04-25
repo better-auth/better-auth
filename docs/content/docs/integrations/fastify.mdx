@@ -6,18 +6,18 @@ description: Learn how to seamlessly integrate Better Auth with your Fastify app
 This guide provides step-by-step instructions for configuring both essential handlers and CORS settings.
 
 <Callout type="important">
-A configured Better Auth instance is required before proceeding. If you haven't set this up yet, please consult our [Installation Guide](/docs/installation).
+  A configured Better Auth instance is required before proceeding. If you haven't set this up yet, please consult our [Installation Guide](/docs/installation).
 </Callout>
 
 ### Prerequisites
 
 Verify the following requirements before integration:
 
-- **Node.js Environment**: v16 or later installed
-- **ES Module Support**: Enable ES modules in either:
-  - `package.json`: `{ "type": "module" }`
-  - TypeScript `tsconfig.json`: `{ "module": "ESNext" }`
-- **Fastify Dependencies**:
+* **Node.js Environment**: v16 or later installed
+* **ES Module Support**: Enable ES modules in either:
+  * `package.json`: `{ "type": "module" }`
+  * TypeScript `tsconfig.json`: `{ "module": "ESNext" }`
+* **Fastify Dependencies**:
   ```package-install
   fastify @fastify/cors
   ```
@@ -30,6 +30,7 @@ Configure Better Auth to process authentication requests by creating a catch-all
 
 ```ts title="server.ts"
 import Fastify from "fastify";
+import { fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth"; // Your configured Better Auth instance
 
 const fastify = Fastify({ logger: true });
@@ -44,10 +45,7 @@ fastify.route({
       const url = new URL(request.url, `http://${request.headers.host}`);
       
       // Convert Fastify headers to standard Headers object
-      const headers = new Headers();
-      Object.entries(request.headers).forEach(([key, value]) => {
-        if (value) headers.append(key, value.toString());
-      });
+      const headers = fromNodeHeaders(request.headers);
 
       // Create Fetch API-compatible request
       const req = new Request(url.toString(), {
@@ -62,11 +60,10 @@ fastify.route({
       // Forward response to client
       reply.status(response.status);
       response.headers.forEach((value, key) => reply.header(key, value));
-      reply.send(response.body ? await response.text() : null);
-
+      return reply.send(response.body ? await response.text() : null);
     } catch (error) {
       fastify.log.error("Authentication Error:", error);
-      reply.status(500).send({ 
+      return reply.status(500).send({ 
         error: "Internal authentication error",
         code: "AUTH_FAILURE"
       });

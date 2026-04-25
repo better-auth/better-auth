@@ -1,10 +1,10 @@
-import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
-import { BetterAuthError } from "../../error";
 import {
 	ATTR_DB_COLLECTION_NAME,
 	ATTR_DB_OPERATION_NAME,
 	withSpan,
-} from "../../instrumentation";
+} from "@better-auth/core/instrumentation";
+import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
+import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
 import { getAuthTables } from "../get-tables";
@@ -496,6 +496,7 @@ export const createAdapterFactory =
 					value,
 					operator = "eq",
 					connector = "AND",
+					mode = "sensitive",
 				} = w;
 				if (operator === "in") {
 					if (!Array.isArray(value)) {
@@ -606,6 +607,7 @@ export const createAdapterFactory =
 					connector,
 					field: fieldName,
 					value: newValue,
+					mode,
 				} satisfies CleanedWhere;
 			}) as any;
 		};

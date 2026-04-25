@@ -10,7 +10,7 @@ Better Auth connects to a database to store data. The database will be used to s
 You can pass a database connection to Better Auth by passing a supported database instance in the database options. You can learn more about supported database adapters in the [Other relational databases](/docs/adapters/other-relational-databases) documentation.
 
 <Callout type="info">
-Better Auth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
+  Better Auth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
 </Callout>
 
 ## CLI
@@ -26,7 +26,7 @@ npx auth@latest migrate
 ```
 
 <Callout type="info">
-For PostgreSQL users: The migrate command supports non-default schemas. It automatically detects your `search_path` configuration and creates tables in the correct schema. See [PostgreSQL adapter](/docs/adapters/postgresql#use-a-non-default-schema) for details.
+  For PostgreSQL users: The migrate command supports non-default schemas. It automatically detects your `search_path` configuration and creates tables in the correct schema. See [PostgreSQL adapter](/docs/adapters/postgresql#use-a-non-default-schema) for details.
 </Callout>
 
 ### Generating Schema
@@ -59,67 +59,67 @@ await runMigrations();
 ```
 
 <Callout type="warn">
-`getMigrations` only works with the built-in Kysely adapter (SQLite/D1, PostgreSQL, MySQL, MSSQL). It does **not** work with Prisma or Drizzle ORM adapters — use CLI migrations with those ORMs instead.
+  `getMigrations` only works with the built-in Kysely adapter (SQLite/D1, PostgreSQL, MySQL, MSSQL). It does **not** work with Prisma or Drizzle ORM adapters — use CLI migrations with those ORMs instead.
 </Callout>
 
 <Accordions>
-<Accordion id="cloudflare-d1-example" title="Example: Cloudflare D1">
-[Cloudflare D1](https://developers.cloudflare.com/d1/) can only be queried through a Cloudflare Worker, so the CLI cannot access it directly. Instead, you can run programmatic migrations through an endpoint:
+  <Accordion id="cloudflare-d1-example" title="Example: Cloudflare D1">
+    [Cloudflare D1](https://developers.cloudflare.com/d1/) can only be queried through a Cloudflare Worker, so the CLI cannot access it directly. Instead, you can run programmatic migrations through an endpoint:
 
-```typescript title="auth.ts"
-import { env } from "cloudflare:workers";
-import { betterAuth } from "better-auth";
+    ```typescript title="auth.ts"
+    import { env } from "cloudflare:workers";
+    import { betterAuth } from "better-auth";
 
-export const auth = betterAuth({
-  database: env.DB,
-  // ... rest of config
-});
-```
-
-```typescript title="src/index.ts"
-import { Hono } from "hono";
-import { auth } from "./auth";
-import { getMigrations } from "better-auth/db/migration";
-
-const app = new Hono();
-
-// Protect or remove this endpoint in production
-app.post("/migrate", async (c) => {
-  try {
-    const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(auth.options);
-
-    if (toBeCreated.length === 0 && toBeAdded.length === 0) {
-      return c.json({ message: "No migrations needed" });
-    }
-
-    await runMigrations();
-    return c.json({
-      message: "Migrations completed successfully",
-      created: toBeCreated.map((t) => t.table),
-      added: toBeAdded.map((t) => t.table),
+    export const auth = betterAuth({
+      database: env.DB,
+      // ... rest of config
     });
-  } catch (error) {
-    return c.json(
-      { error: error instanceof Error ? error.message : "Migration failed" },
-      500,
-    );
-  }
-});
+    ```
 
-app.on(["POST", "GET"], "/api/auth/*", (c) => {
-  return auth.handler(c.req.raw);
-});
+    ```typescript title="src/index.ts"
+    import { Hono } from "hono";
+    import { auth } from "./auth";
+    import { getMigrations } from "better-auth/db/migration";
 
-export default app;
-```
+    const app = new Hono();
 
-<Callout type="info">
-If you're using Cloudflare D1 with Drizzle or Prisma, use [`cloudflare:workers`](https://developers.cloudflare.com/workers/runtime-apis/bindings/) to access `env` and follow the guides below:
+    // Protect or remove this endpoint in production
+    app.post("/migrate", async (c) => {
+      try {
+        const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(auth.options);
 
-- [Drizzle with Cloudflare D1 guide](https://orm.drizzle.team/docs/guides/d1-http-with-drizzle-kit)
-- [Prisma with Cloudflare D1 guide](https://www.prisma.io/docs/guides/cloudflare-d1)
-</Callout>
-</Accordion>
+        if (toBeCreated.length === 0 && toBeAdded.length === 0) {
+          return c.json({ message: "No migrations needed" });
+        }
+
+        await runMigrations();
+        return c.json({
+          message: "Migrations completed successfully",
+          created: toBeCreated.map((t) => t.table),
+          added: toBeAdded.map((t) => t.table),
+        });
+      } catch (error) {
+        return c.json(
+          { error: error instanceof Error ? error.message : "Migration failed" },
+          500,
+        );
+      }
+    });
+
+    app.on(["POST", "GET"], "/api/auth/*", (c) => {
+      return auth.handler(c.req.raw);
+    });
+
+    export default app;
+    ```
+
+    <Callout type="info">
+      If you're using Cloudflare D1 with Drizzle or Prisma, use [`cloudflare:workers`](https://developers.cloudflare.com/workers/runtime-apis/bindings/) to access `env` and follow the guides below:
+
+      * [Drizzle with Cloudflare D1 guide](https://orm.drizzle.team/docs/guides/d1-http-with-drizzle-kit)
+      * [Prisma with Cloudflare D1 guide](https://www.prisma.io/docs/guides/cloudflare-d1)
+    </Callout>
+  </Accordion>
 </Accordions>
 
 ## Secondary Storage
@@ -278,7 +278,7 @@ export const redisSecondaryStorage: SecondaryStorage = {
 
       if (ttl) {
         // Set with TTL in seconds
-        await redis.setex(key, ttl, stringValue);
+        await redis.set(key, stringValue, { ex: ttl });
       } else {
         // Set without TTL
         await redis.set(key, stringValue);
@@ -320,227 +320,229 @@ Better Auth requires the following tables to be present in the database. The typ
 
 Table Name: `user`
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "Unique identifier for each user",
-      isPrimaryKey: true,
-    },
-    {
-      name: "name",
-      type: "string",
-      description: "User's chosen display name",
-    },
-    {
-      name: "email",
-      type: "string",
-      description: "User's email address for communication and login",
-      isUnique: true,
-    },
-    {
-      name: "emailVerified",
-      type: "boolean",
-      description: "Whether the user's email is verified",
-    },
-    {
-      name: "image",
-      type: "string",
-      description: "User's image url",
-      isOptional: true,
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the user account was created",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of the last update to the user's information",
-    },
-  ]}
-/>
+export const userTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each user",
+		isPrimaryKey: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "User's chosen display name",
+	},
+	{
+		name: "email",
+		type: "string",
+		description: "User's email address for communication and login",
+		isUnique: true,
+	},
+	{
+		name: "emailVerified",
+		type: "boolean",
+		description: "Whether the user's email is verified",
+	},
+	{
+		name: "image",
+		type: "string",
+		description: "User's image url",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the user account was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of the last update to the user's information",
+	},
+];
+
+<DatabaseTable name="user" fields={userTableFields} />
 
 ### Session
 
 Table Name: `session`
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "Unique identifier for each session",
-      isPrimaryKey: true,
-    },
-    {
-      name: "userId",
-      type: "string",
-      description: "The ID of the user",
-      isForeignKey: true,
-    },
-    {
-      name: "token",
-      type: "string",
-      description: "The unique session token",
-      isUnique: true,
-    },
-    {
-      name: "expiresAt",
-      type: "Date",
-      description: "The time when the session expires",
-    },
-    {
-      name: "ipAddress",
-      type: "string",
-      description: "The IP address of the device",
-      isOptional: true,
-    },
-    {
-      name: "userAgent",
-      type: "string",
-      description: "The user agent information of the device",
-      isOptional: true,
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the session was created",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the session was updated",
-    },
-  ]}
-/>
+export const sessionTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each session",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
+	},
+	{
+		name: "token",
+		type: "string",
+		description: "The unique session token",
+		isUnique: true,
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The time when the session expires",
+	},
+	{
+		name: "ipAddress",
+		type: "string",
+		description: "The IP address of the device",
+		isOptional: true,
+	},
+	{
+		name: "userAgent",
+		type: "string",
+		description: "The user agent information of the device",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the session was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the session was updated",
+	},
+];
+
+<DatabaseTable name="session" fields={sessionTableFields} />
 
 ### Account
 
 Table Name: `account`
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "Unique identifier for each account",
-      isPrimaryKey: true,
-    },
-    {
-      name: "userId",
-      type: "string",
-      description: "The ID of the user",
-      isForeignKey: true,
-    },
-    {
-      name: "accountId",
-      type: "string",
-      description:
-        "The ID of the account as provided by the SSO or equal to userId for credential accounts",
-    },
-    {
-      name: "providerId",
-      type: "string",
-      description: "The ID of the provider",
-    },
-    {
-      name: "accessToken",
-      type: "string",
-      description: "The access token of the account. Returned by the provider",
-      isOptional: true,
-    },
-    {
-      name: "refreshToken",
-      type: "string",
-      description: "The refresh token of the account. Returned by the provider",
-      isOptional: true,
-    },
-    {
-      name: "accessTokenExpiresAt",
-      type: "Date",
-      description: "The time when the access token expires",
-      isOptional: true,
-    },
-    {
-      name: "refreshTokenExpiresAt",
-      type: "Date",
-      description: "The time when the refresh token expires",
-      isOptional: true,
-    },
-    {
-      name: "scope",
-      type: "string",
-      description: "The scope of the account. Returned by the provider",
-      isOptional: true,
-    },
-    {
-      name: "idToken",
-      type: "string",
-      description: "The ID token returned from the provider",
-      isOptional: true,
-    },
-    {
-      name: "password",
-      type: "string",
-      description:
-        "The password of the account. Mainly used for email and password authentication",
-      isOptional: true,
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the account was created",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the account was updated",
-    },
-  ]}
-/>
+export const accountTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each account",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
+	},
+	{
+		name: "accountId",
+		type: "string",
+		description:
+			"The ID of the account as provided by the SSO or equal to userId for credential accounts",
+	},
+	{
+		name: "providerId",
+		type: "string",
+		description: "The ID of the provider",
+	},
+	{
+		name: "accessToken",
+		type: "string",
+		description: "The access token of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "refreshToken",
+		type: "string",
+		description: "The refresh token of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "accessTokenExpiresAt",
+		type: "Date",
+		description: "The time when the access token expires",
+		isOptional: true,
+	},
+	{
+		name: "refreshTokenExpiresAt",
+		type: "Date",
+		description: "The time when the refresh token expires",
+		isOptional: true,
+	},
+	{
+		name: "scope",
+		type: "string",
+		description: "The scope of the account. Returned by the provider",
+		isOptional: true,
+	},
+	{
+		name: "idToken",
+		type: "string",
+		description: "The ID token returned from the provider",
+		isOptional: true,
+	},
+	{
+		name: "password",
+		type: "string",
+		description:
+			"The password of the account. Mainly used for email and password authentication",
+		isOptional: true,
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the account was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the account was updated",
+	},
+];
+
+<DatabaseTable name="account" fields={accountTableFields} />
 
 ### Verification
 
 Table Name: `verification`
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "Unique identifier for each verification",
-      isPrimaryKey: true,
-    },
-    {
-      name: "identifier",
-      type: "string",
-      description: "The identifier for the verification request",
-    },
-    {
-      name: "value",
-      type: "string",
-      description: "The value to be verified",
-    },
-    {
-      name: "expiresAt",
-      type: "Date",
-      description: "The time when the verification request expires",
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the verification request was created",
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the verification request was updated",
-    },
-  ]}
-/>
+export const verificationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for each verification",
+		isPrimaryKey: true,
+	},
+	{
+		name: "identifier",
+		type: "string",
+		description: "The identifier for the verification request",
+	},
+	{
+		name: "value",
+		type: "string",
+		description: "The value to be verified",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "The time when the verification request expires",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the verification request was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the verification request was updated",
+	},
+];
+
+<DatabaseTable name="verification" fields={verificationTableFields} />
 
 ## Custom Tables
 
@@ -601,10 +603,10 @@ Better Auth provides a type-safe way to extend the `user` and `session` schemas.
 
 To add custom fields, use the `additionalFields` property in the `user` or `session` object of your auth config. The `additionalFields` object uses field names as keys, with each value being a `FieldAttributes` object containing:
 
-- `type`: The data type of the field (e.g., "string", "number", "boolean").
-- `required`: A boolean indicating if the field is mandatory.
-- `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
-- `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
+* `type`: The data type of the field (e.g., "string", "number", "boolean").
+* `required`: A boolean indicating if the field is mandatory.
+* `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
+* `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
 
 Here's an example of how to extend the user schema with additional fields:
 
@@ -829,9 +831,10 @@ export const auth = betterAuth({
 ```
 
 This configuration allows you to:
-- Use database auto-increment (serial, auto_increment, etc.) for the users table
-- Generate UUIDs for all other tables (session, account, verification)
-- Maintain compatibility with existing schemas that use different ID types
+
+* Use database auto-increment (serial, auto\_increment, etc.) for the users table
+* Generate UUIDs for all other tables (session, account, verification)
+* Maintain compatibility with existing schemas that use different ID types
 
 <Callout type="info">
   **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
@@ -850,13 +853,13 @@ There are two types of hooks you can define:
 
 #### 1. Before Hook
 
-- **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
-- **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
+* **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
+* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
 
 #### 2. After Hook
 
-- **Purpose**: This hook is called after the respective entity is created or updated.
-- **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+* **Purpose**: This hook is called after the respective entity is created or updated.
+* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
 
 **Example Usage**
 
@@ -913,7 +916,6 @@ export const auth = betterAuth({
   },
 });
 ```
-
 
 #### Throwing Errors
 
@@ -978,9 +980,9 @@ Much like standard hooks, database hooks also provide a `ctx` object that offers
 
 Plugins can define their own tables in the database to store additional data. They can also add columns to the core tables to store additional data. For example, the two factor authentication plugin adds the following columns to the `user` table:
 
-- `twoFactorEnabled`: Whether two factor authentication is enabled for the user.
-- `twoFactorSecret`: The secret key used to generate TOTP codes.
-- `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
+* `twoFactorEnabled`: Whether two factor authentication is enabled for the user.
+* `twoFactorSecret`: The secret key used to generate TOTP codes.
+* `twoFactorBackupCodes`: Encrypted backup codes for account recovery.
 
 To add new tables and columns to your database, you have two options:
 
@@ -988,7 +990,6 @@ To add new tables and columns to your database, you have two options:
 `Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
-
 
 ## Experimental Joins
 
@@ -1014,10 +1015,10 @@ be sure to update your schema by running our migrate or generate CLI commands to
 
 It's very important to read the documentation regarding experimental joins for your given adapter:
 
-- [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
-- [PrismaORM](/docs/adapters/prisma#joins-experimental)
-- [SQLite](/docs/adapters/sqlite#joins-experimental)
-- [MySQL](/docs/adapters/mysql#joins-experimental)
-- [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
-- [MSSQL](/docs/adapters/mssql#joins-experimental)
-- [MongoDB](/docs/adapters/mongo#joins-experimental)
+* [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
+* [PrismaORM](/docs/adapters/prisma#joins-experimental)
+* [SQLite](/docs/adapters/sqlite#joins-experimental)
+* [MySQL](/docs/adapters/mysql#joins-experimental)
+* [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
+* [MSSQL](/docs/adapters/mssql#joins-experimental)
+* [MongoDB](/docs/adapters/mongo#joins-experimental)

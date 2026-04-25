@@ -1,5 +1,4 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { User } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -17,22 +16,10 @@ import {
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
-import { XMLParser } from "fast-xml-parser";
 import { decodeJwt } from "jose";
-import saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
-import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod";
-import { getVerificationIdentifier } from "./domain-verification";
-
-interface AuthnRequestRecord {
-	id: string;
-	providerId: string;
-	createdAt: number;
-	expiresAt: number;
-}
-
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
@@ -42,14 +29,12 @@ import {
 	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import {
-	validateConfigAlgorithms,
-	validateSAMLAlgorithms,
-	validateSingleAssertion,
-} from "../saml";
+import { validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
-import { generateRelayState, parseRelayState } from "../saml-state";
+import { generateRelayState } from "../saml-state";
+import { saml } from "../samlify";
 import type {
+	AuthnRequestRecord,
 	OIDCConfig,
 	SAMLAssertionExtract,
 	SAMLConfig,
@@ -58,12 +43,14 @@ import type {
 	SSOProvider,
 } from "../types";
 import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
+import { getVerificationIdentifier } from "./domain-verification";
 import {
 	createIdP,
 	createSAMLPostForm,
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -90,117 +77,16 @@ function getOIDCRedirectURI(
 	return `${baseURL}/sso/callback/${providerId}`;
 }
 
-export interface TimestampValidationOptions {
-	clockSkew?: number;
-	requireTimestamps?: boolean;
-	logger?: {
-		warn: (message: string, data?: Record<string, unknown>) => void;
-	};
-}
-
-/** Conditions extracted from SAML assertion */
-export interface SAMLConditions {
-	notBefore?: string;
-	notOnOrAfter?: string;
-}
-
-/**
- * Validates SAML assertion timestamp conditions (NotBefore/NotOnOrAfter).
- * Prevents acceptance of expired or future-dated assertions.
- * @throws {APIError} If timestamps are invalid, expired, or not yet valid
- */
-export function validateSAMLTimestamp(
-	conditions: SAMLConditions | undefined,
-	options: TimestampValidationOptions = {},
-): void {
-	const clockSkew = options.clockSkew ?? constants.DEFAULT_CLOCK_SKEW_MS;
-	const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
-
-	if (!hasTimestamps) {
-		if (options.requireTimestamps) {
-			throw new APIError("BAD_REQUEST", {
-				message: "SAML assertion missing required timestamp conditions",
-				details:
-					"Assertions must include NotBefore and/or NotOnOrAfter conditions",
-			});
-		}
-		// Log warning for missing timestamps when not required
-		options.logger?.warn(
-			"SAML assertion accepted without timestamp conditions",
-			{ hasConditions: !!conditions },
-		);
-		return;
-	}
-
-	const now = Date.now();
-
-	if (conditions?.notBefore) {
-		const notBeforeTime = new Date(conditions.notBefore).getTime();
-		if (Number.isNaN(notBeforeTime)) {
-			throw new APIError("BAD_REQUEST", {
-				message: "SAML assertion has invalid NotBefore timestamp",
-				details: `Unable to parse NotBefore value: ${conditions.notBefore}`,
-			});
-		}
-		if (now < notBeforeTime - clockSkew) {
-			throw new APIError("BAD_REQUEST", {
-				message: "SAML assertion is not yet valid",
-				details: `Current time is before NotBefore (with ${clockSkew}ms clock skew tolerance)`,
-			});
-		}
-	}
-
-	if (conditions?.notOnOrAfter) {
-		const notOnOrAfterTime = new Date(conditions.notOnOrAfter).getTime();
-		if (Number.isNaN(notOnOrAfterTime)) {
-			throw new APIError("BAD_REQUEST", {
-				message: "SAML assertion has invalid NotOnOrAfter timestamp",
-				details: `Unable to parse NotOnOrAfter value: ${conditions.notOnOrAfter}`,
-			});
-		}
-		if (now > notOnOrAfterTime + clockSkew) {
-			throw new APIError("BAD_REQUEST", {
-				message: "SAML assertion has expired",
-				details: `Current time is after NotOnOrAfter (with ${clockSkew}ms clock skew tolerance)`,
-			});
-		}
-	}
-}
-
-/**
- * Extracts the Assertion ID from a SAML response XML.
- * Returns null if the assertion ID cannot be found.
- */
-function extractAssertionId(samlContent: string): string | null {
-	try {
-		const parser = new XMLParser({
-			ignoreAttributes: false,
-			attributeNamePrefix: "@_",
-			removeNSPrefix: true,
-		});
-		const parsed = parser.parse(samlContent);
-
-		const response = parsed.Response || parsed["samlp:Response"];
-		if (!response) return null;
-
-		const rawAssertion = response.Assertion || response["saml:Assertion"];
-		const assertion = Array.isArray(rawAssertion)
-			? rawAssertion[0]
-			: rawAssertion;
-		if (!assertion) return null;
-
-		return assertion["@_ID"] || null;
-	} catch {
-		return null;
-	}
-}
+export {
+	type SAMLConditions,
+	type TimestampValidationOptions,
+	validateSAMLTimestamp,
+} from "../saml/timestamp";
 
 const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
 	format: z.enum(["xml", "json"]).default("xml"),
 });
-
-type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
 export const spMetadata = (options?: SSOOptions) => {
 	return createAuthEndpoint(
@@ -273,7 +159,7 @@ export const spMetadata = (options?: SSOOptions) => {
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 								Location:
 									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
+									`${ctx.context.baseURL}/sso/saml2/sp/acs/${ctx.query.providerId}`,
 							},
 						],
 						singleLogoutService,
@@ -865,6 +751,26 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					},
 					options?.saml?.algorithms,
 				);
+
+				// Validate that the config has a usable IdP entry point
+				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
+				let hasEntryPoint = false;
+				if (body.samlConfig.entryPoint) {
+					try {
+						new URL(body.samlConfig.entryPoint);
+						hasEntryPoint = true;
+					} catch {
+						// not a valid URL
+					}
+				}
+				const hasSingleSignOnService =
+					body.samlConfig.idpMetadata?.singleSignOnService?.length;
+				if (!hasIdpMetadata && !hasEntryPoint && !hasSingleSignOnService) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"SAML configuration requires either idpMetadata.metadata (IdP metadata XML), idpMetadata.singleSignOnService, or a valid entryPoint URL",
+					});
+				}
 			}
 
 			const provider = await ctx.context.adapter.create<
@@ -1326,11 +1232,17 @@ export const signInSSO = (options?: SSOOptions) => {
 					!parsedSamlConfig.spMetadata?.privateKey &&
 					!parsedSamlConfig.privateKey
 				) {
-					ctx.context.logger.warn(
-						"authnRequestsSigned is enabled but no privateKey provided - AuthnRequests will not be signed",
-						{ providerId: provider.providerId },
-					);
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"authnRequestsSigned is enabled but no privateKey provided in spMetadata or samlConfig",
+					});
 				}
+
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					false,
+				);
 
 				let metadata = parsedSamlConfig.spMetadata.metadata;
 
@@ -1367,6 +1279,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						parsedSamlConfig.spMetadata?.privateKey ||
 						parsedSamlConfig.privateKey,
 					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
+					relayState,
 				});
 
 				const idpData = parsedSamlConfig.idpMetadata;
@@ -1411,14 +1324,9 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(
-					ctx,
-					undefined,
-					false,
-				);
-
 				const shouldSaveRequest =
-					loginRequest.id && options?.saml?.enableInResponseToValidation;
+					loginRequest.id &&
+					options?.saml?.enableInResponseToValidation !== false;
 				if (shouldSaveRequest) {
 					const ttl =
 						options?.saml?.requestTTL ?? constants.DEFAULT_AUTHN_REQUEST_TTL_MS;
@@ -1436,7 +1344,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(relayState)}`,
+					url: loginRequest.context,
 					redirect: true,
 				});
 			}
@@ -1601,6 +1509,7 @@ async function handleOIDCCallback(
 				? "post"
 				: "basic",
 	}).catch((e) => {
+		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {
 			throw ctx.redirect(
 				`${
@@ -1760,7 +1669,10 @@ async function handleOIDCCallback(
 	}
 	const { session, user } = linked.data!;
 
-	if (options?.provisionUser && linked.isRegister) {
+	if (
+		options?.provisionUser &&
+		(linked.isRegister || options.provisionUserOnEveryLogin)
+	) {
 		await options.provisionUser({
 			user,
 			userInfo,
@@ -1879,60 +1791,6 @@ const callbackSSOSAMLBodySchema = z.object({
 	RelayState: z.string().optional(),
 });
 
-/**
- * Validates and returns a safe redirect URL.
- * - Prevents open redirect attacks by validating against trusted origins
- * - Prevents redirect loops by checking if URL points to callback route
- * - Falls back to appOrigin if URL is invalid or unsafe
- */
-const getSafeRedirectUrl = (
-	url: string | undefined,
-	callbackPath: string,
-	appOrigin: string,
-	isTrustedOrigin: (
-		url: string,
-		settings?: { allowRelativePaths: boolean },
-	) => boolean,
-): string => {
-	if (!url) {
-		return appOrigin;
-	}
-
-	if (url.startsWith("/") && !url.startsWith("//")) {
-		try {
-			const absoluteUrl = new URL(url, appOrigin);
-			if (absoluteUrl.origin !== appOrigin) {
-				return appOrigin;
-			}
-			const callbackPathname = new URL(callbackPath).pathname;
-			if (absoluteUrl.pathname === callbackPathname) {
-				return appOrigin;
-			}
-		} catch {
-			return appOrigin;
-		}
-		return url;
-	}
-
-	if (!isTrustedOrigin(url, { allowRelativePaths: false })) {
-		return appOrigin;
-	}
-
-	try {
-		const callbackPathname = new URL(callbackPath).pathname;
-		const urlPathname = new URL(url).pathname;
-		if (urlPathname === callbackPathname) {
-			return appOrigin;
-		}
-	} catch {
-		if (url === callbackPath || url.startsWith(`${callbackPath}?`)) {
-			return appOrigin;
-		}
-	}
-
-	return url;
-};
-
 export const callbackSSOSAML = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/callback/:providerId",
@@ -2004,473 +1862,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 			}
 
-			const { SAMLResponse } = ctx.body;
-
-			const maxResponseSize =
-				options?.saml?.maxResponseSize ??
-				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
-				throw new APIError("BAD_REQUEST", {
-					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
-				});
-			}
-
-			let relayState: RelayState | null = null;
-			if (ctx.body.RelayState) {
-				try {
-					relayState = await parseRelayState(ctx);
-				} catch {
-					relayState = null;
-				}
-			}
-			let provider: SSOProvider<SSOOptions> | null = null;
-			if (options?.defaultSSO?.length) {
-				const matchingDefault = options.defaultSSO.find(
-					(defaultProvider) => defaultProvider.providerId === providerId,
-				);
-				if (matchingDefault) {
-					provider = {
-						...matchingDefault,
-						userId: "default",
-						issuer: matchingDefault.samlConfig?.issuer || "",
-						...(options.domainVerification?.enabled
-							? { domainVerified: true }
-							: {}),
-					} as SSOProvider<SSOOptions>;
-				}
-			}
-			if (!provider) {
-				provider = await ctx.context.adapter
-					.findOne<SSOProvider<SSOOptions>>({
-						model: "ssoProvider",
-						where: [{ field: "providerId", value: providerId }],
-					})
-					.then((res) => {
-						if (!res) return null;
-						return {
-							...res,
-							samlConfig: res.samlConfig
-								? safeJsonParse<SAMLConfig>(
-										res.samlConfig as unknown as string,
-									) || undefined
-								: undefined,
-						};
-					});
-			}
-
-			if (!provider) {
-				throw new APIError("NOT_FOUND", {
-					message: "No provider found for the given providerId",
-				});
-			}
-
-			if (
-				options?.domainVerification?.enabled &&
-				!("domainVerified" in provider && provider.domainVerified)
-			) {
-				throw new APIError("UNAUTHORIZED", {
-					message: "Provider domain has not been verified",
-				});
-			}
-
-			const parsedSamlConfig = safeJsonParse<SAMLConfig>(
-				provider.samlConfig as unknown as string,
-			);
-			if (!parsedSamlConfig) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Invalid SAML configuration",
-				});
-			}
-			const idpData = parsedSamlConfig.idpMetadata;
-			let idp: IdentityProvider | null = null;
-
-			// Construct IDP with fallback to manual configuration
-			if (!idpData?.metadata) {
-				idp = saml.IdentityProvider({
-					entityID: idpData?.entityID || parsedSamlConfig.issuer,
-					singleSignOnService: idpData?.singleSignOnService || [
-						{
-							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-							Location: parsedSamlConfig.entryPoint,
-						},
-					],
-					signingCert: idpData?.cert || parsedSamlConfig.cert,
-					wantAuthnRequestsSigned:
-						parsedSamlConfig.authnRequestsSigned || false,
-					isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-					encPrivateKey: idpData?.encPrivateKey,
-					encPrivateKeyPass: idpData?.encPrivateKeyPass,
-				});
-			} else {
-				idp = saml.IdentityProvider({
-					metadata: idpData.metadata,
-					privateKey: idpData.privateKey,
-					privateKeyPass: idpData.privateKeyPass,
-					isAssertionEncrypted: idpData.isAssertionEncrypted,
-					encPrivateKey: idpData.encPrivateKey,
-					encPrivateKeyPass: idpData.encPrivateKeyPass,
-				});
-			}
-
-			// Construct SP with fallback to manual configuration
-			const spData = parsedSamlConfig.spMetadata;
-			const sp = saml.ServiceProvider({
-				metadata: spData?.metadata,
-				entityID: spData?.entityID || parsedSamlConfig.issuer,
-				assertionConsumerService: spData?.metadata
-					? undefined
-					: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location: parsedSamlConfig.callbackUrl,
-							},
-						],
-				privateKey: spData?.privateKey || parsedSamlConfig.privateKey,
-				privateKeyPass: spData?.privateKeyPass,
-				isAssertionEncrypted: spData?.isAssertionEncrypted || false,
-				encPrivateKey: spData?.encPrivateKey,
-				encPrivateKeyPass: spData?.encPrivateKeyPass,
-				wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-				nameIDFormat: parsedSamlConfig.identifierFormat
-					? [parsedSamlConfig.identifierFormat]
-					: undefined,
-			});
-
-			validateSingleAssertion(SAMLResponse);
-
-			let parsedResponse: FlowResult;
-			try {
-				parsedResponse = await sp.parseLoginResponse(idp, "post", {
-					body: {
-						SAMLResponse,
-						RelayState: ctx.body.RelayState || undefined,
-					},
-				});
-
-				if (!parsedResponse?.extract) {
-					throw new Error("Invalid SAML response structure");
-				}
-			} catch (error) {
-				ctx.context.logger.error("SAML response validation failed", {
-					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
-					),
-				});
-				throw new APIError("BAD_REQUEST", {
-					message: "Invalid SAML response",
-					details: error instanceof Error ? error.message : String(error),
-				});
-			}
-
-			const { extract } = parsedResponse!;
-
-			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
-
-			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
-				clockSkew: options?.saml?.clockSkew,
-				requireTimestamps: options?.saml?.requireTimestamps,
-				logger: ctx.context.logger,
-			});
-
-			const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
-				| string
-				| undefined;
-			const shouldValidateInResponseTo =
-				options?.saml?.enableInResponseToValidation;
-
-			if (shouldValidateInResponseTo) {
-				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
-
-				if (inResponseTo) {
-					let storedRequest: AuthnRequestRecord | null = null;
-
-					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-						);
-					if (verification) {
-						try {
-							storedRequest = JSON.parse(
-								verification.value,
-							) as AuthnRequestRecord;
-							if (storedRequest && storedRequest.expiresAt < Date.now()) {
-								storedRequest = null;
-							}
-						} catch {
-							storedRequest = null;
-						}
-					}
-
-					if (!storedRequest) {
-						ctx.context.logger.error(
-							"SAML InResponseTo validation failed: unknown or expired request ID",
-							{ inResponseTo, providerId: provider.providerId },
-						);
-						const redirectUrl =
-							relayState?.callbackURL ||
-							parsedSamlConfig.callbackUrl ||
-							ctx.context.baseURL;
-						throw ctx.redirect(
-							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
-						);
-					}
-
-					if (storedRequest.providerId !== provider.providerId) {
-						ctx.context.logger.error(
-							"SAML InResponseTo validation failed: provider mismatch",
-							{
-								inResponseTo,
-								expectedProvider: storedRequest.providerId,
-								actualProvider: provider.providerId,
-							},
-						);
-
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-						);
-						const redirectUrl =
-							relayState?.callbackURL ||
-							parsedSamlConfig.callbackUrl ||
-							ctx.context.baseURL;
-						throw ctx.redirect(
-							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
-						);
-					}
-
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-					);
-				} else if (!allowIdpInitiated) {
-					ctx.context.logger.error(
-						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
-						{ providerId: provider.providerId },
-					);
-					const redirectUrl =
-						relayState?.callbackURL ||
-						parsedSamlConfig.callbackUrl ||
-						ctx.context.baseURL;
-					throw ctx.redirect(
-						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
-					);
-				}
-			}
-
-			// Assertion Replay Protection
-			const samlContent = (parsedResponse as any).samlContent as
-				| string
-				| undefined;
-			const assertionId = samlContent ? extractAssertionId(samlContent) : null;
-
-			if (assertionId) {
-				const issuer = idp.entityMeta.getEntityID();
-				const conditions = (extract as SAMLAssertionExtract).conditions as
-					| SAMLConditions
-					| undefined;
-				const clockSkew =
-					options?.saml?.clockSkew ?? constants.DEFAULT_CLOCK_SKEW_MS;
-				const expiresAt = conditions?.notOnOrAfter
-					? new Date(conditions.notOnOrAfter).getTime() + clockSkew
-					: Date.now() + constants.DEFAULT_ASSERTION_TTL_MS;
-
-				const existingAssertion =
-					await ctx.context.internalAdapter.findVerificationValue(
-						`${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-					);
-
-				let isReplay = false;
-				if (existingAssertion) {
-					try {
-						const stored = JSON.parse(existingAssertion.value);
-						if (stored.expiresAt >= Date.now()) {
-							isReplay = true;
-						}
-					} catch (error) {
-						ctx.context.logger.warn("Failed to parse stored assertion record", {
-							assertionId,
-							error,
-						});
-					}
-				}
-
-				if (isReplay) {
-					ctx.context.logger.error(
-						"SAML assertion replay detected: assertion ID already used",
-						{
-							assertionId,
-							issuer,
-							providerId: provider.providerId,
-						},
-					);
-					const redirectUrl =
-						relayState?.callbackURL ||
-						parsedSamlConfig.callbackUrl ||
-						ctx.context.baseURL;
-					throw ctx.redirect(
-						`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
-					);
-				}
-
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-					value: JSON.stringify({
-						assertionId,
-						issuer,
-						providerId: provider.providerId,
-						usedAt: Date.now(),
-						expiresAt,
-					}),
-					expiresAt: new Date(expiresAt),
-				});
-			} else {
-				ctx.context.logger.warn(
-					"Could not extract assertion ID for replay protection",
-					{ providerId: provider.providerId },
-				);
-			}
-
-			const attributes = extract.attributes || {};
-			const mapping = parsedSamlConfig.mapping ?? {};
-
-			const userInfo = {
-				...Object.fromEntries(
-					Object.entries(mapping.extraFields || {}).map(([key, value]) => [
-						key,
-						attributes[value as string],
-					]),
-				),
-				id: attributes[mapping.id || "nameID"] || extract.nameID,
-				email: (
-					attributes[mapping.email || "email"] || extract.nameID
-				).toLowerCase(),
-				name:
-					[
-						attributes[mapping.firstName || "givenName"],
-						attributes[mapping.lastName || "surname"],
-					]
-						.filter(Boolean)
-						.join(" ") ||
-					attributes[mapping.name || "displayName"] ||
-					extract.nameID,
-				emailVerified:
-					options?.trustEmailVerified && mapping.emailVerified
-						? ((attributes[mapping.emailVerified] || false) as boolean)
-						: false,
-			};
-			if (!userInfo.id || !userInfo.email) {
-				ctx.context.logger.error(
-					"Missing essential user info from SAML response",
-					{
-						attributes: Object.keys(attributes),
-						mapping,
-						extractedId: userInfo.id,
-						extractedEmail: userInfo.email,
-					},
-				);
-				throw new APIError("BAD_REQUEST", {
-					message: "Unable to extract user ID or email from SAML response",
-				});
-			}
-
-			const isTrustedProvider: boolean =
-				ctx.context.trustedProviders.includes(provider.providerId) ||
-				("domainVerified" in provider &&
-					!!(provider as { domainVerified?: boolean }).domainVerified &&
-					validateEmailDomain(userInfo.email as string, provider.domain));
-
-			const callbackUrl =
-				relayState?.callbackURL ||
-				parsedSamlConfig.callbackUrl ||
-				ctx.context.baseURL;
-
-			const result = await handleOAuthUserInfo(ctx, {
-				userInfo: {
-					email: userInfo.email as string,
-					name: (userInfo.name || userInfo.email) as string,
-					id: userInfo.id as string,
-					emailVerified: Boolean(userInfo.emailVerified),
+			const safeRedirectUrl = await processSAMLResponse(
+				ctx,
+				{
+					SAMLResponse: ctx.body.SAMLResponse,
+					RelayState: ctx.body.RelayState,
+					providerId,
+					currentCallbackPath,
 				},
-				account: {
-					providerId: provider.providerId,
-					accountId: userInfo.id as string,
-					accessToken: "",
-					refreshToken: "",
-				},
-				callbackURL: callbackUrl,
-				disableSignUp: options?.disableImplicitSignUp,
-				isTrustedProvider,
-			});
-
-			if (result.error) {
-				throw ctx.redirect(
-					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
-				);
-			}
-
-			const { session, user } = result.data!;
-
-			if (options?.provisionUser) {
-				await options.provisionUser({
-					user: user as User & Record<string, any>,
-					userInfo,
-					provider,
-				});
-			}
-
-			await assignOrganizationFromProvider(ctx as any, {
-				user,
-				profile: {
-					providerType: "saml",
-					providerId: provider.providerId,
-					accountId: userInfo.id as string,
-					email: userInfo.email as string,
-					emailVerified: Boolean(userInfo.emailVerified),
-					rawAttributes: attributes,
-				},
-				provider,
-				provisioningOptions: options?.organizationProvisioning,
-			});
-
-			await setSessionCookie(ctx, { session, user });
-
-			if (options?.saml?.enableSingleLogout && extract.nameID) {
-				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${provider.providerId}:${extract.nameID}`;
-				const samlSessionData: SAMLSessionRecord = {
-					sessionId: session.id,
-					providerId: provider.providerId,
-					nameID: extract.nameID,
-					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
-				};
-				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: samlSessionKey,
-						value: JSON.stringify(samlSessionData),
-						expiresAt: session.expiresAt,
-					})
-					.catch((e) =>
-						ctx.context.logger.warn("Failed to create SAML session record", {
-							error: e,
-						}),
-					);
-				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
-						value: samlSessionKey,
-						expiresAt: session.expiresAt,
-					})
-					.catch((e) =>
-						ctx.context.logger.warn(
-							"Failed to create SAML session lookup record",
-							e,
-						),
-					);
-			}
-
-			const safeRedirectUrl = getSafeRedirectUrl(
-				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-				currentCallbackPath,
-				appOrigin,
-				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+				options,
 			);
 			throw ctx.redirect(safeRedirectUrl);
 		},
@@ -2509,485 +1909,58 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { SAMLResponse } = ctx.body;
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 
-			const maxResponseSize =
-				options?.saml?.maxResponseSize ??
-				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
-				throw new APIError("BAD_REQUEST", {
-					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
-				});
-			}
-			let relayState: RelayState | null = null;
-			if (ctx.body.RelayState) {
-				try {
-					relayState = await parseRelayState(ctx);
-				} catch {
-					relayState = null;
-				}
-			}
-
-			// If defaultSSO is configured, use it as the provider
-			let provider: SSOProvider<SSOOptions> | null = null;
-
-			if (options?.defaultSSO?.length) {
-				// For ACS endpoint, we can use the first default provider or try to match by providerId
-				const matchingDefault = providerId
-					? options.defaultSSO.find(
-							(defaultProvider) => defaultProvider.providerId === providerId,
-						)
-					: options.defaultSSO[0]; // Use first default provider if no specific providerId
-
-				if (matchingDefault) {
-					provider = {
-						issuer: matchingDefault.samlConfig?.issuer || "",
-						providerId: matchingDefault.providerId,
-						userId: "default",
-						samlConfig: matchingDefault.samlConfig,
-						domain: matchingDefault.domain,
-						...(options.domainVerification?.enabled
-							? { domainVerified: true }
-							: {}),
-					};
-				}
-			} else {
-				provider = await ctx.context.adapter
-					.findOne<SSOProvider<SSOOptions>>({
-						model: "ssoProvider",
-						where: [
-							{
-								field: "providerId",
-								value: providerId,
-							},
-						],
-					})
-					.then((res) => {
-						if (!res) return null;
-						return {
-							...res,
-							samlConfig: res.samlConfig
-								? safeJsonParse<SAMLConfig>(
-										res.samlConfig as unknown as string,
-									) || undefined
-								: undefined,
-						};
-					});
-			}
-
-			if (!provider?.samlConfig) {
-				throw new APIError("NOT_FOUND", {
-					message: "No SAML provider found",
-				});
-			}
-
-			if (
-				options?.domainVerification?.enabled &&
-				!("domainVerified" in provider && provider.domainVerified)
-			) {
-				throw new APIError("UNAUTHORIZED", {
-					message: "Provider domain has not been verified",
-				});
-			}
-
-			const parsedSamlConfig = provider.samlConfig;
-			// Configure SP and IdP
-			const sp = saml.ServiceProvider({
-				entityID:
-					parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
-				assertionConsumerService: [
-					{
-						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-						Location:
-							parsedSamlConfig.callbackUrl ||
-							`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
-					},
-				],
-				wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-				metadata: parsedSamlConfig.spMetadata?.metadata,
-				privateKey:
-					parsedSamlConfig.spMetadata?.privateKey ||
-					parsedSamlConfig.privateKey,
-				privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
-				nameIDFormat: parsedSamlConfig.identifierFormat
-					? [parsedSamlConfig.identifierFormat]
-					: undefined,
-			});
-
-			// Update where we construct the IdP
-			const idpData = parsedSamlConfig.idpMetadata;
-			const idp = !idpData?.metadata
-				? saml.IdentityProvider({
-						entityID: idpData?.entityID || parsedSamlConfig.issuer,
-						singleSignOnService: idpData?.singleSignOnService || [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-								Location: parsedSamlConfig.entryPoint,
-							},
-						],
-						signingCert: idpData?.cert || parsedSamlConfig.cert,
-					})
-				: saml.IdentityProvider({
-						metadata: idpData.metadata,
-					});
-
 			try {
-				validateSingleAssertion(SAMLResponse);
+				const safeRedirectUrl = await processSAMLResponse(
+					ctx,
+					{
+						SAMLResponse: ctx.body.SAMLResponse,
+						RelayState: ctx.body.RelayState,
+						providerId,
+						currentCallbackPath,
+					},
+					options,
+				);
+				throw ctx.redirect(safeRedirectUrl);
 			} catch (error) {
-				if (error instanceof APIError) {
-					const redirectUrl =
-						relayState?.callbackURL ||
-						parsedSamlConfig.callbackUrl ||
-						ctx.context.baseURL;
+				// Re-throw redirects (they use throw for control flow)
+				if (
+					error instanceof Response ||
+					(error &&
+						typeof error === "object" &&
+						"status" in error &&
+						(error as any).status === 302)
+				) {
+					throw error;
+				}
+				// Translate structural SAML errors (400) into browser-friendly redirects
+				// so the user returns to the app instead of seeing raw JSON.
+				// Non-400 errors (404 provider not found, 401 unauthorized) propagate as-is.
+				if (error instanceof APIError && error.statusCode === 400) {
+					// TODO: unify error codes across endpoints (callbackSSOSAML uses
+					// the raw APIError code, ACS uses lowercase snake_case for backward compat)
+					const internalCode = error.body?.code || "";
 					const errorCode =
-						error.body?.code === "SAML_MULTIPLE_ASSERTIONS"
+						internalCode === "SAML_MULTIPLE_ASSERTIONS"
 							? "multiple_assertions"
-							: "no_assertion";
+							: internalCode === "SAML_NO_ASSERTION"
+								? "no_assertion"
+								: internalCode.toLowerCase() || "saml_error";
+					const redirectUrl = getSafeRedirectUrl(
+						ctx.body.RelayState || undefined,
+						currentCallbackPath,
+						appOrigin,
+						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+					);
 					throw ctx.redirect(
-						`${redirectUrl}?error=${errorCode}&error_description=${encodeURIComponent(error.message)}`,
+						`${redirectUrl}${redirectUrl.includes("?") ? "&" : "?"}error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
 					);
 				}
 				throw error;
 			}
-
-			// Parse and validate SAML response
-			let parsedResponse: FlowResult;
-			try {
-				parsedResponse = await sp.parseLoginResponse(idp, "post", {
-					body: {
-						SAMLResponse,
-						RelayState: ctx.body.RelayState || undefined,
-					},
-				});
-
-				if (!parsedResponse?.extract) {
-					throw new Error("Invalid SAML response structure");
-				}
-			} catch (error) {
-				ctx.context.logger.error("SAML response validation failed", {
-					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
-					),
-				});
-				throw new APIError("BAD_REQUEST", {
-					message: "Invalid SAML response",
-					details: error instanceof Error ? error.message : String(error),
-				});
-			}
-
-			const { extract } = parsedResponse!;
-
-			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
-
-			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
-				clockSkew: options?.saml?.clockSkew,
-				requireTimestamps: options?.saml?.requireTimestamps,
-				logger: ctx.context.logger,
-			});
-
-			const inResponseToAcs = (extract as SAMLAssertionExtract).inResponseTo as
-				| string
-				| undefined;
-			const shouldValidateInResponseToAcs =
-				options?.saml?.enableInResponseToValidation;
-
-			if (shouldValidateInResponseToAcs) {
-				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
-
-				if (inResponseToAcs) {
-					let storedRequest: AuthnRequestRecord | null = null;
-
-					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
-						);
-					if (verification) {
-						try {
-							storedRequest = JSON.parse(
-								verification.value,
-							) as AuthnRequestRecord;
-							if (storedRequest && storedRequest.expiresAt < Date.now()) {
-								storedRequest = null;
-							}
-						} catch {
-							storedRequest = null;
-						}
-					}
-
-					if (!storedRequest) {
-						ctx.context.logger.error(
-							"SAML InResponseTo validation failed: unknown or expired request ID",
-							{ inResponseTo: inResponseToAcs, providerId },
-						);
-						const redirectUrl =
-							relayState?.callbackURL ||
-							parsedSamlConfig.callbackUrl ||
-							ctx.context.baseURL;
-						throw ctx.redirect(
-							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
-						);
-					}
-
-					if (storedRequest.providerId !== providerId) {
-						ctx.context.logger.error(
-							"SAML InResponseTo validation failed: provider mismatch",
-							{
-								inResponseTo: inResponseToAcs,
-								expectedProvider: storedRequest.providerId,
-								actualProvider: providerId,
-							},
-						);
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
-						);
-						const redirectUrl =
-							relayState?.callbackURL ||
-							parsedSamlConfig.callbackUrl ||
-							ctx.context.baseURL;
-						throw ctx.redirect(
-							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
-						);
-					}
-
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
-					);
-				} else if (!allowIdpInitiated) {
-					ctx.context.logger.error(
-						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
-						{ providerId },
-					);
-					const redirectUrl =
-						relayState?.callbackURL ||
-						parsedSamlConfig.callbackUrl ||
-						ctx.context.baseURL;
-					throw ctx.redirect(
-						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
-					);
-				}
-			}
-
-			// Assertion Replay Protection
-			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
-				"utf-8",
-			);
-			const assertionIdAcs = extractAssertionId(samlContentAcs);
-
-			if (assertionIdAcs) {
-				const issuer = idp.entityMeta.getEntityID();
-				const conditions = (extract as SAMLAssertionExtract).conditions as
-					| SAMLConditions
-					| undefined;
-				const clockSkew =
-					options?.saml?.clockSkew ?? constants.DEFAULT_CLOCK_SKEW_MS;
-				const expiresAt = conditions?.notOnOrAfter
-					? new Date(conditions.notOnOrAfter).getTime() + clockSkew
-					: Date.now() + constants.DEFAULT_ASSERTION_TTL_MS;
-
-				const existingAssertion =
-					await ctx.context.internalAdapter.findVerificationValue(
-						`${constants.USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
-					);
-
-				let isReplay = false;
-				if (existingAssertion) {
-					try {
-						const stored = JSON.parse(existingAssertion.value);
-						if (stored.expiresAt >= Date.now()) {
-							isReplay = true;
-						}
-					} catch (error) {
-						ctx.context.logger.warn("Failed to parse stored assertion record", {
-							assertionId: assertionIdAcs,
-							error,
-						});
-					}
-				}
-
-				if (isReplay) {
-					ctx.context.logger.error(
-						"SAML assertion replay detected: assertion ID already used",
-						{
-							assertionId: assertionIdAcs,
-							issuer,
-							providerId,
-						},
-					);
-					const redirectUrl =
-						relayState?.callbackURL ||
-						parsedSamlConfig.callbackUrl ||
-						ctx.context.baseURL;
-					throw ctx.redirect(
-						`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
-					);
-				}
-
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
-					value: JSON.stringify({
-						assertionId: assertionIdAcs,
-						issuer,
-						providerId,
-						usedAt: Date.now(),
-						expiresAt,
-					}),
-					expiresAt: new Date(expiresAt),
-				});
-			} else {
-				ctx.context.logger.warn(
-					"Could not extract assertion ID for replay protection",
-					{ providerId },
-				);
-			}
-
-			const attributes = extract.attributes || {};
-			const mapping = parsedSamlConfig.mapping ?? {};
-
-			const userInfo = {
-				...Object.fromEntries(
-					Object.entries(mapping.extraFields || {}).map(([key, value]) => [
-						key,
-						attributes[value as string],
-					]),
-				),
-				id: attributes[mapping.id || "nameID"] || extract.nameID,
-				email: (
-					attributes[mapping.email || "email"] || extract.nameID
-				).toLowerCase(),
-				name:
-					[
-						attributes[mapping.firstName || "givenName"],
-						attributes[mapping.lastName || "surname"],
-					]
-						.filter(Boolean)
-						.join(" ") ||
-					attributes[mapping.name || "displayName"] ||
-					extract.nameID,
-				emailVerified:
-					options?.trustEmailVerified && mapping.emailVerified
-						? ((attributes[mapping.emailVerified] || false) as boolean)
-						: false,
-			};
-
-			if (!userInfo.id || !userInfo.email) {
-				ctx.context.logger.error(
-					"Missing essential user info from SAML response",
-					{
-						attributes: Object.keys(attributes),
-						mapping,
-						extractedId: userInfo.id,
-						extractedEmail: userInfo.email,
-					},
-				);
-				throw new APIError("BAD_REQUEST", {
-					message: "Unable to extract user ID or email from SAML response",
-				});
-			}
-
-			const isTrustedProvider: boolean =
-				ctx.context.trustedProviders.includes(provider.providerId) ||
-				("domainVerified" in provider &&
-					!!(provider as { domainVerified?: boolean }).domainVerified &&
-					validateEmailDomain(userInfo.email as string, provider.domain));
-
-			const callbackUrl =
-				relayState?.callbackURL ||
-				parsedSamlConfig.callbackUrl ||
-				ctx.context.baseURL;
-
-			const result = await handleOAuthUserInfo(ctx, {
-				userInfo: {
-					email: userInfo.email as string,
-					name: (userInfo.name || userInfo.email) as string,
-					id: userInfo.id as string,
-					emailVerified: Boolean(userInfo.emailVerified),
-				},
-				account: {
-					providerId: provider.providerId,
-					accountId: userInfo.id as string,
-					accessToken: "",
-					refreshToken: "",
-				},
-				callbackURL: callbackUrl,
-				disableSignUp: options?.disableImplicitSignUp,
-				isTrustedProvider,
-			});
-
-			if (result.error) {
-				throw ctx.redirect(
-					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
-				);
-			}
-
-			const { session, user } = result.data!;
-
-			if (options?.provisionUser) {
-				await options.provisionUser({
-					user: user as User & Record<string, any>,
-					userInfo,
-					provider,
-				});
-			}
-
-			await assignOrganizationFromProvider(ctx as any, {
-				user,
-				profile: {
-					providerType: "saml",
-					providerId: provider.providerId,
-					accountId: userInfo.id as string,
-					email: userInfo.email as string,
-					emailVerified: Boolean(userInfo.emailVerified),
-					rawAttributes: attributes,
-				},
-				provider,
-				provisioningOptions: options?.organizationProvisioning,
-			});
-
-			await setSessionCookie(ctx, { session, user });
-			if (options?.saml?.enableSingleLogout && extract.nameID) {
-				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
-				const samlSessionData: SAMLSessionRecord = {
-					sessionId: session.id,
-					providerId,
-					nameID: extract.nameID,
-					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
-				};
-				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: samlSessionKey,
-						value: JSON.stringify(samlSessionData),
-						expiresAt: session.expiresAt,
-					})
-					.catch((e) =>
-						ctx.context.logger.warn("Failed to create SAML session record", {
-							error: e,
-						}),
-					);
-				await ctx.context.internalAdapter
-					.createVerificationValue({
-						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
-						value: samlSessionKey,
-						expiresAt: session.expiresAt,
-					})
-					.catch((e) =>
-						ctx.context.logger.warn(
-							"Failed to create SAML session lookup record",
-							e,
-						),
-					);
-			}
-
-			const safeRedirectUrl = getSafeRedirectUrl(
-				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-				currentCallbackPath,
-				appOrigin,
-				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
-			);
-			throw ctx.redirect(safeRedirectUrl);
 		},
 	);
 };
@@ -3056,8 +2029,10 @@ export const sloEndpoint = (options?: SSOOptions) => {
 
 			const config = provider.samlConfig as SAMLConfig;
 			const sp = createSP(config, ctx.context.baseURL, providerId, {
-				wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
-				wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+				sloOptions: {
+					wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
+					wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+				},
 			});
 			const idp = createIdP(config);
 
@@ -3298,8 +2273,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 			}
 
 			const sp = createSP(config, ctx.context.baseURL, providerId, {
-				wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
-				wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+				sloOptions: {
+					wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
+					wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+				},
 			});
 			const idp = createIdP(config);
 

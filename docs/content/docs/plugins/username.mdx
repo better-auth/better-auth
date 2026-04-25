@@ -8,56 +8,60 @@ The username plugin is a lightweight plugin that adds username support to the em
 ## Installation
 
 <Steps>
-    <Step>
-        ### Add Plugin to the server
+  <Step>
+    ### Add Plugin to the server
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { username } from "better-auth/plugins" // [!code highlight]
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { username } from "better-auth/plugins" // [!code highlight]
 
-        export const auth = betterAuth({
-            emailAndPassword: { // [!code highlight]
-                enabled: true, // [!code highlight]
-            }, // [!code highlight]
-            plugins: [ // [!code highlight]
-                username() // [!code highlight]
-            ] // [!code highlight]
-        })
+    export const auth = betterAuth({
+        emailAndPassword: { // [!code highlight]
+            enabled: true, // [!code highlight]
+        }, // [!code highlight]
+        plugins: [ // [!code highlight]
+            username() // [!code highlight]
+        ] // [!code highlight]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
         ```
-    </Step>
-    <Step>
-        ### Migrate the database
+      </Tab>
 
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
-
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx auth migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx auth generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
-    <Step>
-        ### Add the client plugin
-
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client"
-        import { usernameClient } from "better-auth/client/plugins" // [!code highlight]
-
-        export const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
-                usernameClient() // [!code highlight]
-            ] // [!code highlight]
-        })
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
         ```
-    </Step>
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { usernameClient } from "better-auth/client/plugins" // [!code highlight]
+
+    export const authClient = createAuthClient({
+        plugins: [ // [!code highlight]
+            usernameClient() // [!code highlight]
+        ] // [!code highlight]
+    })
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -68,35 +72,34 @@ To sign up a user with username, you can use the existing `signUp.email` functio
 The `signUp` function should take a new `username` property in the object.
 
 <APIMethod path="/sign-up/email" method="POST">
-```ts
-type signUpEmail = {
-    /**
-     * The email of the user.
-    */
-    email: string = "email@domain.com"
-    /**
-     * The name of the user.
-    */
-    name: string = "Test User"
-    /**
-     * The password of the user.
-    */
-    password: string = "password1234"
-    /**
-     * The username of the user.
-    */
-    username?: string = "test"
-    /**
-     * An optional display username of the user.
-    */
-    displayUsername?: string = "Test User123"
-}
-```
+  ```ts
+  type signUpEmail = {
+      /**
+       * The email of the user.
+      */
+      email: string = "email@domain.com"
+      /**
+       * The name of the user.
+      */
+      name: string = "Test User"
+      /**
+       * The password of the user.
+      */
+      password: string = "password1234"
+      /**
+       * The username of the user.
+      */
+      username?: string = "test"
+      /**
+       * An optional display username of the user.
+      */
+      displayUsername?: string = "Test User123"
+  }
+  ```
 </APIMethod>
 
-
 <Callout type="info">
-    If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
+  If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
 </Callout>
 
 ### Sign in
@@ -104,18 +107,18 @@ type signUpEmail = {
 To sign in a user with username, you can use the `signIn.username` function provided by the client.
 
 <APIMethod path="/sign-in/username" method="POST">
-```ts
-type signInUsername = {
-    /**
-     * The username of the user.
-    */
-    username: string = "test"
-    /**
-     * The password of the user.
-    */
-    password: string = "password1234"
-}
-```
+  ```ts
+  type signInUsername = {
+      /**
+       * The username of the user.
+      */
+      username: string = "test"
+      /**
+       * The password of the user.
+      */
+      password: string = "password1234"
+  }
+  ```
 </APIMethod>
 
 ### Update username
@@ -123,14 +126,14 @@ type signInUsername = {
 To update the username of a user, you can use the `updateUser` function provided by the client.
 
 <APIMethod path="/update-user" method="POST">
-```ts
-type updateUser = {
-    /**
-     * The username to update.
-    */
-    username?: string = "new-username"
-}
-```
+  ```ts
+  type updateUser = {
+      /**
+       * The username to update.
+      */
+      username?: string = "new-username"
+  }
+  ```
 </APIMethod>
 
 ### Check if username is available
@@ -138,20 +141,20 @@ type updateUser = {
 To check if a username is available, you can use the `isUsernameAvailable` function provided by the client.
 
 <APIMethod path="/is-username-available" method="POST" resultVariable="response">
-```ts
-type isUsernameAvailable = {
-    /**
-     * The username to check.
-    */
-    username: string = "new-username"
-}
+  ```ts
+  type isUsernameAvailable = {
+      /**
+       * The username to check.
+      */
+      username: string = "new-username"
+  }
 
-if(response?.available) {
-    console.log("Username is available");
-} else {
-    console.log("Username is not available");
-}
-```
+  if (response?.available) {
+      console.log("Username is available");
+  } else {
+      console.log("Username is not available");
+  }
+  ```
 </APIMethod>
 
 ## Options
@@ -339,20 +342,20 @@ const auth = betterAuth({
 
 The plugin requires 2 fields to be added to the user table:
 
-<DatabaseTable
-    fields={[
-        {
-            name: "username",
-            type: "string",
-            description: "The username of the user",
-            isUnique: true,
-            isOptional: true
-        },
-        {
-            name: "displayUsername",
-            type: "string",
-            description: "Non normalized username of the user",
-            isOptional: true
-        },
-    ]}
-/>
+export const usernameUserTableFields = [
+	{
+		name: "username",
+		type: "string",
+		description: "The username of the user",
+		isUnique: true,
+		isOptional: true,
+	},
+	{
+		name: "displayUsername",
+		type: "string",
+		description: "Non normalized username of the user",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="user" fields={usernameUserTableFields} />

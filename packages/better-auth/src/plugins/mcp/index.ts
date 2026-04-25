@@ -15,6 +15,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
+import { resolveDynamicTrustedProxyHeaders } from "../../context/helpers";
 import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
@@ -23,6 +24,7 @@ import {
 	isDynamicBaseURLConfig,
 	resolveBaseURL,
 } from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -189,9 +191,10 @@ export const mcp = (options: MCPOptions) => {
 		oauthAccessToken: "oauthAccessToken",
 		oauthConsent: "oauthConsent",
 	};
-	const provider = oidcProvider(opts);
+	const provider = oidcProvider({ ...opts, __skipDeprecationWarning: true });
 	return {
 		id: "mcp",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -986,8 +989,15 @@ export const withMcpAuth = <
 ) => {
 	return async (req: Request) => {
 		const basePath = auth.options.basePath || "/api/auth";
+		const trustedProxyHeaders = resolveDynamicTrustedProxyHeaders(auth.options);
 		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
-			? resolveBaseURL(auth.options.baseURL, basePath, req)
+			? resolveBaseURL(
+					auth.options.baseURL,
+					basePath,
+					req,
+					undefined,
+					trustedProxyHeaders,
+				)
 			: getBaseURL(
 					typeof auth.options.baseURL === "string"
 						? auth.options.baseURL
@@ -998,9 +1008,15 @@ export const withMcpAuth = <
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
 		const session = await auth.api.getMcpSession({
+			request: req,
 			headers: req.headers,
+			asResponse: false,
 		});
-		const wwwAuthenticateValue = `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`;
+		// Omit the `resource_metadata` URL when we can't build a valid one,
+		// so clients don't follow `Bearer resource_metadata="undefined/..."`.
+		const wwwAuthenticateValue = baseURL
+			? `Bearer resource_metadata="${baseURL}/.well-known/oauth-protected-resource"`
+			: "Bearer";
 		if (!session) {
 			return Response.json(
 				{
@@ -1036,7 +1052,10 @@ export const oAuthDiscoveryMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMcpOAuthConfig();
+		const res = await auth.api.getMcpOAuthConfig({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {
@@ -1060,7 +1079,10 @@ export const oAuthProtectedResourceMetadata = <
 	auth: Auth,
 ) => {
 	return async (request: Request) => {
-		const res = await auth.api.getMCPProtectedResource();
+		const res = await auth.api.getMCPProtectedResource({
+			request,
+			asResponse: false,
+		});
 		return new Response(JSON.stringify(res), {
 			status: 200,
 			headers: {

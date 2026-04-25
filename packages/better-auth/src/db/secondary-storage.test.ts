@@ -120,3 +120,111 @@ describe("secondary storage - get returns already-parsed object", async () => {
 		expect(activeAfter ?? null).toBeNull();
 	});
 });
+
+describe("secondary storage - storeSessionInDatabase", () => {
+	describe("preserveSessionInDatabase: false", async () => {
+		const store = new Map<string, string>();
+
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value, ttl) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: false,
+			},
+			rateLimit: {
+				enabled: false,
+			},
+		});
+
+		beforeEach(() => {
+			store.clear();
+		});
+
+		it("should not return a revoked session when it is deleted from both storages", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const s1 = await client.getSession({ fetchOptions: { headers } });
+			expect(s1.data).not.toBeNull();
+			const token = s1.data!.session.token;
+
+			expect(store.has(token)).toBe(true);
+
+			const revoke = await client.revokeSession({
+				fetchOptions: { headers },
+				token,
+			});
+			expect(revoke.data?.status).toBe(true);
+
+			expect(store.has(token)).toBe(false);
+
+			// Revoke deletes from both secondary storage and database,
+			// so the session should not be usable
+			const after = await client.getSession({ fetchOptions: { headers } });
+			expect(after.data).toBeNull();
+		});
+	});
+
+	describe("preserveSessionInDatabase: true", async () => {
+		const store = new Map<string, string>();
+
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value, ttl) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: true,
+			},
+			rateLimit: {
+				enabled: false,
+			},
+		});
+
+		beforeEach(() => {
+			store.clear();
+		});
+
+		it("should not return a revoked session even if it exists in database", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const s1 = await client.getSession({ fetchOptions: { headers } });
+			expect(s1.data).not.toBeNull();
+			const token = s1.data!.session.token;
+
+			// Session should exist in secondary storage
+			expect(store.has(token)).toBe(true);
+
+			// Revoke the session
+			const revoke = await client.revokeSession({
+				fetchOptions: { headers },
+				token,
+			});
+			expect(revoke.data?.status).toBe(true);
+
+			// Session should be removed from secondary storage
+			expect(store.has(token)).toBe(false);
+
+			// Session should NOT be usable anymore, even though it's preserved in database
+			const after = await client.getSession({ fetchOptions: { headers } });
+			expect(after.data).toBeNull();
+		});
+	});
+});

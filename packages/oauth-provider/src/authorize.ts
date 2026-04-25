@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
@@ -94,9 +95,7 @@ export function validateIssuerUrl(issuer: string): string {
 	try {
 		const url = new URL(issuer);
 
-		const isLocalhost =
-			url.hostname === "localhost" || url.hostname === "127.0.0.1";
-		if (url.protocol !== "https:" && !isLocalhost) {
+		if (url.protocol !== "https:" && !isLoopbackHost(url.host)) {
 			url.protocol = "https:";
 		}
 
@@ -168,20 +167,53 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	// Check request
-	const query: OAuthAuthorizationQuery = ctx.query;
+	// Resolve request_uri (PAR) before processing
+	let query: OAuthAuthorizationQuery = ctx.query;
+	if (query.request_uri) {
+		if (!opts.requestUriResolver) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(ctx, "invalid_request_uri", "request_uri not supported"),
+			);
+		}
+		const resolvedParams = await opts.requestUriResolver({
+			requestUri: query.request_uri,
+			clientId: query.client_id ?? "",
+			ctx,
+		});
+		if (!resolvedParams) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(
+					ctx,
+					"invalid_request_uri",
+					"request_uri is invalid or expired",
+				),
+			);
+		}
+		// RFC 9126 §4: all params come from the stored request, not the URL.
+		// Only client_id is carried from the authorization URL.
+		const urlClientId = query.client_id;
+		query = resolvedParams as unknown as OAuthAuthorizationQuery;
+		if (urlClientId) {
+			query.client_id = urlClientId;
+		}
+	}
+	ctx.query = query;
 	await oAuthState.set({
-		query: query.toString(),
+		query: serializeAuthorizationQuery(query).toString(),
 	});
 
 	if (!query.client_id) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 
 	if (!query.response_type) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
 	}
@@ -191,7 +223,8 @@ export async function authorizeEndpoint(
 		: undefined;
 	const promptNone = promptSet?.has("none") ?? false;
 	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(
 				ctx,
 				`unsupported_prompt_select_account`,
@@ -201,7 +234,8 @@ export async function authorizeEndpoint(
 	}
 
 	if (!(query.response_type === "code")) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(
 				ctx,
 				"unsupported_response_type",
@@ -213,21 +247,40 @@ export async function authorizeEndpoint(
 	// Check client
 	const client = await getClient(ctx, opts, query.client_id);
 	if (!client) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 	if (client.disabled) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
 		);
 	}
 
-	const redirectUri = client.redirectUris?.find(
-		(url) => url === query.redirect_uri,
-	);
+	const redirectUri = client.redirectUris?.find((url) => {
+		if (url === query.redirect_uri) return true;
+		try {
+			const registered = new URL(url);
+			const requested = new URL(query.redirect_uri);
+			// RFC 8252 §7.3: loopback IP literal URIs (127.0.0.0/8, ::1) match on
+			// scheme+host+path+query, ignoring port. §8.3 excludes DNS names like
+			// "localhost" — `isLoopbackIP` enforces IP-literal-only matching.
+			if (
+				isLoopbackIP(registered.hostname) &&
+				registered.hostname === requested.hostname &&
+				registered.pathname === requested.pathname &&
+				registered.protocol === requested.protocol &&
+				registered.search === requested.search
+			)
+				return true;
+		} catch {}
+		return false;
+	});
 	if (!redirectUri || !query.redirect_uri) {
-		throw ctx.redirect(
+		return handleRedirect(
+			ctx,
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
 		);
 	}
@@ -240,7 +293,8 @@ export async function authorizeEndpoint(
 			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_scope",
@@ -263,7 +317,8 @@ export async function authorizeEndpoint(
 	// Validate PKCE parameters if required
 	if (pkceRequired) {
 		if (!query.code_challenge || !query.code_challenge_method) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_request",
@@ -279,7 +334,8 @@ export async function authorizeEndpoint(
 	if (query.code_challenge || query.code_challenge_method) {
 		// Both parameters must be provided together
 		if (!query.code_challenge || !query.code_challenge_method) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_request",
@@ -293,7 +349,8 @@ export async function authorizeEndpoint(
 		// Check code challenge method is supported (only S256)
 		const codeChallengesSupported = ["S256"];
 		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-			throw ctx.redirect(
+			return handleRedirect(
+				ctx,
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_request",
@@ -472,6 +529,21 @@ export async function authorizeEndpoint(
 	});
 }
 
+function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
+	const params = new URLSearchParams();
+	for (const [key, value] of Object.entries(query)) {
+		if (value == null) continue;
+		if (Array.isArray(value)) {
+			for (const v of value) {
+				params.append(key, String(v));
+			}
+		} else {
+			params.set(key, String(value));
+		}
+	}
+	return params;
+}
+
 async function redirectWithAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -494,7 +566,7 @@ async function redirectWithAuthorizationCode(
 		expiresAt: new Date(exp * 1000),
 		value: JSON.stringify({
 			type: "authorization_code",
-			query: ctx.query,
+			query: verificationValue.query,
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
@@ -550,7 +622,9 @@ async function signParams(
 	// Add expiration to query parameters
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
-	const params = new URLSearchParams(ctx.query);
+	const params = serializeAuthorizationQuery(
+		ctx.query as OAuthAuthorizationQuery,
+	);
 	params.set("exp", String(exp));
 
 	const signature = await makeSignature(params.toString(), ctx.context.secret);

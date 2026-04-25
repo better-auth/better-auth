@@ -22,6 +22,8 @@ export type {
 	TestUtilsOptions,
 } from "./types";
 
+import { PACKAGE_VERSION } from "../../version";
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"test-utils": {
@@ -39,19 +41,28 @@ declare module "@better-auth/core" {
  * - Auth helpers (login, getAuthHeaders, getCookies)
  * - OTP capture (when captureOTP: true)
  *
+ * This plugin does not register public HTTP routes or API endpoints, but it does
+ * expose privileged helpers on `ctx.test` for creating sessions and mutating data.
+ * Prefer including it in a test-only auth instance such as `auth.test.ts` instead
+ * of a production auth config.
+ *
+ * If you conditionally spread it into `plugins`, TypeScript may stop inferring
+ * `ctx.test` correctly. A separate test-only auth instance keeps the helpers
+ * typed without adding the plugin to your production auth config.
+ *
  * @example
  * ```ts
  * import { betterAuth } from "better-auth";
  * import { testUtils } from "better-auth/plugins";
  *
- * export const auth = betterAuth({
+ * export const testAuth = betterAuth({
  *   plugins: [
  *     testUtils({ captureOTP: true }),
  *   ],
  * });
  *
  * // In tests, access helpers via context:
- * const ctx = await auth.$context;
+ * const ctx = await testAuth.$context;
  * const test = ctx.test;
  *
  * const user = test.createUser({ email: "test@example.com" });
@@ -62,6 +73,7 @@ declare module "@better-auth/core" {
 export const testUtils = (options: TestUtilsOptions = {}) => {
 	return {
 		id: "test-utils",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			// Check if organization plugin is present
 			const hasOrgPlugin = ctx.hasPlugin("organization");
