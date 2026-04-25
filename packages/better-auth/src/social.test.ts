@@ -997,7 +997,7 @@ describe("updateAccountOnSignIn", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/4498
  */
-describe("Google Provider — multiple client IDs", async () => {
+describe("Google Provider", async () => {
 	const googleKeyPair = await generateKeyPair("RS256");
 	const googleJwk = await exportJWK(googleKeyPair.publicKey);
 	const googleKid = "test-google-kid";
@@ -1031,148 +1031,154 @@ describe("Google Provider — multiple client IDs", async () => {
 		);
 	});
 
-	it.each([
-		["web", webClientId],
-		["iOS", iosClientId],
-		["Android", androidClientId],
-	])("accepts an id token issued for the %s client", async (_, audience) => {
-		const idToken = await signIdToken(audience);
-		const { client } = await getTestInstance(
-			{
-				socialProviders: {
-					google: {
-						clientId: [webClientId, iosClientId, androidClientId],
-						clientSecret: "test-secret",
+	describe("multiple client IDs", () => {
+		it.each([
+			["web", webClientId],
+			["iOS", iosClientId],
+			["Android", androidClientId],
+		])("accepts an id token issued for the %s client", async (_, audience) => {
+			const idToken = await signIdToken(audience);
+			const { client } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							clientId: [webClientId, iosClientId, androidClientId],
+							clientSecret: "test-secret",
+						},
 					},
 				},
-			},
-			{ disableTestUser: true },
-		);
+				{ disableTestUser: true },
+			);
 
-		const res = await client.signIn.social({
-			provider: "google",
-			idToken: { token: idToken },
+			const res = await client.signIn.social({
+				provider: "google",
+				idToken: { token: idToken },
+			});
+
+			expect(res.data).toBeDefined();
+			expect(res.data!.redirect).toBe(false);
+			const data = res.data as { user: { email: string } };
+			expect(data.user.email).toBe("mobile-user@example.com");
 		});
 
-		expect(res.data).toBeDefined();
-		expect(res.data!.redirect).toBe(false);
-		const data = res.data as { user: { email: string } };
-		expect(data.user.email).toBe("mobile-user@example.com");
+		it("rejects an id token whose audience is not configured", async () => {
+			const idToken = await signIdToken("999-unknown.googleusercontent.com");
+			const { client } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							clientId: [webClientId, iosClientId],
+							clientSecret: "test-secret",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const res = await client.signIn.social({
+				provider: "google",
+				idToken: { token: idToken },
+			});
+
+			expect(res.error?.status).toBe(401);
+		});
+
+		it("uses the first configured client id when building the authorization URL", async () => {
+			const { client } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							clientId: [webClientId, iosClientId, androidClientId],
+							clientSecret: "test-secret",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+			});
+
+			expect(signInRes.data?.url).toContain(encodeURIComponent(webClientId));
+			expect(signInRes.data?.url).not.toContain(
+				encodeURIComponent(iosClientId),
+			);
+		});
+
+		it("rejects an empty clientId array at sign-in time", async () => {
+			const { client } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							clientId: [],
+							clientSecret: "test-secret",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const res = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+			});
+
+			expect(res.error?.status).toBe(500);
+		});
 	});
 
-	it("rejects an id token whose audience is not configured", async () => {
-		const idToken = await signIdToken("999-unknown.googleusercontent.com");
-		const { client } = await getTestInstance(
-			{
-				socialProviders: {
-					google: {
-						clientId: [webClientId, iosClientId],
-						clientSecret: "test-secret",
+	describe("includeGrantedScopes", () => {
+		it("includes granted scopes in the authorization URL by default", async () => {
+			const { client } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							clientId: webClientId,
+							clientSecret: "test-secret",
+						},
 					},
 				},
-			},
-			{ disableTestUser: true },
-		);
+				{ disableTestUser: true },
+			);
 
-		const res = await client.signIn.social({
-			provider: "google",
-			idToken: { token: idToken },
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+			});
+
+			const authUrl = new URL(signInRes.data!.url!);
+			expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
 		});
 
-		expect(res.error?.status).toBe(401);
-	});
-
-	it("uses the first configured client id when building the authorization URL", async () => {
-		const { client } = await getTestInstance(
-			{
-				socialProviders: {
-					google: {
-						clientId: [webClientId, iosClientId, androidClientId],
-						clientSecret: "test-secret",
+		it("omits granted scopes from the authorization URL when disabled", async () => {
+			const { client } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							clientId: webClientId,
+							clientSecret: "test-secret",
+							includeGrantedScopes: false,
+						},
 					},
 				},
-			},
-			{ disableTestUser: true },
-		);
+				{ disableTestUser: true },
+			);
 
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				scopes: ["https://www.googleapis.com/auth/drive.file"],
+			});
+
+			const authUrl = new URL(signInRes.data!.url!);
+			expect(authUrl.searchParams.has("include_granted_scopes")).toBe(false);
+			expect(authUrl.searchParams.get("scope")).toContain("openid");
+			expect(authUrl.searchParams.get("scope")).toContain(
+				"https://www.googleapis.com/auth/drive.file",
+			);
 		});
-
-		expect(signInRes.data?.url).toContain(encodeURIComponent(webClientId));
-		expect(signInRes.data?.url).not.toContain(encodeURIComponent(iosClientId));
-	});
-
-	it("includes granted scopes in the authorization URL by default", async () => {
-		const { client } = await getTestInstance(
-			{
-				socialProviders: {
-					google: {
-						clientId: webClientId,
-						clientSecret: "test-secret",
-					},
-				},
-			},
-			{ disableTestUser: true },
-		);
-
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-		});
-
-		const authUrl = new URL(signInRes.data!.url!);
-		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
-	});
-
-	it("omits granted scopes from the authorization URL when disabled", async () => {
-		const { client } = await getTestInstance(
-			{
-				socialProviders: {
-					google: {
-						clientId: webClientId,
-						clientSecret: "test-secret",
-						includeGrantedScopes: false,
-					},
-				},
-			},
-			{ disableTestUser: true },
-		);
-
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-			scopes: ["https://www.googleapis.com/auth/drive.file"],
-		});
-
-		const authUrl = new URL(signInRes.data!.url!);
-		expect(authUrl.searchParams.has("include_granted_scopes")).toBe(false);
-		expect(authUrl.searchParams.get("scope")).toContain("openid");
-		expect(authUrl.searchParams.get("scope")).toContain(
-			"https://www.googleapis.com/auth/drive.file",
-		);
-	});
-
-	it("rejects an empty clientId array at sign-in time", async () => {
-		const { client } = await getTestInstance(
-			{
-				socialProviders: {
-					google: {
-						clientId: [],
-						clientSecret: "test-secret",
-					},
-				},
-			},
-			{ disableTestUser: true },
-		);
-
-		const res = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-		});
-
-		expect(res.error?.status).toBe(500);
 	});
 });
 
