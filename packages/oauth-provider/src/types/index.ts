@@ -1,4 +1,4 @@
-import type { LiteralString } from "@better-auth/core";
+import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
@@ -496,6 +496,37 @@ export interface OAuthOptions<
 		metadata?: Record<string, any>;
 	}) => Awaitable<Record<string, any>>;
 	/**
+	 * Custom fields to include in the token response body.
+	 *
+	 * Unlike `customAccessTokenClaims` (which adds claims inside the JWT payload),
+	 * this adds fields to the JSON response envelope alongside `access_token`,
+	 * `token_type`, etc. Standard OAuth fields (`access_token`, `token_type`,
+	 * `expires_in`, `expires_at`, `refresh_token`, `scope`, `id_token`) cannot
+	 * be overridden.
+	 *
+	 * @param info - context that may be useful when creating custom fields
+	 */
+	customTokenResponseFields?: (info: {
+		/** The grant type being processed */
+		grantType: GrantType;
+		/**
+		 * The user, if applicable.
+		 * Undefined for `client_credentials` (M2M, no user).
+		 * Always present for `authorization_code` and `refresh_token`.
+		 */
+		user?: (User & Record<string, unknown>) | null;
+		/** Scopes granted for this token */
+		scopes: Scopes;
+		/** oAuthClient metadata */
+		metadata?: Record<string, any>;
+		/**
+		 * The authorization code verification value.
+		 * Only present for `authorization_code` grant. Contains the original
+		 * authorization request parameters (`query`), `referenceId`, `sessionId`, etc.
+		 */
+		verificationValue?: VerificationValue;
+	}) => Awaitable<Record<string, unknown>>;
+	/**
 	 * Overwrite specific /.well-known/openid-configuration
 	 * values so they are not available publically.
 	 * This may be important if not all clients need specific scopes.
@@ -677,15 +708,32 @@ export interface OAuthOptions<
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
 	 */
 	pairwiseSecret?: string;
+	/**
+	 * Resolves a `request_uri` at the authorize endpoint (PAR support).
+	 *
+	 * When the authorize endpoint receives a `request_uri` parameter, this callback
+	 * resolves it to the original authorization parameters. Return null if the URI
+	 * is invalid or expired.
+	 */
+	requestUriResolver?: (input: {
+		requestUri: string;
+		clientId: string;
+		ctx: GenericEndpointContext;
+	}) => Promise<Record<string, string> | null>;
 }
 
 export interface OAuthAuthorizationQuery {
 	/**
 	 * The response type.
 	 * - "code": authorization code flow.
+	 * Optional in the query when using request_uri (PAR) — resolved from stored params.
 	 */
 	// NEVER SUPPORT "token" or "id_token" - depreciated in oAuth2.1
-	response_type: "code";
+	response_type?: "code";
+	/**
+	 * PAR request_uri. When present, other params are resolved from the stored request.
+	 */
+	request_uri?: string;
 	/**
 	 * The redirect URI for the client. Must be one of the registered redirect URLs for the client.
 	 */
@@ -704,10 +752,12 @@ export interface OAuthAuthorizationQuery {
 	 * Cross-Site Request Forgery (CSRF, XSRF) mitigation is done by cryptographically binding the
 	 * value of this parameter with a browser cookie.
 	 *
+	 * Recommended for clients, but optional for the authorization server.
+	 *
 	 * Note: Better Auth stores the state in a database instead of a cookie. - This is to minimize
 	 * the complication with native apps and other clients that may not have access to cookies.
 	 */
-	state: string;
+	state?: string;
 	/**
 	 * The client ID. Must be the ID of a registered client.
 	 */
