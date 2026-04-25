@@ -12,10 +12,16 @@ Before getting started, make sure you have a supported database set up (such as 
 Kysely support is built into Better Auth. You only need to install Kysely and a database driver:
 
 ```package-install
-kysely kysely-planetscale
+kysely
 ```
 
 ## Example Usage
+
+For this example, you will also need:
+
+```bash
+npm install kysely-planetscale @planetscale/database
+```
 
 You can use the Kysely adapter to connect to your database as follows.
 
@@ -23,10 +29,13 @@ You can use the Kysely adapter to connect to your database as follows.
 import { betterAuth } from "better-auth";
 import { Kysely } from "kysely";
 import { PlanetScaleDialect } from "kysely-planetscale";
+import { connect } from "@planetscale/database";
 
 const db = new Kysely({
   dialect: new PlanetScaleDialect({
-    url: process.env.DATABASE_URL,
+    database: connect({
+      url: process.env.DATABASE_URL!,
+    }),
   }),
 });
 
