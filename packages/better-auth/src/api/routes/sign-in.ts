@@ -196,13 +196,13 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					responses: {
 						"200": {
 							description:
-								"Success - Returns either session details or redirect URL",
+								"Success - Returns session details (idToken branch) or an authorize URL (redirect branch)",
 							content: {
 								"application/json": {
 									schema: {
-										// todo: we need support for multiple schema
 										type: "object",
-										description: "Session response when idToken is provided",
+										description:
+											"Returns session details when idToken is provided, or an authorize URL otherwise",
 										properties: {
 											token: {
 												type: "string",
@@ -216,10 +216,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 											},
 											redirect: {
 												type: "boolean",
-												enum: [false],
 											},
 										},
-										required: ["redirect", "token", "user"],
+										required: ["redirect"],
 									},
 								},
 							},
