@@ -242,7 +242,17 @@ export function EnterprisePageClient() {
 												<select
 													id="enterprise-size"
 													name="companySize"
-													className="w-full px-3 py-2 bg-transparent border border-foreground/[0.15] text-foreground/85 dark:text-foreground/75 text-sm focus:outline-none focus:border-foreground/40 transition-colors appearance-none cursor-pointer font-mono"
+													className="
+													w-full px-3 py-2 bg-transparent border border-foreground/15 
+													text-foreground/85 text-sm focus:outline-none 
+													focus:border-foreground/40 transition-colors 
+													appearance-none cursor-pointer font-mono
+													[color-scheme:dark]
+													[&>option]:bg-neutral-900
+													[&>option]:text-white
+													[&>option:checked]:bg-neutral-800
+													focus:[&>option:checked]:bg-neutral-800
+													"
 												>
 													<option value="">Select</option>
 													<option value="1-10">1-10</option>
