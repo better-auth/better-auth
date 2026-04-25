@@ -2,8 +2,8 @@
 title: Getting Started
 description: This guide will help you integrate Better Auth Infrastructure into your application.
 ---
-<Steps>
 
+<Steps>
   <Step>
     ## Prerequisites
 
@@ -39,9 +39,7 @@ description: This guide will help you integrate Better Auth Infrastructure into 
       [Better Auth Infrastructure dashboard](/dashboard).
     </Callout>
   </Step>
-
 </Steps>
-
 
 ## Server Setup
 
@@ -99,12 +97,31 @@ export const authClient = createAuthClient({
 });
 ```
 
+### Expo and React Native
 
+For **Expo** or **React Native** clients, import from `@better-auth/infra/native` instead of `@better-auth/infra/client`. The native entry provides `dashClient` (same audit log APIs as the web client) and `sentinelNativeClient`.
+
+```ts
+import { createAuthClient } from "better-auth/client";
+import { dashClient, sentinelNativeClient } from "@better-auth/infra/native";
+
+export const authClient = createAuthClient({
+  baseURL: "https://your-api.example.com",
+  plugins: [
+    dashClient(),
+    sentinelNativeClient({
+      autoSolveChallenge: true,
+    }),
+  ],
+});
+```
+
+See [Sentinel — Expo and React Native](/docs/infrastructure/plugins/sentinel#expo-and-react-native) for more details.
 
 ### Plugin Overview
 
-- **`dash()`** - Enables analytics tracking, audit logging, dashboard admin APIs, and more
-- **`sentinel()`** - Enables security checks and abuse protection
+* **`dash()`** - Enables analytics tracking, audit logging, dashboard admin APIs, and more
+* **`sentinel()`** - Enables security checks and abuse protection
 
 You can use either plugin independently, but using both together provides the full Better Auth Infrastructure experience.
 
@@ -112,8 +129,8 @@ You can use either plugin independently, but using both together provides the fu
 
 Now that you have the basic setup, explore these topics:
 
-- [Dashboard](/docs/infrastructure/plugins/dashboard) - Analytics, activity tracking, and admin APIs
-- [Audit Logs](/docs/infrastructure/plugins/audit-logs) - Track and query authentication events
-- [Sentinel](/docs/infrastructure/plugins/sentinel) - Configure advanced security
-- [Email Service](/docs/infrastructure/services/email) - Set up transactional emails
-- [SMS Service](/docs/infrastructure/services/sms) - Enable SMS verification
+* [Dashboard](/docs/infrastructure/plugins/dashboard) - Analytics, activity tracking, and admin APIs
+* [Audit Logs](/docs/infrastructure/plugins/audit-logs) - Track and query authentication events
+* [Sentinel](/docs/infrastructure/plugins/sentinel) - Configure advanced security
+* [Email Service](/docs/infrastructure/services/email) - Set up transactional emails
+* [SMS Service](/docs/infrastructure/services/sms) - Enable SMS verification
