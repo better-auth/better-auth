@@ -630,6 +630,11 @@ describe("internal adapter test", async () => {
 		});
 		const session = await internalAdapter.createSession(user.id);
 
+		// Session should always have an id, even with secondary storage only
+		expect(session.id).toBeDefined();
+		expect(typeof session.id).toBe("string");
+		expect(session.id.length).toBeGreaterThan(0);
+
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
 			map.get(`active-sessions-${user.id}`),
 		);

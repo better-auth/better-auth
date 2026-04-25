@@ -67,7 +67,7 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 				let newLine = `${field.fieldName} ${type}`;
 				let additionalLine = "";
 				if (field.type === "date" && provider === "postgresql") {
-					newLine += " @db.Timestampz(3)";
+					newLine += " @db.Timestamptz(3)";
 				}
 				if (field.unique) {
 					newLine += " @unique";
