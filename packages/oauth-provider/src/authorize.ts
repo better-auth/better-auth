@@ -640,6 +640,8 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 	params.set(signedQueryIssuedAtParam, String(issuedAt));
+	// Reserved marker: only server-issued consent redirects may sign this.
+	params.delete(postLoginClearedParam);
 	if (flags?.postLoginClearedForSession) {
 		params.set(postLoginClearedParam, flags.postLoginClearedForSession);
 	}
