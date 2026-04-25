@@ -530,6 +530,17 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				);
 			}
 
+			const authorizeHook = ctx.context.options?.emailAndPassword?.authorize;
+			if (authorizeHook) {
+				await authorizeHook(
+					{
+						user: user.user,
+						account: credentialAccount,
+					},
+					ctx.request,
+				);
+			}
+
 			if (
 				ctx.context.options?.emailAndPassword?.requireEmailVerification &&
 				!user.user.emailVerified
