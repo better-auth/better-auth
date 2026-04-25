@@ -37,13 +37,19 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
-    "electron": "^39.7.0",
+    "electron": "^39.8.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@xmldom/xmldom": "^0.8.12",
+      "tar": "^7.5.11"
+    }
   }
 }

@@ -1,0 +1,317 @@
+---
+title: "Better Auth 1.6"
+description: "OpenTelemetry instrumentation, non-blocking scrypt, passkey pre-auth registration, SAML hardening, a new release workflow, and more."
+date: 2026-04-07
+author:
+  name: "Taesu Kim"
+  avatar: ""
+image: "/release-og/1-6.png"
+tags: ["1.6", "OpenTelemetry", "passkey", "performance", "release workflow"]
+---
+
+# Better Auth 1.6
+
+We're excited to announce the release of Better Auth 1.6 🎉
+
+Better Auth 1.6 serves as a bridge version as we transition to our more structured workflow.
+
+Rather than packing in new features, this release is focused on setting the foundation for a more solid project. That said, this release brings new features, improvements, and a number of meaningful fixes.
+
+***
+
+## Highlights
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### OpenTelemetry Instrumentation
+
+Better Auth now emits [OpenTelemetry](https://opentelemetry.io/) spans for distributed tracing. This gives you visibility into every auth API call, including endpoint execution, hook lifecycle, and database operations.
+
+```ts title="instrumentation.ts"
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { SimpleSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
+
+const provider = new NodeTracerProvider({
+  spanProcessors: [new SimpleSpanProcessor(new ConsoleSpanExporter())],
+});
+provider.register();
+```
+
+Once a TracerProvider is registered, Better Auth automatically emits spans via the `better-auth` tracer. No additional configuration is needed in your auth setup.
+
+Supported spans include:
+
+* **Endpoint spans**: `GET /get-session`, `POST /sign-in/email`, etc.
+* **Database spans**: `db create user`, `db findOne session`, etc.
+* **Hook spans**: before/after hooks, middleware, onRequest/onResponse
+
+Each span carries attributes like `http.route`, `db.operation.name`, `db.collection.name`, and `better_auth.operation_id` for filtering and grouping in your observability tool.
+
+This feature is experimental and the span structure may change in future releases. For more information, see the [instrumentation documentation](https://www.better-auth.com/docs/reference/instrumentation).
+
+***
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### Passkey Pre-Auth Registration
+
+The passkey plugin now supports registering passkeys *before* the user has a session. This enables passkey-first onboarding flows where the passkey itself is the initial authentication method.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+  plugins: [
+    passkey({
+      registration: {
+        requireSession: false, // [!code highlight]
+        resolveUser: async ({ ctx, context }) => {
+          // Validate context (e.g., a signed token), then create or load a user.
+          return { id: "user-id", name: "user@example.com" };
+        },
+      },
+    }),
+  ],
+});
+```
+
+The plugin also adds support for WebAuthn extensions on both registration and authentication, letting you pass server-defined extensions like `credProps`.
+
+For more information, see the [passkey documentation](https://www.better-auth.com/docs/plugins/passkey).
+
+***
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### Case Insensitive Queries
+
+Database queries now support case-insensitive string comparisons across all adapters (Drizzle, Prisma, Kysely, MongoDB, Memory).
+
+This is an internal API available to plugin authors and used by core where needed. Queries can specify `mode: "insensitive"` on individual where clauses:
+
+```ts
+adapter.findOne({
+  model: "user",
+  where: [{
+    field: "email",
+    value: "user@example.com",
+    mode: "insensitive", // [!code highlight]
+  }],
+});
+```
+
+Under the hood, each adapter picks the most efficient case-insensitive strategy its database supports.
+
+***
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Align Fresh Age with Session Creation Time
+
+The `freshAge` check now uses `createdAt` instead of `updatedAt`. Previously, any session refresh would reset the freshness window, meaning a session could stay "fresh" indefinitely through regular access. Now, freshness is tied to when the session was created, so sensitive operations like password changes or payment confirmations require recent sign-in.
+
+For more information, see the [session freshness documentation](https://www.better-auth.com/docs/concepts/session-management#session-freshness).
+
+***
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Enable InResponseTo Validation by Default for SAML Flows
+
+SAML `InResponseTo` validation is now enabled by default for SP-initiated flows, preventing replay attacks where a captured assertion is reused. IdP-initiated SSO is not affected. If you need to opt out, you can disable it explicitly:
+
+```ts
+sso({
+  saml: {
+    enableInResponseToValidation: false, // [!code highlight]
+  },
+});
+```
+
+For more information, see the [SSO documentation](https://www.better-auth.com/docs/plugins/sso).
+
+***
+
+<HeaderLabel variant="default">Performance</HeaderLabel>
+
+### Faster and Lighter
+
+Two changes that affect every Better Auth user:
+
+1. Non-blocking scrypt
+
+   Password hashing now uses the native `node:crypto` scrypt implementation, which runs on the libuv thread pool instead of blocking the main thread. On runtimes without `node:crypto` support, it falls back to a pure JavaScript implementation. Existing password hashes remain fully compatible.
+
+2. Reduced package sizes
+
+   Published packages are now significantly smaller, which means faster installs and less disk usage for every project using Better Auth.
+
+   | Package       | v1.5.6   | v1.6.0   | Reduction |
+   | ------------- | -------- | -------- | --------- |
+   | `better-auth` | 4,236 KB | 2,265 KB | 46%       |
+
+***
+
+## Important Changes
+
+### Breaking Changes
+
+| Change                                                   | Description                                                                                                                                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Align fresh age with session creation time               | `freshAge` now uses `createdAt` instead of `updatedAt`. Sessions may require re-authentication more frequently for sensitive operations. [Details](#align-fresh-age-with-session-creation-time) |
+| Enable InResponseTo validation by default for SAML flows | SAML `InResponseTo` validation is now on by default. Set `enableInResponseToValidation: false` to disable. [Details](#enable-inresponseto-validation-by-default-for-saml-flows)                 |
+
+### Behavior Changes
+
+| Change                                    | Description                                                                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| SCIM endpoint authorization enforcement   | SCIM management endpoints now require proper authentication. Passkey ownership normalized to prevent cross-user access. |
+| Stateless cookie cache lifetime alignment | Cookie cache `maxAge` now matches session `expiresIn` to prevent stale cached data.                                     |
+
+### Deprecations
+
+| Change               | Description                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OIDC Provider plugin | Deprecated in favor of [`@better-auth/oauth-provider`](https://www.better-auth.com/docs/plugins/oauth-provider). Will be removed in the next minor version. |
+
+For the full list of changes, see the [changelog](https://github.com/better-auth/better-auth/compare/v1.5.6...v1.6.0).
+
+***
+
+## Migrating to v1.6
+
+For most users, upgrading is straightforward:
+
+```package-install
+npx auth upgrade
+```
+
+Review the [Important Changes](#important-changes) section to check if any of the breaking changes, behavior changes, or deprecations affect your setup.
+
+***
+
+## How We Run Better Auth Going Forward
+
+For a long time, every kind of change competed for the same release window. Bug fixes, additive improvements, large features, refactors, and breaking changes all shared the same release path, which meant a small fix could be ready now and still wait behind unrelated work.
+
+The principle we keep coming back to is straightforward. We want important fixes to ship quickly without giving up predictability or backward compatibility. There should be no surprises, and when an upgrade does require action, that action should be easy to understand and simple to execute.
+
+v1.6 is the bridge release built around that principle. Here is what that looks like in practice.
+
+### Two release tracks
+
+> Important fixes shouldn't wait behind unrelated work.
+
+Better Auth releases now flow through two tracks instead of one. A change ships through beta first whenever adopting it would require existing users to update code, configuration, or schema.
+
+* **`main` is the stable track.** It ships bug fixes, security work, additive improvements, and behavior changes that do not require user action. New capabilities can also land here as long as they are well-tested, non-breaking, and safe to adopt immediately.
+* **`next` is the beta track.** It ships new features, refactors, and breaking changes, after a beta cycle that gives users a window to adapt.
+
+The split exists so that important fixes can move fast without waiting for unrelated work, and so that breaking changes never land without warning. For the latest stable, `npm install better-auth` works as before. To try the next minor in progress, install with the `@beta` tag.
+
+For contributors, release decisions now happen in the pull request itself. A changeset on each PR declares its release intent, and our automated workflow routes the PR to the right branch.
+
+### New feature requests
+
+> Discussion comes before code.
+
+Going forward, every new feature request begins with the [Feature request issue template](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml) on GitHub, not with a pull request opened directly.
+
+Large PRs landing directly are difficult to review safely while keeping the existing system stable. Starting with an issue gives us room to discuss scope, align on API shape, and schedule the work against the release track it belongs on. It also gives us a cleaner way to communicate the roadmap, so contributors and users can see where a given feature is heading and when it might land.
+
+Bug fixes, documentation improvements, and small additive changes continue to go straight to pull requests as before.
+
+### Restructured release notes
+
+> Clarity matters as much as completeness.
+
+Release notes are now grouped by package instead of being presented as one flat changelog. That makes it much faster to find the packages you actually use and check whether a change affects you.
+
+This is generated by **Better Release**, a piece of automation we built for our own release process. On the maintainer side it reduces the kind of small human errors that used to creep into release preparation. On the user side it produces release communication that is more consistent and easier to read.
+
+### Trusted publishing
+
+> Trust matters as much as speed.
+
+Every package we publish to npm now uses OIDC trusted publishing through GitHub Actions. There are no long-lived publish tokens sitting in CI waiting to be stolen, and every published artifact carries provenance linking it back to the exact source commit and workflow run that produced it.
+
+This matters because most of the major incidents in the npm ecosystem have come from credential theft and supply chain compromise, not from malicious code in reviewed commits. Commit signing and contributor identity still matter, but for consumers of a package, verifiable provenance over the published artifact is the stronger guarantee.
+
+You can verify a Better Auth package on your machine with:
+
+```bash title="Terminal"
+npm audit signatures
+```
+
+***
+
+## Contributors
+
+Thanks to all the contributors for making this release possible!
+
+export const releaseContributorUsernames = [
+	// cspell:disable
+	"aarmful",
+	"abdirahmanmahamoud",
+	"abris96",
+	"AliiiBenn",
+	"Bekacru",
+	"Bekione",
+	"bodadotsh",
+	"bytaesu",
+	"cb-alish",
+	"DevDuki",
+	"dipan2003",
+	"dvanmali",
+	"enguerrand",
+	"Eric-Song-Nop",
+	"FaryalRizwan",
+	"florianamette",
+	"formatlos",
+	"frankeld",
+	"GautamBytes",
+	"gideonofori",
+	"GoPro16",
+	"gustavovalverde",
+	"harshitsharmaa",
+	"himself65",
+	"isardmart",
+	"IvanCernja",
+	"jamalavedra",
+	"JoBurgard",
+	"jonathansamines",
+	"jsolano",
+	"kadumedim",
+	"kgray1497",
+	"lapstjup",
+	"Mnigos",
+	"mrgrauel",
+	"MuzzaiyyaN",
+	"NathanColosimo",
+	"okisdev",
+	"olliethedev",
+	"OscarCornish",
+	"pbacza",
+	"periakteon",
+	"ping-maxwell",
+	"qamarq",
+	"raihanbrillmark",
+	"rosano",
+	"ruban-s",
+	"Rudraksh88",
+	"rurruur",
+	"SandyDev00076",
+	"sicarius97",
+	"Sigmabrogz",
+	"TerryHenrard",
+	"tobithedev",
+	"wobedi",
+	"YevheniiKotyrlo",
+	"yzong",
+	"zeke",
+	"zfrankz",
+	// cspell:enable
+];
+
+<Contributors usernames={releaseContributorUsernames} />
