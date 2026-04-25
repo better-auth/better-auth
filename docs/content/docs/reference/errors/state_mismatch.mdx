@@ -1,51 +1,219 @@
 ---
 title: state_mismatch
-description: The state parameter in the request doesn't match the state parameter in the cookie.
+description: State verification failed during the OAuth callback. Covers all state-related error codes and their causes.
 ---
 
 ## What is it?
 
-When an OAuth flow begins, a unique `state` value is generated and stored in a cookie.
-After the user returns from the OAuth provider, this `state` is compared with the one provided in the callback.
-If they don't match, the request is rejected to prevent unauthorized access.
+When an OAuth or SSO flow begins, Better Auth generates a unique `state` value and stores it so it can be
+verified when the provider redirects back. This prevents CSRF and replay attacks by ensuring the callback
+truly belongs to the same browser session that started it.
 
-This check exists to prevent CSRF (Cross-Site Request Forgery) and replay attacks during the OAuth flow -
-basically, to make sure the callback that hits your `/api/auth/callback` endpoint really belongs to the
-same browser session that started it.
+Better Auth supports two state storage strategies - **database** (the default) and **cookie** - and each
+has its own failure modes. This page covers every state-related error code, why it fires, and how to fix it.
 
+***
 
-## Common Causes
+## Error codes at a glance
 
-* The cookie wasn't set or readable during callback (common with `.vercel.app` preview domains or cross-domain issues).
-* The cookie domain/path doesn't match between your app and callback route.
-* The browser blocked third-party cookies (especially on Safari / iOS).
-* You started the OAuth flow in one tab but finished it in another (different cookie context).
-* The preview vs production domain mismatch (e.g., `preview.myapp.com` vs `myapp.com`).
+| Code                      | Message                               | Strategy | Meaning                                                                                       |
+| ------------------------- | ------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `state_mismatch`          | verification not found                | Database | The verification record for this state does not exist in the database (or secondary storage). |
+| `state_mismatch`          | auth state cookie not found           | Cookie   | The encrypted state cookie was not sent back with the callback request.                       |
+| `state_mismatch`          | request expired                       | Both     | The state data was found but its `expiresAt` timestamp is in the past.                        |
+| `state_invalid`           | Failed to decrypt or parse auth state | Cookie   | The state cookie exists but cannot be decrypted or parsed (e.g. secret changed).              |
+| `state_security_mismatch` | State not persisted correctly         | Database | The signed state cookie is missing or does not match the state from the callback URL.         |
+| `state_generation_error`  | Unable to create verification         | Database | The verification record could not be written when starting the flow.                          |
 
-## How to resolve
-### Use a constant domain
+***
 
-* The best fix is to use a constant domain for your app and callback route.
-* Avoid `.vercel.app` subdomains - browsers treat them as public suffixes, so cookies can't be shared across subdomains.
+## `state_mismatch` - verification not found (database strategy)
 
-### Verify cookie configurations
+This is the **most commonly reported** state error. It means the state value that came back from the OAuth
+provider was used to look up a verification record in the database, but no matching record was found.
 
-* It's possible that you've configured custom cookie attributes in your auth config that can cause this issue.
-* Check that cookies are not blocked by browser settings or privacy modes.
-* Ensure you're starting and ending the OAuth flow in the same browser session.
+### Common causes
 
-### Skip state cookie check
+1. **The user took too long on the provider's login page.** The verification record expires after 10 minutes.
+   Once expired, any other `findVerificationValue` call (from OTP checks, magic links, 2FA, etc.) triggers
+   a background cleanup that deletes all expired records - including this one.
 
-If you know what you are doing, you can skip the state cookie check by
-setting the `account.skipStateCookieCheck` option to `true` in your auth config.
+2. **The callback URL was loaded twice.** After a successful lookup the verification record is immediately
+   deleted. If the browser refreshes, the back button is pressed, or a redirect loop replays the callback,
+   the second request finds nothing.
+
+3. **Secondary storage (Redis / KV) without database fallback.** When `secondaryStorage` is configured,
+   verification records are stored there by default and the database is skipped. If the key is evicted
+   (TTL expiry, memory pressure, server restart) and `verification.storeInDatabase` is not explicitly `true`,
+   the lookup returns `null` without checking the database.
+
+4. **Multi-instance deployment without shared state.** Serverless functions or multiple containers each
+   running their own in-memory SQLite will not share verification records. The instance that created the
+   record may not be the one that receives the callback.
+
+5. **Secret rotation with hashed identifiers.** If `verification.storeIdentifier` is `"hashed"`, the
+   identifier is hashed using the server secret. Changing `BETTER_AUTH_SECRET` between the start and
+   callback of the flow means the hash on lookup won't match the hash at rest.
+
+6. **The OAuth provider altered the state parameter.** Some providers URL-encode, truncate, or otherwise
+   modify the `state` query parameter during the redirect, causing a mismatch on lookup.
+
+7. **Missing verification table.** If database migrations were not run or the `verification` table was
+   dropped, the query returns nothing.
+
+### How to fix
+
+* Ensure your database (or Redis) is **shared across all instances** of your application.
+* If using `secondaryStorage`, either set `verification.storeInDatabase: true` as a fallback, or ensure
+  your storage layer is reliable and the TTL is sufficient.
+* Do not rotate `BETTER_AUTH_SECRET` during active OAuth flows, or run both old and new secrets during
+  a transition window.
+* If users consistently time out, consider switching to the `"cookie"` strategy which does not depend
+  on database lookups.
+
+***
+
+## `state_mismatch` - auth state cookie not found (cookie strategy)
+
+When `storeStateStrategy` is `"cookie"`, all state data is encrypted into a cookie. This error means the
+cookie was not present on the callback request.
+
+### Common causes
+
+* The browser blocked or stripped the cookie (third-party cookie restrictions, Safari ITP, incognito mode).
+* The cookie domain/path does not match the callback route (e.g. `.vercel.app` preview domains are treated
+  as public suffixes and cannot share cookies across subdomains).
+* A reverse proxy or CDN dropped the `Cookie` header.
+* The user started the flow in one tab but completed it in another (different cookie jar).
+
+### How to fix
+
+* Use a **stable, custom domain** - avoid `.vercel.app` preview subdomains.
+* Verify that your cookie domain and `SameSite` / `Secure` attributes are correct for your deployment.
+* Confirm the cookie exists in DevTools → Application → Cookies before and after the redirect.
+
+***
+
+## `state_mismatch` - request expired
+
+The state data was successfully retrieved (from either the database or cookie), but its embedded
+`expiresAt` timestamp has passed. The state payload is valid for 10 minutes from creation.
+
+### Common causes
+
+* The user simply took too long (left the provider tab open, slow network, MFA prompt).
+* Clock skew between the server that generated the state and the server that validates it.
+
+### How to fix
+
+* Ensure **NTP is enabled** on all server instances so clocks stay synchronized.
+* If your users regularly need more than 10 minutes (e.g. enterprise SSO with approval workflows),
+  this timeout is currently not configurable - consider opening a feature request.
+
+***
+
+## `state_invalid` - failed to decrypt or parse (cookie strategy)
+
+The encrypted state cookie exists but cannot be decrypted or the decrypted JSON cannot be parsed.
+
+### Common causes
+
+* `BETTER_AUTH_SECRET` was rotated between the start and callback of the flow, so the decryption key
+  no longer matches.
+* The cookie value was corrupted in transit (proxy rewriting, URL encoding issues).
+
+### How to fix
+
+* Avoid rotating secrets during active user flows. Deploy secret changes during low-traffic windows.
+* Check that proxies and middleware do not modify cookie values.
+
+***
+
+## `state_security_mismatch` - state not persisted correctly (database strategy)
+
+After the verification record is found in the database, Better Auth also checks that a **signed state
+cookie** was sent back and its value matches the state from the callback URL. This is a second layer of
+CSRF protection. This error means the cookie is missing or its value does not match.
+
+### Common causes
+
+* The signed cookie expired (its `maxAge` is 5 minutes, shorter than the 10-minute DB record expiry).
+* Third-party cookie restrictions or `SameSite` policy prevented the cookie from being sent.
+* Cross-origin POST callbacks (common with SAML IdPs) do not send `SameSite=Lax` cookies.
+* Preview vs. production domain mismatch.
+* The user opened multiple sign-in tabs - each overwrites the state cookie, so only the last one is valid.
+
+### How to fix
+
+* Use a **stable, custom domain** and verify cookie attributes.
+* For SAML flows, Better Auth already sets `skipStateCookieCheck` internally.
+* If your deployment requires it, you can skip this check:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	account: {
+		skipStateCookieCheck: true,
+	},
+});
+```
 
 <Callout type="warn">
-  Please note that this is a security risk and should only be enabled if you know what you are doing.
+  Skipping the state cookie check removes a CSRF protection layer. Only enable this if you understand
+  the security implications and have other mitigations in place (e.g. your infrastructure guarantees
+  same-origin callbacks).
 </Callout>
 
-### Production Debug
+***
 
-Head to your production site, and use your browser's DevTools → Application → Cookies to confirm:
+## `state_generation_error` - unable to create verification
 
-* The state cookie is being set before redirect.
-* It still exists when the OAuth provider redirects back.
+This error is thrown at the **start** of the OAuth flow (not during the callback). It means the
+verification record could not be written to the database.
+
+### Common causes
+
+* The `verification` table does not exist - migrations have not been run.
+* The database connection failed or timed out.
+* A database hook or plugin rejected the write.
+
+### How to fix
+
+* Run `npx @better-auth/cli migrate` to ensure all tables exist.
+* Check your database connection and credentials.
+* Review any `databaseHooks` on the `verification` model that might prevent writes.
+
+***
+
+## Common causes and fixes
+
+The table below ranks how frequently each root cause is seen in production, which error code it
+triggers, and what to do about it.
+
+| Likelihood    | Root cause                                                            | Error code                                                      | Fix                                                                                   |
+| ------------- | --------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Very high** | Cookie blocked or missing (Safari ITP, cross-domain, preview domains) | `state_security_mismatch` or `state_mismatch` (cookie strategy) | Use a stable custom domain; verify `SameSite` / `Secure` attributes                   |
+| **High**      | Callback URL replayed (refresh, back button, redirect loop)           | `state_mismatch` (DB)                                           | Ensure your error/redirect page does not re-trigger the callback                      |
+| **High**      | User took too long (>10 min) on the provider page                     | `state_mismatch` (DB) or request expired                        | Inform users to retry; consider switching to cookie strategy                          |
+| **High**      | Multiple tabs / concurrent sign-in attempts                           | `state_security_mismatch`                                       | Only the last-opened tab's cookie is valid; earlier tabs will fail                    |
+| **Medium**    | Secondary storage (Redis) key evicted without DB fallback             | `state_mismatch` (DB)                                           | Set `verification.storeInDatabase: true` or ensure Redis persistence                  |
+| **Medium**    | Serverless / multi-instance without shared database                   | `state_mismatch` (DB)                                           | Use a shared database or external storage accessible by all instances                 |
+| **Medium**    | Signed cookie expired (5 min) while DB record is still valid (10 min) | `state_security_mismatch`                                       | The cookie has a shorter TTL than the DB record; users between 5–10 min will hit this |
+| **Low**       | Secret rotation mid-flow                                              | `state_invalid` (cookie) or `state_mismatch` (DB + hashed)      | Rotate secrets during low-traffic windows                                             |
+| **Low**       | OAuth provider altered the state parameter                            | `state_mismatch` (DB)                                           | Verify the provider preserves `state` exactly; check for URL encoding issues          |
+| **Low**       | Missing verification table / migration not run                        | `state_generation_error`                                        | Run `npx @better-auth/cli migrate`                                                    |
+| **Very low**  | Clock skew between server instances                                   | request expired                                                 | Enable NTP on all servers                                                             |
+
+***
+
+## Debugging checklist
+
+1. **Check the error code.** The `error` query parameter on your error page tells you the exact code
+   (`state_mismatch`, `state_security_mismatch`, `state_invalid`, or `state_generation_error`).
+2. **Open DevTools → Application → Cookies.** Confirm the state cookie (`better-auth.state` or
+   `better-auth.oauth_state`) is set before the redirect and still present when the callback arrives.
+3. **Inspect the callback URL.** Confirm the `state` query parameter is present and unmodified.
+4. **Check your server logs.** The `details` object in the error includes the `state` value - you can
+   cross-reference this with your `verification` table to see if the record exists, expired, or was
+   already deleted.
+5. **Verify your deployment.** Ensure all instances share the same database and secret, and that your
+   domain and cookie configuration are consistent.
