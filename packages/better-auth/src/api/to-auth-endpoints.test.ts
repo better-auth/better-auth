@@ -3,6 +3,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { kAPIErrorHeaderSymbol } from "better-call";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { init } from "../context/init";
@@ -1226,5 +1227,82 @@ describe("custom response code", () => {
 		});
 		expect(response.status).toBe(201);
 		expect(response.response).toEqual({ success: true });
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8576
+ */
+describe("response headers on APIError", async () => {
+	const endpoints = {
+		setCookieThenThrow: createAuthEndpoint(
+			"/set-cookie-then-throw",
+			{
+				method: "POST",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				c.setCookie("session_data", "", { maxAge: 0 });
+				throw c.error("UNAUTHORIZED", { message: "cleared" });
+			},
+		),
+		setCookieThenThrowWithExplicitHeaders: createAuthEndpoint(
+			"/set-cookie-then-throw-with-explicit-headers",
+			{
+				method: "POST",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				throw new APIError(
+					"FOUND",
+					{ message: "redirect" },
+					{ location: "/login" },
+				);
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("preserves Set-Cookie headers accumulated via c.setCookie when the endpoint throws APIError", async () => {
+		const response = await authEndpoints.setCookieThenThrow({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(401);
+
+		const setCookie = response.headers.get("set-cookie") ?? "";
+		expect(setCookie).toMatch(/(^|,\s*)session=;/);
+		expect(setCookie).toMatch(/(^|,\s*)session_data=;/);
+		expect(setCookie.toLowerCase()).toMatch(/max-age=0/);
+	});
+
+	it("merges ctx.responseHeaders with explicit APIError headers so both survive", async () => {
+		const response = await authEndpoints.setCookieThenThrowWithExplicitHeaders({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe("/login");
+		expect(response.headers.get("set-cookie") ?? "").toMatch(
+			/(^|,\s*)session=;/,
+		);
+	});
+
+	it("attaches merged headers to the thrown APIError on the non-response path", async () => {
+		let caught: APIError | undefined;
+		try {
+			await authEndpoints.setCookieThenThrowWithExplicitHeaders();
+		} catch (e) {
+			caught = e as APIError;
+		}
+		expect(caught).toBeInstanceOf(APIError);
+		const merged = (
+			caught as { [kAPIErrorHeaderSymbol]?: Headers } | undefined
+		)?.[kAPIErrorHeaderSymbol];
+		expect(merged).toBeInstanceOf(Headers);
+		expect(merged?.get("location")).toBe("/login");
+		expect(merged?.get("set-cookie") ?? "").toMatch(/(^|,\s*)session=;/);
 	});
 });
