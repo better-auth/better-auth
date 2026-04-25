@@ -96,6 +96,16 @@ interface Field {
 	isForeignKey?: boolean;
 	isOptional?: boolean;
 	isUnique?: boolean;
+	references?: {
+		model: string;
+		field: string;
+		onDelete?:
+			| "no action"
+			| "restrict"
+			| "cascade"
+			| "set null"
+			| "set default";
+	};
 }
 
 const typeAliases: Record<string, string> = {
@@ -231,11 +241,11 @@ function fieldToDBField(field: Field): DBFieldAttribute {
 	const bigint = raw === "bigint";
 
 	let references: DBFieldAttribute["references"] | undefined;
-	if (field.isForeignKey && field.name.endsWith("Id")) {
+	if (field.isForeignKey && field.references) {
 		references = {
-			model: field.name.slice(0, -2),
-			field: "id",
-			onDelete: "cascade",
+			model: field.references.model,
+			field: field.references.field,
+			onDelete: field.references.onDelete ?? "cascade",
 		};
 	}
 
@@ -333,16 +343,9 @@ export function DatabaseTable({
 						<path d="M3 5v14a9 3 0 0 0 18 0V5" />
 						<path d="M3 12a9 3 0 0 0 18 0" />
 					</svg>
-					{name ? (
-						<span className="font-mono text-[13px] text-foreground/80">
-							<span className="text-foreground/40">table </span>
-							{name}
-						</span>
-					) : (
-						<span className="text-xs text-foreground/60 font-mono font-medium uppercase tracking-wider">
-							Table
-						</span>
-					)}
+					<span className="text-[11px] leading-0 text-foreground/60 font-mono font-medium uppercase tracking-wider">
+						Table
+					</span>
 				</div>
 				<div className="flex items-center">
 					{(
@@ -441,6 +444,15 @@ export function DatabaseTable({
 						>
 							<div className="px-4 py-2 font-mono text-[13px] text-foreground/80 break-all">
 								{field.name}
+								{field.isOptional && (
+									<span
+										title="Optional"
+										aria-label="Optional"
+										className="text-foreground/40 text-[11px] font-medium select-none"
+									>
+										{" ?"}
+									</span>
+								)}
 							</div>
 							<div className="px-4 py-2 flex items-center gap-1.5">
 								<TypeIcon type={field.type} />
@@ -461,16 +473,9 @@ export function DatabaseTable({
 										FK
 									</span>
 								)}
-								{field.isOptional && (
-									<span className="font-mono text-[13px] text-foreground/60 uppercase">
-										?
-									</span>
+								{!field.isPrimaryKey && !field.isForeignKey && (
+									<span className="text-foreground/20 uppercase">-</span>
 								)}
-								{!field.isPrimaryKey &&
-									!field.isForeignKey &&
-									!field.isOptional && (
-										<span className="text-foreground/20 uppercase">-</span>
-									)}
 							</div>
 							<div className="px-4 py-2 text-[13px] text-foreground/70 leading-relaxed">
 								{field.description}

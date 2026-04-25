@@ -316,7 +316,9 @@ export const inferOrgAdditionalFields = <
 	// if we don't remove all other properties we may see assignability issues
 
 	type ExtractClientOnlyFields<T> = {
-		[K in keyof T as T[K] extends { additionalFields: any } ? K : never]: T[K];
+		[K in keyof T as T[K] extends { additionalFields: unknown }
+			? K
+			: never]: T[K];
 	};
 
 	type Schema = O extends Object
