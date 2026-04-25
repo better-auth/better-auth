@@ -87,6 +87,14 @@ export interface SAMLConfig {
 	mapping?: SAMLMapping | undefined;
 }
 
+/** Stored AuthnRequest record for InResponseTo validation */
+export interface AuthnRequestRecord {
+	id: string;
+	providerId: string;
+	createdAt: number;
+	expiresAt: number;
+}
+
 /** Session data stored during SAML login for Single Logout */
 export interface SAMLSessionRecord {
 	sessionId: string;
