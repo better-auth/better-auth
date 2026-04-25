@@ -12,7 +12,7 @@ Before getting started, make sure you have a supported database set up (such as 
 Kysely support is built into Better Auth. You only need to install Kysely and a database driver:
 
 ```package-install
-kysely better-sqlite3
+kysely kysely-planetscale
 ```
 
 ## Example Usage
@@ -21,12 +21,12 @@ You can use the Kysely adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { Kysely, SqliteDialect } from "kysely";
-import Database from "better-sqlite3";
+import { Kysely } from "kysely";
+import { PlanetScaleDialect } from "kysely-planetscale";
 
 const db = new Kysely({
-  dialect: new SqliteDialect({
-    database: new Database("db.sqlite"),
+  dialect: new PlanetScaleDialect({
+    url: process.env.DATABASE_URL,
   }),
 });
 
