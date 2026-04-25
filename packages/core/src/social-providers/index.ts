@@ -33,6 +33,7 @@ import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
+import { wechat } from "./wechat";
 import { zoom } from "./zoom";
 
 export const socialProviders = {
@@ -70,6 +71,7 @@ export const socialProviders = {
 	polar,
 	railway,
 	vercel,
+	wechat,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -104,10 +106,8 @@ export * from "./google";
 export * from "./huggingface";
 export * from "./kakao";
 export * from "./kick";
-export * from "./kick";
 export * from "./line";
 export * from "./linear";
-export * from "./linkedin";
 export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";
@@ -126,6 +126,7 @@ export * from "./twitch";
 export * from "./twitter";
 export * from "./vercel";
 export * from "./vk";
+export * from "./wechat";
 export * from "./zoom";
 
 export type SocialProviderList = typeof socialProviderList;

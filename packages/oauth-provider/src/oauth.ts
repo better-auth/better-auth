@@ -9,7 +9,6 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
-import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
@@ -28,7 +27,12 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
-import { deleteFromPrompt, getJwtPlugin } from "./utils";
+import {
+	deleteFromPrompt,
+	getJwtPlugin,
+	verifyOAuthQueryParams,
+} from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -161,10 +165,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 	return {
 		id: "oauth-provider",
+		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		init: (ctx) => {
-			// Require session id storage on database (secondary-storage only solution not yet supported)
-			if (ctx.options.session && !ctx.options.session.storeSessionInDatabase) {
+			// OAuth provider performs adapter-level session lookups by id, so it
+			// currently requires DB-backed sessions whenever secondary storage is enabled.
+			if (
+				ctx.options.secondaryStorage &&
+				ctx.options.session?.storeSessionInDatabase !== true
+			) {
 				throw new BetterAuthError(
 					"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
 				);
@@ -177,7 +186,21 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
-				const issuerPath = new URL(issuer).pathname;
+				const isDynamicBaseURLInit =
+					jwtPluginOptions?.jwt?.issuer == null &&
+					typeof ctx.options.baseURL === "object" &&
+					ctx.options.baseURL !== null &&
+					"allowedHosts" in ctx.options.baseURL;
+				let issuerPath: string;
+				try {
+					issuerPath = new URL(issuer).pathname;
+				} catch (error) {
+					// baseURL may not be available during init when using dynamic baseURL config
+					if (isDynamicBaseURLInit && issuer === "") {
+						return;
+					}
+					throw error;
+				}
 				// oAuth Server Config
 				if (
 					!opts.silenceWarnings?.oauthAuthServerConfig &&
@@ -209,27 +232,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						// Verify query signature
 						const query = ctx.body.oauth_query;
-						let queryParams = new URLSearchParams(query);
-						const sig = queryParams.get("sig");
-						const exp = Number(queryParams.get("exp"));
-						queryParams.delete("sig");
-						queryParams = new URLSearchParams(queryParams);
-						const verifySig = await makeSignature(
-							queryParams.toString(),
+						const isValid = await verifyOAuthQueryParams(
+							query,
 							ctx.context.secret,
 						);
-						if (
-							!sig ||
-							!constantTimeEqual(sig, verifySig) ||
-							new Date(exp * 1000) < new Date()
-						) {
+						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_signature",
 							});
 						}
+						const queryParams = new URLSearchParams(query);
+						queryParams.delete("sig");
 						queryParams.delete("exp");
 						await oAuthState.set({
-							query: new URLSearchParams(queryParams).toString(),
+							query: queryParams.toString(),
 						});
 
 						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
@@ -273,6 +289,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!session) return;
 						ctx.context.session = session;
 
+						const secFetchMode = ctx.request?.headers
+							?.get("sec-fetch-mode")
+							?.toLowerCase();
+						const acceptHeader =
+							ctx.request?.headers?.get("accept")?.toLowerCase() ?? "";
+						const isNavigationRequest =
+							secFetchMode === "navigate" ||
+							(!secFetchMode &&
+								(acceptHeader.includes("text/html") ||
+									acceptHeader.includes("application/xhtml+xml")));
+						if (!isNavigationRequest) {
+							ctx.headers?.set("accept", "application/json");
+						}
 						ctx.query = deleteFromPrompt(query, "login");
 						return await authorizeEndpoint(ctx, opts);
 					}),
@@ -1302,6 +1331,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			createOAuthClient: oauthClientEndpoints.createOAuthClient(opts),
 			getOAuthClient: oauthClientEndpoints.getOAuthClient(opts),
 			getOAuthClientPublic: oauthClientEndpoints.getOAuthClientPublic(opts),
+			getOAuthClientPublicPrelogin:
+				oauthClientEndpoints.getOAuthClientPublicPrelogin(opts),
 			getOAuthClients: oauthClientEndpoints.getOAuthClients(opts),
 			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),

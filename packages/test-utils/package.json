@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.6",
   "description": "Testing utilities for Better Auth adapter development",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch"
@@ -28,7 +29,7 @@
   ],
   "exports": {
     "./adapter": {
-      "dev-source": "./src/adapter.ts",
+      "dev-source": "./src/adapter/index.ts",
       "default": "./dist/adapter.mjs",
       "types": "./dist/adapter.d.mts"
     }
@@ -40,8 +41,8 @@
     "vitest": "catalog:vitest"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
     "vitest": "catalog:vitest"
   }
 }

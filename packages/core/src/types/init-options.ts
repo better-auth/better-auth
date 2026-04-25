@@ -216,7 +216,9 @@ export type BetterAuthAdvancedOptions = {
 		  }
 		| undefined;
 	/**
-	 * Use secure cookies
+	 * Force cookies to always use the `Secure` attribute. By default,
+	 * cookies are secure in production environments. Set this to `true`
+	 * to enforce secure cookies in all environments.
 	 *
 	 * @default false
 	 */
@@ -384,9 +386,11 @@ export type BetterAuthAdvancedOptions = {
 
 export type BetterAuthOptions = {
 	/**
-	 * The name of the application
+	 * The name of your application. Used as a display name in contexts
+	 * where your app needs to be identified — for example, as the default
+	 * issuer name in authenticator apps when users set up 2FA/TOTP.
 	 *
-	 * process.env.APP_NAME
+	 * Can also be set via the `APP_NAME` environment variable.
 	 *
 	 * @default "Better Auth"
 	 */
@@ -1145,7 +1149,12 @@ export type BetterAuthOptions = {
 		  })
 		| undefined;
 	/**
-	 * List of trusted origins.
+	 * Additional trusted origins. By default, Better Auth trusts your
+	 * app's {@link baseURL}. Use this option to allow additional origins
+	 * (e.g. a separate frontend domain).
+	 *
+	 * Can be a static array, a function that returns origins dynamically,
+	 * or use wildcard patterns (e.g. `"https://*.example.com"`).
 	 *
 	 * @param request - The request object.
 	 * It'll be undefined if no request was

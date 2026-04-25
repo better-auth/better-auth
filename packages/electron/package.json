@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/electron",
-  "version": "1.5.1-beta.3",
+  "version": "1.5.6",
   "description": "Better Auth integration for Electron applications.",
   "type": "module",
   "license": "MIT",
@@ -19,10 +19,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
@@ -92,10 +93,10 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "better-auth": "workspace:*",
+    "better-auth": "workspace:^",
     "better-call": "catalog:",
     "conf": "^15.0.2",
     "electron": ">=36.0.0"

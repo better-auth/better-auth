@@ -5,6 +5,7 @@ import type {
 import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { parseCookies } from "better-auth/cookies";
 import type { I18nOptions, LocaleDetectionStrategy } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 export type {
 	I18nOptions,
@@ -151,6 +152,7 @@ export const i18n = <Locales extends string[]>(
 
 	return {
 		id: "i18n",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
