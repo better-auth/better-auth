@@ -4,88 +4,90 @@ description: Open ID Connect plugin for Better Auth that allows you to have your
 ---
 
 <Callout type="warn">
-This plugin will soon be deprecated in favor of the [OAuth Provider Plugin](/docs/plugins/oauth-provider).
+  This plugin will soon be deprecated in favor of the [OAuth Provider Plugin](/docs/plugins/oauth-provider).
 </Callout>
 
 The **OIDC Provider Plugin** enables you to build and manage your own OpenID Connect (OIDC) provider, granting full control over user authentication without relying on third-party services like Okta or Azure AD. It also allows other services to authenticate users through your OIDC provider.
 
 **Key Features**:
 
-- **Client Registration**: Register clients to authenticate with your OIDC provider.
-- **Dynamic Client Registration**: Allow clients to register dynamically.
-- **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
-- **Authorization Code Flow**: Support the Authorization Code Flow.
-- **Public Clients**: Support public clients for SPA, mobile apps, CLI tools, etc.
-- **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
-- **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
-- **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
-- **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.
+* **Client Registration**: Register clients to authenticate with your OIDC provider.
+* **Dynamic Client Registration**: Allow clients to register dynamically.
+* **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
+* **Authorization Code Flow**: Support the Authorization Code Flow.
+* **Public Clients**: Support public clients for SPA, mobile apps, CLI tools, etc.
+* **JWKS Endpoint**: Publish a JWKS endpoint to allow clients to verify tokens. (Not fully implemented)
+* **Refresh Tokens**: Issue refresh tokens and handle access token renewal using the `refresh_token` grant.
+* **OAuth Consent**: Implement OAuth consent screens for user authorization, with an option to bypass consent for trusted applications.
+* **UserInfo Endpoint**: Provide a UserInfo endpoint for clients to retrieve user details.
 
 <Callout type="warn">
-This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
+  This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
 </Callout>
 
 ## Installation
 
 <Steps>
-    <Step>
-        ### Mount the Plugin
+  <Step>
+    ### Mount the Plugin
 
-        Add the OIDC plugin to your auth config. See [Configuration Section](#configuration) on how to configure the plugin.
+    Add the OIDC plugin to your auth config. See [Configuration Section](#configuration) on how to configure the plugin.
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth";
-        import { oidcProvider } from "better-auth/plugins"; // [!code highlight]
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { oidcProvider } from "better-auth/plugins"; // [!code highlight]
 
-        const auth = betterAuth({
-            plugins: [
-            oidcProvider({ // [!code highlight]
-                loginPage: "/sign-in", // path to the login page // [!code highlight]
-                // ...other options // [!code highlight]
-              }) // [!code highlight]
-            ]
-        })
+    const auth = betterAuth({
+        plugins: [
+        oidcProvider({ // [!code highlight]
+            loginPage: "/sign-in", // path to the login page // [!code highlight]
+            // ...other options // [!code highlight]
+          }) // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the Database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
         ```
-    </Step>
+      </Tab>
 
-    <Step>
-        ### Migrate the Database
-
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
-
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx auth migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx auth generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
-
-    <Step>
-        ### Add the Client Plugin
-
-        Add the OIDC client plugin to your auth client config.
-
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client";
-        import { oidcClient } from "better-auth/client/plugins" // [!code highlight]
-        
-        const authClient = createAuthClient({
-            plugins: [
-            oidcClient({ // [!code highlight]
-                // Your OIDC configuration // [!code highlight]
-              }) // [!code highlight]
-            ]
-        })
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
         ```
-    </Step>
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Add the Client Plugin
+
+    Add the OIDC client plugin to your auth client config.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { oidcClient } from "better-auth/client/plugins" // [!code highlight]
+
+    const authClient = createAuthClient({
+        plugins: [
+        oidcClient({ // [!code highlight]
+            // Your OIDC configuration // [!code highlight]
+          }) // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -96,87 +98,83 @@ Once installed, you can utilize the OIDC Provider to manage authentication flows
 
 To register a new OIDC client, use the `oauth2.register` method on the client or `auth.api.registerOAuthApplication` on the server.
 
-<APIMethod 
-  path="/oauth2/register" 
-  method="POST"
-  note="By default, client registration requires authentication. Set `allowDynamicClientRegistration: true` to allow public registration. Make sure to add the `oidcClient()` plugin to your auth client configuration."
->
-```ts
-type registerOAuthApplication = {
-    /**
-     * A list of redirect URIs. 
-     */
-    redirect_uris: string[] = ["https://client.example.com/callback"]
-    /**
-     * The authentication method for the token endpoint. 
-     */
-    token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" = "client_secret_basic"
-    /**
-     * The grant types supported by the application. 
-     */
-    grant_types?: ("authorization_code" | "implicit" | "password" | "client_credentials" | "refresh_token" | "urn:ietf:params:oauth:grant-type:jwt-bearer" | "urn:ietf:params:oauth:grant-type:saml2-bearer")[] = ["authorization_code"]
-    /**
-     * The response types supported by the application. 
-     */
-    response_types?: ("code" | "token")[] = ["code"]
-    /**
-     * The name of the application. 
-     */
-    client_name?: string = "My App"
-    /**
-     * The URI of the application. 
-     */
-    client_uri?: string = "https://client.example.com"
-    /**
-     * The URI of the application logo. 
-     */
-    logo_uri?: string = "https://client.example.com/logo.png"
-    /**
-     * The scopes supported by the application. Separated by spaces. 
-     */
-    scope?: string = "profile email"
-    /**
-     * The contact information for the application. 
-     */
-    contacts?: string[] = ["admin@example.com"]
-    /**
-     * The URI of the application terms of service. 
-     */
-    tos_uri?: string = "https://client.example.com/tos"
-    /**
-     * The URI of the application privacy policy. 
-     */
-    policy_uri?: string = "https://client.example.com/policy"
-    /**
-     * The URI of the application JWKS. 
-     */
-    jwks_uri?: string = "https://client.example.com/jwks"
-    /**
-     * The JWKS of the application. 
-     */
-    jwks?: Record<string, any> = {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}
-    /**
-     * The metadata of the application. 
-     */
-    metadata?: Record<string, any> = {"key": "value"}
-    /**
-     * The software ID of the application. 
-     */
-    software_id?: string = "my-software"
-    /**
-     * The software version of the application. 
-     */
-    software_version?: string = "1.0.0"
-    /**
-     * The software statement of the application. 
-     */
-    software_statement?: string
-}
-```
+<APIMethod path="/oauth2/register" method="POST" note="By default, client registration requires authentication. Set `allowDynamicClientRegistration: true` to allow public registration. Make sure to add the `oidcClient()` plugin to your auth client configuration.">
+  ```ts
+  type registerOAuthApplication = {
+      /**
+       * A list of redirect URIs. 
+       */
+      redirect_uris: string[] = ["https://client.example.com/callback"]
+      /**
+       * The authentication method for the token endpoint. 
+       */
+      token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" = "client_secret_basic"
+      /**
+       * The grant types supported by the application. 
+       */
+      grant_types?: ("authorization_code" | "implicit" | "password" | "client_credentials" | "refresh_token" | "urn:ietf:params:oauth:grant-type:jwt-bearer" | "urn:ietf:params:oauth:grant-type:saml2-bearer")[] = ["authorization_code"]
+      /**
+       * The response types supported by the application. 
+       */
+      response_types?: ("code" | "token")[] = ["code"]
+      /**
+       * The name of the application. 
+       */
+      client_name?: string = "My App"
+      /**
+       * The URI of the application. 
+       */
+      client_uri?: string = "https://client.example.com"
+      /**
+       * The URI of the application logo. 
+       */
+      logo_uri?: string = "https://client.example.com/logo.png"
+      /**
+       * The scopes supported by the application. Separated by spaces. 
+       */
+      scope?: string = "profile email"
+      /**
+       * The contact information for the application. 
+       */
+      contacts?: string[] = ["admin@example.com"]
+      /**
+       * The URI of the application terms of service. 
+       */
+      tos_uri?: string = "https://client.example.com/tos"
+      /**
+       * The URI of the application privacy policy. 
+       */
+      policy_uri?: string = "https://client.example.com/policy"
+      /**
+       * The URI of the application JWKS. 
+       */
+      jwks_uri?: string = "https://client.example.com/jwks"
+      /**
+       * The JWKS of the application. 
+       */
+      jwks?: Record<string, any> = {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}
+      /**
+       * The metadata of the application. 
+       */
+      metadata?: Record<string, any> = {"key": "value"}
+      /**
+       * The software ID of the application. 
+       */
+      software_id?: string = "my-software"
+      /**
+       * The software version of the application. 
+       */
+      software_version?: string = "1.0.0"
+      /**
+       * The software statement of the application. 
+       */
+      software_statement?: string
+  }
+  ```
 </APIMethod>
 
 <Callout>
-This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
+  This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
 </Callout>
 
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
@@ -254,9 +252,9 @@ const userInfo = await response.json();
 
 **Returned claims based on scopes:**
 
-- With `openid` scope: Returns the user's ID (`sub` claim)
-- With `profile` scope: Returns `name`, `picture`, `given_name`, `family_name`
-- With `email` scope: Returns `email` and `email_verified`
+* With `openid` scope: Returns the user's ID (`sub` claim)
+* With `profile` scope: Returns `name`, `picture`, `given_name`, `family_name`
+* With `email` scope: Returns `email` and `email_verified`
 
 #### Custom Claims
 
@@ -317,6 +315,7 @@ The plugin will redirect the user to the specified path with `consent_code`, `cl
 The consent endpoint supports two methods for passing the consent code:
 
 **Method 1: URL Parameter**
+
 ```ts title="consent-page.ts"
 import { authClient } from "@/lib/auth-client"
 
@@ -336,6 +335,7 @@ const res = await authClient.oauth2.consent({
 ```
 
 **Method 2: Cookie-Based**
+
 ```ts title="consent-page.ts"
 import { authClient } from "@/lib/auth-client"
 
@@ -418,7 +418,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-When `useJWTPlugin: false` (default), ID tokens are signed with the application secret.
+  When `useJWTPlugin: false` (default), ID tokens are signed with the application secret.
 </Callout>
 
 ### Dynamic Client Registration
@@ -445,195 +445,196 @@ The OIDC Provider plugin adds the following tables to the database:
 
 Table Name: `oauthApplication`
 
-<DatabaseTable
-  fields={[
-   {
-      name: "id",
-      type: "string",
-      description: "Database ID of the OAuth client",
-      isPrimaryKey: true
-   },
-    {
-      name: "clientId",
-      type: "string",
-      description: "Unique identifier for each OAuth client",
-      isUnique: true
-    },
-    { 
-      name: "clientSecret", 
-      type: "string", 
-      description: "Secret key for the OAuth client. Optional for public clients using PKCE.",
-      isOptional: true
-    },
-    {
-      name: "icon",
-      type: "string",
-      description: "Icon of the OAuth client",
-      isOptional: true
-    },
-    {
-      name: "name",
-      type: "string",
-      description: "Name of the OAuth client"
-    },
-    { 
-      name: "redirectUrls",
-      type: "string", 
-      description: "Comma-separated list of redirect URLs"
-    },
-    { 
-      name: "metadata", 
-      type: "string",
-      description: "Additional metadata for the OAuth client",
-      isOptional: true
-    },
-    { 
-      name: "type", 
-      type: "string",
-      description: "Type of OAuth client (e.g., web, mobile)"
-    },
-    {
-      name: "disabled",
-      type: "boolean",
-      description: "Indicates if the client is disabled",
-      isOptional: true
-    },
-    { 
-      name: "userId",
-      type: "string",
-      description: "ID of the user who owns the client. (optional)",
-      isOptional: true,
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the OAuth client was created"
-    },
-   {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the OAuth client was last updated"
-   }
-  ]}
-/>
+export const oauthApplicationTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Database ID of the OAuth client",
+		isPrimaryKey: true,
+	},
+	{
+		name: "clientId",
+		type: "string",
+		description: "Unique identifier for each OAuth client",
+		isUnique: true,
+	},
+	{
+		name: "clientSecret",
+		type: "string",
+		description:
+			"Secret key for the OAuth client. Optional for public clients using PKCE.",
+		isOptional: true,
+	},
+	{
+		name: "icon",
+		type: "string",
+		description: "Icon of the OAuth client",
+		isOptional: true,
+	},
+	{
+		name: "name",
+		type: "string",
+		description: "Name of the OAuth client",
+	},
+	{
+		name: "redirectUrls",
+		type: "string",
+		description: "Comma-separated list of redirect URLs",
+	},
+	{
+		name: "metadata",
+		type: "string",
+		description: "Additional metadata for the OAuth client",
+		isOptional: true,
+	},
+	{
+		name: "type",
+		type: "string",
+		description: "Type of OAuth client (e.g., web, mobile)",
+	},
+	{
+		name: "disabled",
+		type: "boolean",
+		description: "Indicates if the client is disabled",
+		isOptional: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "ID of the user who owns the client. (optional)",
+		isOptional: true,
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the OAuth client was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the OAuth client was last updated",
+	},
+];
+
+<DatabaseTable name="oauthApplication" fields={oauthApplicationTableFields} />
 
 ### OAuth Access Token
 
 Table Name: `oauthAccessToken`
 
-<DatabaseTable
-  fields={[
-    {
-      name: "id",
-      type: "string",
-      description: "Database ID of the access token",
-      isPrimaryKey: true
-   },
-    { 
-      name: "accessToken",
-      type: "string",
-      description: "Access token issued to the client",
-      isUnique: true
-    },
-    { 
-      name: "refreshToken",
-      type: "string",
-      description: "Refresh token issued to the client",
-      isUnique: true
-    },
-    { 
-      name: "accessTokenExpiresAt", 
-      type: "Date", 
-      description: "Expiration date of the access token"
-    },
-    { 
-      name: "refreshTokenExpiresAt", 
-      type: "Date", 
-      description: "Expiration date of the refresh token"
-    },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "ID of the OAuth client",
-      isForeignKey: true,
-      references: { model: "oauthApplication", field: "clientId" }
-    },
-    { 
-      name: "userId",
-      type: "string",
-      description: "ID of the user associated with the token",
-      isOptional: true,
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
-    },
-    { 
-      name: "scopes", 
-      type: "string", 
-      description: "Comma-separated list of scopes granted"
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the access token was created"
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the access token was last updated"
-    }
-  ]}
-/>
+export const oauthAccessTokenTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Database ID of the access token",
+		isPrimaryKey: true,
+	},
+	{
+		name: "accessToken",
+		type: "string",
+		description: "Access token issued to the client",
+		isUnique: true,
+	},
+	{
+		name: "refreshToken",
+		type: "string",
+		description: "Refresh token issued to the client",
+		isUnique: true,
+	},
+	{
+		name: "accessTokenExpiresAt",
+		type: "Date",
+		description: "Expiration date of the access token",
+	},
+	{
+		name: "refreshTokenExpiresAt",
+		type: "Date",
+		description: "Expiration date of the refresh token",
+	},
+	{
+		name: "clientId",
+		type: "string",
+		description: "ID of the OAuth client",
+		isForeignKey: true,
+		references: { model: "oauthApplication", field: "clientId", onDelete: "cascade" },
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "ID of the user associated with the token",
+		isOptional: true,
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
+	},
+	{
+		name: "scopes",
+		type: "string",
+		description: "Comma-separated list of scopes granted",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the access token was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the access token was last updated",
+	},
+];
+
+<DatabaseTable name="oauthAccessToken" fields={oauthAccessTokenTableFields} />
 
 ### OAuth Consent
 
 Table Name: `oauthConsent`
 
-<DatabaseTable
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Database ID of the consent",
-      isPrimaryKey: true
-    },
-    { 
-      name: "userId", 
-      type: "string", 
-      description: "ID of the user who gave consent",
-      isForeignKey: true,
-      references: { model: "user", field: "id" }
-    },
-    { 
-      name: "clientId", 
-      type: "string", 
-      description: "ID of the OAuth client",
-      isForeignKey: true,
-      references: { model: "oauthApplication", field: "clientId" }
-    },
-    { 
-      name: "scopes", 
-      type: "string", 
-      description: "Comma-separated list of scopes consented to"
-    },
-    { 
-      name: "consentGiven", 
-      type: "boolean", 
-      description: "Indicates if consent was given"
-    },
-    {
-      name: "createdAt",
-      type: "Date",
-      description: "Timestamp of when the consent was given"
-    },
-    {
-      name: "updatedAt",
-      type: "Date",
-      description: "Timestamp of when the consent was last updated"
-    }
-  ]}
-/>
+export const oauthConsentTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Database ID of the consent",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "ID of the user who gave consent",
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "cascade" },
+	},
+	{
+		name: "clientId",
+		type: "string",
+		description: "ID of the OAuth client",
+		isForeignKey: true,
+		references: { model: "oauthApplication", field: "clientId", onDelete: "cascade" },
+	},
+	{
+		name: "scopes",
+		type: "string",
+		description: "Comma-separated list of scopes consented to",
+	},
+	{
+		name: "consentGiven",
+		type: "boolean",
+		description: "Indicates if consent was given",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the consent was given",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the consent was last updated",
+	},
+];
+
+<DatabaseTable name="oauthConsent" fields={oauthConsentTableFields} />
 
 ## Options
 
