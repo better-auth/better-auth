@@ -268,6 +268,69 @@ describe("getBaseURL", () => {
 
 			expect(result).toBe("https://api.v1.staging.example.com/auth");
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8898
+		 */
+		describe("RFC compliance and ReDoS guard", () => {
+			const fallback = "http://localhost:3000/auth";
+			const reject = (host: string) => {
+				const request = new Request("http://localhost:3000/test", {
+					headers: {
+						"x-forwarded-host": host,
+						"x-forwarded-proto": "http",
+					},
+				});
+				expect(getBaseURL(undefined, "/auth", request, false, true)).toBe(
+					fallback,
+				);
+			};
+
+			it("rejects port above 65535 (RFC 6335)", () => {
+				reject("example.com:99999");
+				reject("1.2.3.4:70000");
+			});
+
+			it("rejects IPv4 octet above 255 (RFC 3986 dec-octet)", () => {
+				reject("999.999.999.999");
+				reject("256.0.0.1");
+			});
+
+			it("rejects malformed IPv6 (RFC 4291)", () => {
+				reject("[::::::::::]");
+				reject("[1::2::3]");
+				reject("[gggg::1]");
+			});
+
+			it("rejects label longer than 63 octets (RFC 1035 §2.3.4)", () => {
+				reject(`${"a".repeat(64)}.com`);
+			});
+
+			it("rejects hostname longer than 253 octets (RFC 1035 §2.3.4)", () => {
+				const longHost = `${(`${"a".repeat(63)}.`).repeat(4)}com`;
+				reject(longHost);
+			});
+
+			it("rejects header longer than the input cap", () => {
+				reject("a".repeat(1024));
+			});
+
+			it("rejects crafted dash payload without excessive backtracking", () => {
+				const request = new Request("http://localhost:3000/test", {
+					headers: {
+						"x-forwarded-host": `a${"-".repeat(10_000)}!`,
+						"x-forwarded-proto": "http",
+					},
+				});
+
+				const startedAt = performance.now();
+				const result = getBaseURL(undefined, "/auth", request, false, true);
+				const duration = performance.now() - startedAt;
+
+				expect(result).toBe(fallback);
+				expect(duration).toBeLessThan(50);
+			});
+		});
 	});
 });
 
