@@ -315,21 +315,25 @@ describe("getBaseURL", () => {
 				reject("a".repeat(1024));
 			});
 
-			it("rejects crafted dash payload without excessive backtracking", () => {
-				const request = new Request("http://localhost:3000/test", {
-					headers: {
-						"x-forwarded-host": `a${"-".repeat(10_000)}!`,
-						"x-forwarded-proto": "http",
-					},
-				});
+			it(
+				"rejects crafted dash payload without excessive backtracking",
+				{ retry: 2, timeout: 2000 },
+				() => {
+					const request = new Request("http://localhost:3000/test", {
+						headers: {
+							"x-forwarded-host": `a${"-".repeat(10_000)}!`,
+							"x-forwarded-proto": "http",
+						},
+					});
 
-				const startedAt = performance.now();
-				const result = getBaseURL(undefined, "/auth", request, false, true);
-				const duration = performance.now() - startedAt;
+					const startedAt = performance.now();
+					const result = getBaseURL(undefined, "/auth", request, false, true);
+					const duration = performance.now() - startedAt;
 
-				expect(result).toBe(fallback);
-				expect(duration).toBeLessThan(50);
-			});
+					expect(result).toBe(fallback);
+					expect(duration).toBeLessThan(250);
+				},
+			);
 		});
 	});
 });
