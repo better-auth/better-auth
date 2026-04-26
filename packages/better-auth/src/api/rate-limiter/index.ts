@@ -249,8 +249,18 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	}
 }
 
-export async function onResponseRateLimit(req: Request, ctx: AuthContext) {
+export async function onResponseRateLimit(
+	req: Request,
+	ctx: AuthContext,
+	response: Response,
+) {
 	if (!ctx.rateLimit.enabled) {
+		return;
+	}
+	if (
+		ctx.rateLimit.includeSuccessfulRequests === false &&
+		response.status < 400
+	) {
 		return;
 	}
 	const config = await resolveRateLimitConfig(req, ctx);

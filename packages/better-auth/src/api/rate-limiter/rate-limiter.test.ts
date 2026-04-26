@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -98,6 +99,171 @@ describe("rate-limiter", async () => {
 				expect(response.error?.status).toBe(401);
 			}
 		}
+	});
+});
+
+describe("rate-limiter response outcome filtering", async () => {
+	const { client } = await getTestInstance({
+		advanced: {
+			ipAddress: {
+				ipAddressHeaders: ["x-test-ip"],
+			},
+		},
+		rateLimit: {
+			enabled: true,
+			includeSuccessfulRequests: false,
+			customRules: {
+				"/ok": {
+					window: 10,
+					max: 2,
+				},
+				"/list-sessions": {
+					window: 10,
+					max: 2,
+				},
+			},
+		},
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7264
+	 */
+	it("should count only failed responses when includeSuccessfulRequests is false", async () => {
+		const headers = {
+			"x-test-ip": "203.0.113.99",
+		};
+
+		for (let i = 0; i < 5; i++) {
+			const response = await client.$fetch("/ok", { headers });
+			expect(response.data).toMatchObject({ ok: true });
+		}
+
+		for (let i = 0; i < 4; i++) {
+			const response = await client.listSessions({
+				fetchOptions: { headers },
+			});
+			if (i >= 2) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error?.status).toBe(401);
+			}
+		}
+	});
+});
+
+describe("rate-limiter response outcome with plugin response hooks", async () => {
+	const responseRewritePlugin: BetterAuthPlugin = {
+		id: "response-rewrite-plugin",
+		async onResponse(response) {
+			if (response.status !== 200) {
+				return;
+			}
+			return {
+				response: new Response(JSON.stringify({ rewritten: true }), {
+					status: 418,
+					statusText: "I'm a teapot",
+					headers: {
+						"content-type": "application/json",
+					},
+				}),
+			};
+		},
+	};
+
+	const { auth } = await getTestInstance(
+		{
+			advanced: {
+				ipAddress: {
+					ipAddressHeaders: ["x-test-ip"],
+				},
+			},
+			plugins: [responseRewritePlugin],
+			rateLimit: {
+				enabled: true,
+				includeSuccessfulRequests: false,
+				customRules: {
+					"/ok": {
+						window: 10,
+						max: 1,
+					},
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should apply outcome filtering to the final plugin-modified response", async () => {
+		const headers = {
+			"x-test-ip": "203.0.113.97",
+		};
+		const makeRequest = () =>
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+					headers,
+				}),
+			);
+
+		const first = await makeRequest();
+		expect(first.status).toBe(418);
+
+		const second = await makeRequest();
+		expect(second.status).toBe(429);
+	});
+});
+
+describe("rate-limiter response outcome when plugin response hook throws", async () => {
+	const throwingPlugin: BetterAuthPlugin = {
+		id: "throwing-response-plugin",
+		async onResponse(response) {
+			if (response.status === 200) {
+				throw new Error("plugin onResponse failed");
+			}
+		},
+	};
+
+	const { auth } = await getTestInstance(
+		{
+			advanced: {
+				ipAddress: {
+					ipAddressHeaders: ["x-test-ip"],
+				},
+			},
+			plugins: [throwingPlugin],
+			rateLimit: {
+				enabled: true,
+				includeSuccessfulRequests: false,
+				customRules: {
+					"/ok": {
+						window: 10,
+						max: 1,
+					},
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should still account response-side rate limit when plugin throws", async () => {
+		const headers = {
+			"x-test-ip": "203.0.113.96",
+		};
+		const makeRequest = () =>
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+					headers,
+				}),
+			);
+
+		await expect(makeRequest()).rejects.toThrow("plugin onResponse failed");
+
+		const second = await makeRequest();
+		expect(second.status).toBe(429);
 	});
 });
 
