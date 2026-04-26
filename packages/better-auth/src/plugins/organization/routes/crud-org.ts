@@ -8,7 +8,7 @@ import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
+import { hasPermission, invalidatePermissionCache } from "../has-permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -611,6 +611,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			await adapter.deleteOrganization(organizationId);
+			await invalidatePermissionCache(organizationId, ctx);
 			if (options?.organizationHooks?.afterDeleteOrganization) {
 				await options.organizationHooks.afterDeleteOrganization({
 					organization: org,

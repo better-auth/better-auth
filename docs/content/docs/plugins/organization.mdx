@@ -1401,6 +1401,40 @@ const canCreateProjectAndCreateSale =
   });
 ```
 
+**Has Permission For Roles**:
+
+If your app already knows the member roles for an organization, you can skip the membership lookup and evaluate permissions directly with `hasPermissionForRoles`.
+
+```ts title="has-permission-for-roles.ts"
+import { auth } from "@/lib/auth"
+import { headers } from "next/headers"
+
+await auth.api.hasPermissionForRoles({
+  headers: await headers(),
+  body: {
+    organizationId: "org-id",
+    roles: ["admin", "member"],
+    permissions: {
+      project: ["create"],
+    },
+  },
+});
+
+await auth.api.hasPermissionForRoles({
+  headers: await headers(),
+  body: {
+    organizationId: "org-id",
+    roles: "admin,member",
+    permissions: {
+      project: ["create"],
+      sale: ["create"],
+    },
+  },
+});
+```
+
+`hasPermissionForRoles` is a server-side `auth.api` helper and still requires an authenticated session. It skips the membership lookup, but it does not expose organization permission evaluation as a public unauthenticated endpoint.
+
 **Check Role Permission**:
 
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
@@ -1485,6 +1519,37 @@ export const authClient = createAuthClient({
   The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
 </Callout>
+
+### Dynamic Role Permission Cache
+
+If you already configured a global [secondary storage](/docs/concepts/database#secondary-storage), you can enable `permissionCache` on the organization plugin to cache dynamic role definitions per organization.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { redisStorage } from "@better-auth/redis-storage";
+import { ac } from "@/auth/permissions";
+
+export const auth = betterAuth({
+  secondaryStorage: redisStorage({
+    url: process.env.REDIS_URL!,
+  }),
+  plugins: [
+    organization({
+      ac,
+      dynamicAccessControl: {
+        enabled: true,
+      },
+      permissionCache: {
+        enabled: true,
+        ttl: 60,
+      },
+    }),
+  ],
+});
+```
+
+When enabled, Better Auth checks secondary storage before loading dynamic organization roles from the primary database. If no global `secondaryStorage` is configured, Better Auth logs a warning and falls back to database reads.
 
 ### Creating a role
 

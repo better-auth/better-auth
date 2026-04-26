@@ -1,7 +1,7 @@
-import type { APIError } from "@better-auth/core/error";
+import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
+import { describe, expect, expectTypeOf, it, onTestFinished, vi } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -18,7 +18,9 @@ import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
+import { hasPermission as hasPermissionHelper } from "./has-permission";
 import { organization } from "./organization";
+import { cacheAllRoles } from "./permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -26,6 +28,9 @@ import type {
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+
+const getPermissionCacheKey = (organizationId: string) =>
+	`organization-role-permissions:${organizationId}`;
 
 describe("organization type", () => {
 	it("empty org type should works", () => {
@@ -1783,6 +1788,831 @@ describe("dynamic access control should merge DB permissions with built-in roles
 			},
 		});
 		expect(orgDelete.success).toBe(true);
+	});
+});
+
+describe("organization permission cache", async () => {
+	const storage = new Map<string, string>();
+	const storageTTLs = new Map<string, number | undefined>();
+	const secondaryStorage = {
+		get: vi.fn((key: string) => storage.get(key)),
+		set: vi.fn((key: string, value: string, ttl?: number) => {
+			storage.set(key, value);
+			storageTTLs.set(key, ttl);
+		}),
+		delete: vi.fn((key: string) => {
+			storage.delete(key);
+			storageTTLs.delete(key);
+		}),
+	};
+	const ac = createAccessControl({
+		...defaultStatements,
+		project: ["create", "delete"],
+	});
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		secondaryStorage,
+		plugins: [
+			organization({
+				ac,
+				dynamicAccessControl: {
+					enabled: true,
+				},
+				permissionCache: {
+					enabled: true,
+					ttl: 60,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "permission-cache-org",
+			slug: "permission-cache-org",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("warms secondary storage and reuses it on later hasPermission calls", async () => {
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					project: ["create", "delete"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const context = await auth.$context;
+		const findManySpy = vi.spyOn(context.adapter, "findMany");
+		findManySpy.mockClear();
+		secondaryStorage.get.mockClear();
+		secondaryStorage.set.mockClear();
+
+		const permissionKey = getPermissionCacheKey(org.id);
+		const firstCheck = await auth.api.hasPermission({
+			headers,
+			body: {
+				organizationId: org.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		expect(firstCheck.success).toBe(true);
+		expect(
+			findManySpy.mock.calls.filter(
+				([args]) => args.model === "organizationRole",
+			),
+		).toHaveLength(1);
+		expect(secondaryStorage.set).toHaveBeenCalledWith(
+			permissionKey,
+			expect.any(String),
+			60,
+		);
+		expect(storageTTLs.get(permissionKey)).toBe(60);
+
+		findManySpy.mockClear();
+		secondaryStorage.get.mockClear();
+
+		const secondCheck = await auth.api.hasPermission({
+			headers,
+			body: {
+				organizationId: org.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		expect(secondCheck.success).toBe(true);
+		expect(secondaryStorage.get).toHaveBeenCalledWith(permissionKey);
+		expect(
+			findManySpy.mock.calls.filter(
+				([args]) => args.model === "organizationRole",
+			),
+		).toHaveLength(0);
+	});
+
+	it("deletes corrupt secondary storage payloads and repopulates from the database", async () => {
+		const corruptOrg = await auth.api.createOrganization({
+			body: {
+				name: "permission-cache-corrupt-org",
+				slug: `permission-cache-corrupt-org-${crypto.randomUUID()}`,
+			},
+			headers,
+		});
+		if (!corruptOrg) throw new Error("Organization not created");
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: corruptOrg.id,
+				role: "owner",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const permissionKey = getPermissionCacheKey(corruptOrg.id);
+		storage.set(permissionKey, JSON.stringify({ roles: "broken" }));
+		secondaryStorage.delete.mockClear();
+		secondaryStorage.set.mockClear();
+
+		const permissionRes = await auth.api.hasPermission({
+			headers,
+			body: {
+				organizationId: corruptOrg.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		expect(permissionRes.success).toBe(true);
+		expect(secondaryStorage.delete).toHaveBeenCalledWith(permissionKey);
+		expect(secondaryStorage.set).toHaveBeenCalledWith(
+			permissionKey,
+			expect.any(String),
+			60,
+		);
+	});
+});
+
+describe("organization permission cache ttl", async () => {
+	const storage = new Map<string, string>();
+	const secondaryStorage = {
+		get: vi.fn((key: string) => storage.get(key)),
+		set: vi.fn((key: string, value: string) => {
+			storage.set(key, value);
+		}),
+		delete: vi.fn((key: string) => {
+			storage.delete(key);
+		}),
+	};
+	const ac = createAccessControl({
+		...defaultStatements,
+		project: ["create"],
+	});
+	const organizationOptions = {
+		ac,
+		dynamicAccessControl: {
+			enabled: true,
+		},
+		permissionCache: {
+			enabled: true,
+			ttl: 1,
+		},
+	} satisfies OrganizationOptions;
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		secondaryStorage,
+		plugins: [organization(organizationOptions)],
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "permission-cache-ttl-org",
+			slug: "permission-cache-ttl-org",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("falls back to the default ttl when permissionCache.ttl is non-finite", async () => {
+		const invalidTtlOrg = await auth.api.createOrganization({
+			body: {
+				name: "permission-cache-invalid-ttl-org",
+				slug: `permission-cache-invalid-ttl-org-${crypto.randomUUID()}`,
+			},
+			headers,
+		});
+		if (!invalidTtlOrg) throw new Error("Organization not created");
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: invalidTtlOrg.id,
+				role: "custom-invalid-ttl",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const context = await auth.$context;
+		const invalidTtlOptions = {
+			ac,
+			dynamicAccessControl: {
+				enabled: true,
+			},
+			permissionCache: {
+				enabled: true,
+				ttl: Number.NaN,
+			},
+		} satisfies OrganizationOptions;
+
+		secondaryStorage.set.mockClear();
+
+		const result = await hasPermissionHelper(
+			{
+				role: "custom-invalid-ttl",
+				options: invalidTtlOptions,
+				organizationId: invalidTtlOrg.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+			{ context } as any,
+		);
+
+		expect(result).toBe(true);
+		expect(secondaryStorage.set).toHaveBeenCalledWith(
+			getPermissionCacheKey(invalidTtlOrg.id),
+			expect.any(String),
+			60,
+		);
+	});
+
+	it("expires the in-memory role cache based on ttl", async () => {
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const context = await auth.$context;
+		const findManySpy = vi.spyOn(context.adapter, "findMany");
+		findManySpy.mockClear();
+
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date("2026-04-17T00:00:00.000Z"));
+
+			const warmResult = await hasPermissionHelper(
+				{
+					role: "owner",
+					options: organizationOptions,
+					organizationId: org.id,
+					permissions: {
+						project: ["create"],
+					},
+					useMemoryCache: true,
+				},
+				{ context } as any,
+			);
+
+			expect(warmResult).toBe(true);
+			expect(
+				findManySpy.mock.calls.filter(
+					([args]) => args.model === "organizationRole",
+				),
+			).toHaveLength(1);
+
+			storage.clear();
+			findManySpy.mockClear();
+
+			const beforeExpiry = await hasPermissionHelper(
+				{
+					role: "owner",
+					options: organizationOptions,
+					organizationId: org.id,
+					permissions: {
+						project: ["create"],
+					},
+					useMemoryCache: true,
+				},
+				{ context } as any,
+			);
+
+			expect(beforeExpiry).toBe(true);
+			expect(
+				findManySpy.mock.calls.filter(
+					([args]) => args.model === "organizationRole",
+				),
+			).toHaveLength(0);
+
+			vi.setSystemTime(new Date("2026-04-17T00:00:02.000Z"));
+
+			const afterExpiry = await hasPermissionHelper(
+				{
+					role: "owner",
+					options: organizationOptions,
+					organizationId: org.id,
+					permissions: {
+						project: ["create"],
+					},
+					useMemoryCache: true,
+				},
+				{ context } as any,
+			);
+
+			expect(afterExpiry).toBe(true);
+			expect(
+				findManySpy.mock.calls.filter(
+					([args]) => args.model === "organizationRole",
+				),
+			).toHaveLength(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("only stores in-memory cache entries when useMemoryCache is enabled", async () => {
+		onTestFinished(() => {
+			cacheAllRoles.clear();
+		});
+		const { headers: freshHeaders } = await signInWithTestUser();
+
+		const memoryCacheOrg = await auth.api.createOrganization({
+			body: {
+				name: "permission-cache-memory-write-org",
+				slug: `permission-cache-memory-write-org-${crypto.randomUUID()}`,
+			},
+			headers: freshHeaders,
+		});
+		if (!memoryCacheOrg) throw new Error("Organization not created");
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: memoryCacheOrg.id,
+				role: "custom-memory-cache",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const context = await auth.$context;
+		cacheAllRoles.clear();
+
+		const result = await hasPermissionHelper(
+			{
+				role: "custom-memory-cache",
+				options: organizationOptions,
+				organizationId: memoryCacheOrg.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+			{ context } as any,
+		);
+
+		expect(result).toBe(true);
+		expect(cacheAllRoles.has(memoryCacheOrg.id)).toBe(false);
+	});
+});
+
+describe("hasPermissionForRoles", async () => {
+	const storage = new Map<string, string>();
+	const secondaryStorage = {
+		get: vi.fn((key: string) => storage.get(key)),
+		set: vi.fn((key: string, value: string) => {
+			storage.set(key, value);
+		}),
+		delete: vi.fn((key: string) => {
+			storage.delete(key);
+		}),
+	};
+	const ac = createAccessControl({
+		...defaultStatements,
+		project: ["create", "delete"],
+	});
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		secondaryStorage,
+		plugins: [
+			organization({
+				ac,
+				dynamicAccessControl: {
+					enabled: true,
+				},
+				permissionCache: {
+					enabled: true,
+					ttl: 60,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "permission-cache-custom-role-org",
+			slug: "permission-cache-custom-role-org",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("requires an authenticated session even when roles are provided", async () => {
+		try {
+			await auth.api.hasPermissionForRoles({
+				headers: new Headers(),
+				body: {
+					organizationId: org.id,
+					roles: ["owner"],
+					permissions: {
+						project: ["create"],
+					},
+				},
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("UNAUTHORIZED");
+			}
+		}
+	});
+
+	it("skips membership lookup and invalidates cached roles after role updates and deletes", async () => {
+		const permissionKey = getPermissionCacheKey(org.id);
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					project: ["create", "delete"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		await auth.api.hasPermission({
+			headers,
+			body: {
+				organizationId: org.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		secondaryStorage.delete.mockClear();
+
+		await auth.api.createOrgRole({
+			headers,
+			body: {
+				organizationId: org.id,
+				role: "custom-cache",
+				permission: {
+					project: ["create"],
+				},
+			},
+		});
+		expect(secondaryStorage.delete).toHaveBeenCalledWith(permissionKey);
+
+		const context = await auth.$context;
+		const findOneSpy = vi.spyOn(context.adapter, "findOne");
+		findOneSpy.mockClear();
+		secondaryStorage.delete.mockClear();
+
+		const firstCheck = await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: org.id,
+				roles: ["custom-cache"],
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		expect(firstCheck.success).toBe(true);
+		expect(findOneSpy).not.toHaveBeenCalled();
+		expect(storage.has(permissionKey)).toBe(true);
+
+		await auth.api.updateOrgRole({
+			headers,
+			body: {
+				organizationId: org.id,
+				roleName: "custom-cache",
+				data: {
+					permission: {
+						project: ["delete"],
+					},
+				},
+			},
+		});
+
+		expect(secondaryStorage.delete).toHaveBeenCalledWith(permissionKey);
+
+		const createAfterUpdate = await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: org.id,
+				roles: "custom-cache",
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+		const deleteAfterUpdate = await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: org.id,
+				roles: "custom-cache",
+				permissions: {
+					project: ["delete"],
+				},
+			},
+		});
+
+		expect(createAfterUpdate.success).toBe(false);
+		expect(deleteAfterUpdate.success).toBe(true);
+
+		secondaryStorage.delete.mockClear();
+
+		await auth.api.deleteOrgRole({
+			headers,
+			body: {
+				organizationId: org.id,
+				roleName: "custom-cache",
+			},
+		});
+
+		expect(secondaryStorage.delete).toHaveBeenCalledWith(permissionKey);
+
+		const afterDelete = await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: org.id,
+				roles: ["custom-cache"],
+				permissions: {
+					project: ["delete"],
+				},
+			},
+		});
+
+		expect(afterDelete.success).toBe(false);
+	});
+});
+
+describe("organization permission cache invalidation on delete", async () => {
+	const storage = new Map<string, string>();
+	const secondaryStorage = {
+		get: vi.fn((key: string) => storage.get(key)),
+		set: vi.fn((key: string, value: string) => {
+			storage.set(key, value);
+		}),
+		delete: vi.fn((key: string) => {
+			storage.delete(key);
+		}),
+	};
+	const ac = createAccessControl({
+		...defaultStatements,
+		project: ["create"],
+	});
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		secondaryStorage,
+		plugins: [
+			organization({
+				ac,
+				dynamicAccessControl: {
+					enabled: true,
+				},
+				permissionCache: {
+					enabled: true,
+					ttl: 60,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "permission-cache-delete-org",
+			slug: "permission-cache-delete-org",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("clears cached data and removes dynamic org roles when an organization is deleted", async () => {
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "custom-delete",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const permissionKey = getPermissionCacheKey(org.id);
+		const warmCache = await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: org.id,
+				roles: ["custom-delete"],
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		expect(warmCache.success).toBe(true);
+		expect(storage.has(permissionKey)).toBe(true);
+
+		await auth.api.deleteOrganization({
+			headers,
+			body: {
+				organizationId: org.id,
+			},
+		});
+
+		expect(storage.has(permissionKey)).toBe(false);
+
+		const remainingRoles = await db.findMany({
+			model: "organizationRole",
+			where: [
+				{
+					field: "organizationId",
+					value: org.id,
+				},
+			],
+		});
+		expect(remainingRoles).toHaveLength(0);
+
+		const afterDelete = await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: org.id,
+				roles: ["custom-delete"],
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		expect(afterDelete.success).toBe(false);
+	});
+
+	it("still deletes the organization when secondary storage invalidation fails", async () => {
+		const failingOrg = await auth.api.createOrganization({
+			body: {
+				name: "permission-cache-delete-org-with-storage-error",
+				slug: `permission-cache-delete-org-with-storage-error-${crypto.randomUUID()}`,
+			},
+			headers,
+		});
+		if (!failingOrg) throw new Error("Organization not created");
+
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: failingOrg.id,
+				role: "custom-delete-failure",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const permissionKey = getPermissionCacheKey(failingOrg.id);
+		await auth.api.hasPermissionForRoles({
+			headers,
+			body: {
+				organizationId: failingOrg.id,
+				roles: ["custom-delete-failure"],
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		const context = await auth.$context;
+		const warnSpy = vi.spyOn(context.logger, "warn");
+		secondaryStorage.delete.mockImplementationOnce(() => {
+			throw new Error("secondary storage unavailable");
+		});
+
+		const deletedOrganization = await auth.api.deleteOrganization({
+			headers,
+			body: {
+				organizationId: failingOrg.id,
+			},
+		});
+
+		expect(deletedOrganization.id).toBe(failingOrg.id);
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("Failed to invalidate permission cache"),
+			expect.objectContaining({
+				organizationId: failingOrg.id,
+			}),
+		);
+		expect(storage.has(permissionKey)).toBe(true);
+
+		const remainingOrganizations = await db.findMany({
+			model: "organization",
+			where: [
+				{
+					field: "id",
+					value: failingOrg.id,
+				},
+			],
+		});
+		expect(remainingOrganizations).toHaveLength(0);
+	});
+});
+
+describe("organization permission cache without secondary storage", async () => {
+	const ac = createAccessControl({
+		...defaultStatements,
+		project: ["create"],
+	});
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		plugins: [
+			organization({
+				ac,
+				dynamicAccessControl: {
+					enabled: true,
+				},
+				permissionCache: {
+					enabled: true,
+					ttl: 60,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "permission-cache-no-secondary-storage",
+			slug: "permission-cache-no-secondary-storage",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("falls back to database reads when permissionCache is enabled without secondary storage", async () => {
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					project: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const context = await auth.$context;
+		const findManySpy = vi.spyOn(context.adapter, "findMany");
+		const warnSpy = vi.spyOn(context.logger, "warn");
+		findManySpy.mockClear();
+		warnSpy.mockClear();
+
+		const firstCheck = await auth.api.hasPermission({
+			headers,
+			body: {
+				organizationId: org.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+		const secondCheck = await auth.api.hasPermission({
+			headers,
+			body: {
+				organizationId: org.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+		});
+
+		expect(firstCheck.success).toBe(true);
+		expect(secondCheck.success).toBe(true);
+		expect(
+			findManySpy.mock.calls.filter(
+				([args]) => args.model === "organizationRole",
+			),
+		).toHaveLength(2);
+		expect(warnSpy).toHaveBeenCalledTimes(1);
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("permissionCache.enabled"),
+		);
 	});
 });
 
