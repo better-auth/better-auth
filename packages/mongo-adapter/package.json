@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/mongo-adapter",
-  "version": "1.5.7-beta.1",
+  "version": "1.6.9",
   "description": "Mongo adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -20,10 +20,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
+    "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
@@ -42,7 +43,7 @@
     }
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:*",
+    "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
     "mongodb": "^6.0.0 || ^7.0.0"
   },

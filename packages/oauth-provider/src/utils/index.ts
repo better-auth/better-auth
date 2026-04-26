@@ -515,7 +515,7 @@ export function parsePrompt(prompt: string) {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
 	const uri = client.redirectUris?.[0];
 	if (!uri) {
 		throw new BetterAuthError(
@@ -531,7 +531,7 @@ export function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
-export async function computePairwiseSub(
+async function computePairwiseSub(
 	userId: string,
 	client: SchemaClient<Scope[]>,
 	secret: string,
@@ -558,6 +558,21 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
+ * Converts URLSearchParams to a plain object, preserving
+ * multi-valued keys as arrays instead of discarding duplicates.
+ */
+export function searchParamsToQuery(
+	params: URLSearchParams,
+): Record<string, string | string[]> {
+	const result: Record<string, string | string[]> = Object.create(null);
+	for (const key of new Set(params.keys())) {
+		const values = params.getAll(key);
+		result[key] = values.length === 1 ? values[0]! : values;
+	}
+	return result;
+}
+
+/**
  * Deletes a prompt value
  *
  * @param ctx
@@ -572,7 +587,7 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 			? query.set("prompt", prompts.join(" "))
 			: query.delete("prompt");
 	}
-	return Object.fromEntries(query);
+	return searchParamsToQuery(query);
 }
 
 enum PKCERequirementErrors {

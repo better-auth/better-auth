@@ -1085,4 +1085,57 @@ describe("oauth-proxy", async () => {
 			expect(accounts[0]?.providerId).toBe("google");
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8889
+	 */
+	it("should read code from POST body for form_post response mode", async () => {
+		const { client } = await getTestInstance({
+			database: undefined,
+			plugins: [
+				oAuthProxy({
+					currentURL: "http://preview-localhost:3000",
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const encryptedState = new URL(res.url!).searchParams.get("state");
+		expect(encryptedState).toBeTruthy();
+
+		// Simulate Apple's form_post: code and state are in the POST body, not the query string
+		await client.$fetch(`/callback/google`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				code: "test",
+				state: encryptedState!,
+			}).toString(),
+			onError(context) {
+				const location = context.response.headers.get("location") ?? "";
+				expect(location).not.toContain("error=no_code");
+				expect(location).not.toContain("error=invalid");
+				// Should redirect to proxy callback with profile data
+				expect(location).toContain("/oauth-proxy-callback");
+				expect(location).toContain("profile");
+			},
+		});
+	});
 });
