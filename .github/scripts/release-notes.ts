@@ -121,6 +121,17 @@ function readFileFromRef(path: string, branch: string): string {
 	return readFileSync(path, "utf-8");
 }
 
+function refHasPath(ref: string, path: string): boolean {
+	try {
+		execFileSync("git", ["cat-file", "-e", `${ref}:${path}`], {
+			stdio: "ignore",
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 function listTags(): string[] {
 	const output = execFileSync(
 		"git",
@@ -451,8 +462,33 @@ function packageToDir(name: string): string {
 	return `packages/${name.replace(/^@better-auth\//, "")}`;
 }
 
+function packageToReadmeUrl(name: string, ref: string): string {
+	return `https://github.com/${REPO}/blob/${ref}/${packageToDir(name)}/README.md`;
+}
+
 function packageToChangelogUrl(name: string, ref: string): string {
 	return `https://github.com/${REPO}/blob/${ref}/${packageToDir(name)}/CHANGELOG.md`;
+}
+
+function isNewPackageSinceTag(name: string, previousTag: string): boolean {
+	return !refHasPath(previousTag, `${packageToDir(name)}/package.json`);
+}
+
+function packageReferenceLink(
+	name: string,
+	ref: string,
+): { label: "CHANGELOG" | "README"; url: string } {
+	if (refHasPath(ref, `${packageToDir(name)}/CHANGELOG.md`)) {
+		return {
+			label: "CHANGELOG",
+			url: packageToChangelogUrl(name, ref),
+		};
+	}
+
+	return {
+		label: "README",
+		url: packageToReadmeUrl(name, ref),
+	};
 }
 
 /** Load changeset IDs from the previous beta's pre.json to exclude from orphans. */
@@ -670,17 +706,24 @@ function collectEntries(version: string, branch: string): ReleaseEntry[] {
 					: resolvePackage(parsed.scope || undefined, []);
 		}
 
-		entries.push({
-			id: changeset ? `pr-${prNumber}` : `git-${prNumber}`,
-			title,
-			changesetDescription,
-			prNumber,
-			author,
-			domain,
-			packageName,
-			changeType: classifyChangeType(parsed.type, breaking),
-			breaking,
-		});
+		const releasePackages =
+			changeset?.packageNames.length && changeset.packageNames.length > 0
+				? [...new Set(changeset.packageNames)]
+				: [packageName];
+
+		for (const releasePackage of releasePackages) {
+			entries.push({
+				id: `${changeset ? `pr-${prNumber}` : `git-${prNumber}`}:${releasePackage}`,
+				title,
+				changesetDescription,
+				prNumber,
+				author,
+				domain,
+				packageName: releasePackage,
+				changeType: classifyChangeType(parsed.type, breaking),
+				breaking,
+			});
+		}
 	}
 
 	const previousBetaChangesets = loadPreviousPrereleaseChangesets(version);
@@ -783,10 +826,14 @@ function formatReleaseBody(opts: FormatOptions): string {
 		return a.localeCompare(b);
 	});
 
+	const newPackages = new Set(
+		packageOrder.filter((pkg) => isNewPackageSinceTag(pkg, previousTag)),
+	);
+
 	for (const pkg of packageOrder) {
 		const pkgEntries = grouped.get(pkg)!;
 
-		lines.push(`## \`${pkg}\``);
+		lines.push(newPackages.has(pkg) ? `## ✨ \`${pkg}\` ✨` : `## \`${pkg}\``);
 		lines.push("");
 
 		for (const changeType of CHANGE_TYPE_ORDER) {
@@ -816,8 +863,12 @@ function formatReleaseBody(opts: FormatOptions): string {
 			lines.push("");
 		}
 
-		const changelogUrl = packageToChangelogUrl(pkg, commitRef);
-		lines.push(`For detailed changes, see [\`CHANGELOG\`](${changelogUrl})`);
+		const referenceLink = packageReferenceLink(pkg, commitRef);
+		lines.push(
+			referenceLink.label === "CHANGELOG"
+				? `For detailed changes, see [\`${referenceLink.label}\`](${referenceLink.url})`
+				: `For package details, see [\`${referenceLink.label}\`](${referenceLink.url})`,
+		);
 		lines.push("");
 	}
 
