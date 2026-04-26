@@ -160,4 +160,62 @@ describe("next-js integration", () => {
 
 		expect(session).not.toBeNull();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8464
+	 */
+	it("should skip writing session_token when value is unchanged", async () => {
+		const store: Record<string, string> = {};
+		const setSpy = vi.fn((name: string, value: string) => {
+			store[name] = value;
+		});
+
+		vi.doMock("next/headers.js", () => ({
+			cookies: vi.fn(async () => ({
+				set: setSpy,
+				delete: vi.fn(),
+				get: vi.fn((name: string) =>
+					store[name] !== undefined ? { value: store[name] } : undefined,
+				),
+			})),
+			headers: vi.fn(async () => new Headers()),
+		}));
+
+		const [{ getTestInstance }, { nextCookies }] = await Promise.all([
+			import("../test-utils/test-instance"),
+			import("./next-js"),
+		]);
+
+		const { auth, testUser } = await getTestInstance({
+			plugins: [nextCookies()],
+			session: {
+				updateAge: 0,
+			},
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		const requestHeaders = new Headers();
+		requestHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		await auth.api.getSession({ headers: requestHeaders });
+		expect(Object.keys(store).length).toBeGreaterThan(0);
+
+		setSpy.mockClear();
+
+		await auth.api.getSession({ headers: requestHeaders });
+
+		const sessionTokenWrites = setSpy.mock.calls.filter(
+			([key]) =>
+				typeof key === "string" &&
+				key.includes("session_token") &&
+				!key.includes("session_token_multi"),
+		);
+		expect(sessionTokenWrites).toHaveLength(0);
+	});
 });

@@ -103,6 +103,8 @@ export const nextCookies = () => {
 							}
 							parsed.forEach((value, key) => {
 								if (!key) return;
+								// Skip identical writes to avoid router cache invalidation.
+								if (cookieHelper.get(key)?.value === value.value) return;
 								try {
 									cookieHelper.set(key, value.value, toCookieOptions(value));
 								} catch {
