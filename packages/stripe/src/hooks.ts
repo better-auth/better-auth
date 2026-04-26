@@ -416,14 +416,17 @@ export async function onSubscriptionUpdated(
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialEnd
 			) {
-				await plan.freeTrial.onTrialEnd({ subscription }, ctx);
+				await plan.freeTrial.onTrialEnd(
+					{ subscription: subscriptionUpdated },
+					ctx,
+				);
 			}
 			if (
 				stripeSubscriptionUpdated.status === "incomplete_expired" &&
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialExpired
 			) {
-				await plan.freeTrial.onTrialExpired(subscription, ctx);
+				await plan.freeTrial.onTrialExpired(subscriptionUpdated, ctx);
 			}
 		}
 	} catch (error: any) {
@@ -462,35 +465,43 @@ export async function onSubscriptionDeleted(
 							trialEnd: new Date(stripeSubscriptionDeleted.trial_end * 1000),
 						}
 					: {};
-			await ctx.context.adapter.update({
-				model: "subscription",
-				where: [
-					{
-						field: "id",
-						value: subscription.id,
+			const subscriptionUpdated =
+				await ctx.context.adapter.update<Subscription>({
+					model: "subscription",
+					where: [
+						{
+							field: "id",
+							value: subscription.id,
+						},
+					],
+					update: {
+						...trial,
+						status: "canceled",
+						updatedAt: new Date(),
+						cancelAtPeriodEnd: stripeSubscriptionDeleted.cancel_at_period_end,
+						cancelAt: stripeSubscriptionDeleted.cancel_at
+							? new Date(stripeSubscriptionDeleted.cancel_at * 1000)
+							: null,
+						canceledAt: stripeSubscriptionDeleted.canceled_at
+							? new Date(stripeSubscriptionDeleted.canceled_at * 1000)
+							: null,
+						endedAt: stripeSubscriptionDeleted.ended_at
+							? new Date(stripeSubscriptionDeleted.ended_at * 1000)
+							: null,
+						stripeScheduleId: null,
 					},
-				],
-				update: {
-					...trial,
-					status: "canceled",
-					updatedAt: new Date(),
-					cancelAtPeriodEnd: stripeSubscriptionDeleted.cancel_at_period_end,
-					cancelAt: stripeSubscriptionDeleted.cancel_at
-						? new Date(stripeSubscriptionDeleted.cancel_at * 1000)
-						: null,
-					canceledAt: stripeSubscriptionDeleted.canceled_at
-						? new Date(stripeSubscriptionDeleted.canceled_at * 1000)
-						: null,
-					endedAt: stripeSubscriptionDeleted.ended_at
-						? new Date(stripeSubscriptionDeleted.ended_at * 1000)
-						: null,
-					stripeScheduleId: null,
-				},
-			});
+				});
+			// Practically unreachable. A null here means the row was deleted between the read above and this update.
+			if (!subscriptionUpdated) {
+				ctx.context.logger.warn(
+					`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+				);
+				return;
+			}
 			await options.subscription.onSubscriptionDeleted?.({
 				event,
 				stripeSubscription: stripeSubscriptionDeleted,
-				subscription,
+				subscription: subscriptionUpdated,
 			});
 		} else {
 			ctx.context.logger.warn(
