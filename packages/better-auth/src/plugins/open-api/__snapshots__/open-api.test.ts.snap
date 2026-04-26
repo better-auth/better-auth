@@ -1591,7 +1591,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "nullable": true,
                   "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session",
@@ -1604,7 +1603,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "session",
                     "user",
                   ],
-                  "type": "object",
+                  "type": [
+                    "object",
+                    "null",
+                  ],
                 },
               },
             },
@@ -1735,7 +1737,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "nullable": true,
                   "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session",
@@ -1748,7 +1749,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "session",
                     "user",
                   ],
-                  "type": "object",
+                  "type": [
+                    "object",
+                    "null",
+                  ],
                 },
               },
             },
@@ -4091,12 +4095,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Session response when idToken is provided",
+                  "description": "Returns session details when idToken is provided, or an authorize URL otherwise",
                   "properties": {
                     "redirect": {
-                      "enum": [
-                        false,
-                      ],
                       "type": "boolean",
                     },
                     "token": {
@@ -4112,14 +4113,12 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "required": [
                     "redirect",
-                    "token",
-                    "user",
                   ],
                   "type": "object",
                 },
               },
             },
-            "description": "Success - Returns either session details or redirect URL",
+            "description": "Success - Returns session details (idToken branch) or an authorize URL (redirect branch)",
           },
           "400": {
             "content": {

@@ -30,7 +30,7 @@ To upgrade, run:
 npx auth upgrade
 ```
 
----
+***
 
 ## 🚀 Highlights
 
@@ -90,7 +90,7 @@ import { mcpAuthHono } from "better-auth/plugins/mcp/client/adapters";
 const middleware = mcpAuthHono(mcpAuth);
 ```
 
----
+***
 
 ### OAuth 2.1 Provider
 
@@ -116,19 +116,19 @@ export const auth = betterAuth({
 
 Key features:
 
-- **OAuth 2.1 with OIDC**: Supports `authorization_code`, `refresh_token`, and `client_credentials` grants with `openid` scope support.
-- **MCP-ready**: Works out of the box as an authorization server for MCP tools and agents.
-- **Dynamic Client Registration**: Allow clients to register dynamically, with support for both public and confidential clients.
-- **JWT & JWKS verification**: Sign access tokens as JWTs and verify them remotely via the `/jwks` endpoint.
-- **Consent & authorization flows**: Built-in consent, account selection, and post-login redirect screens.
-- **Token introspection & revocation**: RFC 7662 and RFC 7009 compliant endpoints.
-- **Per-endpoint rate limiting**: Configurable rate limits for each OAuth endpoint.
+* **OAuth 2.1 with OIDC**: Supports `authorization_code`, `refresh_token`, and `client_credentials` grants with `openid` scope support.
+* **MCP-ready**: Works out of the box as an authorization server for MCP tools and agents.
+* **Dynamic Client Registration**: Allow clients to register dynamically, with support for both public and confidential clients.
+* **JWT & JWKS verification**: Sign access tokens as JWTs and verify them remotely via the `/jwks` endpoint.
+* **Consent & authorization flows**: Built-in consent, account selection, and post-login redirect screens.
+* **Token introspection & revocation**: RFC 7662 and RFC 7009 compliant endpoints.
+* **Per-endpoint rate limiting**: Configurable rate limits for each OAuth endpoint.
 
 <Callout type="info">
-The OAuth 2.1 Provider replaces the previous OIDC Provider plugin, which will be deprecated in a future release. The MCP plugin will also transition to use the OAuth 2.1 Provider as its foundation. See the [migration guide](https://www.better-auth.com/docs/plugins/oauth-provider#from-oidc-provider-plugin) for upgrading from the OIDC Provider plugin.
+  The OAuth 2.1 Provider replaces the previous OIDC Provider plugin, which will be deprecated in a future release. The MCP plugin will also transition to use the OAuth 2.1 Provider as its foundation. See the [migration guide](https://www.better-auth.com/docs/plugins/oauth-provider#from-oidc-provider-plugin) for upgrading from the OIDC Provider plugin.
 </Callout>
 
----
+***
 
 ### Electron Integration
 
@@ -161,7 +161,7 @@ const client = createAuthClient({
 await client.requestAuth();
 ```
 
----
+***
 
 ### Internationalization (i18n)
 
@@ -190,7 +190,7 @@ export const auth = betterAuth({
 
 Error codes are fully typed — your IDE will autocomplete all available error codes from every registered plugin.
 
----
+***
 
 ### Typed Error Codes
 
@@ -219,7 +219,7 @@ Error responses now look like:
 
 This is the foundation that the i18n plugin builds on — every error code from every plugin is discoverable at compile time, so translation dictionaries are fully type-checked.
 
----
+***
 
 ### SSO — Production Ready
 
@@ -260,16 +260,16 @@ export const auth = betterAuth({
 
 ### Additional SSO Improvements
 
-- **Signed SAML AuthnRequests**: Configurable signature and digest algorithms.
-- **Multi-domain providers**: Bind SSO providers to multiple domains.
-- **InResponseTo validation**: Prevent replay attacks on SAML assertions.
-- **Algorithm restrictions**: Block deprecated signature/digest algorithms.
-- **Clock skew tolerance**: Configurable tolerance for SAML timestamp validation.
-- **OIDC ID token `aud` claim validation**: Verify audience in OpenID Connect flows.
-- **Provider CRUD endpoints**: List, get, update, and delete SSO providers via API.
-- **Shared OIDC redirect URI**: Single redirect URI for all OIDC providers.
+* **Signed SAML AuthnRequests**: Configurable signature and digest algorithms.
+* **Multi-domain providers**: Bind SSO providers to multiple domains.
+* **InResponseTo validation**: Prevent replay attacks on SAML assertions.
+* **Algorithm restrictions**: Block deprecated signature/digest algorithms.
+* **Clock skew tolerance**: Configurable tolerance for SAML timestamp validation.
+* **OIDC ID token `aud` claim validation**: Verify audience in OpenID Connect flows.
+* **Provider CRUD endpoints**: List, get, update, and delete SSO providers via API.
+* **Shared OIDC redirect URI**: Single redirect URI for all OIDC providers.
 
----
+***
 
 ### API Key Plugin
 
@@ -349,8 +349,7 @@ const key = auth.api.createApiKey({
 });
 ```
 
-
----
+***
 
 ### Unified Before & After Hooks
 
@@ -385,13 +384,13 @@ hooks: {
 },
 ```
 
----
+***
 
 ### Dynamic Base URL
 
 Better Auth can now resolve the base URL dynamically from incoming requests, making it work seamlessly with Vercel preview deployments, multi-domain setups, and reverse proxies.
 
-[👉 Read more about dynamic base URL](https://www.better-auth.com/docs/concepts/dynamic-base-url)
+[👉 Read more about dynamic base URL](https://www.better-auth.com/docs/guides/dynamic-base-url)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -409,7 +408,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### Verification on Secondary Storage
 
@@ -443,17 +442,17 @@ verification: {
 },
 ```
 
----
+***
 
 ### Rate Limiter Improvements
 
 The rate limiter has been improved with separate request/response handling, hardened defaults, and IPv6 support.
 
-- **Separate request and response phases**: Rejected requests are no longer counted against the rate limit.
-- **Hardened default rules**: Sign-in/sign-up limited to 3 requests per 10 seconds; password reset/OTP limited to 3 requests per 60 seconds.
-- **IPv6 subnet support**: Rate limiting by IPv6 prefix with configurable subnet size.
-- **Plugin-level rate limit rules**: Plugins can define their own rate limit rules.
-- **Expired entry cleanup**: Automatic cleanup for the memory storage backend.
+* **Separate request and response phases**: Rejected requests are no longer counted against the rate limit.
+* **Hardened default rules**: Sign-in/sign-up limited to 3 requests per 10 seconds; password reset/OTP limited to 3 requests per 60 seconds.
+* **IPv6 subnet support**: Rate limiting by IPv6 prefix with configurable subnet size.
+* **Plugin-level rate limit rules**: Plugins can define their own rate limit rules.
+* **Expired entry cleanup**: Automatic cleanup for the memory storage backend.
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -467,7 +466,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### Non-Destructive Secret Key Rotation
 
@@ -492,7 +491,7 @@ BETTER_AUTH_SECRETS="2:new-secret-key,1:old-secret-key"
 
 New data is always encrypted with the latest key (first in the array), while decryption automatically tries all configured keys. This lets you roll secrets gradually without downtime or data loss.
 
----
+***
 
 ### Seat-Based Billing (Stripe)
 
@@ -527,7 +526,7 @@ export const auth = betterAuth({
 
 The plugin also adds support for usage-based billing via `lineItems`, subscription schedules with `scheduleAtPeriodEnd`, and `billingInterval` tracking.
 
----
+***
 
 ### Test Utilities Plugin
 
@@ -539,13 +538,15 @@ A new `testUtils` plugin provides factories, database helpers, and auth utilitie
 import { betterAuth } from "better-auth";
 import { testUtils } from "better-auth/plugins";
 
-export const auth = betterAuth({
+export const testAuth = betterAuth({
     plugins: [testUtils({ captureOTP: true })],
 });
 ```
 
+Prefer adding `testUtils` in a test-only auth instance such as `auth.test.ts`. It does not expose public routes, but it does add privileged helpers on `ctx.test`, and conditional plugin arrays can weaken type inference.
+
 ```tsx
-const ctx = await auth.$context;
+const ctx = await testAuth.$context;
 const test = ctx.test;
 
 // Create and save a test user
@@ -559,7 +560,7 @@ const { headers, session, token } = await test.login({ userId: user.id });
 const otp = test.getOTP("test@example.com");
 ```
 
----
+***
 
 ### Update Session Endpoint
 
@@ -575,19 +576,19 @@ await authClient.updateSession({
 
 This is useful when you have additional session fields that need to change without re-authentication.
 
----
+***
 
 ### Adapter Extraction
 
 Database adapters have been extracted into their own packages. This is a major architectural change that reduces bundle size and allows adapters to be versioned independently.
 
-| Package | Description |
-| --- | --- |
+| Package                        | Description         |
+| ------------------------------ | ------------------- |
 | `@better-auth/drizzle-adapter` | Drizzle ORM adapter |
-| `@better-auth/prisma-adapter` | Prisma adapter |
-| `@better-auth/kysely-adapter` | Kysely adapter |
-| `@better-auth/mongo-adapter` | MongoDB adapter |
-| `@better-auth/memory-adapter` | In-memory adapter |
+| `@better-auth/prisma-adapter`  | Prisma adapter      |
+| `@better-auth/kysely-adapter`  | Kysely adapter      |
+| `@better-auth/mongo-adapter`   | MongoDB adapter     |
+| `@better-auth/memory-adapter`  | In-memory adapter   |
 
 The main `better-auth` package re-exports all adapters, so existing imports continue to work. But you can now install only the adapter you need for smaller bundles:
 
@@ -600,7 +601,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### Cloudflare D1 Support
 
@@ -621,86 +622,86 @@ export default {
 
 The built-in D1 dialect handles query execution, batch operations, and introspection through D1's native API. Note that D1 does not support interactive transactions — Better Auth uses D1's `batch()` API for atomicity instead.
 
----
+***
 
 ## ✨ More Features
 
 ### Authentication & Sessions
 
-- **`verifyPassword` API**: New server-side endpoint to verify the current user's password.
-- **`setShouldSkipSessionRefresh`**: Programmatically skip session refresh for specific requests.
-- **`deferSessionRefresh`**: Support for read-replica database setups.
-- **Awaitable social provider config**: Provider configuration can now be async.
-- **Limit enumeration on sign-up**: When email verification is required, sign-up no longer reveals existing accounts.
-- **`customSyntheticUser` option**: Support plugin fields in enumeration-protected responses ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
-- **Form data support for email sign-in/sign-up**: In addition to JSON bodies.
-- **Automatic base URL detection from `VERCEL_URL` and `NEXTAUTH_URL`**: The client now falls back to `VERCEL_URL` and `NEXTAUTH_URL` environment variables when no explicit `baseURL` is configured, making server-side rendering on Vercel work out of the box.
+* **`verifyPassword` API**: New server-side endpoint to verify the current user's password.
+* **`setShouldSkipSessionRefresh`**: Programmatically skip session refresh for specific requests.
+* **`deferSessionRefresh`**: Support for read-replica database setups.
+* **Awaitable social provider config**: Provider configuration can now be async.
+* **Limit enumeration on sign-up**: When email verification is required, sign-up no longer reveals existing accounts.
+* **`customSyntheticUser` option**: Support plugin fields in enumeration-protected responses ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
+* **Form data support for email sign-in/sign-up**: In addition to JSON bodies.
+* **Automatic base URL detection from `VERCEL_URL` and `NEXTAUTH_URL`**: The client now falls back to `VERCEL_URL` and `NEXTAUTH_URL` environment variables when no explicit `baseURL` is configured, making server-side rendering on Vercel work out of the box.
 
 ### OAuth & Providers
 
-- **Railway OAuth provider**: New social provider.
-- **Trusted providers callback**: Dynamic trusted provider resolution.
-- **Case-insensitive email matching**: For social account linking.
-- **Legacy OAuth clients without PKCE**: Backward compatibility support.
+* **Railway OAuth provider**: New social provider.
+* **Trusted providers callback**: Dynamic trusted provider resolution.
+* **Case-insensitive email matching**: For social account linking.
+* **Legacy OAuth clients without PKCE**: Backward compatibility support.
 
 ### Stripe Plugin
 
-- **`seatPriceId`** and **`lineItems`** enable flexible subscription checkouts, supporting modern pricing models like per-seat and usage-based billing.
-- **`scheduleAtPeriodEnd`**: Defer plan changes to end of billing period.
-- **Subscription schedule tracking**: Monitor upcoming subscription changes.
-- **Organization customer support**: Organization as a Stripe customer.
-- **Flexible cancellation and termination**: More control over subscription lifecycle.
+* **`seatPriceId`** and **`lineItems`** enable flexible subscription checkouts, supporting modern pricing models like per-seat and usage-based billing.
+* **`scheduleAtPeriodEnd`**: Defer plan changes to end of billing period.
+* **Subscription schedule tracking**: Monitor upcoming subscription changes.
+* **Organization customer support**: Organization as a Stripe customer.
+* **Flexible cancellation and termination**: More control over subscription lifecycle.
 
 ### SCIM
 
-- **SCIM ownership model**: Link SCIM provider connections to users.
-- **SCIM connection management**: List, get, and delete SCIM provider connections.
-- **Microsoft Entra ID compatibility**: Full support for Entra provisioning.
+* **SCIM ownership model**: Link SCIM provider connections to users.
+* **SCIM connection management**: List, get, and delete SCIM provider connections.
+* **Microsoft Entra ID compatibility**: Full support for Entra provisioning.
 
 ### OAuth Provider Plugin
 
-- **HTTPS enforcement for redirect URIs**: HTTP only allowed for localhost.
-- **RFC 9207 `iss` parameter**: Authorization response issuer identifier.
-- **Per-client PKCE configuration**: Opt-out of PKCE for admin-created clients.
-- **Scope narrowing at consent**: Users can reduce requested scopes.
-- **`prompt=none` support**: Silent authentication for OIDC.
-- **Configurable rate limiting**: Per-endpoint rate limit configuration.
+* **HTTPS enforcement for redirect URIs**: HTTP only allowed for localhost.
+* **RFC 9207 `iss` parameter**: Authorization response issuer identifier.
+* **Per-client PKCE configuration**: Opt-out of PKCE for admin-created clients.
+* **Scope narrowing at consent**: Users can reduce requested scopes.
+* **`prompt=none` support**: Silent authentication for OIDC.
+* **Configurable rate limiting**: Per-endpoint rate limit configuration.
 
 ### Plugin Improvements
 
-- **`magic-link`: `allowedAttempts` option**: Limit verification attempts.
-- **`email-otp`: Change email flow with OTP**: Users can change their email address via OTP verification, with optional current-email confirmation for added security.
-- **`email-otp`: Name, image, and additional fields in sign-in**: Richer OTP sign-in.
-- **`phone-number`: Additional fields in `signUpOnVerification`**: Pass extra data.
-- **`two-factor`: `twoFactorCookieMaxAge` and server-side trust device expiration**.
-- **`one-tap`: Button mode for Google sign-in**.
-- **`anonymous`: Delete anonymous user endpoint**.
-- **`admin`: Optional password on user creation**.
-- **`api-keys`: Pagination for list endpoint, organization reference via metadata**.
-- **`organization`: Function support for `membershipLimit`**, reject expired invites.
+* **`magic-link`: `allowedAttempts` option**: Limit verification attempts.
+* **`email-otp`: Change email flow with OTP**: Users can change their email address via OTP verification, with optional current-email confirmation for added security.
+* **`email-otp`: Name, image, and additional fields in sign-in**: Richer OTP sign-in.
+* **`phone-number`: Additional fields in `signUpOnVerification`**: Pass extra data.
+* **`two-factor`: `twoFactorCookieMaxAge` and server-side trust device expiration**.
+* **`one-tap`: Button mode for Google sign-in**.
+* **`anonymous`: Delete anonymous user endpoint**.
+* **`admin`: Optional password on user creation**.
+* **`api-keys`: Pagination for list endpoint, organization reference via metadata**.
+* **`organization`: Function support for `membershipLimit`**, reject expired invites.
 
 ### Core & Infrastructure
 
-- **`BetterAuthPluginRegistry` type system**: Typed plugin discovery via `getPlugin()` and `hasPlugin()`.
-- **Version in `AuthContext`**: Access the Better Auth version at runtime.
-- **Redis secondary storage**: Extracted to `@better-auth/redis-storage`.
-- **Session ID handling for secondary storage**: Proper ID generation when database is not used.
+* **`BetterAuthPluginRegistry` type system**: Typed plugin discovery via `getPlugin()` and `hasPlugin()`.
+* **Version in `AuthContext`**: Access the Better Auth version at runtime.
+* **Redis secondary storage**: Extracted to `@better-auth/redis-storage`.
+* **Session ID handling for secondary storage**: Proper ID generation when database is not used.
 
----
+***
 
 ## 🔒 Security Improvements
 
-- **Prevent OTP reuse via race condition**: Atomically invalidate OTPs on use.
-- **Prevent user enumeration**: In email-otp when sign-up is disabled, and on sign-up with required email verification.
-- **Prevent email enumeration on `/change-email`**: Always returns `{ status: true }` and simulates token generation for timing safety ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
-- **Stricter default rate limits**: For password reset and phone number verification endpoints.
-- **Separate CSRF and origin checks**: More granular request validation.
-- **Prevent trial abuse**: Check all user subscriptions before granting a free trial.
-- **SAML ACS error redirect hardening**: Prevent open redirect in error flows.
-- **IPv6 address normalization and subnet support**: For rate limiting and IP-based rules.
-- **XML parser hardening**: Configurable size limits for SAML responses and metadata.
+* **Prevent OTP reuse via race condition**: Atomically invalidate OTPs on use.
+* **Prevent user enumeration**: In email-otp when sign-up is disabled, and on sign-up with required email verification.
+* **Prevent email enumeration on `/change-email`**: Always returns `{ status: true }` and simulates token generation for timing safety ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
+* **Stricter default rate limits**: For password reset and phone number verification endpoints.
+* **Separate CSRF and origin checks**: More granular request validation.
+* **Prevent trial abuse**: Check all user subscriptions before granting a free trial.
+* **SAML ACS error redirect hardening**: Prevent open redirect in error flows.
+* **IPv6 address normalization and subnet support**: For rate limiting and IP-based rules.
+* **XML parser hardening**: Configurable size limits for SAML responses and metadata.
 
----
+***
 
 ## ⚠️ Breaking Changes
 
@@ -729,8 +730,8 @@ npm install @better-auth/api-key
 
 **Schema changes:**
 
-- The `userId` field on the `ApiKey` table has been renamed to `referenceId`.
-- A new `configId` field has been added (defaults to `"default"`).
+* The `userId` field on the `ApiKey` table has been renamed to `referenceId`.
+* A new `configId` field has been added (defaults to `"default"`).
 
 **Plugin options changes:**
 
@@ -767,7 +768,7 @@ export const auth = betterAuth({
 The `updateApiKey` endpoint now requires at least a `userId` parameter or headers to be passed on the server side.
 If you didn't provide this in previous version, you're now required to pass them.
 
----
+***
 
 ## 🛠 Developer Changes
 
@@ -777,18 +778,18 @@ If you are building a plugin on top of Better Auth, there are a few things you s
 
 All previously deprecated APIs have been removed. This includes deprecated adapter types, client types, helper types, and plugin options. If you were relying on any `@deprecated` methods or options, you'll need to migrate to their replacements:
 
-| Removed | Replacement |
-| --- | --- |
-| `Adapter` | `DBAdapter` |
-| `TransactionAdapter` | `DBTransactionAdapter` |
-| `Store` (client) | `ClientStore` |
-| `AtomListener` (client) | `ClientAtomListener` |
-| `ClientOptions` | `BetterAuthClientOptions` |
-| `LiteralUnion`, `DeepPartial` (from `better-auth/types/helper`) | Import from `@better-auth/core` |
-| `onEmailVerification` | `afterEmailVerification` |
-| `sendChangeEmailVerification` | `sendChangeEmailConfirmation` |
-| `advanced.database.useNumberId` | `advanced.database.generateId: "serial"` |
-| Organization `permission` field | `permissions` (plural) |
+| Removed                                                         | Replacement                              |
+| --------------------------------------------------------------- | ---------------------------------------- |
+| `Adapter`                                                       | `DBAdapter`                              |
+| `TransactionAdapter`                                            | `DBTransactionAdapter`                   |
+| `Store` (client)                                                | `ClientStore`                            |
+| `AtomListener` (client)                                         | `ClientAtomListener`                     |
+| `ClientOptions`                                                 | `BetterAuthClientOptions`                |
+| `LiteralUnion`, `DeepPartial` (from `better-auth/types/helper`) | Import from `@better-auth/core`          |
+| `onEmailVerification`                                           | `afterEmailVerification`                 |
+| `sendChangeEmailVerification`                                   | `sendChangeEmailConfirmation`            |
+| `advanced.database.useNumberId`                                 | `advanced.database.generateId: "serial"` |
+| Organization `permission` field                                 | `permissions` (plural)                   |
 
 ### `@better-auth/core/utils` Barrel Export Removed
 
@@ -878,29 +879,29 @@ The `id` field is used to determine relationships between structures in database
 
 The context object passed to a plugin's `init()` callback is now the same reference used throughout the auth lifecycle. `init()` can also return arbitrary keys via `Record<string, unknown>`, enabling plugins to inject custom context values that other plugins can access.
 
----
+***
 
 ## 🐛 Bug Fixes & Improvements
 
 This release includes over 220 bug fixes addressing issues across all areas:
 
-- **Drizzle Adapter**: Fixed date transformation crashes and input handling.
-- **Cookie Handling**: Centralized parsing, fixed Expo leading semicolons, secure detection fallbacks.
-- **Database Hooks**: Delayed execution until after transaction commits to prevent inconsistencies.
-- **Transaction Deadlock Prevention**: Improved locking strategies across adapters.
-- **Prisma Adapter**: Fixed null condition handling and unique where field detection.
-- **OAuth**: Fixed `refresh_token_expires_in` handling, callback routing, and token encryption.
-- **Organization**: Fixed role deletion prevention, active member refetch, and dynamic access control inference.
-- **Expo**: Fixed immutable headers on Cloudflare Workers, cookie injection wildcards, and skipped cookie/expo-origin headers for ID token requests.
-- **Kysely Adapter**: Fixed edge case with aliased joined table names.
-- **Last Login Method**: Fixed handling of multiple Set-Cookie headers.
-- **Session Listing**: Fixed endpoints returning empty arrays when more than 100 inactive sessions exist.
-- **Organization**: Fixed path matching for active member signals.
-- **OAuth**: Fixed preserving refresh tokens when provider omits them on refresh.
-- **Secondary Storage**: Synced `updateSession` changes and removed duplicate writes.
-- And many more!
+* **Drizzle Adapter**: Fixed date transformation crashes and input handling.
+* **Cookie Handling**: Centralized parsing, fixed Expo leading semicolons, secure detection fallbacks.
+* **Database Hooks**: Delayed execution until after transaction commits to prevent inconsistencies.
+* **Transaction Deadlock Prevention**: Improved locking strategies across adapters.
+* **Prisma Adapter**: Fixed null condition handling and unique where field detection.
+* **OAuth**: Fixed `refresh_token_expires_in` handling, callback routing, and token encryption.
+* **Organization**: Fixed role deletion prevention, active member refetch, and dynamic access control inference.
+* **Expo**: Fixed immutable headers on Cloudflare Workers, cookie injection wildcards, and skipped cookie/expo-origin headers for ID token requests.
+* **Kysely Adapter**: Fixed edge case with aliased joined table names.
+* **Last Login Method**: Fixed handling of multiple Set-Cookie headers.
+* **Session Listing**: Fixed endpoints returning empty arrays when more than 100 inactive sessions exist.
+* **Organization**: Fixed path matching for active member signals.
+* **OAuth**: Fixed preserving refresh tokens when provider omits them on refresh.
+* **Secondary Storage**: Synced `updateSession` changes and removed duplicate writes.
+* And many more!
 
----
+***
 
 A lot of refinements to make everything smoother, faster, and more reliable.
 👉 [Check the full changelog](https://github.com/better-auth/better-auth/releases/tag/v1.5.0)

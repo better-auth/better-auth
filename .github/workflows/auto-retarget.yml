@@ -20,11 +20,20 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        if: vars.RELEASE_APP_ID != ''
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Detect max bump type from changesets
         id: bump
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           MAX="patch"
           FILES=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --name-only | grep '^\.changeset/.*\.md$' | grep -v 'README.md' || true)
@@ -36,7 +45,7 @@ jobs:
 
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            CONTENT=$(gh api "repos/$GITHUB_REPOSITORY/contents/$f?ref=${{ github.event.pull_request.head.sha }}" --jq '.content' | base64 -d 2>/dev/null || true)
+            CONTENT=$(gh api "repos/$GITHUB_REPOSITORY/contents/$f?ref=${HEAD_SHA}" --jq '.content' | base64 -d 2>/dev/null || true)
             [ -z "$CONTENT" ] && continue
             BUMPS=$(echo "$CONTENT" | sed -n '/^---$/,/^---$/p' | grep -oE '"[^"]+"\s*:\s*(major|minor|patch)' | grep -oE '(major|minor|patch)$' | sort -u)
             if echo "$BUMPS" | grep -q "major"; then
@@ -53,7 +62,7 @@ jobs:
         if: steps.bump.outputs.max == 'minor' || steps.bump.outputs.max == 'major'
         id: next-check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           if gh api "repos/$GITHUB_REPOSITORY/branches/next" --silent 2>/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -65,7 +74,7 @@ jobs:
       - name: Retarget PR to next
         if: (steps.bump.outputs.max == 'minor' || steps.bump.outputs.max == 'major') && steps.next-check.outputs.exists == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           MAX_BUMP: ${{ steps.bump.outputs.max }}
         run: |

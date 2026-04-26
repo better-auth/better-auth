@@ -34,7 +34,7 @@ export const authHandler = api.raw(
 ```
 
 <Callout>
-Encore's `api.raw()` provides Node.js request/response types. We use `toNodeHandler` from `better-auth/node` to bridge these to Better Auth's Web API handler.
+  Encore's `api.raw()` provides Node.js request/response types. We use `toNodeHandler` from `better-auth/node` to bridge these to Better Auth's Web API handler.
 </Callout>
 
 ### CORS
@@ -70,7 +70,7 @@ encore run
 ```
 
 <Callout type="tip">
-Open the local dashboard at `localhost:9400` to see traces for all requests, including auth handler execution and session validation. Useful for debugging auth issues.
+  Open the local dashboard at `localhost:9400` to see traces for all requests, including auth handler execution and session validation. Useful for debugging auth issues.
 </Callout>
 
 ### Protecting Endpoints
@@ -134,7 +134,7 @@ export const getProfile = api(
 ```
 
 <Callout type="tip">
-If you want to manage session cookies directly in your Encore endpoints, check out Encore's [typed cookie support](https://encore.dev/docs/ts/primitives/cookies).
+  If you want to manage session cookies directly in your Encore endpoints, check out Encore's [typed cookie support](https://encore.dev/docs/ts/primitives/cookies).
 </Callout>
 
 ### Learn More
