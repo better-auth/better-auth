@@ -62,6 +62,15 @@ export const SafeUrlSchema = z.url().superRefine((val, ctx) => {
 
 	const u = new URL(val);
 
+	// Disallow URL fragments
+	if (u.hash && u.hash.length > 0) {
+		ctx.addIssue({
+			code: "custom",
+			message: "URL must not contain a fragment",
+		});
+		return;
+	}
+
 	if (DANGEROUS_SCHEMES.includes(u.protocol)) {
 		ctx.addIssue({
 			code: "custom",

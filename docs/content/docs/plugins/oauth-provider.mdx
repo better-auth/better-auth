@@ -462,6 +462,7 @@ Important notes:
 * In OAuth 2.1, only `response_type: "code"` is supported.
 * `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
 * All authorization responses (success and error) include the `iss` parameter for issuer validation ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)).
+* Use the `resource` indicators to restrict tokens to a resource ([RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)).
 
 **State**
 
@@ -493,6 +494,11 @@ The token endpoint supports the following client authentication methods:
 * **`client_secret_post`** — Client credentials sent in the request body
 * **`private_key_jwt`** — Client authenticates with a signed JWT assertion ([RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523))
 * **`none`** — Public client (PKCE required)
+
+Important Notes:
+
+* With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
+* With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
 #### Private Key JWT Authentication
 
@@ -615,7 +621,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
-To provide resource specific claims via `customAccessTokenClaims`, store the allowed resources that a confidential client can use in its `resources` field.
+Use the `resources` field in `customAccessTokenClaims` to add claims based on the audience.
 
 ### Revoke Endpoint
 
@@ -1079,9 +1085,10 @@ oauthProvider({
     };
   },
   // Attach claims to access tokens
-  customAccessTokenClaims: ({ user, scopes, referenceId, resource, metadata }) => {
+  customAccessTokenClaims: ({ user, scopes, referenceId, resources, metadata }) => {
     return {
       "https://example.com/org": referenceId,
+      "https://example.com/resources": resources,
       "https://example.com/roles": ["editor"],
     };
   },

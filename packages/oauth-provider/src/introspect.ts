@@ -20,6 +20,7 @@ import {
 	getStoredToken,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
+	toAudienceClaim,
 	validateClientCredentials,
 } from "./utils";
 
@@ -214,6 +215,16 @@ async function validateOpaqueAccessToken(
 	if (accessToken.userId) {
 		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
 	}
+	const resources = Array.isArray(accessToken.resources)
+		? accessToken.resources
+		: undefined;
+	const audience = resources ? [...resources] : undefined;
+	if (audience?.length && accessToken.scopes?.includes("openid")) {
+		const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
+		if (!audience.includes(userInfoEndpoint)) {
+			audience.push(userInfoEndpoint);
+		}
+	}
 
 	// Add Custom Claims
 	const customClaims = opts.customAccessTokenClaims
@@ -221,6 +232,7 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
+				resources,
 				metadata: parseClientMetadata(client?.metadata),
 			})
 		: {};
@@ -235,6 +247,7 @@ async function validateOpaqueAccessToken(
 		...customClaims,
 		active: true,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		aud: toAudienceClaim(audience),
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
@@ -296,7 +309,7 @@ async function validateRefreshToken(
 			where: [
 				{
 					field: "id",
-					value: refreshToken.sessionId,
+					value: sessionId,
 				},
 			],
 		});
