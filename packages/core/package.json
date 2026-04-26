@@ -179,7 +179,7 @@
     "better-call": "catalog:",
     "@cloudflare/workers-types": ">=4",
     "jose": "^6.1.0",
-    "kysely": "^0.28.5",
+    "kysely": "^0.28.14",
     "nanostores": "^1.0.1"
   },
   "peerDependenciesMeta": {
