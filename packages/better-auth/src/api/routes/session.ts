@@ -278,8 +278,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								await getShouldSkipSessionRefresh();
 
 							if (timeUntilExpiry < updateAge && !shouldSkipSessionRefresh) {
-								const cookieMaxAge =
-									ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
 								const refreshedSession = {
 									session: {
 										...session.session,
