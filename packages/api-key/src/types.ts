@@ -162,6 +162,15 @@ export interface ApiKeyConfigurationOptions {
 				 * @default 365
 				 */
 				maxExpiresIn?: number;
+				/**
+				 * Whether to automatically clean up expired API keys inline during API key requests.
+				 *
+				 * If `false`, expired key cleanup must be handled manually, for example by calling
+				 * `auth.api.deleteAllExpiredApiKeys()` from a cron job.
+				 *
+				 * @default true
+				 */
+				autoCleanup?: boolean;
 		  }
 		| undefined;
 	/**

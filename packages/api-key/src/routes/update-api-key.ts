@@ -475,7 +475,9 @@ export function updateApiKey({
 				});
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			if (opts.keyExpiration.autoCleanup) {
+				deleteAllExpiredApiKeys(ctx.context);
+			}
 
 			// Migrate legacy double-stringified metadata if needed
 			const migratedMetadata = await migrateDoubleStringifiedMetadata(
