@@ -36,6 +36,8 @@ import {
 	leaveOrganization,
 	listMembers,
 	removeMember,
+	transferOwnership,
+	transferOwnershipCallback,
 	updateMemberRole,
 } from "./routes/crud-members";
 import {
@@ -160,6 +162,8 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
+	transferOwnership: ReturnType<typeof transferOwnership<O>>;
+	transferOwnershipCallback: ReturnType<typeof transferOwnershipCallback<O>>;
 };
 
 const createHasPermissionBodySchema = z
@@ -761,6 +765,34 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member-role)
 		 */
 		getActiveMemberRole: getActiveMemberRole(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/transfer-ownership`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.transferOwnership`
+		 *
+		 * **client:**
+		 * `authClient.organization.transferOwnership`
+		 */
+		transferOwnership: transferOwnership(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/transfer-ownership/callback`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.transferOwnershipCallback`
+		 *
+		 * **client:**
+		 * `authClient.organization.transferOwnershipCallback`
+		 */
+		transferOwnershipCallback: transferOwnershipCallback(opts),
 	};
 	const teamSupport = opts.teams?.enabled;
 	const teamEndpoints = {

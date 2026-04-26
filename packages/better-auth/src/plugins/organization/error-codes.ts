@@ -90,4 +90,9 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
 	ROLE_IS_ASSIGNED_TO_MEMBERS:
 		"Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
+	CANNOT_TRANSFER_OWNERSHIP_TO_NON_MEMBER:
+		"Cannot transfer ownership to a user who is not a member of the organization",
+	YOU_ARE_NOT_ALLOWED_TO_TRANSFER_OWNERSHIP:
+		"You are not allowed to transfer ownership of this organization",
+	INVALID_TRANSFER_TOKEN: "Invalid or expired transfer ownership token",
 });
