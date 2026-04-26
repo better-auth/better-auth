@@ -56,7 +56,6 @@ export const requestPasswordReset = createAuthEndpoint(
 					description:
 						"The URL to redirect the user to reset their password. If the token isn't valid or expired, it'll be redirected with a query parameter `?error=INVALID_TOKEN`. If the token is valid, it'll be redirected with a query parameter `?token=VALID_TOKEN",
 				})
-				.optional(),
 		}),
 		metadata: {
 			openapi: {
