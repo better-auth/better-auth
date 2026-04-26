@@ -4933,6 +4933,190 @@ describe("stripe", () => {
 			// Verify the cancelAt date is correct
 			expect(updatedSub!.cancelAt!.getTime()).toBe(cancelAt * 1000);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9321
+		 */
+		it("should pass stripeSubscription to onSubscriptionUpdate", async () => {
+			const onSubscriptionUpdate = vi.fn();
+
+			const now = Math.floor(Date.now() / 1000);
+			const cancelAt = now + 15 * 24 * 60 * 60;
+
+			const webhookEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_9321",
+						customer: "cus_9321",
+						status: "active",
+						cancel_at_period_end: true,
+						cancel_at: cancelAt,
+						canceled_at: now,
+						ended_at: null,
+						items: {
+							data: [
+								{
+									price: { id: "price_starter_123", lookup_key: null },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: now + 30 * 24 * 60 * 60,
+								},
+							],
+						},
+					},
+				},
+			};
+
+			const constructEventAsync = vi.fn().mockResolvedValue(webhookEvent);
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: { constructEventAsync },
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					onSubscriptionUpdate,
+				},
+			} as unknown as StripeOptions;
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{ database: memory, plugins: [stripe(testOptions)] },
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const { id: userId } = await webhookCtx.adapter.create({
+				model: "user",
+				data: { email: "9321@test.com" },
+			});
+			await webhookCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_9321",
+					stripeSubscriptionId: "sub_9321",
+					status: "active",
+					plan: "starter",
+				},
+			});
+
+			await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(onSubscriptionUpdate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					stripeSubscription: expect.any(Object),
+				}),
+			);
+		});
+
+		it("should pass the post-update subscription row to onSubscriptionCancel (symmetry with onSubscriptionUpdate)", async () => {
+			const onSubscriptionCancel = vi.fn();
+
+			const now = Math.floor(Date.now() / 1000);
+			const periodEnd = now + 30 * 24 * 60 * 60;
+			const cancelAt = now + 15 * 24 * 60 * 60;
+
+			const cancelEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_cancel_timing",
+						customer: "cus_cancel_timing",
+						status: "active",
+						cancel_at_period_end: true,
+						cancel_at: cancelAt,
+						canceled_at: now,
+						ended_at: null,
+						items: {
+							data: [
+								{
+									price: { id: "price_starter_123", lookup_key: null },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: periodEnd,
+								},
+							],
+						},
+						cancellation_details: {
+							reason: "cancellation_requested",
+							feedback: null,
+							comment: null,
+						},
+					},
+				},
+			};
+
+			const constructEventAsync = vi.fn().mockResolvedValue(cancelEvent);
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: { constructEventAsync },
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					onSubscriptionCancel,
+				},
+			} as unknown as StripeOptions;
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const { id: userId } = await webhookCtx.adapter.create({
+				model: "user",
+				data: { email: "cancel-timing@test.com" },
+			});
+
+			await webhookCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_cancel_timing",
+					stripeSubscriptionId: "sub_cancel_timing",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: false,
+					cancelAt: null,
+					canceledAt: null,
+				},
+			});
+
+			await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(cancelEvent),
+				}),
+			);
+
+			expect(onSubscriptionCancel).toHaveBeenCalledTimes(1);
+			const arg = onSubscriptionCancel.mock.calls[0]?.[0];
+			expect(arg.subscription).toMatchObject({
+				cancelAtPeriodEnd: true,
+				cancelAt: expect.any(Date),
+				canceledAt: expect.any(Date),
+			});
+		});
 	});
 
 	describe("webhook: immediate cancellation (subscription deleted)", () => {

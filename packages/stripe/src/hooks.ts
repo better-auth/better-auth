@@ -372,22 +372,31 @@ export async function onSubscriptionUpdated(
 				},
 			],
 		});
+		// Practically unreachable. A null here means the row was deleted between the read above and this update.
+		if (!updatedSubscription) {
+			ctx.context.logger.warn(
+				`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+			);
+			return;
+		}
+
 		const isNewCancellation =
 			subscriptionUpdated.status === "active" &&
 			isStripePendingCancel(subscriptionUpdated) &&
 			!isPendingCancel(subscription);
 		if (isNewCancellation) {
 			await options.subscription.onSubscriptionCancel?.({
-				subscription,
+				event,
+				subscription: updatedSubscription,
+				stripeSubscription: subscriptionUpdated,
 				cancellationDetails:
 					subscriptionUpdated.cancellation_details || undefined,
-				stripeSubscription: subscriptionUpdated,
-				event,
 			});
 		}
 		await options.subscription.onSubscriptionUpdate?.({
 			event,
-			subscription: updatedSubscription || subscription,
+			subscription: updatedSubscription,
+			stripeSubscription: subscriptionUpdated,
 		});
 		if (plan) {
 			if (

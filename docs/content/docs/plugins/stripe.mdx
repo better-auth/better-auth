@@ -620,8 +620,8 @@ subscription: {
         // Called when a subscription is created outside the checkout flow (e.g. Stripe dashboard)
         await sendSubscriptionCreatedEmail(subscription.referenceId, plan.name);
     },
-    onSubscriptionUpdate: async ({ event, subscription }) => {
-        // Called when a subscription is updated
+    onSubscriptionUpdate: async ({ event, subscription, stripeSubscription }) => {
+        // Called when a subscription is updated. Use `stripeSubscription` for raw Stripe fields like `cancellation_details`.
         console.log(`Subscription ${subscription.id} updated`);
     },
     onSubscriptionCancel: async ({ event, subscription, stripeSubscription, cancellationDetails }) => {
@@ -847,18 +847,18 @@ stripe({
 
 ### Subscription Options
 
-| Option                     | Type                         | Description                                                                                                                   |
-| -------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                                   |
-| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                              |
-| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                                |
-| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                       |
-| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.         |
-| `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context. |
-| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.         |
-| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription }`.                                                    |
-| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.          |
-| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                |
+| Option                     | Type                         | Description                                                                                                                                                                |
+| -------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                                                                                |
+| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                                                                           |
+| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                                                                             |
+| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                                                                    |
+| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.                                                      |
+| `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context.                                              |
+| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.                                                      |
+| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription, stripeSubscription }`. Use `stripeSubscription` for raw Stripe fields like `cancellation_details`. |
+| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.                                                       |
+| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                                                             |
 
 #### Plan Configuration
 
