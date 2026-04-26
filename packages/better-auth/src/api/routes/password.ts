@@ -51,7 +51,6 @@ export const requestPasswordReset = createAuthEndpoint(
 			 * token=VALID_TOKEN
 			 */
 			redirectTo: z
-			redirectTo: z
 				.string()
 				.meta({
 					description:
