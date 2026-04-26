@@ -26,7 +26,9 @@
     "@better-auth/test-utils": "1.6.0"
   },
   "changesets": [
+    "add-hydrate-session",
     "cimd-plugin",
+    "cool-lights-burn",
     "dcr-graceful-override-confidential",
     "dynamic-baseurl-hardening",
     "fix-2fa-bypass",
