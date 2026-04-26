@@ -20,7 +20,10 @@ import {
 } from "better-auth/api";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
-import { handleOAuthUserInfo } from "better-auth/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	handleOAuthUserInfo,
+} from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import * as z from "zod";
@@ -872,41 +875,43 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+				"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 		})
 		.optional(),
 	organizationSlug: z
 		.string({})
 		.meta({
-			description: "The slug of the organization to sign in with",
+			description: "The slug of the organization to sign in with.",
 		})
 		.optional(),
 	providerId: z
 		.string({})
 		.meta({
 			description:
-				"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+				"The ID of the provider to sign in with. Can be provided instead of email.",
 		})
 		.optional(),
 	domain: z
 		.string({})
 		.meta({
-			description: "The domain of the provider.",
+			description:
+				"The email domain of the provider. Can be provided instead of email.",
 		})
 		.optional(),
 	callbackURL: z.string({}).meta({
-		description: "The URL to redirect to after login",
+		description: "The URL to redirect to after successful sign-in.",
 	}),
 	errorCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login",
+			description: "The URL to redirect to if the sign-in flow fails.",
 		})
 		.optional(),
 	newUserCallbackURL: z
 		.string({})
 		.meta({
-			description: "The URL to redirect to after login if the user is new",
+			description:
+				"The URL to redirect to after sign-in if the user is newly registered.",
 		})
 		.optional(),
 	scopes: z
@@ -919,17 +924,23 @@ const signInSSOBodySchema = z.object({
 		.string({})
 		.meta({
 			description:
-				"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+				"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
 		})
 		.optional(),
+	additionalParams: additionalAuthorizationParamsSchema,
 	requestSignUp: z
 		.boolean({})
 		.meta({
 			description:
-				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
 		})
 		.optional(),
-	providerType: z.enum(["oidc", "saml"]).optional(),
+	providerType: z
+		.enum(["oidc", "saml"])
+		.meta({
+			description: "The provider protocol to sign in with.",
+		})
+		.optional(),
 });
 
 export const signInSSO = (options?: SSOOptions) => {
@@ -953,35 +964,63 @@ export const signInSSO = (options?: SSOOptions) => {
 										email: {
 											type: "string",
 											description:
-												"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+												"The email address to sign in with. Used to resolve the provider via the email domain; optional if providerId, domain, or organizationSlug is provided.",
 										},
-										issuer: {
+										organizationSlug: {
 											type: "string",
 											description:
-												"The issuer identifier, this is the URL of the provider and can be used to verify the provider and identify the provider during login. It's optional if the email is provided",
+												"The slug of the organization to sign in with.",
 										},
 										providerId: {
 											type: "string",
 											description:
-												"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+												"The ID of the provider to sign in with. Can be provided instead of email.",
+										},
+										domain: {
+											type: "string",
+											description:
+												"The email domain of the provider. Can be provided instead of email.",
 										},
 										callbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description:
+												"The URL to redirect to after successful sign-in.",
 										},
 										errorCallbackURL: {
 											type: "string",
-											description: "The URL to redirect to after login",
+											description:
+												"The URL to redirect to if the sign-in flow fails.",
 										},
 										newUserCallbackURL: {
 											type: "string",
 											description:
-												"The URL to redirect to after login if the user is new",
+												"The URL to redirect to after sign-in if the user is newly registered.",
+										},
+										scopes: {
+											type: "array",
+											items: { type: "string" },
+											description: "Scopes to request from the provider.",
 										},
 										loginHint: {
 											type: "string",
 											description:
 												"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
+										},
+										additionalParams: {
+											type: "object",
+											additionalProperties: { type: "string" },
+											description:
+												"Extra query parameters to append to the provider authorization URL. RFC 6749 reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope) are rejected.",
+										},
+										requestSignUp: {
+											type: "boolean",
+											description:
+												"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.",
+										},
+										providerType: {
+											type: "string",
+											enum: ["oidc", "saml"],
+											description: "The provider protocol to sign in with.",
 										},
 									},
 									required: ["callbackURL"],
@@ -1215,6 +1254,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
 					authorizationEndpoint: config.authorizationEndpoint,
+					additionalParams: ctx.body.additionalParams,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),

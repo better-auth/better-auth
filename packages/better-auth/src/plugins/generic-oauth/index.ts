@@ -259,7 +259,10 @@ export const genericOAuth = <const ID extends string>(
 							accessType: c.accessType,
 							responseType: c.responseType,
 							responseMode: c.responseMode,
-							additionalParams: c.authorizationUrlParams,
+							additionalParams: {
+								...(c.authorizationUrlParams ?? {}),
+								...(data.additionalParams ?? {}),
+							},
 							loginHint: data.loginHint,
 						});
 					},

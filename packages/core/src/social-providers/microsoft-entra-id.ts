@@ -174,6 +174,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
 				loginHint: data.loginHint,
+				additionalParams: data.additionalParams,
 			});
 		},
 		validateAuthorizationCode({ code, codeVerifier, redirectURI }) {

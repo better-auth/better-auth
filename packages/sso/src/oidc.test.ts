@@ -255,6 +255,26 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	it("should forward additionalParams to the SSO authorization URL", async () => {
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			additionalParams: { domain_hint: "contoso.com" },
+			fetchOptions: { throw: true },
+		});
+		const url = new URL(res.url);
+		expect(url.searchParams.get("domain_hint")).toBe("contoso.com");
+	});
+
+	it("should reject SSO additionalParams that collide with reserved OAuth params", async () => {
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			additionalParams: { redirect_uri: "https://attacker.example/callback" },
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
 	it("should hydrate authorizationEndpoint via discovery when missing from stored config", async () => {
 		const { headers } = await signInWithTestUser();
 

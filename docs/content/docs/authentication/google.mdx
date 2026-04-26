@@ -210,3 +210,19 @@ socialProviders: {
   already authorized your app, you must have them revoke your app's access in
   their Google account settings, then re-authorize.
 </Callout>
+
+### Restricting to a Google Workspace domain
+
+To limit sign-in to accounts in a specific Google Workspace domain, forward the
+`hd` parameter on the call. This mirrors Google's `hd` authorization-URL
+parameter and is resolved per request:
+
+```ts
+await authClient.signIn.social({
+  provider: "google",
+  additionalParams: { hd: "example.com" },
+});
+```
+
+You can also set `hd` at the provider config level if the restriction is static
+for your application.

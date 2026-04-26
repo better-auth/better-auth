@@ -60,3 +60,15 @@ const signIn = async () => {
   });
 };
 ```
+
+### Preselecting an organizational domain
+
+To skip the account picker for users you know belong to a given tenant or
+domain, forward Microsoft's `domain_hint` parameter on the call:
+
+```ts
+await authClient.signIn.social({
+  provider: "microsoft",
+  additionalParams: { domain_hint: "contoso.com" },
+});
+```

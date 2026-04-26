@@ -251,6 +251,47 @@ describe("account", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/2351
+	 */
+	it("should forward additionalParams and loginHint to the authorization URL", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				loginHint: "user@example.com",
+				additionalParams: {
+					access_type: "offline",
+					prompt: "consent",
+				},
+			});
+
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const url = new URL(linkAccountRes.data!.url);
+			expect(url.searchParams.get("access_type")).toBe("offline");
+			expect(url.searchParams.get("prompt")).toBe("consent");
+			expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+		});
+	});
+
+	it("should reject additionalParams that override reserved OAuth params", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				additionalParams: {
+					state: "attacker-controlled",
+				},
+			});
+			expect(linkAccountRes.error?.status).toBe(400);
+		});
+	});
+
 	it("should link second account from the same provider", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async (headers) => {
