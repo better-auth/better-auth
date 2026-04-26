@@ -44,7 +44,8 @@ export interface LineOptions
 export const line = (options: LineOptions) => {
 	const authorizationEndpoint = "https://access.line.me/oauth2/v2.1/authorize";
 	const tokenEndpoint = "https://api.line.me/oauth2/v2.1/token";
-	const userInfoEndpoint = "https://api.line.me/oauth2/v2.1/userinfo";
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://api.line.me/oauth2/v2.1/userinfo";
 	const verifyIdTokenEndpoint = "https://api.line.me/oauth2/v2.1/verify";
 
 	return {
@@ -79,7 +80,7 @@ export const line = (options: LineOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -91,7 +92,7 @@ export const line = (options: LineOptions) => {
 							clientId: options.clientId,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async verifyIdToken(token, nonce) {

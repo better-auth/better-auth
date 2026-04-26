@@ -132,6 +132,24 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	authorizationEndpoint?: string | undefined;
 	/**
+	 * Custom token endpoint URL.
+	 * Use this to override the default token endpoint of the provider.
+	 * Useful for testing with local OAuth servers or using sandbox environments.
+	 */
+	tokenEndpoint?: string | undefined;
+	/**
+	 * Custom user info endpoint URL.
+	 * Use this to override the default user info endpoint of the provider.
+	 * Useful for testing with local OAuth servers or using sandbox environments.
+	 */
+	userInfoEndpoint?: string | undefined;
+	/**
+	 * Custom JWKS endpoint URL.
+	 * Use this to override the default JWKS endpoint of the provider.
+	 * Useful for testing with local OAuth servers or using sandbox environments.
+	 */
+	jwksEndpoint?: string | undefined;
+	/**
 	 * The client key of your application
 	 * Tiktok Social Provider uses this field instead of clientId
 	 */

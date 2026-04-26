@@ -22,6 +22,8 @@ export interface RedditOptions extends ProviderOptions<RedditProfile> {
 }
 
 export const reddit = (options: RedditOptions) => {
+	const tokenEndpoint =
+		options.tokenEndpoint ?? "https://www.reddit.com/api/v1/access_token";
 	return {
 		id: "reddit",
 		name: "Reddit",
@@ -54,14 +56,11 @@ export const reddit = (options: RedditOptions) => {
 				)}`,
 			};
 
-			const { data, error } = await betterFetch<object>(
-				"https://www.reddit.com/api/v1/access_token",
-				{
-					method: "POST",
-					headers,
-					body: body.toString(),
-				},
-			);
+			const { data, error } = await betterFetch<object>(tokenEndpoint, {
+				method: "POST",
+				headers,
+				body: body.toString(),
+			});
 
 			if (error) {
 				throw error;
@@ -81,7 +80,7 @@ export const reddit = (options: RedditOptions) => {
 							clientSecret: options.clientSecret,
 						},
 						authentication: "basic",
-						tokenEndpoint: "https://www.reddit.com/api/v1/access_token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

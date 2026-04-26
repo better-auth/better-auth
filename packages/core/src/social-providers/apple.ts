@@ -110,7 +110,7 @@ export const apple = (options: AppleOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		async verifyIdToken(token, nonce) {
@@ -124,7 +124,7 @@ export const apple = (options: AppleOptions) => {
 				const decodedHeader = decodeProtectedHeader(token);
 				const { kid, alg: jwtAlg } = decodedHeader;
 				if (!kid || !jwtAlg) return false;
-				const publicKey = await getApplePublicKey(kid);
+				const publicKey = await getApplePublicKey(kid, options.jwksEndpoint);
 				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 					algorithms: [jwtAlg],
 					issuer: "https://appleid.apple.com",
@@ -155,7 +155,7 @@ export const apple = (options: AppleOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options,
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -205,7 +205,7 @@ export const apple = (options: AppleOptions) => {
 	} satisfies OAuthProvider<AppleProfile>;
 };
 
-export const getApplePublicKey = async (kid: string) => {
+export const getApplePublicKey = async (kid: string, jwksEndpoint?: string) => {
 	const APPLE_BASE_URL = "https://appleid.apple.com";
 	const JWKS_APPLE_URI = "/auth/keys";
 	const { data } = await betterFetch<{
@@ -217,7 +217,7 @@ export const getApplePublicKey = async (kid: string) => {
 			n: string;
 			e: string;
 		}>;
-	}>(`${APPLE_BASE_URL}${JWKS_APPLE_URI}`);
+	}>(jwksEndpoint ?? `${APPLE_BASE_URL}${JWKS_APPLE_URI}`);
 	if (!data?.keys) {
 		throw new APIError("BAD_REQUEST", {
 			message: "Keys not found",

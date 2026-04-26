@@ -60,6 +60,24 @@ export interface GithubOptions extends ProviderOptions<GithubProfile> {
 }
 export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://api.github.com/user";
+	const emailEndpoint = (() => {
+		try {
+			const url = new URL(userInfoEndpoint);
+			const normalizedPathname = url.pathname.endsWith("/")
+				? url.pathname.slice(0, -1)
+				: url.pathname;
+			if (!normalizedPathname.endsWith("/user")) {
+				return undefined;
+			}
+			url.pathname = `${normalizedPathname}/emails`;
+			url.search = "";
+			return url.toString();
+		} catch {
+			return undefined;
+		}
+	})();
 	return {
 		id: "github",
 		name: "GitHub",
@@ -98,7 +116,7 @@ export const github = (options: GithubOptions) => {
 			const { data, error } = await betterFetch<
 				| { access_token: string; token_type: string; scope: string }
 				| { error: string; error_description?: string; error_uri?: string }
-			>(tokenEndpoint, {
+			>(options.tokenEndpoint ?? tokenEndpoint, {
 				method: "POST",
 				body: body,
 				headers: requestHeaders,
@@ -126,7 +144,7 @@ export const github = (options: GithubOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -134,7 +152,7 @@ export const github = (options: GithubOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<GithubProfile>(
-				"https://api.github.com/user",
+				userInfoEndpoint,
 				{
 					headers: {
 						"User-Agent": "better-auth",
@@ -145,19 +163,23 @@ export const github = (options: GithubOptions) => {
 			if (error) {
 				return null;
 			}
-			const { data: emails } = await betterFetch<
-				{
-					email: string;
-					primary: boolean;
-					verified: boolean;
-					visibility: "public" | "private";
-				}[]
-			>("https://api.github.com/user/emails", {
-				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
-					"User-Agent": "better-auth",
-				},
-			});
+			const emails = emailEndpoint
+				? (
+						await betterFetch<
+							{
+								email: string;
+								primary: boolean;
+								verified: boolean;
+								visibility: "public" | "private";
+							}[]
+						>(emailEndpoint, {
+							headers: {
+								Authorization: `Bearer ${token.accessToken}`,
+								"User-Agent": "better-auth",
+							},
+						})
+					).data
+				: undefined;
 
 			if (!profile.email && emails) {
 				profile.email = (emails.find((e) => e.primary) ?? emails[0])

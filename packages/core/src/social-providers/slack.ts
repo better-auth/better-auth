@@ -39,6 +39,8 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 
 export const slack = (options: SlackOptions) => {
 	const tokenEndpoint = "https://slack.com/api/openid.connect.token";
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://slack.com/api/openid.connect.userInfo";
 	return {
 		id: "slack",
 		name: "Slack",
@@ -48,7 +50,10 @@ export const slack = (options: SlackOptions) => {
 				: ["openid", "profile", "email"];
 			if (scopes) _scopes.push(...scopes);
 			if (options.scope) _scopes.push(...options.scope);
-			const url = new URL("https://slack.com/openid/connect/authorize");
+			const url = new URL(
+				options.authorizationEndpoint ??
+					"https://slack.com/openid/connect/authorize",
+			);
 			url.searchParams.set("scope", _scopes.join(" "));
 			url.searchParams.set("response_type", "code");
 			url.searchParams.set("client_id", options.clientId);
@@ -61,7 +66,7 @@ export const slack = (options: SlackOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -74,7 +79,7 @@ export const slack = (options: SlackOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -82,7 +87,7 @@ export const slack = (options: SlackOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<SlackProfile>(
-				"https://slack.com/api/openid.connect.userInfo",
+				userInfoEndpoint,
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,

@@ -98,7 +98,7 @@ export const salesforce = (options: SalesforceOptions) => {
 				codeVerifier,
 				redirectURI: options.redirectURI || redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 
@@ -111,7 +111,7 @@ export const salesforce = (options: SalesforceOptions) => {
 							clientId: options.clientId,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 
@@ -122,7 +122,7 @@ export const salesforce = (options: SalesforceOptions) => {
 
 			try {
 				const { data: user } = await betterFetch<SalesforceProfile>(
-					userInfoEndpoint,
+					options.userInfoEndpoint ?? userInfoEndpoint,
 					{
 						headers: {
 							Authorization: `Bearer ${token.accessToken}`,
