@@ -1,5 +1,13 @@
 # @better-auth/api-key
 
+## 1.7.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [[`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671)]:
+  - better-auth@1.7.0-beta.3
+  - @better-auth/core@1.7.0-beta.3
+
 ## 1.7.0-beta.2
 
 ### Patch Changes

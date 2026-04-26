@@ -1,5 +1,17 @@
 # @better-auth/stripe
 
+## 1.7.0-beta.3
+
+### Minor Changes
+
+- [#9359](https://github.com/better-auth/better-auth/pull/9359) [`a9d48c9`](https://github.com/better-auth/better-auth/commit/a9d48c993de0fc2b9ba5829c9cb985716ce00c45) Thanks [@bytaesu](https://github.com/bytaesu)! - `onSubscriptionCancel` callback `event` is no longer marked optional, consistent with all other subscription lifecycle callbacks. The only call site always provides an event, so the optional marker was inaccurate.
+
+### Patch Changes
+
+- Updated dependencies [[`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671)]:
+  - better-auth@1.7.0-beta.3
+  - @better-auth/core@1.7.0-beta.3
+
 ## 1.7.0-beta.2
 
 ### Patch Changes

@@ -1,5 +1,22 @@
 # better-auth
 
+## 1.7.0-beta.3
+
+### Minor Changes
+
+- [#8733](https://github.com/better-auth/better-auth/pull/8733) [`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `hydrateSession` to seed the client with a server-fetched session so `useSession` returns data on the first render.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.3
+  - @better-auth/drizzle-adapter@1.7.0-beta.3
+  - @better-auth/kysely-adapter@1.7.0-beta.3
+  - @better-auth/memory-adapter@1.7.0-beta.3
+  - @better-auth/mongo-adapter@1.7.0-beta.3
+  - @better-auth/prisma-adapter@1.7.0-beta.3
+  - @better-auth/telemetry@1.7.0-beta.3
+
 ## 1.7.0-beta.2
 
 ### Minor Changes
