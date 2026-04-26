@@ -1,0 +1,23 @@
+---
+title: invalid_token_and_callback_url
+description: Both the reset token and callbackURL are missing from the request.
+---
+
+## What is it?
+
+This error is thrown during the password reset validation step (`GET /reset-password`) when the
+request contains neither a `token` nor a `callbackURL` query parameter. Both are required.
+
+## Common Causes
+
+* The password reset link in the email was generated incorrectly, omitting both parameters.
+
+## How to resolve
+
+### Ensure the reset link is built correctly
+
+* The link in your password reset email must include both `token` and `callbackURL` as query parameter, for example:
+  ```
+  https://yourapp.com/api/auth/reset-password/TOKEN?callbackURL=https://yourapp.com/reset-password
+  ```
+* Check your email template or the call from `sendResetPassword` to confirm both values are present.
