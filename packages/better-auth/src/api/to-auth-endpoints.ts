@@ -154,7 +154,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 						responseHeaders: undefined,
 						session: null,
 					},
-					path: endpoint.path,
+					path: route,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
 				const hasRequest = isRequestLike(context?.request);

@@ -146,6 +146,63 @@ describe("before hook", async () => {
 			expect(res).toMatchObject({ key: "value", name: "headers" });
 		});
 
+		it("should preserve the declared endpoint path for routed requests", async () => {
+			let hookPath = "";
+			const endpoint = {
+				callback: createAuthEndpoint(
+					"/callback/:id",
+					{ method: "GET" },
+					async (c) => ({
+						path: c.path,
+						providerId: c.params.id,
+					}),
+				),
+			};
+			const authContext = init({
+				hooks: {
+					before: createAuthMiddleware(async (c) => {
+						hookPath = c.path;
+					}),
+				},
+			});
+			const api = toAuthEndpoints(endpoint, authContext);
+
+			const res = await api.callback({
+				path: "/callback/google",
+				params: {
+					id: "google",
+				},
+			});
+
+			expect(hookPath).toBe("/callback/:id");
+			expect(res).toMatchObject({
+				path: "/callback/:id",
+				providerId: "google",
+			});
+		});
+
+		it("should use /:virtual fallback path for pathless endpoints when no request path is provided", async () => {
+			let hookPath = "";
+			const endpoint = {
+				pathless: createAuthEndpoint({ method: "GET" }, async (c) => ({
+					seenPath: c.path,
+				})),
+			};
+			const authContext = init({
+				hooks: {
+					before: createAuthMiddleware(async (c) => {
+						hookPath = c.path;
+					}),
+				},
+			});
+			const api = toAuthEndpoints(endpoint, authContext);
+
+			const res = await api.pathless();
+
+			expect(hookPath).toBe("/:virtual");
+			expect(res).toMatchObject({ seenPath: "/:virtual" });
+		});
+
 		it("should replace existing array when hook provides another array", async () => {
 			const endpoint = {
 				body: createAuthEndpoint(

@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { lastLoginMethod } from "../last-login-method";
+import { openAPI } from "../open-api";
 import { magicLink } from ".";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
@@ -18,15 +20,16 @@ describe("magic link", async () => {
 		token: "",
 		url: "",
 	};
-	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
-		plugins: [
-			magicLink({
-				async sendMagicLink(data) {
-					verificationEmail = data;
-				},
-			}),
-		],
-	});
+	const { auth, customFetchImpl, testUser, sessionSetter } =
+		await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
 
 	const client = createAuthClient({
 		plugins: [magicLinkClient()],
@@ -67,6 +70,28 @@ describe("magic link", async () => {
 			metadata: {
 				inviteId: "123",
 			},
+		});
+	});
+
+	it("should keep signInMagicLink status-only on the server api", async () => {
+		const response = await auth.api.signInMagicLink({
+			body: {
+				email: testUser.email,
+				metadata: {
+					inviteId: "server",
+				},
+			},
+			headers: new Headers(),
+		});
+
+		expectTypeOf(response).toEqualTypeOf<{
+			status: true;
+		}>();
+		expect(response).toEqual({
+			status: true,
+		});
+		expect(verificationEmail.metadata).toEqual({
+			inviteId: "server",
 		});
 	});
 	it("should verify magic link", async () => {
@@ -367,6 +392,154 @@ describe("magic link", async () => {
 	});
 });
 
+describe("magic link generate", async () => {
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+	const sendMagicLink = vi.fn((data: VerificationEmail) => {
+		verificationEmail = data;
+	});
+	const { auth, customFetchImpl, testUser } = await getTestInstance({
+		plugins: [
+			magicLink({
+				sendMagicLink,
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
+	});
+
+	it("should expose generateMagicLink on the server api only", async () => {
+		expectTypeOf<typeof auth.api>().toHaveProperty("generateMagicLink");
+		expectTypeOf<typeof client>().not.toHaveProperty("generateMagicLink");
+	});
+
+	it("should issue a magic link without sending it", async () => {
+		const response = await auth.api.generateMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers: new Headers(),
+		});
+
+		expectTypeOf<typeof response>().toMatchObjectType<{
+			status: true;
+			url: string;
+			token: string;
+		}>();
+		expect(response.status).toBe(true);
+		expect(new URL(response.url).searchParams.get("token")).toBe(
+			response.token,
+		);
+		expect(sendMagicLink).not.toHaveBeenCalled();
+		expect(verificationEmail).toEqual({
+			email: "",
+			token: "",
+			url: "",
+		});
+	});
+
+	it("should respect callback urls", async () => {
+		const response = await auth.api.generateMagicLink({
+			body: {
+				email: testUser.email,
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				errorCallbackURL: "/error",
+			},
+			headers: new Headers(),
+		});
+
+		const url = new URL(response.url);
+		expect(url.searchParams.get("callbackURL")).toBe("/dashboard");
+		expect(url.searchParams.get("newUserCallbackURL")).toBe("/welcome");
+		expect(url.searchParams.get("errorCallbackURL")).toBe("/error");
+		expect(sendMagicLink).not.toHaveBeenCalled();
+	});
+
+	it("should generate the same link shape as auth.api.signInMagicLink", async () => {
+		let generatedEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const generateToken = vi.fn(() => "shared-token");
+		const generateInstance = await getTestInstance({
+			plugins: [
+				magicLink({
+					generateToken,
+					sendMagicLink,
+				}),
+			],
+		});
+		const signInInstance = await getTestInstance({
+			plugins: [
+				magicLink({
+					generateToken,
+					sendMagicLink(data) {
+						generatedEmail = data;
+					},
+				}),
+			],
+		});
+
+		const generated = await generateInstance.auth.api.generateMagicLink({
+			body: {
+				email: generateInstance.testUser.email,
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				errorCallbackURL: "/error",
+			},
+			headers: new Headers(),
+		});
+
+		await signInInstance.auth.api.signInMagicLink({
+			body: {
+				email: signInInstance.testUser.email,
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				errorCallbackURL: "/error",
+			},
+			headers: new Headers(),
+		});
+
+		expect(generated.url).toBe(generatedEmail.url);
+		expect(generated.token).toBe(generatedEmail.token);
+		expect(generateToken).toHaveBeenCalledTimes(2);
+	});
+
+	it("should allow generateMagicLink with lastLoginMethod installed", async () => {
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					sendMagicLink,
+				}),
+				lastLoginMethod(),
+			],
+		});
+
+		await expect(
+			auth.api.generateMagicLink({
+				body: {
+					email: testUser.email,
+				},
+				headers: new Headers(),
+			}),
+		).resolves.toMatchObject({
+			status: true,
+		});
+	});
+});
+
 describe("magic link verify", async () => {
 	const verificationEmail: VerificationEmail[] = [
 		{
@@ -416,6 +589,32 @@ describe("magic link verify", async () => {
 		expect(response.data?.token).toBeDefined();
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
+	});
+});
+
+describe("magic link openapi", async () => {
+	const { auth } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink() {},
+			}),
+			openAPI(),
+		],
+	});
+
+	it("should keep the public sign-in response schema token-free", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+		const responseSchema =
+			paths["/sign-in/magic-link"].post.responses["200"].content[
+				"application/json"
+			].schema;
+
+		expect(responseSchema.properties.status).toEqual({
+			type: "boolean",
+		});
+		expect(responseSchema.properties.url).toBeUndefined();
+		expect(responseSchema.properties.token).toBeUndefined();
 	});
 });
 
@@ -507,6 +706,32 @@ describe("magic link storeToken", async () => {
 		expect(response2.status).toBe(true);
 	});
 
+	it("should store generated token in hashed storage without sending", async () => {
+		const sendMagicLink = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					storeToken: "hashed",
+					sendMagicLink,
+				}),
+			],
+		});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const response = await auth.api.generateMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers: new Headers(),
+		});
+		const hashedToken = await defaultKeyHasher(response.token);
+		const storedToken =
+			await internalAdapter.findVerificationValue(hashedToken);
+
+		expect(storedToken).toBeDefined();
+		expect(sendMagicLink).not.toHaveBeenCalled();
+	});
+
 	it("should store token with custom hasher", async () => {
 		let verificationEmail: VerificationEmail = {
 			email: "",
@@ -548,6 +773,37 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		expect(response2.status).toBe(true);
+	});
+
+	it("should store generated token with custom hasher without sending", async () => {
+		const sendMagicLink = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					storeToken: {
+						type: "custom-hasher",
+						async hash(token) {
+							return token + "hashed";
+						},
+					},
+					sendMagicLink,
+				}),
+			],
+		});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const response = await auth.api.generateMagicLink({
+			body: {
+				email: testUser.email,
+			},
+			headers: new Headers(),
+		});
+		const hashedToken = `${response.token}hashed`;
+		const storedToken =
+			await internalAdapter.findVerificationValue(hashedToken);
+
+		expect(storedToken).toBeDefined();
+		expect(sendMagicLink).not.toHaveBeenCalled();
 	});
 });
 
