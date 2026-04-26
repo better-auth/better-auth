@@ -187,6 +187,9 @@ async function createIdToken(
 		? await computeOidcHash(accessToken, signingAlg)
 		: undefined;
 
+	const emitSid = Boolean(
+		client.enableEndSession || client.backchannelLogoutUri,
+	);
 	const payload: JWTPayload = {
 		...userClaims,
 		auth_time: authTimeSec,
@@ -199,7 +202,7 @@ async function createIdToken(
 		nonce,
 		iat,
 		exp,
-		sid: client.enableEndSession ? sessionId : undefined,
+		sid: emitSid ? sessionId : undefined,
 	};
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified

@@ -108,6 +108,8 @@ describe("oauth metadata", async () => {
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
+			backchannel_logout_supported: true,
+			backchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
@@ -168,7 +170,20 @@ describe("oauth metadata", async () => {
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
+			backchannel_logout_supported: true,
+			backchannel_logout_session_supported: true,
 		});
+	});
+
+	it("advertises back-channel logout as unsupported when the jwt plugin is disabled", async () => {
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				disableJwtPlugin: true,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata.backchannel_logout_supported).toBe(false);
+		expect(metadata.backchannel_logout_session_supported).toBe(false);
 	});
 
 	it("should utilize advertised metadata fields", async () => {

@@ -382,7 +382,10 @@ describe("oauth introspect", async () => {
 		});
 	});
 
-	it("should pass opaque access_token introspection with logged out user", async () => {
+	it("reports opaque access_token as inactive after the user signs out", async () => {
+		// Per OIDC Back-Channel Logout §2.7: access tokens bound to a session
+		// are revoked when the session ends, even if they have not yet
+		// reached their TTL.
 		const { headers: testHeaders } = await signInWithTestUser();
 		const tokens = await getTokens(undefined, undefined, testHeaders);
 		const signOut = await auth.api.signOut({
@@ -404,19 +407,13 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toMatchObject({
-			active: true,
-			client_id: oauthClient?.client_id,
-			scope: "openid profile email offline_access",
-			sub: expect.any(String),
-			iss: authServerBaseUrl,
-			exp: expect.any(Number),
-			iat: expect.any(Number),
-		});
-		expect(introspection.data?.sid).toBeUndefined();
+		expect(introspection.data).toEqual({ active: false });
 	});
 
-	it("should pass jwt access_token introspection with logged out user", async () => {
+	it("reports jwt access_token as inactive after the user signs out", async () => {
+		// JWT access tokens that carry `sid` are bound to the OP session and
+		// become inactive when the session ends, per OIDC Back-Channel Logout
+		// §2.7, regardless of their own TTL.
 		const { headers: testHeaders } = await signInWithTestUser();
 		const tokens = await getTokens(
 			undefined,
@@ -444,16 +441,7 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toMatchObject({
-			active: true,
-			client_id: oauthClient?.client_id,
-			scope: "openid profile email offline_access",
-			sub: expect.any(String),
-			iss: authServerBaseUrl,
-			exp: expect.any(Number),
-			iat: expect.any(Number),
-		});
-		expect(introspection.data?.sid).toBeUndefined();
+		expect(introspection.data).toEqual({ active: false });
 	});
 
 	it("should pass refresh_token introspection with logged out user", async () => {

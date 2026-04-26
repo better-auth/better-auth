@@ -26,6 +26,9 @@ export function authServerMetadata(
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
+	// Back-channel logout requires a verifiable Logout Token, which depends on
+	// the JWT plugin's JWKS. Advertise support only when the plugin is enabled.
+	const backchannelSupported = !overrides?.jwt_disabled;
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
 		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
@@ -78,6 +81,8 @@ export function authServerMetadata(
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
+		backchannel_logout_supported: backchannelSupported,
+		backchannel_logout_session_supported: backchannelSupported,
 	};
 	return metadata;
 }

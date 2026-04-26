@@ -16,7 +16,11 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
-import { rpInitiatedLogoutEndpoint } from "./logout";
+import {
+	deliverBackchannelLogoutTokens,
+	revokeAndPlanBackchannelLogout,
+	rpInitiatedLogoutEndpoint,
+} from "./logout";
 import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
@@ -182,30 +186,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Check for jwt plugin registration
+			// Well-known warnings are best-effort and only make sense with the
+			// JWT plugin. A dynamic baseURL resolves per-request, so there is
+			// nothing to emit at init time for that deployment shape either.
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
 				const jwtPluginOptions = jwtPlugin?.options;
-
-				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
 				const isDynamicBaseURLInit =
 					jwtPluginOptions?.jwt?.issuer == null &&
 					typeof ctx.options.baseURL === "object" &&
 					ctx.options.baseURL !== null &&
 					"allowedHosts" in ctx.options.baseURL;
-				let issuerPath: string;
+				let issuerPath: string | undefined;
 				try {
 					issuerPath = new URL(issuer).pathname;
 				} catch (error) {
-					// baseURL may not be available during init when using dynamic baseURL config
-					if (isDynamicBaseURLInit && issuer === "") {
-						return;
-					}
-					throw error;
+					if (!isDynamicBaseURLInit || issuer !== "") throw error;
 				}
-				// oAuth Server Config
 				if (
+					issuerPath !== undefined &&
 					!opts.silenceWarnings?.oauthAuthServerConfig &&
 					!(ctx.options.basePath === "/" && issuerPath === "/")
 				) {
@@ -213,8 +213,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
 					);
 				}
-				// OpenId Config
 				if (
+					issuerPath !== undefined &&
 					!opts.silenceWarnings?.openidConfig &&
 					ctx.options.basePath !== issuerPath &&
 					opts.scopes?.includes("openid")
@@ -224,6 +224,37 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
+
+			// The hook must register for every configuration path (including
+			// dynamic baseURL). Revocation runs inline because it mutates DB
+			// state we rely on; the HTTP fan-out is routed through the host's
+			// background handler (e.g. Vercel `waitUntil`, CF `ctx.waitUntil`)
+			// so a slow RP cannot delay the user-facing logout response.
+			return {
+				options: {
+					databaseHooks: {
+						session: {
+							delete: {
+								async before(session, hookCtx) {
+									if (!hookCtx) return;
+									const plan = await revokeAndPlanBackchannelLogout(
+										hookCtx,
+										opts,
+										{
+											sessionId: session.id,
+											userId: session.userId,
+										},
+									);
+									if (!plan) return;
+									hookCtx.context.runInBackgroundOrAwait(
+										deliverBackchannelLogoutTokens(hookCtx, opts, plan),
+									);
+								},
+							},
+						},
+					},
+				},
+			};
 		},
 		hooks: {
 			before: [
@@ -1190,6 +1221,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
 						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+						backchannel_logout_uri: SafeUrlSchema.optional(),
+						backchannel_logout_session_required: z.boolean().optional(),
 						token_endpoint_auth_method: z
 							.enum([
 								"none",
@@ -1334,6 +1367,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															format: "uri",
 														},
 														description: "List of allowed logout redirect uris",
+													},
+													backchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL to receive signed Logout Tokens when the end-user's OP session terminates",
+													},
+													backchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the RP requires a `sid` claim in every Logout Token",
 													},
 													token_endpoint_auth_method: {
 														type: "string",
