@@ -1145,6 +1145,78 @@ describe("cookie cache refreshCache", async () => {
 		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8817
+	 */
+	it("should preserve session expiry when refreshing stateless cookie cache", async () => {
+		const expiresIn = 60 * 60; // 1 hour
+		const cacheMaxAge = 300; // 5 minutes
+		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			// True stateless mode: no database configured
+			database: undefined as any,
+			session: {
+				expiresIn,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: cacheMaxAge,
+					refreshCache: {
+						updateAge: 60, // Refresh when 60 seconds remain
+					},
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(firstSession.data).not.toBeNull();
+		const sessionToken = firstSession.data?.session?.token;
+		const originalExpiresAt = new Date(
+			firstSession.data!.session.expiresAt,
+		).getTime();
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken!);
+
+		vi.useFakeTimers();
+		// Advance time to trigger refresh (300 - 60 = 240, so at 241 we're in refresh window)
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		const sessionFromCache = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(sessionFromCache.data).not.toBeNull();
+		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
+		expect(new Date(sessionFromCache.data!.session.expiresAt).getTime()).toBe(
+			originalExpiresAt,
+		);
+		expect(originalExpiresAt - Date.now()).toBeGreaterThan(
+			(cacheMaxAge + 1) * 1000,
+		);
+
+		vi.useRealTimers();
+	});
+
 	it("should work without database when refreshCache threshold is reached", async () => {
 		const { client, testUser, cookieSetter, auth } = await getTestInstance({
 			// True stateless mode: no database configured
