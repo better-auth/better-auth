@@ -174,4 +174,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
+	/**
+	 * Accept callbacks from providers that initiate the OAuth flow without
+	 * sending a `state` parameter (e.g. Clever). When enabled, stateless
+	 * callbacks restart the OAuth flow server-side with a fresh `state` and
+	 * PKCE verifier. See the generic-oauth docs for details.
+	 *
+	 * @default false
+	 */
+	allowIdpInitiated?: boolean | undefined;
 }
