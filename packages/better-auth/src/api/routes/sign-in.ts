@@ -7,6 +7,7 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -181,7 +182,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			body: socialSignInBodySchema,
 			metadata: {
 				$Infer: {
-					body: socialSignInBodySchema,
+					body: {} as z.infer<typeof socialSignInBodySchema>,
 					returned: {} as {
 						redirect: boolean;
 						token?: string | undefined;
@@ -195,13 +196,13 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					responses: {
 						"200": {
 							description:
-								"Success - Returns either session details or redirect URL",
+								"Success - Returns session details (idToken branch) or an authorize URL (redirect branch)",
 							content: {
 								"application/json": {
 									schema: {
-										// todo: we need support for multiple schema
 										type: "object",
-										description: "Session response when idToken is provided",
+										description:
+											"Returns session details when idToken is provided, or an authorize URL otherwise",
 										properties: {
 											token: {
 												type: "string",
@@ -215,10 +216,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 											},
 											redirect: {
 												type: "boolean",
-												enum: [false],
 											},
 										},
-										required: ["redirect", "token", "user"],
+										required: ["redirect"],
 									},
 								},
 							},
@@ -288,9 +288,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				if (!userInfo.user.email) {
-					c.context.logger.error("User email not found", {
-						provider: c.body.provider,
-					});
+					c.context.logger.error(
+						missingEmailLogMessage(c.body.provider, { source: "id_token" }),
+						{ provider: c.body.provider },
+					);
 					throw APIError.from(
 						"UNAUTHORIZED",
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
