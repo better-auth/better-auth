@@ -78,7 +78,7 @@ export const getClientConfig = (
 				return null as any;
 			}
 			return parseJSON(text, {
-				strict: false,
+				strict: true,
 			});
 		},
 		customFetchImpl: fetch,
