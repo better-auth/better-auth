@@ -70,6 +70,13 @@ export interface OAuthProvider<
 		| ((refreshToken: string) => Promise<OAuth2Tokens>)
 		| undefined;
 	revokeToken?: ((token: string) => Promise<void>) | undefined;
+	createEndSessionURL?:
+		| ((data: {
+				idToken?: string | null | undefined;
+				postLogoutRedirectURI?: string | undefined;
+				state?: string | undefined;
+		  }) => Awaitable<URL | null>)
+		| undefined;
 	/**
 	 * Verify the id token
 	 * @param token - The id token

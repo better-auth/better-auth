@@ -109,6 +109,57 @@ describe("oauth2", async () => {
 		return { callbackURL, headers: newHeaders, setCookieHeader };
 	}
 
+	it("should discover end_session_endpoint for provider logout", async () => {
+		const fetchMock = vi.fn(async () => {
+			return new Response(
+				JSON.stringify({
+					end_session_endpoint: "https://idp.example.com/logout",
+				}),
+				{
+					headers: {
+						"content-type": "application/json",
+					},
+				},
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+		try {
+			const { auth } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "discovery-logout",
+								discoveryUrl:
+									"https://idp.example.com/.well-known/openid-configuration",
+								clientId: "client-id",
+								clientSecret: "client-secret",
+							},
+						],
+					}),
+				],
+			});
+			const context = await auth.$context;
+			const provider = await getAwaitableValue(context.socialProviders, {
+				value: "discovery-logout",
+			});
+			const logoutUrl = await provider?.createEndSessionURL?.({
+				idToken: "id-token",
+			});
+
+			expect(logoutUrl?.toString()).toBe(
+				"https://idp.example.com/logout?id_token_hint=id-token",
+			);
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			const calls = fetchMock.mock.calls as unknown as Array<[unknown]>;
+			expect(String(calls[0]?.[0])).toBe(
+				"https://idp.example.com/.well-known/openid-configuration",
+			);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
 	it("should delete state cookie with path attribute", async () => {
 		const headers = new Headers();
 		const signInRes = await authClient.signIn.social({

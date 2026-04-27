@@ -4253,8 +4253,23 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "redirect": {
+                      "description": "Whether the client should redirect to the provider logout URL",
+                      "type": "boolean",
+                    },
                     "success": {
                       "type": "boolean",
+                    },
+                    "url": {
+                      "description": "Provider logout URL when RP-initiated logout is available",
+                      "type": "string",
+                    },
+                    "urls": {
+                      "description": "All provider logout URLs when multiple providers support RP-initiated logout",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
                     },
                   },
                   "type": "object",

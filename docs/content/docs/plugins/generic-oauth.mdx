@@ -85,6 +85,36 @@ The plugin uses the core OAuth callback route at `/callback/:providerId`. This m
 
 Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
 
+### RP-Initiated Logout
+
+For OIDC providers that expose an `end_session_endpoint`, `authClient.signOut()` will clear the Better Auth session and then redirect the browser to the provider logout endpoint. When you use `discoveryUrl`, the endpoint is read from the provider discovery document. You can also configure it manually with `endSessionEndpoint`.
+
+```ts
+await authClient.signOut()
+```
+
+Pass `callbackURL` to ask the provider to return the user to your app after logout. The URL must be registered with your provider as a post-logout redirect URI.
+
+```ts
+await authClient.signOut({
+  callbackURL: "/login",
+})
+```
+
+To keep sign-out local to Better Auth, disable provider logout for that config.
+
+```ts
+genericOAuth({
+  config: [{
+    providerId: "provider-id",
+    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+    clientId: "test-client-id",
+    clientSecret: "test-client-secret",
+    disableProviderLogout: true,
+  }]
+})
+```
+
 ## Pre-configured Provider Helpers
 
 Better Auth provides pre-configured helper functions for popular OAuth providers. These helpers handle the provider-specific configuration, including discovery URLs and user info endpoints.
@@ -196,6 +226,9 @@ All providers support the same optional fields:
 * `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
 * `disableSignUp?: boolean` - Disable sign-up entirely
 * `overrideUserInfo?: boolean` - Override user info on sign in
+* `endSessionEndpoint?: string` - OIDC RP-Initiated Logout endpoint. Auto-discovered from `end_session_endpoint` when available
+* `postLogoutRedirectURI?: string` - Default URI to pass as `post_logout_redirect_uri` during provider logout
+* `disableProviderLogout?: boolean` - Disable automatic provider logout during `authClient.signOut()`
 
 ## Configuration
 
@@ -212,6 +245,9 @@ interface GenericOAuthConfig {
   authorizationUrl?: string;
   tokenUrl?: string;
   userInfoUrl?: string;
+  endSessionEndpoint?: string;
+  postLogoutRedirectURI?: string;
+  disableProviderLogout?: boolean;
   clientId: string;
   clientSecret: string;
   scopes?: string[];
@@ -235,6 +271,12 @@ interface GenericOAuthConfig {
 **tokenUrl**: (Optional) The OAuth provider's token endpoint. Not required if using `discoveryUrl`.
 
 **userInfoUrl**: (Optional) The endpoint to fetch user profile information. Not required if using `discoveryUrl`.
+
+**endSessionEndpoint**: (Optional) The OIDC RP-Initiated Logout endpoint. Not required if using `discoveryUrl` and the provider returns `end_session_endpoint`.
+
+**postLogoutRedirectURI**: (Optional) Default URI to send as `post_logout_redirect_uri` when `authClient.signOut()` redirects to the provider. This URI must be registered with the provider.
+
+**disableProviderLogout**: (Optional) If true, `authClient.signOut()` only clears the Better Auth session and does not redirect to the provider logout endpoint.
 
 **clientId**: The OAuth client ID issued by your provider.
 
