@@ -78,52 +78,134 @@ function withPath(url: string, path = "/api/auth") {
 	return `${trimmedUrl}${path}`;
 }
 
+/**
+ * RFC 1035 §2.3.4 max printable hostname (253) + ":65535" + slack.
+ */
+const MAX_HOST_HEADER_LENGTH = 260;
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.2
+ */
+function splitHostPort(
+	header: string,
+): { host: string; port: string | null } | null {
+	if (header.startsWith("[")) {
+		const closing = header.indexOf("]");
+		if (closing === -1) return null;
+
+		const host = header.slice(0, closing + 1);
+		const rest = header.slice(closing + 1);
+
+		if (rest === "") return { host, port: null };
+		if (!rest.startsWith(":")) return null;
+		return { host, port: rest.slice(1) };
+	}
+
+	const lastColon = header.lastIndexOf(":");
+	if (lastColon === -1) return { host: header, port: null };
+
+	const host = header.slice(0, lastColon);
+	const port = header.slice(lastColon + 1);
+
+	if (host === "" || host.includes(":")) return null;
+	return { host, port };
+}
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6335#section-6
+ */
+function isValidPort(port: string): boolean {
+	if (!/^[0-9]{1,5}$/.test(port)) return false;
+
+	const n = Number(port);
+	return n >= 1 && n <= 65535;
+}
+
+const IPV4_SHAPE = /^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$/;
+const IPV4_OCTET = /^(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$/;
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.2
+ */
+function isValidIPv4(host: string): boolean {
+	const octets = host.split(".");
+	if (octets.length !== 4) return false;
+	return octets.every((o) => IPV4_OCTET.test(o));
+}
+
+const IPV6_GROUP = /^[0-9a-fA-F]{1,4}$/;
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc4291#section-2.2
+ */
+function isValidIPv6(addr: string): boolean {
+	if (addr === "::") return true;
+	if (addr === "" || addr === ":") return false;
+
+	const parts = addr.split("::");
+	if (parts.length > 2) return false;
+
+	const compressed = parts.length === 2;
+	const [head = "", tail = ""] = parts;
+	const headGroups = head ? head.split(":") : [];
+	const tailGroups = compressed && tail ? tail.split(":") : [];
+	const groups = headGroups.concat(tailGroups);
+
+	if (groups.length === 0 || groups.some((g) => g === "")) return false;
+
+	let extraGroups = 0;
+	const last = groups[groups.length - 1] as string;
+	if (last.includes(".")) {
+		if (!isValidIPv4(last)) return false;
+		groups.pop();
+		extraGroups = 2;
+	}
+
+	if (!groups.every((g) => IPV6_GROUP.test(g))) return false;
+
+	const total = groups.length + extraGroups;
+	return compressed ? total < 8 : total === 8;
+}
+
+const REG_NAME_LABEL = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc1035#section-2.3.1
+ * @see https://datatracker.ietf.org/doc/html/rfc1123#section-2
+ */
+function isValidRegName(host: string): boolean {
+	if (host.length === 0 || host.length > 253) return false;
+
+	const labels = host.split(".");
+	return labels.every((label) => REG_NAME_LABEL.test(label));
+}
+
 function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 	if (!header || header.trim() === "") {
 		return false;
 	}
 
 	if (type === "proto") {
-		// Only allow http and https protocols
 		return header === "http" || header === "https";
 	}
 
 	if (type === "host") {
-		const suspiciousPatterns = [
-			/\.\./, // Path traversal
-			/\0/, // Null bytes
-			/[\s]/, // Whitespace (except legitimate spaces that should be trimmed)
-			/^[.]/, // Starting with dot
-			/[<>'"]/, // HTML/script injection characters
-			/javascript:/i, // Protocol injection
-			/file:/i, // File protocol
-			/data:/i, // Data protocol
-		];
+		if (header.length > MAX_HOST_HEADER_LENGTH) return false;
 
-		if (suspiciousPatterns.some((pattern) => pattern.test(header))) {
-			return false;
+		const parts = splitHostPort(header);
+		if (!parts) return false;
+		if (parts.port !== null && !isValidPort(parts.port)) return false;
+
+		const { host } = parts;
+
+		if (host.startsWith("[") && host.endsWith("]")) {
+			return isValidIPv6(host.slice(1, -1));
 		}
 
-		// Basic hostname validation (allows localhost, IPs, and domains with ports)
-		// This is a simple check, not exhaustive RFC validation
-		const hostnameRegex =
-			/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/;
+		// RFC 3986 §3.2.2 first-match-wins: only IPv4-shaped strings go to IPv4.
+		if (IPV4_SHAPE.test(host)) return isValidIPv4(host);
 
-		// Also allow IPv4 addresses
-		const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:[0-9]{1,5})?$/;
-
-		// Also allow IPv6 addresses in brackets
-		const ipv6Regex = /^\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$/;
-
-		// Allow localhost variations
-		const localhostRegex = /^localhost(:[0-9]{1,5})?$/i;
-
-		return (
-			hostnameRegex.test(header) ||
-			ipv4Regex.test(header) ||
-			ipv6Regex.test(header) ||
-			localhostRegex.test(header)
-		);
+		return isValidRegName(host);
 	}
 
 	return false;
