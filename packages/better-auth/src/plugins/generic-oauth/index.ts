@@ -67,6 +67,7 @@ interface DiscoveryDocument {
 	token_endpoint?: string;
 	userinfo_endpoint?: string;
 	issuer?: string;
+	end_session_endpoint?: string;
 	id_token_signing_alg_values_supported?: string[];
 }
 
@@ -190,6 +191,7 @@ export const genericOAuth = <const ID extends string>(
 				let authorizationUrl = c.authorizationUrl;
 				let tokenUrl = c.tokenUrl;
 				let userInfoUrl = c.userInfoUrl;
+				let endSessionEndpoint = c.endSessionEndpoint;
 
 				let issuer: string | undefined;
 				let isOidc = false;
@@ -208,6 +210,7 @@ export const genericOAuth = <const ID extends string>(
 						authorizationUrl ??= discovered.authorization_endpoint;
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
+						endSessionEndpoint ??= discovered.end_session_endpoint;
 						issuer = discovered.issuer;
 						isOidc =
 							Array.isArray(discovered.id_token_signing_alg_values_supported) &&
@@ -241,20 +244,10 @@ export const genericOAuth = <const ID extends string>(
 						if (c.disableProviderLogout) {
 							return null;
 						}
-						let finalEndSessionEndpoint = c.endSessionEndpoint;
-						if (!finalEndSessionEndpoint && c.discoveryUrl) {
-							const discovery = await betterFetch<{
-								end_session_endpoint?: string;
-							}>(c.discoveryUrl, {
-								method: "GET",
-								headers: c.discoveryHeaders,
-							});
-							finalEndSessionEndpoint = discovery.data?.end_session_endpoint;
-						}
-						if (!finalEndSessionEndpoint) {
+						if (!endSessionEndpoint) {
 							return null;
 						}
-						const url = new URL(finalEndSessionEndpoint);
+						const url = new URL(endSessionEndpoint);
 						if (data.idToken) {
 							url.searchParams.set("id_token_hint", data.idToken);
 						}
