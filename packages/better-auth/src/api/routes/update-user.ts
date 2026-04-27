@@ -907,6 +907,11 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
+		/**
+		 * Send verification to the new email directly. This path handles both:
+		 * - skipOldEmailVerification=true (password/fresh session already validated above)
+		 * - No sendChangeEmailConfirmation configured
+		 */
 		const token = await createEmailVerificationToken(
 			ctx.context.secret,
 			ctx.context.session.user.email,
