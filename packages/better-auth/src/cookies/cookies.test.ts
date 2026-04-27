@@ -722,6 +722,45 @@ describe("getSessionCookie", async () => {
 		// Verify that chunking happened (instead of logging an error and not caching)
 		expect(hasCookieChunks).toBe(true);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8737
+	 */
+	it("should find cookie cache via fallback when prefix does not match", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: {
+				useSecureCookies: true,
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
 });
 
 describe("Cookie Cache Field Filtering", () => {
