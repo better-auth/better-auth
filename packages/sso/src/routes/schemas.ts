@@ -42,14 +42,14 @@ const oidcConfigSchema = z.object({
 
 const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),
-	cert: z.string().optional(),
+	cert: z.union([z.string(), z.array(z.string()).nonempty()]).optional(),
 	callbackUrl: z.string().url().optional(),
 	audience: z.string().optional(),
 	idpMetadata: z
 		.object({
 			metadata: z.string().optional(),
 			entityID: z.string().optional(),
-			cert: z.string().optional(),
+			cert: z.union([z.string(), z.array(z.string()).nonempty()]).optional(),
 			privateKey: z.string().optional(),
 			privateKeyPass: z.string().optional(),
 			isAssertionEncrypted: z.boolean().optional(),
