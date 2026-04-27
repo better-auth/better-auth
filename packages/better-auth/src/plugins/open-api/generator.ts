@@ -150,52 +150,140 @@ function getParameters(options: EndpointOptions) {
 	return parameters;
 }
 
+function unwrapRequestBodyType(zodType: z.ZodType<any>) {
+	let current = zodType;
+	let required = true;
+	let defaultValue: unknown = undefined;
+	while (current instanceof z.ZodOptional || current instanceof z.ZodDefault) {
+		required = false;
+		if (current instanceof z.ZodDefault) {
+			const defaultValueDef = (current as any)._def.defaultValue;
+			defaultValue =
+				typeof defaultValueDef === "function"
+					? defaultValueDef()
+					: defaultValueDef;
+		}
+		current = current.unwrap() as z.ZodType<any>;
+	}
+	return {
+		defaultValue,
+		required,
+		schema: current,
+	};
+}
+
+function isMergeableObjectSchema(schema: any) {
+	const type = schema?.type;
+	return (
+		!!schema &&
+		(type === "object" || (Array.isArray(type) && type.includes("object"))) &&
+		schema.$ref === undefined &&
+		schema.allOf === undefined &&
+		schema.anyOf === undefined
+	);
+}
+
+function schemaAllowsNull(schema: any) {
+	const type = schema?.type;
+	return Array.isArray(type) && type.includes("null");
+}
+
+function areSchemasEqual(left: any, right: any) {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function mergeObjectSchemas(left: any, right: any, description?: string) {
+	const properties: Record<string, any> = {
+		...(left.properties || {}),
+	};
+	for (const [key, value] of Object.entries(right.properties || {})) {
+		if (
+			properties[key] !== undefined &&
+			!areSchemasEqual(properties[key], value)
+		) {
+			return undefined;
+		}
+		properties[key] = value;
+	}
+
+	const required = Array.from(
+		new Set([...(left.required || []), ...(right.required || [])]),
+	);
+	const leftAdditionalProperties = left.additionalProperties;
+	const rightAdditionalProperties = right.additionalProperties;
+	if (
+		leftAdditionalProperties !== undefined &&
+		rightAdditionalProperties !== undefined &&
+		!areSchemasEqual(leftAdditionalProperties, rightAdditionalProperties)
+	) {
+		return undefined;
+	}
+
+	const type =
+		schemaAllowsNull(left) && schemaAllowsNull(right)
+			? ["object", "null"]
+			: "object";
+
+	return {
+		type,
+		...(Object.keys(properties).length > 0 ? { properties } : {}),
+		...(required.length > 0 ? { required } : {}),
+		...(leftAdditionalProperties !== undefined ||
+		rightAdditionalProperties !== undefined
+			? {
+					additionalProperties:
+						leftAdditionalProperties ?? rightAdditionalProperties,
+				}
+			: {}),
+		...((description ?? left.description ?? right.description)
+			? {
+					description: description ?? left.description ?? right.description,
+				}
+			: {}),
+	};
+}
+
 function getRequestBody(options: EndpointOptions): any {
 	if (options.metadata?.openapi?.requestBody) {
 		return options.metadata.openapi.requestBody;
 	}
 	if (!options.body) return undefined;
-	if (
-		options.body instanceof z.ZodObject ||
-		options.body instanceof z.ZodOptional
-	) {
-		// @ts-expect-error
-		const shape = options.body.shape;
-		if (!shape) return undefined;
-		const properties: Record<string, any> = {};
-		const required: string[] = [];
-		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof z.ZodType) {
-				properties[key] = processZodType(value as z.ZodType<any>);
-				if (!(value instanceof z.ZodOptional)) {
-					required.push(key);
-				}
-			}
-		});
-		return {
-			required:
-				options.body instanceof z.ZodOptional
-					? false
-					: options.body
-						? true
-						: false,
-			content: {
-				"application/json": {
-					schema: {
-						type: "object",
-						properties,
-						required,
-					},
-				},
+	const requestBodySchemaInfo = unwrapRequestBodyType(
+		options.body as z.ZodType<any>,
+	);
+	const schema = processZodType(requestBodySchemaInfo.schema);
+	return {
+		required: requestBodySchemaInfo.required,
+		content: {
+			"application/json": {
+				schema:
+					requestBodySchemaInfo.defaultValue === undefined
+						? schema
+						: { ...schema, default: requestBodySchemaInfo.defaultValue },
 			},
-		};
-	}
-	return undefined;
+		},
+	};
 }
 
 function processZodType(zodType: z.ZodType<any>): any {
 	// optional unwrapping
 	if (zodType instanceof z.ZodOptional) {
+		const innerType = zodType.unwrap() as any;
+		const innerSchema = processZodType(innerType);
+		if (innerSchema.type) {
+			const type = Array.isArray(innerSchema.type)
+				? innerSchema.type
+				: [innerSchema.type];
+			return {
+				...innerSchema,
+				type: Array.from(new Set([...type, "null"])),
+			};
+		}
+		return {
+			anyOf: [innerSchema, { type: "null" }],
+		};
+	}
+	if (zodType instanceof z.ZodNullable) {
 		const innerType = zodType.unwrap() as any;
 		const innerSchema = processZodType(innerType);
 		if (innerSchema.type) {
@@ -225,6 +313,13 @@ function processZodType(zodType: z.ZodType<any>): any {
 			default: defaultValue,
 		};
 	}
+	if (zodType instanceof z.ZodAny) {
+		return (zodType as any).description
+			? {
+					description: (zodType as any).description,
+				}
+			: {};
+	}
 	// object unwrapping
 	if (zodType instanceof z.ZodObject) {
 		const shape = (zodType as any).shape;
@@ -243,15 +338,59 @@ function processZodType(zodType: z.ZodType<any>): any {
 				type: "object",
 				properties,
 				...(required.length > 0 ? { required } : {}),
-				description: (zodType as any).description,
+				...((zodType as any).description
+					? { description: (zodType as any).description }
+					: {}),
 			};
 		}
+	}
+	if (zodType instanceof z.ZodRecord) {
+		return {
+			type: "object",
+			additionalProperties: processZodType(
+				(zodType as any).valueType ?? (zodType as any)._def.valueType,
+			),
+			...((zodType as any).description
+				? { description: (zodType as any).description }
+				: {}),
+		};
+	}
+	if (zodType instanceof z.ZodIntersection) {
+		const leftSchema = processZodType(
+			(zodType as any).left ?? (zodType as any)._def.left,
+		);
+		const rightSchema = processZodType(
+			(zodType as any).right ?? (zodType as any)._def.right,
+		);
+
+		if (
+			isMergeableObjectSchema(leftSchema) &&
+			isMergeableObjectSchema(rightSchema)
+		) {
+			const mergedSchema = mergeObjectSchemas(
+				leftSchema,
+				rightSchema,
+				(zodType as any).description,
+			);
+			if (mergedSchema) {
+				return mergedSchema;
+			}
+		}
+
+		return {
+			allOf: [leftSchema, rightSchema],
+			...((zodType as any).description
+				? { description: (zodType as any).description }
+				: {}),
+		};
 	}
 
 	// For primitive types, get the correct type from the unwrapped ZodType
 	const baseSchema = {
 		type: getTypeFromZodType(zodType),
-		description: (zodType as any).description,
+		...((zodType as any).description
+			? { description: (zodType as any).description }
+			: {}),
 	};
 
 	return baseSchema;
