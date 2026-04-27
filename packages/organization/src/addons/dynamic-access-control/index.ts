@@ -3,6 +3,10 @@ import { DYNAMIC_ACCESS_CONTROL_ERROR_CODES } from "./helpers/errors";
 import { getAddonSchema } from "./helpers/get-schema";
 import { resolveOptions } from "./helpers/resolve-options";
 import { createRole } from "./routes/create-role";
+import { deleteRole } from "./routes/delete-role";
+import { getRole } from "./routes/get-role";
+import { listRoles } from "./routes/list-roles";
+import { updateRole } from "./routes/update-role";
 import type {
 	DynamicAccessControlOptions,
 	InferOrganizationRole,
@@ -27,6 +31,10 @@ export const dynamicAccessControl = <O extends DynamicAccessControlOptions>(
 		options: _options,
 		endpoints: {
 			createRole: createRole(_options),
+			deleteRole: deleteRole(_options),
+			getRole: getRole(_options),
+			listRoles: listRoles(_options),
+			updateRole: updateRole(_options),
 		},
 		schema: getAddonSchema<O>(options as O),
 	} satisfies Addon<O>;
