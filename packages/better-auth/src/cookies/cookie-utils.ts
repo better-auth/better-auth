@@ -1,3 +1,8 @@
+import { BetterAuthError } from "@better-auth/core/error";
+import type { CookieOptions } from "better-call";
+
+export const ALLOWED_COOKIE_SIZE = 4096;
+
 function tryDecode(str: string): string {
 	try {
 		return decodeURIComponent(str);
@@ -200,4 +205,42 @@ export function setCookieToHeader(headers: Headers) {
 			.join("; ");
 		headers.set("cookie", updatedCookies);
 	};
+}
+
+export function estimateEmptyCookieSize(
+	name: string,
+	attributes: CookieOptions,
+) {
+	const path = attributes.path ?? "/";
+	let s = `${name}=`;
+	s += `; Path=${path}`;
+	if (attributes.httpOnly) {
+		s += "; HttpOnly";
+	}
+	const sameSite = attributes.sameSite ?? "lax";
+	s += `; SameSite=${sameSite}`;
+	if (attributes.maxAge != null) {
+		s += `; Max-Age=${attributes.maxAge}`;
+	} else if (attributes.expires) {
+		const expires =
+			typeof attributes.expires === "number"
+				? new Date(attributes.expires * 1000).toUTCString()
+				: (attributes.expires as Date).toUTCString();
+		s += `; Expires=${expires}`;
+	}
+	if (attributes.secure) {
+		s += "; Secure";
+	}
+	if (attributes.domain) {
+		s += `; Domain=${attributes.domain}`;
+	}
+	return s.length;
+}
+
+export function getMaxCookieValueSize(name: string, attributes: CookieOptions) {
+	const size = ALLOWED_COOKIE_SIZE - estimateEmptyCookieSize(name, attributes);
+	if (size <= 0) {
+		throw new BetterAuthError(`Cookie ${name} is too large to be chunked.`);
+	}
+	return size;
 }
