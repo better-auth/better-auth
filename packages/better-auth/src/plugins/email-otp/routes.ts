@@ -45,6 +45,9 @@ async function resolveOTP(
 
 	const otp =
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
+
+	opts.onOTPCreated?.({ email, otp, type });
+
 	const storedOTP = await storeOTP(ctx, opts, otp);
 
 	await ctx.context.internalAdapter
@@ -201,6 +204,9 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
+
+			opts.onOTPCreated?.({ email, otp, type: ctx.body.type });
+
 			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
@@ -1135,6 +1141,9 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email: newEmail, type: "change-email" }, ctx) ||
 				defaultOTPGenerator(opts);
+
+			opts.onOTPCreated?.({ email: newEmail, otp, type: "change-email" });
+
 			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,

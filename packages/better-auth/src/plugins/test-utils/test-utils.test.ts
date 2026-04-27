@@ -319,6 +319,50 @@ describe("testUtils plugin", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9229
+	 */
+	describe("OTP capture with hashed storage", async () => {
+		const { auth: authHashed } = await getTestInstance({
+			plugins: [
+				testUtils({ captureOTP: true }),
+				emailOTP({
+					async sendVerificationOTP() {
+						// Don't actually send email in tests
+					},
+					storeOTP: "hashed",
+				}),
+			],
+		});
+
+		const ctx = (await authHashed.$context) as unknown as { test: TestHelpers };
+		const test = ctx.test;
+
+		beforeEach(() => {
+			test.clearOTPs!();
+		});
+
+		it("should capture plaintext OTP even when storeOTP is hashed", async () => {
+			const email = `test-hashed-${Date.now()}@example.com`;
+			const user = test.createUser({ email });
+			await test.saveUser(user);
+
+			// Send OTP with storeOTP: "hashed"
+			await authHashed.api.sendVerificationOTP({
+				body: { email, type: "sign-in" },
+			});
+
+			// Get captured OTP - should be plaintext, not hashed
+			const otp = test.getOTP!(email);
+			expect(otp).toBeDefined();
+			// Should be 6 digits (plaintext), not the hashed value
+			expect(otp).toMatch(/^\d{6}$/);
+
+			// Cleanup
+			await test.deleteUser(user.id);
+		});
+	});
+
 	describe("integration test example", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [testUtils()],
