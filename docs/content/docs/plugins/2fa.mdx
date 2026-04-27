@@ -203,13 +203,19 @@ const authClient = createAuthClient({
 
 ### Disabling 2FA
 
-To disable two-factor authentication, call `twoFactor.disable` with the user's password (required for credential accounts). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
+To disable two-factor authentication, call `twoFactor.disable` with a valid TOTP code or backup code. For TOTP-enabled accounts, a `code` is required — providing only a `password` will be rejected. For OTP-only accounts without a TOTP secret, the user's password is used as a fallback.
 
 <APIMethod path="/two-factor/disable" method="POST" requireSession>
   ```ts
   type disableTwoFactor = {
       /**
-       * The user's password (required for credential accounts)
+       * A valid TOTP code or backup code.
+       * Required if the user has TOTP enabled.
+       */
+      code?: string
+      /**
+       * User password. Only used as a fallback for
+       * OTP-only accounts without a TOTP secret.
        */
       password?: string
   }

@@ -13,13 +13,17 @@ import {
 	expireCookie,
 	setSessionCookie,
 } from "../../cookies";
-import { symmetricEncrypt } from "../../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { shouldRequirePassword, validatePassword } from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import type { BackupCodeOptions } from "./backup-codes";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import {
+	backupCode2fa,
+	generateBackupCodes,
+	verifyBackupCode,
+} from "./backup-codes";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
@@ -88,13 +92,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					})
 					.optional(),
 			});
-	const disableTwoFactorBodySchema = allowPasswordless
-		? z.object({
-				password: passwordSchema.optional(),
-			})
-		: z.object({
-				password: passwordSchema,
-			});
+
+	const disableTwoFactorBodySchema = z.object({
+		code: z.string().optional(),
+		password: passwordSchema.optional(),
+	});
 
 	return {
 		id: "two-factor",
@@ -294,30 +296,66 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password } = ctx.body;
-					const requirePassword = await shouldRequirePassword(
-						ctx,
-						user.id,
-						allowPasswordless,
-					);
-					if (requirePassword) {
-						if (!password) {
+					const { code, password } = ctx.body;
+					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+						model: "twoFactor",
+						where: [{ field: "userId", value: user.id }],
+					});
+					if (code && twoFactor) {
+						const decryptedSecret = await symmetricDecrypt({
+							key: ctx.context.secretConfig,
+							data: twoFactor.secret,
+						});
+						const isValidTOTP = await createOTP(decryptedSecret, {
+							period: options?.totpOptions?.period ?? 30,
+							digits: options?.totpOptions?.digits ?? 6,
+						}).verify(code);
+						const backupCodeResult = await verifyBackupCode(
+							{
+								backupCodes: twoFactor.backupCodes,
+								code,
+							},
+							ctx.context.secretConfig,
+							backupCodeOptions,
+						);
+						const isValidBackupCode = backupCodeResult.status;
+						if (!isValidBackupCode && !isValidTOTP) {
 							throw APIError.from(
 								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
+								TWO_FACTOR_ERROR_CODES.INVALID_CODE,
 							);
 						}
-						const isPasswordValid = await validatePassword(ctx, {
-							password,
-							userId: user.id,
-						});
-						if (!isPasswordValid) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								BASE_ERROR_CODES.INVALID_PASSWORD,
-							);
+					} else if (twoFactor) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.INVALID_CODE,
+						);
+					} else {
+						const requirePassword = await shouldRequirePassword(
+							ctx,
+							user.id,
+							allowPasswordless,
+						);
+						if (requirePassword) {
+							if (!password) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									BASE_ERROR_CODES.INVALID_PASSWORD,
+								);
+							}
+							const isPasswordValid = await validatePassword(ctx, {
+								password,
+								userId: user.id,
+							});
+							if (!isPasswordValid) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									BASE_ERROR_CODES.INVALID_PASSWORD,
+								);
+							}
 						}
 					}
+
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,
 						{
