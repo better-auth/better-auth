@@ -105,38 +105,38 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 		async (ctx) => {
 			const body = getBody(ctx);
 			const session = await getSessionFromCtx(ctx);
+			if (!session) throw APIError.fromStatus("UNAUTHORIZED");
+
 			const orgAdapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const roleAdapter = getAdapter(ctx.context, options);
 			const orgId = await getOrganizationId({ ctx });
 			const realOrganizationId = await orgAdapter.getRealOrganizationId(orgId);
 
-			if (session) {
-				const userId = session.user.id;
-				const IDs = { userId, organizationId: realOrganizationId };
-				const member = await orgAdapter.findMemberByOrgId(IDs);
+			const member = await orgAdapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: realOrganizationId,
+			});
 
-				if (!member) {
-					const code = "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION";
-					const msg = ORGANIZATION_ERROR_CODES[code];
-					throw APIError.from("FORBIDDEN", msg);
-				}
+			if (!member) {
+				const code = "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("FORBIDDEN", msg);
+			}
 
-				const permissions = { ac: ["create"] };
-				const canCreate = await hasPermission(
-					{
-						role: member.role,
-						options: ctx.context.orgOptions,
-						permissions,
-						organizationId: realOrganizationId,
-					},
-					ctx,
-				);
+			const canCreate = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: { ac: ["create"] },
+					organizationId: realOrganizationId,
+				},
+				ctx,
+			);
 
-				if (!canCreate) {
-					const code = "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE";
-					const msg = ORGANIZATION_ERROR_CODES[code];
-					throw APIError.from("FORBIDDEN", msg);
-				}
+			if (!canCreate) {
+				const code = "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("FORBIDDEN", msg);
 			}
 
 			const org = await orgAdapter.findOrganizationById(realOrganizationId);
@@ -163,6 +163,50 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 				...additionalFields
 			} = body;
 
+			// Validate that all resources in permissions are valid according to ac.statements
+			const ac = ctx.context.orgOptions.ac;
+			if (ac) {
+				const validResources = Object.keys(ac.statements);
+				const providedResources = Object.keys(permissions);
+				const invalidResource = providedResources.find(
+					(r) => !validResources.includes(r),
+				);
+				if (invalidResource) {
+					const msg = ORGANIZATION_ERROR_CODES.INVALID_RESOURCE;
+					throw APIError.from("BAD_REQUEST", msg);
+				}
+			}
+
+			// Check privilege escalation: user cannot grant permissions they don't have
+			const missingPermissions: string[] = [];
+			for (const [resource, actions] of Object.entries(permissions)) {
+				for (const action of actions) {
+					const userHasPermission = await hasPermission(
+						{
+							role: member.role,
+							options: ctx.context.orgOptions,
+							permissions: { [resource]: [action] },
+							organizationId: realOrganizationId,
+							useMemoryCache: true,
+						},
+						ctx,
+					);
+					if (!userHasPermission) {
+						missingPermissions.push(`${resource}:${action}`);
+					}
+				}
+			}
+
+			if (missingPermissions.length > 0) {
+				const code = "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.fromStatus("FORBIDDEN", {
+					message: msg.message,
+					code: msg.code,
+					missingPermissions,
+				});
+			}
+
 			const roleHook = getHook("CreateRole", options);
 
 			const roleData = await (async () => {
@@ -179,7 +223,7 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 					{
 						organization: org,
 						role: roleObj,
-						user: session?.user,
+						user: session.user,
 					},
 					ctx,
 				);
@@ -199,7 +243,7 @@ export const createRole = <O extends DynamicAccessControlOptions>(
 			}
 
 			await roleHook.after(
-				{ organization: org, role: createdRole, user: session?.user },
+				{ organization: org, role: createdRole, user: session.user },
 				ctx,
 			);
 

@@ -142,9 +142,9 @@ describe("dynamic-access-control", async (it) => {
 		});
 
 		const complexPermissions = {
-			member: ["create", "read", "update", "delete"],
-			invitation: ["create", "read", "delete"],
-			organization: ["read", "update"],
+			member: ["create", "update", "delete"],
+			invitation: ["create", "cancel"],
+			organization: ["update", "delete"],
 		};
 
 		const roleData = getRoleData({
@@ -158,5 +158,81 @@ describe("dynamic-access-control", async (it) => {
 		});
 
 		expect(role.permissions).toEqual(complexPermissions);
+	});
+
+	it("should not allow creating a role with permissions the user does not have", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			body: orgData,
+			headers,
+		});
+
+		const invalidPermissions = {
+			member: ["nonexistent-action"],
+		};
+
+		const roleData = getRoleData({
+			organizationId: org.id,
+			permissions: invalidPermissions,
+		});
+
+		await expect(
+			auth.api.createRole({
+				body: roleData,
+				headers,
+			}),
+		).rejects.toThrow();
+	});
+
+	/**
+	 * Security test: Unauthenticated requests should be rejected
+	 */
+	it("should reject unauthenticated requests", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			body: orgData,
+			headers,
+		});
+
+		const roleData = getRoleData({ organizationId: org.id });
+
+		await expect(
+			auth.api.createRole({
+				body: roleData,
+			}),
+		).rejects.toThrow();
+	});
+
+	/**
+	 * Security test: Invalid resource names should be rejected
+	 */
+	it("should reject roles with invalid resource names", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			body: orgData,
+			headers,
+		});
+
+		const invalidResourcePermissions = {
+			"invalid-resource-that-does-not-exist": ["create"],
+		};
+
+		const roleData = getRoleData({
+			organizationId: org.id,
+			permissions: invalidResourcePermissions,
+		});
+
+		await expect(
+			auth.api.createRole({
+				body: roleData,
+				headers,
+			}),
+		).rejects.toThrow();
 	});
 });
