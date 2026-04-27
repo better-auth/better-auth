@@ -720,6 +720,49 @@ describe("organization", async () => {
 		expect(invite.data?.role).toBe("owner");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8826
+	 */
+	it("should allow owner to invite with owner role when allowInviteByRole is configured", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					allowInviteByRole: ["owner", "admin"],
+					async sendInvitationEmail(data, request) {},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const scopedClient = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+		const org = await scopedClient.organization.create({
+			name: "allow-invite-by-role-owner",
+			slug: "allow-invite-by-role-owner",
+			fetchOptions: { headers },
+		});
+		const invite = await scopedClient.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: "allow-invite-by-role-owner@test.com",
+			role: "owner",
+			fetchOptions: { headers },
+		});
+		expect(invite.error).toBeNull();
+		expect(invite.data?.role).toBe("owner");
+	});
+
 	it("should allow leaving organization", async () => {
 		const newUser = {
 			email: "leave@org.com",
