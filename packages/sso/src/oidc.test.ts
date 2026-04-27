@@ -1,6 +1,6 @@
+import { organization } from "@better-auth/organization";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
-import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";

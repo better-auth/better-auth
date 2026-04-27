@@ -1,5 +1,7 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
+import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
@@ -4096,13 +4098,6 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	describe("organization-owned API keys", async () => {
-		const { organization } = await import(
-			"../../better-auth/src/plugins/organization"
-		);
-		const { organizationClient } = await import(
-			"../../better-auth/src/plugins/organization/client"
-		);
-
 		const { auth, signInWithTestUser, client } = await getTestInstance(
 			{
 				plugins: [

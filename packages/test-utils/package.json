@@ -37,6 +37,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
+    "@better-auth/organization": "workspace:*",
     "tsdown": "catalog:",
     "vitest": "catalog:vitest"
   },

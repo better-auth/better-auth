@@ -65,14 +65,16 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/organization": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
     "stripe": "^22.0.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": "workspace:^",
-    "better-auth": "workspace:^",
+    "@better-auth/core": "workspace:*",
+    "@better-auth/organization": "workspace:*",
+    "better-auth": "workspace:*",
     "better-call": "catalog:",
     "stripe": "^18 || ^19 || ^20 || ^21 || ^22"
   }

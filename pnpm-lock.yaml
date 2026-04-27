@@ -471,6 +471,9 @@ importers:
         specifier: ^0.28.14
         version: 0.28.14
     devDependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../packages/organization
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -507,6 +510,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -522,6 +528,9 @@ importers:
       '@better-auth/drizzle-adapter':
         specifier: workspace:*
         version: link:../../../../packages/drizzle-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -534,6 +543,9 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../packages/kysely-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -549,6 +561,9 @@ importers:
       '@better-auth/memory-adapter':
         specifier: workspace:*
         version: link:../../../../packages/memory-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -564,6 +579,9 @@ importers:
       '@better-auth/mongo-adapter':
         specifier: workspace:*
         version: link:../../../../packages/mongo-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -579,6 +597,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../../../../packages/prisma-adapter
@@ -753,6 +774,9 @@ importers:
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../../../../packages/oauth-provider
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../../../../../packages/passkey
@@ -771,6 +795,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../../../../../packages/passkey
@@ -783,6 +810,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
     dependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
@@ -795,6 +825,9 @@ importers:
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../../../../packages/expo
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
@@ -821,6 +854,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -1045,6 +1081,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../passkey
@@ -1304,6 +1343,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@modelcontextprotocol/sdk':
         specifier: ^1.27.1
         version: 1.27.1(zod@4.3.6)
@@ -1313,6 +1355,31 @@ importers:
       listhen:
         specifier: ^1.9.0
         version: 1.9.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+
+  packages/organization:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      defu:
+        specifier: '>=6.1.5 <7'
+        version: 6.1.7
+      nanostores:
+        specifier: ^1.1.0
+        version: 1.1.1
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      better-call:
+        specifier: 'catalog:'
+        version: 1.3.5(zod@4.3.6)
       tsdown:
         specifier: 'catalog:'
         version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -1400,7 +1467,7 @@ importers:
         specifier: 'catalog:'
         version: 0.4.0
       better-auth:
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
@@ -1412,6 +1479,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../sso
@@ -1446,6 +1516,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -1483,6 +1556,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -1520,6 +1596,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -9064,8 +9143,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  effect@3.21.1:
-    resolution: {integrity: sha512-bA3TsBd0mByThuCnE6FQqS+L3DLazk4UbE9jp0CqVfIjQl5DKi8sAe93O/ZKeF7clL65fJxcsVGiAKYXdnHByA==}
+  effect@3.21.2:
+    resolution: {integrity: sha512-rXd2FGDM8KdjSIrc+mqEELo7ScW7xTVxEf1iInmPSpIde9/nyGuFM710cjTo7/EreGXiUX2MOonPpprbz2XHCg==}
 
   electron-to-chromium@1.5.302:
     resolution: {integrity: sha512-sM6HAN2LyK82IyPBpznDRqlTQAtuSaO+ShzFiWTvoMJLHyZ+Y39r8VMfHzwbU8MVBzQ4Wdn85+wlZl2TLGIlwg==}
@@ -13398,9 +13477,6 @@ packages:
   set-blocking@2.0.0:
     resolution: {integrity: sha512-KiKBS8AnWGEyLzofFfmvKwpdPzqiy16LvQfK3yv/fVH7Bj13/wl3JSR1J+rfgRE9q7xUJK4qvgS8raSOeLUehw==}
 
-  set-cookie-parser@3.0.1:
-    resolution: {integrity: sha512-n7Z7dXZhJbwuAHhNzkTti6Aw9QDDjZtm3JTpTGATIdNzdQz5GuFs22w90BcvF4INfnrL5xrX3oGsuqO5Dx3A1Q==}
-
   set-cookie-parser@3.1.0:
     resolution: {integrity: sha512-kjnC1DXBHcxaOaOXBHBeRtltsDG2nUiUni+jP92M9gYdW12rsmx92UsfpH7o5tDRs7I1ZZPSQJQGv3UaRfCiuw==}
 
@@ -15301,7 +15377,7 @@ snapshots:
   '@antfu/install-pkg@1.1.0':
     dependencies:
       package-manager-detector: 1.6.0
-      tinyexec: 1.0.4
+      tinyexec: 1.1.1
 
   '@arethetypeswrong/cli@0.18.2':
     dependencies:
@@ -17803,14 +17879,14 @@ snapshots:
     dependencies:
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       jest-mock: 29.7.0
 
   '@jest/fake-timers@29.7.0':
     dependencies:
       '@jest/types': 29.6.3
       '@sinonjs/fake-timers': 10.3.0
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       jest-message-util: 29.7.0
       jest-mock: 29.7.0
       jest-util: 29.7.0
@@ -17844,7 +17920,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -18782,7 +18858,7 @@ snapshots:
     dependencies:
       c12: 3.1.0(magicast@0.3.5)
       deepmerge-ts: 7.1.5
-      effect: 3.21.1
+      effect: 3.21.2
       empathic: 2.0.0
     transitivePeerDependencies:
       - magicast
@@ -18791,7 +18867,7 @@ snapshots:
     dependencies:
       c12: 3.1.0(magicast@0.5.2)
       deepmerge-ts: 7.1.5
-      effect: 3.21.1
+      effect: 3.21.2
       empathic: 2.0.0
     transitivePeerDependencies:
       - magicast
@@ -21177,7 +21253,7 @@ snapshots:
 
   '@types/babel__core@7.20.5':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       '@types/babel__generator': 7.27.0
       '@types/babel__template': 7.4.4
@@ -21189,7 +21265,7 @@ snapshots:
 
   '@types/babel__template@7.4.4':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
 
   '@types/babel__traverse@7.28.0':
@@ -21229,7 +21305,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
 
   '@types/cookie@0.6.0': {}
 
@@ -21364,7 +21440,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.1':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       '@types/qs': 6.14.0
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -21474,7 +21550,7 @@ snapshots:
 
   '@types/readable-stream@4.0.23':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
 
   '@types/resolve@1.20.2': {}
 
@@ -21486,12 +21562,12 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
 
   '@types/stack-utils@2.0.3': {}
 
@@ -21519,7 +21595,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -21776,7 +21852,7 @@ snapshots:
 
   '@vue/compiler-core@3.5.29':
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@vue/shared': 3.5.29
       entities: 7.0.1
       estree-walker: 2.0.2
@@ -22123,7 +22199,7 @@ snapshots:
   babel-dead-code-elimination@1.0.12:
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/traverse': 7.29.0
       '@babel/types': 7.29.0
     transitivePeerDependencies:
@@ -22308,7 +22384,7 @@ snapshots:
       '@better-auth/utils': 0.4.0
       '@better-fetch/fetch': 1.1.21
       rou3: 0.7.12
-      set-cookie-parser: 3.0.1
+      set-cookie-parser: 3.1.0
     optionalDependencies:
       zod: 4.3.6
 
@@ -23605,7 +23681,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@3.21.1:
+  effect@3.21.2:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 3.23.2
@@ -24855,7 +24931,7 @@ snapshots:
 
   happy-dom@20.8.9:
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       entities: 7.0.1
@@ -25380,7 +25456,7 @@ snapshots:
   istanbul-lib-instrument@5.2.1:
     dependencies:
       '@babel/core': 7.29.0
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.2
       semver: 6.3.1
@@ -25436,7 +25512,7 @@ snapshots:
       '@jest/environment': 29.7.0
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       jest-mock: 29.7.0
       jest-util: 29.7.0
 
@@ -25473,7 +25549,7 @@ snapshots:
   jest-mock@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       jest-util: 29.7.0
 
   jest-regex-util@29.6.3: {}
@@ -25481,7 +25557,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -26015,7 +26091,7 @@ snapshots:
 
   magicast@0.2.11:
     dependencies:
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       recast: 0.23.11
 
@@ -26708,7 +26784,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.29.0
       '@babel/generator': 7.29.1
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
       flow-enums-runtime: 0.0.6
       metro: 0.83.4
@@ -26797,7 +26873,7 @@ snapshots:
       '@babel/code-frame': 7.29.0
       '@babel/core': 7.29.0
       '@babel/generator': 7.29.1
-      '@babel/parser': 7.29.0
+      '@babel/parser': 7.29.2
       '@babel/template': 7.28.6
       '@babel/traverse': 7.29.0
       '@babel/types': 7.29.0
@@ -27706,7 +27782,7 @@ snapshots:
     dependencies:
       citty: 0.2.1
       pathe: 2.0.3
-      tinyexec: 1.0.4
+      tinyexec: 1.1.1
 
   oauth2-mock-server@8.2.2:
     dependencies:
@@ -29559,8 +29635,6 @@ snapshots:
 
   set-blocking@2.0.0: {}
 
-  set-cookie-parser@3.0.1: {}
-
   set-cookie-parser@3.1.0: {}
 
   setprototypeof@1.2.0: {}
@@ -30284,12 +30358,12 @@ snapshots:
       hookable: 6.0.1
       import-without-cache: 0.2.5
       obug: 2.1.1
-      picomatch: 4.0.3
+      picomatch: 4.0.4
       rolldown: 1.0.0-rc.8
       rolldown-plugin-dts: 0.22.4(oxc-resolver@11.19.0)(rolldown@1.0.0-rc.8)(typescript@5.9.3)
       semver: 7.7.4
-      tinyexec: 1.0.2
-      tinyglobby: 0.2.15
+      tinyexec: 1.1.1
+      tinyglobby: 0.2.16
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
       unrun: 0.2.31(synckit@0.11.11)

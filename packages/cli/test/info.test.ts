@@ -291,7 +291,7 @@ describe("info command", () => {
 		await fs.writeFile(
 			path.join(tmpDir, "auth.ts"),
 			`import { betterAuth } from "better-auth";
-			import { twoFactor, organization } from "better-auth/plugins";
+			import { twoFactor } from "better-auth/plugins";
 
 			export const auth = betterAuth({
 				plugins: [
@@ -299,10 +299,6 @@ describe("info command", () => {
 						otpOptions: {
 							secret: "otp-secret-key"
 						}
-					}),
-					organization({
-						apiKey: "org-api-key",
-						webhookSecret: "webhook-secret"
 					})
 				]
 			})`,

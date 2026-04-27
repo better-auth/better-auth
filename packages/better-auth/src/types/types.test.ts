@@ -2,7 +2,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import type { InferCtx } from "../client/path-to-object";
-import { organization, twoFactor } from "../plugins";
+import { twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
@@ -199,7 +199,7 @@ describe("general types", async () => {
 
 	it("should infer additional fields from plugins", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [twoFactor(), organization()],
+			plugins: [twoFactor()],
 		});
 		expectTypeOf<typeof auth.$Infer.Session.user>().toEqualTypeOf<{
 			id: string;
@@ -221,7 +221,6 @@ describe("general types", async () => {
 			token: string;
 			ipAddress?: string | undefined | null;
 			userAgent?: string | undefined | null;
-			activeOrganizationId?: string | undefined | null;
 		}>();
 	});
 
@@ -304,7 +303,7 @@ describe("any-poisoning guards", () => {
 	it("auth.$Infer should not collapse with untyped plugin", async () => {
 		const untypedPlugin = {} as any;
 		const { auth } = await getTestInstance({
-			plugins: [organization(), untypedPlugin],
+			plugins: [twoFactor(), untypedPlugin],
 		});
 		type Infer = typeof auth.$Infer;
 		expectTypeOf<Infer>().not.toBeAny();
@@ -318,7 +317,7 @@ describe("any-poisoning guards", () => {
 	it("auth.$ERROR_CODES should not collapse with untyped plugin", async () => {
 		const untypedPlugin = {} as any;
 		const { auth } = await getTestInstance({
-			plugins: [organization(), untypedPlugin],
+			plugins: [twoFactor(), untypedPlugin],
 		});
 		type Codes = (typeof auth)["$ERROR_CODES"];
 		expectTypeOf<Codes>().not.toBeAny();

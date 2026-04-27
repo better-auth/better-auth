@@ -1,5 +1,5 @@
+import type { Member } from "@better-auth/organization";
 import type { User } from "better-auth";
-import type { Member } from "better-auth/plugins";
 
 export interface SCIMProvider {
 	id: string;

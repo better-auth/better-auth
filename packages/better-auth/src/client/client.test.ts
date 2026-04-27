@@ -15,7 +15,6 @@ import {
 	magicLinkClient,
 	multiSessionClient,
 	oidcClient,
-	organizationClient,
 	twoFactorClient,
 } from "./plugins";
 import { createAuthClient as createReactClient } from "./react";
@@ -341,7 +340,7 @@ describe("type", () => {
 
 	it("should infer session react", () => {
 		const client = createReactClient({
-			plugins: [organizationClient(), twoFactorClient(), emailOTPClient()],
+			plugins: [twoFactorClient(), emailOTPClient()],
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
@@ -604,7 +603,6 @@ describe("type", () => {
 	it("should infer $ERROR_CODES with multiple plugins", () => {
 		const client = createReactClient({
 			plugins: [
-				organizationClient(),
 				twoFactorClient(),
 				emailOTPClient(),
 				adminClient(),
@@ -616,11 +614,6 @@ describe("type", () => {
 				testClientPlugin2(),
 			],
 		});
-
-		// Should have organization error codes
-		expectTypeOf(
-			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
-		).toEqualTypeOf<"ORGANIZATION_NOT_FOUND">();
 
 		// Should have two-factor error codes
 		expectTypeOf(

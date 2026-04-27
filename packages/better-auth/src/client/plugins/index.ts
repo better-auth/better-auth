@@ -16,7 +16,6 @@ export * from "../../plugins/multi-session/client";
 export * from "../../plugins/oidc-provider/client";
 export * from "../../plugins/one-tap/client";
 export * from "../../plugins/one-time-token/client";
-export * from "../../plugins/organization/client";
 export * from "../../plugins/phone-number/client";
 export * from "../../plugins/siwe/client";
 export * from "../../plugins/two-factor/client";

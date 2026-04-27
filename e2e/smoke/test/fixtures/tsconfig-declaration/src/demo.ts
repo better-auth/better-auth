@@ -1,3 +1,4 @@
+import { organization } from "@better-auth/organization";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
@@ -14,7 +15,6 @@ import {
 	oAuthProxy,
 	oneTap,
 	openAPI,
-	organization,
 	twoFactor,
 } from "better-auth/plugins";
 import { Stripe } from "stripe";

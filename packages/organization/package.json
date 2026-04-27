@@ -1,0 +1,88 @@
+{
+  "name": "@better-auth/organization",
+  "version": "1.5.0-beta.13",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/organization"
+  },
+  "keywords": [
+    "auth",
+    "organization",
+    "multi-tenant",
+    "teams",
+    "rbac"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Organization plugin for Better Auth",
+  "scripts": {
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./access": "./dist/access.mjs",
+    "./client": "./dist/client.mjs",
+    "./dynamic-access-control": "./dist/dynamic-access-control.mjs",
+    "./dynamic-access-control/client": "./dist/dynamic-access-control/client.mjs",
+    "./teams": "./dist/teams.mjs",
+    "./teams/client": "./dist/teams/client.mjs",
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
+      ],
+      "access": [
+        "./dist/access.d.mts"
+      ],
+      "teams/client": [
+        "./dist/teams/client.d.mts"
+      ],
+      "teams": [
+        "./dist/teams.d.mts"
+      ],
+      "dynamic-access-control/client": [
+        "./dist/dynamic-access-control/client.d.mts"
+      ],
+      "dynamic-access-control": [
+        "./dist/dynamic-access-control.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "defu": "^6.1.4",
+    "zod": "^4.3.6",
+    "nanostores": "^1.1.0"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-call": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:"
+  },
+  "inlinedDependencies": {
+    "@better-fetch/fetch": "1.1.21"
+  }
+}

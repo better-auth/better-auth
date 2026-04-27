@@ -1,3 +1,4 @@
+import type { Member } from "@better-auth/organization";
 import { base64Url } from "@better-auth/utils/base64";
 import type {
 	Account,
@@ -12,7 +13,6 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import type { Member } from "better-auth/plugins";
 import * as z from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import type { AuthMiddleware } from "./middlewares";

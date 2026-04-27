@@ -1,0 +1,385 @@
+import type {
+	Awaitable,
+	GenericEndpointContext,
+	Prettify,
+} from "@better-auth/core";
+import type { DBFieldAttribute, Session, User } from "@better-auth/core/db";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
+import type { Organization } from "../../schema";
+import type { FindAddonFromOrgOptions, OrganizationOptions } from "../../types";
+import type { Team, TeamMember } from "./schema";
+
+export interface TeamsOptions {
+	hooks?: TeamHooks;
+	/**
+	 * Default team configuration
+	 */
+	defaultTeam?: {
+		/**
+		 * Enable creating a default team when an organization is created
+		 *
+		 * @default true
+		 */
+		enabled: boolean;
+		/**
+		 * Pass a custom default team creator function
+		 */
+		customCreateDefaultTeam?: (
+			organization: Organization & Record<string, any>,
+		) => Promise<Partial<Team> & Record<string, any>>;
+	};
+	/**
+	 * Maximum number of teams an organization can have.
+	 *
+	 * You can pass a number or a function that returns a number
+	 *
+	 * @default "unlimited"
+	 *
+	 * @param organization
+	 * @param request
+	 * @returns
+	 */
+	maximumTeams?:
+		| ((
+				data: {
+					organizationId: string;
+					session: {
+						user: User;
+						session: Session;
+					} | null;
+				},
+				ctx?: GenericEndpointContext,
+		  ) => Awaitable<number>)
+		| number;
+
+	/**
+	 * The maximum number of members per team.
+	 *
+	 * if `undefined`, there is no limit.
+	 *
+	 * @default undefined
+	 */
+	maximumMembersPerTeam?:
+		| number
+		| ((data: {
+				teamId: string;
+				session: { user: User; session: Session };
+				organizationId: string;
+		  }) => Awaitable<number>)
+		| undefined;
+	/**
+	 * By default, if an organization does only have one team, they'll not be able to remove it.
+	 *
+	 * You can disable this behavior by setting this to `false.
+	 *
+	 * @default false
+	 */
+	allowRemovingAllTeams?: boolean;
+	/**
+	 * Enable slugs for teams.
+	 *
+	 * @default false
+	 */
+	enableSlugs?: boolean;
+	/**
+	 * Endpoint parameters or return value's `teamId` field to reference either `id` or `slug`.
+	 *
+	 * @default "id"
+	 */
+	defaultTeamIdField?: "id" | "slug";
+	/**
+	 * Configure the team related schemas
+	 */
+	schema?:
+		| {
+				team?: {
+					modelName?: string;
+					fields?: {
+						[key in keyof Omit<Team & { slug: string }, "id">]?: string;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+				teamMember?: {
+					modelName?: string;
+					fields?: {
+						[key in keyof Omit<TeamMember, "id">]?: string;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+				invitation?: {
+					fields?: {
+						teamId?: string;
+					};
+				};
+				session?: {
+					fields?: {
+						activeTeamId?: string;
+					};
+				};
+		  }
+		| undefined;
+}
+
+export interface ResolvedTeamsOptions extends TeamsOptions {
+	defaultTeam: {
+		/**
+		 * Enable creating a default team when an organization is created
+		 *
+		 * @default true
+		 */
+		enabled: boolean;
+		/**
+		 * Pass a custom default team creator function.
+		 * This function can return partial team data which will be merged
+		 * with defaults and used to create the team via the adapter.
+		 */
+		customCreateDefaultTeam?: (
+			organization: Organization & Record<string, any>,
+		) => Promise<Partial<Team> & Record<string, any>>;
+	};
+	maximumTeams: (
+		data: {
+			organizationId: string;
+			session: {
+				user: User;
+				session: Session;
+			} | null;
+		},
+		ctx?: GenericEndpointContext,
+	) => Awaitable<number>;
+	maximumMembersPerTeam: (data: {
+		teamId: string;
+		session: { user: User; session: Session };
+		organizationId: string;
+	}) => Awaitable<number>;
+	allowRemovingAllTeams: boolean;
+	hooks?: TeamHooks;
+}
+
+export type InferTeamFromOrgOptions<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = false,
+> =
+	FindAddonFromOrgOptions<O, "teams"> extends infer T extends Record<
+		string,
+		any
+	>
+		? T["options"] extends TeamsOptions
+			? InferTeam<T["options"], isClientSide>
+			: undefined
+		: undefined;
+
+export type InferTeamMemberFromOrgOptions<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = false,
+> =
+	FindAddonFromOrgOptions<O, "teams"> extends infer T extends Record<
+		string,
+		any
+	>
+		? T["options"] extends TeamsOptions
+			? InferTeamMember<T["options"], isClientSide>
+			: undefined
+		: undefined;
+
+export type InferTeam<
+	TO extends TeamsOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	Team &
+		InferAdditionalFieldsFromPluginOptions<"team", TO, isClientSide> &
+		(TO["enableSlugs"] extends true ? { slug: string } : {})
+>;
+
+export type InferTeamMember<
+	TO extends TeamsOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	TeamMember &
+		InferAdditionalFieldsFromPluginOptions<"teamMember", TO, isClientSide>
+>;
+
+export type TeamHooks =
+	| {
+			/**
+			 * A callback that runs before a team is created
+			 *
+			 * You can return a `data` object to override the default data.
+			 */
+			beforeCreateTeam?: (
+				data: {
+					team: {
+						name: string;
+						organizationId: string;
+						[key: string]: any;
+					};
+					user?: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext | null,
+			) => Promise<void | {
+				data: Record<string, any>;
+			}>;
+
+			/**
+			 * A callback that runs after a team is created
+			 */
+			afterCreateTeam?: (
+				data: {
+					team: Team & Record<string, any>;
+					user?: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext | null,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs before a team is updated
+			 *
+			 * You can return a `data` object to override the default data.
+			 */
+			beforeUpdateTeam?: (
+				data: {
+					team: Team & Record<string, any>;
+					updates: {
+						name?: string;
+						[key: string]: any;
+					};
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void | {
+				data: Record<string, any>;
+			}>;
+
+			/**
+			 * A callback that runs after a team is updated
+			 */
+			afterUpdateTeam?: (
+				data: {
+					team: (Team & Record<string, any>) | null;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs before a team is deleted
+			 */
+			beforeDeleteTeam?: (
+				data: {
+					team: Team & Record<string, any>;
+					user?: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs after a team is deleted
+			 */
+			afterDeleteTeam?: (
+				data: {
+					team: Team & Record<string, any>;
+					user?: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs before a member is added to a team
+			 */
+			beforeAddTeamMember?: (
+				data: {
+					teamMember: {
+						teamId: string;
+						userId: string;
+						[key: string]: any;
+					};
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void | {
+				data: Record<string, any>;
+			}>;
+
+			/**
+			 * A callback that runs after a member is added to a team
+			 */
+			afterAddTeamMember?: (
+				data: {
+					teamMember: TeamMember & Record<string, any>;
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs before a team member is updated
+			 *
+			 * You can return a `data` object to override the default data.
+			 */
+			beforeUpdateTeamMember?: (
+				data: {
+					teamMember: TeamMember & Record<string, any>;
+					updates: Record<string, any>;
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void | {
+				data: Record<string, any>;
+			}>;
+
+			/**
+			 * A callback that runs after a team member is updated
+			 */
+			afterUpdateTeamMember?: (
+				data: {
+					teamMember: (TeamMember & Record<string, any>) | null;
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs before a member is removed from a team
+			 */
+			beforeRemoveTeamMember?: (
+				data: {
+					teamMember: TeamMember & Record<string, any>;
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs after a member is removed from a team
+			 */
+			afterRemoveTeamMember?: (
+				data: {
+					teamMember: TeamMember & Record<string, any>;
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+	  }
+	| undefined;
