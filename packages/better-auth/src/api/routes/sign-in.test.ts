@@ -379,3 +379,91 @@ describe("sign-in with form data", async () => {
 		expect(response.status).toBe(200);
 	});
 });
+
+describe("email case insensitivity", async () => {
+	/**
+	 * Tests that sign-in works regardless of email case, preventing
+	 * "User not found" errors when users sign up with mixed case
+	 * but sign in with different casing.
+	 */
+	it("should sign in with different email casing than sign-up", async () => {
+		const { auth } = await getTestInstance();
+		const mixedCaseEmail = "Test.User@Example.COM";
+		const password = "securePassword123";
+
+		await auth.api.signUpEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+				name: "Test User",
+			},
+		});
+
+		const signInLowercase = await auth.api.signInEmail({
+			body: {
+				email: mixedCaseEmail.toLowerCase(),
+				password,
+			},
+		});
+		expect(signInLowercase.user).toBeDefined();
+		expect(signInLowercase.user.email).toBe(mixedCaseEmail.toLowerCase());
+
+		const signInUppercase = await auth.api.signInEmail({
+			body: {
+				email: mixedCaseEmail.toUpperCase(),
+				password,
+			},
+		});
+		expect(signInUppercase.user).toBeDefined();
+		expect(signInUppercase.user.email).toBe(mixedCaseEmail.toLowerCase());
+
+		const signInOriginal = await auth.api.signInEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+			},
+		});
+		expect(signInOriginal.user).toBeDefined();
+		expect(signInOriginal.user.email).toBe(mixedCaseEmail.toLowerCase());
+	});
+
+	it("should store email as lowercase regardless of input casing", async () => {
+		const { auth } = await getTestInstance();
+		const mixedCaseEmail = "Another.User@DOMAIN.com";
+		const password = "password123";
+
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+				name: "Another User",
+			},
+		});
+
+		expect(signUpResult.user.email).toBe(mixedCaseEmail.toLowerCase());
+	});
+
+	it("should not allow duplicate sign-ups with different email casing", async () => {
+		const { auth } = await getTestInstance();
+		const email = "duplicate.test@example.com";
+		const password = "password123";
+
+		await auth.api.signUpEmail({
+			body: {
+				email: email.toLowerCase(),
+				password,
+				name: "First User",
+			},
+		});
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: email.toUpperCase(),
+					password,
+					name: "Second User",
+				},
+			}),
+		).rejects.toThrow();
+	});
+});

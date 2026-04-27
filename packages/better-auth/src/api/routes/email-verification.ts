@@ -188,7 +188,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 				status: true,
 			});
 		}
-		if (session?.user.email !== email) {
+		if (session?.user.email.toLowerCase() !== email.toLowerCase()) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
 		}
 		if (session?.user.emailVerified) {
