@@ -1140,9 +1140,16 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 					},
 					email: {
 						type: "string",
-						required: true,
+						required: false,
 						sortable: true,
 						fieldName: opts.schema?.invitation?.fields?.email,
+						index: true,
+					},
+					phoneNumber: {
+						type: "string",
+						required: false,
+						sortable: true,
+						fieldName: opts.schema?.invitation?.fields?.phoneNumber,
 						index: true,
 					},
 					role: {
