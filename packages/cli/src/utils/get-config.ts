@@ -246,9 +246,9 @@ function createRewriteImportPathsPlugin(matchers: PathsMatcher[]) {
 }
 
 /** Virtual module aliases; real tsconfig paths go through the babel plugin. */
-function getVirtualModuleAliases(): Record<string, string> {
+function getVirtualModuleAliases(cwd: string): Record<string, string> {
 	const result: Record<string, string> = {};
-	addSvelteKitEnvModules(result);
+	addSvelteKitEnvModules(result, cwd);
 	addCloudflareModules(result);
 	return result;
 }
@@ -276,7 +276,7 @@ const jitiOptions = (cwd: string): JitiOptions => {
 			},
 		},
 		extensions: [...SOURCE_EXTENSIONS],
-		alias: getVirtualModuleAliases(),
+		alias: getVirtualModuleAliases(cwd),
 	};
 };
 
