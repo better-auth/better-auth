@@ -1,5 +1,17 @@
 # @better-auth/stripe
 
+## 1.6.10
+
+### Patch Changes
+
+- [#9354](https://github.com/better-auth/better-auth/pull/9354) [`5d24a74`](https://github.com/better-auth/better-auth/commit/5d24a7478b563b38353681c0f6317d540a4721f1) Thanks [@bytaesu](https://github.com/bytaesu)! - `onSubscriptionUpdate` now receives `stripeSubscription` (the raw Stripe object), matching the shape of all other subscription callbacks. `onSubscriptionCancel` now also receives the post-update subscription row instead of the pre-update snapshot.
+
+- [#9356](https://github.com/better-auth/better-auth/pull/9356) [`3e4fc8c`](https://github.com/better-auth/better-auth/commit/3e4fc8ca74e04f4e675dd69c8d552141c6ef5d9b) Thanks [@bytaesu](https://github.com/bytaesu)! - `onSubscriptionDeleted`, `onTrialEnd`, and `onTrialExpired` now receive the post-update subscription row instead of the pre-update snapshot, consistent with the rest of the lifecycle callbacks.
+
+- Updated dependencies [[`1e0f26d`](https://github.com/better-auth/better-auth/commit/1e0f26d4c83608d14a533f33458ade0f8504fd16), [`88a7c67`](https://github.com/better-auth/better-auth/commit/88a7c678f4db3f7da580d53071b2595b92354a45), [`c1336c5`](https://github.com/better-auth/better-auth/commit/c1336c563d45f93ca3fd4da4e6c767fc267d86d0)]:
+  - better-auth@1.6.10
+  - @better-auth/core@1.6.10
+
 ## 1.6.9
 
 ### Patch Changes

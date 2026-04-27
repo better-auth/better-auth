@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.6.9",
+  "version": "1.6.10",
   "description": "Drizzle adapter for Better Auth",
   "type": "module",
   "license": "MIT",
