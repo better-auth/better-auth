@@ -120,6 +120,20 @@ describe("email-otp", async () => {
 		expect(newUser.data?.user.image).toBe("https://example.com/avatar.png");
 	});
 
+	it("should check verification otp for non-existent user (signup flow)", async () => {
+		const newEmail = "check-otp-no-user@domain.com";
+		await client.emailOtp.sendVerificationOtp({
+			email: newEmail,
+			type: "sign-in",
+		});
+		const res = await client.emailOtp.checkVerificationOtp({
+			email: newEmail,
+			type: "sign-in",
+			otp,
+		});
+		expect(res.data?.success).toBe(true);
+	});
+
 	it("should sign-up with uppercase email", async () => {
 		const testUser2 = {
 			email: "TEST-EMAIL@DOMAIN.COM",
