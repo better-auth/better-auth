@@ -189,6 +189,13 @@ Pick the bump type based on user impact:
 - **`patch`** for bug fixes and additive changes existing users don't need to know about.
 - **`minor`** or **`major`** for anything existing users need to be aware of (see [Branch Targeting](#branch-targeting)).
 
+A good description:
+
+- Write for end users reading the changelog, not for the PR reviewer.
+- Be clear and concise.
+- Explain what changed, not a commit-style prefix (e.g. `fix:`, `feat:`).
+- Describe the symptom users see, not the internal cause.
+
 If you're not sure whether your change needs one, a maintainer will handle
 it before merge.
 
