@@ -3677,3 +3677,132 @@ describe("organization additionalFields with returned: false", async () => {
 		expect(dbOrg?.secretField).toBe("updated-secret");
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6038
+ */
+describe("fullOrganizationAccessRoles", async () => {
+	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				fullOrganizationAccessRoles: ["owner", "admin"],
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const memberUser = {
+		email: "member-restricted@test.com",
+		password: "test123456",
+		name: "member-restricted",
+	};
+	const adminUser = {
+		email: "admin-restricted@test.com",
+		password: "test123456",
+		name: "admin-restricted",
+	};
+
+	const { headers: ownerHeaders } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "restricted-org",
+			slug: "restricted-org",
+		},
+		{ headers: ownerHeaders },
+	);
+	const organizationId = org.data!.id;
+
+	await client.signUp.email({
+		email: memberUser.email,
+		password: memberUser.password,
+		name: memberUser.name,
+	});
+	await client.signUp.email({
+		email: adminUser.email,
+		password: adminUser.password,
+		name: adminUser.name,
+	});
+
+	const memberInvite = await client.organization.inviteMember(
+		{
+			organizationId,
+			email: memberUser.email,
+			role: "member",
+		},
+		{ headers: ownerHeaders },
+	);
+	const adminInvite = await client.organization.inviteMember(
+		{
+			organizationId,
+			email: adminUser.email,
+			role: "admin",
+		},
+		{ headers: ownerHeaders },
+	);
+
+	const { headers: memberHeaders } = await signInWithUser(
+		memberUser.email,
+		memberUser.password,
+	);
+	await client.organization.acceptInvitation({
+		invitationId: memberInvite.data!.id!,
+		fetchOptions: { headers: memberHeaders },
+	});
+
+	const { headers: adminHeaders } = await signInWithUser(
+		adminUser.email,
+		adminUser.password,
+	);
+	await client.organization.acceptInvitation({
+		invitationId: adminInvite.data!.id!,
+		fetchOptions: { headers: adminHeaders },
+	});
+
+	it("should allow owner to get full organization", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await client.organization.getFullOrganization({
+			query: { organizationId },
+			fetchOptions: { headers },
+		});
+		expect(org.data).toBeDefined();
+		expect(org.data?.members.length).toBe(3);
+	});
+
+	it("should allow admin to get full organization", async () => {
+		const { headers } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		await client.organization.setActive({ organizationId }, { headers });
+		const org = await client.organization.getFullOrganization({
+			query: { organizationId },
+			fetchOptions: { headers },
+		});
+		expect(org.data).toBeDefined();
+		expect(org.data?.members.length).toBe(3);
+	});
+
+	it("should deny member from getting full organization", async () => {
+		const { headers } = await signInWithUser(
+			memberUser.email,
+			memberUser.password,
+		);
+		await client.organization.setActive({ organizationId }, { headers });
+		const org = await client.organization.getFullOrganization({
+			query: { organizationId },
+			fetchOptions: { headers },
+		});
+		expect(org.error?.status).toBe(403);
+		expect(org.data).toBeNull();
+	});
+});
