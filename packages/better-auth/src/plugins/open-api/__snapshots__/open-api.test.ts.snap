@@ -617,6 +617,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "description": "The new email address to set must be a valid email address",
                     "type": "string",
                   },
+                  "password": {
+                    "description": "The user's password. Required when sendOldEmailVerification is disabled and session is not fresh",
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
                 },
                 "required": [
                   "newEmail",

@@ -66,6 +66,8 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 		"POST method requires deferSessionRefresh to be enabled in session config",
 	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
 	PASSWORD_ALREADY_SET: "User already has a password set",
+	PASSWORD_OR_FRESH_SESSION_REQUIRED:
+		"Password or fresh session required to perform this action",
 });
 
 export type APIErrorCode = keyof typeof BASE_ERROR_CODES;

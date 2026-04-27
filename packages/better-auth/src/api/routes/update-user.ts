@@ -677,6 +677,13 @@ export const changeEmail = createAuthEndpoint(
 					description: "The URL to redirect to after email verification",
 				})
 				.optional(),
+			password: z
+				.string()
+				.meta({
+					description:
+						"The user's password. Required when sendOldEmailVerification is disabled and session is not fresh",
+				})
+				.optional(),
 		}),
 		use: [sensitiveSessionMiddleware],
 		metadata: {
@@ -825,7 +832,46 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is verified, we need to send a verification email
 		 */
-		if (canSendConfirmation) {
+		const skipOldEmailVerification =
+			ctx.context.options.emailVerification?.sendOldEmailVerification === false;
+
+		/**
+		 * When skipping old email verification, require password or
+		 * fresh session to compensate for the reduced security.
+		 */
+		if (skipOldEmailVerification) {
+			if (ctx.body.password) {
+				const accounts = await ctx.context.internalAdapter.findAccounts(
+					ctx.context.session.user.id,
+				);
+				const account = accounts.find(
+					(account) => account.providerId === "credential" && account.password,
+				);
+				if (!account || !account.password) {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+				}
+				const verify = await ctx.context.password.verify({
+					hash: account.password,
+					password: ctx.body.password,
+				});
+				if (!verify) {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+				}
+			} else if (ctx.context.sessionConfig.freshAge !== 0) {
+				const createdAt = new Date(
+					ctx.context.session.session.createdAt,
+				).getTime();
+				const freshAge = ctx.context.sessionConfig.freshAge * 1000;
+				if (Date.now() - createdAt >= freshAge) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						BASE_ERROR_CODES.PASSWORD_OR_FRESH_SESSION_REQUIRED,
+					);
+				}
+			}
+		}
+
+		if (canSendConfirmation && !skipOldEmailVerification) {
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				ctx.context.session.user.email,
@@ -861,6 +907,11 @@ export const changeEmail = createAuthEndpoint(
 			});
 		}
 
+		/**
+		 * Send verification to the new email directly. This path handles both:
+		 * - skipOldEmailVerification=true (password/fresh session already validated above)
+		 * - No sendChangeEmailConfirmation configured
+		 */
 		const token = await createEmailVerificationToken(
 			ctx.context.secret,
 			ctx.context.session.user.email,

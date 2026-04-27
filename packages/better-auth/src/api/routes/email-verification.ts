@@ -367,8 +367,9 @@ export const verifyEmail = createAuthEndpoint(
 							user: user.user,
 						};
 					}
+					const oldEmail = parsed.email;
 					const updatedUser =
-						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
+						await ctx.context.internalAdapter.updateUserByEmail(oldEmail, {
 							email: parsed.updateTo,
 							emailVerified: true,
 						});
@@ -376,6 +377,20 @@ export const verifyEmail = createAuthEndpoint(
 						await ctx.context.options.emailVerification.afterEmailVerification(
 							updatedUser,
 							ctx.request,
+						);
+					}
+					const afterEmailChange =
+						ctx.context.options.user?.changeEmail?.afterEmailChange;
+					if (afterEmailChange) {
+						await ctx.context.runInBackgroundOrAwait(
+							afterEmailChange(
+								{
+									user: updatedUser,
+									oldEmail,
+									newEmail: parsed.updateTo,
+								},
+								ctx.request,
+							),
 						);
 					}
 					await setSessionCookie(ctx, {
