@@ -1,5 +1,6 @@
 //#region Necessary re-exports
 export type * from "../../types/helper";
+export type * from "../query";
 //#endregion
 
 export * from "../../plugins/additional-fields/client";
