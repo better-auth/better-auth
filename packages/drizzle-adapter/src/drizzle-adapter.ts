@@ -27,7 +27,6 @@ import {
 	ne,
 	notInArray,
 	or,
-	sql,
 } from "drizzle-orm";
 import {
 	insensitiveEq,
@@ -109,12 +108,45 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const c = await builder.returning();
 					return c[0];
 				}
-				await builder.execute();
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
-				if (where?.length) {
+				const hasWhere = where?.length;
+				const hasBuilderIdValue = builderVal && builderVal[0]?.id?.value;
+				const hasDataId = data.id;
+
+				if (!hasWhere && !hasBuilderIdValue && !hasDataId) {
+					if (typeof builder.$returningId === "function") {
+						const returningResult = await builder.$returningId();
+						const primaryKeyField = Object.keys(returningResult[0] ?? {})[0];
+						const returnedId = primaryKeyField
+							? returningResult[0][primaryKeyField]
+							: undefined;
+						if (returnedId != null) {
+							const res = await db
+								.select()
+								.from(schemaModel)
+								.where(eq(schemaModel.id, returnedId))
+								.limit(1)
+								.execute();
+							return res[0];
+						}
+					}
+					throw new BetterAuthError(
+						`[# Drizzle Adapter]: Cannot safely retrieve the inserted row for model "${model}" on MySQL. ` +
+							`When using MySQL with "advanced.database.generateId" set to false, ` +
+							`the adapter cannot determine the ID of the newly inserted row. ` +
+							`To fix this, either: ` +
+							`(1) set "advanced.database.generateId" to a custom ID generation function in your Better Auth config, ` +
+							`(2) ensure your Drizzle schema uses $defaultFn() on the primary key column, or ` +
+							`(3) use auto-increment integer primary keys. ` +
+							`See: https://www.better-auth.com/docs/concepts/database#generate-id`,
+					);
+				}
+
+				await builder.execute();
+				if (hasWhere) {
 					// If we're updating a field that's in the where clause, use the new value
-					const updatedWhere = where.map((w) => {
+					const updatedWhere = where!.map((w) => {
 						// If this field was updated, use the new value for lookup
 						if (data[w.field] !== undefined) {
 							return { ...w, value: data[w.field] };
@@ -128,17 +160,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.from(schemaModel)
 						.where(...clause);
 					return res[0];
-				} else if (builderVal && builderVal[0]?.id?.value) {
-					let tId = builderVal[0]?.id?.value;
-					if (!tId) {
-						//get last inserted id
-						const lastInsertId = await db
-							.select({ id: sql`LAST_INSERT_ID()` })
-							.from(schemaModel)
-							.orderBy(desc(schemaModel.id))
-							.limit(1);
-						tId = lastInsertId[0].id;
-					}
+				} else if (hasBuilderIdValue) {
+					const tId = builderVal[0]?.id?.value;
 					const res = await db
 						.select()
 						.from(schemaModel)
@@ -146,26 +169,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.limit(1)
 						.execute();
 					return res[0];
-				} else if (data.id) {
+				} else if (hasDataId) {
 					const res = await db
 						.select()
 						.from(schemaModel)
 						.where(eq(schemaModel.id, data.id))
-						.limit(1)
-						.execute();
-					return res[0];
-				} else {
-					// If the user doesn't have `id` as a field, then this will fail.
-					// We expect that they defined `id` in all of their models.
-					if (!("id" in schemaModel)) {
-						throw new BetterAuthError(
-							`The model "${model}" does not have an "id" field. Please use the "id" field as your primary key.`,
-						);
-					}
-					const res = await db
-						.select()
-						.from(schemaModel)
-						.orderBy(desc(schemaModel.id))
 						.limit(1)
 						.execute();
 					return res[0];

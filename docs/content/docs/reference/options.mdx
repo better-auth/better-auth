@@ -644,7 +644,7 @@ export const auth = betterAuth({
 * `cookies`: Customize cookie names and attributes
 * `defaultCookieAttributes`: Default attributes for all cookies
 * `cookiePrefix`: Prefix for cookies
-* `database`: Database configuration options
+* `database`: Database configuration options (⚠️ **MySQL users**: setting `generateId` to `false` with non-sequential IDs can cause the adapter to return the wrong row — see [MySQL ID Generation](/docs/adapters/mysql#id-generation-on-mysql))
 * `backgroundTasks`: Configure background task handling for deferred operations
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 * OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
