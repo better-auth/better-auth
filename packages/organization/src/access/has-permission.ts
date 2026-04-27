@@ -77,8 +77,9 @@ export const hasPermission = async (
 
 	if (input.useMemoryCache) {
 		acRoles = cacheAllRoles.get(input.organizationId) || acRoles;
+	} else if (dynamicAccessControl) {
+		cacheAllRoles.set(input.organizationId, acRoles);
 	}
-	cacheAllRoles.set(input.organizationId, acRoles);
 
 	return hasPermissionFn(input, acRoles);
 };
