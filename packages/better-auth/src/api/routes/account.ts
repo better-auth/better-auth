@@ -571,7 +571,7 @@ export const getAccessToken = createAuthEndpoint(
 					idToken: newTokens?.idToken || account.idToken,
 				};
 				let updatedAccount: Record<string, any> | null = null;
-				if (account.id) {
+				if (account.id && ctx.context.options.database) {
 					updatedAccount = await ctx.context.internalAdapter.updateAccount(
 						account.id,
 						updatedData,
