@@ -559,11 +559,14 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				);
 			}
 
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
-					verificationToken,
-				);
-			if (!data) {
+			const data = await ctx.context.internalAdapter.findVerificationValue(
+				verificationToken,
+				{ cleanupBeforeFind: true },
+			);
+			const expiresAt = data?.expiresAt
+				? new Date(data.expiresAt).getTime()
+				: Number.NaN;
+			if (!data || Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
@@ -735,10 +738,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
-					verificationToken,
-				);
+			const data = await ctx.context.internalAdapter.findVerificationValue(
+				verificationToken,
+				{ cleanupBeforeFind: true },
+			);
 			if (!data) {
 				throw APIError.from(
 					"BAD_REQUEST",

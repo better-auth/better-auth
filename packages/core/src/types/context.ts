@@ -207,7 +207,12 @@ export interface InternalAdapter<
 			Partial<Verification>,
 	): Promise<Verification>;
 
-	findVerificationValue(identifier: string): Promise<Verification | null>;
+	findVerificationValue(
+		identifier: string,
+		options?: {
+			cleanupBeforeFind?: boolean | undefined;
+		},
+	): Promise<Verification | null>;
 
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
