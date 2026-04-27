@@ -69,7 +69,7 @@ export const signOut = createAuthEndpoint(
 												type: "string",
 											},
 											description:
-												"All provider logout URLs when multiple providers support RP-initiated logout",
+												"All unique provider logout URLs when RP-initiated logout is available. Use this to build a client-side redirect chain or postMessage bridge to complete logout across multiple providers.",
 										},
 										redirect: {
 											type: "boolean",
@@ -123,19 +123,34 @@ export const signOut = createAuthEndpoint(
 				if (logoutAccounts.length === 0) {
 					return null;
 				}
+				const uniqueLogoutAccounts = [];
+				const seenProviderIds = new Set<string>();
+				for (const account of logoutAccounts) {
+					if (!seenProviderIds.has(account.providerId)) {
+						seenProviderIds.add(account.providerId);
+						uniqueLogoutAccounts.push(account);
+					}
+				}
 				const postLogoutRedirectURI = ctx.body?.callbackURL
 					? new URL(ctx.body.callbackURL, ctx.context.baseURL).toString()
 					: undefined;
 				const urls: URL[] = [];
-				for (const account of logoutAccounts) {
+				for (const account of uniqueLogoutAccounts) {
 					const provider = providersById.get(account.providerId);
-					const url = await provider?.createEndSessionURL?.({
-						idToken: account.idToken,
-						postLogoutRedirectURI,
-						state: ctx.body?.state,
-					});
-					if (url) {
-						urls.push(url);
+					try {
+						const url = await provider?.createEndSessionURL?.({
+							idToken: account.idToken,
+							postLogoutRedirectURI,
+							state: ctx.body?.state,
+						});
+						if (url) {
+							urls.push(url);
+						}
+					} catch (e) {
+						ctx.context.logger.error(
+							`Failed to create logout URL for provider "${account.providerId}"`,
+							e,
+						);
 					}
 				}
 				if (urls.length === 0) {
