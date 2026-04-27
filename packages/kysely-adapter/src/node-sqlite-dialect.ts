@@ -131,11 +131,40 @@ class NodeSqliteConnection implements DatabaseConnection {
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
+		const normalizedSql = sql.trim().toLowerCase();
+		const isMutation = /^(insert|update|delete|replace)\b/.test(normalizedSql);
+		const isInsert = /^(insert|replace)\b/.test(normalizedSql);
+		const hasReturningClause = /\breturning\b/.test(normalizedSql);
 
-		const rows = stmt.all(...(parameters as any[])) as O[];
+		if (isMutation && !hasReturningClause) {
+			const { changes, lastInsertRowid } = stmt.run(
+				...(parameters as any[]),
+			) as {
+				changes?: number | bigint | null;
+				lastInsertRowid?: number | bigint | null;
+			};
+
+			return Promise.resolve({
+				numAffectedRows:
+					typeof changes === "number"
+						? BigInt(changes)
+						: typeof changes === "bigint"
+							? changes
+							: undefined,
+				insertId:
+					isInsert && lastInsertRowid !== undefined && lastInsertRowid !== null
+						? typeof lastInsertRowid === "number"
+							? BigInt(lastInsertRowid)
+							: typeof lastInsertRowid === "bigint"
+								? lastInsertRowid
+								: undefined
+						: undefined,
+				rows: [],
+			});
+		}
 
 		return Promise.resolve({
-			rows,
+			rows: stmt.all(...(parameters as any[])) as O[],
 		});
 	}
 

@@ -13,6 +13,7 @@ import type {
 	InferOrganization,
 	InferTeam,
 	InvitationInput,
+	InvitationStatus,
 	Member,
 	MemberInput,
 	OrganizationInput,
@@ -1043,9 +1044,40 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
+			expectedStatus?: InvitationStatus;
 			status: "accepted" | "canceled" | "rejected";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			if (data.expectedStatus) {
+				const updatedCount = await adapter.updateMany({
+					model: "invitation",
+					where: [
+						{
+							field: "id",
+							value: data.invitationId,
+						},
+						{
+							field: "status",
+							value: data.expectedStatus,
+						},
+					],
+					update: {
+						status: data.status,
+					},
+				});
+				if (updatedCount === 0) {
+					return null;
+				}
+				return adapter.findOne<InferInvitation<O, false>>({
+					model: "invitation",
+					where: [
+						{
+							field: "id",
+							value: data.invitationId,
+						},
+					],
+				});
+			}
 			const invitation = await adapter.update<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
