@@ -7,7 +7,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
-import { parseUserOutput } from "../../db/schema";
+import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -269,7 +269,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							name,
 							email: normalizedEmail,
 							emailVerified: false,
-							image: image || null,
+							image: image ?? null,
 							createdAt: now,
 							updatedAt: now,
 						};
@@ -289,17 +289,22 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									additionalFields[key] = additionalUserFields[key];
 								}
 							}
-							syntheticUser = customSyntheticUser({
+							const customResult = customSyntheticUser({
 								coreFields,
 								additionalFields,
 								id: generatedId,
 							});
+							// Ensure custom synthetic users have consistent shape with real users
+							syntheticUser = buildSyntheticUserOutput(
+								ctx.context.options,
+								customResult,
+							);
 						} else {
-							syntheticUser = {
+							syntheticUser = buildSyntheticUserOutput(ctx.context.options, {
 								...coreFields,
 								...additionalUserFields,
 								id: generatedId,
-							};
+							});
 						}
 
 						return ctx.json({
