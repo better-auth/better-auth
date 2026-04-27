@@ -841,10 +841,13 @@ export const createInternalAdapter = (
 				const activeSession = await secondaryStorage.get(
 					`active-sessions-${userId}`,
 				);
-				const sessions = activeSession
+				const parsed = activeSession
 					? safeJSONParse<{ token: string; expiresAt: number }[]>(activeSession)
-					: [];
-				if (!sessions) return;
+					: null;
+				if (activeSession && !parsed) {
+					await secondaryStorage.delete(`active-sessions-${userId}`);
+				}
+				const sessions = parsed ?? [];
 				const now = Date.now();
 				const survivor = sessions.find(
 					(s) => s.token === exceptToken && s.expiresAt > now,
@@ -854,11 +857,16 @@ export const createInternalAdapter = (
 					await secondaryStorage.delete(session.token);
 				}
 				if (survivor) {
-					await secondaryStorage.set(
-						`active-sessions-${userId}`,
-						JSON.stringify([survivor]),
-						getTTLSeconds(survivor.expiresAt, now),
-					);
+					const ttl = getTTLSeconds(survivor.expiresAt, now);
+					if (ttl > 0) {
+						await secondaryStorage.set(
+							`active-sessions-${userId}`,
+							JSON.stringify([survivor]),
+							ttl,
+						);
+					} else {
+						await secondaryStorage.delete(`active-sessions-${userId}`);
+					}
 				} else {
 					await secondaryStorage.delete(`active-sessions-${userId}`);
 				}
