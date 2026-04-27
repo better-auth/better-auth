@@ -31,7 +31,7 @@ export async function createEmailVerificationToken(
 	const token = await signJWT(
 		{
 			email: email.toLowerCase(),
-			updateTo,
+			updateTo: updateTo?.toLowerCase(),
 			...extraPayload,
 		},
 		secret,
