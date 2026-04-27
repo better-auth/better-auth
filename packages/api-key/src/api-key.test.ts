@@ -4636,3 +4636,29 @@ describe("api-key", async () => {
 		});
 	});
 });
+
+describe("listApiKeys with integer user.id (postgres + serial)", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [apiKey()],
+			advanced: {
+				database: { generateId: "serial" },
+			},
+		},
+		{
+			testWith: "postgres",
+			clientOptions: { plugins: [apiKeyClient()] },
+		},
+	);
+	const { headers } = await signInWithTestUser();
+
+	it("returns the key that createApiKey just wrote", async () => {
+		const created = await auth.api.createApiKey({ body: {}, headers });
+		expect(created.id).toBeDefined();
+
+		const result = await auth.api.listApiKeys({ headers });
+
+		expect(result.total).toBeGreaterThan(0);
+		expect(result.apiKeys.find((k) => k.id === created.id)).toBeDefined();
+	});
+});

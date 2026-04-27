@@ -494,6 +494,46 @@ describe("organization invitation hooks", async (it) => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9288
+ */
+describe("beforeCreateInvitation custom id", async (it) => {
+	const customInvitationId = "custom-invitation-id-test";
+
+	const plugin = organization({
+		hooks: {
+			beforeCreateInvitation: async () => {
+				return { data: { id: customInvitationId } };
+			},
+		},
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should allow passing id through `beforeCreateInvitation`", async () => {
+		const invitation = await auth.api.createInvitation({
+			headers,
+			body: {
+				email: `custom-id-test-${crypto.randomUUID()}@example.com`,
+				role: "member",
+				organizationId: org.id,
+			},
+		});
+
+		expect(invitation.invitation.id).toBe(customInvitationId);
+	});
+});
+
 describe("member permission to invite", async (it) => {
 	const plugin = organization({
 		async sendInvitationEmail(data, request) {},

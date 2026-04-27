@@ -291,24 +291,27 @@ export type SubscriptionOptions = {
 		  ) => Promise<void>)
 		| undefined;
 	/**
-	 * A callback to run after a user is about to cancel their subscription
+	 * A callback to run on every subscription update webhook. Use `stripeSubscription`
+	 * to read fields that are not persisted in the local subscription row.
 	 * @returns
 	 */
 	onSubscriptionUpdate?:
 		| ((data: {
 				event: Stripe.Event;
+				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
 		  }) => Promise<void>)
 		| undefined;
 	/**
-	 * A callback to run after a user is about to cancel their subscription
+	 * A callback to run once when a subscription transitions into a pending-cancel state
+	 * (e.g. `cancel_at_period_end` or a scheduled `cancel_at`).
 	 * @returns
 	 */
 	onSubscriptionCancel?:
 		| ((data: {
 				event?: Stripe.Event;
-				subscription: Subscription;
 				stripeSubscription: Stripe.Subscription;
+				subscription: Subscription;
 				cancellationDetails?: Stripe.Subscription.CancellationDetails | null;
 		  }) => Promise<void>)
 		| undefined;

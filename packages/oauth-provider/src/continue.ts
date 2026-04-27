@@ -3,7 +3,7 @@ import { APIError } from "better-auth/api";
 import { authorizeEndpoint } from "./authorize";
 import { oAuthState } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
-import { deleteFromPrompt, searchParamsToQuery } from "./utils";
+import { removePromptFromQuery, searchParamsToQuery } from "./utils";
 
 export async function continueEndpoint(
 	ctx: GenericEndpointContext,
@@ -37,7 +37,9 @@ async function selected(
 	}
 	ctx.headers?.set("accept", "application/json");
 	const query = new URLSearchParams(_query);
-	ctx.query = deleteFromPrompt(query, "select_account");
+	ctx.query = searchParamsToQuery(
+		removePromptFromQuery(query, "select_account"),
+	);
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
@@ -58,7 +60,7 @@ async function created(
 	}
 	const query = new URLSearchParams(_query);
 	ctx.headers?.set("accept", "application/json");
-	ctx.query = deleteFromPrompt(query, "create");
+	ctx.query = searchParamsToQuery(removePromptFromQuery(query, "create"));
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,

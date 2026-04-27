@@ -81,5 +81,8 @@
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:"
+  },
+  "inlinedDependencies": {
+    "@better-fetch/fetch": "1.1.21"
   }
 }

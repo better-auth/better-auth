@@ -701,7 +701,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null;
 			const { teamIds: _teamIds, ...invitationData } = invitation;
 			const invite = await adapter.create<
-				Omit<InvitationInput, "id">,
+				InvitationInput,
 				InferInvitation<O, false>
 			>({
 				model: "invitation",
@@ -713,6 +713,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					...invitationData,
 					teamId,
 				},
+				forceAllowId: true,
 			});
 
 			return filterInvitationOutput(invite);
