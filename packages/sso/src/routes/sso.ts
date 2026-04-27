@@ -35,6 +35,7 @@ import { generateRelayState } from "../saml-state";
 import { saml } from "../samlify";
 import type {
 	AuthnRequestRecord,
+	Member,
 	OIDCConfig,
 	SAMLAssertionExtract,
 	SAMLConfig,
@@ -50,6 +51,7 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 
 /**
@@ -629,7 +631,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const member = await ctx.context.adapter.findOne<Member>({
 					model: "member",
 					where: [
 						{
@@ -642,9 +644,15 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						},
 					],
 				});
-				if (!organization) {
+				if (!member) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
+					});
+				}
+				if (ctx.context.hasPlugin("organization") && !hasOrgAdminRole(member)) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							"You must be an organization owner or admin to register SSO providers",
 					});
 				}
 			}
