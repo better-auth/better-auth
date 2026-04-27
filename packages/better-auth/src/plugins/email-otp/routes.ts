@@ -367,11 +367,12 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
-				if (ctx.body.type === "sign-in" && !opts.disableSignUp) {
-					// allow - user may not exist yet during signup flow
-				} else {
+			const shouldRequireUser = !(
+				ctx.body.type === "sign-in" && !opts.disableSignUp
+			);
+			if (shouldRequireUser) {
+				const user = await ctx.context.internalAdapter.findUserByEmail(email);
+				if (!user) {
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}
 			}
