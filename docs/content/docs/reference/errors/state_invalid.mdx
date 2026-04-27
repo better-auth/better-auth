@@ -1,0 +1,58 @@
+---
+title: state_invalid
+description: Failed to decrypt or parse the OAuth state during the callback.
+---
+
+## What is it?
+
+When using the **cookie** state storage strategy (`storeStateStrategy: "cookie"`), Better Auth encrypts all OAuth state
+data into a cookie. During the callback, this cookie is decrypted and parsed. The `state_invalid` error means the cookie
+exists but could not be decrypted or the decrypted content could not be parsed as valid JSON.
+
+This error only occurs with the cookie strategy. If you are using the default database strategy, state-related
+failures may surface as other errors instead, such as `state_mismatch` or `state_security_mismatch`, depending on
+what failed.
+
+## Common Causes
+
+* **Secret rotation mid-flow.** The `BETTER_AUTH_SECRET` was changed between the start and the callback of the OAuth
+  flow, so the decryption key no longer matches the one that encrypted the cookie.
+* **Cookie value corrupted in transit.** A proxy, CDN, or middleware modified or truncated the cookie value during
+  the redirect.
+* **Malformed cookie.** The cookie was manually altered, or a different cookie with a conflicting name was read
+  instead.
+
+## How to resolve
+
+### Avoid rotating secrets during active flows
+
+Deploy secret changes during low-traffic windows. If you need to rotate secrets, consider running both the old and new
+secrets simultaneously during a transition period so in-progress flows can complete.
+
+### Check proxies and middleware
+
+Verify that any reverse proxies, CDNs, or middleware in front of your application preserve the full, unmodified
+cookie value. Look for cookie rewriting, truncation, or URL-encoding issues.
+
+### Verify cookie names and values
+
+Use your browser's DevTools → Application → Cookies to confirm that the `better-auth.oauth_state` cookie is set
+before the redirect and still exists (unmodified) when the callback arrives.
+
+### Switch to the database strategy
+
+If cookie issues persist, switch to the default database strategy which does not depend on state cookies for
+decryption:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	account: {
+		storeStateStrategy: "database",
+	},
+});
+```
+
+***
+
+For a comprehensive overview of all state-related errors and their root causes, see
+[state\_mismatch](/docs/reference/errors/state_mismatch).

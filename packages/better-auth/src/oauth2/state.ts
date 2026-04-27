@@ -58,14 +58,19 @@ export async function parseState(c: GenericEndpointContext) {
 	} catch (error) {
 		c.context.logger.error("Failed to parse state", error);
 
-		if (
-			error instanceof StateError &&
-			error.code === "state_security_mismatch"
-		) {
-			throw c.redirect(`${errorURL}?error=state_mismatch`);
+		if (error instanceof StateError) {
+			const errorCode =
+				error.code === "state_security_mismatch"
+					? "state_mismatch"
+					: error.code;
+			const sep = errorURL.includes("?") ? "&" : "?";
+			throw c.redirect(
+				`${errorURL}${sep}error=${encodeURIComponent(errorCode)}`,
+			);
 		}
 
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+		const sep = errorURL.includes("?") ? "&" : "?";
+		throw c.redirect(`${errorURL}${sep}error=internal_server_error`);
 	}
 
 	if (!parsedData.errorURL) {

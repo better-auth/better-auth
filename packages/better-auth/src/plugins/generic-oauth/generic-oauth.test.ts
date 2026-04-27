@@ -1114,7 +1114,10 @@ describe("oauth2", async () => {
 		);
 
 		expect(res.status).toBe(302);
-		expect(res.headers.get("location")).toContain("please_restart_the_process");
+		expect(res.headers.get("location")).toContain("state_not_found");
+		expect(res.headers.get("location")).not.toContain(
+			"please_restart_the_process",
+		);
 	});
 
 	it("should await async mapProfileToUser", async () => {
