@@ -187,6 +187,20 @@ This will trigger a new OAuth flow that requests the additional scopes. After co
   provider.
 </Callout>
 
+### Disable Previously Granted Scopes
+
+By default, Google authorization requests include `include_granted_scopes=true`, which can return previously granted scopes along with newly requested scopes. Set `includeGrantedScopes` to `false` when you want each OAuth request to include only the scopes requested for that flow.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        includeGrantedScopes: false, // [!code highlight]
+    },
+}
+```
+
 ### Always get refresh token
 
 Google only issues a refresh token the first time a user consents to your app.

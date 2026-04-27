@@ -51,6 +51,11 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * The hosted domain of the user
 	 */
 	hd?: string | undefined;
+	/**
+	 * Include previously granted scopes in the authorization request.
+	 * Defaults to true.
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
 
 export const google = (options: GoogleOptions) => {
@@ -92,9 +97,12 @@ export const google = (options: GoogleOptions) => {
 				display: display || options.display,
 				loginHint,
 				hd: options.hd,
-				additionalParams: {
-					include_granted_scopes: "true",
-				},
+				additionalParams:
+					options.includeGrantedScopes === false
+						? undefined
+						: {
+								include_granted_scopes: "true",
+							},
 			});
 			return url;
 		},
