@@ -479,6 +479,108 @@ describe("verify phone-number", async () => {
 	});
 });
 
+describe("repeated OTP sends", async () => {
+	let otp = "";
+	let resetOtp = "";
+
+	const { client, db } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP(data) {
+						resetOtp = data.code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+					allowedAttempts: 3,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("should not create duplicate verification records on repeated sendOtp", async () => {
+		const phone = "+251900000001";
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+
+		const records = await db.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: phone }],
+		});
+		expect(records).toHaveLength(1);
+	});
+
+	it("should allow wrong-code then correct-code after re-sending OTP", async () => {
+		const phone = "+251900000002";
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+		const latestCode = otp;
+
+		const wrongRes = await client.phoneNumber.verify({
+			phoneNumber: phone,
+			code: "000000",
+		});
+		expect(wrongRes.error?.status).toBe(400);
+
+		const correctRes = await client.phoneNumber.verify({
+			phoneNumber: phone,
+			code: latestCode,
+		});
+		expect(correctRes.error).toBe(null);
+		expect(correctRes.data?.status).toBe(true);
+	});
+
+	it("should not create duplicate verification records on repeated password reset requests", async () => {
+		const phone = "+251900000003";
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+		await client.phoneNumber.verify({ phoneNumber: phone, code: otp });
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber: phone });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber: phone });
+
+		const records = await db.findMany({
+			model: "verification",
+			where: [
+				{
+					field: "identifier",
+					value: `${phone}-request-password-reset`,
+				},
+			],
+		});
+		expect(records).toHaveLength(1);
+	});
+
+	it("should succeed on repeated password reset requests followed by reset", async () => {
+		const phone = "+251900000004";
+		await client.phoneNumber.sendOtp({ phoneNumber: phone });
+		await client.phoneNumber.verify({ phoneNumber: phone, code: otp });
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber: phone });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber: phone });
+
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: phone,
+			otp: resetOtp,
+			newPassword: "new-password-123",
+		});
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+	});
+});
+
 describe("reset password flow attempts", async () => {
 	let otp = "";
 	let resetOtp = "";
