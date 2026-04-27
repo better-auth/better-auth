@@ -9,41 +9,37 @@ Organizations are the top-level entity in the organization plugin. They represen
 
 To create a new organization, use the `organization.create` method:
 
-<APIMethod
-    path="/organization/create"
-    method="POST"
-    requireSession
-    note="Includes any additional fields from the organization schema.">
-```ts
-type createOrganization = {
-    /**
-     * Name of the organization.
-     */
-    name: string = "My Organization"
-    /**
-     * Slug of the organization. Not required if slugs are disabled.
-     */
-    slug: string = "my-org"
-    /**
-     * Organization logo.
-     */
-    logo?: string = "https://example.com/logo.png"
-    /**
-     * Organization metadata.
-     */
-    metadata?: Record<string, any> = { test: "organization-metadata" }
-    /**
-     * Whether to keep the current active organization active after creating a new one.
-     */
-    keepCurrentActiveOrganization?: boolean = true
-    /**
-     * User ID of the organization creator, allows you provide the user id when calling the endpoint without session headers.
-     * @serverOnly
-     */
-    userId?: string = "user-id"
-}
-```
-</APIMethod> 
+<APIMethod path="/organization/create" method="POST" requireSession note="Includes any additional fields from the organization schema.">
+  ```ts
+  type createOrganization = {
+      /**
+       * Name of the organization.
+       */
+      name: string = "My Organization"
+      /**
+       * Slug of the organization. Not required if slugs are disabled.
+       */
+      slug: string = "my-org"
+      /**
+       * Organization logo.
+       */
+      logo?: string = "https://example.com/logo.png"
+      /**
+       * Organization metadata.
+       */
+      metadata?: Record<string, any> = { test: "organization-metadata" }
+      /**
+       * Whether to keep the current active organization active after creating a new one.
+       */
+      keepCurrentActiveOrganization?: boolean = true
+      /**
+       * User ID of the organization creator, allows you provide the user id when calling the endpoint without session headers.
+       * @serverOnly
+       */
+      userId?: string = "user-id"
+  }
+  ```
+</APIMethod>
 
 ### Creating an org as an admin
 
@@ -61,129 +57,112 @@ await auth.api.createOrganization({
 ```
 
 <Callout type="warn">
-    Note that the `userId` parameter cannot be used alongside session headers.
-    If headers were provided, it will take precedence over the `userId` parameter.
+  Note that the `userId` parameter cannot be used alongside session headers.
+  If headers were provided, it will take precedence over the `userId` parameter.
 </Callout>
-
 
 ## Updating an Organization
 
 You can update an organization by calling the `organization.update` method.
 
-<APIMethod
-    path="/organization/update"
-    method="POST"
-    requireSession
-    note="Includes any additional fields from the organization schema.">
-```ts
-type updateOrganization = {
-    /**
-     * The organization ID to update.
-     */
-    organizationId?: string = "org-id"
-    /**
-     * The data to update the organization with.
-     */
-    data: {
-        /**
-         * The name of the organization.
-         */
-        name?: string = "Updated Organization Name"
-        /**
-         * The logo of the organization.
-         */
-        logo?: string = "https://example.com/logo.png"
-        /**
-         * The slug of the organization.
-         */
-        slug?: string = "updated-slug"
-        /**
-         * The metadata of the organization.
-         */
-        metadata?: Record<string, any> = { test: "organization-metadata" }
-    }
-}
-```
+<APIMethod path="/organization/update" method="POST" requireSession note="Includes any additional fields from the organization schema.">
+  ```ts
+  type updateOrganization = {
+      /**
+       * The organization ID to update.
+       */
+      organizationId?: string = "org-id"
+      /**
+       * The data to update the organization with.
+       */
+      data: {
+          /**
+           * The name of the organization.
+           */
+          name?: string = "Updated Organization Name"
+          /**
+           * The logo of the organization.
+           */
+          logo?: string = "https://example.com/logo.png"
+          /**
+           * The slug of the organization.
+           */
+          slug?: string = "updated-slug"
+          /**
+           * The metadata of the organization.
+           */
+          metadata?: Record<string, any> = { test: "organization-metadata" }
+      }
+  }
+  ```
 </APIMethod>
-
 
 ## Deleting an Organization
 
 You can delete an organization using the `organization.delete` method.
 
-<APIMethod
-    path="/organization/delete"
-    method="POST"
-    requireSession
-    note="Requires owner or admin permissions.">
-```ts
-type deleteOrganization = {
-    /**
-     * The organization ID to delete.
-     */
-    organizationId?: string = "org-id"
-}
-```
+<APIMethod path="/organization/delete" method="POST" requireSession note="Requires owner or admin permissions.">
+  ```ts
+  type deleteOrganization = {
+      /**
+       * The organization ID to delete.
+       */
+      organizationId?: string = "org-id"
+  }
+  ```
 </APIMethod>
 
 <Callout type="warn">
-    Deleting an organization will also delete all associated members,
-    invitations, and related data.
+  Deleting an organization will also delete all associated members,
+  invitations, and related data.
 </Callout>
 
 <Callout type="info">
-    You can disable organization deletion entirely by setting `disableOrganizationDeletion: true` in the plugin options.
+  You can disable organization deletion entirely by setting `disableOrganizationDeletion: true` in the plugin options.
 </Callout>
-
 
 ## Check if org slug is taken
 
 You can check if an organization slug is taken using the `organization.checkSlug` method.
 
-<APIMethod
-    path="/organization/check-slug"
-    method="POST"
-    requireSession
->
-```ts
-type checkSlug = {
-    /**
-     * The slug to check.
-     */
-    slug: string = "my-org"
-}
-```
+<APIMethod path="/organization/check-slug" method="POST" requireSession>
+  ```ts
+  type checkSlug = {
+      /**
+       * The slug to check.
+       */
+      slug: string = "my-org"
+  }
+  ```
 </APIMethod>
 
 Returns:
+
 ```ts
 type Result = { isTaken: boolean }
 ```
-
 
 ## List Organizations
 
 You can list all organizations the current user is a member of using the `organization.list` method.
 
-<APIMethod
-    path="/organization/list"
-    method="GET"
-    requireSession>
-```ts
-type listOrganizations = {
-    /**
-     * The maximum number of organizations to return.
-     */
-    limit?: number = 10
-    /**
-     * The number of organizations to skip.
-     */
-    offset?: number = 0
-}
-```
+<APIMethod path="/organization/list" method="GET" requireSession>
+  ```ts
+  type listOrganizations = {
+      /**
+       * The maximum number of organizations to return.
+       */
+      limit?: number = 10
+      /**
+       * The number of organizations to skip.
+       */
+      offset?: number = 0
+  }
+  ```
 </APIMethod>
 
 Returns:
+
 ```ts
 type Result = {
     /**
@@ -205,7 +184,6 @@ type Result = {
 }
 ```
 
-
 ## Set Active Organization
 
 You can set the active organization for the current session using the `organization.setActive` method.
@@ -213,20 +191,16 @@ The active organization is stored in the session and can be used to scope reques
 
 You can learn more about [Active Organizations](/docs/plugins/organization-new/active-organization).
 
-<APIMethod
-    path="/organization/set-active"
-    method="POST"
-    requireSession
->
-```ts
-type setActiveOrganization = {
-    /**
-     * The organization ID to set as active.
-     * Pass `null` to unset the active organization.
-     */
-    organizationId: string | null = "org-id"
-}
-```
+<APIMethod path="/organization/set-active" method="POST" requireSession>
+  ```ts
+  type setActiveOrganization = {
+      /**
+       * The organization ID to set as active.
+       * Pass `null` to unset the active organization.
+       */
+      organizationId: string | null = "org-id"
+  }
+  ```
 </APIMethod>
 
 Returns the organization object if an organization is set,
@@ -236,8 +210,7 @@ or `null` if the active organization is unset.
 type Result = Organization | null
 ```
 
-
----
+***
 
 ## Organization Related Options
 
@@ -300,7 +273,7 @@ organization({
 Whether to disable slugs for organizations. When disabled, organizations will only be identified by their ID.
 
 <Callout type="warn">
-    Don't forget to re-run schema generation or migrations after changing this option.
+  Don't forget to re-run schema generation or migrations after changing this option.
 </Callout>
 
 ```ts
@@ -394,17 +367,15 @@ organization({
 })
 ```
 
-
 ## Organization Schema
 
 The organization table includes the following fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique identifier |
-| `name` | `string` | Organization name |
-| `slug` | `string` | URL-friendly identifier |
-| `logo` | `string?` | Organization logo URL |
-| `metadata` | `object?` | Custom metadata |
-| `createdAt` | `Date` | Creation timestamp |
-
+| Field       | Type      | Description             |
+| ----------- | --------- | ----------------------- |
+| `id`        | `string`  | Unique identifier       |
+| `name`      | `string`  | Organization name       |
+| `slug`      | `string`  | URL-friendly identifier |
+| `logo`      | `string?` | Organization logo URL   |
+| `metadata`  | `object?` | Custom metadata         |
+| `createdAt` | `Date`    | Creation timestamp      |
