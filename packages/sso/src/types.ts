@@ -36,6 +36,33 @@ export interface OIDCConfig {
 		| undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
+	/**
+	 * Prompt parameter for the OIDC authorization request.
+	 * Controls the authentication experience for the user.
+	 *
+	 * Common values:
+	 * - `"none"` — No interaction; fail if user is not already authenticated
+	 * - `"login"` — Force re-authentication even if user has an active session
+	 * - `"consent"` — Force consent screen even if previously granted
+	 * - `"select_account"` — Force account selection when user has multiple accounts
+	 *
+	 * Can be combined (e.g., `"login consent"` or `"select_account consent"`).
+	 *
+	 * When set on the provider config, this acts as the default prompt for
+	 * all sign-in requests using this provider. It can be overridden per-request
+	 * via the `prompt` parameter on `signIn.sso()`.
+	 */
+	prompt?:
+		| (
+				| "none"
+				| "login"
+				| "create"
+				| "consent"
+				| "select_account"
+				| "select_account consent"
+				| "login consent"
+		  )
+		| undefined;
 }
 
 export interface SAMLConfig {

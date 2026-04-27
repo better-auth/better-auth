@@ -712,6 +712,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							`${body.issuer}/.well-known/openid-configuration`,
 						mapping: body.oidcConfig.mapping,
 						scopes: body.oidcConfig.scopes,
+						prompt: body.oidcConfig.prompt,
 						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
 						overrideUserInfo:
 							ctx.body.overrideUserInfo ||
@@ -735,6 +736,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
 					mapping: body.oidcConfig.mapping,
 					scopes: body.oidcConfig.scopes,
+					prompt: body.oidcConfig.prompt,
 					userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
 					overrideUserInfo:
 						ctx.body.overrideUserInfo ||
@@ -922,6 +924,21 @@ const signInSSOBodySchema = z.object({
 				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
 		})
 		.optional(),
+	prompt: z
+		.enum([
+			"none",
+			"login",
+			"create",
+			"consent",
+			"select_account",
+			"select_account consent",
+			"login consent",
+		])
+		.meta({
+			description:
+				"Prompt parameter for the OIDC authorization request. Controls the authentication experience (e.g., force account selection or consent). Overrides the provider-level default if set.",
+		})
+		.optional(),
 	providerType: z.enum(["oidc", "saml"]).optional(),
 });
 
@@ -975,6 +992,20 @@ export const signInSSO = (options?: SSOOptions) => {
 											type: "string",
 											description:
 												"Login hint to send to the identity provider (e.g., email or identifier). If supported, sent as 'login_hint'.",
+										},
+										prompt: {
+											type: "string",
+											enum: [
+												"none",
+												"login",
+												"create",
+												"consent",
+												"select_account",
+												"select_account consent",
+												"login consent",
+											],
+											description:
+												"Prompt parameter for the OIDC authorization request. Controls the authentication experience (e.g., force account selection or consent). Overrides the provider-level default if set.",
 										},
 									},
 									required: ["callbackURL"],
@@ -1207,6 +1238,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					scopes: ctx.body.scopes ||
 						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
+					prompt: ctx.body.prompt || config.prompt,
 					authorizationEndpoint: config.authorizationEndpoint,
 				});
 				return ctx.json({
