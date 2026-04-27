@@ -13,6 +13,8 @@ export type {
 	TranslationDictionary,
 } from "./types";
 
+export * as locales from "./locales";
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		i18n: {
