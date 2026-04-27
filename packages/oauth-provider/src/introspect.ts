@@ -288,14 +288,14 @@ async function validateRefreshToken(
 		};
 	}
 
-	let sessionId: string | undefined = refreshToken.sessionId ?? undefined;
+	let sessionId = refreshToken.sessionId ?? undefined;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
 			where: [
 				{
 					field: "id",
-					value: refreshToken.sessionId,
+					value: sessionId,
 				},
 			],
 		});
