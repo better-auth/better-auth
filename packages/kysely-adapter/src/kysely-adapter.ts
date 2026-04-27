@@ -110,9 +110,18 @@ export const kyselyAdapter = (
 			) => {
 				let res: any;
 				if (config?.type === "mysql") {
-					// This isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id.
-					// Change this if there is a better way.
-					await builder.execute();
+					const result = await builder.executeTakeFirst();
+					const insertId = result?.insertId;
+
+					if (insertId) {
+						res = await db
+							.selectFrom(model)
+							.selectAll()
+							.where(getFieldName({ model, field: "id" }), "=", insertId)
+							.executeTakeFirst();
+						return res;
+					}
+
 					const field = values.id
 						? "id"
 						: where.length > 0 && where[0]?.field
