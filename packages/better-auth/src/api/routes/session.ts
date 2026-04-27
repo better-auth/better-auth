@@ -136,8 +136,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
+							// Decryption failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
 							expireCookie(ctx, ctx.context.authCookies.sessionData);
-							return ctx.json(null);
 						}
 					} else if (strategy === "jwt") {
 						// Decode JWT (signed with HMAC, not encrypted)
@@ -160,8 +162,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
+							// Verification failed, expire the invalid cookie and fall through
+							// to session_token DB validation. This handles scenarios like
+							// cross-subdomain cookie migrations where stale cookies may be present.
 							expireCookie(ctx, ctx.context.authCookies.sessionData);
-							return ctx.json(null);
 						}
 					} else {
 						// Decode compact format (or legacy base64-hmac)
@@ -191,8 +195,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							if (isValid) {
 								sessionDataPayload = parsed;
 							} else {
+								// HMAC verification failed, expire the invalid cookie and fall through
+								// to session_token DB validation. This handles scenarios like
+								// cross-subdomain cookie migrations where stale cookies may be present.
 								expireCookie(ctx, ctx.context.authCookies.sessionData);
-								return ctx.json(null);
 							}
 						}
 					}
