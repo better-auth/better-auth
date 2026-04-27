@@ -7,6 +7,7 @@ import { discord } from "./discord";
 import { dropbox } from "./dropbox";
 import { facebook } from "./facebook";
 import { figma } from "./figma";
+import { fortytwo } from "./fortytwo";
 import { github } from "./github";
 import { gitlab } from "./gitlab";
 import { google } from "./google";
@@ -43,6 +44,7 @@ export const socialProviders = {
 	discord,
 	facebook,
 	figma,
+	fortytwo,
 	github,
 	microsoft,
 	google,
@@ -100,6 +102,7 @@ export * from "./discord";
 export * from "./dropbox";
 export * from "./facebook";
 export * from "./figma";
+export * from "./fortytwo";
 export * from "./github";
 export * from "./gitlab";
 export * from "./google";
