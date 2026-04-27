@@ -681,6 +681,86 @@ describe("lastLoginMethod", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9276
+	 */
+	it("should clear cross-subdomain cookies by including the domain attribute", async () => {
+		const { client, testUser } = await getTestInstance(
+			{
+				baseURL: "https://auth.example.com",
+				advanced: {
+					crossSubDomainCookies: {
+						enabled: true,
+						domain: "example.com",
+					},
+				},
+				plugins: [lastLoginMethod()],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient({ domain: "example.com" })],
+				},
+			},
+		);
+
+		// Step 1: Sign in to get the cookie set with domain attribute
+		let setCookieHeader = "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+
+		// Verify the server sets the cookie with Domain=example.com
+		expect(setCookieHeader).toContain(
+			"better-auth.last_used_login_method=email",
+		);
+		expect(setCookieHeader).toContain("Domain=example.com");
+
+		// Step 2: Simulate clearing the cookie on the client side.
+		// Mock document.cookie to capture the string the client writes.
+		let writtenCookie = "";
+		const originalDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis,
+			"document",
+		);
+
+		Object.defineProperty(globalThis, "document", {
+			value: {},
+			writable: true,
+			configurable: true,
+		});
+
+		Object.defineProperty(globalThis.document, "cookie", {
+			get() {
+				return "better-auth.last_used_login_method=email";
+			},
+			set(val: string) {
+				writtenCookie = val;
+			},
+			configurable: true,
+		});
+
+		client.clearLastUsedLoginMethod();
+
+		// Restore
+		if (originalDescriptor) {
+			Object.defineProperty(globalThis, "document", originalDescriptor);
+		} else {
+			globalThis.document = undefined as any;
+		}
+
+		// The written cookie MUST include the domain to properly expire
+		// a cross-subdomain cookie.
+		expect(writtenCookie).toContain("domain=example.com");
+	});
+
 	it("should handle multiple set-cookie headers correctly", async () => {
 		// Create a custom plugin that sets an additional cookie to simulate multiple Set-Cookie headers
 		const multiCookiePlugin = {
