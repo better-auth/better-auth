@@ -95,16 +95,16 @@ const authClient = createAuthClient({
 ```
 
 <Callout type="info">
-    When using `"cookie"`, the plugin reads from the `active_organization` cookie.
-    This enables cross-tab synchronization - all tabs in the same browser will share the active organization.
-</Callout>  
+  When using `"cookie"`, the plugin reads from the `active_organization` cookie.
+  This enables cross-tab synchronization - all tabs in the same browser will share the active organization.
+</Callout>
 
 ## Team Addon
 
 The team addon provides the same functionality as the organization plugin,
 where you can configure a `defaultTeamIdField` to use as the default team identifier.
 
-```ts 
+```ts
 organization({
   use: [teams({ defaultTeamIdField: "slug" })]
 })
