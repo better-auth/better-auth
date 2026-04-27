@@ -7,6 +7,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
 	APIError,
+	getOAuthState,
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 } from "../../api";
@@ -233,6 +234,26 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 			),
 		},
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path === "/sign-in/social";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, { disableRefresh: true });
+						if (!session || !session.user.isAnonymous) {
+							return;
+						}
+						if (!ctx.body.additionalData) {
+							ctx.body.additionalData = {};
+						}
+						ctx.body.additionalData.anonymousSessionToken =
+							session.session.token;
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(ctx) {
@@ -269,12 +290,27 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						}
 						/**
 						 * Make sure the user had an anonymous session.
+						 * Try cookies first, then fall back to the OAuth state
 						 */
-						const session = await getSessionFromCtx<{
+						let session = await getSessionFromCtx<{
 							isAnonymous: boolean | null;
 						}>(ctx, {
 							disableRefresh: true,
 						});
+
+						if (!session || !session.user.isAnonymous) {
+							const oauthState = await getOAuthState();
+							const anonymousToken = oauthState?.anonymousSessionToken;
+							const found = anonymousToken
+								? await ctx.context.internalAdapter.findSession(anonymousToken)
+								: null;
+							if (found?.user?.isAnonymous) {
+								session = {
+									session: found.session,
+									user: { ...found.user, isAnonymous: true },
+								};
+							}
+						}
 
 						if (!session || !session.user.isAnonymous) {
 							return;
