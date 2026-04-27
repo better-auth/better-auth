@@ -247,7 +247,12 @@ export const genericOAuth = <const ID extends string>(
 						if (!endSessionEndpoint) {
 							return null;
 						}
-						const url = new URL(endSessionEndpoint);
+						let url: URL;
+						try {
+							url = new URL(endSessionEndpoint);
+						} catch {
+							return null;
+						}
 						if (data.idToken) {
 							url.searchParams.set("id_token_hint", data.idToken);
 						}
