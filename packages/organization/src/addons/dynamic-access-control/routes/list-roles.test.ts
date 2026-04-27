@@ -90,6 +90,7 @@ describe("list-roles", async (it) => {
 			await auth.api.createRole({ body: roleData, headers });
 		}
 
+		// First page
 		const result = await auth.api.listRoles({
 			query: {
 				organizationId: org.id,
@@ -102,6 +103,7 @@ describe("list-roles", async (it) => {
 		expect(result.roles).toHaveLength(2);
 		expect(result.total).toBe(5);
 
+		// Second page
 		const result2 = await auth.api.listRoles({
 			query: {
 				organizationId: org.id,
@@ -113,6 +115,19 @@ describe("list-roles", async (it) => {
 
 		expect(result2.roles).toHaveLength(2);
 		expect(result2.total).toBe(5);
+
+		// Last page
+		const result3 = await auth.api.listRoles({
+			query: {
+				organizationId: org.id,
+				limit: 2,
+				offset: 4,
+			},
+			headers,
+		});
+
+		expect(result3.roles).toHaveLength(1);
+		expect(result3.total).toBe(5);
 	});
 
 	it("should only list roles for the specified organization", async () => {

@@ -1,8 +1,447 @@
 ---
 title: Dynamic Access Control
-description: Learn how to use dynamic access control to manage access to resources within an organization.
+description: Learn how to use dynamic access control to manage roles and permissions at runtime within an organization.
 ---
 
-Dynamic access control allows you to create roles at runtime for organizations.
-This is achieved by storing the created roles and permissions associated with an
-organization in your database.
+Dynamic access control allows you to create, update, and delete roles at runtime for organizations. This is achieved by storing the created roles and permissions associated with an organization in your database, enabling per-organization customization of access control.
+
+## Set Up
+
+<Steps>
+  <Step>
+    ### 1. Add the dynamic access control addon
+
+    To add the dynamic access control addon, simply add the `dynamicAccessControl()` addon into the `organization()` plugin.
+
+    ```ts title="auth.ts"
+    import { organization } from "@better-auth/organization";
+    import { dynamicAccessControl } from "@better-auth/organization/addons"; // [!code highlight]
+
+    export const auth = betterAuth({
+        plugins: [
+            organization({
+                use: [dynamicAccessControl()], // [!code highlight]
+            }),
+        ],
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### 2. Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```bash
+        npx @better-auth/cli migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```bash
+        npx @better-auth/cli generate
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+That's it! You can now start creating and managing dynamic roles in your application.
+
+***
+
+## Creating a Role
+
+You can create a new role within an organization using the `organization.createRole` method. The role will be stored in the database and can be assigned to members.
+
+<APIMethod path="/organization/create-role" method="POST" requireSession>
+  ```ts
+  type createRole = {
+      /**
+       * The name of the role.
+       */
+      role: string = "editor"
+      /**
+       * The permissions for the role, as a record of resource to actions.
+       */
+      permissions: Record<string, string[]> = {
+          "organization": ["read", "update"],
+          "member": ["read"]
+      }
+      /**
+       * The organization ID which the role will belong to.
+       */
+      organizationId: string = "org-id"
+  }
+  ```
+</APIMethod>
+
+Returns the created role:
+
+```ts
+type Result = {
+    id: string;
+    role: string;
+    organizationId: string;
+    permissions: Record<string, string[]>;
+    createdAt: Date;
+    updatedAt?: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+  The user must have `ac:create` permission to create a role. By default, this permission is granted to the `owner` role.
+</Callout>
+
+<Callout type="warn">
+  **Security:** You can only create roles with permissions that you already have. This prevents privilege escalation attacks where a user could grant themselves permissions they don't possess.
+</Callout>
+
+## Updating a Role
+
+You can update a role's name and/or permissions using the `organization.updateRole` method.
+
+<APIMethod path="/organization/update-role" method="POST" requireSession>
+  ```ts
+  type updateRole = {
+      /**
+       * The ID of the role to update.
+       * Either roleId or roleName must be provided.
+       */
+      roleId?: string = "role-id"
+      /**
+       * The name of the role to update (used for lookup).
+       * Either roleId or roleName must be provided.
+       */
+      roleName?: string = "editor"
+      /**
+       * The organization ID. If not provided, uses the active organization.
+       */
+      organizationId?: string = "org-id"
+      /**
+       * The data to update the role with.
+       */
+      data: {
+          /**
+           * The new name for the role.
+           */
+          roleName?: string = "senior-editor"
+          /**
+           * The new permissions for the role.
+           */
+          permissions?: Record<string, string[]> = {
+              "organization": ["read", "update"],
+              "member": ["read", "create"]
+          }
+      }
+  }
+  ```
+</APIMethod>
+
+Returns the updated role:
+
+```ts
+type Result = {
+    id: string;
+    role: string;
+    organizationId: string;
+    permissions: Record<string, string[]>;
+    createdAt: Date;
+    updatedAt?: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+  The user must have `ac:update` permission to update a role. By default, this permission is granted to the `owner` role.
+</Callout>
+
+<Callout type="warn">
+  **Security:** You cannot rename a role to a pre-defined role name (e.g., "owner", "admin", "member"). Additionally, you can only assign permissions that you already have.
+</Callout>
+
+## Deleting a Role
+
+You can delete a role from an organization using the `organization.deleteRole` method.
+
+<APIMethod path="/organization/delete-role" method="POST" requireSession>
+  ```ts
+  type deleteRole = {
+      /**
+       * The ID of the role to delete.
+       * Either roleId or roleName must be provided.
+       */
+      roleId?: string = "role-id"
+      /**
+       * The name of the role to delete.
+       * Either roleId or roleName must be provided.
+       */
+      roleName?: string = "editor"
+      /**
+       * The organization ID. If not provided, uses the active organization.
+       */
+      organizationId?: string = "org-id"
+  }
+  ```
+</APIMethod>
+
+Returns:
+
+```ts
+type Result = {
+    success: boolean;
+}
+```
+
+<Callout type="info">
+  The user must have `ac:delete` permission to delete a role. By default, this permission is granted to the `owner` role.
+</Callout>
+
+<Callout type="warn">
+  You cannot delete a role that is currently assigned to any member. You must first unassign the role from all members before deleting it.
+</Callout>
+
+<Callout type="warn">
+  Pre-defined roles (e.g., "owner", "admin", "member") cannot be deleted.
+</Callout>
+
+## Getting a Role
+
+You can retrieve a specific role by its ID or name using the `organization.getRole` method.
+
+<APIMethod path="/organization/get-role" method="GET" requireSession>
+  ```ts
+  type getRole = {
+      /**
+       * The ID of the role to retrieve.
+       * Either roleId or roleName must be provided.
+       */
+      roleId?: string = "role-id"
+      /**
+       * The name of the role to retrieve.
+       * Either roleId or roleName must be provided.
+       */
+      roleName?: string = "editor"
+      /**
+       * The organization ID. If not provided, uses the active organization.
+       */
+      organizationId?: string = "org-id"
+  }
+  ```
+</APIMethod>
+
+Returns the role:
+
+```ts
+type Result = {
+    id: string;
+    role: string;
+    organizationId: string;
+    permissions: Record<string, string[]>;
+    createdAt: Date;
+    updatedAt?: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+  The user must have `ac:read` permission to get a role. By default, this permission is granted to the `owner` role.
+</Callout>
+
+## Listing Roles
+
+You can list all roles in an organization using the `organization.listRoles` method. This endpoint supports pagination and sorting.
+
+<APIMethod path="/organization/list-roles" method="GET" requireSession>
+  ```ts
+  type listRoles = {
+      /**
+       * The organization ID to list roles for.
+       * If not provided, uses the active organization.
+       */
+      organizationId?: string = "org-id"
+      /**
+       * Maximum number of roles to return (1-100).
+       */
+      limit?: number = 10
+      /**
+       * Number of roles to skip for pagination.
+       */
+      offset?: number = 0
+      /**
+       * Field to sort by.
+       * Options: "createdAt", "role", "updatedAt"
+       */
+      sortBy?: "createdAt" | "role" | "updatedAt" = "createdAt"
+      /**
+       * Sort direction.
+       */
+      sortDirection?: "asc" | "desc" = "desc"
+  }
+  ```
+</APIMethod>
+
+Returns a paginated result with roles and total count:
+
+```ts
+type Result = {
+    roles: Array<{
+        id: string;
+        role: string;
+        organizationId: string;
+        permissions: Record<string, string[]>;
+        createdAt: Date;
+        updatedAt?: Date;
+        // Additional fields if configured in schema
+    }>;
+    /**
+     * Total count of roles in the organization.
+     */
+    total: number;
+}
+```
+
+<Callout type="info">
+  The user must have `ac:read` permission to list roles. By default, this permission is granted to the `owner` role.
+</Callout>
+
+***
+
+## Dynamic Access Control Addon Options
+
+You can configure the dynamic access control addon with the following options:
+
+### `schema`
+
+Customize the database schema for the organization role table. You can rename fields, change the model name, or add additional fields.
+
+```ts
+dynamicAccessControl({
+    schema: {
+        organizationRole: {
+            modelName: "customRole", // Rename the table
+            fields: {
+                role: "roleName" // Rename fields
+            },
+            additionalFields: {
+                description: {
+                    type: "string",
+                    required: false
+                },
+                isDefault: {
+                    type: "boolean",
+                    required: false,
+                    defaultValue: false
+                },
+                priority: {
+                    type: "number",
+                    required: false
+                }
+            }
+        }
+    }
+})
+```
+
+Additional fields will be available in:
+
+* `createRole` request body
+* `updateRole` request body (within the `data` object)
+* All response types that return role data
+
+<Callout type="warn">
+  Don't forget to re-run schema generation or migrations after changing schema options.
+</Callout>
+
+### `hooks`
+
+Hooks allow you to run custom logic at various points in the role lifecycle.
+
+```ts
+dynamicAccessControl({
+    hooks: {
+        beforeCreateRole: async ({ role, user, organization }, ctx) => {
+            // Runs before a role is created
+            // Return { data: {...} } to modify the role data
+        },
+        afterCreateRole: async ({ role, user, organization }, ctx) => {
+            // Runs after a role is created
+        },
+        beforeUpdateRole: async ({ role, updates, user, organization }, ctx) => {
+            // Runs before a role is updated
+            // Return { data: {...} } to modify the update data
+        },
+        afterUpdateRole: async ({ role, user, organization }, ctx) => {
+            // Runs after a role is updated
+        },
+        beforeDeleteRole: async ({ role, user, organization }, ctx) => {
+            // Runs before a role is deleted
+        },
+        afterDeleteRole: async ({ role, user, organization }, ctx) => {
+            // Runs after a role is deleted
+        }
+    }
+})
+```
+
+***
+
+## Security Considerations
+
+The dynamic access control addon includes several security measures to prevent privilege escalation:
+
+1. **Permission Validation**: When creating or updating a role, users can only assign permissions they already possess. This prevents users from granting themselves elevated privileges.
+
+2. **Resource Validation**: Only valid resources (as defined in your access control statements) can be included in permissions.
+
+3. **Pre-defined Role Protection**: Pre-defined roles (e.g., "owner", "admin", "member") cannot be deleted or have their names used for dynamic roles.
+
+4. **Role-in-use Protection**: Roles that are currently assigned to members cannot be deleted until they are unassigned.
+
+5. **Membership Validation**: All endpoints verify that the requesting user is a member of the organization before allowing any operations.
+
+***
+
+## Organization Role Schema
+
+The organization role table includes the following fields:
+
+| Field            | Type                       | Description                   |
+| ---------------- | -------------------------- | ----------------------------- |
+| `id`             | `string`                   | Unique identifier             |
+| `role`           | `string`                   | Role name                     |
+| `organizationId` | `string`                   | Reference to the organization |
+| `permissions`    | `Record<string, string[]>` | Permissions for the role      |
+| `createdAt`      | `Date`                     | Creation timestamp            |
+| `updatedAt`      | `Date?`                    | Last update timestamp         |
+
+***
+
+## Assigning Dynamic Roles to Members
+
+Once you've created dynamic roles, you can assign them to organization members using the standard `updateMemberRole` endpoint:
+
+```ts
+await authClient.organization.updateMemberRole({
+    memberId: "member-id",
+    organizationId: "org-id",
+    role: "editor" // Your dynamic role name
+});
+```
+
+Members can also have multiple roles:
+
+```ts
+await authClient.organization.updateMemberRole({
+    memberId: "member-id",
+    organizationId: "org-id",
+    role: ["member", "editor"] // Combine pre-defined and dynamic roles
+});
+```
+
+<Callout type="info">
+  When a member has multiple roles, their effective permissions are the union of all permissions from their assigned roles.
+</Callout>
