@@ -185,9 +185,11 @@ export type InferCtx<
 > =
 	IsAny<C["body"]> extends true
 		? InferCtxQuery<C, FetchOptions>
-		: C["body"] extends Record<string, any>
-			? InferBodyCtx<C["body"], FetchOptions>
-			: InferCtxQuery<C, FetchOptions>;
+		: [NonNullable<C["body"]>] extends [never]
+			? InferCtxQuery<C, FetchOptions>
+			: NonNullable<C["body"]> extends Record<string, any>
+				? InferBodyCtx<NonNullable<C["body"]>, FetchOptions>
+				: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 

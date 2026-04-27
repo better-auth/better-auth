@@ -49,6 +49,9 @@ export type BaseOAuthProviderOptions = Pick<
 	| "tokenEndpointAuth"
 	| "scopes"
 	| "redirectURI"
+	| "endSessionEndpoint"
+	| "postLogoutRedirectURI"
+	| "disableProviderLogout"
 	| "pkce"
 	| "disableImplicitSignUp"
 	| "disableSignUp"
@@ -315,6 +318,50 @@ export const genericOAuth = <const ID extends string>(
 						idTokenConfig !== undefined &&
 						c.disableIdTokenNonceBinding !== true,
 					allowIdpInitiated: c.allowIdpInitiated,
+					async createEndSessionURL(data: {
+						idToken?: string | null | undefined;
+						postLogoutRedirectURI?: string | undefined;
+						state?: string | undefined;
+					}) {
+						if (c.disableProviderLogout) {
+							return null;
+						}
+						let finalEndSessionEndpoint = c.endSessionEndpoint;
+						if (!finalEndSessionEndpoint && c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								end_session_endpoint?: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+								headers: c.discoveryHeaders,
+							});
+							finalEndSessionEndpoint = discovery.data?.end_session_endpoint;
+						}
+						if (!finalEndSessionEndpoint) {
+							return null;
+						}
+						const url = new URL(finalEndSessionEndpoint);
+						if (data.idToken) {
+							url.searchParams.set("id_token_hint", data.idToken);
+						}
+						const configuredRedirectURI =
+							data.postLogoutRedirectURI ?? c.postLogoutRedirectURI;
+						const postLogoutRedirectURI = configuredRedirectURI
+							? new URL(configuredRedirectURI, ctx.baseURL).toString()
+							: undefined;
+						if (postLogoutRedirectURI) {
+							url.searchParams.set(
+								"post_logout_redirect_uri",
+								postLogoutRedirectURI,
+							);
+							url.searchParams.set("client_id", c.clientId);
+							if (data.state) {
+								url.searchParams.set("state", data.state);
+							}
+						} else if (!data.idToken) {
+							url.searchParams.set("client_id", c.clientId);
+						}
+						return url;
+					},
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
 							throw APIError.from(
