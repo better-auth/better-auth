@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "e2e:integration": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
     "prepare": "prisma generate"
   },
   "devDependencies": {

@@ -462,46 +462,6 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
-  e2e/adapter:
-    dependencies:
-      deepmerge:
-        specifier: ^4.3.1
-        version: 4.3.1
-      kysely:
-        specifier: ^0.28.14
-        version: 0.28.14
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      '@types/pg':
-        specifier: ^8.16.0
-        version: 8.16.0
-      better-sqlite3:
-        specifier: ^12.6.2
-        version: 12.6.2
-      drizzle-kit:
-        specifier: ^0.30.6
-        version: 0.30.6
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@upstash/redis@1.36.4)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.14)(mysql2@3.18.2(@types/node@25.6.0))(pg@8.19.0)(postgres@3.4.8)(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
-      mongodb:
-        specifier: ^7.1.0
-        version: 7.1.0(socks@2.8.7)
-      mysql2:
-        specifier: ^3.18.2
-        version: 3.18.2(@types/node@25.6.0)
-      pg:
-        specifier: ^8.19.0
-        version: 8.19.0
-      tarn:
-        specifier: ^3.0.2
-        version: 3.0.2
-      tedious:
-        specifier: ^18.6.2
-        version: 18.6.2(@azure/core-client@1.10.1)
-
   e2e/adapter/test/adapter-factory:
     devDependencies:
       '@better-auth/core':
@@ -525,21 +485,69 @@ importers:
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
+      better-sqlite3:
+        specifier: ^12.6.2
+        version: 12.6.2
+      drizzle-kit:
+        specifier: ^0.30.6
+        version: 0.30.6
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@upstash/redis@1.36.4)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.14)(mysql2@3.18.2(@types/node@25.6.0))(pg@8.19.0)(postgres@3.4.8)(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+      mysql2:
+        specifier: ^3.18.2
+        version: 3.18.2(@types/node@25.6.0)
+      pg:
+        specifier: ^8.19.0
+        version: 8.19.0
 
   e2e/adapter/test/kysely-adapter:
     devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../packages/kysely-adapter
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
+      better-sqlite3:
+        specifier: ^12.6.2
+        version: 12.6.2
+      kysely:
+        specifier: ^0.28.14
+        version: 0.28.14
+      mysql2:
+        specifier: ^3.18.2
+        version: 3.18.2(@types/node@25.6.0)
+      pg:
+        specifier: ^8.19.0
+        version: 8.19.0
+      tarn:
+        specifier: ^3.0.2
+        version: 3.0.2
+      tedious:
+        specifier: ^18.6.2
+        version: 18.6.2(@azure/core-client@1.10.1)
 
   e2e/adapter/test/memory-adapter:
     devDependencies:
@@ -573,6 +581,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
+      mongodb:
+        specifier: ^7.1.0
+        version: 7.1.0(socks@2.8.7)
 
   e2e/adapter/test/prisma-adapter:
     devDependencies:
@@ -682,6 +693,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/better-auth
     devDependencies:
+      '@better-auth/api-key':
+        specifier: workspace:*
+        version: link:../../packages/api-key
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1698,8 +1712,8 @@ packages:
     resolution: {integrity: sha512-cTlrKttbrRHEw3W+0/I609A2Matj5JQaRvfLtEIGZvlN0RaPi+3ANsMeqAyCAVlH/lUIW2tmtBlSMni74lcXeg==}
     engines: {node: '>=12'}
 
-  '@azure-rest/core-client@2.5.1':
-    resolution: {integrity: sha512-EHaOXW0RYDKS5CFffnixdyRPak5ytiCtU7uXDcP/uiY+A6jFRwNGzzJBiznkCzvi5EYpY+YWinieqHb0oY916A==}
+  '@azure-rest/core-client@2.6.0':
+    resolution: {integrity: sha512-iuFKDm8XPzNxPfRjhyU5/xKZmcRDzSuEghXDHHk4MjBV/wFL34GmYVBZnn9wmuoLBeS1qAw9ceMdaeJBPcB1QQ==}
     engines: {node: '>=20.0.0'}
 
   '@azure/abort-controller@2.1.2':
@@ -1714,8 +1728,8 @@ packages:
     resolution: {integrity: sha512-Nh5PhEOeY6PrnxNPsEHRr9eimxLwgLlpmguQaHKBinFYA/RU9+kOYVOQqOrTsCL+KSxrLLl1gD8Dk5BFW/7l/w==}
     engines: {node: '>=20.0.0'}
 
-  '@azure/core-http-compat@2.3.2':
-    resolution: {integrity: sha512-Tf6ltdKzOJEgxZeWLCjMxrxbodB/ZeCbzzA1A2qHbhzAjzjHoBVSUeSl/baT/oHAxhc4qdqVaDKnc2+iE932gw==}
+  '@azure/core-http-compat@2.4.0':
+    resolution: {integrity: sha512-f1P96IB399YiN2ARYHP7EpZi3Bf3wH4SN2lGzrw7JVwm7bbsVYtf2iKSBwTywD2P62NOPZGHFSZi+6jjb75JuA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@azure/core-client': ^1.10.0
@@ -1745,9 +1759,9 @@ packages:
     resolution: {integrity: sha512-uWC0fssc+hs1TGGVkkghiaFkkS7NkTxfnCH+Hdg+yTehTpMcehpok4PgUKKdyCH+9ldu6FhiHRv84Ntqj1vVcw==}
     engines: {node: '>=20.0.0'}
 
-  '@azure/keyvault-common@2.0.0':
-    resolution: {integrity: sha512-wRLVaroQtOqfg60cxkzUkGKrKMsCP6uYXAOomOIysSMyt1/YM0eUn9LqieAWM8DLcU4+07Fio2YGpPeqUbpP9w==}
-    engines: {node: '>=18.0.0'}
+  '@azure/keyvault-common@2.1.0':
+    resolution: {integrity: sha512-aCDidWuKY06LWQ4x7/8TIXK6iRqTaRWRL3t7T+LC+j1b07HtoIsOxP/tU90G4jCSBn5TAyUTCtA4MS/y5Hudaw==}
+    engines: {node: '>=20.0.0'}
 
   '@azure/keyvault-keys@4.10.0':
     resolution: {integrity: sha512-eDT7iXoBTRZ2n3fLiftuGJFD+yjkiB1GNqzU2KbY1TLYeXeSPVTVgn2eJ5vmRTZ11978jy2Kg2wI7xa9Tyr8ag==}
@@ -15330,7 +15344,7 @@ snapshots:
       escape-html: 1.0.3
       xpath: 0.0.32
 
-  '@azure-rest/core-client@2.5.1':
+  '@azure-rest/core-client@2.6.0':
     dependencies:
       '@azure/abort-controller': 2.1.2
       '@azure/core-auth': 1.10.1
@@ -15365,7 +15379,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@azure/core-http-compat@2.3.2(@azure/core-client@1.10.1)(@azure/core-rest-pipeline@1.22.2)':
+  '@azure/core-http-compat@2.4.0(@azure/core-client@1.10.1)(@azure/core-rest-pipeline@1.22.2)':
     dependencies:
       '@azure/abort-controller': 2.1.2
       '@azure/core-client': 1.10.1
@@ -15424,11 +15438,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@azure/keyvault-common@2.0.0':
+  '@azure/keyvault-common@2.1.0':
     dependencies:
+      '@azure-rest/core-client': 2.6.0
       '@azure/abort-controller': 2.1.2
       '@azure/core-auth': 1.10.1
-      '@azure/core-client': 1.10.1
       '@azure/core-rest-pipeline': 1.22.2
       '@azure/core-tracing': 1.3.1
       '@azure/core-util': 1.13.1
@@ -15439,16 +15453,16 @@ snapshots:
 
   '@azure/keyvault-keys@4.10.0(@azure/core-client@1.10.1)':
     dependencies:
-      '@azure-rest/core-client': 2.5.1
+      '@azure-rest/core-client': 2.6.0
       '@azure/abort-controller': 2.1.2
       '@azure/core-auth': 1.10.1
-      '@azure/core-http-compat': 2.3.2(@azure/core-client@1.10.1)(@azure/core-rest-pipeline@1.22.2)
+      '@azure/core-http-compat': 2.4.0(@azure/core-client@1.10.1)(@azure/core-rest-pipeline@1.22.2)
       '@azure/core-lro': 2.7.2
       '@azure/core-paging': 1.6.2
       '@azure/core-rest-pipeline': 1.22.2
       '@azure/core-tracing': 1.3.1
       '@azure/core-util': 1.13.1
-      '@azure/keyvault-common': 2.0.0
+      '@azure/keyvault-common': 2.1.0
       '@azure/logger': 1.3.0
       tslib: 2.8.1
     transitivePeerDependencies:
@@ -21198,7 +21212,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
 
   '@types/body-parser@1.19.6':
     dependencies:
@@ -21447,7 +21461,7 @@ snapshots:
 
   '@types/pg@8.16.0':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       pg-protocol: 1.12.0
       pg-types: 2.2.0
 
@@ -21474,7 +21488,7 @@ snapshots:
 
   '@types/readable-stream@4.0.23':
     dependencies:
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
 
   '@types/resolve@1.20.2': {}
 
@@ -30116,7 +30130,7 @@ snapshots:
       '@azure/identity': 4.13.0
       '@azure/keyvault-keys': 4.10.0(@azure/core-client@1.10.1)
       '@js-joda/core': 5.7.0
-      '@types/node': 25.5.0
+      '@types/node': 25.6.0
       bl: 6.1.6
       iconv-lite: 0.6.3
       js-md4: 0.3.2

@@ -2,6 +2,9 @@
   "name": "@better-auth-test/fixtures-ipv6",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
     "better-auth": "workspace:*",

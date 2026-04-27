@@ -15,6 +15,7 @@
   },
   "scripts": {
     "check": "tsc && wrangler build",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
     "dev": "wrangler dev",
     "migrate:local": "wrangler d1 migrations apply db --local",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"

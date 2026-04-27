@@ -2,10 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "references": [
     {
-      "path": "../core/tsconfig.json"
+      "path": "../core/tsconfig.build.json"
     },
     {
-      "path": "../better-auth/tsconfig.json"
+      "path": "../better-auth/tsconfig.build.json"
     }
   ]
 }

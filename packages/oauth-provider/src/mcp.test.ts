@@ -123,7 +123,7 @@ describe("mcp - server-client flows", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const authClient = createAuthClient({
-		plugins: [oauthProviderClient(), oauthProviderResourceClient(auth)],
+		plugins: [oauthProviderClient(), oauthProviderResourceClient(auth as any)],
 		baseURL: authServerUrl,
 		fetchOptions: {
 			customFetchImpl,

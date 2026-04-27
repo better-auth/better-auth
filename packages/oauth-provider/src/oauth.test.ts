@@ -19,6 +19,7 @@ import { listen } from "listhen";
 import {
 	afterAll,
 	afterEach,
+	assert,
 	beforeAll,
 	describe,
 	expect,
@@ -401,6 +402,7 @@ describe("oauth", async () => {
 				throw: true,
 			},
 		);
+		assert(typeof signInResponse.url === "string");
 		expect(signInResponse.redirect).toBe(true);
 		expect(signInResponse.url).toContain(rpBaseUrl);
 
@@ -957,6 +959,7 @@ describe("oauth", async () => {
 				throw: true,
 			},
 		);
+		assert(typeof signInResponse.url === "string");
 		expect(signInResponse.redirect).toBe(true);
 		expect(signInResponse.url).toContain(rpBaseUrl);
 

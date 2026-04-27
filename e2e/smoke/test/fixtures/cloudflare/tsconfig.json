@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "esnext",
     "lib": ["esnext"],
+    "customConditions": ["dev-source"],
     "module": "esnext",
     "outDir": "./dist",
     "moduleResolution": "bundler",

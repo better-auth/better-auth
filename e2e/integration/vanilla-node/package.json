@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start:client": "vite"
+    "start:client": "vite",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@better-auth-test/test-utils": "workspace:*",

@@ -22,7 +22,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsdown",
-    "dev": "tsdown --watch"
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --build tsconfig.build.json"
   },
   "files": [
     "dist"
