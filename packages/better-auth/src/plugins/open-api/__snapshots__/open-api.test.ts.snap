@@ -810,9 +810,8 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "properties": {
                     "token": {
-                      "description": "New session token if other sessions were revoked",
-                      "nullable": true,
-                      "type": "string",
+                      "description": "Always null; current session preserved.",
+                      "type": "null",
                     },
                     "user": {
                       "properties": {

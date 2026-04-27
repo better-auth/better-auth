@@ -155,6 +155,8 @@ export interface InternalAdapter<
 
 	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
 
+	deleteOtherSessions(userId: string, exceptToken: string): Promise<void>;
+
 	findOAuthUser(
 		email: string,
 		accountId: string,
