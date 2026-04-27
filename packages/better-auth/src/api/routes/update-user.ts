@@ -186,8 +186,7 @@ export const changePassword = createAuthEndpoint(
 									type: "object",
 									properties: {
 										token: {
-											type: "string",
-											nullable: true,
+											type: "null",
 											description: "Always null; current session preserved.",
 										},
 										user: {
