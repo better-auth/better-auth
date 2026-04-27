@@ -3,4 +3,4 @@
 "@better-auth/core": patch
 ---
 
-fix(api): preserve current session on `/change-password` when `revokeOtherSessions: true`
+`changePassword({ revokeOtherSessions: true })` no longer signs the caller out; only other devices' sessions are revoked.
