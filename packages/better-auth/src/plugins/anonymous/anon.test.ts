@@ -378,9 +378,11 @@ describe("anonymous", async () => {
 		function createMiddlewareContext({
 			newSessionUser,
 			deleteUser,
+			deleteSessions,
 		}: {
 			newSessionUser: Record<string, any>;
 			deleteUser: ReturnType<typeof vi.fn>;
+			deleteSessions?: ReturnType<typeof vi.fn>;
 		}) {
 			return {
 				path: "/sign-in/anonymous",
@@ -411,6 +413,7 @@ describe("anonymous", async () => {
 					},
 					internalAdapter: {
 						deleteUser,
+						deleteSessions: deleteSessions ?? vi.fn(),
 					},
 					options: {},
 					secret: "secret",
@@ -457,12 +460,14 @@ describe("anonymous", async () => {
 			const plugin = anonymous();
 			const handler = plugin.hooks?.after?.[0]?.handler;
 			const deleteUser = vi.fn();
+			const deleteSessions = vi.fn();
 			const ctx = createMiddlewareContext({
 				newSessionUser: {
 					id: "linked-user",
 					isAnonymous: false,
 				},
 				deleteUser,
+				deleteSessions,
 			});
 
 			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
@@ -477,6 +482,7 @@ describe("anonymous", async () => {
 
 			await handler?.(ctx);
 
+			expect(deleteSessions).toHaveBeenCalledWith("anon-user");
 			expect(deleteUser).toHaveBeenCalledWith("anon-user");
 		});
 	});
