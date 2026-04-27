@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { deleteFromPrompt, searchParamsToQuery } from "./index";
+import {
+	getSignedQueryIssuedAt,
+	removePromptFromQuery,
+	searchParamsToQuery,
+	signedQueryIssuedAtParam,
+} from "./index";
 
 describe("searchParamsToQuery", () => {
 	it("preserves single-valued params as strings", () => {
@@ -48,12 +53,12 @@ describe("searchParamsToQuery", () => {
 	});
 });
 
-describe("deleteFromPrompt", () => {
+describe("removePromptFromQuery", () => {
 	it("removes a prompt value and preserves other params", () => {
 		const params = new URLSearchParams(
 			"client_id=abc&prompt=login consent&scope=openid",
 		);
-		const result = deleteFromPrompt(params, "login");
+		const result = searchParamsToQuery(removePromptFromQuery(params, "login"));
 
 		expect(result.prompt).toBe("consent");
 		expect(result.client_id).toBe("abc");
@@ -64,7 +69,9 @@ describe("deleteFromPrompt", () => {
 		const params = new URLSearchParams(
 			"client_id=abc&prompt=consent&scope=openid",
 		);
-		const result = deleteFromPrompt(params, "consent");
+		const result = searchParamsToQuery(
+			removePromptFromQuery(params, "consent"),
+		);
 
 		expect(result.prompt).toBeUndefined();
 		expect(result.client_id).toBe("abc");
@@ -77,7 +84,7 @@ describe("deleteFromPrompt", () => {
 		params.append("resource", "https://api.example.com");
 		params.append("resource", "https://other.example.com");
 
-		const result = deleteFromPrompt(params, "login");
+		const result = searchParamsToQuery(removePromptFromQuery(params, "login"));
 
 		expect(result.prompt).toBe("consent");
 		expect(result.resource).toEqual([
@@ -88,8 +95,49 @@ describe("deleteFromPrompt", () => {
 
 	it("does nothing when the prompt value is not present", () => {
 		const params = new URLSearchParams("client_id=abc&prompt=consent");
-		const result = deleteFromPrompt(params, "login");
+		const result = searchParamsToQuery(removePromptFromQuery(params, "login"));
 
 		expect(result.prompt).toBe("consent");
+	});
+
+	it("does not mutate the original query", () => {
+		const params = new URLSearchParams(
+			"client_id=abc&prompt=login consent&scope=openid",
+		);
+		removePromptFromQuery(params, "login");
+
+		expect(params.get("prompt")).toBe("login consent");
+	});
+});
+
+describe("getSignedQueryIssuedAt", () => {
+	it("reads the signed query issue time when present", () => {
+		const issuedAt = 1777026004123;
+		const params = new URLSearchParams({
+			client_id: "abc",
+			[signedQueryIssuedAtParam]: String(issuedAt),
+		});
+
+		expect(getSignedQueryIssuedAt(params.toString())).toEqual(
+			new Date(issuedAt),
+		);
+	});
+
+	it("returns null when ba_iat is absent", () => {
+		const params = new URLSearchParams({
+			client_id: "abc",
+			exp: "1777026604",
+		});
+
+		expect(getSignedQueryIssuedAt(params.toString())).toBeNull();
+	});
+
+	it("returns null when ba_iat is not a positive finite number", () => {
+		const params = new URLSearchParams({
+			client_id: "abc",
+			[signedQueryIssuedAtParam]: "not-a-number",
+		});
+
+		expect(getSignedQueryIssuedAt(params.toString())).toBeNull();
 	});
 });
