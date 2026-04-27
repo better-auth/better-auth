@@ -5,7 +5,7 @@ import type {
 	Prettify,
 } from "@better-auth/core";
 import { useAuthQuery } from "better-auth/client";
-import type { AccessControl, Role } from "better-auth/plugins";
+import type { AccessControl, ArrayElement, Role } from "better-auth/plugins";
 import { atom } from "nanostores";
 import type { defaultStatements, HasPermissionBaseInput } from "../access";
 import {
