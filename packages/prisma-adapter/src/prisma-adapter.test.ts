@@ -213,4 +213,23 @@ describe("prisma-adapter", () => {
 			name: "Updated",
 		});
 	});
+
+	it("should return null when where is empty", async () => {
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: {
+				update: vi.fn(),
+				updateMany: vi.fn(),
+				findFirst: vi.fn(),
+			},
+		});
+
+		const result = await adapter.update({
+			model: "user",
+			where: [],
+			update: { name: "test" },
+		});
+
+		expect(result).toBeNull();
+	});
 });
