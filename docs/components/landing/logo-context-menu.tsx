@@ -1,34 +1,22 @@
 "use client";
 
 import { Code, Image, Type } from "lucide-react";
-import type { StaticImageData } from "next/image";
 import { useTheme } from "next-themes";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-
-interface LogoAssets {
-	darkSvg: string;
-	whiteSvg: string;
-	darkWordmark: string;
-	whiteWordmark: string;
-	darkPng: StaticImageData;
-	whitePng: StaticImageData;
-}
+import { brandAssetPaths } from "@/lib/brand-assets";
 
 interface ContextMenuProps {
 	logo: React.ReactNode;
-	logoAssets: LogoAssets;
 }
 
-export default function LogoContextMenu({
-	logo,
-	logoAssets,
-}: ContextMenuProps) {
+export default function LogoContextMenu({ logo }: ContextMenuProps) {
 	const [showMenu, setShowMenu] = useState<boolean>(false);
 	const menuRef = useRef<HTMLDivElement>(null);
 	const logoRef = useRef<HTMLDivElement>(null);
 	const { theme } = useTheme();
+	const assetTheme = theme === "dark" ? "dark" : "light";
 
 	const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
 		e.preventDefault();
@@ -39,37 +27,43 @@ export default function LogoContextMenu({
 		}
 	};
 
-	const copySvgToClipboard = (
+	const copySvgToClipboard = async (
 		e: React.MouseEvent,
-		svgContent: string,
+		svgPath: string,
 		type: string,
 	) => {
 		e.preventDefault();
 		e.stopPropagation();
-		navigator.clipboard
-			.writeText(svgContent)
-			.then(() => {
-				toast.success("", {
-					description: `${type} copied to clipboard`,
-				});
-			})
-			.catch((err) => {
-				toast.error("", {
-					description: `Failed to copy ${type} to clipboard`,
-				});
+
+		try {
+			const response = await fetch(svgPath);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch ${svgPath}`);
+			}
+
+			const svgText = await response.text();
+			await navigator.clipboard.writeText(svgText);
+			toast.success("", {
+				description: `${type} copied to clipboard`,
 			});
-		setShowMenu(false);
+		} catch {
+			toast.error("", {
+				description: `Failed to copy ${type} to clipboard`,
+			});
+		} finally {
+			setShowMenu(false);
+		}
 	};
 
-	const downloadPng = (
+	const downloadAsset = (
 		e: React.MouseEvent,
-		pngData: StaticImageData,
+		href: string,
 		fileName: string,
 	) => {
 		e.preventDefault();
 		e.stopPropagation();
 		const link = document.createElement("a");
-		link.href = pngData.src;
+		link.href = href;
 		link.download = fileName;
 
 		document.body.appendChild(link);
@@ -85,7 +79,7 @@ export default function LogoContextMenu({
 		e.preventDefault();
 		e.stopPropagation();
 		const link = document.createElement("a");
-		link.href = "/branding/better-auth-brand-assets.zip";
+		link.href = brandAssetPaths.assetsZip;
 		link.download = "better-auth-branding-assets.zip";
 
 		document.body.appendChild(link);
@@ -109,10 +103,6 @@ export default function LogoContextMenu({
 		};
 	}, []);
 
-	const getAsset = <T,>(darkAsset: T, lightAsset: T): T => {
-		return theme === "dark" ? darkAsset : lightAsset;
-	};
-
 	return (
 		<div className="relative">
 			<div
@@ -132,9 +122,9 @@ export default function LogoContextMenu({
 						<div className="flex p-0 gap-1 flex-col text-xs">
 							<button
 								onClick={(e) =>
-									copySvgToClipboard(
+									void copySvgToClipboard(
 										e,
-										getAsset(logoAssets.darkSvg, logoAssets.whiteSvg),
+										brandAssetPaths.logo[assetTheme].svg,
 										"Logo SVG",
 									)
 								}
@@ -151,9 +141,9 @@ export default function LogoContextMenu({
 							<hr className="border-border/[60%]" />
 							<button
 								onClick={(e) =>
-									copySvgToClipboard(
+									void copySvgToClipboard(
 										e,
-										getAsset(logoAssets.darkWordmark, logoAssets.whiteWordmark),
+										brandAssetPaths.wordmark[assetTheme].svg,
 										"Logo Wordmark",
 									)
 								}
@@ -171,10 +161,10 @@ export default function LogoContextMenu({
 							<hr className="border-border/[60%]" />
 							<button
 								onClick={(e) =>
-									downloadPng(
+									downloadAsset(
 										e,
-										getAsset(logoAssets.darkPng, logoAssets.whitePng),
-										`better-auth-logo-${theme}.png`,
+										brandAssetPaths.logo[assetTheme].png,
+										`better-auth-logo-${assetTheme}.png`,
 									)
 								}
 								className="flex items-center gap-3 w-full p-2 text-white hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
