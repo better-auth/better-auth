@@ -187,6 +187,22 @@ This will trigger a new OAuth flow that requests the additional scopes. After co
   provider.
 </Callout>
 
+### Disable incremental authorization
+
+By default, Better Auth sends `include_granted_scopes=true` to Google's authorization endpoint so newly issued access tokens cover scopes from prior grants in addition to the ones requested for the current flow. Set `includeGrantedScopes: false` if each OAuth flow should request only its own scopes.
+
+```ts
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        includeGrantedScopes: false, // [!code highlight]
+    },
+}
+```
+
+See Google's [Incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth) docs for the underlying parameter behavior.
+
 ### Always get refresh token
 
 Google only issues a refresh token the first time a user consents to your app.
