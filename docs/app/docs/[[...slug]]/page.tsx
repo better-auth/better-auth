@@ -77,9 +77,24 @@ export default async function Page({
 			}}
 		>
 			{version.slug === "beta" && <BetaBanner version={version} />}
-			<div className="flex items-center justify-between gap-4">
-				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
-				<div className="flex items-center gap-2 not-prose shrink-0">
+			<div className="mb-4">
+				<div className="flex items-start justify-between gap-4">
+					<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
+					<div className="hidden flex-wrap items-center gap-2 not-prose lg:flex lg:shrink-0">
+						<LLMCopyButton rawUrl={`${rawBase}/${page.path}`} />
+						<ViewOptions
+							markdownUrl={`${page.url}.mdx`}
+							githubUrl={`${githubBase}/${page.path}`}
+							rawMdUrl={`/llms.txt${page.url}.md`}
+						/>
+					</div>
+				</div>
+				{page.data.description && (
+					<DocsDescription className="mt-2 mb-0">
+						{page.data.description}
+					</DocsDescription>
+				)}
+				<div className="mt-4 flex flex-wrap items-center gap-2 not-prose lg:hidden">
 					<LLMCopyButton rawUrl={`${rawBase}/${page.path}`} />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
@@ -88,9 +103,6 @@ export default async function Page({
 					/>
 				</div>
 			</div>
-			{page.data.description && (
-				<DocsDescription>{page.data.description}</DocsDescription>
-			)}
 			<DocsBody>
 				<MDX
 					components={{
