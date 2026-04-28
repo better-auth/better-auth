@@ -614,5 +614,111 @@ describe("organization API keys", async () => {
 			expect(getResult.error).toBeDefined();
 			expect(getResult.error?.status).toBe(404);
 		});
+
+		it("should return ORGANIZATION_NOT_FOUND when organizationId does not exist", async () => {
+			const { client, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						organization({
+							async sendInvitationEmail() {},
+						}),
+						apiKey([
+							{
+								configId: "org-keys",
+								defaultPrefix: "org_",
+								references: "organization",
+							},
+						]),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			const { headers } = await signInWithTestUser();
+
+			const result = await client.apiKey.create(
+				{ configId: "org-keys", organizationId: "non-existent-org-id" },
+				{ headers },
+			);
+
+			expect(result.error).toBeDefined();
+			expect(result.error?.status).toBe(403);
+			expect(result.error?.code).toBe(
+				ERROR_CODES.USER_NOT_MEMBER_OF_ORGANIZATION.code,
+			);
+		});
+
+		it("should allow server-side org key creation without userId (trusted server call)", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						organization({
+							async sendInvitationEmail() {},
+						}),
+						apiKey([
+							{
+								configId: "org-keys",
+								defaultPrefix: "org_",
+								references: "organization",
+							},
+						]),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			const { headers } = await signInWithTestUser();
+			const org = await auth.api.createOrganization({
+				body: { name: "Server Key Org", slug: `server-key-${Date.now()}` },
+				headers,
+			});
+
+			// Server-side call: no session headers, just organizationId
+			const result = await auth.api.createApiKey({
+				body: { configId: "org-keys", organizationId: org.id },
+			});
+
+			expect(result.key).toBeDefined();
+			expect(result.referenceId).toBe(org.id);
+			expect(result.configId).toBe("org-keys");
+		});
+
+		it("should return ORGANIZATION_NOT_FOUND on server-side call with non-existent orgId", async () => {
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						organization({
+							async sendInvitationEmail() {},
+						}),
+						apiKey([
+							{
+								configId: "org-keys",
+								defaultPrefix: "org_",
+								references: "organization",
+							},
+						]),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			await expect(
+				auth.api.createApiKey({
+					body: { configId: "org-keys", organizationId: "non-existent-org-id" },
+				}),
+			).rejects.toThrow();
+		});
 	});
 });

@@ -8,7 +8,7 @@ import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
-import { checkOrgApiKeyPermission } from "../org-authorization";
+import { checkOrgApiKeyPermission, checkOrgExists } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import { getDate } from "../utils";
@@ -328,14 +328,21 @@ export function createApiKey({
 					throw APIError.from("BAD_REQUEST", msg);
 				}
 
-				// Get user ID from session or body
-				const userId = session?.user.id || ctx.body.userId;
-				if (!userId) {
-					throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+				if (isClientRequest) {
+					// Get user ID from session
+					const userId = session?.user.id;
+					if (!userId) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.UNAUTHORIZED_SESSION,
+						);
+					}
+					// Verify membership and permission
+					await checkOrgApiKeyPermission(ctx, userId, orgId, "create");
+				} else {
+					// Verify Organization Existence
+					await checkOrgExists(ctx, orgId);
 				}
-
-				// Verify membership and permission
-				await checkOrgApiKeyPermission(ctx, userId, orgId, "create");
 
 				referenceId = orgId;
 			} else {
