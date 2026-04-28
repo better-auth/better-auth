@@ -15,8 +15,8 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 	const [showMenu, setShowMenu] = useState<boolean>(false);
 	const menuRef = useRef<HTMLDivElement>(null);
 	const logoRef = useRef<HTMLDivElement>(null);
-	const { theme } = useTheme();
-	const surface = theme === "dark" ? "onDark" : "onLight";
+	const { resolvedTheme } = useTheme();
+	const surface = resolvedTheme === "dark" ? "onDark" : "onLight";
 
 	const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
 		e.preventDefault();
