@@ -959,7 +959,7 @@ describe("cookie cache refreshCache", async () => {
 				strategy: "jwe",
 				maxAge: 300, // 5 minutes
 				refreshCache: {
-					updateAge: 60, // Refresh when 60 seconds remain
+					updateAge: 60, // Refresh when less than 60 seconds remain
 				},
 			},
 		},
@@ -1161,7 +1161,7 @@ describe("cookie cache refreshCache", async () => {
 					strategy: "jwe",
 					maxAge: cacheMaxAge,
 					refreshCache: {
-						updateAge: 60, // Refresh when 60 seconds remain
+						updateAge: 60, // Refresh when less than 60 seconds remain
 					},
 				},
 			},
@@ -1190,6 +1190,10 @@ describe("cookie cache refreshCache", async () => {
 		const originalExpiresAt = new Date(
 			firstSession.data!.session.expiresAt,
 		).getTime();
+		const initialSessionDataCookie = parseCookies(
+			headers.get("cookie") || "",
+		).get("better-auth.session_data");
+		expect(initialSessionDataCookie).toBeDefined();
 
 		const ctx = await auth.$context;
 		await ctx.internalAdapter.deleteSession(sessionToken!);
@@ -1198,14 +1202,30 @@ describe("cookie cache refreshCache", async () => {
 		// Advance time to trigger refresh (300 - 60 = 240, so at 241 we're in refresh window)
 		await vi.advanceTimersByTimeAsync(1000 * 241);
 
+		let refreshedSessionDataCookie: string | undefined;
+		let refreshedSessionTokenCookie: string | undefined;
 		const sessionFromCache = await client.getSession({
 			fetchOptions: {
 				headers,
-				onSuccess: cookieSetter(headers),
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedSessionDataCookie = parsed.get(
+						"better-auth.session_data",
+					)?.value;
+					refreshedSessionTokenCookie = parsed.get(
+						"better-auth.session_token",
+					)?.value;
+					cookieSetter(headers)(context);
+				},
 			},
 		});
 
 		expect(sessionFromCache.data).not.toBeNull();
+		expect(refreshedSessionDataCookie).toBeDefined();
+		expect(refreshedSessionDataCookie).not.toBe(initialSessionDataCookie);
+		expect(refreshedSessionTokenCookie).toBeDefined();
 		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
 		expect(new Date(sessionFromCache.data!.session.expiresAt).getTime()).toBe(
 			originalExpiresAt,
@@ -1227,7 +1247,7 @@ describe("cookie cache refreshCache", async () => {
 					strategy: "jwe",
 					maxAge: 300, // 5 minutes
 					refreshCache: {
-						updateAge: 60, // Refresh when 60 seconds remain
+						updateAge: 60, // Refresh when less than 60 seconds remain
 					},
 				},
 			},
@@ -1291,7 +1311,7 @@ describe("cookie cache refreshCache", async () => {
 					strategy: "jwe",
 					maxAge: 300, // 5 minutes
 					refreshCache: {
-						updateAge: 60, // Refresh when 60 seconds remain
+						updateAge: 60, // Refresh when less than 60 seconds remain
 					},
 				},
 			},
