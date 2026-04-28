@@ -16,7 +16,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const logoRef = useRef<HTMLDivElement>(null);
 	const { theme } = useTheme();
-	const assetTheme = theme === "dark" ? "dark" : "light";
+	const surface = theme === "dark" ? "onDark" : "onLight";
 
 	const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
 		e.preventDefault();
@@ -80,7 +80,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 		e.stopPropagation();
 		const link = document.createElement("a");
 		link.href = brandAssetPaths.assetsZip;
-		link.download = "better-auth-branding-assets.zip";
+		link.download = "better-auth-brand-assets.zip";
 
 		document.body.appendChild(link);
 		link.click();
@@ -124,7 +124,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 								onClick={(e) =>
 									void copySvgToClipboard(
 										e,
-										brandAssetPaths.logo[assetTheme].svg,
+										brandAssetPaths.mark[surface].svg,
 										"Logo SVG",
 									)
 								}
@@ -143,7 +143,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 								onClick={(e) =>
 									void copySvgToClipboard(
 										e,
-										brandAssetPaths.wordmark[assetTheme].svg,
+										brandAssetPaths.wordmark[surface].svg,
 										"Logo Wordmark",
 									)
 								}
@@ -160,13 +160,14 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 
 							<hr className="border-border/[60%]" />
 							<button
-								onClick={(e) =>
+								onClick={(e) => {
+									const pngPath = brandAssetPaths.mark[surface].png;
 									downloadAsset(
 										e,
-										brandAssetPaths.logo[assetTheme].png,
-										`better-auth-logo-${assetTheme}.png`,
-									)
-								}
+										pngPath,
+										pngPath.split("/").pop() ?? "logo.png",
+									);
+								}}
 								className="flex items-center gap-3 w-full p-2 text-white hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
 							>
 								<div className="flex items-center">

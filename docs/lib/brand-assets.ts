@@ -1,23 +1,23 @@
 export const brandAssetPaths = {
 	assetsZip: "/branding/better-auth-brand-assets.zip",
-	logo: {
-		light: {
-			svg: "/branding/better-auth-logo-light.svg",
-			png: "/branding/better-auth-logo-light.png",
+	mark: {
+		onLight: {
+			svg: "/branding/svg/better-auth-mark-dark.svg",
+			png: "/branding/png/better-auth-mark-dark.png",
 		},
-		dark: {
-			svg: "/branding/better-auth-logo-dark.svg",
-			png: "/branding/better-auth-logo-dark.png",
+		onDark: {
+			svg: "/branding/svg/better-auth-mark-light.svg",
+			png: "/branding/png/better-auth-mark-light.png",
 		},
 	},
 	wordmark: {
-		light: {
-			svg: "/branding/better-auth-logo-wordmark-light.svg",
-			png: "/branding/better-auth-logo-wordmark-light.png",
+		onLight: {
+			svg: "/branding/svg/better-auth-wordmark-dark.svg",
+			png: "/branding/png/better-auth-wordmark-dark.png",
 		},
-		dark: {
-			svg: "/branding/better-auth-logo-wordmark-dark.svg",
-			png: "/branding/better-auth-logo-wordmark-dark.png",
+		onDark: {
+			svg: "/branding/svg/better-auth-wordmark-light.svg",
+			png: "/branding/png/better-auth-wordmark-light.png",
 		},
 	},
 } as const;
@@ -25,22 +25,22 @@ export const brandAssetPaths = {
 export const brandLogoPreviews = [
 	{
 		label: "Mark · Light",
-		src: brandAssetPaths.logo.light.svg,
+		src: brandAssetPaths.mark.onLight.svg,
 		bg: "bg-white",
 	},
 	{
 		label: "Mark · Dark",
-		src: brandAssetPaths.logo.dark.svg,
+		src: brandAssetPaths.mark.onDark.svg,
 		bg: "bg-black",
 	},
 	{
 		label: "Wordmark · Light",
-		src: brandAssetPaths.wordmark.light.svg,
+		src: brandAssetPaths.wordmark.onLight.svg,
 		bg: "bg-white",
 	},
 	{
 		label: "Wordmark · Dark",
-		src: brandAssetPaths.wordmark.dark.svg,
+		src: brandAssetPaths.wordmark.onDark.svg,
 		bg: "bg-black",
 	},
 ] as const;

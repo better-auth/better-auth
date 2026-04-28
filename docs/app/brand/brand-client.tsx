@@ -747,14 +747,14 @@ function LogoBlock() {
 						className="border border-foreground/10 group"
 					>
 						<div
-							className={`h-28 w-full flex items-center justify-center ${l.bg}`}
+							className={`h-28 w-full flex items-center justify-center p-6 ${l.bg}`}
 						>
 							<Image
 								src={l.src}
 								alt={l.label}
 								width={120}
 								height={60}
-								className="max-h-16 w-auto"
+								className="max-h-12 w-auto max-w-full"
 							/>
 						</div>
 						<div className="flex items-baseline justify-between border-t border-foreground/10 px-3 py-2">
