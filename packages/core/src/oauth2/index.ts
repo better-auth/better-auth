@@ -20,6 +20,7 @@ export {
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,
+	mergeScopes,
 } from "./utils";
 export {
 	authorizationCodeRequest,

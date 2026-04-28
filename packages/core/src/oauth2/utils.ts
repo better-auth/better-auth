@@ -48,6 +48,19 @@ export function applyDefaultAccessTokenExpiry(
 }
 
 /**
+ * Compute the union of stored and incoming OAuth scopes, preserving
+ * stored insertion order and dropping duplicates.
+ */
+export function mergeScopes(
+	stored: string | null | undefined,
+	incoming: string[] | undefined,
+): string {
+	const existing = stored ? stored.split(",").filter(Boolean) : [];
+	const next = incoming ?? [];
+	return [...new Set([...existing, ...next])].join(",");
+}
+
+/**
  * Return the provider's primary Client ID: the single string, or the entry at
  * array index 0 for the cross-platform form used by ID token audience
  * verification. Index 0 is the designated primary and pairs with

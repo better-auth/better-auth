@@ -800,13 +800,17 @@ export const refreshToken = createAuthEndpoint(
 				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
 
 			if (account.id) {
+				/**
+				 * `scope` intentionally omitted. Refresh response may be narrower.
+				 *
+				 * @see {@link Account.scope}
+				 */
 				const updateData = {
 					...(account || {}),
 					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
 					refreshToken: resolvedRefreshToken,
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || account.scope,
 					idToken: tokens.idToken || account.idToken,
 				};
 				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
@@ -823,7 +827,6 @@ export const refreshToken = createAuthEndpoint(
 					refreshToken: resolvedRefreshToken,
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || accountData.scope,
 					idToken: tokens.idToken || accountData.idToken,
 				};
 				await setAccountCookie(ctx, updateData);

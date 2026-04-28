@@ -23,7 +23,10 @@ export const accountSchema = coreSchema.extend({
 	 */
 	refreshTokenExpiresAt: z.date().nullish(),
 	/**
-	 * The scopes that the user has authorized
+	 * The set of OAuth scopes the user has granted to this account, stored
+	 * as a comma-separated list. Represents the accumulated grant rather
+	 * than the latest token's `scope` claim, since per RFC 6749 §1.5 a
+	 * token's scope may be narrower than the user's grant.
 	 */
 	scope: z.string().nullish(),
 	/**
