@@ -13,6 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { APIError } from "../api";
 import { signJWT } from "../crypto";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
@@ -1436,5 +1437,97 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 			where: [{ field: "id", value: userId }],
 		});
 		expect(promoted?.emailVerified).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9044
+ */
+describe("oauth2 - APIError with empty message in databaseHooks", async () => {
+	let shouldRejectCreation = false;
+
+	const { client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		databaseHooks: {
+			user: {
+				create: {
+					before: async () => {
+						if (shouldRejectCreation) {
+							throw new APIError("FORBIDDEN", {
+								body: { code: "USER_BANNED" },
+							});
+						}
+					},
+				},
+			},
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+			},
+		},
+	});
+
+	it("should redirect with error code instead of crashing when APIError has empty message", async () => {
+		shouldRejectCreation = true;
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email: "banned-user@example.com",
+					email_verified: true,
+					name: "Banned User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_banned_user_sub",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Banned",
+					family_name: "User",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		// Should redirect with error, not crash with empty string
+		expect(redirectLocation).toContain("error=");
+		expect(redirectLocation).not.toContain("error=&");
+		expect(redirectLocation).not.toContain("error=UNKNOWN");
 	});
 });
