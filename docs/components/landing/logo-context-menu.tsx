@@ -1,224 +1,120 @@
 "use client";
 
-import { Code, Image, Type } from "lucide-react";
-import type { StaticImageData } from "next/image";
+import { Code, Download, Palette, Type } from "lucide-react";
+import Link from "next/link";
 import { useTheme } from "next-themes";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+	Popover,
+	PopoverAnchor,
+	PopoverContent,
+} from "@/components/ui/popover";
+import { brandAssetPaths } from "@/lib/brand-assets";
 
-interface LogoAssets {
-	darkSvg: string;
-	whiteSvg: string;
-	darkWordmark: string;
-	whiteWordmark: string;
-	darkPng: StaticImageData;
-	whitePng: StaticImageData;
-}
-
-interface ContextMenuProps {
+interface LogoContextMenuProps {
 	logo: React.ReactNode;
-	logoAssets: LogoAssets;
 }
 
-export default function LogoContextMenu({
-	logo,
-	logoAssets,
-}: ContextMenuProps) {
-	const [showMenu, setShowMenu] = useState<boolean>(false);
-	const menuRef = useRef<HTMLDivElement>(null);
-	const logoRef = useRef<HTMLDivElement>(null);
-	const { theme } = useTheme();
+const itemClassName =
+	"flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer outline-hidden [&_svg]:size-4 [&_svg]:text-muted-foreground";
 
-	const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
-		e.preventDefault();
-		e.stopPropagation();
-		const rect = logoRef.current?.getBoundingClientRect();
-		if (rect) {
-			setShowMenu(true);
+export default function LogoContextMenu({ logo }: LogoContextMenuProps) {
+	const [open, setOpen] = useState(false);
+	const { resolvedTheme } = useTheme();
+	const variant = resolvedTheme === "dark" ? "light" : "dark";
+
+	useEffect(() => {
+		const mql = window.matchMedia("(min-width: 1024px)");
+		const onChange = () => {
+			if (!mql.matches) {
+				setOpen(false);
+			}
+		};
+		mql.addEventListener("change", onChange);
+		return () => mql.removeEventListener("change", onChange);
+	}, []);
+
+	const copySvg = async (svgPath: string, label: string) => {
+		try {
+			const res = await fetch(svgPath);
+			if (!res.ok) {
+				throw new Error(`Failed to fetch ${svgPath}`);
+			}
+			const text = await res.text();
+			await navigator.clipboard.writeText(text);
+			toast.success("", { description: `${label} copied to clipboard` });
+		} catch {
+			toast.error("", { description: `Failed to copy ${label} to clipboard` });
+		} finally {
+			setOpen(false);
 		}
 	};
 
-	const copySvgToClipboard = (
-		e: React.MouseEvent,
-		svgContent: string,
-		type: string,
-	) => {
-		e.preventDefault();
-		e.stopPropagation();
-		navigator.clipboard
-			.writeText(svgContent)
-			.then(() => {
-				toast.success("", {
-					description: `${type} copied to clipboard`,
-				});
-			})
-			.catch((err) => {
-				toast.error("", {
-					description: `Failed to copy ${type} to clipboard`,
-				});
-			});
-		setShowMenu(false);
-	};
-
-	const downloadPng = (
-		e: React.MouseEvent,
-		pngData: StaticImageData,
-		fileName: string,
-	) => {
-		e.preventDefault();
-		e.stopPropagation();
+	const downloadAllAssets = () => {
 		const link = document.createElement("a");
-		link.href = pngData.src;
-		link.download = fileName;
-
+		link.href = brandAssetPaths.assetsZip;
+		link.download = "better-auth-brand-assets.zip";
 		document.body.appendChild(link);
 		link.click();
 		document.body.removeChild(link);
-
-		toast.success(`Downloading the asset...`);
-
-		setShowMenu(false);
-	};
-
-	const downloadAllAssets = (e: React.MouseEvent) => {
-		e.preventDefault();
-		e.stopPropagation();
-		const link = document.createElement("a");
-		link.href = "/branding/better-auth-brand-assets.zip";
-		link.download = "better-auth-branding-assets.zip";
-
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-
 		toast.success("Downloading all assets...");
-		setShowMenu(false);
-	};
-
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-				setShowMenu(false);
-			}
-		};
-
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => {
-			document.removeEventListener("mousedown", handleClickOutside);
-		};
-	}, []);
-
-	const getAsset = <T,>(darkAsset: T, lightAsset: T): T => {
-		return theme === "dark" ? darkAsset : lightAsset;
+		setOpen(false);
 	};
 
 	return (
-		<div className="relative">
-			<div
-				ref={logoRef}
-				onContextMenu={handleContextMenu}
-				className="cursor-pointer"
-			>
-				{logo}
-			</div>
-
-			{showMenu && (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverAnchor asChild>
 				<div
-					ref={menuRef}
-					className="fixed mx-10 z-50 bg-black border border-border p-1 rounded-sm shadow-xl w-56 overflow-hidden animate-fd-dialog-in duration-500"
+					onContextMenu={(e) => {
+						e.preventDefault();
+						setOpen(true);
+					}}
+					className="cursor-pointer"
 				>
-					<div className="">
-						<div className="flex p-0 gap-1 flex-col text-xs">
-							<button
-								onClick={(e) =>
-									copySvgToClipboard(
-										e,
-										getAsset(logoAssets.darkSvg, logoAssets.whiteSvg),
-										"Logo SVG",
-									)
-								}
-								className="flex items-center gap-3 w-full p-2 text-white hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
-							>
-								<div className="flex items-center">
-									<span className="text-zinc-400/30">[</span>
-
-									<Code className="h-[13.8px] w-[13.8px] mx-[3px]" />
-									<span className="text-zinc-400/30">]</span>
-								</div>
-								<span>Copy Logo as SVG </span>
-							</button>
-							<hr className="border-border/[60%]" />
-							<button
-								onClick={(e) =>
-									copySvgToClipboard(
-										e,
-										getAsset(logoAssets.darkWordmark, logoAssets.whiteWordmark),
-										"Logo Wordmark",
-									)
-								}
-								className="flex items-center gap-3 w-full p-2 text-white hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
-							>
-								<div className="flex items-center">
-									<span className="text-zinc-400/30">[</span>
-
-									<Type className="h-[13.8px] w-[13.8px] mx-[3px]" />
-									<span className="text-zinc-400/30">]</span>
-								</div>
-								<span>Copy Logo as Wordmark </span>
-							</button>
-
-							<hr className="border-border/[60%]" />
-							<button
-								onClick={(e) =>
-									downloadPng(
-										e,
-										getAsset(logoAssets.darkPng, logoAssets.whitePng),
-										`better-auth-logo-${theme}.png`,
-									)
-								}
-								className="flex items-center gap-3 w-full p-2 text-white hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
-							>
-								<div className="flex items-center">
-									<span className="text-zinc-400/30">[</span>
-
-									<Image className="h-[13.8px] w-[13.8px] mx-[3px]" />
-									<span className="text-zinc-400/30">]</span>
-								</div>
-								<span>Download Logo PNG</span>
-							</button>
-							<hr className="border-border" />
-							<button
-								onClick={(e) => downloadAllAssets(e)}
-								className="flex items-center gap-3 w-full p-2 text-white hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
-							>
-								<div className="flex items-center">
-									<span className="text-zinc-400/30">[</span>
-
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="1em"
-										height="1em"
-										viewBox="0 0 24 24"
-										className="h-[13.8px] w-[13.8px] mx-[3px]"
-									>
-										<path
-											fill="none"
-											stroke="currentColor"
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth="2"
-											d="M4 8v8.8c0 1.12 0 1.68.218 2.108a2 2 0 0 0 .874.874c.427.218.987.218 2.105.218h9.606c1.118 0 1.677 0 2.104-.218c.377-.192.683-.498.875-.874c.218-.428.218-.987.218-2.105V8M4 8h16M4 8l1.365-2.39c.335-.585.503-.878.738-1.092c.209-.189.456-.332.723-.42C7.13 4 7.466 4 8.143 4h7.714c.676 0 1.015 0 1.318.099c.267.087.513.23.721.42c.236.213.404.506.74 1.093L20 8m-8 3v6m0 0l3-2m-3 2l-3-2"
-										></path>
-									</svg>
-									<span className="text-zinc-400/30">]</span>
-								</div>
-								<span>Brand Assets</span>
-							</button>
-						</div>
-					</div>
+					{logo}
 				</div>
-			)}
-		</div>
+			</PopoverAnchor>
+			<PopoverContent align="start" sideOffset={8} className="w-56 p-1">
+				<button
+					type="button"
+					onClick={() =>
+						void copySvg(brandAssetPaths.mark[variant].svg, "Logo SVG")
+					}
+					className={itemClassName}
+				>
+					<Code />
+					Copy Logo as SVG
+				</button>
+				<button
+					type="button"
+					onClick={() =>
+						void copySvg(brandAssetPaths.wordmark[variant].svg, "Wordmark SVG")
+					}
+					className={itemClassName}
+				>
+					<Type />
+					Copy Wordmark as SVG
+				</button>
+				<button
+					type="button"
+					onClick={downloadAllAssets}
+					className={itemClassName}
+				>
+					<Download />
+					Download Brand Assets
+				</button>
+				<div className="-mx-1 my-1 h-px bg-border" />
+				<Link
+					href="/brand"
+					onClick={() => setOpen(false)}
+					className={itemClassName}
+				>
+					<Palette />
+					Visit Brand Guidelines
+				</Link>
+			</PopoverContent>
+		</Popover>
 	);
 }
