@@ -16,6 +16,7 @@ import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { setTokenUtil } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
@@ -119,6 +120,10 @@ const oauthCallbackQuerySchema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
 });
+
+const isOAuthProxyStartPath = (context) => {
+	return !!(context.path?.startsWith("/sign-in/social") || context.path?.startsWith("/sign-in/oauth2") || context.path?.startsWith("/link-social"));
+};
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
@@ -242,6 +247,44 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						ctx.context.logger.warn("Failed to clean up OAuth state", e);
 					}
 
+					if (payload.link) {
+					  if (!ctx.context.trustedProviders.includes(payload.account.providerId) && !payload.userInfo.emailVerified || ctx.context.options.account?.accountLinking?.enabled === false) {
+					    ctx.context.logger.error("Unable to link account - untrusted provider");
+					    throw redirectOnError(ctx, errorURL, "unable_to_link_account");
+					  }
+					  if (payload.userInfo.email?.toLowerCase() !== payload.link.email.toLowerCase() && ctx.context.options.account?.accountLinking?.allowDifferentEmails !== true) {
+					    throw redirectOnError(ctx, errorURL, "email_doesn't_match");
+					  }
+					  const existingAccount = await ctx.context.internalAdapter.findAccountByProviderId(String(payload.userInfo.id), payload.account.providerId);
+					  if (existingAccount) {
+					    if (existingAccount.userId.toString() !== payload.link.userId.toString()) {
+					      throw redirectOnError(ctx, errorURL, "account_already_linked_to_different_user");
+					    }
+					    const updateData = Object.fromEntries(Object.entries({
+					      accessToken: await setTokenUtil(payload.account.accessToken, ctx.context),
+					      refreshToken: await setTokenUtil(payload.account.refreshToken, ctx.context),
+					      idToken: payload.account.idToken,
+					      accessTokenExpiresAt: payload.account.accessTokenExpiresAt,
+					      refreshTokenExpiresAt: payload.account.refreshTokenExpiresAt,
+					      scope: payload.account.scope
+					    }).filter(([_, value]) => value !== void 0));
+					    await ctx.context.internalAdapter.updateAccount(existingAccount.id, updateData);
+					  } else if (!await ctx.context.internalAdapter.createAccount({
+					    userId: payload.link.userId,
+					    providerId: payload.account.providerId,
+					    accountId: String(payload.userInfo.id),
+					    accessToken: await setTokenUtil(payload.account.accessToken, ctx.context),
+					    refreshToken: await setTokenUtil(payload.account.refreshToken, ctx.context),
+					    idToken: payload.account.idToken,
+					    accessTokenExpiresAt: payload.account.accessTokenExpiresAt,
+					    refreshTokenExpiresAt: payload.account.refreshTokenExpiresAt,
+					    scope: payload.account.scope
+					  })) {
+					    throw redirectOnError(ctx, errorURL, "unable_to_link_account");
+					  }
+					  throw ctx.redirect(payload.callbackURL);
+					}
+					
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo: payload.userInfo,
 						account: payload.account,
@@ -271,10 +314,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			before: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return isOAuthProxyStartPath(context);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
@@ -466,6 +506,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							callbackURL: finalCallbackURL,
 							newUserURL: stateData.newUserURL,
 							errorURL: stateData.errorURL,
+							link: stateData.link,
 							disableSignUp:
 								(provider.disableImplicitSignUp && !stateData.requestSignUp) ||
 								provider.options?.disableSignUp,
@@ -488,10 +529,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
+						return isOAuthProxyStartPath(context);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const skipProxy = checkSkipProxy(ctx, opts);
