@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getVersionFromPathname, versionedDocsHref } from "@/lib/docs-versions";
 import { cn } from "@/lib/utils";
-import { Logo } from "../icons/logo";
+import { BetterAuthWordmark } from "../icons/logo";
 import { contents } from "../sidebar-content";
 import {
 	Accordion,
@@ -485,14 +485,7 @@ export function StaggeredNavFiles() {
 					>
 						<div className="flex flex-col gap-2 w-full">
 							<LogoContextMenu
-								logo={
-									<div className="flex items-center gap-1">
-										<Logo className="h-3 w-auto shrink-0" />
-										<p className="select-none font-mono text-base uppercase leading-none">
-											BETTER-AUTH.
-										</p>
-									</div>
-								}
+								logo={<BetterAuthWordmark className="w-35 h-auto" />}
 							/>
 						</div>
 					</Link>
@@ -509,10 +502,7 @@ export function StaggeredNavFiles() {
 						href="/"
 						className="flex h-full items-center gap-1 px-4 transition-colors duration-150"
 					>
-						<Logo className="h-3 w-auto shrink-0" />
-						<p className="select-none font-mono text-sm uppercase leading-none">
-							BETTER-AUTH.
-						</p>
+						<BetterAuthWordmark className="w-35 h-auto" />
 					</Link>
 					<div className="flex items-center gap-1 pr-2">
 						{isDocs && (
@@ -609,14 +599,7 @@ export function StaggeredNavFiles() {
 							className={`flex h-full items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
 						>
 							<LogoContextMenu
-								logo={
-									<div className="flex items-center gap-1">
-										<Logo className="h-3 w-auto shrink-0" />
-										<p className="select-none font-mono text-base uppercase leading-none">
-											BETTER-AUTH.
-										</p>
-									</div>
-								}
+								logo={<BetterAuthWordmark className="w-35 h-auto" />}
 							/>
 						</Link>
 					)}
