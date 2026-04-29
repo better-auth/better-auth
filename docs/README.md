@@ -3,7 +3,7 @@
 
   <source media="(prefers-color-scheme: light)" srcset="public/branding/svg/better-auth-wordmark-dark.svg" />
 
-  <img alt="Better Auth" src="public/branding/svg/better-auth-wordmark-light.svg" width="280" />
+  <img alt="Better Auth" src="public/branding/svg/better-auth-wordmark-dark.svg" width="280" />
 </picture>
 
 ### Website & Docs

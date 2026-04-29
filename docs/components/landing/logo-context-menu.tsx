@@ -16,7 +16,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const logoRef = useRef<HTMLDivElement>(null);
 	const { resolvedTheme } = useTheme();
-	const surface = resolvedTheme === "dark" ? "onDark" : "onLight";
+	const variant = resolvedTheme === "dark" ? "light" : "dark";
 
 	const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
 		e.preventDefault();
@@ -124,7 +124,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 								onClick={(e) =>
 									void copySvgToClipboard(
 										e,
-										brandAssetPaths.mark[surface].svg,
+										brandAssetPaths.mark[variant].svg,
 										"Logo SVG",
 									)
 								}
@@ -143,7 +143,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 								onClick={(e) =>
 									void copySvgToClipboard(
 										e,
-										brandAssetPaths.wordmark[surface].svg,
+										brandAssetPaths.wordmark[variant].svg,
 										"Logo Wordmark",
 									)
 								}
@@ -161,7 +161,7 @@ export default function LogoContextMenu({ logo }: ContextMenuProps) {
 							<hr className="border-border/[60%]" />
 							<button
 								onClick={(e) => {
-									const pngPath = brandAssetPaths.mark[surface].png;
+									const pngPath = brandAssetPaths.mark[variant].png;
 									downloadAsset(
 										e,
 										pngPath,
