@@ -726,6 +726,92 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.id).toBe(session.data?.user.id);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9401
+	 */
+	it("should revalidate useSession after admin impersonation", async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal("window", {});
+		const { headers } = await signInWithTestUser();
+		const browserHeaders = new Headers(headers);
+		const browserClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [adminClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					const requestHeaders = new Headers(browserHeaders);
+					const nextHeaders = init?.headers;
+					if (nextHeaders instanceof Headers) {
+						for (const [key, value] of nextHeaders.entries()) {
+							requestHeaders.set(key, value);
+						}
+					} else if (nextHeaders && typeof nextHeaders === "object") {
+						for (const [key, value] of Object.entries(nextHeaders)) {
+							if (typeof value === "string") {
+								requestHeaders.set(key, value);
+							}
+						}
+					}
+					return customFetchImpl(url, {
+						...init,
+						headers: requestHeaders,
+					});
+				},
+			},
+		});
+		const targetUser = await client.signUp.email({
+			email: "impersonate-reactive@mail.com",
+			password: "password",
+			name: "Impersonate Reactive User",
+		});
+
+		const unsubscribe = browserClient.useSession.subscribe(() => {});
+		try {
+			await vi.runAllTimersAsync();
+
+			const reactiveAdminSession = browserClient.useSession.get();
+			const freshAdminSession = await browserClient.getSession();
+			expect(reactiveAdminSession.data?.user.id).toBe(
+				freshAdminSession.data?.user.id,
+			);
+
+			await browserClient.admin.impersonateUser(
+				{
+					userId: targetUser.data?.user.id || "",
+				},
+				{
+					onSuccess: (ctx) => {
+						cookieSetter(browserHeaders)(ctx);
+					},
+				},
+			);
+
+			const freshImpersonatedSession = await browserClient.getSession();
+			expect(freshImpersonatedSession.data?.user.id).toBe(
+				targetUser.data?.user.id,
+			);
+
+			let reactiveImpersonatedSession = browserClient.useSession.get();
+			for (
+				let attempt = 0;
+				attempt < 5 &&
+				reactiveImpersonatedSession.data?.user.id !== targetUser.data?.user.id;
+				attempt++
+			) {
+				await vi.advanceTimersByTimeAsync(25);
+				await vi.runAllTimersAsync();
+				reactiveImpersonatedSession = browserClient.useSession.get();
+			}
+
+			expect(reactiveImpersonatedSession.data?.user.id).toBe(
+				targetUser.data?.user.id,
+			);
+		} finally {
+			unsubscribe();
+			vi.unstubAllGlobals();
+		}
+	});
+
 	it("should not allow non-admin to impersonate user", async () => {
 		const res = await client.admin.impersonateUser(
 			{
