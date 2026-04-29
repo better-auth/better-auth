@@ -38,6 +38,10 @@ export async function validateApiKey({
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
+	if (apiKey.configId !== (opts.configId ?? "default")) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
+
 	if (apiKey.enabled === false) {
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
 	}

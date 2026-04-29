@@ -3995,7 +3995,10 @@ describe("api-key", async () => {
 			});
 
 			const result = await auth.api.verifyApiKey({
-				body: { key: publicKey.key },
+				body: {
+					configId: "public-api",
+					key: publicKey.key,
+				},
 			});
 
 			expect(result.valid).toBe(true);
