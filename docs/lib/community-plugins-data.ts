@@ -152,6 +152,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@commet/better-auth",
+		url: "https://github.com/commet-labs/commet",
+		description:
+			"Billing and payments plugin for Commet with customer sync, subscriptions, feature access, usage tracking, seats, and customer portal support.",
+		author: {
+			name: "Commet Labs",
+			github: "commet-labs",
+			avatar: "https://github.com/commet-labs.png",
+		},
+	},
+	{
 		name: "stargate-better-auth",
 		url: "https://github.com/neiii/stargate-better-auth",
 		description:
@@ -216,6 +227,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "better-invite",
+		url: "https://github.com/better-invite/better-invite",
+		description:
+			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
+		author: {
+			name: "Sandy",
+			github: "0-Sandy",
+			avatar: "https://github.com/0-Sandy.png",
+		},
+	},
+	{
 		name: "better-auth-usos",
 		url: "https://github.com/qamarq/better-auth-usos",
 		description:
@@ -235,6 +257,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "C-W-D-Harshit",
 			github: "C-W-D-Harshit",
 			avatar: "https://github.com/C-W-D-Harshit.png",
+		},
+	},
+	{
+		name: "better-auth-audit-logs",
+		url: "https://github.com/ejirocodes/better-auth-audit-logs",
+		description:
+			"Audit log plugin for Better Auth. Auto-captures auth events with severity inference, PII redaction, custom storage backends, and retention policies.",
+		author: {
+			name: "ejirocodes",
+			github: "ejirocodes",
+			avatar: "https://github.com/ejirocodes.png",
 		},
 	},
 ];
