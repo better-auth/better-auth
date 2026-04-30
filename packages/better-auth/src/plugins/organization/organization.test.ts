@@ -1351,7 +1351,7 @@ describe("listMembers regression", async () => {
 
 	const { headers } = await signInWithTestUser();
 
-	it.only("should not fail when organization has more than 100 members", async () => {
+	it("should not fail when organization has more than 100 members", async () => {
 		const TOTAL = 120;
 
 		const org = await auth.api.createOrganization({
