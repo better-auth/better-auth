@@ -1,0 +1,189 @@
+---
+title: UI Pages
+description: Server-rendered authentication pages for sign-in, sign-up, password reset, and more
+---
+
+Better Auth provides built-in server-rendered UI pages for common authentication flows. These pages are pre-built HTML that works out of the box with minimal configuration, while still allowing theme customization.
+
+## Enabling UI Pages
+
+To enable UI pages, add the `ui` option to your Better Auth configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // ... other options
+  ui: {
+    enabled: true,
+    theme: {
+      primaryColor: "#0066cc",
+      logo: "/logo.png",
+    },
+  },
+});
+```
+
+## Mounting the UI Handler
+
+The UI pages are served through a separate handler (`uiHandler`) that you mount in your app. The default base path is `/auth`:
+
+```ts title="server.ts"
+import { auth } from "./auth";
+
+// Mount the UI handler - handles routes under /auth/*
+app.use("/*", (req) => auth.uiHandler(req));
+
+// Mount the API handler for auth API endpoints
+app.use("/api/auth/*", (req) => auth.handler(req));
+```
+
+With the default configuration, your auth pages will be available at:
+
+* `/auth/sign-in` - Sign in page
+* `/auth/sign-up` - Sign up page
+* `/auth/forgot-password` - Forgot password page
+* `/auth/reset-password` - Reset password page
+* `/auth/verify-email` - Email verification page
+* `/auth/profile` - User profile page
+
+## Configuration Options
+
+### Theme
+
+Customize the appearance of the UI pages:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  ui: {
+    theme: {
+      // Colors
+      primaryColor: "#0066cc",
+      secondaryColor: "#6c757d",
+      backgroundColor: "#ffffff",
+      textColor: "#1a1a1a",
+      errorColor: "#dc3545",
+      successColor: "#28a745",
+      
+      // Styling
+      borderRadius: "8px",
+      fontFamily: "Inter, system-ui, sans-serif",
+      
+      // Branding
+      logo: "/logo.png",
+      appName: "My App",
+      
+      // Dark mode
+      darkMode: {
+        enabled: true,
+        backgroundColor: "#1a1a1a",
+        textColor: "#ffffff",
+        primaryColor: "#3399ff",
+      },
+    },
+  },
+});
+```
+
+### Page Configuration
+
+Enable or disable individual pages:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  ui: {
+    pages: {
+      signIn: { enabled: true },
+      signUp: { enabled: true },
+      forgotPassword: { enabled: true },
+      resetPassword: { enabled: true },
+      verifyEmail: { enabled: true },
+      profile: { enabled: false }, // Disable the profile page
+    },
+  },
+});
+```
+
+### API Base URL
+
+By default, the UI pages call the Better Auth API at the configured `baseURL` + `basePath`. You can override this:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  ui: {
+    apiBaseUrl: "https://api.myapp.com/api/auth",
+  },
+});
+```
+
+### Redirect After Sign In
+
+Configure where users are redirected after successful authentication:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  ui: {
+    redirectTo: "/dashboard",
+  },
+});
+```
+
+### Base Path
+
+The UI routes default to `/auth` as the base path. You can customize this:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  ui: {
+    basePath: "/login", // Pages will be at /login/sign-in, etc.
+  },
+});
+```
+
+## Full Configuration Reference
+
+```ts
+interface UIOptions {
+  /** Enable the UI feature. Default: true when ui option is provided */
+  enabled?: boolean;
+  
+  /** Theme configuration */
+  theme?: {
+    primaryColor?: string;
+    secondaryColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
+    errorColor?: string;
+    successColor?: string;
+    borderRadius?: string;
+    fontFamily?: string;
+    logo?: string;
+    appName?: string;
+    darkMode?: boolean | {
+      enabled: boolean;
+      backgroundColor?: string;
+      textColor?: string;
+      primaryColor?: string;
+    };
+  };
+  
+  /** Built-in page configuration */
+  pages?: {
+    signIn?: { enabled?: boolean };
+    signUp?: { enabled?: boolean };
+    forgotPassword?: { enabled?: boolean };
+    resetPassword?: { enabled?: boolean };
+    verifyEmail?: { enabled?: boolean };
+    profile?: { enabled?: boolean };
+  };
+  
+  /** Base path for UI routes */
+  basePath?: string;
+  
+  /** API base URL for API calls from UI pages */
+  apiBaseUrl?: string;
+  
+  /** Redirect URL after successful sign-in */
+  redirectTo?: string;
+}
+```

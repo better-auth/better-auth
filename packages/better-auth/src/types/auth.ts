@@ -7,6 +7,19 @@ import type { InferPluginContext, InferPluginErrorCodes } from "./plugins";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
+	/**
+	 * UI handler for serving pre-built auth pages.
+	 * Only available when `ui` option is configured.
+	 *
+	 * Mount this handler at a separate path from the API handler.
+	 *
+	 * @example
+	 * ```ts
+	 * app.use("/auth/*", auth.uiHandler);
+	 * app.use("/api/auth/*", auth.handler);
+	 * ```
+	 */
+	uiHandler: (request: Request) => Promise<Response>;
 	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;

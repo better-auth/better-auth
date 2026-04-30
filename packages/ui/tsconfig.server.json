@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./server",
+    "rootDir": "./src",
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": ["ES2020"],
+    "types": ["node"],
+    "esModuleInterop": true
+  },
+  "include": ["src/assets.ts", "src/server-entry.ts", "src/types/common.ts"]
+}

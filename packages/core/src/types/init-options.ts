@@ -31,6 +31,7 @@ import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
+import type { UIOptions } from "./ui-options";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 type Optional<T> = {
@@ -1184,6 +1185,33 @@ export type BetterAuthOptions = {
 				  ) => Awaitable<(string | undefined | null)[]>)
 		  )
 		| undefined;
+	/**
+	 * UI configuration for server-rendered auth pages.
+	 *
+	 * When enabled, Better Auth provides pre-built UI pages for
+	 * sign-in, sign-up, password reset, email verification, and profile.
+	 *
+	 * The UI is served through a separate `uiHandler` that you mount
+	 * at your desired path.
+	 *
+	 * @example
+	 * ```ts
+	 * const auth = betterAuth({
+	 *   ui: {
+	 *     enabled: true,
+	 *     theme: {
+	 *       primaryColor: "#0066cc",
+	 *       logo: "/logo.png",
+	 *     },
+	 *   },
+	 * });
+	 *
+	 * // Mount the UI handler separately from the API
+	 * app.use("/auth/*", auth.uiHandler);
+	 * app.use("/api/auth/*", auth.handler);
+	 * ```
+	 */
+	ui?: UIOptions | undefined;
 	/**
 	 * Rate limiting configuration
 	 */

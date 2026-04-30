@@ -490,6 +490,7 @@
   },
   "dependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/ui": "workspace:*",
     "@better-auth/drizzle-adapter": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
     "@better-auth/memory-adapter": "workspace:*",

@@ -11,6 +11,7 @@ import type { RawError } from "../utils/error-codes";
 import type { AuthContext } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
+import type { BetterAuthPluginUI } from "./ui-options";
 
 type DeepPartial<T> = T extends Function
 	? T
@@ -160,4 +161,22 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	adapter?: {
 		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
+	/**
+	 * UI configuration for the plugin.
+	 * Allows plugins to contribute custom UI pages.
+	 *
+	 * @example
+	 * ```ts
+	 * ui: {
+	 *   pages: [
+	 *     {
+	 *       path: "/two-factor-setup",
+	 *       html: preBuiltTwoFactorHTML,
+	 *       title: "Two-Factor Setup",
+	 *     },
+	 *   ],
+	 * }
+	 * ```
+	 */
+	ui?: BetterAuthPluginUI | undefined;
 };

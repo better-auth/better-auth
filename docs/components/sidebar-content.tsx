@@ -430,6 +430,23 @@ export const contents: Content[] = [
 				),
 			},
 			{
+				title: "UI Pages",
+				href: "/docs/concepts/ui",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							className="fill-current"
+							d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"
+						></path>
+					</svg>
+				),
+			},
+			{
 				title: "Users & Accounts",
 				href: "/docs/concepts/users-accounts",
 				icon: () => (

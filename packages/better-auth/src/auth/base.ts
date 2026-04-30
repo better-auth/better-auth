@@ -9,6 +9,7 @@ import {
 	resolveRequestContext,
 } from "../context/helpers";
 import type { Auth } from "../types";
+import { createUIHandler } from "../ui/handler";
 import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
@@ -26,6 +27,10 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		}
 		return acc;
 	}, {});
+	const uiHandler = createUIHandler({
+		context: authContext,
+		options,
+	});
 	return {
 		handler: async (request: Request) => {
 			const ctx = await authContext;
@@ -79,6 +84,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			const { handler } = router(handlerCtx, options);
 			return runWithAdapter(handlerCtx.adapter, () => handler(request));
 		},
+		uiHandler,
 		api,
 		options: options,
 		$context: authContext,
