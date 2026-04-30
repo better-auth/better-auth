@@ -1402,9 +1402,11 @@ describe("listMembers regression", async () => {
 			},
 		} as any);
 
-		expect(result.members.length).toBe(TOTAL + 1);
+		const members = (result as unknown as { members: any[] }).members;
 
-		result.members.forEach((member) => {
+		expect(members.length).toBe(TOTAL + 1);
+
+		members.forEach((member) => {
 			expect(member.user).toBeDefined();
 			expect(member.user.id).toBe(member.userId);
 		});
