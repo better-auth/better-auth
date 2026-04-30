@@ -196,6 +196,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						operator: "in",
 					},
 				],
+				limit: members[0].length,
 			});
 			return {
 				members: members[0].map((member) => {

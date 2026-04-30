@@ -1340,6 +1340,77 @@ describe("organization", async () => {
 	});
 });
 
+describe("listMembers regression", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				membershipLimit: 500, // allow >100 members
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it.only("should not fail when organization has more than 100 members", async () => {
+		const TOTAL = 120;
+
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "big-org",
+				slug: "big-org",
+			},
+			headers,
+		});
+
+		const orgId = org?.id!;
+
+		const users = await Promise.all(
+			Array.from({ length: TOTAL }).map((_, i) =>
+				auth.api.signUpEmail({
+					body: {
+						email: `biguser${i}@test.com`,
+						password: "password",
+						name: `User ${i}`,
+					},
+				}),
+			),
+		);
+
+		await Promise.all(
+			users.map(async (u) => {
+				const session = await auth.api.getSession({
+					headers: new Headers({
+						Authorization: `Bearer ${u?.token}`,
+					}),
+				});
+
+				return auth.api.addMember({
+					body: {
+						organizationId: orgId,
+						userId: session?.user.id!,
+						role: "member",
+					},
+				});
+			}),
+		);
+
+		const result = await auth.api.listMembers({
+			headers,
+			body: {
+				organizationId: orgId,
+				limit: 200,
+			},
+		});
+
+		expect(result.members.length).toBe(TOTAL + 1);
+
+		result.members.forEach((member) => {
+			expect(member.user).toBeDefined();
+			expect(member.user.id).toBe(member.userId);
+		});
+	}, 30000); //timeout
+});
+
 describe("invitation expiration and filtering", async () => {
 	const { auth, signInWithUser } = await getTestInstance({
 		plugins: [
