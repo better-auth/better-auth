@@ -196,6 +196,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						operator: "in",
 					},
 				],
+				limit:
+					data.limit ||
+					(typeof options?.membershipLimit === "number"
+						? options.membershipLimit
+						: 100) ||
+					100,
 			});
 			return {
 				members: members[0].map((member) => {
