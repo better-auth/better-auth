@@ -1658,7 +1658,9 @@ async function handleOIDCCallback(
 		isTrustedProvider,
 	});
 	if (linked.error) {
-		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
+		throw ctx.redirect(
+			`${errorURL || callbackURL}?error=${linked.error.split(" ").join("_")}`,
+		);
 	}
 	const { session, user } = linked.data!;
 
