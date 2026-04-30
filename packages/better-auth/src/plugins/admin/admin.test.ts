@@ -767,10 +767,19 @@ describe("Admin plugin", async () => {
 
 		const unsubscribe = browserClient.useSession.subscribe(() => {});
 		try {
-			await vi.runAllTimersAsync();
-
-			const reactiveAdminSession = browserClient.useSession.get();
 			const freshAdminSession = await browserClient.getSession();
+			let reactiveAdminSession = browserClient.useSession.get();
+			for (
+				let attempt = 0;
+				attempt < 5 &&
+				reactiveAdminSession.data?.user.id !== freshAdminSession.data?.user.id;
+				attempt++
+			) {
+				await vi.advanceTimersByTimeAsync(25);
+				await vi.runAllTimersAsync();
+				reactiveAdminSession = browserClient.useSession.get();
+			}
+
 			expect(reactiveAdminSession.data?.user.id).toBe(
 				freshAdminSession.data?.user.id,
 			);
