@@ -108,25 +108,18 @@ export const spMetadata = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const provider = await ctx.context.adapter.findOne<{
-				id: string;
-				samlConfig: string;
-			}>({
-				model: "ssoProvider",
-				where: [
-					{
-						field: "providerId",
-						value: ctx.query.providerId,
-					},
-				],
-			});
+			const provider = await findSAMLProvider(
+				ctx.query.providerId,
+				options,
+				ctx.context.adapter,
+			);
 			if (!provider) {
 				throw new APIError("NOT_FOUND", {
 					message: "No provider found for the given providerId",
 				});
 			}
 
-			const parsedSamlConfig = safeJsonParse<SAMLConfig>(provider.samlConfig);
+			const parsedSamlConfig = provider.samlConfig;
 			if (!parsedSamlConfig) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid SAML configuration",
