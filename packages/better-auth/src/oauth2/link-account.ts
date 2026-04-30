@@ -309,19 +309,21 @@ async function handleLinkToUser(
 	);
 
 	if (alreadyLinked) {
-		// Account already linked, just create a session
-		const session = await c.context.internalAdapter.createSession(
-			targetUser.id,
-		);
-		if (!session) {
-			return {
-				error: "unable to create session",
-				data: null,
-				isRegister: false,
-			};
-		}
+		// Account is already linked, we return a placeholder session for type consistency.
+		// For oauth-proxy link flows, the session cookie is NOT set since the user
+		// already has a session from initiating linkSocial. This placeholder is
+		// never used; it exists only to satisfy the return type required by other
+		// callers (sign-in flows) that do use the session.
+		const placeholderSession = {
+			id: "link-placeholder",
+			userId: targetUser.id,
+			token: "link-operation-placeholder",
+			expiresAt: new Date(0), // Already expired, cannot be used
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
 		return {
-			data: { session, user: targetUser },
+			data: { session: placeholderSession, user: targetUser },
 			error: null,
 			isRegister: false,
 		};
@@ -409,18 +411,22 @@ async function handleLinkToUser(
 		});
 	}
 
-	// Create session
-	const session = await c.context.internalAdapter.createSession(targetUser.id);
-	if (!session) {
-		return {
-			error: "unable to create session",
-			data: null,
-			isRegister: false,
-		};
-	}
+	// Return a placeholder session for type consistency.
+	// For oauth-proxy link flows, the session cookie is NOT set since the user
+	// already has a session from initiating linkSocial. This placeholder is
+	// never used; it exists only to satisfy the return type required by other
+	// callers (sign-in flows) that do use the session.
+	const placeholderSession = {
+		id: "link-placeholder",
+		userId: targetUser.id,
+		token: "link-operation-placeholder",
+		expiresAt: new Date(0), // Already expired - cannot be used
+		createdAt: new Date(),
+		updatedAt: new Date(),
+	};
 
 	return {
-		data: { session, user: targetUser },
+		data: { session: placeholderSession, user: targetUser },
 		error: null,
 		isRegister: false,
 	};

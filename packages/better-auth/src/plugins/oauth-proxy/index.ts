@@ -265,7 +265,14 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
 
-					await setSessionCookie(ctx, result.data);
+					// For non-link operations, we set the session cookie
+					const isLinkOperation = !!payload.link?.userId;
+					if (!isLinkOperation && result.data.session) {
+						await setSessionCookie(
+							ctx,
+							result.data as { session: any; user: any },
+						);
+					}
 
 					// Redirect to final callback URL
 					const finalURL = result.isRegister
