@@ -730,7 +730,6 @@ describe("Admin plugin", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9401
 	 */
 	it("should revalidate useSession after admin impersonation", async () => {
-		vi.useFakeTimers();
 		vi.stubGlobal("window", {});
 		const { headers } = await signInWithTestUser();
 		const browserHeaders = new Headers(headers);
@@ -759,28 +758,52 @@ describe("Admin plugin", async () => {
 				},
 			},
 		});
+		type SessionState = ReturnType<typeof browserClient.useSession.get>;
+		type SessionData = NonNullable<SessionState["data"]>;
+		const waitForSessionData = async (
+			matches: (session: SessionData) => boolean,
+			triggerRead = false,
+		) => {
+			return new Promise<SessionData>((resolve, reject) => {
+				let unsubscribe = () => {};
+				const timeoutId = setTimeout(() => {
+					unsubscribe();
+					reject(new Error("Timed out waiting for session data"));
+				}, 1500);
+
+				unsubscribe = browserClient.useSession.subscribe((state) => {
+					if (state.isPending || state.isRefetching || state.data === null) {
+						return;
+					}
+
+					if (!matches(state.data)) {
+						return;
+					}
+
+					clearTimeout(timeoutId);
+					unsubscribe();
+					resolve(state.data);
+				});
+
+				if (triggerRead) {
+					browserClient.useSession.get();
+				}
+			});
+		};
 		const targetUser = await client.signUp.email({
 			email: "impersonate-reactive@mail.com",
 			password: "password",
 			name: "Impersonate Reactive User",
 		});
 
-		const unsubscribe = browserClient.useSession.subscribe(() => {});
 		try {
 			const freshAdminSession = await browserClient.getSession();
-			let reactiveAdminSession = browserClient.useSession.get();
-			for (
-				let attempt = 0;
-				attempt < 5 &&
-				reactiveAdminSession.data?.user.id !== freshAdminSession.data?.user.id;
-				attempt++
-			) {
-				await vi.advanceTimersByTimeAsync(25);
-				await vi.runAllTimersAsync();
-				reactiveAdminSession = browserClient.useSession.get();
-			}
+			const reactiveAdminSession = await waitForSessionData(
+				(session) => session.user.id === freshAdminSession.data?.user.id,
+				true,
+			);
 
-			expect(reactiveAdminSession.data?.user.id).toBe(
+			expect(reactiveAdminSession.user.id).toBe(
 				freshAdminSession.data?.user.id,
 			);
 
@@ -800,23 +823,14 @@ describe("Admin plugin", async () => {
 				targetUser.data?.user.id,
 			);
 
-			let reactiveImpersonatedSession = browserClient.useSession.get();
-			for (
-				let attempt = 0;
-				attempt < 5 &&
-				reactiveImpersonatedSession.data?.user.id !== targetUser.data?.user.id;
-				attempt++
-			) {
-				await vi.advanceTimersByTimeAsync(25);
-				await vi.runAllTimersAsync();
-				reactiveImpersonatedSession = browserClient.useSession.get();
-			}
+			const reactiveImpersonatedSession = await waitForSessionData(
+				(session) => session.user.id === targetUser.data?.user.id,
+			);
 
-			expect(reactiveImpersonatedSession.data?.user.id).toBe(
+			expect(reactiveImpersonatedSession.user.id).toBe(
 				targetUser.data?.user.id,
 			);
 		} finally {
-			unsubscribe();
 			vi.unstubAllGlobals();
 		}
 	});
