@@ -1400,7 +1400,7 @@ describe("listMembers regression", async () => {
 				organizationId: orgId,
 				limit: 200,
 			},
-		});
+		} as any);
 
 		expect(result.members.length).toBe(TOTAL + 1);
 
