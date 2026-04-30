@@ -21,7 +21,7 @@ You can use the Drizzle adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { db } from "./database.ts";
 
 export const auth = betterAuth({
@@ -91,7 +91,7 @@ The Drizzle adapter expects the schema you define to match the table names. For 
 ```ts
 import { betterAuth } from "better-auth";
 import { db } from "./drizzle";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { schema } from "./schema";
 
 export const auth = betterAuth({
