@@ -284,7 +284,7 @@ export const validatePasswordResetToken = createAuthEndpoint(
 		if (verification.expiresAt < new Date()) {
 			return ctx.json({
 				valid: false,
-				message: "Token has expired",
+				message: "Invalid token",
 			});
 		}
 

@@ -252,7 +252,7 @@ describe("forgot password", async () => {
 			token,
 		});
 		expect(validation.data?.valid).toBe(false);
-		expect(validation.data?.message).toBe("Token has expired");
+		expect(validation.data?.message).toBe("Invalid token");
 
 		vi.useRealTimers();
 	});
