@@ -17,6 +17,14 @@ describe("device authorization plugin input validation", () => {
 		`);
 	});
 
+	it("should NOT throw when schema is not provided", () => {
+		expect(() => {
+			deviceAuthorization({
+				verificationUri: "https://example.com/device",
+			});
+		}).not.toThrow();
+	});
+
 	it("should validate custom options", async () => {
 		const options = deviceAuthorizationOptionsSchema.parse({
 			expiresIn: "1m",
