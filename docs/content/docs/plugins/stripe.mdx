@@ -375,10 +375,17 @@ To get the user's active subscriptions:
       sub => sub.status === "active" || sub.status === "trialing"
   );
 
+  // Persisted Stripe price id on the subscription row
+    const activePriceId = activeSubscription?.priceId;
+
   // Check subscription limits
   const projectLimit = subscriptions?.limits?.projects || 0;
   ```
 </APIMethod>
+
+<Callout type="info">
+  `subscription.list` returns the persisted `subscription.priceId` from your database. After checkout and webhook sync, this value reflects the canonical Stripe subscription item price ID.
+</Callout>
 
 Make sure to provide `authorizeReference` in your plugin config to authorize the reference ID
 
@@ -711,6 +718,13 @@ export const stripeSubscriptionTableFields = [
 		type: "string",
 		description: "The name of the subscription plan",
 	},
+    {
+        name: "priceId",
+        type: "string",
+        description:
+            "The Stripe price ID persisted on the subscription row and synced from Stripe subscription items.",
+        isOptional: true,
+    },
 	{
 		name: "referenceId",
 		type: "string",
@@ -1114,7 +1128,7 @@ If webhooks aren't being processed correctly:
 If subscription statuses aren't updating correctly:
 
 1. Make sure the webhook events are being received and processed
-2. Check that the `stripeCustomerId` and `stripeSubscriptionId` fields are correctly populated
+2. Check that the `stripeCustomerId`, `stripeSubscriptionId`, and `priceId` fields are correctly populated
 3. Verify that the reference IDs match between your application and Stripe
 
 ### Testing Webhooks Locally

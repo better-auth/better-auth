@@ -342,6 +342,7 @@ describe("stripe", () => {
 			trialStart: undefined,
 			trialEnd: undefined,
 		});
+		expect(subscription?.priceId).toEqual(expect.any(String));
 	});
 
 	it("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async () => {
@@ -822,6 +823,8 @@ describe("stripe", () => {
 			periodEnd: expect.any(Date),
 			plan: "starter",
 		});
+
+		expect(updatedSubscription?.priceId).toEqual(expect.any(String));
 	});
 
 	it("should handle subscription webhook events with trial", async () => {
@@ -945,6 +948,7 @@ describe("stripe", () => {
 			plan: "starter",
 			trialStart: expect.any(Date),
 			trialEnd: expect.any(Date),
+			priceId: expect.any(String),
 		});
 	});
 
@@ -1658,6 +1662,7 @@ describe("stripe", () => {
 		);
 		expect(incompleteSubscription.status).toBe("incomplete");
 		expect(incompleteSubscription.stripeSubscriptionId).toBeUndefined();
+		expect(incompleteSubscription.priceId).toEqual(expect.any(String));
 
 		// Get user with stripeCustomerId
 		const user = await testCtx.adapter.findOne<any>({

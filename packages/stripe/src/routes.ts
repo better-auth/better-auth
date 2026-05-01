@@ -659,6 +659,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						model: "subscription",
 						update: {
 							stripeSubscriptionId: activeSubscription.id,
+							priceId: planItem?.price.id,
 							updatedAt: new Date(),
 						},
 						where: [
@@ -1011,6 +1012,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					update: {
 						plan: plan.name.toLowerCase(),
 						seats: isAutoManagedSeats ? memberCount : ctx.body.seats || 1,
+						priceId: priceIdToUse,
 						updatedAt: new Date(),
 					},
 					where: [
@@ -1032,6 +1034,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						status: "incomplete",
 						referenceId,
 						seats: isAutoManagedSeats ? memberCount : ctx.body.seats || 1,
+						priceId: priceIdToUse,
 					},
 				});
 			}
@@ -1816,6 +1819,7 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 					periodEnd: new Date(subscriptionItem.current_period_end * 1000),
 					periodStart: new Date(subscriptionItem.current_period_start * 1000),
 					stripeSubscriptionId: stripeSubscription.id,
+					priceId: subscriptionItem.price.id,
 					cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
 					cancelAt: stripeSubscription.cancel_at
 						? new Date(stripeSubscription.cancel_at * 1000)

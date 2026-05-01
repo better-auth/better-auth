@@ -102,6 +102,7 @@ export async function onCheckoutSessionCompleted(
 							: null,
 						seats: seats,
 						billingInterval: subscriptionItem.price.recurring?.interval,
+						priceId: subscriptionItem.price.id,
 					},
 					where: [
 						{
@@ -250,6 +251,7 @@ export async function onSubscriptionCreated(
 				periodEnd,
 				seats,
 				billingInterval: subscriptionItem.price.recurring?.interval,
+				priceId: subscriptionItem.price.id,
 			},
 		});
 
@@ -371,6 +373,7 @@ export async function onSubscriptionUpdated(
 				seats,
 				stripeSubscriptionId: stripeSubscriptionUpdated.id,
 				billingInterval: subscriptionItem.price.recurring?.interval,
+				priceId: subscriptionItem.price.id,
 				stripeScheduleId: stripeSubscriptionUpdated.schedule
 					? typeof stripeSubscriptionUpdated.schedule === "string"
 						? stripeSubscriptionUpdated.schedule
