@@ -8,6 +8,7 @@ const footerLinks = [
 	{ label: "Blog", href: "/blog" },
 	{ label: "Community", href: "/community" },
 	{ label: "Changelog", href: "/changelog" },
+	{ label: "Careers", href: "/careers" },
 ];
 
 export default function Footer() {

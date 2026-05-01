@@ -21,6 +21,13 @@ export function SignatureMark() {
 				</Link>
 				<span className="text-foreground/15">/</span>
 				<Link
+					href="/careers"
+					className="hover:text-foreground/80 transition-colors"
+				>
+					Careers
+				</Link>
+				<span className="text-foreground/15">/</span>
+				<Link
 					href="/legal"
 					className="hover:text-foreground/80 transition-colors"
 				>

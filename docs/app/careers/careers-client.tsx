@@ -1,250 +1,71 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useState } from "react";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import type { Job } from "./careers-data";
 
-const roles = [
-	{
-		title: "Founding Design Engineer",
-		type: "Full-time",
-		location: "San Francisco",
-		description:
-			"Craft the visual identity and UI of Better Auth's products — dashboard, docs, landing pages. You'll own design end-to-end.",
-		requirements: [
-			"Strong portfolio with shipped product work",
-			"React / Next.js proficiency",
-			"CSS mastery and responsive design",
-			"Eye for detail and micro-interactions",
-			"Experience shipping design systems",
-		],
-	},
-	{
-		title: "Senior Developer Relations",
-		type: "Full-time",
-		location: "San Francisco",
-		description:
-			"Be the bridge between Better Auth and its developer community. Create content, speak at events, build demos, and shape the developer experience.",
-		requirements: [
-			"Developer background with public repos or OSS contributions",
-			"Content creation experience (blogs, videos, tutorials)",
-			"Public speaking and conference experience",
-			"Community building track record",
-			"Familiarity with auth / security space",
-		],
-	},
-];
+type RoleFilter = {
+	city: string;
+	department: string;
+};
 
-function ApplyDialog({
-	role,
-	onClose,
-}: {
-	role: (typeof roles)[number];
-	onClose: () => void;
-}) {
-	const [submitted, setSubmitted] = useState(false);
+function formatEmploymentType(type: string): string {
+	const map: Record<string, string> = {
+		full_time: "Full-time",
+		part_time: "Part-time",
+		contract: "Contract",
+		intern: "Intern",
+		temporary: "Temporary",
+	};
+	return map[type] ?? type.replace(/_/g, "-");
+}
 
+function getCity(locationName?: string | null) {
+	return (locationName?.split(",")[0] ?? "Remote").trim();
+}
+
+function getDepartmentName(departments?: Array<{ name: string }> | null) {
+	return departments?.[0]?.name?.trim() || null;
+}
+
+function getLocationDepartmentRows(
+	jobs: Job[],
+): Array<{ city: string; department: string; openRoles: number }> {
+	const counts = jobs.reduce<
+		Record<string, { city: string; department: string; openRoles: number }>
+	>((acc, job) => {
+		const city = getCity(job.location?.name);
+		const department = getDepartmentName(job.departments) ?? "—";
+		const key = `${city}::${department}`;
+		acc[key] = acc[key]
+			? { ...acc[key], openRoles: acc[key].openRoles + 1 }
+			: { city, department, openRoles: 1 };
+		return acc;
+	}, {});
+	return Object.values(counts).sort((a, b) => {
+		if (a.city !== b.city) return a.city.localeCompare(b.city);
+		return a.department.localeCompare(b.department);
+	});
+}
+
+function matchesFilter(job: Job, filter: RoleFilter) {
 	return (
-		<motion.div
-			initial={{ opacity: 0 }}
-			animate={{ opacity: 1 }}
-			exit={{ opacity: 0 }}
-			transition={{ duration: 0.15 }}
-			className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-			onClick={onClose}
-		>
-			{/* Backdrop */}
-			<div className="absolute inset-0 bg-black/40 backdrop-blur-md dark:bg-black/72" />
-
-			{/* Dialog */}
-			<motion.div
-				initial={{ opacity: 0, y: 10, scale: 0.98 }}
-				animate={{ opacity: 1, y: 0, scale: 1 }}
-				exit={{ opacity: 0, y: 10, scale: 0.98 }}
-				transition={{ duration: 0.2, ease: "easeOut" }}
-				onClick={(e: React.MouseEvent) => e.stopPropagation()}
-				className="relative w-full max-w-md overflow-hidden border border-foreground/[0.14] bg-background/95 shadow-2xl shadow-black/12 ring-1 ring-black/5 backdrop-blur dark:border-white/[0.08] dark:bg-[#050505]/95 dark:shadow-black/65 dark:ring-white/[0.04]"
-			>
-				{/* Corner marks */}
-				<span className="absolute top-2 left-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-				<span className="absolute top-2 right-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-				<span className="absolute bottom-2 left-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-				<span className="absolute bottom-2 right-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-
-				<div className="p-6 sm:p-8">
-					{/* Close button */}
-					<button
-						type="button"
-						onClick={onClose}
-						aria-label="Close dialog"
-						className="absolute top-4 right-4 text-foreground/50 hover:text-foreground/80 transition-colors"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							aria-hidden="true"
-						>
-							<path
-								fill="currentColor"
-								d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12z"
-							/>
-						</svg>
-					</button>
-
-					{submitted ? (
-						<motion.div
-							initial={{ opacity: 0, y: 6 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.3 }}
-							className="text-center py-6 space-y-3"
-						>
-							<p className="text-sm text-foreground/92 dark:text-foreground/88">
-								Application sent
-							</p>
-							<p className="text-xs text-foreground/60 dark:text-foreground/52 leading-relaxed max-w-xs mx-auto">
-								Thanks for applying for {role.title}. We&apos;ll review your
-								application and get back to you soon.
-							</p>
-							<button
-								type="button"
-								onClick={onClose}
-								className="mt-4 inline-flex items-center px-4 py-2 border border-foreground/[0.18] bg-foreground/[0.03] text-foreground/72 hover:text-foreground/90 hover:border-foreground/28 hover:bg-foreground/[0.06] transition-all font-mono text-[10px] uppercase tracking-widest dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/68 dark:hover:text-foreground/84 dark:hover:bg-white/[0.05]"
-							>
-								Close
-							</button>
-						</motion.div>
-					) : (
-						<>
-							<div className="mb-6 space-y-1">
-								<p className="text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/50 font-mono">
-									# Apply
-								</p>
-								<h3 className="text-sm text-foreground/92 dark:text-foreground/86">
-									{role.title}
-								</h3>
-								<div className="flex items-center gap-2 pt-1">
-									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/50 border border-foreground/[0.15] bg-foreground/[0.03] px-1.5 py-0.5 leading-none dark:border-white/[0.08] dark:bg-white/[0.03]">
-										{role.type}
-									</span>
-									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/50 border border-foreground/[0.15] bg-foreground/[0.03] px-1.5 py-0.5 leading-none dark:border-white/[0.08] dark:bg-white/[0.03]">
-										{role.location}
-									</span>
-								</div>
-							</div>
-
-							<form
-								onSubmit={(e) => {
-									e.preventDefault();
-									setSubmitted(true);
-								}}
-								className="space-y-4"
-							>
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-name"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Name
-									</label>
-									<input
-										id="careers-name"
-										type="text"
-										required
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
-										placeholder="Your full name"
-									/>
-								</div>
-
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-email"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Email
-									</label>
-									<input
-										id="careers-email"
-										type="email"
-										required
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
-										placeholder="you@example.com"
-									/>
-								</div>
-
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-portfolio"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Portfolio / GitHub
-									</label>
-									<input
-										id="careers-portfolio"
-										type="url"
-										required
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
-										placeholder="https://"
-									/>
-								</div>
-
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-why"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Why Better Auth?
-									</label>
-									<textarea
-										id="careers-why"
-										required
-										rows={3}
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors resize-none"
-										placeholder="Tell us why you want to join..."
-									/>
-								</div>
-
-								<div className="pt-2">
-									<button
-										type="submit"
-										className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background hover:opacity-90 transition-all"
-									>
-										<span className="font-mono text-[10px] uppercase tracking-widest">
-											Submit Application
-										</span>
-										<svg
-											className="h-2.5 w-2.5 opacity-80"
-											viewBox="0 0 10 10"
-											fill="none"
-										>
-											<path
-												d="M1 9L9 1M9 1H3M9 1V7"
-												stroke="currentColor"
-												strokeWidth="1.2"
-											/>
-										</svg>
-									</button>
-								</div>
-							</form>
-						</>
-					)}
-				</div>
-			</motion.div>
-		</motion.div>
+		getCity(job.location?.name) === filter.city &&
+		(getDepartmentName(job.departments) ?? "—") === filter.department
 	);
 }
 
-function CareersHero() {
+function CareersHero({
+	rows,
+	activeFilter,
+	onFilterSelect,
+}: {
+	rows: Array<{ city: string; department: string; openRoles: number }>;
+	activeFilter: RoleFilter | null;
+	onFilterSelect: (filter: RoleFilter) => void;
+}) {
 	return (
 		<motion.div
 			initial={{ opacity: 0, y: 12 }}
@@ -262,31 +83,72 @@ function CareersHero() {
 					</p>
 				</div>
 
-				{/* Quick stats */}
-				<div className="border-t border-foreground/10 pt-4 space-y-0">
-					{[
-						{ label: "Location", value: "San Francisco" },
-						{ label: "Open roles", value: `${roles.length}` },
-					].map((item, i) => (
-						<motion.div
-							key={item.label}
-							initial={{ opacity: 0, x: -8 }}
-							animate={{ opacity: 1, x: 0 }}
-							transition={{
-								duration: 0.25,
-								delay: 0.3 + i * 0.06,
-								ease: "easeOut",
-							}}
-							className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
-						>
-							<span className="text-sm text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
-								{item.label}
+				{/* Location table */}
+				<div className="border-t border-foreground/10 pt-4">
+					<div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3 border-b border-foreground/[0.06] pb-1.5">
+						<span className="text-[9px] font-mono uppercase tracking-[0.18em] text-foreground/50 dark:text-foreground/40">
+							Location
+						</span>
+						<span className="text-[9px] font-mono uppercase tracking-[0.18em] text-foreground/50 dark:text-foreground/40">
+							Department
+						</span>
+						<span className="text-right text-[9px] font-mono uppercase tracking-[0.18em] text-foreground/50 dark:text-foreground/40">
+							Open roles
+						</span>
+					</div>
+					{rows.length === 0 ? (
+						<div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3 py-1.5">
+							<span className="text-sm text-foreground/50 dark:text-foreground/40">
+								—
 							</span>
-							<span className="text-sm text-foreground/85 dark:text-foreground/75 font-mono">
-								{item.value}
+							<span className="text-sm text-foreground/50 dark:text-foreground/40">
+								—
 							</span>
-						</motion.div>
-					))}
+							<span className="text-right text-sm text-foreground/50 dark:text-foreground/40 font-mono">
+								0
+							</span>
+						</div>
+					) : (
+						rows.map(({ city, department, openRoles }, i) => (
+							<motion.div
+								key={`${city}-${department}`}
+								initial={{ opacity: 0, x: -8 }}
+								animate={{ opacity: 1, x: 0 }}
+								transition={{
+									duration: 0.25,
+									delay: 0.3 + i * 0.06,
+									ease: "easeOut",
+								}}
+								className="border-b border-dashed border-foreground/[0.06] last:border-0"
+							>
+								<button
+									type="button"
+									onClick={() => onFilterSelect({ city, department })}
+									aria-pressed={
+										activeFilter?.city === city &&
+										activeFilter?.department === department
+									}
+									data-testid={`filter-${city}-${department}`}
+									className={`grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5rem] gap-3 py-1.5 text-left transition-colors ${
+										activeFilter?.city === city &&
+										activeFilter?.department === department
+											? "bg-foreground/[0.04]"
+											: "hover:bg-foreground/[0.02]"
+									}`}
+								>
+									<span className="text-[13px] text-foreground/70 dark:text-foreground/50 uppercase tracking-wide">
+										{city}
+									</span>
+									<span className="text-[13px] text-foreground/70 dark:text-foreground/50 uppercase tracking-wide">
+										{department}
+									</span>
+									<span className="text-right text-[13px] text-foreground/85 dark:text-foreground/75 font-mono">
+										{openRoles}
+									</span>
+								</button>
+							</motion.div>
+						))
+					)}
 				</div>
 
 				{/* Contact link */}
@@ -314,15 +176,13 @@ function CareersHero() {
 	);
 }
 
-function RoleCard({
-	role,
-	index,
-	onApply,
-}: {
-	role: (typeof roles)[number];
-	index: number;
-	onApply: () => void;
-}) {
+function RoleCard({ role, index }: { role: Job; index: number }) {
+	const city = getCity(role.location?.name);
+	const department = getDepartmentName(role.departments);
+	const applyUrl = role.absolute_url.startsWith("https://")
+		? role.absolute_url
+		: null;
+
 	return (
 		<motion.div
 			initial={{ opacity: 0, y: 10 }}
@@ -354,51 +214,65 @@ function RoleCard({
 				{/* Header */}
 				<div className="space-y-3">
 					<h3 className="text-base sm:text-lg text-foreground/92 dark:text-foreground/86 tracking-tight">
-						{role.title}
+						{applyUrl ? (
+							<a
+								href={applyUrl}
+								target="_blank"
+								rel="noreferrer"
+								className="inline-flex items-center gap-1.5 underline decoration-foreground/30 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground/70 dark:hover:text-foreground"
+							>
+								{role.title}
+								<svg
+									className="mt-px h-3 w-3 shrink-0 opacity-65"
+									viewBox="0 0 10 10"
+									fill="none"
+									aria-hidden="true"
+								>
+									<path
+										d="M1 9L9 1M9 1H3M9 1V7"
+										stroke="currentColor"
+										strokeWidth="1.2"
+									/>
+								</svg>
+							</a>
+						) : (
+							role.title
+						)}
 					</h3>
 					<div className="flex items-center gap-2">
 						<span className="border border-foreground/[0.14] bg-foreground/[0.03] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest text-foreground/58 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-foreground/48 leading-none">
-							{role.type}
+							{formatEmploymentType(role.employment_type)}
 						</span>
 						<span className="border border-foreground/[0.14] bg-foreground/[0.03] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest text-foreground/58 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-foreground/48 leading-none">
-							{role.location}
+							{city}
 						</span>
+						{department && (
+							<span className="border border-foreground/[0.14] bg-foreground/[0.03] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest text-foreground/58 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-foreground/48 leading-none">
+								{department}
+							</span>
+						)}
 					</div>
 				</div>
 
-				{/* Description */}
-				<p className="max-w-lg text-[14px] leading-relaxed text-foreground/66 dark:text-foreground/56">
-					{role.description}
-				</p>
-
-				{/* Divider */}
-				<div className="border-t border-foreground/[0.08] dark:border-white/[0.06]" />
-
-				{/* Requirements */}
-				<div>
-					<p className="mb-3 text-[9px] font-mono uppercase tracking-[0.18em] text-foreground/52 dark:text-foreground/44">
-						Requirements
-					</p>
-					<ul className="space-y-2">
-						{role.requirements.map((req) => (
-							<li
-								key={req}
-								className="flex items-start gap-2 text-[14px] leading-relaxed text-foreground/56 transition-colors duration-300 group-hover:text-foreground/68 dark:text-foreground/48 dark:group-hover:text-foreground/60"
+				{role.roleParagraphs.length > 0 && (
+					<div className="space-y-3">
+						{role.roleParagraphs.map((paragraph, paragraphIndex) => (
+							<p
+								key={`${role.id}-${paragraphIndex}`}
+								className="text-[14px] leading-relaxed text-foreground/66 dark:text-foreground/56"
 							>
-								<span className="mt-px shrink-0 select-none font-mono text-[9px] leading-none text-foreground/60 dark:text-foreground/46">
-									+
-								</span>
-								<span>{req}</span>
-							</li>
+								{paragraph}
+							</p>
 						))}
-					</ul>
-				</div>
+					</div>
+				)}
 
 				{/* Apply CTA */}
 				<div className="pt-2">
-					<button
-						type="button"
-						onClick={onApply}
+					<a
+						href={applyUrl ?? "#"}
+						target="_blank"
+						rel="noreferrer"
 						className="inline-flex items-center gap-1.5 bg-foreground px-3.5 py-2 text-background transition-all hover:opacity-90 cursor-pointer"
 					>
 						<span className="font-mono text-[10px] uppercase tracking-widest">
@@ -415,17 +289,27 @@ function RoleCard({
 								strokeWidth="1.2"
 							/>
 						</svg>
-					</button>
+					</a>
 				</div>
 			</div>
 		</motion.div>
 	);
 }
 
-export function CareersPageClient() {
-	const [applyingRole, setApplyingRole] = useState<
-		(typeof roles)[number] | null
-	>(null);
+export function CareersPageClient({ jobs }: { jobs: Job[] }) {
+	const [activeFilter, setActiveFilter] = useState<RoleFilter | null>(null);
+	const rows = getLocationDepartmentRows(jobs);
+	const filteredJobs = activeFilter
+		? jobs.filter((job) => matchesFilter(job, activeFilter))
+		: jobs;
+
+	function handleFilterSelect(filter: RoleFilter) {
+		setActiveFilter((current) =>
+			current?.city === filter.city && current?.department === filter.department
+				? null
+				: filter,
+		);
+	}
 
 	return (
 		<div className="relative min-h-dvh pt-14 lg:pt-0">
@@ -436,7 +320,11 @@ export function CareersPageClient() {
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
-						<CareersHero />
+						<CareersHero
+							rows={rows}
+							activeFilter={activeFilter}
+							onFilterSelect={handleFilterSelect}
+						/>
 					</div>
 
 					{/* Right side */}
@@ -519,32 +407,48 @@ export function CareersPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.15 }}
 							>
-								<div className="space-y-4">
-									{roles.map((role, i) => (
-										<RoleCard
-											key={role.title}
-											role={role}
-											index={i}
-											onApply={() => setApplyingRole(role)}
-										/>
-									))}
-								</div>
+								{filteredJobs.length === 0 ? (
+									<p className="text-sm text-foreground/50 dark:text-foreground/40">
+										{activeFilter
+											? "No open positions match the current filter. Adjust the table selection or reach out at "
+											: "No open positions right now. Check back soon or reach out at "}
+										<a
+											href="mailto:careers@better-auth.com"
+											className="underline underline-offset-2 hover:text-foreground/70 transition-colors"
+										>
+											careers@better-auth.com
+										</a>
+										.
+									</p>
+								) : (
+									<div className="space-y-4">
+										{activeFilter && (
+											<div className="flex items-center justify-between gap-3 border border-dashed border-foreground/[0.08] px-4 py-3">
+												<p className="text-[12px] font-mono uppercase tracking-[0.16em] text-foreground/55">
+													Showing {activeFilter.city} /{" "}
+													{activeFilter.department}
+												</p>
+												<button
+													type="button"
+													onClick={() => setActiveFilter(null)}
+													data-testid="clear-role-filter"
+													className="text-[10px] font-mono uppercase tracking-[0.16em] text-foreground/45 transition-colors hover:text-foreground/70"
+												>
+													Show all roles
+												</button>
+											</div>
+										)}
+										{filteredJobs.map((role, i) => (
+											<RoleCard key={role.id} role={role} index={i} />
+										))}
+									</div>
+								)}
 							</motion.div>
 						</div>
 						<Footer />
 					</div>
 				</div>
 			</div>
-
-			{/* Apply dialog */}
-			<AnimatePresence>
-				{applyingRole && (
-					<ApplyDialog
-						role={applyingRole}
-						onClose={() => setApplyingRole(null)}
-					/>
-				)}
-			</AnimatePresence>
 		</div>
 	);
 }

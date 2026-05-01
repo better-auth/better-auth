@@ -16,7 +16,8 @@
     "sync-beta": "node scripts/sync-beta-content.ts",
     "sync-typesense": "node scripts/sync-typesense.ts",
     "format:md": "remark . --ext md,mdx --output --quiet",
-    "format:check": "remark . --ext md,mdx --quiet --frail"
+    "format:check": "remark . --ext md,mdx --quiet --frail",
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
