@@ -6,6 +6,8 @@ import { HalftoneBackground } from "@/components/landing/halftone-bg";
 import type { GemJobPost } from "@/lib/gem";
 import { formatGemEnum } from "@/lib/gem";
 
+type Role = Omit<GemJobPost, "content" | "content_plain">;
+
 function CareersHero({ openRoles }: { openRoles: number }) {
 	return (
 		<motion.div
@@ -76,8 +78,8 @@ function CareersHero({ openRoles }: { openRoles: number }) {
 	);
 }
 
-function groupByDepartment(roles: GemJobPost[]): [string, GemJobPost[]][] {
-	const groups = new Map<string, GemJobPost[]>();
+function groupByDepartment(roles: Role[]): [string, Role[]][] {
+	const groups = new Map<string, Role[]>();
 	for (const role of roles) {
 		const dept = role.departments[0]?.name ?? "Other";
 		const existing = groups.get(dept);
@@ -87,7 +89,7 @@ function groupByDepartment(roles: GemJobPost[]): [string, GemJobPost[]][] {
 	return Array.from(groups);
 }
 
-function RoleRow({ role, index }: { role: GemJobPost; index: number }) {
+function RoleRow({ role, index }: { role: Role; index: number }) {
 	const location =
 		role.location_type === "remote"
 			? "Remote"
@@ -151,7 +153,7 @@ function RoleRow({ role, index }: { role: GemJobPost; index: number }) {
 	);
 }
 
-function RolesList({ roles }: { roles: GemJobPost[] }) {
+function RolesList({ roles }: { roles: Role[] }) {
 	const groups = groupByDepartment(roles);
 	let rowIndex = 0;
 	return (
@@ -192,7 +194,7 @@ function EmptyState() {
 	);
 }
 
-export function CareersPageClient({ roles }: { roles: GemJobPost[] }) {
+export function CareersPageClient({ roles }: { roles: Role[] }) {
 	return (
 		<div className="relative min-h-dvh pt-14 lg:pt-0">
 			<div className="relative text-foreground">
@@ -247,36 +249,30 @@ export function CareersPageClient({ roles }: { roles: GemJobPost[] }) {
 								initial={{ opacity: 0, y: 6 }}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
+								className="space-y-5 max-w-2xl"
 							>
-								<div className="relative border-foreground/[0.08] overflow-hidden">
-									<div className="space-y-5 max-w-2xl">
-										<p className="text-[15px] text-foreground/60 leading-relaxed">
-											Better Auth is built with the idea of{" "}
-											<span className="text-foreground/80">
-												democratizing access to high quality software
-											</span>
-											. We&apos;re a small, focused team shaping how auth works
-											for millions of developers.
-										</p>
+								<p className="text-[15px] text-foreground/60 leading-relaxed">
+									Better Auth is built with the idea of{" "}
+									<span className="text-foreground/80">
+										democratizing access to high quality software
+									</span>
+									. We&apos;re a small, focused team shaping how auth works for
+									millions of developers.
+								</p>
 
-										<p className="text-[15px] text-foreground/60 leading-relaxed">
-											Every line of code we write gets used in production by
-											thousands of projects &mdash; from solo indie hackers to
-											large-scale enterprises. The work here has{" "}
-											<span className="text-foreground/80">
-												outsized impact
-											</span>
-											.
-										</p>
+								<p className="text-[15px] text-foreground/60 leading-relaxed">
+									Every line of code we write gets used in production by
+									thousands of projects &mdash; from solo indie hackers to
+									large-scale enterprises. The work here has{" "}
+									<span className="text-foreground/80">outsized impact</span>.
+								</p>
 
-										<p className="text-[15px] text-foreground/60 leading-relaxed">
-											We work in the open, move fast, and care deeply about
-											developer experience. If you want to do the best work of
-											your career on a problem that matters, we&apos;d love to
-											hear from you.
-										</p>
-									</div>
-								</div>
+								<p className="text-[15px] text-foreground/60 leading-relaxed">
+									We work in the open, move fast, and care deeply about
+									developer experience. If you want to do the best work of your
+									career on a problem that matters, we&apos;d love to hear from
+									you.
+								</p>
 							</motion.div>
 
 							{/* Section: Open positions */}

@@ -9,6 +9,9 @@ export const metadata: Metadata = createMetadata({
 });
 
 export default async function CareersPage() {
-	const roles = await fetchGemJobPosts();
+	// Strip large `content` / `content_plain` fields that the careers UI never reads.
+	const roles = (await fetchGemJobPosts()).map(
+		({ content, content_plain, ...rest }) => rest,
+	);
 	return <CareersPageClient roles={roles} />;
 }

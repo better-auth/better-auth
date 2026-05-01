@@ -66,7 +66,12 @@ export async function fetchGemJobPosts(): Promise<GemJobPost[]> {
 			console.error("Failed to fetch Gem job posts:", response.status);
 			return [];
 		}
-		return (await response.json()) as GemJobPost[];
+		const data = await response.json();
+		if (!Array.isArray(data)) {
+			console.error("Unexpected Gem response shape:", typeof data);
+			return [];
+		}
+		return data as GemJobPost[];
 	} catch (error) {
 		console.error("Error fetching Gem job posts:", error);
 		return [];
