@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
+import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 
 export const auth = betterAuth({
 	plugins: [organization({})],
@@ -40,3 +41,12 @@ auth.api
 	.then(({ headers }: { headers: Headers }) => {
 		console.log(headers);
 	});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6876
+ */
+export type TypeExportRegression = {
+	profile: GoogleProfile;
+	joinOption: JoinOption;
+	joinConfig: JoinConfig;
+};
