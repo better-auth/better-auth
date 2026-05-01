@@ -99,7 +99,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 								"application/json": {
 									schema: {
 										type: "object",
-										properties: {
+									properties: {
 											token: {
 												type: "string",
 												nullable: true,
@@ -329,7 +329,14 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					createdUser = await ctx.context.internalAdapter.createUser({
 						email: normalizedEmail,
 						name,
-						image,
+						// Normalize image to null (instead of undefined) so that
+						// filterOutputFields includes the key in the response, keeping
+						// the real-user envelope byte-symmetric with the synthetic
+						// duplicate-email envelope which always emits `image: null`.
+						// Without this, `"image" in response.user` differs between
+						// the two branches and reopens the email-enumeration oracle
+						// that requireEmailVerification is designed to close.
+						image: image ?? null,
 						...additionalUserFields,
 						emailVerified: false,
 					});
