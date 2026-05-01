@@ -572,22 +572,28 @@ export function searchParamsToQuery(
 	return result;
 }
 
-/**
- * Deletes a prompt value
- *
- * @param ctx
- * @param prompt - the prompt value to delete
- */
-export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	const prompts = query.get("prompt")?.split(" ");
+export const signedQueryIssuedAtParam = "ba_iat";
+export const postLoginClearedParam = "ba_pl";
+
+export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
+	const raw = new URLSearchParams(oauthQuery).get(signedQueryIssuedAtParam);
+	if (!raw) return null;
+	const issuedAt = Number(raw);
+	if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+	return new Date(issuedAt);
+}
+
+export function removePromptFromQuery(query: URLSearchParams, prompt: Prompt) {
+	const nextQuery = new URLSearchParams(query);
+	const prompts = nextQuery.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
 		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
+			? nextQuery.set("prompt", prompts.join(" "))
+			: nextQuery.delete("prompt");
 	}
-	return searchParamsToQuery(query);
+	return nextQuery;
 }
 
 enum PKCERequirementErrors {

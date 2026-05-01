@@ -2,10 +2,11 @@ import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
-import { APIError } from "../error";
+import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -35,7 +36,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** The primary username that represents the user */
 	preferred_username: string;
 	/** User's email address */
-	email: string;
+	email?: string;
 	/** Human-readable value that identifies the subject of the token */
 	name: string;
 	/** Matches the parameter included in the original authorize request */
@@ -116,7 +117,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 
 export interface MicrosoftOptions
 	extends ProviderOptions<MicrosoftEntraIDProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
@@ -149,6 +150,15 @@ export const microsoft = (options: MicrosoftOptions) => {
 		id: "microsoft",
 		name: "Microsoft EntraID",
 		createAuthorizationURL(data) {
+			// Microsoft Entra supports public clients (SPA / native apps with
+			// PKCE only), so clientSecret is intentionally not required here.
+			// See https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow
+			if (!getPrimaryClientId(options.clientId)) {
+				logger.error(
+					"Client Id is required for Microsoft Entra ID. Make sure to provide it in the options.",
+				);
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+			}
 			const scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email", "User.Read", "offline_access"];
@@ -190,7 +200,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				const publicKey = await getMicrosoftPublicKey(kid, tenant, authority);
 				const verifyOptions: {
 					algorithms: [string];
-					audience: string;
+					audience: string | string[];
 					maxTokenAge: string;
 					issuer?: string;
 				} = {

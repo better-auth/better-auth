@@ -20,7 +20,6 @@ import type {
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
-import * as saml from "samlify";
 import {
 	afterAll,
 	afterEach,
@@ -34,6 +33,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { saml } from "./samlify";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -657,6 +657,17 @@ describe("SAML SSO with defaultSSO array", async () => {
 			url: expect.stringContaining("http://localhost:8081"),
 			redirect: true,
 		});
+	});
+
+	it("should fetch sp metadata for a defaultSSO provider", async () => {
+		const spMetadataRes = await auth.api.spMetadata({
+			query: {
+				providerId: "default-saml",
+			},
+		});
+		const spMetadataResValue = await spMetadataRes.text();
+		expect(spMetadataRes.status).toBe(200);
+		expect(spMetadataResValue).toBe(spMetadata);
 	});
 });
 
