@@ -397,6 +397,28 @@ export interface OrganizationOptions {
 	 */
 	deleteOrganizationTokenExpiresIn?: number | undefined;
 	/**
+	 * Require the organization owner to provide their current password
+	 * before the organization can be deleted.
+	 *
+	 * When `true`, the `password` field becomes mandatory in the
+	 * `organization.delete` request body. Requests without a password
+	 * are rejected with a `BAD_REQUEST` error before any deletion logic runs.
+	 *
+	 * This only applies to users who have a credential (email + password)
+	 * account. Users who signed up via OAuth will receive a
+	 * `CREDENTIAL_ACCOUNT_NOT_FOUND` error if this option is enabled.
+	 *
+	 * @default false
+	 *
+	 * @example
+	 * ```ts
+	 * organization({
+	 *   requirePasswordToDeleteOrganization: true,
+	 * })
+	 * ```
+	 */
+	requirePasswordToDeleteOrganization?: boolean | undefined;
+	/**
 	 * Hooks for organization
 	 */
 	organizationHooks?:

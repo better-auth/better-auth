@@ -795,35 +795,32 @@ To update organization info, you can use `organization.update`
 
 To remove user owned organization, you can use `organization.delete`
 
-<APIMethod
-  path="/organization/delete"
-  method="POST"
-  requireSession
->
-```ts
-type deleteOrganization = {
-    /*
-    * The organization ID to delete.
-    */
-    organizationId: string = "org-id"
-    /*
-    * Verification token received via email (when email confirmation is enabled).
-    * When provided, the deletion is confirmed immediately.
-    */
-    token?: string
-    /*
-    * URL to redirect to after the organization is deleted.
-    * Only used when confirming via the callback endpoint.
-    */
-    callbackURL?: string
-    /*
-    * The requester's password for identity verification.
-    * Optional — if provided, it is verified against the user's credential account
-    * before proceeding with deletion (or sending the confirmation email).
-    */
-    password?: string
-}
-```
+<APIMethod path="/organization/delete" method="POST" requireSession>
+  ```ts
+  type deleteOrganization = {
+      /*
+      * The organization ID to delete.
+      */
+      organizationId: string = "org-id"
+      /*
+      * Verification token received via email (when email confirmation is enabled).
+      * When provided, the deletion is confirmed immediately.
+      */
+      token?: string
+      /*
+      * URL to redirect to after the organization is deleted.
+      * Only used when confirming via the callback endpoint.
+      */
+      callbackURL?: string
+      /*
+      * The requester's password for identity verification.
+      * Optional — if provided, it is verified against the user's credential account
+      * before proceeding with deletion (or sending the confirmation email).
+      * Required when `requirePasswordToDeleteOrganization: true` is set in the plugin options.
+      */
+      password?: string
+  }
+  ```
 </APIMethod>
 
 If the user has the necessary permissions (by default: role is owner) in the specified organization, all members, invitations and organization information will be removed.
@@ -856,6 +853,7 @@ const auth = betterAuth({
 You can require the organization owner to confirm deletion via email before the organization is removed. This works similarly to the [delete user](/docs/concepts/users-accounts#delete-user) confirmation flow.
 
 When `sendDeleteOrganizationEmail` is configured, calling `organization.delete` will **not** delete the organization immediately. Instead, it will:
+
 1. Generate a short-lived verification token
 2. Call your `sendDeleteOrganizationEmail` callback so you can email the confirmation link
 3. Return `{ success: true, message: "Verification email sent" }`
@@ -879,6 +877,7 @@ export const auth = betterAuth({
         });
       },
       deleteOrganizationTokenExpiresIn: 3600, // optional, default: 86400 (24h)
+      requirePasswordToDeleteOrganization: true, // optional, enforce password verification
     }),
   ],
 });
@@ -891,7 +890,7 @@ You can optionally pass a `password` to verify the requester's identity before t
 ```ts
 const { data, error } = await authClient.organization.delete({
   organizationId: "org-id",
-  password: "user-password", // optional identity check
+  password: "user-password", // optional identity check (required if requirePasswordToDeleteOrganization: true)
   callbackURL: "/org-deleted", // optional redirect after confirmation
 });
 // data.message === "Verification email sent"

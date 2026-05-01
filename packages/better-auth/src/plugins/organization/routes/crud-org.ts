@@ -664,9 +664,6 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 					);
 				}
-				if (tokenOrgId === session.session.activeOrganizationId) {
-					await adapter.setActiveOrganization(session.session.token, null, ctx);
-				}
 				if (options?.organizationHooks?.beforeDeleteOrganization) {
 					await options.organizationHooks.beforeDeleteOrganization({
 						organization: org,
@@ -674,6 +671,13 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					});
 				}
 				await runWithTransaction(ctx.context.adapter, async () => {
+					if (tokenOrgId === session.session.activeOrganizationId) {
+						await adapter.setActiveOrganization(
+							session.session.token,
+							null,
+							ctx,
+						);
+					}
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 						`delete-organization-${ctx.body.token}`,
 					);
@@ -732,6 +736,15 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
 
+			if (
+				ctx.context.orgOptions.requirePasswordToDeleteOrganization &&
+				!ctx.body.password
+			) {
+				throw APIError.from("BAD_REQUEST", {
+					message: "Password is required to delete this organization",
+					code: "PASSWORD_REQUIRED",
+				});
+			}
 			if (ctx.body.password) {
 				const accounts = await ctx.context.internalAdapter.findAccounts(
 					session.user.id,
@@ -786,10 +799,6 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			if (organizationId === session.session.activeOrganizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
 				await options.organizationHooks.beforeDeleteOrganization({
 					organization: org,
@@ -797,6 +806,9 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			await runWithTransaction(ctx.context.adapter, async () => {
+				if (organizationId === session.session.activeOrganizationId) {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				}
 				await adapter.deleteOrganization(organizationId);
 			});
 			if (options?.organizationHooks?.afterDeleteOrganization) {
@@ -944,10 +956,6 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 				);
 			}
 
-			if (organizationId === session.session.activeOrganizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
 				await options.organizationHooks.beforeDeleteOrganization({
 					organization: org,
@@ -955,6 +963,9 @@ export const deleteOrganizationCallback = <O extends OrganizationOptions>(
 				});
 			}
 			await runWithTransaction(ctx.context.adapter, async () => {
+				if (organizationId === session.session.activeOrganizationId) {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				}
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					`delete-organization-${ctx.query.token}`,
 				);

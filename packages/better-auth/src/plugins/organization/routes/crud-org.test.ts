@@ -891,4 +891,60 @@ describe("delete organization", async () => {
 		const orgs = await auth.api.listOrganizations({ headers });
 		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
 	});
+
+	it("should reject deletion when requirePasswordToDeleteOrganization is enabled and no password is provided", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					requirePasswordToDeleteOrganization: true,
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "requires-pw", slug: "requires-pw" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: { organizationId: org?.id },
+			headers,
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(400);
+
+		// org must still exist
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.find((o: any) => o.id === org?.id)).toBeDefined();
+	});
+
+	it("should allow deletion when requirePasswordToDeleteOrganization is enabled and correct password is provided", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					requirePasswordToDeleteOrganization: true,
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			body: { name: "requires-pw-ok", slug: "requires-pw-ok" },
+			headers,
+		});
+
+		const res = await auth.api.deleteOrganization({
+			body: { organizationId: org?.id, password: "test123456" },
+			headers,
+		});
+		expect(res).toMatchObject({
+			success: true,
+			message: "Organization deleted",
+		});
+
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.find((o: any) => o.id === org?.id)).toBeUndefined();
+	});
 });
