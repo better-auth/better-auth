@@ -1,8 +1,12 @@
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptionsWithAssertion,
+	GenericOAuthConfig,
+} from "../index";
 
-export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
+export interface MicrosoftEntraIdOptions
+	extends BaseOAuthProviderOptionsWithAssertion {
 	/**
 	 * Microsoft Entra ID tenant ID.
 	 * Can be a GUID, "common", "organizations", or "consumers"
@@ -92,6 +96,7 @@ export function microsoftEntraId(
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		clientAssertionProvider: options.clientAssertionProvider,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

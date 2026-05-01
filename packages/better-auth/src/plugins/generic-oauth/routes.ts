@@ -397,6 +397,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						options: {
 							clientId: providerConfig.clientId,
 							clientSecret: providerConfig.clientSecret,
+							clientAssertionProvider: providerConfig.clientAssertionProvider,
 							redirectURI: providerConfig.redirectURI,
 						},
 						tokenEndpoint: finalTokenUrl,

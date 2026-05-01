@@ -51,6 +51,27 @@ export type BaseOAuthProviderOptions = Omit<
 };
 
 /**
+ * Base type for OAuth provider options where the caller may authenticate to
+ * the token endpoint either with a long-lived `clientSecret` or with a
+ * `clientAssertionProvider` that returns a (typically short-lived) client
+ * assertion such as a signed JWT.
+ *
+ * Used by providers that are known to support JWT-bearer client assertions
+ * (RFC 7523), e.g. Microsoft Entra ID, Okta, Auth0.
+ */
+export type BaseOAuthProviderOptionsWithAssertion = Omit<
+	BaseOAuthProviderOptions,
+	"clientSecret"
+> &
+	Pick<GenericOAuthConfig, "clientAssertionProvider"> & {
+		/**
+		 * OAuth client secret. Required unless `clientAssertionProvider` is
+		 * provided.
+		 */
+		clientSecret?: string;
+	};
+
+/**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
@@ -114,6 +135,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
+								clientAssertionProvider: c.clientAssertionProvider,
 								redirectURI: c.redirectURI,
 							},
 							authorizationEndpoint: finalAuthUrl,

@@ -2,6 +2,7 @@ import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
+import { CLIENT_ASSERTION_TYPE_JWT_BEARER } from "./validate-authorization-code";
 
 export async function refreshAccessTokenRequest({
 	refreshToken,
@@ -17,12 +18,17 @@ export async function refreshAccessTokenRequest({
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+	const clientAssertion =
+		!options.clientSecret && options.clientAssertionProvider
+			? await options.clientAssertionProvider()
+			: undefined;
 	return createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
 		extraParams,
 		resource,
+		clientAssertion,
 	});
 }
 
@@ -35,12 +41,14 @@ export function createRefreshAccessTokenRequest({
 	authentication,
 	extraParams,
 	resource,
+	clientAssertion,
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
 	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
+	clientAssertion?: string | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -52,7 +60,10 @@ export function createRefreshAccessTokenRequest({
 	body.set("refresh_token", refreshToken);
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
-	if (authentication === "basic") {
+	// A client assertion is always carried in the body per RFC 7523, even if the
+	// caller requested `basic` authentication.
+	const useClientAssertion = !options.clientSecret && !!clientAssertion;
+	if (authentication === "basic" && !useClientAssertion) {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
@@ -71,6 +82,9 @@ export function createRefreshAccessTokenRequest({
 		body.set("client_id", primaryClientId);
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
+		} else if (clientAssertion) {
+			body.set("client_assertion_type", CLIENT_ASSERTION_TYPE_JWT_BEARER);
+			body.set("client_assertion", clientAssertion);
 		}
 	}
 
@@ -108,7 +122,7 @@ export async function refreshAccessToken({
 	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = await createRefreshAccessTokenRequest({
+	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,

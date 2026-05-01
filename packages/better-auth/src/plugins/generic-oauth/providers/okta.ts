@@ -1,6 +1,9 @@
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptionsWithAssertion,
+	GenericOAuthConfig,
+} from "../index";
 
-export interface OktaOptions extends BaseOAuthProviderOptions {
+export interface OktaOptions extends BaseOAuthProviderOptionsWithAssertion {
 	/**
 	 * Okta issuer URL (e.g., https://dev-xxxxx.okta.com/oauth2/default)
 	 * This will be used to construct the discovery URL.
@@ -42,6 +45,7 @@ export function okta(options: OktaOptions): GenericOAuthConfig {
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		clientAssertionProvider: options.clientAssertionProvider,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

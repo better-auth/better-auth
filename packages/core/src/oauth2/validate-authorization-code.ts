@@ -5,6 +5,9 @@ import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
+export const CLIENT_ASSERTION_TYPE_JWT_BEARER =
+	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+
 export async function authorizationCodeRequest({
 	code,
 	codeVerifier,
@@ -27,6 +30,10 @@ export async function authorizationCodeRequest({
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+	const clientAssertion =
+		!options.clientSecret && options.clientAssertionProvider
+			? await options.clientAssertionProvider()
+			: undefined;
 	return createAuthorizationCodeRequest({
 		code,
 		codeVerifier,
@@ -37,6 +44,7 @@ export async function authorizationCodeRequest({
 		headers,
 		additionalParams,
 		resource,
+		clientAssertion,
 	});
 }
 
@@ -53,6 +61,7 @@ export function createAuthorizationCodeRequest({
 	headers,
 	additionalParams = {},
 	resource,
+	clientAssertion,
 }: {
 	code: string;
 	redirectURI: string;
@@ -63,6 +72,7 @@ export function createAuthorizationCodeRequest({
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
+	clientAssertion?: string | undefined;
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
@@ -88,7 +98,10 @@ export function createAuthorizationCodeRequest({
 	}
 	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
 	// Fixes compatibility with providers like Notion, Twitter, etc.
-	if (authentication === "basic") {
+	// A client assertion is always carried in the body per RFC 7523, even if the
+	// caller requested `basic` authentication.
+	const useClientAssertion = !options.clientSecret && !!clientAssertion;
+	if (authentication === "basic" && !useClientAssertion) {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
@@ -103,6 +116,9 @@ export function createAuthorizationCodeRequest({
 		body.set("client_id", primaryClientId);
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
+		} else if (clientAssertion) {
+			body.set("client_assertion_type", CLIENT_ASSERTION_TYPE_JWT_BEARER);
+			body.set("client_assertion", clientAssertion);
 		}
 	}
 

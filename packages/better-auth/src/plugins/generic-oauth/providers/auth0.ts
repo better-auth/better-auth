@@ -1,6 +1,9 @@
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptionsWithAssertion,
+	GenericOAuthConfig,
+} from "../index";
 
-export interface Auth0Options extends BaseOAuthProviderOptions {
+export interface Auth0Options extends BaseOAuthProviderOptionsWithAssertion {
 	/**
 	 * Auth0 domain (e.g., dev-xxx.eu.auth0.com)
 	 * This will be used to construct the discovery URL.
@@ -42,6 +45,7 @@ export function auth0(options: Auth0Options): GenericOAuthConfig {
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		clientAssertionProvider: options.clientAssertionProvider,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

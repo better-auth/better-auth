@@ -106,6 +106,22 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	clientSecret?: string | undefined;
 	/**
+	 * An async function that returns an assertion used for authenticating the client
+	 * with the authorization server's token endpoint, in lieu of a long-lived `clientSecret`.
+	 *
+	 * When provided, token endpoint requests will include these parameters instead of `client_secret`:
+	 *
+	 * - `client_assertion_type`: `urn:ietf:params:oauth:client-assertion-type:jwt-bearer` (constant value)
+	 * - `client_assertion`: the string returned by this function
+	 *
+	 * The function is invoked for every token endpoint request, so the caller can
+	 * generate fresh, short-lived assertions (e.g. a signed JWT). It is ignored when
+	 * `clientSecret` is set.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc7523
+	 */
+	clientAssertionProvider?: (() => Promise<string> | string) | undefined;
+	/**
 	 * The scopes you want to request from the provider
 	 */
 	scope?: string[] | undefined;
