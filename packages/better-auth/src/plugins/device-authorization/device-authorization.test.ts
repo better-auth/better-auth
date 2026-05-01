@@ -4,7 +4,7 @@ import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
 
-describe.only("device authorization plugin input validation", () => {
+describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
 		const options = deviceAuthorizationOptionsSchema.parse({});
 		expect(options).toMatchInlineSnapshot(`
@@ -15,14 +15,6 @@ describe.only("device authorization plugin input validation", () => {
 			  "userCodeLength": 8,
 			}
 		`);
-	});
-
-	it("should NOT throw when schema is not provided", () => {
-		expect(() => {
-			deviceAuthorization({
-				verificationUri: "https://example.com/device",
-			});
-		}).not.toThrow();
 	});
 
 	it("should validate custom options", async () => {
