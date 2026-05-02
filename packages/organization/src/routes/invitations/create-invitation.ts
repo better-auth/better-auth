@@ -21,53 +21,68 @@ import type {
 	OrganizationOptions,
 } from "../../types";
 
-const baseInvitationSchema = z.object({
-	email: z.string().meta({
-		description: "The email address of the user to invite",
-	}),
-	role: z
-		.union([
-			z.string().meta({
-				description: "The role to assign to the user",
-			}),
-			z.array(
-				z.string().meta({
-					description: "The roles to assign to the user",
-				}),
-			),
-		])
-		.meta({
-			description:
-				'The role(s) to assign to the user. It can be `admin`, `member`, owner. Eg: "member"',
-		}),
-	organizationId: z
-		.string()
-		.meta({
-			description: "The organization ID to invite the user to",
-		})
-		.optional(),
-	resend: z
-		.boolean()
-		.meta({
-			description:
-				"Resend the invitation email, if the user is already invited. Eg: true",
-		})
-		.optional(),
-	teamId: z.union([
-		z
+const baseInvitationSchema = z
+	.object({
+		email: z
 			.string()
 			.meta({
-				description: "The team ID to invite the user to",
+				description:
+					"The email address of the user to invite. Either email or userId must be provided.",
 			})
 			.optional(),
-		z
-			.array(z.string())
+		userId: z
+			.string()
 			.meta({
-				description: "The team IDs to invite the user to",
+				description:
+					"The user ID of the user to invite. Either email or userId must be provided.",
 			})
 			.optional(),
-	]),
-});
+		role: z
+			.union([
+				z.string().meta({
+					description: "The role to assign to the user",
+				}),
+				z.array(
+					z.string().meta({
+						description: "The roles to assign to the user",
+					}),
+				),
+			])
+			.meta({
+				description:
+					'The role(s) to assign to the user. It can be `admin`, `member`, owner. Eg: "member"',
+			}),
+		organizationId: z
+			.string()
+			.meta({
+				description: "The organization ID to invite the user to",
+			})
+			.optional(),
+		resend: z
+			.boolean()
+			.meta({
+				description:
+					"Resend the invitation email, if the user is already invited. Eg: true",
+			})
+			.optional(),
+		teamId: z.union([
+			z
+				.string()
+				.meta({
+					description: "The team ID to invite the user to",
+				})
+				.optional(),
+			z
+				.array(z.string())
+				.meta({
+					description: "The team IDs to invite the user to",
+				})
+				.optional(),
+		]),
+	})
+	.refine((data) => data.email || data.userId, {
+		message: "Either email or userId must be provided",
+	});
 
 export type CreateInvitation<O extends OrganizationOptions> = ReturnType<
 	typeof createInvitation<O>
@@ -96,9 +111,15 @@ export const createInvitation = <O extends OrganizationOptions>(
 					body: {} as {
 						/**
 						 * The email address of the user
-						 * to invite
+						 * to invite. Either email or userId
+						 * must be provided.
 						 */
-						email: string;
+						email?: string | undefined;
+						/**
+						 * The user ID of the user to invite.
+						 * Either email or userId must be provided.
+						 */
+						userId?: string | undefined;
 						/**
 						 * The role to assign to the user
 						 */
@@ -183,7 +204,32 @@ export const createInvitation = <O extends OrganizationOptions>(
 			>({ ctx, shouldGetOrganization: true });
 			const organizationId = organization.id as RealOrganizationId;
 
-			const email = ctx.body.email.toLowerCase();
+			let email: string;
+
+			if (ctx.body.userId) {
+				const user = await ctx.context.adapter.findOne<{
+					id: string;
+					email: string;
+				}>({
+					model: "user",
+					where: [{ field: "id", value: ctx.body.userId }],
+					select: ["id", "email"],
+				});
+				if (!user) {
+					const code = "USER_NOT_FOUND";
+					const msg = ORGANIZATION_ERROR_CODES[code];
+					throw APIError.from("BAD_REQUEST", msg);
+				}
+				email = user.email.toLowerCase();
+			} else if (ctx.body.email) {
+				email = ctx.body.email.toLowerCase();
+			} else {
+				throw APIError.from("BAD_REQUEST", {
+					message: "Either email or userId must be provided",
+					code: "EMAIL_OR_USER_ID_REQUIRED",
+				});
+			}
+
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);

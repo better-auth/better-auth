@@ -15,8 +15,15 @@ To invite a user to an organization, use the `organization.inviteMember` method:
   type inviteMember = {
       /**
        * The email address of the user to invite.
+       * Either email or userId must be provided.
        */
-      email: string = "user@example.com"
+      email?: string = "user@example.com"
+      /**
+       * The user ID of the user to invite.
+       * Either email or userId must be provided.
+       * When provided, the user's email is looked up automatically.
+       */
+      userId?: string = "user-id"
       /**
        * The role(s) to assign to the user when they accept.
        * Can be a single role or an array of roles.
@@ -35,6 +42,27 @@ To invite a user to an organization, use the `organization.inviteMember` method:
   }
   ```
 </APIMethod>
+
+### Inviting by User ID
+
+If you already have a user in your system and want to invite them to an organization, you can use their user ID instead of their email:
+
+```ts
+await authClient.organization.inviteMember({
+    userId: "user-123",
+    role: "member",
+})
+```
+
+When you provide a `userId`, the system automatically looks up the user's email and creates the invitation. This is useful when:
+
+* You're inviting existing users from a user picker or search interface
+* You want to avoid email typos
+* The user's email might change but their ID remains constant
+
+<Callout type="info">
+  If both `email` and `userId` are provided, `userId` takes precedence and the user's actual email from the database is used for the invitation.
+</Callout>
 
 ### Inviting with Multiple Roles
 
@@ -82,8 +110,15 @@ When a user clicks the URL, they are automatically redirected to the backend cal
   type getInvitationURL = {
       /**
        * The email address of the user to invite.
+       * Either email or userId must be provided.
        */
-      email: string = "user@example.com"
+      email?: string = "user@example.com"
+      /**
+       * The user ID of the user to invite.
+       * Either email or userId must be provided.
+       * When provided, the user's email is looked up automatically.
+       */
+      userId?: string = "user-id"
       /**
        * The role(s) to assign to the user when they accept.
        * Can be a single role or an array of roles.

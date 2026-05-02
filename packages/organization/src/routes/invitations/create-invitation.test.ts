@@ -597,3 +597,219 @@ describe("member permission to invite", async (it) => {
 		expect(result.invitation.role).toBe("member");
 	});
 });
+
+describe("invite by user ID", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser, signInWithUser, adapter } =
+		await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const org = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should invite user by userId", async () => {
+		const userEmail = `invite-by-id-${crypto.randomUUID()}@test.com`;
+		const signupRes = await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "User To Invite",
+			},
+		});
+
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				userId: signupRes.user.id,
+				role: "member",
+			},
+		});
+
+		expect(result.invitation).toBeDefined();
+		expect(result.invitation.email).toBe(userEmail);
+		expect(result.invitation.role).toBe("member");
+		expect(result.invitation.status).toBe("pending");
+	});
+
+	it("should throw error when userId does not exist", async () => {
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: org.id,
+					userId: "non-existent-user-id",
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.USER_NOT_FOUND.message);
+	});
+
+	it("should not allow inviting user by ID who is already a member", async () => {
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		const memberEmail = `already-member-by-id-${crypto.randomUUID()}@test.com`;
+		const signupRes = await auth.api.signUpEmail({
+			body: {
+				email: memberEmail,
+				password: "password123",
+				name: "Already Member By ID",
+			},
+		});
+
+		await adapter.create({
+			model: "member",
+			data: {
+				id: crypto.randomUUID(),
+				organizationId: newOrg.id,
+				userId: signupRes.user.id,
+				role: "member",
+				createdAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: newOrg.id,
+					userId: signupRes.user.id,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
+		);
+	});
+
+	it("should not allow inviting user by ID who is already invited", async () => {
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		const userEmail = `double-invite-by-id-${crypto.randomUUID()}@test.com`;
+		const signupRes = await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "Double Invite User",
+			},
+		});
+
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: newOrg.id,
+				userId: signupRes.user.id,
+				role: "member",
+			},
+		});
+		expect(result.invitation).toBeDefined();
+
+		await expect(
+			auth.api.createInvitation({
+				headers,
+				body: {
+					organizationId: newOrg.id,
+					userId: signupRes.user.id,
+					role: "member",
+				},
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
+	});
+
+	it("should work with both email and userId provided (userId takes precedence)", async () => {
+		const userEmail = `both-email-and-id-${crypto.randomUUID()}@test.com`;
+		const signupRes = await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "Both Email And ID User",
+			},
+		});
+
+		const result = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: org.id,
+				userId: signupRes.user.id,
+				email: "different-email@test.com",
+				role: "member",
+			},
+		});
+
+		expect(result.invitation).toBeDefined();
+		expect(result.invitation.email).toBe(userEmail);
+	});
+
+	it("should allow invited user to accept invitation", async () => {
+		const newOrgData = getOrganizationData();
+		const newOrg = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: newOrgData.name,
+				slug: newOrgData.slug,
+			},
+		});
+
+		const userEmail = `accept-invite-by-id-${crypto.randomUUID()}@test.com`;
+		const signupRes = await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "Accept Invite User",
+			},
+		});
+
+		const inviteResult = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: newOrg.id,
+				userId: signupRes.user.id,
+				role: "member",
+			},
+		});
+
+		const { headers: inviteeHeaders } = await signInWithUser(
+			userEmail,
+			"test123456",
+		);
+
+		const acceptResult = await auth.api.acceptInvitation({
+			headers: inviteeHeaders,
+			body: {
+				invitationId: inviteResult.invitation.id,
+			},
+		});
+
+		expect(acceptResult.invitation.status).toBe("accepted");
+		expect(acceptResult.member).toBeDefined();
+		expect(acceptResult.member.userId).toBe(signupRes.user.id);
+		expect(acceptResult.member.organizationId).toBe(newOrg.id);
+	});
+});
