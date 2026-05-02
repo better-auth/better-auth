@@ -57,7 +57,7 @@ function CareersHero({ openRoles }: { openRoles: number }) {
 				<div className="flex items-center gap-3 pt-1">
 					<a
 						href="mailto:careers@better-auth.com"
-						className="inline-flex items-center gap-1.5 text-[13px] text-foreground/40 hover:text-foreground/70 font-mono uppercase tracking-wider transition-colors"
+						className="inline-flex items-center gap-1.5 text-xs text-foreground/40 hover:text-foreground/70 font-mono tracking-wider transition-colors"
 					>
 						careers@better-auth.com
 						<svg
@@ -251,7 +251,7 @@ export function CareersPageClient({ roles }: { roles: Role[] }) {
 								transition={{ duration: 0.3, delay: 0.05 }}
 								className="space-y-5 max-w-2xl"
 							>
-								<p className="text-[15px] text-foreground/60 leading-relaxed">
+								<p className="text-md text-foreground/60 leading-relaxed">
 									Better Auth is built with the idea of{" "}
 									<span className="text-foreground/80">
 										democratizing access to high quality software
@@ -260,14 +260,14 @@ export function CareersPageClient({ roles }: { roles: Role[] }) {
 									millions of developers.
 								</p>
 
-								<p className="text-[15px] text-foreground/60 leading-relaxed">
+								<p className="text-md text-foreground/60 leading-relaxed">
 									Every line of code we write gets used in production by
-									thousands of projects &mdash; from solo indie hackers to
-									large-scale enterprises. The work here has{" "}
+									thousands of projects, from solo indie hackers to large-scale
+									enterprises. The work here has{" "}
 									<span className="text-foreground/80">outsized impact</span>.
 								</p>
 
-								<p className="text-[15px] text-foreground/60 leading-relaxed">
+								<p className="text-md text-foreground/60 leading-relaxed">
 									We work in the open, move fast, and care deeply about
 									developer experience. If you want to do the best work of your
 									career on a problem that matters, we&apos;d love to hear from
