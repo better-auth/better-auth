@@ -1,5 +1,28 @@
 # @better-auth/oauth-provider
 
+## 1.7.0-beta.2
+
+### Minor Changes
+
+- [#9277](https://github.com/better-auth/better-auth/pull/9277) [`5c6de4e`](https://github.com/better-auth/better-auth/commit/5c6de4ed265e7aa30e7e42a0e493386cf3ad6c96) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oauth-provider): return RFC-compliant `{ error, error_description }` envelopes from validation failures
+
+  An internal `createOAuthEndpoint` wrapper now translates zod validation failures into the envelope required by RFC 6749 §5.2, 7009 §2.2.1, 7662 §2.3, and 7591 §3.2.2. Failing issues are routed per field:
+  - an absent required value maps to `errorCodesByField[name].missing` or the endpoint's `defaultError`.
+  - an unsupported value (unknown enum member) maps to `errorCodesByField[name].invalid` or `defaultError`.
+  - any other failure (wrong type, duplicated query params, invalid format, refinement) maps to `defaultError`, so RFC 6749 §3.1 malformed requests emit the endpoint's default code regardless of field.
+
+  All six OAuth endpoints (`/oauth2/token`, `/oauth2/authorize`, `/oauth2/revoke`, `/oauth2/introspect`, `/oauth2/register`, `/oauth2/end-session`) now return RFC-compliant errors for malformed requests. `/oauth2/authorize` validation failures redirect to the relying party with `error`, `error_description`, echoed `state`, and `iss` whenever `client_id` and `redirect_uri` resolve against the registered client; requests without a trusted RP fall back to the server error page.
+
+  Additional RFC compliance fixes on the same endpoints:
+  - `/oauth2/revoke` and `/oauth2/introspect` now ignore an unknown `token_type_hint` instead of rejecting it. RFC 7009 §2.2.1 and RFC 7662 §2.1 reserve `unsupported_token_type` for the token itself, not the hint value; servers MAY ignore unrecognized hints and search across supported token types.
+  - `/oauth2/authorize` error redirects now respect OIDC Core 1.0 §5 response modes. Errors for `response_type=token` or `id_token` are delivered in the URL fragment per RFC 6749 §4.2.2.1; an explicit `response_mode=query` overrides the default.
+
+### Patch Changes
+
+- Updated dependencies [[`9aed910`](https://github.com/better-auth/better-auth/commit/9aed910499eb4cbc3dd0c395ff5534893daab7a4), [`acbd6ef`](https://github.com/better-auth/better-auth/commit/acbd6ef69f88ea54174446ac0465a426bad7ca09), [`954b664`](https://github.com/better-auth/better-auth/commit/954b664f4f251f8dd028451dab3ab43067dbf890), [`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9)]:
+  - better-auth@1.7.0-beta.2
+  - @better-auth/core@1.7.0-beta.2
+
 ## 1.7.0-beta.1
 
 ### Minor Changes
@@ -82,6 +105,57 @@
 - Updated dependencies [[`6ce30cf`](https://github.com/better-auth/better-auth/commit/6ce30cf13853619b9022e93bd6ecb956bc32482d), [`f6428d0`](https://github.com/better-auth/better-auth/commit/f6428d02fcabc2e628f39b0e402f1a6eb0602649), [`c5066fe`](https://github.com/better-auth/better-auth/commit/c5066fe5d68babf2376cfc63d813de5542eca463), [`5f84335`](https://github.com/better-auth/better-auth/commit/5f84335815d75410320bdfa665a6712d3416b04f), [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656), [`544f1c6`](https://github.com/better-auth/better-auth/commit/544f1c63c9826831d96a126fbe568d8a8a8fde68)]:
   - better-auth@1.7.0-beta.0
   - @better-auth/core@1.7.0-beta.0
+
+## 1.6.7
+
+### Patch Changes
+
+- [#9244](https://github.com/better-auth/better-auth/pull/9244) [`4e0e6e1`](https://github.com/better-auth/better-auth/commit/4e0e6e1fd32705063cf4831c0339212066aa369f) Thanks [@TanishValesha](https://github.com/TanishValesha)! - read OAuth2 userinfo `Authorization` from `ctx.headers` when `ctx.request` is absent, so `auth.api.oauth2UserInfo({ headers })` matches HTTP `GET /oauth2/userinfo`.
+
+- Updated dependencies [[`307196a`](https://github.com/better-auth/better-auth/commit/307196a405e067f4a863de2ed68528e8d4bdc162), [`4a180f0`](https://github.com/better-auth/better-auth/commit/4a180f0b0c084c59e7b006058d3fdbd8542face5), [`4f373ee`](https://github.com/better-auth/better-auth/commit/4f373eed8a42e02460dbd2ee9973b9493cea04eb), [`e1b1cfc`](https://github.com/better-auth/better-auth/commit/e1b1cfc7a262c8bf0c383a7b2b1d140472d33e56), [`d053a45`](https://github.com/better-auth/better-auth/commit/d053a4583e0db9132e52a100ae33e13d040a6bae)]:
+  - better-auth@1.6.7
+  - @better-auth/core@1.6.7
+
+## 1.6.6
+
+### Patch Changes
+
+- [#9226](https://github.com/better-auth/better-auth/pull/9226) [`e64ff72`](https://github.com/better-auth/better-auth/commit/e64ff720fb8514cb78aedd1660223d8b948284da) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Consolidate host/IP classification behind `@better-auth/core/utils/host` and close several loopback/SSRF bypasses that the previous per-package regex checks missed.
+
+  **Electron user-image proxy: SSRF bypasses closed (`@better-auth/electron`).** `fetchUserImage` previously gated outbound requests with a bespoke IPv4/IPv6 regex that missed multiple vectors. All of the following were reachable in production and are now blocked:
+  - `http://tenant.localhost/` and other `*.localhost` names (RFC 6761 reserves the entire TLD for loopback).
+  - `http://[::ffff:169.254.169.254]/` (IPv4-mapped IPv6 to AWS IMDS, the classic SSRF bypass).
+  - `http://metadata.google.internal/`, `http://metadata.goog/` (GCP instance metadata).
+  - `http://instance-data/`, `http://instance-data.ec2.internal/` (AWS IMDS alternate FQDNs).
+  - `http://100.100.100.200/` (Alibaba Cloud IMDS; lives in RFC 6598 shared address space `100.64/10`, which the old regex did not cover).
+  - `http://0.0.0.0:PORT/` (the Linux/macOS kernel routes the unspecified address to loopback: Oligo's "0.0.0.0 Day").
+  - `http://[fc00::...]/`, `http://[fd00::...]/` (IPv6 ULA per RFC 4193) and IPv6 link-local `fe80::/10`, neither of which the regex recognized.
+
+  Documentation ranges (RFC 5737 / RFC 3849), benchmarking (`198.18/15`), multicast, and broadcast are also now rejected.
+
+  **`better-auth`: `0.0.0.0` is no longer treated as loopback.** The previous `isLoopbackHost` implementation in `packages/better-auth/src/utils/url.ts` classified `0.0.0.0` alongside `127.0.0.1` / `::1` / `localhost`. `0.0.0.0` is the unspecified address, not loopback; treating it as such lets browser-origin requests reach localhost-bound dev services (Oligo's "0.0.0.0 Day"). The helper now accepts the full `127.0.0.0/8` range and any `*.localhost` name, and rejects `0.0.0.0`.
+
+  **`better-auth`: trusted-origin substring hardening.** `getTrustedOrigins` previously used `host.includes("localhost") || host.includes("127.0.0.1")` when deciding whether to add an `http://` variant for a dynamic `baseURL.allowedHosts` entry. Misconfigurations like `evil-localhost.com` or `127.0.0.1.nip.io` would incorrectly gain an HTTP origin in the trust list. The check now uses the shared classifier, so only real loopback hosts get the HTTP variant.
+
+  **`@better-auth/oauth-provider`: RFC 8252 compliance.**
+  - §7.3 redirect URI matching now accepts the full `127.0.0.0/8` range (not just `127.0.0.1`) plus `[::1]`, with port-flexible comparison. Port-flexible matching is limited to IP literals; DNS names such as `localhost` continue to use exact-string matching per §8.3 ("NOT RECOMMENDED" for loopback).
+  - `validateIssuerUrl` uses the shared loopback check rather than a two-hostname literal comparison.
+
+  **New module: `@better-auth/core/utils/host`.** Exposes `classifyHost`, `isLoopbackIP`, `isLoopbackHost`, and `isPublicRoutableHost`. One RFC 6890 / RFC 6761 / RFC 8252 implementation that handles IPv4, IPv6 (including bracketed literals, zone IDs, IPv4-mapped addresses, and 6to4 / NAT64 / Teredo tunnel forms with embedded-IPv4 recursion), and FQDNs, with a curated cloud-metadata FQDN set. All bespoke loopback/private/link-local checks across the monorepo now route through it.
+
+- Updated dependencies [[`b5742f9`](https://github.com/better-auth/better-auth/commit/b5742f9d08d7c6ae0848279b79c8bcc0a09082d7), [`4debfb6`](https://github.com/better-auth/better-auth/commit/4debfb600ff448f3e63ed242a2fb5a2c41654be1), [`9ea7eb1`](https://github.com/better-auth/better-auth/commit/9ea7eb1eab28d50d40836ab4e2cbe5a81c4da1aa), [`a844c7d`](https://github.com/better-auth/better-auth/commit/a844c7dd087715678787cb10bf9670fad46e535b), [`ab4c10f`](https://github.com/better-auth/better-auth/commit/ab4c10fbc09defcd851d614acecc111cc114b543), [`a61083e`](https://github.com/better-auth/better-auth/commit/a61083e023163d0a14d9e886ce556ba459677428), [`e64ff72`](https://github.com/better-auth/better-auth/commit/e64ff720fb8514cb78aedd1660223d8b948284da)]:
+  - @better-auth/core@1.6.6
+  - better-auth@1.6.6
+
+## 1.6.5
+
+### Patch Changes
+
+- [`5b900a2`](https://github.com/better-auth/better-auth/commit/5b900a2b43a734ecde6b624b92a4e21468376012) Thanks [@chdanielmueller](https://github.com/chdanielmueller)! - fix(oauth-provider): enforce client privilege checks on OAuth client creation
+
+- Updated dependencies [[`938dd80`](https://github.com/better-auth/better-auth/commit/938dd80e2debfab7f7ef480792a5e63876e779d9), [`0538627`](https://github.com/better-auth/better-auth/commit/05386271ca143d07416297611d3b31e6c20e2f2a)]:
+  - better-auth@1.6.5
+  - @better-auth/core@1.6.5
 
 ## 1.6.4
 

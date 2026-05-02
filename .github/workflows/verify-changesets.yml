@@ -7,32 +7,68 @@ on:
       - main
       - next
       - 'release/**'
-    paths:
-      - '.changeset/**'
-      - 'packages/**'
+  merge_group:
 
 permissions: {}
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    if: >
-      !startsWith(github.head_ref, 'changeset-release/') &&
-      !(github.head_ref == 'next' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository) &&
-      !(github.head_ref == 'main' && github.base_ref == 'next' && github.event.pull_request.head.repo.full_name == github.repository) &&
-      github.actor != 'github-actions[bot]' &&
-      github.actor != 'better-release[bot]'
     permissions:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: Evaluate exemptions
+        id: gate
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          UPSTREAM_REPO: ${{ github.repository }}
+        run: |
+          exempt=false
+          reason=""
+
+          if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+            exempt=true
+            reason="merge_group event (verification ran on the source PR)"
+          elif [ "$HEAD_REPO" = "$UPSTREAM_REPO" ]; then
+            case "$HEAD_REF" in
+              changeset-release/*)
+                exempt=true
+                reason="release PR from changeset-release/* branch"
+                ;;
+            esac
+
+            if [ "$exempt" = "false" ]; then
+              if [ "$HEAD_REF" = "next" ] && [ "$BASE_REF" = "main" ]; then
+                exempt=true
+                reason="next -> main promotion PR"
+              elif [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "next" ]; then
+                exempt=true
+                reason="main -> next sync PR"
+              fi
+            fi
+          fi
+
+          {
+            echo "exempt=$exempt"
+            echo "reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$exempt" = "true" ]; then
+            echo "Verification exempt: $reason"
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.exempt == 'false'
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Block pre.json on main
-        if: github.base_ref == 'main'
+        if: steps.gate.outputs.exempt == 'false' && github.base_ref == 'main'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
@@ -43,6 +79,7 @@ jobs:
 
       - name: Get changed changeset files
         id: changed
+        if: steps.gate.outputs.exempt == 'false'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
@@ -57,7 +94,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Check package changes require changeset
-        if: steps.changed.outputs.has_changesets == 'false'
+        if: steps.gate.outputs.exempt == 'false' && steps.changed.outputs.has_changesets == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -65,13 +102,13 @@ jobs:
         run: |
           LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
           if echo "$LABELS" | grep -q "skip-changeset"; then
-            echo "Skipping changeset requirement (skip-changeset label found)"
+            echo "Changeset not required (skip-changeset label present)"
             exit 0
           fi
 
           PKG_CHANGES=$(git diff --name-only "origin/$BASE_REF"...HEAD -- 'packages/' | grep -c '.' || true)
           if [ "$PKG_CHANGES" -eq 0 ]; then
-            echo "No package changes detected, changeset not required"
+            echo "Changeset not required (no package changes)"
             exit 0
           fi
 
@@ -79,7 +116,7 @@ jobs:
           exit 1
 
       - name: Validate changeset files
-        if: steps.changed.outputs.has_changesets == 'true'
+        if: steps.gate.outputs.exempt == 'false' && steps.changed.outputs.has_changesets == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -116,7 +153,7 @@ jobs:
             while IFS= read -r line; do
               [ -z "$line" ] && continue
               if ! echo "$line" | grep -qE '^"[^"]+"\s*:\s*(major|minor|patch|none)\s*$'; then
-                echo "::error::Changeset $f has invalid entry: $line — expected '\"package-name\": patch|minor|major|none'"
+                echo "::error::Changeset $f has invalid entry: $line (expected '\"package-name\": patch|minor|major|none')"
                 HAS_ERROR=1
               fi
             done <<< "$BODY"

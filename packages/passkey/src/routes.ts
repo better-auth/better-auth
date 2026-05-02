@@ -838,6 +838,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				return ctx.json(
 					{
 						session: s,
+						user,
 					},
 					{
 						status: 200,

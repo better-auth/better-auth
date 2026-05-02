@@ -254,26 +254,10 @@ function CareersHero() {
 		>
 			<div className="space-y-6">
 				<div className="space-y-2">
-					<div className="flex items-center gap-1.5">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="0.9em"
-							height="0.9em"
-							viewBox="0 0 24 24"
-							className="text-foreground/60"
-							aria-hidden="true"
-						>
-							<path
-								fill="currentColor"
-								d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-2 .89-2 2v11c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2m-6 0h-4V4h4z"
-							/>
-						</svg>
-						<span className="text-sm text-foreground/60">Careers</span>
-					</div>
 					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight text-balance">
 						Join the team
 					</h1>
-					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed">
+					<p className="text-base text-foreground/70 dark:text-foreground/50 leading-relaxed">
 						Help us build the future of authentication.
 					</p>
 				</div>
@@ -282,7 +266,6 @@ function CareersHero() {
 				<div className="border-t border-foreground/10 pt-4 space-y-0">
 					{[
 						{ label: "Location", value: "San Francisco" },
-						{ label: "Team size", value: "8" },
 						{ label: "Open roles", value: `${roles.length}` },
 					].map((item, i) => (
 						<motion.div
@@ -296,10 +279,10 @@ function CareersHero() {
 							}}
 							className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-							<span className="text-xs text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
+							<span className="text-sm text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
 								{item.label}
 							</span>
-							<span className="text-xs text-foreground/85 dark:text-foreground/75 font-mono">
+							<span className="text-sm text-foreground/85 dark:text-foreground/75 font-mono">
 								{item.value}
 							</span>
 						</motion.div>
@@ -310,7 +293,7 @@ function CareersHero() {
 				<div className="flex items-center gap-3 pt-1">
 					<a
 						href="mailto:careers@better-auth.com"
-						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/40 hover:text-foreground/70 font-mono uppercase tracking-wider transition-colors"
+						className="inline-flex items-center gap-1.5 text-[13px] text-foreground/40 hover:text-foreground/70 font-mono uppercase tracking-wider transition-colors"
 					>
 						careers@better-auth.com
 						<svg
@@ -370,7 +353,7 @@ function RoleCard({
 			<div className="p-5 sm:p-6 space-y-4">
 				{/* Header */}
 				<div className="space-y-3">
-					<h3 className="text-sm sm:text-base text-foreground/92 dark:text-foreground/86 tracking-tight">
+					<h3 className="text-base sm:text-lg text-foreground/92 dark:text-foreground/86 tracking-tight">
 						{role.title}
 					</h3>
 					<div className="flex items-center gap-2">
@@ -384,7 +367,7 @@ function RoleCard({
 				</div>
 
 				{/* Description */}
-				<p className="max-w-lg text-[12px] leading-relaxed text-foreground/66 dark:text-foreground/56">
+				<p className="max-w-lg text-[14px] leading-relaxed text-foreground/66 dark:text-foreground/56">
 					{role.description}
 				</p>
 
@@ -400,7 +383,7 @@ function RoleCard({
 						{role.requirements.map((req) => (
 							<li
 								key={req}
-								className="flex items-start gap-2 text-xs leading-relaxed text-foreground/56 transition-colors duration-300 group-hover:text-foreground/68 dark:text-foreground/48 dark:group-hover:text-foreground/60"
+								className="flex items-start gap-2 text-[14px] leading-relaxed text-foreground/56 transition-colors duration-300 group-hover:text-foreground/68 dark:text-foreground/48 dark:group-hover:text-foreground/60"
 							>
 								<span className="mt-px shrink-0 select-none font-mono text-[9px] leading-none text-foreground/60 dark:text-foreground/46">
 									+
@@ -499,22 +482,18 @@ export function CareersPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
-									# Why Better Auth
-								</p>
-
 								<div className="relative border border-dashed border-foreground/[0.08] overflow-hidden">
 									<div className="px-5 py-5 sm:px-8 sm:py-8 space-y-5 max-w-2xl">
-										<p className="text-[13px] text-foreground/60 leading-relaxed">
-											Better Auth is the{" "}
+										<p className="text-[15px] text-foreground/60 leading-relaxed">
+											Better Auth is built with the idea of{" "}
 											<span className="text-foreground/80">
-												fastest-growing open-source authentication framework
-											</span>{" "}
-											for the web. We&apos;re a small, focused team shaping how
-											auth works for millions of developers.
+												democratizing access to high quality software
+											</span>
+											. We&apos;re a small, focused team shaping how auth works
+											for millions of developers.
 										</p>
 
-										<p className="text-[13px] text-foreground/60 leading-relaxed">
+										<p className="text-[15px] text-foreground/60 leading-relaxed">
 											Every line of code we write gets used in production by
 											thousands of projects &mdash; from solo indie hackers to
 											large-scale enterprises. The work here has{" "}
@@ -524,7 +503,7 @@ export function CareersPageClient() {
 											.
 										</p>
 
-										<p className="text-[13px] text-foreground/60 leading-relaxed">
+										<p className="text-[15px] text-foreground/60 leading-relaxed">
 											We work in the open, move fast, and care deeply about
 											developer experience. If you want to do the best work of
 											your career on a problem that matters, we&apos;d love to
@@ -540,10 +519,6 @@ export function CareersPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.15 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/60 font-mono mb-5">
-									# Open positions
-								</p>
-
 								<div className="space-y-4">
 									{roles.map((role, i) => (
 										<RoleCard

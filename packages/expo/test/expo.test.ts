@@ -1126,6 +1126,128 @@ describe("expo deep link cookie injection for verify-email", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8952
+ */
+describe("expo session cache hydration", async () => {
+	it("preserves additional fields through the cache round-trip", async () => {
+		const storage = new Map<string, string>();
+		const sharedClientOptions = {
+			storage: {
+				getItem: (key: string) => storage.get(key) || null,
+				setItem: (key: string, value: string) => storage.set(key, value),
+			},
+		};
+		const serverConfig = {
+			emailAndPassword: { enabled: true },
+			user: {
+				additionalFields: {
+					favoriteColor: {
+						type: "string" as const,
+						defaultValue: "blue",
+					},
+				},
+			},
+			session: {
+				additionalFields: {
+					deviceLabel: {
+						type: "string" as const,
+						defaultValue: "test-device",
+					},
+				},
+			},
+			plugins: [expo()],
+			trustedOrigins: ["better-auth://"],
+		};
+
+		const { client: writer, testUser } = await getTestInstance(serverConfig, {
+			clientOptions: { plugins: [expoClient(sharedClientOptions)] },
+		});
+		await writer.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await writer.getSession();
+
+		const { client: coldStart } = await getTestInstance(serverConfig, {
+			clientOptions: { plugins: [expoClient(sharedClientOptions)] },
+		});
+		const atom = coldStart.$store.atoms.session!.get();
+		expect(atom.data).toMatchObject({
+			user: { favoriteColor: "blue" },
+			session: { deviceLabel: "test-device" },
+		});
+		// Hydration is optimistic; /get-session will still be awaited.
+		expect(atom.isPending).toBe(true);
+	});
+
+	it.each([
+		["expired", new Date(Date.now() - 60_000).toISOString()],
+		["missing", undefined],
+		["invalid", "not-a-date"],
+	])("does not hydrate when session.expiresAt is %s", async (_label, expiresAt) => {
+		const storage = new Map<string, string>();
+		storage.set(
+			"better-auth_session_data",
+			JSON.stringify({
+				user: { id: "u1" },
+				session: { id: "s1", expiresAt },
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (k) => storage.get(k) || null,
+								setItem: (k, v) => storage.set(k, v),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		expect(client.$store.atoms.session!.get().data).toBeNull();
+	});
+
+	it("does not hydrate when disableCache is set", async () => {
+		const storage = new Map<string, string>();
+		storage.set(
+			"better-auth_session_data",
+			JSON.stringify({
+				user: { id: "u1" },
+				session: {
+					id: "s1",
+					expiresAt: new Date(Date.now() + 60_000).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							disableCache: true,
+							storage: {
+								getItem: (k) => storage.get(k) || null,
+								setItem: (k, v) => storage.set(k, v),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		expect(client.$store.atoms.session!.get().data).toBeNull();
+	});
+});
+
 describe("ExpoFocusManager duplicate notification prevention", () => {
 	it("should not notify listeners when setFocused is called with the same value", async () => {
 		const { setupExpoFocusManager } = await import("../src/focus-manager");

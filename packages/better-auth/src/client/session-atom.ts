@@ -6,20 +6,40 @@ import type { AuthQueryAtom } from "./query";
 import { useAuthQuery } from "./query";
 import { createSessionRefreshManager } from "./session-refresh";
 
-export type SessionAtom = AuthQueryAtom<{
+export type SessionData = {
 	user: User;
 	session: Session;
-}>;
+};
+
+export type SessionAtom = AuthQueryAtom<SessionData>;
+
+export function hydrateSessionAtom(
+	sessionAtom: SessionAtom,
+	session: SessionData | null,
+) {
+	// The client is a module-level singleton, so writing during SSR would leak
+	// one request's session into concurrent requests sharing the same process.
+	if (typeof window === "undefined") {
+		return;
+	}
+	const currentSession = sessionAtom.get();
+	if (currentSession.data !== null || session === null) {
+		return;
+	}
+	sessionAtom.set({
+		...currentSession,
+		data: session,
+		error: null,
+		isPending: false,
+	});
+}
 
 export function getSessionAtom(
 	$fetch: BetterFetch,
 	options?: BetterAuthClientOptions | undefined,
 ) {
 	const $signal = atom<boolean>(false);
-	const session: SessionAtom = useAuthQuery<{
-		user: User;
-		session: Session;
-	}>($signal, "/get-session", $fetch, {
+	const session = useAuthQuery<SessionData>($signal, "/get-session", $fetch, {
 		method: "GET",
 	});
 

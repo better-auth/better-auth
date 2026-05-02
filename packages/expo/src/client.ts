@@ -3,6 +3,7 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import {
 	parseSetCookieHeader,
@@ -290,6 +291,25 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		version: PACKAGE_VERSION,
 		getActions(_, $store) {
 			store = $store;
+			// Restore the last persisted session as the initial value of the session atom
+			const sessionAtom = $store.atoms.session;
+			if (!isWeb && !opts?.disableCache && sessionAtom) {
+				const raw = storage.getItem(localCacheName);
+				const cached = raw
+					? safeJSONParse<{ user: User; session: Session }>(raw)
+					: null;
+				const exp = cached?.session?.expiresAt;
+				const expMs = exp ? new Date(exp).getTime() : Number.NaN;
+				const isFresh =
+					!!cached?.user?.id && !!cached.session?.id && expMs > Date.now();
+				if (isFresh) {
+					sessionAtom.set({
+						...sessionAtom.get(),
+						data: cached,
+						error: null,
+					});
+				}
+			}
 			return {
 				/**
 				 * Get the stored cookie.

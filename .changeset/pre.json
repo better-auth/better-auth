@@ -31,8 +31,11 @@
     "dynamic-baseurl-hardening",
     "fix-2fa-bypass",
     "fix-backup-codes-storage",
+    "fix-oauth-provider-rfc-error-envelope",
     "fix-password-reset-callback-operation-id",
+    "fix-revert-2fa-broadening",
     "fix-stripe-defu-prototype-pollution",
+    "force-allow-id-uuid",
     "generic-oauth-unification",
     "honest-regions-jam",
     "honest-symbols-stick",
@@ -40,6 +43,7 @@
     "oauth-provider-at-hash",
     "oauth-provider-token-refactor",
     "pr-8926",
+    "pr-8977",
     "pr-9032",
     "pr-9084",
     "private-key-jwt",
@@ -47,6 +51,7 @@
     "sso-saml-hardening",
     "sso-saml-model-split",
     "sso-upgrade-samlify",
+    "tighten-adapter-peerdeps",
     "two-factor-otp-enable"
   ]
 }

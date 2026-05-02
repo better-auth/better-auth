@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.7.0-beta.1",
+  "version": "1.7.0-beta.2",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -102,6 +102,12 @@
     "./instrumentation": {
       "dev-source": "./src/instrumentation/index.ts",
       "types": "./dist/instrumentation/index.d.mts",
+      "node": "./dist/instrumentation/index.mjs",
+      "deno": "./dist/instrumentation/index.mjs",
+      "bun": "./dist/instrumentation/index.mjs",
+      "edge": "./dist/instrumentation/pure.index.mjs",
+      "workerd": "./dist/instrumentation/index.mjs",
+      "browser": "./dist/instrumentation/pure.index.mjs",
       "default": "./dist/instrumentation/index.mjs"
     }
   },
@@ -178,6 +184,9 @@
   },
   "peerDependenciesMeta": {
     "@cloudflare/workers-types": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
       "optional": true
     }
   }

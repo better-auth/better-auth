@@ -400,8 +400,17 @@ export async function introspectEndpoint(
 ) {
 	let { token, token_type_hint } = ctx.body as {
 		token: string;
-		token_type_hint?: "access_token" | "refresh_token";
+		token_type_hint?: string;
 	};
+
+	// RFC 7662 §2.1: unknown hints are ignored and detection falls back to
+	// trying both supported token types.
+	if (
+		token_type_hint !== "access_token" &&
+		token_type_hint !== "refresh_token"
+	) {
+		token_type_hint = undefined;
+	}
 
 	const credentials = await extractClientCredentials(
 		ctx,
