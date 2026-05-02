@@ -536,6 +536,23 @@ export const username = (options?: UsernameOptions | undefined) => {
 								);
 							}
 							const normalizedUsername = normalizer(ctx.body.username);
+							const session =
+								ctx.path === "/update-user"
+									? await getSessionFromCtx(ctx)
+									: null;
+
+							if (ctx.path === "/update-user" && options?.immutableUsername) {
+								const hasUsername = !!session?.user.username;
+								const usernamesDiffer =
+									session?.user.username !== normalizedUsername;
+								if (hasUsername && usernamesDiffer) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										ERROR_CODES.USERNAME_IS_IMMUTABLE,
+									);
+								}
+							}
+
 							const existingUser = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
@@ -554,24 +571,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 							}
 
 							if (ctx.path === "/update-user" && existingUser) {
-								const session = await getSessionFromCtx(ctx);
 								if (!session || existingUser.id !== session.user.id) {
 									throw APIError.from(
 										"BAD_REQUEST",
 										ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
-									);
-								}
-							}
-
-							if (ctx.path === "/update-user" && options?.immutableUsername) {
-								const session = await getSessionFromCtx(ctx);
-								const hasUsername = !!session?.user.username;
-								const usernamesDiffer =
-									session?.user.username !== normalizedUsername;
-								if (hasUsername && usernamesDiffer) {
-									throw APIError.from(
-										"BAD_REQUEST",
-										ERROR_CODES.USERNAME_IS_IMMUTABLE,
 									);
 								}
 							}
