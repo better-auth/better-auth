@@ -36,6 +36,7 @@ export type {
 	ClientAtomListener,
 	ClientFetchOption,
 	ClientStore,
+	UIPageDefinition,
 } from "./plugin-client";
 export type { SecretConfig } from "./secret";
 export type {
@@ -44,5 +45,5 @@ export type {
 	UIOptions,
 	UIPage,
 	UIPageConfig,
-	UITheme,
+	UIPageMetadata,
 } from "./ui-options";

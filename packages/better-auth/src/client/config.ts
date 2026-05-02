@@ -9,6 +9,7 @@ import { getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
+import { createUIProxy } from "./ui";
 
 const resolvePublicAuthUrl = (basePath?: string) => {
 	if (typeof process === "undefined") return undefined;
@@ -173,6 +174,17 @@ export const getClientConfig = (
 			);
 		}
 	}
+
+	const uiBasePath = baseURL.replace(/\/api\/auth$/, "/auth");
+	const ui = createUIProxy(
+		{
+			basePath: uiBasePath,
+			$store,
+			atomListeners,
+		},
+		plugins,
+	);
+
 	return {
 		get baseURL() {
 			return baseURL;
@@ -183,5 +195,6 @@ export const getClientConfig = (
 		atomListeners,
 		$fetch,
 		$store,
+		ui,
 	};
 };

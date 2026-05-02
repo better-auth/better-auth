@@ -1,9 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*.ts", "package.json"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "package.json"],
   "compilerOptions": {
     "lib": ["esnext", "dom", "dom.iterable"],
-    "types": ["node", "bun"]
+    "types": ["node", "bun"],
+    "jsx": "react-jsx"
   },
   "references": [
     {

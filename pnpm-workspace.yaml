@@ -1,6 +1,7 @@
 packages:
   - packages/**
   - docs
+  - demo/**
   - e2e/**
   - test
 

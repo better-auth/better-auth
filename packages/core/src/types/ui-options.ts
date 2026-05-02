@@ -1,86 +1,4 @@
 /**
- * Theme configuration for the UI pages.
- * Uses CSS custom properties for runtime customization.
- */
-export type UITheme = {
-	/**
-	 * Primary brand color used for buttons, links, and accents.
-	 * @example "#0066cc"
-	 */
-	primaryColor?: string | undefined;
-	/**
-	 * Secondary color for less prominent UI elements.
-	 * @example "#6c757d"
-	 */
-	secondaryColor?: string | undefined;
-	/**
-	 * Background color for the page.
-	 * @example "#ffffff"
-	 */
-	backgroundColor?: string | undefined;
-	/**
-	 * Text color for the page.
-	 * @example "#1a1a1a"
-	 */
-	textColor?: string | undefined;
-	/**
-	 * Error/danger color for validation messages.
-	 * @example "#dc3545"
-	 */
-	errorColor?: string | undefined;
-	/**
-	 * Success color for success messages.
-	 * @example "#28a745"
-	 */
-	successColor?: string | undefined;
-	/**
-	 * Border radius for UI elements.
-	 * @example "8px"
-	 */
-	borderRadius?: string | undefined;
-	/**
-	 * Font family for the UI.
-	 * @example "Inter, system-ui, sans-serif"
-	 */
-	fontFamily?: string | undefined;
-	/**
-	 * URL to the logo image.
-	 * @example "/logo.png"
-	 */
-	logo?: string | undefined;
-	/**
-	 * Application name displayed in the UI.
-	 * Falls back to the main `appName` option if not set.
-	 */
-	appName?: string | undefined;
-	/**
-	 * Enable dark mode support.
-	 * @default false
-	 */
-	darkMode?:
-		| boolean
-		| {
-				/**
-				 * Enable dark mode
-				 */
-				enabled: boolean;
-				/**
-				 * Dark mode background color
-				 */
-				backgroundColor?: string | undefined;
-				/**
-				 * Dark mode text color
-				 */
-				textColor?: string | undefined;
-				/**
-				 * Dark mode primary color
-				 */
-				primaryColor?: string | undefined;
-		  }
-		| undefined;
-};
-
-/**
  * Configuration for individual page enablement.
  */
 export type UIPageConfig = {
@@ -143,6 +61,39 @@ export type UIBuiltInPages = {
 };
 
 /**
+ * Metadata for UI pages (SEO, social sharing).
+ */
+export type UIPageMetadata = {
+	/**
+	 * Page title.
+	 */
+	title?: string | undefined;
+	/**
+	 * Page description for SEO.
+	 */
+	description?: string | undefined;
+	/**
+	 * Open Graph image URL.
+	 */
+	image?: string | undefined;
+	/**
+	 * Open Graph type.
+	 * @default "website"
+	 */
+	ogType?: string | undefined;
+	/**
+	 * Twitter card type.
+	 */
+	twitterCard?: "summary" | "summary_large_image" | undefined;
+	/**
+	 * Additional meta tags.
+	 */
+	additionalMeta?:
+		| Array<{ name?: string; property?: string; content: string }>
+		| undefined;
+};
+
+/**
  * UI configuration options for Better Auth.
  */
 export type UIOptions = {
@@ -151,10 +102,6 @@ export type UIOptions = {
 	 * @default true when ui option is provided
 	 */
 	enabled?: boolean | undefined;
-	/**
-	 * Theme configuration for customizing the appearance.
-	 */
-	theme?: UITheme | undefined;
 	/**
 	 * Configuration for built-in pages.
 	 * Each page can be enabled or disabled individually.
@@ -187,6 +134,47 @@ export type UIOptions = {
 	 * Additional custom pages provided by the application.
 	 */
 	customPages?: UIPage[] | undefined;
+	/**
+	 * URL to a custom CSS file for theming.
+	 * This CSS loads synchronously before React renders, preventing flash of default styles.
+	 *
+	 * The CSS file should contain shadcn CSS variables (same format as globals.css).
+	 *
+	 * Trade-offs:
+	 * - Pro: No flash of default styles
+	 * - Pro: Works in both embedded and full-page modes
+	 * - Con: Blocks initial render until CSS loads
+	 * - Con: Requires hosting a CSS file at a public URL
+	 *
+	 * @example "/themes/dark.css" or "https://cdn.myapp.com/auth-theme.css"
+	 */
+	cssURL?: string | undefined;
+	/**
+	 * Callback to customize page metadata for SEO and social sharing.
+	 * Called for each page request (non-embedded mode only).
+	 *
+	 * @example
+	 * ```typescript
+	 * metadata: ({ page }) => ({
+	 *   title: `${page} - My App`,
+	 *   description: "Secure authentication",
+	 *   image: "https://myapp.com/og-auth.png",
+	 * })
+	 * ```
+	 */
+	metadata?:
+		| ((context: {
+				page:
+					| "sign-in"
+					| "sign-up"
+					| "forgot-password"
+					| "reset-password"
+					| "verify-email"
+					| "profile"
+					| string;
+				path: string;
+		  }) => UIPageMetadata | Promise<UIPageMetadata>)
+		| undefined;
 };
 
 /**

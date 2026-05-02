@@ -3,7 +3,10 @@ title: UI Pages
 description: Server-rendered authentication pages for sign-in, sign-up, password reset, and more
 ---
 
-Better Auth provides built-in server-rendered UI pages for common authentication flows. These pages are pre-built HTML that works out of the box with minimal configuration, while still allowing theme customization.
+Better Auth provides built-in UI pages for common authentication flows. You can use these pages in two ways:
+
+1. **Full pages** - Access directly in the browser (e.g., `/auth/sign-in`)
+2. **Embedded components** - Render inside your app using the `<Auth />` component (see framework integration docs)
 
 ## Enabling UI Pages
 
@@ -16,17 +19,13 @@ export const auth = betterAuth({
   // ... other options
   ui: {
     enabled: true,
-    theme: {
-      primaryColor: "#0066cc",
-      logo: "/logo.png",
-    },
   },
 });
 ```
 
 ## Mounting the UI Handler
 
-The UI pages are served through a separate handler (`uiHandler`) that you mount in your app. The default base path is `/auth`:
+The UI pages are served through a separate handler (`uiHandler`) that you mount in your app:
 
 ```ts title="server.ts"
 import { auth } from "./auth";
@@ -38,7 +37,7 @@ app.use("/*", (req) => auth.uiHandler(req));
 app.use("/api/auth/*", (req) => auth.handler(req));
 ```
 
-With the default configuration, your auth pages will be available at:
+Your auth pages will be available at:
 
 * `/auth/sign-in` - Sign in page
 * `/auth/sign-up` - Sign up page
@@ -47,45 +46,54 @@ With the default configuration, your auth pages will be available at:
 * `/auth/verify-email` - Email verification page
 * `/auth/profile` - User profile page
 
-## Configuration Options
+## Theming
 
-### Theme
+### Automatic Theme Detection
 
-Customize the appearance of the UI pages:
+When using the `<Auth />` component, shadcn CSS variables from your parent page are automatically detected and applied to the iframe. No manual configuration needed if your app already uses shadcn.
+
+### Custom CSS URL
+
+For zero-flash theming, provide a CSS file URL:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
   ui: {
-    theme: {
-      // Colors
-      primaryColor: "#0066cc",
-      secondaryColor: "#6c757d",
-      backgroundColor: "#ffffff",
-      textColor: "#1a1a1a",
-      errorColor: "#dc3545",
-      successColor: "#28a745",
-      
-      // Styling
-      borderRadius: "8px",
-      fontFamily: "Inter, system-ui, sans-serif",
-      
-      // Branding
-      logo: "/logo.png",
-      appName: "My App",
-      
-      // Dark mode
-      darkMode: {
-        enabled: true,
-        backgroundColor: "#1a1a1a",
-        textColor: "#ffffff",
-        primaryColor: "#3399ff",
-      },
-    },
+    cssURL: "/themes/my-shadcn-theme.css", // Loaded before React renders
   },
 });
 ```
 
-### Page Configuration
+The CSS file should contain shadcn CSS variables:
+
+```css title="public/themes/my-shadcn-theme.css"
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  /* ... other shadcn variables */
+}
+```
+
+## Page Metadata
+
+Customize SEO and social sharing metadata:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  ui: {
+    metadata: ({ page, path }) => ({
+      title: `${page} - My App`,
+      description: "Secure authentication for My App",
+      image: "https://myapp.com/og-auth.png",
+      twitterCard: "summary_large_image",
+    }),
+  },
+});
+```
+
+## Page Configuration
 
 Enable or disable individual pages:
 
@@ -98,76 +106,86 @@ export const auth = betterAuth({
       forgotPassword: { enabled: true },
       resetPassword: { enabled: true },
       verifyEmail: { enabled: true },
-      profile: { enabled: false }, // Disable the profile page
+      profile: { enabled: false },
     },
   },
 });
 ```
 
-### API Base URL
+## Local Development
 
-By default, the UI pages call the Better Auth API at the configured `baseURL` + `basePath`. You can override this:
+When developing with different ports (e.g., Next.js on :3000, API on :4000), set up a proxy:
 
-```ts title="auth.ts"
-export const auth = betterAuth({
+### Next.js
+
+```js title="next.config.js"
+module.exports = {
+  async rewrites() {
+    return [
+      { source: '/auth/:path*', destination: 'http://localhost:4000/auth/:path*' }
+    ];
+  },
+};
+```
+
+### Vite
+
+```ts title="vite.config.ts"
+export default defineConfig({
+  server: {
+    proxy: {
+      '/auth': 'http://localhost:4000'
+    }
+  }
+});
+```
+
+## Plugin UI Pages
+
+Plugins can expose additional UI pages. When a plugin provides UI pages, they become available through `authClient.ui`:
+
+```tsx
+// If a plugin like email-otp provides a UI page
+<Auth ui={authClient.ui.emailOtp({ email: "user@example.com" })} />
+```
+
+### Creating Plugin UI Pages
+
+Plugins can define UI pages in both server and client configurations:
+
+```ts title="Server plugin"
+export const myPlugin = () => ({
+  id: "my-plugin",
   ui: {
-    apiBaseUrl: "https://api.myapp.com/api/auth",
+    pages: [{ 
+      path: "/my-page", 
+      html: myPageHTML,
+      title: "My Plugin Page"
+    }]
   },
 });
 ```
 
-### Redirect After Sign In
-
-Configure where users are redirected after successful authentication:
-
-```ts title="auth.ts"
-export const auth = betterAuth({
+```ts title="Client plugin"
+export const myPluginClient = () => ({
+  id: "my-plugin",
   ui: {
-    redirectTo: "/dashboard",
-  },
+    myPage: {
+      path: "/my-page",
+      args: {} as { customArg?: string }
+    }
+  }
 });
 ```
 
-### Base Path
-
-The UI routes default to `/auth` as the base path. You can customize this:
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-  ui: {
-    basePath: "/login", // Pages will be at /login/sign-in, etc.
-  },
-});
-```
+The client plugin's `args` type enables TypeScript autocomplete when using `authClient.ui.myPage({ customArg: "..." })`.
 
 ## Full Configuration Reference
 
 ```ts
 interface UIOptions {
-  /** Enable the UI feature. Default: true when ui option is provided */
   enabled?: boolean;
   
-  /** Theme configuration */
-  theme?: {
-    primaryColor?: string;
-    secondaryColor?: string;
-    backgroundColor?: string;
-    textColor?: string;
-    errorColor?: string;
-    successColor?: string;
-    borderRadius?: string;
-    fontFamily?: string;
-    logo?: string;
-    appName?: string;
-    darkMode?: boolean | {
-      enabled: boolean;
-      backgroundColor?: string;
-      textColor?: string;
-      primaryColor?: string;
-    };
-  };
-  
-  /** Built-in page configuration */
   pages?: {
     signIn?: { enabled?: boolean };
     signUp?: { enabled?: boolean };
@@ -177,13 +195,21 @@ interface UIOptions {
     profile?: { enabled?: boolean };
   };
   
-  /** Base path for UI routes */
   basePath?: string;
-  
-  /** API base URL for API calls from UI pages */
   apiBaseUrl?: string;
-  
-  /** Redirect URL after successful sign-in */
   redirectTo?: string;
+  
+  /** URL to custom CSS file for theming */
+  cssURL?: string;
+  
+  /** Callback to customize page metadata */
+  metadata?: (context: { page: string; path: string }) => {
+    title?: string;
+    description?: string;
+    image?: string;
+    ogType?: string;
+    twitterCard?: "summary" | "summary_large_image";
+    additionalMeta?: Array<{ name?: string; property?: string; content: string }>;
+  };
 }
 ```

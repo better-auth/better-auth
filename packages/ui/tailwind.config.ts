@@ -1,50 +1,60 @@
 import type { Config } from "tailwindcss";
 import tailwindAnimate from "tailwindcss-animate";
 
+/**
+ * Tailwind configuration for Better Auth UI.
+ *
+ * Colors use CSS fallback syntax: var(--primary, var(--ba-primary))
+ * - If host app defines --primary, it's used (seamless theme integration)
+ * - Otherwise, falls back to --ba-primary (our default theme)
+ */
 export default {
 	darkMode: ["class"],
 	content: ["./src/**/*.{ts,tsx}"],
+	safelist: ["hidden"],
 	theme: {
 		extend: {
 			colors: {
-				border: "hsl(var(--border))",
-				input: "hsl(var(--input))",
-				ring: "hsl(var(--ring))",
-				background: "hsl(var(--background))",
-				foreground: "hsl(var(--foreground))",
+				border: "var(--border, var(--ba-border))",
+				input: "var(--input, var(--ba-input))",
+				ring: "var(--ring, var(--ba-ring))",
+				background: "var(--background, var(--ba-background))",
+				foreground: "var(--foreground, var(--ba-foreground))",
 				primary: {
-					DEFAULT: "hsl(var(--primary))",
-					foreground: "hsl(var(--primary-foreground))",
+					DEFAULT: "var(--primary, var(--ba-primary))",
+					foreground: "var(--primary-foreground, var(--ba-primary-foreground))",
 				},
 				secondary: {
-					DEFAULT: "hsl(var(--secondary))",
-					foreground: "hsl(var(--secondary-foreground))",
+					DEFAULT: "var(--secondary, var(--ba-secondary))",
+					foreground:
+						"var(--secondary-foreground, var(--ba-secondary-foreground))",
 				},
 				destructive: {
-					DEFAULT: "hsl(var(--destructive))",
-					foreground: "hsl(var(--destructive-foreground))",
+					DEFAULT: "var(--destructive, var(--ba-destructive))",
+					foreground:
+						"var(--destructive-foreground, var(--ba-destructive-foreground))",
 				},
 				muted: {
-					DEFAULT: "hsl(var(--muted))",
-					foreground: "hsl(var(--muted-foreground))",
+					DEFAULT: "var(--muted, var(--ba-muted))",
+					foreground: "var(--muted-foreground, var(--ba-muted-foreground))",
 				},
 				accent: {
-					DEFAULT: "hsl(var(--accent))",
-					foreground: "hsl(var(--accent-foreground))",
+					DEFAULT: "var(--accent, var(--ba-accent))",
+					foreground: "var(--accent-foreground, var(--ba-accent-foreground))",
 				},
 				popover: {
-					DEFAULT: "hsl(var(--popover))",
-					foreground: "hsl(var(--popover-foreground))",
+					DEFAULT: "var(--popover, var(--ba-popover))",
+					foreground: "var(--popover-foreground, var(--ba-popover-foreground))",
 				},
 				card: {
-					DEFAULT: "hsl(var(--card))",
-					foreground: "hsl(var(--card-foreground))",
+					DEFAULT: "var(--card, var(--ba-card))",
+					foreground: "var(--card-foreground, var(--ba-card-foreground))",
 				},
 			},
 			borderRadius: {
-				lg: "var(--radius)",
-				md: "calc(var(--radius) - 2px)",
-				sm: "calc(var(--radius) - 4px)",
+				lg: "var(--radius, var(--ba-radius))",
+				md: "calc(var(--radius, var(--ba-radius)) - 2px)",
+				sm: "calc(var(--radius, var(--ba-radius)) - 4px)",
 			},
 			keyframes: {
 				"accordion-down": {

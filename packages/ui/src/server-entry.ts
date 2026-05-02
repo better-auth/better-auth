@@ -6,56 +6,53 @@
  *
  * @example
  * ```typescript
- * import { loadAssets, type BetterAuthUIConfig } from "@better-auth/ui";
+ * import { loadPageAssets, getPageTemplate, type PageName } from "@better-auth/ui";
  *
- * const assets = loadAssets();
- * // assets.html - HTML template (inject config here)
- * // assets.js - React application bundle
+ * const assets = loadPageAssets("sign-in");
+ * // assets.templates.page - Full page HTML template
+ * // assets.templates.embed - Embed mode HTML template
+ * // assets.hydrate - Hydration JavaScript
  * // assets.css - Tailwind CSS styles
+ *
+ * const template = getPageTemplate("sign-in", embed);
  * ```
  */
 
 // Asset loading utilities
-export { getAssetPaths, getDistPath, loadAssets } from "./assets.js";
+export {
+	getAssetPaths,
+	getAvailablePages,
+	getDistPath,
+	getPageAssetPaths,
+	getPageTemplate,
+	listChunks,
+	loadAssets,
+	loadChunk,
+	loadCSS,
+	loadHydrate,
+	loadPageAssets,
+	loadTemplates,
+	type PageAssets,
+	type PageName,
+	type PageTemplates,
+} from "./assets.js";
 
 // Types
 export type { SocialProvider, UITheme } from "./types/common.js";
+export type { BetterAuthUIConfig } from "./types/config.js";
 
 /**
- * Configuration injected into the UI at runtime.
- * Set this on `window.__BETTER_AUTH_UI__` before the React app loads.
+ * Message types sent from parent to iframe (legacy - for backward compatibility)
  */
-export interface BetterAuthUIConfig {
-	apiBaseUrl: string;
-	appName: string;
-	logo?: string;
-	redirectTo: string;
-	socialProviders: Array<{
-		id: string;
-		name: string;
-		icon?: string;
-	}>;
-	features: {
-		emailPassword: boolean;
-		passkey: boolean;
-		magicLink: boolean;
-		rememberMe: boolean;
-		emailVerification: boolean;
-	};
-	paths: {
-		signIn: string;
-		signUp: string;
-		forgotPassword: string;
-		resetPassword: string;
-		verifyEmail: string;
-		profile: string;
-	};
-	minPasswordLength: number;
-	page:
-		| "sign-in"
-		| "sign-up"
-		| "forgot-password"
-		| "reset-password"
-		| "verify-email"
-		| "profile";
-}
+export type ParentToIframeMessage =
+	| { type: "better-auth:css"; css: string }
+	| { type: "better-auth:args"; args: Record<string, unknown> };
+
+/**
+ * Message types sent from iframe to parent (legacy - for backward compatibility)
+ */
+export type IframeToParentMessage =
+	| { type: "better-auth:loaded" }
+	| { type: "better-auth:success"; data: { redirectTo?: string } }
+	| { type: "better-auth:error"; error: { code: string; message: string } }
+	| { type: "better-auth:signal"; signal: string };

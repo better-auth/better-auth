@@ -1,10 +1,21 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
-import type { BetterAuthUIConfig, SocialProvider } from "@better-auth/ui";
-import { loadAssets } from "@better-auth/ui";
+import type {
+	BetterAuthUIConfig,
+	PageName,
+	SocialProvider,
+} from "@better-auth/ui";
+import { getPageTemplate, loadCSS, loadHydrate } from "@better-auth/ui";
 
 export type UIHandlerOptions = {
 	context: Promise<AuthContext>;
 	options: BetterAuthOptions;
+};
+
+/**
+ * Security headers for UI pages
+ */
+const SECURITY_HEADERS = {
+	"X-Content-Type-Options": "nosniff",
 };
 
 function normalizePath(path: string): string {
@@ -16,6 +27,28 @@ function normalizePath(path: string): string {
 		normalized = normalized.slice(0, -1);
 	}
 	return normalized;
+}
+
+/**
+ * Parse embed mode and args from URL search params
+ */
+function parseEmbedParams(url: URL): {
+	embed: boolean;
+	args: Record<string, unknown>;
+} {
+	const embed = url.searchParams.get("embed") === "true";
+	let args: Record<string, unknown> = {};
+
+	const argsParam = url.searchParams.get("args");
+	if (argsParam) {
+		try {
+			args = JSON.parse(atob(argsParam));
+		} catch {
+			console.warn("Failed to parse args query parameter");
+		}
+	}
+
+	return { embed, args };
 }
 
 function getSocialProviders(options: BetterAuthOptions): SocialProvider[] {
@@ -54,26 +87,110 @@ function getPageFromPath(
 	}
 }
 
-function createConfigScript(config: BetterAuthUIConfig): string {
-	return `<script>window.__BETTER_AUTH_UI__=${JSON.stringify(config)};</script>`;
+function escapeHtml(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
 }
 
-function injectConfig(html: string, config: BetterAuthUIConfig): string {
-	const configScript = createConfigScript(config);
-	return html.replace(
-		"<!-- CONFIG_PLACEHOLDER: BetterAuth injects <script>window.__BETTER_AUTH_UI__ = {...}</script> here -->",
-		configScript,
-	);
-}
+/**
+ * Build the full HTML page with template, config, hydration, and CSS
+ */
+function buildHtmlPage(
+	template: string,
+	config: BetterAuthUIConfig,
+	hydrate: string,
+	css: string,
+	title: string,
+	metadata?: {
+		title?: string;
+		description?: string;
+		image?: string;
+		ogType?: string;
+		twitterCard?: string;
+		additionalMeta?: Array<{
+			name?: string;
+			property?: string;
+			content: string;
+		}>;
+	},
+	cssURL?: string,
+): string {
+	const metaTags: string[] = [];
 
-function injectTitle(html: string, title: string): string {
-	return html.replace("<title>Better Auth</title>", `<title>${title}</title>`);
-}
+	if (metadata) {
+		if (metadata.description) {
+			metaTags.push(
+				`<meta name="description" content="${escapeHtml(metadata.description)}" />`,
+			);
+			metaTags.push(
+				`<meta property="og:description" content="${escapeHtml(metadata.description)}" />`,
+			);
+		}
+		if (metadata.title) {
+			metaTags.push(
+				`<meta property="og:title" content="${escapeHtml(metadata.title)}" />`,
+			);
+		}
+		if (metadata.image) {
+			metaTags.push(
+				`<meta property="og:image" content="${escapeHtml(metadata.image)}" />`,
+			);
+			metaTags.push(
+				`<meta name="twitter:image" content="${escapeHtml(metadata.image)}" />`,
+			);
+		}
+		if (metadata.ogType) {
+			metaTags.push(
+				`<meta property="og:type" content="${escapeHtml(metadata.ogType)}" />`,
+			);
+		}
+		if (metadata.twitterCard) {
+			metaTags.push(
+				`<meta name="twitter:card" content="${escapeHtml(metadata.twitterCard)}" />`,
+			);
+		}
+		if (metadata.additionalMeta) {
+			for (const meta of metadata.additionalMeta) {
+				if (meta.name) {
+					metaTags.push(
+						`<meta name="${escapeHtml(meta.name)}" content="${escapeHtml(meta.content)}" />`,
+					);
+				} else if (meta.property) {
+					metaTags.push(
+						`<meta property="${escapeHtml(meta.property)}" content="${escapeHtml(meta.content)}" />`,
+					);
+				}
+			}
+		}
+	}
 
-function fixAssetPaths(html: string, assetsPath: string): string {
-	return html
-		.replace('src="/__better-auth/auth.js"', `src="${assetsPath}/auth.js"`)
-		.replace('href="/__better-auth/auth.css"', `href="${assetsPath}/auth.css"`);
+	const cssLink = cssURL
+		? `<link rel="stylesheet" href="${escapeHtml(cssURL)}" />`
+		: "";
+
+	return `<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>${escapeHtml(title)}</title>
+	${metaTags.join("\n\t")}
+	<style>${css}</style>
+	${cssLink}
+</head>
+<body class="dark">
+	${template}
+	<script>
+window.__BETTER_AUTH_UI__ = ${JSON.stringify(config)};
+${hydrate}
+BetterAuthUI.autoHydrate();
+	</script>
+</body>
+</html>`;
 }
 
 export function createUIHandler({ context, options }: UIHandlerOptions) {
@@ -87,6 +204,22 @@ export function createUIHandler({ context, options }: UIHandlerOptions) {
 
 	const basePath = normalizePath(uiOptions.basePath ?? "/auth");
 	const assetsPath = `${basePath}/__assets`;
+
+	// Load assets once at startup
+	let hydrateJs: string;
+	let cssContent: string;
+
+	try {
+		hydrateJs = loadHydrate();
+		cssContent = loadCSS();
+	} catch (error) {
+		console.error("Failed to load UI assets:", error);
+		return async (_request: Request): Promise<Response> => {
+			return new Response("UI assets not found. Run build first.", {
+				status: 500,
+			});
+		};
+	}
 
 	return async (request: Request): Promise<Response> => {
 		if (request.method !== "GET") {
@@ -103,10 +236,9 @@ export function createUIHandler({ context, options }: UIHandlerOptions) {
 			return new Response("Not Found", { status: 404 });
 		}
 
-		const assets = loadAssets();
-
-		if (pathname === `${assetsPath}/auth.js`) {
-			return new Response(assets.js, {
+		// Serve hydration JS
+		if (pathname === `${assetsPath}/hydrate.js`) {
+			return new Response(hydrateJs, {
 				headers: {
 					"Content-Type": "application/javascript; charset=utf-8",
 					"Cache-Control": "public, max-age=31536000, immutable",
@@ -114,8 +246,9 @@ export function createUIHandler({ context, options }: UIHandlerOptions) {
 			});
 		}
 
+		// Serve CSS
 		if (pathname === `${assetsPath}/auth.css`) {
-			return new Response(assets.css, {
+			return new Response(cssContent, {
 				headers: {
 					"Content-Type": "text/css; charset=utf-8",
 					"Cache-Control": "public, max-age=31536000, immutable",
@@ -145,13 +278,13 @@ export function createUIHandler({ context, options }: UIHandlerOptions) {
 		}
 
 		const ctx = await context;
-		const apiBaseUrl =
-			uiOptions.apiBaseUrl || `${ctx.baseURL}${ctx.options.basePath || ""}`;
+		const apiBaseUrl = uiOptions.apiBaseUrl || ctx.baseURL;
+
+		const { embed, args } = parseEmbedParams(url);
 
 		const config: BetterAuthUIConfig = {
 			apiBaseUrl,
-			appName: uiOptions.theme?.appName || ctx.appName,
-			logo: uiOptions.theme?.logo,
+			appName: ctx.appName,
 			redirectTo: uiOptions.redirectTo || "/",
 			socialProviders: getSocialProviders(options),
 			features: {
@@ -171,9 +304,11 @@ export function createUIHandler({ context, options }: UIHandlerOptions) {
 			},
 			minPasswordLength: options.emailAndPassword?.minPasswordLength ?? 8,
 			page,
+			embed,
+			args,
 		};
 
-		const pageTitles: Record<BetterAuthUIConfig["page"], string> = {
+		const defaultTitles: Record<string, string> = {
 			"sign-in": `Sign In - ${config.appName}`,
 			"sign-up": `Sign Up - ${config.appName}`,
 			"forgot-password": `Forgot Password - ${config.appName}`,
@@ -182,15 +317,51 @@ export function createUIHandler({ context, options }: UIHandlerOptions) {
 			profile: `Profile - ${config.appName}`,
 		};
 
-		let html = assets.html;
-		html = fixAssetPaths(html, assetsPath);
-		html = injectConfig(html, config);
-		html = injectTitle(html, pageTitles[page]);
+		// Get the template for this page
+		const template = getPageTemplate(page as PageName, embed);
+
+		let pageTitle = defaultTitles[page] || config.appName;
+		let metadata:
+			| {
+					title?: string;
+					description?: string;
+					image?: string;
+					ogType?: string;
+					twitterCard?: string;
+					additionalMeta?: Array<{
+						name?: string;
+						property?: string;
+						content: string;
+					}>;
+			  }
+			| undefined;
+
+		if (uiOptions.metadata && !embed) {
+			try {
+				metadata = await uiOptions.metadata({ page, path: pathname });
+				if (metadata?.title) {
+					pageTitle = metadata.title;
+				}
+			} catch (error) {
+				console.warn("Failed to get page metadata:", error);
+			}
+		}
+
+		const html = buildHtmlPage(
+			template,
+			config,
+			hydrateJs,
+			cssContent,
+			pageTitle,
+			metadata,
+			uiOptions.cssURL,
+		);
 
 		return new Response(html, {
 			headers: {
 				"Content-Type": "text/html; charset=utf-8",
 				"Cache-Control": "no-store",
+				...SECURITY_HEADERS,
 			},
 		});
 	};

@@ -32,6 +32,31 @@ export const authClient = createAuthClient();
 export const { signIn, signUp, signOut, useSession } = authClient;
 ```
 
+## Using the Auth Component
+
+Better Auth provides a pre-built `<Auth />` component for quick authentication UI:
+
+```vue title="app/pages/login.vue"
+<script setup lang="ts">
+import { authClient } from "~~/lib/auth-client";
+import { Auth } from "better-auth/vue";
+
+const ui = authClient.ui.signIn();
+
+function handleSuccess(data: { redirectTo?: string }) {
+  navigateTo(data.redirectTo || "/dashboard");
+}
+</script>
+
+<template>
+  <div class="flex items-center justify-center min-h-screen">
+    <Auth :ui="ui" @success="handleSuccess" />
+  </div>
+</template>
+```
+
+The component automatically inherits your shadcn theme if you're using one. For more customization options, see the [UI Pages documentation](/docs/concepts/ui).
+
 ## Use the session
 
 Use `authClient.useSession(useFetch)` inside a page `setup()` to load the session on the server and hydrate it on the client. Pass Nuxt's `useFetch` so the request is made with the incoming cookies and the payload is reused during hydration:

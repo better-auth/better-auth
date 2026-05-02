@@ -1,60 +1,154 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/*
+ * Better Auth UI Styles
+ * 
+ * CSS variables use fallback syntax: var(--primary, var(--ba-primary))
+ * - If host app defines --primary (shadcn), it's used
+ * - Otherwise, falls back to --ba-primary (our default theme)
+ */
 
-@layer base {
-	:root {
-		--background: 0 0% 100%;
-		--foreground: 0 0% 3.9%;
-		--card: 0 0% 100%;
-		--card-foreground: 0 0% 3.9%;
-		--popover: 0 0% 100%;
-		--popover-foreground: 0 0% 3.9%;
-		--primary: 0 0% 9%;
-		--primary-foreground: 0 0% 98%;
-		--secondary: 0 0% 96.1%;
-		--secondary-foreground: 0 0% 9%;
-		--muted: 0 0% 96.1%;
-		--muted-foreground: 0 0% 45.1%;
-		--accent: 0 0% 96.1%;
-		--accent-foreground: 0 0% 9%;
-		--destructive: 0 84.2% 60.2%;
-		--destructive-foreground: 0 0% 98%;
-		--border: 0 0% 89.8%;
-		--input: 0 0% 89.8%;
-		--ring: 0 0% 3.9%;
-		--radius: 0.5rem;
-	}
-
-	.dark {
-		--background: 0 0% 3.9%;
-		--foreground: 0 0% 98%;
-		--card: 0 0% 3.9%;
-		--card-foreground: 0 0% 98%;
-		--popover: 0 0% 3.9%;
-		--popover-foreground: 0 0% 98%;
-		--primary: 0 0% 98%;
-		--primary-foreground: 0 0% 9%;
-		--secondary: 0 0% 14.9%;
-		--secondary-foreground: 0 0% 98%;
-		--muted: 0 0% 14.9%;
-		--muted-foreground: 0 0% 63.9%;
-		--accent: 0 0% 14.9%;
-		--accent-foreground: 0 0% 98%;
-		--destructive: 0 62.8% 30.6%;
-		--destructive-foreground: 0 0% 98%;
-		--border: 0 0% 14.9%;
-		--input: 0 0% 14.9%;
-		--ring: 0 0% 83.1%;
-	}
+/*
+ * Default theme fallback variables (--ba-* prefix)
+ * These are defined OUTSIDE the layer so they're always available.
+ */
+:root {
+	/* Light mode defaults */
+	--ba-background: hsl(0 0% 100%);
+	--ba-foreground: hsl(0 0% 3.9%);
+	--ba-card: hsl(0 0% 100%);
+	--ba-card-foreground: hsl(0 0% 3.9%);
+	--ba-popover: hsl(0 0% 100%);
+	--ba-popover-foreground: hsl(0 0% 3.9%);
+	--ba-primary: hsl(0 0% 9%);
+	--ba-primary-foreground: hsl(0 0% 98%);
+	--ba-secondary: hsl(0 0% 96.1%);
+	--ba-secondary-foreground: hsl(0 0% 9%);
+	--ba-muted: hsl(0 0% 96.1%);
+	--ba-muted-foreground: hsl(0 0% 45.1%);
+	--ba-accent: hsl(0 0% 96.1%);
+	--ba-accent-foreground: hsl(0 0% 9%);
+	--ba-destructive: hsl(0 84.2% 60.2%);
+	--ba-destructive-foreground: hsl(0 0% 98%);
+	--ba-border: hsl(0 0% 89.8%);
+	--ba-input: hsl(0 0% 89.8%);
+	--ba-ring: hsl(0 0% 3.9%);
+	--ba-radius: 0.5rem;
 }
 
-@layer base {
-	* {
-		@apply border-border;
+.dark {
+	/* Dark mode defaults */
+	--ba-background: hsl(0 0% 3.9%);
+	--ba-foreground: hsl(0 0% 98%);
+	--ba-card: hsl(0 0% 3.9%);
+	--ba-card-foreground: hsl(0 0% 98%);
+	--ba-popover: hsl(0 0% 3.9%);
+	--ba-popover-foreground: hsl(0 0% 98%);
+	--ba-primary: hsl(0 0% 98%);
+	--ba-primary-foreground: hsl(0 0% 9%);
+	--ba-secondary: hsl(0 0% 14.9%);
+	--ba-secondary-foreground: hsl(0 0% 98%);
+	--ba-muted: hsl(0 0% 14.9%);
+	--ba-muted-foreground: hsl(0 0% 63.9%);
+	--ba-accent: hsl(0 0% 14.9%);
+	--ba-accent-foreground: hsl(0 0% 98%);
+	--ba-destructive: hsl(0 62.8% 30.6%);
+	--ba-destructive-foreground: hsl(0 0% 98%);
+	--ba-border: hsl(0 0% 14.9%);
+	--ba-input: hsl(0 0% 14.9%);
+	--ba-ring: hsl(0 0% 83.1%);
+}
+
+/*
+ * Minimal reset styles for standalone pages.
+ * These use our fallback variables, not global theme variables.
+ */
+@layer better-auth {
+	/*
+	 * Essential resets (subset of Tailwind preflight)
+	 */
+	*,
+	::before,
+	::after {
+		box-sizing: border-box;
+		border-width: 0;
+		border-style: solid;
+		border-color: var(--border, var(--ba-border));
+	}
+
+	html {
+		line-height: 1.5;
+		-webkit-text-size-adjust: 100%;
+		tab-size: 4;
+		font-family:
+			ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+			"Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 	}
 
 	body {
-		@apply bg-background text-foreground;
+		margin: 0;
+		line-height: inherit;
+		background-color: var(--background, var(--ba-background));
+		color: var(--foreground, var(--ba-foreground));
 	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-size: inherit;
+		font-weight: inherit;
+	}
+
+	a {
+		color: inherit;
+		text-decoration: inherit;
+	}
+
+	button,
+	input,
+	select,
+	textarea {
+		font-family: inherit;
+		font-size: 100%;
+		font-weight: inherit;
+		line-height: inherit;
+		color: inherit;
+		margin: 0;
+		padding: 0;
+	}
+
+	button,
+	[role="button"] {
+		cursor: pointer;
+	}
+
+	:disabled {
+		cursor: default;
+	}
+
+	img,
+	svg,
+	video,
+	canvas,
+	audio,
+	iframe,
+	embed,
+	object {
+		display: block;
+		vertical-align: middle;
+	}
+
+	img,
+	video {
+		max-width: 100%;
+		height: auto;
+	}
+
+	[hidden] {
+		display: none;
+	}
+
+	@tailwind components;
+	@tailwind utilities;
 }

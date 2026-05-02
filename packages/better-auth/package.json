@@ -91,10 +91,20 @@
       "types": "./dist/client/react/index.d.mts",
       "default": "./dist/client/react/index.mjs"
     },
+    "./react/Auth": {
+      "dev-source": "./src/client/react/Auth.tsx",
+      "types": "./dist/client/react/Auth.d.mts",
+      "default": "./dist/client/react/Auth.mjs"
+    },
     "./solid": {
       "dev-source": "./src/client/solid/index.ts",
       "types": "./dist/client/solid/index.d.mts",
       "default": "./dist/client/solid/index.mjs"
+    },
+    "./solid/Auth": {
+      "dev-source": "./src/client/solid/Auth.tsx",
+      "types": "./dist/client/solid/Auth.d.mts",
+      "default": "./dist/client/solid/Auth.mjs"
     },
     "./lynx": {
       "dev-source": "./src/client/lynx/index.ts",

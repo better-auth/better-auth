@@ -13,5 +13,10 @@
     "types": ["node"],
     "esModuleInterop": true
   },
-  "include": ["src/assets.ts", "src/server-entry.ts", "src/types/common.ts"]
+  "include": [
+    "src/assets.ts",
+    "src/server-entry.ts",
+    "src/types/common.ts",
+    "src/types/config.ts"
+  ]
 }

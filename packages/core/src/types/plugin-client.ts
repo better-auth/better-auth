@@ -77,6 +77,22 @@ export interface BetterAuthClientOptions {
 	sessionOptions?: RevalidateOptions | undefined;
 }
 
+/**
+ * Definition of a UI page exposed by a plugin.
+ * Used for type inference when calling authClient.ui methods.
+ */
+export interface UIPageDefinition<TArgs = Record<string, unknown>> {
+	/**
+	 * Path under uiHandler (e.g., "/email-otp")
+	 */
+	path: string;
+	/**
+	 * Typed arguments for this page.
+	 * Used for TypeScript inference when calling authClient.ui.pageName(args).
+	 */
+	args?: TArgs;
+}
+
 export interface BetterAuthClientPlugin {
 	id: LiteralString;
 	version?: string | undefined;
@@ -126,4 +142,20 @@ export interface BetterAuthClientPlugin {
 			message: string;
 		}
 	>;
+	/**
+	 * UI pages exposed by this plugin.
+	 * Each page defines its path and typed arguments.
+	 * These pages will be available via authClient.ui.pageName(args).
+	 *
+	 * @example
+	 * ```typescript
+	 * ui: {
+	 *   emailOtp: {
+	 *     path: "/email-otp",
+	 *     args: {} as { email?: string; autoSubmit?: boolean }
+	 *   }
+	 * }
+	 * ```
+	 */
+	ui?: Record<string, UIPageDefinition> | undefined;
 }

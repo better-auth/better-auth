@@ -49,6 +49,32 @@ Some of the actions are reactive. The client uses [nano-store](https://github.co
 
 The client also uses [better-fetch](https://github.com/bekacru/better-fetch) to make the requests. You can pass the fetch configuration to the client.
 
+## Using the Auth Component
+
+Better Auth provides a pre-built `<Auth />` component that you can use to quickly add authentication UI to your app:
+
+```tsx title="app/login/page.tsx"
+import { authClient } from "@/lib/auth-client";
+import { Auth } from "better-auth/react";
+import { useRouter } from "next/navigation";
+
+export default function LoginPage() {
+  const router = useRouter();
+  
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Auth
+        ui={authClient.ui.signIn()}
+        onSuccess={() => router.push("/dashboard")}
+        onError={(err) => console.error(err.message)}
+      />
+    </div>
+  );
+}
+```
+
+The component automatically inherits your shadcn theme if you're using one. For more customization options, see the [UI Pages documentation](/docs/concepts/ui).
+
 ## RSC and Server actions
 
 The `api` object exported from the auth instance contains all the actions that you can perform on the server. Every endpoint made inside Better Auth is invocable as a function. Including plugins endpoints.

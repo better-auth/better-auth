@@ -1,4 +1,5 @@
 afplay
+shadcn
 shiki
 samlify
 libsql

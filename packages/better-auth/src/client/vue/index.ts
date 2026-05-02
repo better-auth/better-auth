@@ -19,7 +19,16 @@ import type {
 	IsSignal,
 	SessionQueryParams,
 } from "../types";
+import type { UIProxy } from "../ui";
 import { useStore } from "./vue-store";
+
+type InferPlugins<O extends BetterAuthClientOptions> = O extends {
+	plugins: infer P;
+}
+	? P extends BetterAuthClientPlugin[]
+		? P
+		: []
+	: [];
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -58,6 +67,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		$fetch,
 		$store,
 		atomListeners,
+		ui,
 	} = getClientConfig(options, false);
 	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
@@ -121,6 +131,8 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		useSession,
 		$fetch,
 		$store,
+		atomListeners,
+		ui,
 	};
 
 	const proxy = createDynamicPathProxy(
@@ -140,9 +152,11 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;
+			atomListeners: typeof atomListeners;
 			$ERROR_CODES: PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
+			ui: UIProxy<InferPlugins<Option>>;
 		};
 }
 
@@ -150,3 +164,4 @@ export type * from "@better-fetch/fetch";
 export type * from "nanostores";
 export type * from "../../types/helper";
 export type { UnionToIntersection } from "../../types/helper";
+export type { AtomListener } from "../auth-iframe";

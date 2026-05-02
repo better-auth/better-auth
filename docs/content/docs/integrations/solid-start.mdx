@@ -15,3 +15,65 @@ import { toSolidStartHandler } from "better-auth/solid-start";
 
 export const { GET, POST } = toSolidStartHandler(auth);
 ```
+
+## Create a client
+
+Create a client instance using `better-auth/solid`:
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/solid";
+
+export const authClient = createAuthClient({
+  // you can pass client configuration here
+});
+```
+
+## Using the Auth Component
+
+Better Auth provides a pre-built `<Auth />` component for quick authentication UI:
+
+```tsx title="routes/login.tsx"
+import { authClient } from "~/lib/auth-client";
+import { Auth } from "better-auth/solid";
+import { useNavigate } from "@solidjs/router";
+
+export default function LoginPage() {
+  const navigate = useNavigate();
+  
+  return (
+    <div class="container">
+      <Auth
+        ui={authClient.ui.signIn()}
+        onSuccess={(data) => {
+          navigate(data.redirectTo || "/dashboard");
+        }}
+        onError={(err) => console.error(err.message)}
+      />
+    </div>
+  );
+}
+```
+
+The component automatically inherits your shadcn theme if you're using one. For more customization options, see the [UI Pages documentation](/docs/concepts/ui).
+
+## Use the session
+
+Use `authClient.useSession()` to reactively access the current session:
+
+```tsx
+import { authClient } from "~/lib/auth-client";
+
+export default function Profile() {
+  const session = authClient.useSession();
+  
+  return (
+    <div>
+      {session().data ? (
+        <p>Welcome, {session().data.user.name}</p>
+      ) : (
+        <p>Not signed in</p>
+      )}
+    </div>
+  );
+}
+```
