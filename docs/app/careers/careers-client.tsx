@@ -1,250 +1,14 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { motion } from "framer-motion";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import type { GemJobPost } from "@/lib/gem";
+import { formatGemEnum } from "@/lib/gem";
 
-const roles = [
-	{
-		title: "Founding Design Engineer",
-		type: "Full-time",
-		location: "San Francisco",
-		description:
-			"Craft the visual identity and UI of Better Auth's products — dashboard, docs, landing pages. You'll own design end-to-end.",
-		requirements: [
-			"Strong portfolio with shipped product work",
-			"React / Next.js proficiency",
-			"CSS mastery and responsive design",
-			"Eye for detail and micro-interactions",
-			"Experience shipping design systems",
-		],
-	},
-	{
-		title: "Senior Developer Relations",
-		type: "Full-time",
-		location: "San Francisco",
-		description:
-			"Be the bridge between Better Auth and its developer community. Create content, speak at events, build demos, and shape the developer experience.",
-		requirements: [
-			"Developer background with public repos or OSS contributions",
-			"Content creation experience (blogs, videos, tutorials)",
-			"Public speaking and conference experience",
-			"Community building track record",
-			"Familiarity with auth / security space",
-		],
-	},
-];
+type Role = Omit<GemJobPost, "content" | "content_plain">;
 
-function ApplyDialog({
-	role,
-	onClose,
-}: {
-	role: (typeof roles)[number];
-	onClose: () => void;
-}) {
-	const [submitted, setSubmitted] = useState(false);
-
-	return (
-		<motion.div
-			initial={{ opacity: 0 }}
-			animate={{ opacity: 1 }}
-			exit={{ opacity: 0 }}
-			transition={{ duration: 0.15 }}
-			className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-			onClick={onClose}
-		>
-			{/* Backdrop */}
-			<div className="absolute inset-0 bg-black/40 backdrop-blur-md dark:bg-black/72" />
-
-			{/* Dialog */}
-			<motion.div
-				initial={{ opacity: 0, y: 10, scale: 0.98 }}
-				animate={{ opacity: 1, y: 0, scale: 1 }}
-				exit={{ opacity: 0, y: 10, scale: 0.98 }}
-				transition={{ duration: 0.2, ease: "easeOut" }}
-				onClick={(e: React.MouseEvent) => e.stopPropagation()}
-				className="relative w-full max-w-md overflow-hidden border border-foreground/[0.14] bg-background/95 shadow-2xl shadow-black/12 ring-1 ring-black/5 backdrop-blur dark:border-white/[0.08] dark:bg-[#050505]/95 dark:shadow-black/65 dark:ring-white/[0.04]"
-			>
-				{/* Corner marks */}
-				<span className="absolute top-2 left-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-				<span className="absolute top-2 right-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-				<span className="absolute bottom-2 left-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-				<span className="absolute bottom-2 right-2 text-[9px] font-mono text-foreground/25 dark:text-foreground/18 select-none leading-none">
-					+
-				</span>
-
-				<div className="p-6 sm:p-8">
-					{/* Close button */}
-					<button
-						type="button"
-						onClick={onClose}
-						aria-label="Close dialog"
-						className="absolute top-4 right-4 text-foreground/50 hover:text-foreground/80 transition-colors"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							aria-hidden="true"
-						>
-							<path
-								fill="currentColor"
-								d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12z"
-							/>
-						</svg>
-					</button>
-
-					{submitted ? (
-						<motion.div
-							initial={{ opacity: 0, y: 6 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.3 }}
-							className="text-center py-6 space-y-3"
-						>
-							<p className="text-sm text-foreground/92 dark:text-foreground/88">
-								Application sent
-							</p>
-							<p className="text-xs text-foreground/60 dark:text-foreground/52 leading-relaxed max-w-xs mx-auto">
-								Thanks for applying for {role.title}. We&apos;ll review your
-								application and get back to you soon.
-							</p>
-							<button
-								type="button"
-								onClick={onClose}
-								className="mt-4 inline-flex items-center px-4 py-2 border border-foreground/[0.18] bg-foreground/[0.03] text-foreground/72 hover:text-foreground/90 hover:border-foreground/28 hover:bg-foreground/[0.06] transition-all font-mono text-[10px] uppercase tracking-widest dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/68 dark:hover:text-foreground/84 dark:hover:bg-white/[0.05]"
-							>
-								Close
-							</button>
-						</motion.div>
-					) : (
-						<>
-							<div className="mb-6 space-y-1">
-								<p className="text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/50 font-mono">
-									# Apply
-								</p>
-								<h3 className="text-sm text-foreground/92 dark:text-foreground/86">
-									{role.title}
-								</h3>
-								<div className="flex items-center gap-2 pt-1">
-									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/50 border border-foreground/[0.15] bg-foreground/[0.03] px-1.5 py-0.5 leading-none dark:border-white/[0.08] dark:bg-white/[0.03]">
-										{role.type}
-									</span>
-									<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/50 border border-foreground/[0.15] bg-foreground/[0.03] px-1.5 py-0.5 leading-none dark:border-white/[0.08] dark:bg-white/[0.03]">
-										{role.location}
-									</span>
-								</div>
-							</div>
-
-							<form
-								onSubmit={(e) => {
-									e.preventDefault();
-									setSubmitted(true);
-								}}
-								className="space-y-4"
-							>
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-name"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Name
-									</label>
-									<input
-										id="careers-name"
-										type="text"
-										required
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
-										placeholder="Your full name"
-									/>
-								</div>
-
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-email"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Email
-									</label>
-									<input
-										id="careers-email"
-										type="email"
-										required
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
-										placeholder="you@example.com"
-									/>
-								</div>
-
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-portfolio"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Portfolio / GitHub
-									</label>
-									<input
-										id="careers-portfolio"
-										type="url"
-										required
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors"
-										placeholder="https://"
-									/>
-								</div>
-
-								<div className="space-y-1.5">
-									<label
-										htmlFor="careers-why"
-										className="text-[9px] text-foreground/58 dark:text-foreground/48 uppercase tracking-widest font-mono"
-									>
-										Why Better Auth?
-									</label>
-									<textarea
-										id="careers-why"
-										required
-										rows={3}
-										className="w-full border border-foreground/[0.15] bg-foreground/[0.025] px-3 py-2 text-[12px] text-foreground/88 placeholder:text-foreground/38 focus:outline-none focus:border-foreground/38 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-foreground/78 dark:placeholder:text-foreground/28 dark:focus:border-white/[0.2] transition-colors resize-none"
-										placeholder="Tell us why you want to join..."
-									/>
-								</div>
-
-								<div className="pt-2">
-									<button
-										type="submit"
-										className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background hover:opacity-90 transition-all"
-									>
-										<span className="font-mono text-[10px] uppercase tracking-widest">
-											Submit Application
-										</span>
-										<svg
-											className="h-2.5 w-2.5 opacity-80"
-											viewBox="0 0 10 10"
-											fill="none"
-										>
-											<path
-												d="M1 9L9 1M9 1H3M9 1V7"
-												stroke="currentColor"
-												strokeWidth="1.2"
-											/>
-										</svg>
-									</button>
-								</div>
-							</form>
-						</>
-					)}
-				</div>
-			</motion.div>
-		</motion.div>
-	);
-}
-
-function CareersHero() {
+function CareersHero({ openRoles }: { openRoles: number }) {
 	return (
 		<motion.div
 			initial={{ opacity: 0, y: 12 }}
@@ -266,7 +30,7 @@ function CareersHero() {
 				<div className="border-t border-foreground/10 pt-4 space-y-0">
 					{[
 						{ label: "Location", value: "San Francisco" },
-						{ label: "Open roles", value: `${roles.length}` },
+						{ label: "Open Positions", value: `${openRoles}` },
 					].map((item, i) => (
 						<motion.div
 							key={item.label}
@@ -293,7 +57,7 @@ function CareersHero() {
 				<div className="flex items-center gap-3 pt-1">
 					<a
 						href="mailto:careers@better-auth.com"
-						className="inline-flex items-center gap-1.5 text-[13px] text-foreground/40 hover:text-foreground/70 font-mono uppercase tracking-wider transition-colors"
+						className="inline-flex items-center gap-1.5 text-xs text-foreground/40 hover:text-foreground/70 font-mono tracking-wider transition-colors"
 					>
 						careers@better-auth.com
 						<svg
@@ -314,119 +78,123 @@ function CareersHero() {
 	);
 }
 
-function RoleCard({
-	role,
-	index,
-	onApply,
-}: {
-	role: (typeof roles)[number];
-	index: number;
-	onApply: () => void;
-}) {
+function groupByDepartment(roles: Role[]): [string, Role[]][] {
+	const groups = new Map<string, Role[]>();
+	for (const role of roles) {
+		const dept = role.departments[0]?.name ?? "Other";
+		const existing = groups.get(dept);
+		if (existing) existing.push(role);
+		else groups.set(dept, [role]);
+	}
+	return Array.from(groups);
+}
+
+function RoleRow({ role, index }: { role: Role; index: number }) {
+	const location =
+		role.location_type === "remote"
+			? "Remote"
+			: (role.location?.name ?? formatGemEnum(role.location_type));
+	const meta = [location, formatGemEnum(role.employment_type)]
+		.filter(Boolean)
+		.join(" · ");
+
 	return (
-		<motion.div
-			initial={{ opacity: 0, y: 10 }}
+		<motion.a
+			href={role.absolute_url}
+			target="_blank"
+			rel="noopener noreferrer"
+			initial={{ opacity: 0, y: 4 }}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{
-				duration: 0.3,
-				delay: 0.2 + index * 0.08,
+				duration: 0.25,
+				delay: 0.05 + index * 0.04,
 				ease: "easeOut",
 			}}
-			className="group relative overflow-hidden border border-foreground/[0.1] bg-foreground/[0.018] shadow-sm shadow-black/[0.03] transition-all duration-300 hover:z-10 hover:-translate-y-px hover:border-foreground/[0.18] hover:bg-foreground/[0.03] hover:shadow-lg hover:shadow-black/[0.06] dark:border-white/[0.07] dark:bg-white/[0.015] dark:shadow-black/[0.2] dark:hover:border-white/[0.12] dark:hover:bg-white/[0.03] dark:hover:shadow-black/[0.35]"
+			className="group flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-6 border-b border-dashed border-foreground/[0.08] dark:border-white/[0.06] py-4 last:border-0 transition-colors"
 		>
-			<div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/18 to-transparent dark:via-white/[0.14]" />
-
-			{/* Corner marks */}
-			<span className="absolute top-2 left-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
-				+
-			</span>
-			<span className="absolute top-2 right-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
-				+
-			</span>
-			<span className="absolute bottom-2 left-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
-				+
-			</span>
-			<span className="absolute bottom-2 right-2 text-[9px] font-mono text-foreground/22 dark:text-foreground/16 select-none leading-none">
-				+
-			</span>
-
-			<div className="p-5 sm:p-6 space-y-4">
-				{/* Header */}
-				<div className="space-y-3">
-					<h3 className="text-base sm:text-lg text-foreground/92 dark:text-foreground/86 tracking-tight">
-						{role.title}
-					</h3>
-					<div className="flex items-center gap-2">
-						<span className="border border-foreground/[0.14] bg-foreground/[0.03] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest text-foreground/58 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-foreground/48 leading-none">
-							{role.type}
-						</span>
-						<span className="border border-foreground/[0.14] bg-foreground/[0.03] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest text-foreground/58 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-foreground/48 leading-none">
-							{role.location}
-						</span>
-					</div>
-				</div>
-
-				{/* Description */}
-				<p className="max-w-lg text-[14px] leading-relaxed text-foreground/66 dark:text-foreground/56">
-					{role.description}
-				</p>
-
-				{/* Divider */}
-				<div className="border-t border-foreground/[0.08] dark:border-white/[0.06]" />
-
-				{/* Requirements */}
-				<div>
-					<p className="mb-3 text-[9px] font-mono uppercase tracking-[0.18em] text-foreground/52 dark:text-foreground/44">
-						Requirements
-					</p>
-					<ul className="space-y-2">
-						{role.requirements.map((req) => (
-							<li
-								key={req}
-								className="flex items-start gap-2 text-[14px] leading-relaxed text-foreground/56 transition-colors duration-300 group-hover:text-foreground/68 dark:text-foreground/48 dark:group-hover:text-foreground/60"
-							>
-								<span className="mt-px shrink-0 select-none font-mono text-[9px] leading-none text-foreground/60 dark:text-foreground/46">
-									+
-								</span>
-								<span>{req}</span>
-							</li>
-						))}
-					</ul>
-				</div>
-
-				{/* Apply CTA */}
-				<div className="pt-2">
-					<button
-						type="button"
-						onClick={onApply}
-						className="inline-flex items-center gap-1.5 bg-foreground px-3.5 py-2 text-background transition-all hover:opacity-90 cursor-pointer"
-					>
-						<span className="font-mono text-[10px] uppercase tracking-widest">
-							Apply
-						</span>
-						<svg
-							className="h-2.5 w-2.5 opacity-80"
-							viewBox="0 0 10 10"
-							fill="none"
-						>
-							<path
-								d="M1 9L9 1M9 1H3M9 1V7"
-								stroke="currentColor"
-								strokeWidth="1.2"
-							/>
-						</svg>
-					</button>
-				</div>
+			{/* Title row (with mobile arrow on the right) */}
+			<div className="flex items-baseline justify-between gap-3">
+				<span className="text-[15px] sm:text-base text-foreground/85 dark:text-foreground/75 group-hover:text-foreground dark:group-hover:text-foreground/95 transition-colors">
+					{role.title}
+				</span>
+				<svg
+					className="sm:hidden h-2.5 w-2.5 shrink-0 text-foreground/30 group-hover:text-foreground/70 group-hover:translate-x-0.5 transition-all"
+					viewBox="0 0 10 10"
+					fill="none"
+					aria-hidden="true"
+				>
+					<path
+						d="M1 9L9 1M9 1H3M9 1V7"
+						stroke="currentColor"
+						strokeWidth="1.2"
+					/>
+				</svg>
 			</div>
-		</motion.div>
+
+			{/* Meta (with desktop arrow inline) */}
+			<div className="flex items-baseline gap-3 sm:shrink-0">
+				<span className="text-[12px] text-foreground/45 dark:text-foreground/35 group-hover:text-foreground/70 dark:group-hover:text-foreground/55 transition-colors sm:text-right">
+					{meta}
+				</span>
+				<svg
+					className="hidden sm:block h-2.5 w-2.5 text-foreground/30 group-hover:text-foreground/70 group-hover:translate-x-0.5 transition-all"
+					viewBox="0 0 10 10"
+					fill="none"
+					aria-hidden="true"
+				>
+					<path
+						d="M1 9L9 1M9 1H3M9 1V7"
+						stroke="currentColor"
+						strokeWidth="1.2"
+					/>
+				</svg>
+			</div>
+		</motion.a>
 	);
 }
 
-export function CareersPageClient() {
-	const [applyingRole, setApplyingRole] = useState<
-		(typeof roles)[number] | null
-	>(null);
+function RolesList({ roles }: { roles: Role[] }) {
+	const groups = groupByDepartment(roles);
+	let rowIndex = 0;
+	return (
+		<div className="space-y-10">
+			{groups.map(([dept, deptRoles]) => (
+				<section key={dept}>
+					<h3 className="text-[11px] font-mono uppercase tracking-widest text-foreground/55 dark:text-foreground/45 mb-1">
+						{dept}
+					</h3>
+					<div>
+						{deptRoles.map((role) => (
+							<RoleRow key={role.id} role={role} index={rowIndex++} />
+						))}
+					</div>
+				</section>
+			))}
+		</div>
+	);
+}
 
+function EmptyState() {
+	return (
+		<div className="border border-dashed border-foreground/[0.1] p-8 text-center">
+			<p className="text-md text-foreground/60 dark:text-foreground/50 leading-relaxed">
+				No open positions right now.
+			</p>
+			<p className="mt-2 text-xs text-foreground/45 leading-relaxed">
+				We are still happy to hear from you. Reach out at{" "}
+				<a
+					href="mailto:careers@better-auth.com"
+					className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground/70 transition-colors"
+				>
+					careers@better-auth.com
+				</a>
+				.
+			</p>
+		</div>
+	);
+}
+
+export function CareersPageClient({ roles }: { roles: Role[] }) {
 	return (
 		<div className="relative min-h-dvh pt-14 lg:pt-0">
 			<div className="relative text-foreground">
@@ -436,7 +204,7 @@ export function CareersPageClient() {
 						<div className="hidden lg:block">
 							<HalftoneBackground />
 						</div>
-						<CareersHero />
+						<CareersHero openRoles={roles.length} />
 					</div>
 
 					{/* Right side */}
@@ -481,36 +249,30 @@ export function CareersPageClient() {
 								initial={{ opacity: 0, y: 6 }}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
+								className="space-y-5 max-w-2xl"
 							>
-								<div className="relative border border-dashed border-foreground/[0.08] overflow-hidden">
-									<div className="px-5 py-5 sm:px-8 sm:py-8 space-y-5 max-w-2xl">
-										<p className="text-[15px] text-foreground/60 leading-relaxed">
-											Better Auth is built with the idea of{" "}
-											<span className="text-foreground/80">
-												democratizing access to high quality software
-											</span>
-											. We&apos;re a small, focused team shaping how auth works
-											for millions of developers.
-										</p>
+								<p className="text-md text-foreground/60 leading-relaxed">
+									Better Auth is built with the idea of{" "}
+									<span className="text-foreground/80">
+										democratizing access to high quality software
+									</span>
+									. We&apos;re a small, focused team shaping how auth works for
+									millions of developers.
+								</p>
 
-										<p className="text-[15px] text-foreground/60 leading-relaxed">
-											Every line of code we write gets used in production by
-											thousands of projects &mdash; from solo indie hackers to
-											large-scale enterprises. The work here has{" "}
-											<span className="text-foreground/80">
-												outsized impact
-											</span>
-											.
-										</p>
+								<p className="text-md text-foreground/60 leading-relaxed">
+									Every line of code we write gets used in production by
+									thousands of projects, from solo indie hackers to large-scale
+									enterprises. The work here has{" "}
+									<span className="text-foreground/80">outsized impact</span>.
+								</p>
 
-										<p className="text-[15px] text-foreground/60 leading-relaxed">
-											We work in the open, move fast, and care deeply about
-											developer experience. If you want to do the best work of
-											your career on a problem that matters, we&apos;d love to
-											hear from you.
-										</p>
-									</div>
-								</div>
+								<p className="text-md text-foreground/60 leading-relaxed">
+									We work in the open, move fast, and care deeply about
+									developer experience. If you want to do the best work of your
+									career on a problem that matters, we&apos;d love to hear from
+									you.
+								</p>
 							</motion.div>
 
 							{/* Section: Open positions */}
@@ -518,33 +280,19 @@ export function CareersPageClient() {
 								initial={{ opacity: 0, y: 6 }}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.15 }}
+								className="pt-10"
 							>
-								<div className="space-y-4">
-									{roles.map((role, i) => (
-										<RoleCard
-											key={role.title}
-											role={role}
-											index={i}
-											onApply={() => setApplyingRole(role)}
-										/>
-									))}
-								</div>
+								{roles.length === 0 ? (
+									<EmptyState />
+								) : (
+									<RolesList roles={roles} />
+								)}
 							</motion.div>
 						</div>
 						<Footer />
 					</div>
 				</div>
 			</div>
-
-			{/* Apply dialog */}
-			<AnimatePresence>
-				{applyingRole && (
-					<ApplyDialog
-						role={applyingRole}
-						onClose={() => setApplyingRole(null)}
-					/>
-				)}
-			</AnimatePresence>
 		</div>
 	);
 }
