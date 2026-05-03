@@ -248,7 +248,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path.startsWith("/organization");
+					return path === "/sign-out" || path.startsWith("/organization");
 				},
 				signal: "$activeOrgSignal",
 			},
