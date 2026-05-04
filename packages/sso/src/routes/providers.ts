@@ -5,6 +5,11 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import * as z from "zod";
+import {
+	getReturnedSSOProviderAdditionalFields,
+	getSSOProviderAdditionalFieldsSchema,
+	parseSSOProviderAdditionalFields,
+} from "../additional-fields";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
@@ -12,6 +17,7 @@ import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { updateSSOProviderBodySchema } from "./schemas";
 
 interface SSOProviderRecord {
+	[key: string]: unknown;
 	id: string;
 	providerId: string;
 	issuer: string;
@@ -83,6 +89,7 @@ async function batchCheckOrgAdmin(
 
 function sanitizeProvider(
 	provider: {
+		[key: string]: unknown;
 		providerId: string;
 		issuer: string;
 		domain: string;
@@ -92,6 +99,7 @@ function sanitizeProvider(
 		samlConfig?: string | SAMLConfig | null;
 	},
 	baseURL: string,
+	options?: SSOOptions,
 ) {
 	let oidcConfig: OIDCConfig | null = null;
 	let samlConfig: SAMLConfig | null = null;
@@ -149,10 +157,11 @@ function sanitizeProvider(
 				}
 			: undefined,
 		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
+		...getReturnedSSOProviderAdditionalFields(provider, options),
 	};
 }
 
-export const listSSOProviders = () => {
+export const listSSOProviders = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/providers",
 		{
@@ -224,7 +233,7 @@ export const listSSOProviders = () => {
 			}
 
 			const providers = accessibleProviders.map((p) =>
-				sanitizeProvider(p, ctx.context.baseURL),
+				sanitizeProvider(p, ctx.context.baseURL, options),
 			);
 
 			return ctx.json({ providers });
@@ -277,7 +286,7 @@ async function checkProviderAccess(
 	return provider;
 }
 
-export const getSSOProvider = () => {
+export const getSSOProvider = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/get-provider",
 		{
@@ -308,7 +317,7 @@ export const getSSOProvider = () => {
 
 			const provider = await checkProviderAccess(ctx, providerId);
 
-			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
+			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL, options));
 		},
 	);
 };
@@ -387,6 +396,9 @@ function mergeOIDCConfig(
 }
 
 export const updateSSOProvider = (options: SSOOptions) => {
+	const additionalFieldsSchema =
+		getSSOProviderAdditionalFieldsSchema(options).partial();
+
 	return createAuthEndpoint(
 		"/sso/update-provider",
 		{
@@ -394,6 +406,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			use: [sessionMiddleware],
 			body: updateSSOProviderBodySchema.extend({
 				providerId: z.string(),
+				...additionalFieldsSchema.shape,
 			}),
 			metadata: {
 				openapi: {
@@ -419,7 +432,18 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			const { providerId, ...body } = ctx.body;
 
 			const { issuer, domain, samlConfig, oidcConfig } = body;
-			if (!issuer && !domain && !samlConfig && !oidcConfig) {
+			const additionalFields = parseSSOProviderAdditionalFields(
+				options,
+				body,
+				"update",
+			);
+			if (
+				!issuer &&
+				!domain &&
+				!samlConfig &&
+				!oidcConfig &&
+				Object.keys(additionalFields).length === 0
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: "No fields provided for update",
 				});
@@ -427,7 +451,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 			const existingProvider = await checkProviderAccess(ctx, providerId);
 
-			const updateData: Partial<SSOProviderRecord> = {};
+			const updateData: Partial<SSOProviderRecord> = {
+				...additionalFields,
+			};
 
 			if (body.issuer !== undefined) {
 				updateData.issuer = body.issuer;
@@ -544,7 +570,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				});
 			}
 
-			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
+			return ctx.json(
+				sanitizeProvider(fullProvider, ctx.context.baseURL, options),
+			);
 		},
 	);
 };

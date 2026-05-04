@@ -24,6 +24,11 @@ import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import * as z from "zod";
+import {
+	filterSSOProviderAdditionalFields,
+	getSSOProviderAdditionalFieldsSchema,
+	parseSSOProviderAdditionalFields,
+} from "../additional-fields";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
@@ -38,11 +43,13 @@ import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
+	InferSSOProvider,
 	OIDCConfig,
 	SAMLConfig,
 	SAMLSessionRecord,
 	SSOOptions,
 	SSOProvider,
+	SSOProviderAdditionalFieldsInput,
 } from "../types";
 import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
@@ -360,13 +367,22 @@ const ssoProviderBodySchema = z.object({
 });
 
 export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
+	const additionalFieldsSchema = getSSOProviderAdditionalFieldsSchema(options);
+	type Body = z.infer<typeof ssoProviderBodySchema> &
+		SSOProviderAdditionalFieldsInput<O>;
+
 	return createAuthEndpoint(
 		"/sso/register",
 		{
 			method: "POST",
-			body: ssoProviderBodySchema,
+			body: ssoProviderBodySchema.extend({
+				...additionalFieldsSchema.shape,
+			}),
 			use: [sessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as Body,
+				},
 				openapi: {
 					operationId: "registerSSOProvider",
 					summary: "Register an OIDC provider",
@@ -580,6 +596,11 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			const body = ctx.body;
+			const additionalFields = parseSSOProviderAdditionalFields(
+				options,
+				body,
+				"create",
+			);
 			const issuerValidator = z.string().url();
 			if (issuerValidator.safeParse(body.issuer).error) {
 				throw new APIError("BAD_REQUEST", {
@@ -759,6 +780,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
+					...additionalFields,
 					oidcConfig: (() => {
 						const config = buildOIDCConfig();
 						if (config) {
@@ -834,7 +856,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				redirectURI: string;
 				oidcConfig: OIDCConfig | null;
 				samlConfig: SAMLConfig | null;
-			} & Omit<SSOProvider<O>, "oidcConfig" | "samlConfig">;
+			} & Omit<InferSSOProvider<O>, "oidcConfig" | "samlConfig">;
 
 			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
 				? SSOProviderResponse & {
@@ -844,7 +866,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				: SSOProviderResponse;
 
 			const result = {
-				...provider,
+				...filterSSOProviderAdditionalFields(
+					provider as unknown as Record<string, unknown>,
+					options,
+				),
 				oidcConfig: safeJsonParse<OIDCConfig>(
 					provider.oidcConfig as unknown as string,
 				),

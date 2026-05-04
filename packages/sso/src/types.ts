@@ -1,4 +1,10 @@
 import type { Awaitable, OAuth2Tokens, User } from "better-auth";
+import type {
+	DBFieldAttribute,
+	FieldAttributeToObject,
+	InferAdditionalFieldsFromPluginOptions,
+	RemoveFieldsWithReturnedFalse,
+} from "better-auth/db";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
 export interface OIDCMapping {
@@ -174,12 +180,58 @@ type BaseSSOProvider = {
 	domain: string;
 };
 
+type SSOProviderAdditionalFields<
+	O extends SSOOptions,
+	IsClientSide extends boolean,
+> = O["schema"] extends {
+	ssoProvider?: {
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
+	};
+}
+	? IsClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithReturnedFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
+
+export type SSOProviderAdditionalFieldsInput<
+	O extends SSOOptions,
+	IsClientSide extends boolean = true,
+> = InferAdditionalFieldsFromPluginOptions<"ssoProvider", O, IsClientSide>;
+
+export type InferSSOProvider<
+	O extends SSOOptions,
+	IsClientSide extends boolean = true,
+> = (O["domainVerification"] extends { enabled: true }
+	? {
+			domainVerified: boolean;
+		} & BaseSSOProvider
+	: BaseSSOProvider) &
+	SSOProviderAdditionalFields<O, IsClientSide>;
+
 export type SSOProvider<O extends SSOOptions> =
 	O["domainVerification"] extends { enabled: true }
 		? {
 				domainVerified: boolean;
-			} & BaseSSOProvider
-		: BaseSSOProvider;
+			} & BaseSSOProvider &
+				SSOProviderAdditionalFields<O, false>
+		: BaseSSOProvider & SSOProviderAdditionalFields<O, false>;
+
+export type SSOProviderSchema<O extends SSOOptions> = {
+	ssoProvider: {
+		modelName: string;
+		fields: Record<string, DBFieldAttribute> &
+			(O["schema"] extends {
+				ssoProvider?: {
+					additionalFields: infer Field extends Record<
+						string,
+						DBFieldAttribute
+					>;
+				};
+			}
+				? Field
+				: {});
+	};
+};
 
 export interface SSOOptions {
 	/**
@@ -308,6 +360,29 @@ export interface SSOOptions {
 		organizationId?: string | undefined;
 		domain?: string | undefined;
 	};
+	/**
+	 * The schema for the SSO plugin.
+	 */
+	schema?:
+		| {
+				ssoProvider?: {
+					modelName?: string | undefined;
+					fields?: {
+						issuer?: string | undefined;
+						oidcConfig?: string | undefined;
+						samlConfig?: string | undefined;
+						userId?: string | undefined;
+						providerId?: string | undefined;
+						organizationId?: string | undefined;
+						domain?: string | undefined;
+						domainVerified?: string | undefined;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+		  }
+		| undefined;
 	/**
 	 * Configure the maximum number of SSO providers a user can register.
 	 * You can also pass a function that returns a number.

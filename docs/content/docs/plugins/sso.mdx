@@ -1426,6 +1426,50 @@ await authClient.signIn.sso({
 
 The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
 
+### Additional Provider Fields
+
+You can add custom columns to the `ssoProvider` table with `schema.ssoProvider.additionalFields`. These fields can be used to store provider metadata, such as a display name shown when an organization has multiple SSO providers.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      schema: {
+        ssoProvider: {
+          additionalFields: {
+            displayName: {
+              type: "string",
+              required: true,
+            },
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
+Then include the field when registering or updating a provider:
+
+```ts
+await auth.api.registerSSOProvider({
+  body: {
+    providerId: "okta-main",
+    displayName: "Okta",
+    issuer: "https://idp.example.com",
+    domain: "example.com",
+    oidcConfig: {
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    },
+  },
+  headers,
+});
+```
+
 ## Schema
 
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
