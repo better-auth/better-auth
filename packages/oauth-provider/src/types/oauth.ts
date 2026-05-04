@@ -63,7 +63,7 @@ export interface AuthServerMetadata {
 	 *
 	 * @default `/oauth2/register`
 	 */
-	registration_endpoint: string;
+	registration_endpoint?: string;
 	/**
 	 * Supported scopes.
 	 */

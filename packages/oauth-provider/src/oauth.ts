@@ -437,6 +437,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							dynamic_client_registration_supported:
+								opts.allowDynamicClientRegistration,
 							public_client_supported:
 								opts.allowUnauthenticatedClientRegistration,
 							grant_types_supported: opts.grantTypes,
