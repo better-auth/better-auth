@@ -275,7 +275,7 @@ export const generatePasskeyRegistrationOptions = (
 				userID,
 				userName: ctx.query?.name || user.name || user.id,
 				userDisplayName: user.displayName || user.name || user.id,
-				attestationType: "none",
+				attestationType: opts.attestation ?? "none",
 				excludeCredentials: userPasskeys.map((passkey) => ({
 					id: passkey.credentialID,
 					transports: passkey.transports?.split(

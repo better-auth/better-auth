@@ -95,6 +95,38 @@ describe("passkey", async () => {
 		});
 	});
 
+	it("should default attestation to 'none' when not configured", async () => {
+		const { auth: defaultAuth, signInWithTestUser: signIn } =
+			await getTestInstance({
+				plugins: [passkey()],
+			});
+		const { headers } = await signIn();
+		const options = (await defaultAuth.api.generatePasskeyRegistrationOptions({
+			headers,
+		})) as { attestation?: string };
+
+		expect(options.attestation).toBe("none");
+	});
+
+	it.each([
+		"none",
+		"indirect",
+		"direct",
+		"enterprise",
+	] as const)("should forward configured attestation '%s' to generateRegistrationOptions", async (attestation) => {
+		const { auth: configuredAuth, signInWithTestUser: signIn } =
+			await getTestInstance({
+				plugins: [passkey({ attestation })],
+			});
+		const { headers } = await signIn();
+		const options =
+			(await configuredAuth.api.generatePasskeyRegistrationOptions({
+				headers,
+			})) as { attestation?: string };
+
+		expect(options.attestation).toBe(attestation);
+	});
+
 	it("should generate register options without session when resolveUser is provided", async () => {
 		const { auth: preAuth } = await getTestInstance({
 			plugins: [
