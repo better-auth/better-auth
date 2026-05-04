@@ -61,6 +61,8 @@ export interface AuthServerMetadata {
 	/**
 	 * The URL of the dynamic client registration endpoint.
 	 *
+	 * This field is only present when `allowDynamicClientRegistration` is enabled.
+	 *
 	 * @default `/oauth2/register`
 	 */
 	registration_endpoint?: string;
