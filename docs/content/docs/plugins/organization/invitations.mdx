@@ -453,6 +453,20 @@ organization({
   the existing invitation is reused.
 </Callout>
 
+### `privacy`
+
+When enabled, hides email addresses from invitation responses.
+
+```ts
+organization({
+    privacy: true // Hides invitee emails and inviter emails
+})
+```
+
+**Default:** `false`
+
+See [Privacy](/docs/plugins/organization/privacy) for full configuration options.
+
 ***
 
 ## Invitation Schema

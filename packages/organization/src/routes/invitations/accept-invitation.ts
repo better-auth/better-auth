@@ -224,7 +224,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			);
 
 			return ctx.json({
-				invitation: acceptedI,
+				invitation: adapter.applyInvitationPrivacy(acceptedI),
 				member,
 				organization,
 			});

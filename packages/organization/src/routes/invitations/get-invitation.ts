@@ -127,13 +127,18 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) => {
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
+			const privacyOptions = adapter.getPrivacyOptions();
+			const hideInviterEmail =
+				privacyOptions.enabled &&
+				privacyOptions.hiddenMemberFields.includes("email");
+
 			return ctx.json({
-				...invitation,
+				...adapter.applyInvitationPrivacy(invitation),
 				organizationName: organization.name,
 				...("slug" in organization
 					? { organizationSlug: organization.slug }
 					: {}),
-				inviterEmail: member.user.email,
+				...(hideInviterEmail ? {} : { inviterEmail: member.user.email }),
 			});
 		},
 	);

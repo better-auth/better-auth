@@ -480,7 +480,11 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 				ctx,
 			);
 
-			return ctx.json({ url, invitation, organization });
+			return ctx.json({
+				url,
+				invitation: adapter.applyInvitationPrivacy(invitation),
+				organization,
+			});
 		},
 	);
 };

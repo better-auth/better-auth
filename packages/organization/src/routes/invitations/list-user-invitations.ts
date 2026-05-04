@@ -120,9 +120,9 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
 			const invitations = await adapter.listUserInvitations(userEmail);
-			const pendingInvitations = invitations.filter(
-				(inv) => inv.status === "pending",
-			);
+			const pendingInvitations = invitations
+				.filter((inv) => inv.status === "pending")
+				.map(adapter.applyInvitationPrivacy);
 			return ctx.json(pendingInvitations);
 		},
 	);

@@ -21,6 +21,10 @@ import type {
 	InferOrganization,
 	OrganizationOptions,
 } from "../types";
+import {
+	applyInvitationPrivacyFilter,
+	applyMemberPrivacyFilter,
+} from "./apply-privacy-filter";
 import { getDate } from "./date";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { filterOutputFields } from "./filter-output-fields";
@@ -75,6 +79,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		const invitationAdditionalFields = schema.invitation?.additionalFields;
 		const result = filterOutputFields(invitation, invitationAdditionalFields);
 		return result;
+	};
+
+	const filterInvitationForResponse = <
+		Invitation extends Record<string, any> | null,
+	>(
+		invitation: Invitation,
+	) => {
+		const filtered = filterInvitationOutput(invitation);
+		return applyInvitationPrivacyFilter(filtered, options.privacy);
 	};
 
 	const filterSessionOutput = <Session extends Record<string, any> | null>(
@@ -536,12 +549,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				}
 				return {
 					...member,
-					user: {
-						id: user.id,
-						name: user.name,
-						email: user.email,
-						image: user.image,
-					},
+					user: applyMemberPrivacyFilter(
+						{
+							id: user.id,
+							name: user.name,
+							email: user.email,
+							image: user.image,
+						},
+						options.privacy,
+					),
 				};
 			});
 
@@ -555,7 +571,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return {
 				...filterOrgOutput(org),
-				invitations: invitations.map(filterInvitationOutput),
+				invitations: invitations.map(filterInvitationForResponse),
 				members: membersWithUsers.map(filterMemberOutput),
 				...teamsResult,
 			};
@@ -847,12 +863,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const { user, ...member } = result;
 			return {
 				...filterMemberOutput(member),
-				user: {
-					id: user.id,
-					name: user.name,
-					email: user.email,
-					image: user.image,
-				},
+				user: applyMemberPrivacyFilter(
+					{
+						id: user.id,
+						name: user.name,
+						email: user.email,
+						image: user.image,
+					},
+					options.privacy,
+				),
 			};
 		},
 		/**
@@ -962,6 +981,30 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return member ? filterMemberOutput(member) : null;
 		},
+		/**
+		 * Apply privacy filtering to an invitation for API response.
+		 * Removes email field if privacy is enabled.
+		 */
+		applyInvitationPrivacy: <T extends Record<string, any> | null>(
+			invitation: T,
+		) => {
+			return applyInvitationPrivacyFilter(invitation, options.privacy);
+		},
+		/**
+		 * Apply privacy filtering to member user data for API response.
+		 * Removes specified fields (email by default) if privacy is enabled.
+		 */
+		applyMemberUserPrivacy: <
+			T extends { email?: string; name?: string | null; image?: string | null },
+		>(
+			userData: T,
+		) => {
+			return applyMemberPrivacyFilter(userData, options.privacy);
+		},
+		/**
+		 * Get the resolved privacy options.
+		 */
+		getPrivacyOptions: () => options.privacy,
 	};
 	return orgAdapter;
 };

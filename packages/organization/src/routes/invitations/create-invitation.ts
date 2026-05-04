@@ -502,7 +502,10 @@ export const createInvitation = <O extends OrganizationOptions>(
 				ctx,
 			);
 
-			return ctx.json({ invitation, organization });
+			return ctx.json({
+				invitation: adapter.applyInvitationPrivacy(invitation),
+				organization,
+			});
 		},
 	);
 };

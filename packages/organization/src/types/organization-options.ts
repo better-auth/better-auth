@@ -5,6 +5,33 @@ import type { Invitation, Member, Organization } from "../schema";
 import type { Addon } from "./addon";
 import type { OrganizationHooks } from "./organization-hooks";
 
+/**
+ * Privacy options for controlling what member and invitation data
+ * is exposed in API responses.
+ */
+export type PrivacyOptions = {
+	/**
+	 * Fields to hide from member user data in API responses.
+	 * Applied to get-full-organization and similar endpoints.
+	 * @default ['email'] when privacy is enabled
+	 */
+	hiddenMemberFields?: ("email" | "name" | "image")[];
+	/**
+	 * Fields to hide from invitation data in API responses.
+	 * @default ['email'] when privacy is enabled
+	 */
+	hiddenInvitationFields?: "email"[];
+};
+
+/**
+ * Resolved privacy options with defaults applied.
+ */
+export type ResolvedPrivacyOptions = {
+	enabled: boolean;
+	hiddenMemberFields: ("email" | "name" | "image")[];
+	hiddenInvitationFields: "email"[];
+};
+
 export type ResolvedOrganizationOptions = {
 	use: Addon[];
 	ac?: AccessControl;
@@ -55,6 +82,7 @@ export type ResolvedOrganizationOptions = {
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<void>;
+	privacy: ResolvedPrivacyOptions;
 };
 
 export type OrganizationOptions = OrgOptions & BaseOptions & InvitationOptions;
@@ -183,6 +211,29 @@ type OrgOptions = {
 				  >
 				| false
 		  >);
+	/**
+	 * Privacy settings for organization data.
+	 * When enabled, hides specified fields from API responses.
+	 *
+	 * - `false` or `undefined`: Privacy disabled (default)
+	 * - `true`: Enable with defaults (hide emails from members and invitations)
+	 * - `{ memberFields, invitationFields }`: Custom configuration
+	 *
+	 * @example
+	 * ```ts
+	 * // Enable with defaults (hide emails)
+	 * privacy: true
+	 *
+	 * // Custom configuration
+	 * privacy: {
+	 *   memberFields: ['email', 'image'],
+	 *   invitationFields: ['email']
+	 * }
+	 * ```
+	 *
+	 * @default false
+	 */
+	privacy?: boolean | PrivacyOptions;
 };
 
 type InvitationOptions = {

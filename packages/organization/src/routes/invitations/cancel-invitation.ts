@@ -126,7 +126,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(
 				ctx,
 			);
 
-			return ctx.json(canceledI);
+			return ctx.json(adapter.applyInvitationPrivacy(canceledI));
 		},
 	);
 };

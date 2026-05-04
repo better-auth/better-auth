@@ -147,6 +147,9 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 				sortDirection: ctx.query?.sortDirection,
 				status: ctx.query?.status,
 			});
-			return ctx.json(result);
+			return ctx.json({
+				...result,
+				invitations: result.invitations.map(adapter.applyInvitationPrivacy),
+			});
 		},
 	);

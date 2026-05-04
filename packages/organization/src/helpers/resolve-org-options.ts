@@ -2,6 +2,7 @@ import { defaultRoles } from "../access";
 import type {
 	OrganizationOptions,
 	ResolvedOrganizationOptions,
+	ResolvedPrivacyOptions,
 } from "../types";
 
 const DEFAULT_ORGANIZATION_LIMIT = 100;
@@ -15,6 +16,43 @@ const DEFAULT_INVITATION_EXPIRES_IN = 60 * 60 * 48; // 48 hours in seconds
 const DEFAULT_INVITATION_LIMIT = 100;
 const DEFAULT_CANCEL_PENDING_INVITATIONS_ON_RE_INVITE = false;
 const DEFAULT_REQUIRE_EMAIL_VERIFICATION_ON_INVITATION = false;
+
+const DEFAULT_HIDDEN_MEMBER_FIELDS: ("email" | "name" | "image")[] = ["email"];
+const DEFAULT_HIDDEN_INVITATION_FIELDS: "email"[] = ["email"];
+
+function resolvePrivacyOptions(
+	privacy:
+		| boolean
+		| {
+				hiddenMemberFields?: ("email" | "name" | "image")[];
+				hiddenInvitationFields?: "email"[];
+		  }
+		| undefined,
+): ResolvedPrivacyOptions {
+	if (!privacy) {
+		return {
+			enabled: false,
+			hiddenMemberFields: [],
+			hiddenInvitationFields: [],
+		};
+	}
+
+	if (privacy === true) {
+		return {
+			enabled: true,
+			hiddenMemberFields: DEFAULT_HIDDEN_MEMBER_FIELDS,
+			hiddenInvitationFields: DEFAULT_HIDDEN_INVITATION_FIELDS,
+		};
+	}
+
+	return {
+		enabled: true,
+		hiddenMemberFields:
+			privacy.hiddenMemberFields ?? DEFAULT_HIDDEN_MEMBER_FIELDS,
+		hiddenInvitationFields:
+			privacy.hiddenInvitationFields ?? DEFAULT_HIDDEN_INVITATION_FIELDS,
+	};
+}
 
 export const resolveOrgOptions = <O extends OrganizationOptions>(
 	opts?: O | undefined,
@@ -91,6 +129,7 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 			}
 			return false;
 		},
+		privacy: resolvePrivacyOptions(opts?.privacy),
 	} satisfies ResolvedOrganizationOptions;
 
 	if (options.disableSlugs && options.defaultOrganizationIdField === "slug") {

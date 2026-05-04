@@ -167,13 +167,13 @@ describe("create invitation", async (it) => {
 
 		// Create a new user
 		const memberEmail = `already-member-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: memberUser } = (await auth.api.signUpEmail({
 			body: {
 				email: memberEmail,
 				password: "password123",
 				name: "Already Member",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		// Add as member directly via adapter
 		await adapter.create({
@@ -181,7 +181,7 @@ describe("create invitation", async (it) => {
 			data: {
 				id: crypto.randomUUID(),
 				organizationId: newOrg.id,
-				userId: signupRes.user.id,
+				userId: memberUser.id,
 				role: "member",
 				createdAt: new Date(),
 			},
@@ -232,13 +232,13 @@ describe("create invitation", async (it) => {
 
 		// Create an admin user
 		const adminEmail = `admin-user-${crypto.randomUUID()}@test.com`;
-		const adminSignup = await auth.api.signUpEmail({
+		const { user: adminUser } = (await auth.api.signUpEmail({
 			body: {
 				email: adminEmail,
 				password: "test123456",
 				name: "Admin User",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		// Add admin to org via adapter
 		await adapter.create({
@@ -246,7 +246,7 @@ describe("create invitation", async (it) => {
 			data: {
 				id: crypto.randomUUID(),
 				organizationId: newOrg.id,
-				userId: adminSignup.user.id,
+				userId: adminUser.id,
 				role: "admin",
 				createdAt: new Date(),
 			},
@@ -514,13 +514,13 @@ describe("member permission to invite", async (it) => {
 	it("should not allow members without invite permission to invite", async () => {
 		// Create a member user
 		const memberEmail = `member-no-invite-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: memberUser } = (await auth.api.signUpEmail({
 			body: {
 				email: memberEmail,
 				password: "test123456",
 				name: "Member User",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		// Add as member (default member role doesn't have invite permission)
 		await adapter.create({
@@ -528,7 +528,7 @@ describe("member permission to invite", async (it) => {
 			data: {
 				id: crypto.randomUUID(),
 				organizationId: org.id,
-				userId: signupRes.user.id,
+				userId: memberUser.id,
 				role: "member",
 				createdAt: new Date(),
 			},
@@ -558,13 +558,13 @@ describe("member permission to invite", async (it) => {
 	it("should allow admins to invite members", async () => {
 		// Create an admin user
 		const adminEmail = `admin-can-invite-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: adminUser } = (await auth.api.signUpEmail({
 			body: {
 				email: adminEmail,
 				password: "test123456",
 				name: "Admin User",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		// Add as admin
 		await adapter.create({
@@ -572,7 +572,7 @@ describe("member permission to invite", async (it) => {
 			data: {
 				id: crypto.randomUUID(),
 				organizationId: org.id,
-				userId: signupRes.user.id,
+				userId: adminUser.id,
 				role: "admin",
 				createdAt: new Date(),
 			},
@@ -617,19 +617,19 @@ describe("invite by user ID", async (it) => {
 
 	it("should invite user by userId", async () => {
 		const userEmail = `invite-by-id-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: invitedUser } = (await auth.api.signUpEmail({
 			body: {
 				email: userEmail,
 				password: "test123456",
 				name: "User To Invite",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		const result = await auth.api.createInvitation({
 			headers,
 			body: {
 				organizationId: org.id,
-				userId: signupRes.user.id,
+				userId: invitedUser.id,
 				role: "member",
 			},
 		});
@@ -664,20 +664,20 @@ describe("invite by user ID", async (it) => {
 		});
 
 		const memberEmail = `already-member-by-id-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: memberUser } = (await auth.api.signUpEmail({
 			body: {
 				email: memberEmail,
 				password: "password123",
 				name: "Already Member By ID",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		await adapter.create({
 			model: "member",
 			data: {
 				id: crypto.randomUUID(),
 				organizationId: newOrg.id,
-				userId: signupRes.user.id,
+				userId: memberUser.id,
 				role: "member",
 				createdAt: new Date(),
 			},
@@ -689,7 +689,7 @@ describe("invite by user ID", async (it) => {
 				headers,
 				body: {
 					organizationId: newOrg.id,
-					userId: signupRes.user.id,
+					userId: memberUser.id,
 					role: "member",
 				},
 			}),
@@ -710,19 +710,19 @@ describe("invite by user ID", async (it) => {
 		});
 
 		const userEmail = `double-invite-by-id-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: invitedUser } = (await auth.api.signUpEmail({
 			body: {
 				email: userEmail,
 				password: "test123456",
 				name: "Double Invite User",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		const result = await auth.api.createInvitation({
 			headers,
 			body: {
 				organizationId: newOrg.id,
-				userId: signupRes.user.id,
+				userId: invitedUser.id,
 				role: "member",
 			},
 		});
@@ -733,7 +733,7 @@ describe("invite by user ID", async (it) => {
 				headers,
 				body: {
 					organizationId: newOrg.id,
-					userId: signupRes.user.id,
+					userId: invitedUser.id,
 					role: "member",
 				},
 			}),
@@ -745,19 +745,19 @@ describe("invite by user ID", async (it) => {
 
 	it("should work with both email and userId provided (userId takes precedence)", async () => {
 		const userEmail = `both-email-and-id-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: invitedUser } = (await auth.api.signUpEmail({
 			body: {
 				email: userEmail,
 				password: "test123456",
 				name: "Both Email And ID User",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		const result = await auth.api.createInvitation({
 			headers,
 			body: {
 				organizationId: org.id,
-				userId: signupRes.user.id,
+				userId: invitedUser.id,
 				email: "different-email@test.com",
 				role: "member",
 			},
@@ -778,19 +778,19 @@ describe("invite by user ID", async (it) => {
 		});
 
 		const userEmail = `accept-invite-by-id-${crypto.randomUUID()}@test.com`;
-		const signupRes = await auth.api.signUpEmail({
+		const { user: invitedUser } = (await auth.api.signUpEmail({
 			body: {
 				email: userEmail,
 				password: "test123456",
 				name: "Accept Invite User",
 			},
-		});
+		})) as unknown as { user: { id: string } };
 
 		const inviteResult = await auth.api.createInvitation({
 			headers,
 			body: {
 				organizationId: newOrg.id,
-				userId: signupRes.user.id,
+				userId: invitedUser.id,
 				role: "member",
 			},
 		});
@@ -807,9 +807,9 @@ describe("invite by user ID", async (it) => {
 			},
 		});
 
-		expect(acceptResult.invitation.status).toBe("accepted");
-		expect(acceptResult.member).toBeDefined();
-		expect(acceptResult.member.userId).toBe(signupRes.user.id);
-		expect(acceptResult.member.organizationId).toBe(newOrg.id);
+		expect(acceptResult!.invitation.status).toBe("accepted");
+		expect(acceptResult!.member).toBeDefined();
+		expect(acceptResult!.member.userId).toBe(invitedUser.id);
+		expect(acceptResult!.member.organizationId).toBe(newOrg.id);
 	});
 });

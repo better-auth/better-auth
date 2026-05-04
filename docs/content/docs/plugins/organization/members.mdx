@@ -281,6 +281,20 @@ type ListMembersResponse = {
 
 ## Configuration Options
 
+### `privacy`
+
+Control what member data is exposed in API responses. When enabled, sensitive fields like email addresses are hidden from responses.
+
+```ts
+organization({
+    privacy: true // Hide emails by default
+})
+```
+
+**Default:** `false` (all fields visible)
+
+See [Privacy](/docs/plugins/organization/privacy) for full configuration options.
+
 ### `membershipLimit`
 
 The maximum number of members allowed in an organization. Can be a number or an async function.

@@ -122,7 +122,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(
 			);
 
 			return ctx.json({
-				invitation: rejectedI,
+				invitation: adapter.applyInvitationPrivacy(rejectedI),
 				member: null,
 			});
 		},
