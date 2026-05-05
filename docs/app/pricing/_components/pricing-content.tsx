@@ -189,11 +189,9 @@ function TierCard({ tier, index }: { tier: Tier; index: number }) {
 			transition={{ duration: 0.3, delay: 0.1 + index * 0.05, ease: "easeOut" }}
 			className={cn(
 				"relative flex flex-col bg-background",
-				"border border-foreground/10 lg:border-r-0 last:lg:border-r",
-				"first:rounded-tl-lg first:rounded-bl-lg last:rounded-tr-lg last:rounded-br-lg",
-				"lg:first:rounded-bl-lg lg:last:rounded-br-lg",
+				"border border-foreground/10 lg:border-l-0 lg:border-r-0 first:lg:border-l last:lg:border-r",
 				highlighted &&
-					"lg:border! lg:border-foreground/25! lg:rounded-lg! lg:-my-4 lg:z-10 bg-foreground/1.5",
+					"lg:border! lg:border-foreground/25! lg:-my-4 lg:z-10 bg-foreground/1.5",
 			)}
 		>
 			<div className="flex flex-col flex-1 px-6 pt-6 pb-6">
@@ -243,7 +241,7 @@ function TierCard({ tier, index }: { tier: Tier; index: number }) {
 				<a href={tier.cta.href} className="block mt-auto">
 					<div
 						className={cn(
-							"w-full py-2.5 text-center text-[13px] rounded-md transition-all duration-200",
+							"w-full py-2.5 text-center text-[13px] rounded-sm transition-all duration-200",
 							highlighted
 								? "bg-foreground text-background hover:opacity-90"
 								: "border border-foreground/15 text-foreground/85 hover:bg-foreground/5 hover:border-foreground/25",
@@ -296,7 +294,7 @@ function CompareCell({ value }: { value: CellValue }) {
 function CompareTable() {
 	return (
 		<TooltipProvider delayDuration={150}>
-			<div className="border border-foreground/10 rounded-lg overflow-hidden">
+			<div className="border border-foreground/10 rounded-sm overflow-hidden">
 				<div className="overflow-x-auto">
 					<table className="w-full min-w-[640px] table-fixed border-collapse">
 						<thead>
@@ -399,7 +397,7 @@ export function PricingContent() {
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.05 }}
-				className="flex items-center gap-4 px-5 py-3.5 border border-foreground/10 rounded-lg bg-foreground/2"
+				className="flex items-center gap-4 px-5 py-3.5 border border-foreground/10 rounded-sm bg-foreground/2"
 			>
 				<p className="flex-1 text-[13px] text-foreground/75 leading-relaxed">
 					The Better Auth framework is{" "}
@@ -408,7 +406,7 @@ export function PricingContent() {
 				</p>
 				<a
 					href="/docs"
-					className="group shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-foreground/85 border border-foreground/15 rounded-md hover:border-foreground/30 hover:bg-foreground/5 transition-all"
+					className="group shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-foreground/85 border border-foreground/15 rounded-sm hover:border-foreground/30 hover:bg-foreground/5 transition-all"
 				>
 					Docs
 					<svg
