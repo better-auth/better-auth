@@ -358,14 +358,15 @@ function SectionHeaderRow({
 function CompareTableDesktop() {
 	return (
 		<div className="hidden lg:block border border-foreground/10 rounded-sm">
-			<div className="sticky top-(--landing-topbar-height) z-10 grid grid-cols-[34%_22%_22%_22%] bg-background border-b border-foreground/10">
-				<div aria-hidden="true" />
+			<div
+				aria-hidden="true"
+				className="sticky top-(--landing-topbar-height) z-10 grid grid-cols-[34%_22%_22%_22%] bg-background border-b border-foreground/10"
+			>
+				<div />
 				{tierNames.map((name) => (
 					<div
 						key={name}
-						className={cn(
-							"text-left text-sm font-medium py-5 px-5 text-foreground",
-						)}
+						className="text-left text-sm font-medium py-5 px-5 text-foreground"
 					>
 						{name}
 					</div>
@@ -378,6 +379,16 @@ function CompareTableDesktop() {
 					<col className="w-[22%]" />
 					<col className="w-[22%]" />
 				</colgroup>
+				<thead className="sr-only">
+					<tr>
+						<th scope="col">Feature</th>
+						{tierNames.map((name) => (
+							<th key={name} scope="col">
+								{name}
+							</th>
+						))}
+					</tr>
+				</thead>
 				<tbody>
 					{compareSections.map((section, sIdx) => (
 						<Fragment key={section.title}>
@@ -449,6 +460,12 @@ function CompareTableMobile() {
 
 			<div className="border border-foreground/10 rounded-sm overflow-hidden">
 				<table className="w-full table-fixed border-collapse">
+					<thead className="sr-only">
+						<tr>
+							<th scope="col">Feature</th>
+							<th scope="col">{selected}</th>
+						</tr>
+					</thead>
 					<tbody>
 						{compareSections.map((section, sIdx) => (
 							<Fragment key={section.title}>
@@ -536,6 +553,7 @@ export function PricingContent() {
 
 			{/* Comparison table */}
 			<motion.section
+				aria-label="Plan comparison"
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.3 }}
