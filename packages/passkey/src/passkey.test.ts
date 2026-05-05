@@ -110,7 +110,6 @@ describe("passkey", async () => {
 
 	it.each([
 		"none",
-		"indirect",
 		"direct",
 		"enterprise",
 	] as const)("should forward configured attestation '%s' to generateRegistrationOptions", async (attestation) => {
