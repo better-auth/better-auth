@@ -343,9 +343,9 @@ export const databasesConfig = [
 				isNamedImport: false,
 			},
 		],
-		preCode: `const dialect = createPool({ host: "localhost", user: "root", password: "password", database: "database", timezone: "Z" })`,
+		preCode: `const database = createPool({ host: "localhost", user: "root", password: "password", database: "database", timezone: "Z" })`,
 		code({ additionalOptions }) {
-			return kyselyCode({ provider: "mysql", additionalOptions });
+			return `database`;
 		},
 		dependencies: ["mysql2"],
 	},
@@ -358,9 +358,9 @@ export const databasesConfig = [
 				isNamedImport: false,
 			},
 		],
-		preCode: `const dialect = new Pool({ connectionString: "postgresql://postgres:password@localhost:5432/database" })`,
+		preCode: `const database = new Pool({ connectionString: "postgresql://postgres:password@localhost:5432/database" })`,
 		code({ additionalOptions }) {
-			return kyselyCode({ provider: "postgresql", additionalOptions });
+			return `database`;
 		},
 		dependencies: ["pg"],
 		devDependencies: ["@types/pg"],
