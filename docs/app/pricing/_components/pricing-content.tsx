@@ -3,7 +3,14 @@
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { Check, Gauge, Headset, Info, Layers2, Minus } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import {
 	Tooltip,
 	TooltipContent,
@@ -178,6 +185,7 @@ const compareSections: readonly CompareSection[] = [
 ];
 
 const tierNames = ["Starter", "Pro", "Enterprise"] as const;
+type TierName = (typeof tierNames)[number];
 
 function TierCard({ tier, index }: { tier: Tier; index: number }) {
 	const { highlighted } = tier;
@@ -188,12 +196,10 @@ function TierCard({ tier, index }: { tier: Tier; index: number }) {
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.3, delay: 0.1 + index * 0.05, ease: "easeOut" }}
 			className={cn(
-				"relative flex flex-col bg-background",
-				"border border-foreground/10 lg:border-r-0 last:lg:border-r",
-				"first:rounded-tl-lg first:rounded-bl-lg last:rounded-tr-lg last:rounded-br-lg",
-				"lg:first:rounded-bl-lg lg:last:rounded-br-lg",
+				"relative flex flex-col bg-background mx-auto max-w-md w-full",
+				"border border-foreground/10 lg:border-l-0 lg:border-r-0 first:lg:border-l last:lg:border-r",
 				highlighted &&
-					"lg:border! lg:border-foreground/25! lg:rounded-lg! lg:-my-4 lg:z-10 bg-foreground/1.5",
+					"lg:border! lg:border-foreground/25! lg:-my-4 lg:z-10 bg-muted/30",
 			)}
 		>
 			<div className="flex flex-col flex-1 px-6 pt-6 pb-6">
@@ -243,7 +249,7 @@ function TierCard({ tier, index }: { tier: Tier; index: number }) {
 				<a href={tier.cta.href} className="block mt-auto">
 					<div
 						className={cn(
-							"w-full py-2.5 text-center text-[13px] rounded-md transition-all duration-200",
+							"w-full py-2.5 text-center text-[13px] rounded-sm transition-all duration-200",
 							highlighted
 								? "bg-foreground text-background hover:opacity-90"
 								: "border border-foreground/15 text-foreground/85 hover:bg-foreground/5 hover:border-foreground/25",
@@ -293,100 +299,208 @@ function CompareCell({ value }: { value: CellValue }) {
 	);
 }
 
+function RowLabel({ row }: { row: CompareRow }) {
+	return (
+		<span className="inline-flex items-center gap-1.5">
+			{row.label}
+			{row.tip && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							aria-label={`More info about ${row.label}`}
+							className="inline-flex items-center text-foreground/40 hover:text-foreground/70 transition-colors cursor-help"
+						>
+							<Info className="w-3.5 h-3.5" strokeWidth={1.75} />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent
+						side="top"
+						className="max-w-[260px] text-[12px] leading-relaxed"
+					>
+						{row.tip}
+					</TooltipContent>
+				</Tooltip>
+			)}
+		</span>
+	);
+}
+
+function SectionHeaderRow({
+	section,
+	colSpan,
+	withTopBorder,
+}: {
+	section: CompareSection;
+	colSpan: number;
+	withTopBorder: boolean;
+}) {
+	const Icon = section.icon;
+	return (
+		<tr>
+			<th
+				colSpan={colSpan}
+				scope="colgroup"
+				className={cn(
+					"text-left text-[14px] text-foreground font-normal py-3 px-5 border-b border-foreground/10",
+					withTopBorder && "border-t border-foreground/10",
+				)}
+			>
+				<span className="inline-flex items-center gap-2">
+					<Icon className="w-4 h-4 text-foreground/70" strokeWidth={1.75} />
+					{section.title}
+				</span>
+			</th>
+		</tr>
+	);
+}
+
+function CompareTableDesktop() {
+	return (
+		<div className="hidden lg:block border border-foreground/10 rounded-sm">
+			<div
+				aria-hidden="true"
+				className="sticky top-(--landing-topbar-height) z-10 grid grid-cols-[34%_22%_22%_22%] bg-background border-b border-foreground/10"
+			>
+				<div />
+				{tierNames.map((name) => (
+					<div
+						key={name}
+						className="text-left text-sm font-medium py-5 px-5 text-foreground"
+					>
+						{name}
+					</div>
+				))}
+			</div>
+			<table className="w-full table-fixed border-collapse">
+				<colgroup>
+					<col className="w-[34%]" />
+					<col className="w-[22%]" />
+					<col className="w-[22%]" />
+					<col className="w-[22%]" />
+				</colgroup>
+				<thead className="sr-only">
+					<tr>
+						<th scope="col">Feature</th>
+						{tierNames.map((name) => (
+							<th key={name} scope="col">
+								{name}
+							</th>
+						))}
+					</tr>
+				</thead>
+				<tbody>
+					{compareSections.map((section, sIdx) => (
+						<Fragment key={section.title}>
+							<SectionHeaderRow
+								section={section}
+								colSpan={4}
+								withTopBorder={sIdx > 0}
+							/>
+							{section.rows.map((row) => (
+								<tr
+									key={`${section.title}-${row.label}`}
+									className="border-b border-foreground/6 last:border-b-0"
+								>
+									<td className="text-[13px] text-foreground/85 py-3 px-5 align-top">
+										<RowLabel row={row} />
+									</td>
+									{row.values.map((cell, idx) => (
+										<td
+											key={`${row.label}-${tierNames[idx]}`}
+											className="py-3 px-5 align-top"
+										>
+											<CompareCell value={cell} />
+										</td>
+									))}
+								</tr>
+							))}
+						</Fragment>
+					))}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function CompareTableMobile() {
+	const [selected, setSelected] = useState<TierName>("Pro");
+	const planIdx = tierNames.indexOf(selected);
+	const selectedTier = tiers[planIdx];
+
+	return (
+		<div className="lg:hidden max-w-xl mx-auto">
+			<div className="sticky top-(--landing-topbar-height) z-10 bg-background py-4 flex items-center justify-between gap-3">
+				<Select
+					value={selected}
+					onValueChange={(v) => setSelected(v as TierName)}
+				>
+					<SelectTrigger
+						aria-label="Select plan to compare"
+						className="rounded-sm w-fit min-w-[140px] font-medium"
+					>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent className="rounded-sm font-medium">
+						{tierNames.map((name) => (
+							<SelectItem key={name} value={name} className="rounded-sm">
+								{name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+
+				<a
+					href={selectedTier.cta.href}
+					className="shrink-0 inline-flex items-center px-4 h-9 text-[13px] bg-foreground text-background rounded-sm hover:opacity-90 transition-all"
+				>
+					{selectedTier.cta.label}
+				</a>
+			</div>
+
+			<div className="border border-foreground/10 rounded-sm overflow-hidden">
+				<table className="w-full table-fixed border-collapse">
+					<thead className="sr-only">
+						<tr>
+							<th scope="col">Feature</th>
+							<th scope="col">{selected}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{compareSections.map((section, sIdx) => (
+							<Fragment key={section.title}>
+								<SectionHeaderRow
+									section={section}
+									colSpan={2}
+									withTopBorder={sIdx > 0}
+								/>
+								{section.rows.map((row) => (
+									<tr
+										key={`${section.title}-${row.label}`}
+										className="border-b border-foreground/6 last:border-b-0"
+									>
+										<td className="text-[13px] text-foreground/85 py-3 px-4 align-top w-[58%]">
+											<RowLabel row={row} />
+										</td>
+										<td className="py-3 px-4 align-top text-right">
+											<CompareCell value={row.values[planIdx]} />
+										</td>
+									</tr>
+								))}
+							</Fragment>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	);
+}
+
 function CompareTable() {
 	return (
 		<TooltipProvider delayDuration={150}>
-			<div className="border border-foreground/10 rounded-lg overflow-hidden">
-				<div className="overflow-x-auto">
-					<table className="w-full min-w-[640px] table-fixed border-collapse">
-						<thead>
-							<tr className="border-b border-foreground/10 bg-foreground/2">
-								<th className="w-[34%]" aria-hidden="true" />
-								{tierNames.map((name) => (
-									<th
-										key={name}
-										className={cn(
-											"text-left text-[13px] font-normal py-5 px-5 w-[22%]",
-											name === "Pro" ? "text-foreground" : "text-foreground/65",
-										)}
-									>
-										{name}
-									</th>
-								))}
-							</tr>
-						</thead>
-						<tbody>
-							{compareSections.map((section, sIdx) => {
-								const Icon = section.icon;
-								return (
-									<Fragment key={section.title}>
-										<tr>
-											<th
-												colSpan={4}
-												scope="colgroup"
-												className={cn(
-													"text-left text-[14px] text-foreground font-normal py-3 px-5 border-b border-foreground/10",
-													sIdx > 0 && "border-t border-foreground/10",
-												)}
-											>
-												<span className="inline-flex items-center gap-2">
-													<Icon
-														className="w-4 h-4 text-foreground/70"
-														strokeWidth={1.75}
-													/>
-													{section.title}
-												</span>
-											</th>
-										</tr>
-										{section.rows.map((row) => (
-											<tr
-												key={`${section.title}-${row.label}`}
-												className="border-b border-foreground/6 last:border-b-0"
-											>
-												<td className="text-[13px] text-foreground/85 py-3 px-5 align-top">
-													<span className="inline-flex items-center gap-1.5">
-														{row.label}
-														{row.tip && (
-															<Tooltip>
-																<TooltipTrigger asChild>
-																	<button
-																		type="button"
-																		aria-label={`More info about ${row.label}`}
-																		className="inline-flex items-center text-foreground/40 hover:text-foreground/70 transition-colors cursor-help"
-																	>
-																		<Info
-																			className="w-3.5 h-3.5"
-																			strokeWidth={1.75}
-																		/>
-																	</button>
-																</TooltipTrigger>
-																<TooltipContent
-																	side="top"
-																	className="max-w-[260px] text-[12px] leading-relaxed"
-																>
-																	{row.tip}
-																</TooltipContent>
-															</Tooltip>
-														)}
-													</span>
-												</td>
-												{row.values.map((cell, idx) => (
-													<td
-														key={`${row.label}-${tierNames[idx]}`}
-														className="py-3 px-5 align-top"
-													>
-														<CompareCell value={cell} />
-													</td>
-												))}
-											</tr>
-										))}
-									</Fragment>
-								);
-							})}
-						</tbody>
-					</table>
-				</div>
-			</div>
+			<CompareTableDesktop />
+			<CompareTableMobile />
 		</TooltipProvider>
 	);
 }
@@ -399,7 +513,7 @@ export function PricingContent() {
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.05 }}
-				className="flex items-center gap-4 px-5 py-3.5 border border-foreground/10 rounded-lg bg-foreground/2"
+				className="flex items-center gap-4 px-5 py-3.5 border border-foreground/10 rounded-sm bg-foreground/2"
 			>
 				<p className="flex-1 text-[13px] text-foreground/75 leading-relaxed">
 					The Better Auth framework is{" "}
@@ -408,7 +522,7 @@ export function PricingContent() {
 				</p>
 				<a
 					href="/docs"
-					className="group shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-foreground/85 border border-foreground/15 rounded-md hover:border-foreground/30 hover:bg-foreground/5 transition-all"
+					className="group shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-foreground/85 border border-foreground/15 rounded-sm hover:border-foreground/30 hover:bg-foreground/5 transition-all"
 				>
 					Docs
 					<svg
@@ -439,12 +553,11 @@ export function PricingContent() {
 
 			{/* Comparison table */}
 			<motion.section
+				aria-label="Plan comparison"
 				initial={{ opacity: 0, y: 6 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3, delay: 0.3 }}
-				className="space-y-4"
 			>
-				<h2 className="text-base text-foreground">Compare plans</h2>
 				<CompareTable />
 			</motion.section>
 		</div>
