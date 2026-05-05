@@ -360,6 +360,38 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
+
+			const username = ctx.body.data?.username;
+
+			if (username) {
+				const normalized = username.toLowerCase();
+
+				const users = await ctx.context.internalAdapter.listUsers(
+					1,
+					0,
+					undefined,
+					[
+						{
+							field: "username",
+							operator: "eq",
+							value: normalized,
+						},
+					],
+				);
+
+				if (users?.length) {
+					throw APIError.from("BAD_REQUEST", {
+						code: "USERNAME_ALREADY_EXISTS",
+						message: "Username already exists",
+					});
+				}
+
+				// ✅ SAFE ACCESS
+				if (ctx.body.data && !ctx.body.data.displayUsername) {
+					ctx.body.data.displayUsername = username;
+				}
+			}
+
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
 				email: email,
 				name: ctx.body.name,

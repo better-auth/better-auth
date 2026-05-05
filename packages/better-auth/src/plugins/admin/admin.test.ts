@@ -1831,4 +1831,40 @@ describe("edge cases: userId validation", async () => {
 			}),
 		).rejects.toThrow("user not found");
 	});
+
+	it("should not allow duplicate usernames via admin.createUser", async () => {
+		const username = "duplicateUser";
+
+		await client.admin.createUser(
+			{
+				name: "User 1",
+				email: "user1@test.com",
+				password: "password",
+				role: "user",
+				data: {
+					username,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		const res = await client.admin.createUser(
+			{
+				name: "User 2",
+				email: "user2@test.com",
+				password: "password",
+				role: "user",
+				data: {
+					username,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		expect(res.error).toBeDefined();
+	});
 });
