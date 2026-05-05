@@ -361,10 +361,10 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				);
 			}
 
-			const username = ctx.body.data?.username;
+			const rawUsername = ctx.body.data?.username;
 
-			if (username) {
-				const normalized = username.toLowerCase();
+			if (typeof rawUsername === "string") {
+				const username = rawUsername.toLowerCase();
 
 				const users = await ctx.context.internalAdapter.listUsers(
 					1,
@@ -374,7 +374,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 						{
 							field: "username",
 							operator: "eq",
-							value: normalized,
+							value: username,
 						},
 					],
 				);
@@ -386,8 +386,12 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					});
 				}
 
-				if (ctx.body.data && !ctx.body.data.displayUsername) {
-					ctx.body.data.displayUsername = username;
+				if (ctx.body.data) {
+					ctx.body.data.username = username;
+
+					if (!ctx.body.data.displayUsername) {
+						ctx.body.data.displayUsername = rawUsername;
+					}
 				}
 			}
 
