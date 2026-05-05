@@ -386,7 +386,6 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					});
 				}
 
-				// ✅ SAFE ACCESS
 				if (ctx.body.data && !ctx.body.data.displayUsername) {
 					ctx.body.data.displayUsername = username;
 				}
