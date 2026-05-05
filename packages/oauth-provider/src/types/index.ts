@@ -752,10 +752,12 @@ export interface OAuthAuthorizationQuery {
 	 * Cross-Site Request Forgery (CSRF, XSRF) mitigation is done by cryptographically binding the
 	 * value of this parameter with a browser cookie.
 	 *
+	 * Recommended for clients, but optional for the authorization server.
+	 *
 	 * Note: Better Auth stores the state in a database instead of a cookie. - This is to minimize
 	 * the complication with native apps and other clients that may not have access to cookies.
 	 */
-	state: string;
+	state?: string;
 	/**
 	 * The client ID. Must be the ID of a registered client.
 	 */
@@ -1035,7 +1037,7 @@ export interface OAuthRefreshToken<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
 	token: string;
-	sessionId: string;
+	sessionId?: string;
 	userId: string;
 	referenceId?: string;
 	clientId?: string;

@@ -229,12 +229,45 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								if (isAPIError(e)) {
 									/**
 									 * API Errors from response are caught
-									 * and returned to hooks
+									 * and returned to hooks.
+									 *
+									 * Headers come from two sources that must both
+									 * survive:
+									 * - `kAPIErrorHeaderSymbol`: ctx.responseHeaders
+									 *   accumulated via c.setCookie / c.setHeader
+									 *   before the throw.
+									 * - `e.headers`: explicit headers on the APIError
+									 *   (e.g. `location` from c.redirect).
+									 *
+									 * Start from the accumulated ctx headers, then
+									 * apply e.headers on top — appending `set-cookie`
+									 * and setting others — so explicit APIError
+									 * headers override while cookies accumulate.
 									 */
+									const ctxHeaders = (
+										e as {
+											[kAPIErrorHeaderSymbol]?: Headers;
+										}
+									)[kAPIErrorHeaderSymbol];
+									const errHeaders = e.headers ? new Headers(e.headers) : null;
+									let headers: Headers | null = null;
+									if (ctxHeaders || errHeaders) {
+										headers = new Headers();
+										ctxHeaders?.forEach((value, key) => {
+											headers!.append(key, value);
+										});
+										errHeaders?.forEach((value, key) => {
+											if (key.toLowerCase() === "set-cookie") {
+												headers!.append(key, value);
+											} else {
+												headers!.set(key, value);
+											}
+										});
+									}
 									return {
 										response: e,
 										status: e.statusCode,
-										headers: e.headers ? new Headers(e.headers) : null,
+										headers,
 									};
 								}
 								throw e;
@@ -272,6 +305,29 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 							}
 
 							if (isAPIError(result.response) && !shouldReturnResponse) {
+								/**
+								 * Non-response path: we re-throw the raw APIError
+								 * to callers of `auth.api.*`. `result.headers`
+								 * holds the merged ctx + explicit headers (see
+								 * catch block above) — rewrite
+								 * `kAPIErrorHeaderSymbol` with the merged set so
+								 * downstream pipelines (e.g. better-call's
+								 * response builder, or an outer hook catch) see
+								 * the same headers we'd have written on the
+								 * response.
+								 */
+								if (result.headers) {
+									Object.defineProperty(
+										result.response,
+										kAPIErrorHeaderSymbol,
+										{
+											enumerable: false,
+											configurable: true,
+											writable: false,
+											value: result.headers,
+										},
+									);
+								}
 								throw result.response;
 							}
 

@@ -47,15 +47,6 @@ export default function PricingLayout({
 										</div>
 									))}
 								</div>
-
-								<div className="flex items-center gap-3 pt-1">
-									<a
-										href="https://dash.better-auth.com/sign-in"
-										className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-colors"
-									>
-										Get Started
-									</a>
-								</div>
 							</div>
 						</div>
 					</div>
