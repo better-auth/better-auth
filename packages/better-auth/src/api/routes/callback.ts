@@ -165,10 +165,11 @@ export const callbackOAuth = createAuthEndpoint(
 			})
 			.then((res) => res?.user);
 
-		if (!userInfo) {
+		if (!userInfo || userInfo.id === undefined || userInfo.id === null) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError("unable_to_get_user_info");
 		}
+		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
@@ -196,7 +197,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 			const existingAccount =
 				await c.context.internalAdapter.findAccountByProviderId(
-					String(userInfo.id),
+					providerAccountId,
 					provider.id,
 				);
 
@@ -222,7 +223,7 @@ export const callbackOAuth = createAuthEndpoint(
 				const newAccount = await c.context.internalAdapter.createAccount({
 					userId: link.userId,
 					providerId: provider.id,
-					accountId: String(userInfo.id),
+					accountId: providerAccountId,
 					...tokens,
 					accessToken: await setTokenUtil(tokens.accessToken, c.context),
 					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
@@ -248,14 +249,14 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		const accountData = {
 			providerId: provider.id,
-			accountId: String(userInfo.id),
+			accountId: providerAccountId,
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
-				id: String(userInfo.id),
+				id: providerAccountId,
 				email: userInfo.email,
 				name: userInfo.name || "",
 			},
