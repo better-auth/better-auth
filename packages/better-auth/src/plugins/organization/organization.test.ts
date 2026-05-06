@@ -32,6 +32,45 @@ describe("organization type", () => {
 		expectTypeOf({} satisfies OrganizationOptions);
 		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9135
+	 */
+	it("allows dynamic roles in create invitation input", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					roles: {
+						admin: adminAc,
+						member: memberAc,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+				}),
+			],
+		});
+
+		const dynamicRole = "contractor" as string;
+		const dynamicRoles = ["contractor", "reviewer"] as string[];
+
+		if (false) {
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-role@example.com",
+					role: dynamicRole,
+				},
+			});
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-roles@example.com",
+					role: dynamicRoles,
+				},
+			});
+		}
+	});
 });
 
 describe("organization", async () => {
