@@ -95,16 +95,12 @@ describe("init CLI - database generation", () => {
 
 		it("should generate the right kysely-mysql database code", async () => {
 			const database = getDatabaseCode("mysql");
-			const expectedCode = (
-				await formatCode(`const database = { dialect, type: 'mysql' }`)
-			).replace("const database = ", "");
-			const code = (
-				await formatCode(`const database = ` + database.code({}))
-			).replace("const database = ", "");
+			const expectedCode = await formatCode("database");
+			const code = await formatCode(database.code({}));
 			expect(code).toEqual(expectedCode);
 
 			const expectedPreCode = await formatCode(
-				`const dialect = createPool({
+				`const database = createPool({
                     host: 'localhost',
                     user: 'root',
                     password: 'password',
@@ -118,16 +114,12 @@ describe("init CLI - database generation", () => {
 
 		it("should generate the right kysely-postgresql database code", async () => {
 			const database = getDatabaseCode("postgresql");
-			const expectedCode = (
-				await formatCode(`const database = { dialect, type: 'postgresql' }`)
-			).replace("const database = ", "");
-			const code = (
-				await formatCode(`const database = ` + database.code({}))
-			).replace("const database = ", "");
+			const expectedCode = await formatCode("database");
+			const code = await formatCode(database.code({}));
 			expect(code).toEqual(expectedCode);
 
 			const expectedPreCode = await formatCode(
-				`const dialect = new Pool({
+				`const database = new Pool({
                     connectionString: 'postgresql://postgres:password@localhost:5432/database',
                 });`,
 			);
