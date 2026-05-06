@@ -1,3 +1,5 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -10,7 +12,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import * as apiModule from "../../api";
+import { APIError, getSessionFromCtx } from "../../api";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -375,109 +377,209 @@ describe("anonymous", async () => {
 	});
 
 	describe("anonymous cleanup safeguards", () => {
-		function createMiddlewareContext({
-			newSessionUser,
-			deleteUser,
-		}: {
-			newSessionUser: Record<string, any>;
-			deleteUser: ReturnType<typeof vi.fn>;
-		}) {
-			return {
-				path: "/sign-in/anonymous",
-				context: {
-					responseHeaders: new Headers({
-						"set-cookie":
-							"better-auth.session_token=new-token.value; Path=/; HttpOnly",
-					}),
-					authCookies: {
-						sessionToken: {
-							name: "better-auth.session_token",
-							options: {},
-						},
-						sessionData: {
-							name: "better-auth.session_data",
-							options: {},
-						},
-						dontRememberToken: {
-							name: "better-auth.dont_remember",
-							options: {},
-						},
+		const passkeyRegistrationRoutePlugin = {
+			id: "passkey-registration-route-plugin",
+			endpoints: {
+				verifyRegistration: createAuthEndpoint(
+					"/passkey/verify-registration",
+					{
+						method: "POST",
 					},
-					newSession: {
-						user: newSessionUser,
-						session: {
-							token: "new-token",
-						},
+					async (ctx) => {
+						return ctx.json({ success: true });
 					},
-					internalAdapter: {
-						deleteUser,
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		const passkeyRegistrationFailureRoutePlugin = {
+			id: "passkey-registration-failure-route-plugin",
+			endpoints: {
+				verifyRegistration: createAuthEndpoint(
+					"/passkey/verify-registration",
+					{
+						method: "POST",
 					},
-					options: {},
-					secret: "secret",
-					setNewSession: vi.fn(),
-				},
-				headers: new Headers(),
-				query: {},
-				error: vi.fn(),
-				json: vi.fn(),
-				getSignedCookie: vi.fn(),
-				setCookie: vi.fn(),
-				setSignedCookie: vi.fn(),
-			} as any;
+					async () => {
+						throw APIError.from("BAD_REQUEST", {
+							code: "PASSKEY_REGISTRATION_FAILED",
+							message: "Passkey registration failed",
+						});
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		const callbackLinkRoutePlugin = {
+			id: "callback-link-route-plugin",
+			endpoints: {
+				callbackMock: createAuthEndpoint(
+					"/callback/mock",
+					{
+						method: "GET",
+					},
+					async (ctx) => {
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, { disableRefresh: true });
+						if (!session) {
+							return ctx.json({ linked: false });
+						}
+						await ctx.context.internalAdapter.createAccount({
+							userId: session.user.id,
+							providerId: "mock-provider",
+							accountId: `mock-${session.user.id}`,
+						});
+						return ctx.json({ linked: true });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		async function getAnonymousFlagForUser(
+			db: Awaited<ReturnType<typeof getTestInstance>>["db"],
+			userId: string,
+		) {
+			const users = await db.findMany<{ isAnonymous: boolean | null }>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+			});
+			return users[0]?.isAnonymous;
 		}
 
-		it("does not delete when the new session is still anonymous", async () => {
-			const plugin = anonymous();
-			const handler = plugin.hooks?.after?.[0]?.handler;
-			const deleteUser = vi.fn();
-			const ctx = createMiddlewareContext({
-				newSessionUser: {
-					id: "anon-user",
-					isAnonymous: true,
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7985
+		 */
+		it("updates anonymous flag when passkey registration completes", async () => {
+			const { client, sessionSetter, db } = await getTestInstance(
+				{
+					plugins: [anonymous(), passkeyRegistrationRoutePlugin],
 				},
-				deleteUser,
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+				},
+			);
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
 			});
 
-			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
-				user: {
-					id: "anon-user",
-					isAnonymous: true,
-				},
-				session: {
-					token: "old-token",
-				},
-			} as any);
+			const sessionBefore = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionBefore.data?.user.isAnonymous).toBe(true);
+			const anonymousUserId = sessionBefore.data?.user.id;
+			expect(anonymousUserId).toBeDefined();
+			if (!anonymousUserId) {
+				throw new Error("Expected anonymous user id");
+			}
 
-			await handler?.(ctx);
+			await client.$fetch("/passkey/verify-registration", {
+				method: "POST",
+				headers,
+			});
 
-			expect(deleteUser).not.toHaveBeenCalled();
+			expect(await getAnonymousFlagForUser(db, anonymousUserId)).toBe(false);
+
+			const sessionAfter = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionAfter.data?.user.isAnonymous).toBe(false);
 		});
 
-		it("deletes the previous anonymous user when linking a new account", async () => {
-			const plugin = anonymous();
-			const handler = plugin.hooks?.after?.[0]?.handler;
-			const deleteUser = vi.fn();
-			const ctx = createMiddlewareContext({
-				newSessionUser: {
-					id: "linked-user",
-					isAnonymous: false,
+		it("keeps anonymous flag when passkey registration fails", async () => {
+			const { client, sessionSetter, db } = await getTestInstance(
+				{
+					plugins: [anonymous(), passkeyRegistrationFailureRoutePlugin],
 				},
-				deleteUser,
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+				},
+			);
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
 			});
 
-			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
-				user: {
-					id: "anon-user",
-					isAnonymous: true,
-				},
-				session: {
-					token: "old-token",
-				},
-			} as any);
+			const sessionBefore = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionBefore.data?.user.isAnonymous).toBe(true);
+			const anonymousUserId = sessionBefore.data?.user.id;
+			expect(anonymousUserId).toBeDefined();
+			if (!anonymousUserId) {
+				throw new Error("Expected anonymous user id");
+			}
 
-			await handler?.(ctx);
+			const verifyRegistrationResult = await client.$fetch(
+				"/passkey/verify-registration",
+				{
+					method: "POST",
+					headers,
+				},
+			);
+			expect(verifyRegistrationResult.error).toBeDefined();
 
-			expect(deleteUser).toHaveBeenCalledWith("anon-user");
+			expect(await getAnonymousFlagForUser(db, anonymousUserId)).toBe(true);
+
+			const sessionAfter = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionAfter.data?.user.isAnonymous).toBe(true);
+		});
+
+		it("updates anonymous flag when callback links an account without a new session cookie", async () => {
+			const { client, sessionSetter, db } = await getTestInstance(
+				{
+					plugins: [anonymous(), callbackLinkRoutePlugin],
+				},
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+				},
+			);
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+
+			const sessionBefore = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionBefore.data?.user.isAnonymous).toBe(true);
+			const anonymousUserId = sessionBefore.data?.user.id;
+			expect(anonymousUserId).toBeDefined();
+			if (!anonymousUserId) {
+				throw new Error("Expected anonymous user id");
+			}
+
+			await client.$fetch("/callback/mock", {
+				method: "GET",
+				headers,
+			});
+
+			expect(await getAnonymousFlagForUser(db, anonymousUserId)).toBe(false);
+
+			const sessionAfter = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionAfter.data?.user.isAnonymous).toBe(false);
 		});
 	});
 });
