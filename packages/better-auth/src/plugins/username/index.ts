@@ -272,7 +272,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									if (username) {
 										if (!skipValidation) {
 											const currentUserId =
-												context?.session?.user?.id ||
+												context?.context?.session?.user?.id ||
 												("id" in user ? (user.id as string) : null);
 											await validateUsername(
 												username,

@@ -70,7 +70,11 @@ describe("admin + username plugin interaction", async () => {
 			},
 		});
 
-		expect(res.user.username).toBe("jamessmith");
+		const user = res.user as typeof res.user & {
+			username: string;
+			displayUsername: string;
+		};
+		expect(user.username).toBe("jamessmith");
 	});
 
 	/**
@@ -114,8 +118,12 @@ describe("admin + username plugin interaction", async () => {
 			},
 		});
 
-		expect(res.user.username).toBe("testuser3");
-		expect(res.user.displayUsername).toBe("TestUser3");
+		const user = res.user as typeof res.user & {
+			username: string;
+			displayUsername: string;
+		};
+		expect(user.username).toBe("testuser3");
+		expect(user.displayUsername).toBe("TestUser3");
 	});
 
 	it("should validate username format when creating user via admin endpoint", async () => {
