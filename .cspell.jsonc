@@ -99,6 +99,8 @@
 		"*.config.js",
 		"*.config.ts",
 		"*.json",
-		".gitignore"
+		".gitignore",
+		// locale translation files contain non-English text that CSpell doesn't recognize
+		"packages/i18n/src/locales/**"
 	]
 }
