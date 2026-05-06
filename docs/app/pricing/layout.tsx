@@ -47,21 +47,12 @@ export default function PricingLayout({
 										</div>
 									))}
 								</div>
-
-								<div className="flex items-center gap-3 pt-1">
-									<a
-										href="https://dash.better-auth.com/sign-in"
-										className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-colors"
-									>
-										Get Started
-									</a>
-								</div>
 							</div>
 						</div>
 					</div>
 
 					{/* Right side — Content */}
-					<div className="relative w-full lg:w-[70%] overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[70%] overflow-x-clip no-scrollbar">
 						<div className="px-5 lg:px-8 lg:pt-20">
 							{/* Mobile header */}
 							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
