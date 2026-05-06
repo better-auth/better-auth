@@ -1077,15 +1077,19 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
+						...params?.params,
+						mode: "subscription",
 						...(customerId
 							? {
 									customer: customerId,
+									customer_email: undefined,
 									customer_update:
 										customerType !== "user"
 											? ({ address: "auto" } as const)
 											: ({ name: "auto", address: "auto" } as const), // The customer name is automatically set only for users
 								}
 							: {
+									customer: undefined,
 									customer_email: user.email,
 								}),
 						locale: ctx.body.locale,
@@ -1101,6 +1105,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							)}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
 						),
 						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+						client_reference_id: referenceId,
 						line_items: [
 							// Base price
 							...(!isSeatOnlyPlan
@@ -1124,9 +1129,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							// Additional line items (metered prices, add-ons, etc.)
 							...(plan.lineItems ?? []),
 						],
-						mode: "subscription",
-						client_reference_id: referenceId,
-						...params?.params,
 						subscription_data: {
 							...freeTrial,
 							...params?.params?.subscription_data,
