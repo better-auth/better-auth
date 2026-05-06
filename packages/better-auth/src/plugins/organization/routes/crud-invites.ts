@@ -1,3 +1,4 @@
+import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -68,6 +69,16 @@ const baseInvitationSchema = z.object({
 	]),
 });
 
+type DynamicOrganizationRole<O extends OrganizationOptions> = O extends {
+	dynamicAccessControl: { enabled: true };
+}
+	? LiteralString
+	: never;
+
+type OrganizationInvitationRole<O extends OrganizationOptions> =
+	| InferOrganizationRolesFromOption<O>
+	| DynamicOrganizationRole<O>;
+
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.invitation?.additionalFields || {},
@@ -96,8 +107,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The role to assign to the user
 						 */
 						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
+							| OrganizationInvitationRole<O>
+							| OrganizationInvitationRole<O>[];
 						/**
 						 * The organization ID to invite
 						 * the user to
@@ -289,7 +300,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				email: email,
 				organizationId: organizationId,
 			});
-			if (alreadyInvited.length && !ctx.body.resend) {
+			if (
+				alreadyInvited.length &&
+				!ctx.body.resend &&
+				!ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
+			) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
