@@ -1,9 +1,22 @@
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
 import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9378
+ */
 export const auth = betterAuth({
-	plugins: [organization({})],
+	plugins: [
+		organization({}),
+		oauthProvider({
+			loginPage: "/auth/sign-in",
+			consentPage: "/auth/oauth/consent",
+			scopes: ["openid", "email"],
+			allowDynamicClientRegistration: true,
+			allowUnauthenticatedClientRegistration: true,
+		}),
+	],
 });
 
 auth.api

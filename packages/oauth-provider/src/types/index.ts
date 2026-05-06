@@ -6,10 +6,14 @@ import type { Awaitable } from "./helpers";
 import type { GrantType } from "./oauth";
 
 export type {
+	AuthMethod,
 	AuthServerMetadata,
+	BearerMethodsSupported,
+	GrantType,
 	OAuthClient,
 	OIDCMetadata,
 	ResourceServerMetadata,
+	TokenEndpointAuthMethod,
 } from "./oauth";
 
 export type StoreTokenType =
