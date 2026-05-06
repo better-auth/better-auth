@@ -52,7 +52,7 @@ export default function PricingLayout({
 					</div>
 
 					{/* Right side — Content */}
-					<div className="relative w-full lg:w-[70%] overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[70%] overflow-x-clip no-scrollbar">
 						<div className="px-5 lg:px-8 lg:pt-20">
 							{/* Mobile header */}
 							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
