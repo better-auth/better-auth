@@ -202,8 +202,43 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 
 ### Server Options
 
-* `disableSignUp`: Disable the sign-up option, allowing only existing users to sign in. Default is false.
+* `disableSignup`: Disable the sign-up option, allowing only existing users to sign in. Default is false.
 * `clientId`: Optionally, pass a client ID here if it is not provided in your social provider configuration.
+* `mapProfileToUser`: Optional mapper from the **verified Google ID token payload** to fields passed to `createUser` on first sign-up (same contract as `socialProviders.google.mapProfileToUser`). If omitted, Better Auth reuses `socialProviders.google.mapProfileToUser` when configured, so structured claims like `given_name` and `family_name` behave the same as the standard Google OAuth redirect flow and you avoid splitting `name` heuristically. If you define both, the One Tap plugin option wins.
+
+Example – map structured name fields onto your schema (often via `user.additionalFields`; see [extending the user schema](/docs/concepts/database#extending-core-schema)):
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oneTap } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      mapProfileToUser: (profile) => ({
+        firstName: profile.given_name,
+        lastName: profile.family_name,
+      }),
+    },
+  },
+  plugins: [
+    oneTap(), // uses socialProviders.google.mapProfileToUser
+  ],
+});
+```
+
+Override only for One Tap (e.g. different rules than redirect OAuth):
+
+```ts title="auth.ts"
+oneTap({
+  mapProfileToUser: (profile) => ({
+    firstName: profile.given_name,
+    lastName: profile.family_name,
+  }),
+}),
+```
 
 ### Authorized JavaScript origins
 
