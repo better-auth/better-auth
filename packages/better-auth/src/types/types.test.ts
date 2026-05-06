@@ -1,4 +1,5 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import type { InferCtx } from "../client/path-to-object";
@@ -267,6 +268,23 @@ describe("general types", async () => {
 		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
 
 		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6876
+ */
+describe("public type exports", () => {
+	it("should export JoinOption from better-auth/types", () => {
+		expectTypeOf<JoinOption>().not.toBeAny();
+	});
+
+	it("should export JoinConfig from better-auth/types", () => {
+		expectTypeOf<JoinConfig>().not.toBeAny();
+	});
+
+	it("should export GoogleProfile from better-auth/types", () => {
+		expectTypeOf<GoogleProfile>().not.toBeAny();
 	});
 });
 
