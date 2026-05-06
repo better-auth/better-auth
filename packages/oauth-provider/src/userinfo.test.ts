@@ -6,6 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { APIError } from "better-call";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -50,7 +51,7 @@ describe("oauth userinfo", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 
 	async function createAuthUrl(
@@ -195,6 +196,44 @@ describe("oauth userinfo", async () => {
 			email: user.email,
 			email_verified: user.emailVerified,
 		});
+	});
+
+	/**
+	 * Programmatic callers have no `ctx.request`, so userinfo must resolve the
+	 * bearer token from `ctx.headers` for both transports.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8806
+	 */
+	it("should return userinfo via auth.api with headers only (no Request)", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await auth.api.oauth2UserInfo({
+			headers: new Headers({
+				Authorization: `Bearer ${tokens.data!.access_token!}`,
+			}),
+		});
+		expect(userinfo).toMatchObject({
+			sub: user.id,
+			name: user.name,
+			given_name: expect.any(String),
+			family_name: expect.any(String),
+			email: user.email,
+			email_verified: user.emailVerified,
+		});
+	});
+
+	it("should reject auth.api userinfo when Authorization header is missing", async () => {
+		try {
+			await auth.api.oauth2UserInfo({ headers: new Headers() });
+			expect.unreachable();
+		} catch (error) {
+			const err = error as APIError;
+			expect(err.statusCode).toBe(401);
+			expect(err.body).toMatchObject({
+				error: "invalid_request",
+				error_description: "authorization header not found",
+			});
+		}
 	});
 
 	it("should pass provide all user information - jwt", async () => {

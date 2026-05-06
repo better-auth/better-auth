@@ -2,7 +2,8 @@ import { createAuthClient } from "better-auth/client";
 import { makeSignature } from "better-auth/crypto";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { exportJWK, generateKeyPair } from "jose";
+import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "../client";
 import { oauthProvider } from "../oauth";
 import type { OAuthClient } from "../types/oauth";
@@ -11,7 +12,7 @@ describe("oauthClient", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
@@ -173,7 +174,7 @@ describe("oauthClient", async () => {
 	});
 
 	it("should update the client", async () => {
-		const newRedirectUri = `https://example.com/api/auth/oauth2/callback/${providerId}`;
+		const newRedirectUri = `https://example.com/api/auth/callback/${providerId}`;
 		const client = await authClient.oauth2.updateClient({
 			client_id: oauthClient.client_id,
 			update: {
@@ -207,5 +208,156 @@ describe("oauthClient", async () => {
 			client_id: oauthClient.client_id,
 		});
 		expect(client.data).toBeNull();
+	});
+});
+
+describe("oauthClient private_key_jwt clients", async () => {
+	const baseUrl = "http://localhost:3002";
+	const redirectUri = "http://localhost:5002/callback";
+	const trustedJwksUri = "https://trusted.example.com/.well-known/jwks.json";
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		trustedOrigins: [
+			"https://trusted.example.com",
+			"https://trusted-updated.example.com",
+		],
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				allowPublicClientPrelogin: true,
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	const authClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let publicJwk: JsonWebKey;
+	let jwksClient: OAuthClient;
+	let jwksUriClient: OAuthClient;
+
+	beforeAll(async () => {
+		const { publicKey } = await generateKeyPair("RS256", { extractable: true });
+		publicJwk = await exportJWK(publicKey);
+	});
+
+	it("should create private_key_jwt clients with jwks and jwks_uri", async () => {
+		const inlineClient = await authClient.oauth2.createClient({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: [
+				{ ...publicJwk, kid: "crud-inline-key", alg: "RS256", use: "sig" },
+			],
+		});
+		expect(inlineClient.data?.client_id).toBeDefined();
+		expect(inlineClient.data?.client_secret).toBeUndefined();
+		expect(inlineClient.data?.token_endpoint_auth_method).toBe(
+			"private_key_jwt",
+		);
+		expect(inlineClient.data?.jwks).toEqual([
+			{ ...publicJwk, kid: "crud-inline-key", alg: "RS256", use: "sig" },
+		]);
+		jwksClient = inlineClient.data!;
+
+		const remoteClient = await authClient.oauth2.createClient({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks_uri: trustedJwksUri,
+		});
+		expect(remoteClient.data?.client_id).toBeDefined();
+		expect(remoteClient.data?.client_secret).toBeUndefined();
+		expect(remoteClient.data?.token_endpoint_auth_method).toBe(
+			"private_key_jwt",
+		);
+		expect(remoteClient.data?.jwks_uri).toBe(trustedJwksUri);
+		jwksUriClient = remoteClient.data!;
+	});
+
+	it("should get private_key_jwt clients without leaking secrets", async () => {
+		const inlineClient = await authClient.oauth2.getClient({
+			query: { client_id: jwksClient.client_id },
+		});
+		expect(inlineClient.data?.client_secret).toBeUndefined();
+		expect(inlineClient.data?.jwks).toEqual(jwksClient.jwks);
+
+		const remoteClient = await authClient.oauth2.getClient({
+			query: { client_id: jwksUriClient.client_id },
+		});
+		expect(remoteClient.data?.client_secret).toBeUndefined();
+		expect(remoteClient.data?.jwks_uri).toBe(trustedJwksUri);
+	});
+
+	it("should include private_key_jwt clients in the client list", async () => {
+		const clients = await authClient.oauth2.getClients();
+		const byId = new Map(
+			(clients.data ?? []).map((client) => [client.client_id, client]),
+		);
+
+		expect(byId.get(jwksClient.client_id)?.token_endpoint_auth_method).toBe(
+			"private_key_jwt",
+		);
+		expect(byId.get(jwksClient.client_id)?.jwks).toEqual(jwksClient.jwks);
+		expect(byId.get(jwksUriClient.client_id)?.jwks_uri).toBe(trustedJwksUri);
+	});
+
+	it("should preserve inline jwks metadata when updating a private_key_jwt client", async () => {
+		const updated = await authClient.oauth2.updateClient({
+			client_id: jwksClient.client_id,
+			update: {
+				client_name: "Updated inline client",
+				redirect_uris: [redirectUri, "https://example.com/callback"],
+			},
+		});
+
+		expect(updated.data?.client_name).toBe("Updated inline client");
+		expect(updated.data?.jwks).toEqual(jwksClient.jwks);
+		expect(updated.data?.redirect_uris).toEqual([
+			redirectUri,
+			"https://example.com/callback",
+		]);
+		jwksClient = updated.data!;
+	});
+
+	it("should preserve jwks_uri metadata when updating a private_key_jwt client", async () => {
+		const updated = await authClient.oauth2.updateClient({
+			client_id: jwksUriClient.client_id,
+			update: {
+				client_name: "Updated remote client",
+				redirect_uris: [
+					redirectUri,
+					"https://trusted-updated.example.com/callback",
+				],
+			},
+		});
+
+		expect(updated.data?.client_name).toBe("Updated remote client");
+		expect(updated.data?.jwks_uri).toBe(trustedJwksUri);
+		expect(updated.data?.redirect_uris).toEqual([
+			redirectUri,
+			"https://trusted-updated.example.com/callback",
+		]);
+		jwksUriClient = updated.data!;
+	});
+
+	it("should reject client secret rotation for private_key_jwt clients", async () => {
+		const result = await authClient.oauth2.client.rotateSecret({
+			client_id: jwksClient.client_id,
+		});
+
+		expect(result.error?.status).toBeGreaterThanOrEqual(400);
+		expect(result.error?.status).toBeLessThan(500);
 	});
 });

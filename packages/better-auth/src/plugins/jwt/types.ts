@@ -206,3 +206,16 @@ export interface Jwk {
 	alg?: JWSAlgorithms | undefined;
 	crv?: ("Ed25519" | "P-256" | "P-521") | undefined;
 }
+
+/**
+ * A fully resolved signing key ready for JWT signing.
+ * Produced by `resolveSigningKey`, consumed by `signJWT`.
+ * Separates key resolution from signing so callers can
+ * read the `alg` before constructing the JWT payload
+ * (required for OIDC hash claims like at_hash).
+ */
+export interface ResolvedSigningKey {
+	alg: string;
+	kid: string;
+	privateKey: CryptoKey | Uint8Array;
+}

@@ -33,3 +33,4 @@ Vercel
 rgba
 idtoken
 HIBP
+cimd

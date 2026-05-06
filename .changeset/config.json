@@ -11,6 +11,7 @@
       "@better-auth/core",
       "auth",
       "@better-auth/api-key",
+      "@better-auth/cimd",
       "@better-auth/drizzle-adapter",
       "@better-auth/electron",
       "@better-auth/expo",

@@ -117,11 +117,8 @@ When signing in, use the appropriate `providerId` (e.g., `"line-jp"`, `"line-th"
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
-import { genericOAuthClient } from "better-auth/client/plugins";
 
-const authClient = createAuthClient({
-  plugins: [genericOAuthClient()],
-});
+const authClient = createAuthClient();
 
 // Sign in with Japan channel
 await authClient.signIn.social({ provider: "line-jp" });

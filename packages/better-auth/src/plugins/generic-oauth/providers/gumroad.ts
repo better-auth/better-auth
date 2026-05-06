@@ -39,7 +39,9 @@ interface GumroadProfile {
  *
  * @see https://app.gumroad.com/oauth
  */
-export function gumroad(options: GumroadOptions): GenericOAuthConfig {
+export function gumroad(
+	options: GumroadOptions,
+): GenericOAuthConfig<"gumroad"> {
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
 	): Promise<OAuth2UserInfo | null> => {

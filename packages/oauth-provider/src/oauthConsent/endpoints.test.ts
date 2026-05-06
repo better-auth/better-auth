@@ -15,7 +15,7 @@ describe("oauthConsent", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [

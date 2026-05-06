@@ -167,7 +167,10 @@ export interface HydratedOIDCConfig {
 	userInfoEndpoint?: string;
 
 	/** Token endpoint authentication method */
-	tokenEndpointAuthentication?: "client_secret_basic" | "client_secret_post";
+	tokenEndpointAuthentication?:
+		| "client_secret_basic"
+		| "client_secret_post"
+		| "private_key_jwt";
 
 	/** Scopes supported by the IdP */
 	scopesSupported?: string[];

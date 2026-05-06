@@ -51,7 +51,7 @@ describe("oauth register", async () => {
 	});
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	it("should fail without body", async () => {
 		const response = await serverClient.$fetch("/oauth2/register", {
@@ -295,7 +295,7 @@ describe("oauth register - unauthenticated", async () => {
 	});
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	it("should create public clients without authentication", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
@@ -517,7 +517,7 @@ describe("oauth register - organization", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [

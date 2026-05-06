@@ -12,9 +12,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/cimd": "link:../../packages/cimd",
     "@better-auth/dash": "^0.1.6",
     "@better-auth/electron": "link:../../packages/electron",
-    "@better-auth/infra": "^0.1.8",
+    "@better-auth/infra": "^0.2.5",
     "@better-auth/oauth-provider": "link:../../packages/oauth-provider",
     "@better-auth/passkey": "link:../../packages/passkey",
     "@better-auth/scim": "link:../../packages/scim",
@@ -80,7 +81,7 @@
     "recharts": "^3.7.0",
     "resend": "^6.9.3",
     "sonner": "^2.0.7",
-    "stripe": "^22.0.1",
+    "stripe": "22.0.1",
     "tailwind-merge": "^3.5.0",
     "ua-parser-js": "^2.0.9",
     "vaul": "^1.1.2",

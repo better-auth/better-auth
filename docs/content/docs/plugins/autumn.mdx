@@ -131,7 +131,7 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
   <Step>
     ### Add `<AutumnProvider />`
 
-    Client side, wrap your application with the AutumnProvider component, and pass in the `baseUrl` that you define within better-auth's `authClient`.
+    In your layout file, wrap your application with the AutumnProvider component, and pass in the `useBetterAuth` to true.
 
     ```tsx title="app/layout.tsx"
     import { AutumnProvider } from "autumn-js/react";
@@ -144,8 +144,7 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
       return (
         <html>
           <body>
-            {/* or meta.env.BETTER_AUTH_URL for vite */}
-            <AutumnProvider betterAuthUrl={process.env.NEXT_PUBLIC_BETTER_AUTH_URL}>
+            <AutumnProvider useBetterAuth={true}>
               {children}
             </AutumnProvider>
           </body>
