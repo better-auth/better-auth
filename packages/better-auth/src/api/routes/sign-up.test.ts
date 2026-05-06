@@ -293,7 +293,7 @@ describe("sign-up user enumeration protection", async () => {
 		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
 	});
 
-	it("should not call onExistingUserSignUp when autoSignIn is false without requireEmailVerification", async () => {
+	it("should call onExistingUserSignUp when autoSignIn is false without requireEmailVerification", async () => {
 		const onExistingUserSignUp = vi.fn();
 		const { auth } = await getTestInstance(
 			{
@@ -315,9 +315,10 @@ describe("sign-up user enumeration protection", async () => {
 		};
 
 		await auth.api.signUpEmail({ body });
-		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
-
-		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+		const response = await auth.api.signUpEmail({ body });
+		expect(response.token).toBeNull();
+		expect(response.user).toBeDefined();
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
 	});
 
 	it("should not call onExistingUserSignUp when enumeration protection is inactive", async () => {
@@ -372,7 +373,7 @@ describe("sign-up user enumeration protection", async () => {
 		expect(onExistingUserSignUp).not.toHaveBeenCalled();
 	});
 
-	it("should throw for existing email when autoSignIn is disabled without requireEmailVerification", async () => {
+	it("should return synthetic user for existing email when autoSignIn is disabled without requireEmailVerification", async () => {
 		const { auth } = await getTestInstance(
 			{
 				emailAndPassword: {
@@ -392,8 +393,10 @@ describe("sign-up user enumeration protection", async () => {
 		};
 
 		await auth.api.signUpEmail({ body });
-
-		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+		const response = await auth.api.signUpEmail({ body });
+		expect(response.token).toBeNull();
+		expect(response.user).toBeDefined();
+		expect(response.user.email).toBe("existing-auto-signin@test.com");
 	});
 
 	it("should return token: null for new sign-up when autoSignIn is disabled", async () => {
