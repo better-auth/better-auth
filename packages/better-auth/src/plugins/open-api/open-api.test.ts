@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { emailOTP } from "../email-otp";
 import { openAPI } from ".";
 
 describe("open-api", async () => {
@@ -275,5 +276,38 @@ describe("open-api", async () => {
 		expect(signUpProps.rememberMe).toBeDefined();
 		const baseTypes = getBaseType(signUpProps.rememberMe.type);
 		expect(baseTypes).toContain("boolean");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9298
+	 */
+	describe("ZodIntersection body schemas (plugin .and(z.record(...)) pattern)", async () => {
+		const { auth: authWithEmailOTP } = await getTestInstance({
+			plugins: [
+				openAPI(),
+				emailOTP({
+					sendVerificationOTP: async () => {},
+				}),
+			],
+		});
+
+		it("should emit a requestBody for emailOTP /sign-in/email-otp", async () => {
+			const schema = await authWithEmailOTP.api.generateOpenAPISchema();
+			const paths = schema.paths as Record<string, any>;
+			const path = paths["/sign-in/email-otp"];
+			expect(path?.post?.requestBody).toBeDefined();
+			const bodySchema =
+				path.post.requestBody.content["application/json"].schema;
+			expect(bodySchema.type).toBe("object");
+			expect(bodySchema.properties.email).toBeDefined();
+			expect(bodySchema.properties.otp).toBeDefined();
+			expect(bodySchema.properties.name).toBeDefined();
+			expect(bodySchema.properties.image).toBeDefined();
+			expect(bodySchema.required).toEqual(
+				expect.arrayContaining(["email", "otp"]),
+			);
+			// `.and(z.record(z.string(), z.any()))` means "any other keys also allowed".
+			expect(bodySchema.additionalProperties).toBe(true);
+		});
 	});
 });

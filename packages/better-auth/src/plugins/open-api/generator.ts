@@ -155,6 +155,22 @@ function getRequestBody(options: EndpointOptions): any {
 		return options.metadata.openapi.requestBody;
 	}
 	if (!options.body) return undefined;
+	// Several plugins (email-otp, phone-number, organization, admin) define their
+	// body as `z.object({...}).and(z.record(z.string(), z.any()))` to allow
+	// arbitrary additional fields. Without explicit handling, `instanceof
+	// ZodObject` is false and the request body silently drops out of the spec.
+	if (options.body instanceof z.ZodIntersection) {
+		const schema = processZodType(options.body as z.ZodType<any>);
+		if (!schema) return undefined;
+		return {
+			required: true,
+			content: {
+				"application/json": {
+					schema,
+				},
+			},
+		};
+	}
 	if (
 		options.body instanceof z.ZodObject ||
 		options.body instanceof z.ZodOptional
@@ -194,6 +210,37 @@ function getRequestBody(options: EndpointOptions): any {
 }
 
 function processZodType(zodType: z.ZodType<any>): any {
+	// Intersection (e.g. `z.object({...}).and(z.record(...))`).
+	// Flatten the common "object + open record" pattern to a single object schema
+	// with `additionalProperties: true`; merge two object schemas; otherwise fall
+	// back to OpenAPI's `allOf`.
+	if (zodType instanceof z.ZodIntersection) {
+		const def = (zodType as any)._def;
+		const left = processZodType(def.left);
+		const right = processZodType(def.right);
+		const leftIsOpenRecord = def.left instanceof z.ZodRecord;
+		const rightIsOpenRecord = def.right instanceof z.ZodRecord;
+		if (left.type === "object" && rightIsOpenRecord) {
+			return { ...left, additionalProperties: true };
+		}
+		if (right.type === "object" && leftIsOpenRecord) {
+			return { ...right, additionalProperties: true };
+		}
+		if (left.type === "object" && right.type === "object") {
+			const mergedRequired = Array.from(
+				new Set([...(left.required ?? []), ...(right.required ?? [])]),
+			);
+			return {
+				type: "object",
+				properties: {
+					...(left.properties ?? {}),
+					...(right.properties ?? {}),
+				},
+				...(mergedRequired.length > 0 ? { required: mergedRequired } : {}),
+			};
+		}
+		return { allOf: [left, right] };
+	}
 	// optional unwrapping
 	if (zodType instanceof z.ZodOptional) {
 		const innerType = zodType.unwrap() as any;
