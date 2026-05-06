@@ -1437,6 +1437,20 @@ describe("parse cookies", () => {
 			"session-data.signature=",
 		);
 	});
+
+	it("should parse cookies separated only by a semi-colon", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature;better-auth.session_data=session-data.signature";
+
+		const parsedCookies = parseCookies(cookieHeader);
+
+		expect(parsedCookies.get("better-auth.session_token")).toBe(
+			"session-token.signature",
+		);
+		expect(parsedCookies.get("better-auth.session_data")).toBe(
+			"session-data.signature",
+		);
+	});
 });
 
 describe("expireCookie", () => {
