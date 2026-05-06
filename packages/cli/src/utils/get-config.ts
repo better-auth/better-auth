@@ -286,16 +286,8 @@ const jitiOptions = (cwd: string): JitiOptions => {
  * itself so users who export the options object directly still work.
  */
 const resolveAuthModule = (mod: unknown): unknown => {
-	const m = mod as
-		| { auth?: unknown; default?: { auth?: unknown } | unknown }
-		| null
-		| undefined;
-	return (
-		m?.auth ??
-		(m?.default as { auth?: unknown } | undefined)?.auth ??
-		m?.default ??
-		mod
-	);
+	const m = mod as { auth?: unknown; default?: { auth?: unknown } };
+	return m?.auth ?? m?.default?.auth ?? m?.default ?? mod;
 };
 
 const isServerOnlyError = (e: unknown): boolean =>
