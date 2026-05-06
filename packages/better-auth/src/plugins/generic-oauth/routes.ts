@@ -283,9 +283,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				`${ctx.context.baseURL}/error`;
 			if (ctx.query.error || !ctx.query.code) {
 				throw ctx.redirect(
-					`${defaultErrorURL}?error=${
-						ctx.query.error || "oAuth_code_missing"
-					}&error_description=${ctx.query.error_description}`,
+					`${defaultErrorURL}?error=${encodeURIComponent(ctx.query.error || "oAuth_code_missing")}&error_description=${encodeURIComponent(ctx.query.error_description || "")}`,
 				);
 			}
 			const providerId = ctx.params?.providerId;
@@ -323,9 +321,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					`${ctx.context.baseURL}/error`;
 				let url = errorURL || defaultErrorURL;
 				if (url.includes("?")) {
-					url = `${url}&error=${error}`;
+					url = `${url}&error=${encodeURIComponent(error)}`;
 				} else {
-					url = `${url}?error=${error}`;
+					url = `${url}?error=${encodeURIComponent(error)}`;
 				}
 				throw ctx.redirect(url);
 			}
