@@ -29,8 +29,7 @@ export const tr: TranslationDictionary = {
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "Kimlik bilgisi hesabı bulunamadı",
 	SESSION_EXPIRED:
 		"Oturum süresi doldu. Bu işlemi gerçekleştirmek için yeniden kimlik doğrulayın.",
-	FAILED_TO_UNLINK_LAST_ACCOUNT:
-		"Son hesabınızın bağlantısını kaldıramazsınız",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "Son hesabınızın bağlantısını kaldıramazsınız",
 	ACCOUNT_NOT_FOUND: "Hesap bulunamadı",
 	USER_ALREADY_HAS_PASSWORD:
 		"Kullanıcının zaten bir şifresi var. Hesabı silmek için şifreyi girin.",

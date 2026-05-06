@@ -17,8 +17,7 @@ export const pl: TranslationDictionary = {
 	PROVIDER_NOT_FOUND: "Dostawca nie znaleziony",
 	INVALID_TOKEN: "Nieprawidłowy token",
 	TOKEN_EXPIRED: "Token wygasł",
-	FAILED_TO_GET_USER_INFO:
-		"Nie udało się pobrać informacji o użytkowniku",
+	FAILED_TO_GET_USER_INFO: "Nie udało się pobrać informacji o użytkowniku",
 	USER_EMAIL_NOT_FOUND: "Adres e-mail użytkownika nie znaleziony",
 	EMAIL_NOT_VERIFIED: "Adres e-mail nie został zweryfikowany",
 	PASSWORD_TOO_SHORT: "Hasło jest za krótkie",
@@ -31,8 +30,7 @@ export const pl: TranslationDictionary = {
 		"Konto z danymi uwierzytelniającymi nie znalezione",
 	SESSION_EXPIRED:
 		"Sesja wygasła. Uwierzytelnij się ponownie, aby wykonać tę akcję.",
-	FAILED_TO_UNLINK_LAST_ACCOUNT:
-		"Nie możesz odłączyć swojego ostatniego konta",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "Nie możesz odłączyć swojego ostatniego konta",
 	ACCOUNT_NOT_FOUND: "Konto nie znalezione",
 	USER_ALREADY_HAS_PASSWORD:
 		"Użytkownik ma już hasło. Podaj je, aby usunąć konto.",

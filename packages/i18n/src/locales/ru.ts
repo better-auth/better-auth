@@ -17,8 +17,7 @@ export const ru: TranslationDictionary = {
 	PROVIDER_NOT_FOUND: "Провайдер не найден",
 	INVALID_TOKEN: "Недействительный токен",
 	TOKEN_EXPIRED: "Токен истёк",
-	FAILED_TO_GET_USER_INFO:
-		"Не удалось получить информацию о пользователе",
+	FAILED_TO_GET_USER_INFO: "Не удалось получить информацию о пользователе",
 	USER_EMAIL_NOT_FOUND: "Электронная почта пользователя не найдена",
 	EMAIL_NOT_VERIFIED: "Электронная почта не подтверждена",
 	PASSWORD_TOO_SHORT: "Пароль слишком короткий",

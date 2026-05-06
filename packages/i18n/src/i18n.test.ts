@@ -405,9 +405,9 @@ describe("i18n plugin", async () => {
 
 			for (const locale of expectedLocales) {
 				expect(locales).toHaveProperty(locale);
-				expect(
-					typeof (locales as Record<string, unknown>)[locale],
-				).toBe("object");
+				expect(typeof (locales as Record<string, unknown>)[locale]).toBe(
+					"object",
+				);
 			}
 		});
 

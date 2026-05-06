@@ -23,17 +23,13 @@ export const th: TranslationDictionary = {
 	PASSWORD_TOO_SHORT: "รหัสผ่านสั้นเกินไป",
 	PASSWORD_TOO_LONG: "รหัสผ่านยาวเกินไป",
 	USER_ALREADY_EXISTS: "ผู้ใช้มีอยู่แล้ว",
-	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-		"ผู้ใช้มีอยู่แล้ว กรุณาใช้อีเมลอื่น",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "ผู้ใช้มีอยู่แล้ว กรุณาใช้อีเมลอื่น",
 	EMAIL_CAN_NOT_BE_UPDATED: "ไม่สามารถอัปเดตอีเมลได้",
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "ไม่พบบัญชีข้อมูลรับรอง",
-	SESSION_EXPIRED:
-		"เซสชันหมดอายุ กรุณายืนยันตัวตนใหม่เพื่อดำเนินการนี้",
-	FAILED_TO_UNLINK_LAST_ACCOUNT:
-		"คุณไม่สามารถยกเลิกการเชื่อมต่อบัญชีสุดท้ายของคุณได้",
+	SESSION_EXPIRED: "เซสชันหมดอายุ กรุณายืนยันตัวตนใหม่เพื่อดำเนินการนี้",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "คุณไม่สามารถยกเลิกการเชื่อมต่อบัญชีสุดท้ายของคุณได้",
 	ACCOUNT_NOT_FOUND: "ไม่พบบัญชี",
-	USER_ALREADY_HAS_PASSWORD:
-		"ผู้ใช้มีรหัสผ่านอยู่แล้ว กรุณาระบุรหัสผ่านเพื่อลบบัญชี",
+	USER_ALREADY_HAS_PASSWORD: "ผู้ใช้มีรหัสผ่านอยู่แล้ว กรุณาระบุรหัสผ่านเพื่อลบบัญชี",
 	VERIFICATION_EMAIL_NOT_ENABLED: "ไม่ได้เปิดใช้งานอีเมลยืนยัน",
 	EMAIL_ALREADY_VERIFIED: "อีเมลได้รับการยืนยันแล้ว",
 	EMAIL_MISMATCH: "อีเมลไม่ตรงกัน",

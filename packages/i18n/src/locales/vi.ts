@@ -26,10 +26,8 @@ export const vi: TranslationDictionary = {
 	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
 		"Người dùng đã tồn tại. Sử dụng email khác.",
 	EMAIL_CAN_NOT_BE_UPDATED: "Email không thể được cập nhật",
-	CREDENTIAL_ACCOUNT_NOT_FOUND:
-		"Không tìm thấy tài khoản thông tin xác thực",
-	SESSION_EXPIRED:
-		"Phiên đã hết hạn. Xác thực lại để thực hiện hành động này.",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản thông tin xác thực",
+	SESSION_EXPIRED: "Phiên đã hết hạn. Xác thực lại để thực hiện hành động này.",
 	FAILED_TO_UNLINK_LAST_ACCOUNT:
 		"Bạn không thể hủy liên kết tài khoản cuối cùng của mình",
 	ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản",

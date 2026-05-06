@@ -30,8 +30,7 @@ export const de: TranslationDictionary = {
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "Anmeldekonto nicht gefunden",
 	SESSION_EXPIRED:
 		"Sitzung abgelaufen. Bitte authentifizieren Sie sich erneut, um diese Aktion durchzuführen.",
-	FAILED_TO_UNLINK_LAST_ACCOUNT:
-		"Sie können Ihr letztes Konto nicht trennen",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "Sie können Ihr letztes Konto nicht trennen",
 	ACCOUNT_NOT_FOUND: "Konto nicht gefunden",
 	USER_ALREADY_HAS_PASSWORD:
 		"Der Benutzer hat bereits ein Passwort. Geben Sie dieses an, um das Konto zu löschen.",
