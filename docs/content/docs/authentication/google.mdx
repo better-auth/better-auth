@@ -4,65 +4,68 @@ description: Google provider setup and usage.
 ---
 
 <Steps>
-    <Step> 
-        ### Get your Google credentials
-        To use Google as a social provider, you need to get your Google credentials. You can get them by creating a new project in the [Google Cloud Console](https://console.cloud.google.com/apis/dashboard).
+  <Step>
+    ### Get your Google credentials
 
-        In the Google Cloud Console > Credentials > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+    To use Google as a social provider, you need to get your Google credentials. You can get them by creating a new project in the [Google Cloud Console](https://console.cloud.google.com/apis/dashboard).
 
-        <Callout type="info">
-        **Creating Your Google OAuth Credentials**
+    In the Google Cloud Console > Credentials > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
-        If you haven't created OAuth credentials yet, follow these step-by-step instructions:
+    <Callout type="info">
+      **Creating Your Google OAuth Credentials**
 
-        1. Open **Google Cloud Console** → **APIs & Services** → **Credentials**
-        2. Click **Create Credentials** → **OAuth client ID**
-        3. Choose **Web application**
-        4. Add your redirect URIs:
-           - `http://localhost:3000/api/auth/callback/google` (for local development)
-           - `https://your-domain.com/api/auth/callback/google` (for production)
-        5. Copy the **Client ID** and **Client Secret** into your environment variables
+      If you haven't created OAuth credentials yet, follow these step-by-step instructions:
 
-        These steps avoid common issues such as `redirect_uri_mismatch`.
-        </Callout>
-    </Step>
+      1. Open **Google Cloud Console** → **APIs & Services** → **Credentials**
+      2. Click **Create Credentials** → **OAuth client ID**
+      3. Choose **Web application**
+      4. Add your redirect URIs:
+         * `http://localhost:3000/api/auth/callback/google` (for local development)
+         * `https://your-domain.com/api/auth/callback/google` (for production)
+      5. Copy the **Client ID** and **Client Secret** into your environment variables
+
+      These steps avoid common issues such as `redirect_uri_mismatch`.
+    </Callout>
+  </Step>
 
   <Step>
-        ### Configure the provider
-        To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
+    ### Configure the provider
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
+    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
 
-        export const auth = betterAuth({
-            baseURL: process.env.BETTER_AUTH_URL, // [!code highlight]
-            socialProviders: {
-                google: { // [!code highlight]
-                    clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
-                    clientSecret: process.env.GOOGLE_CLIENT_SECRET as string, // [!code highlight]
-                }, // [!code highlight]
-            },
-        })
-        ```
-        <Callout type="warn">
-        **Important: Set Your Base URL**
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
 
-        You must configure the `baseURL` to avoid `redirect_uri_mismatch` errors. Better Auth uses this to construct the OAuth callback URL sent to Google.
+    export const auth = betterAuth({
+        baseURL: process.env.BETTER_AUTH_URL, // [!code highlight]
+        socialProviders: {
+            google: { // [!code highlight]
+                clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
 
-        **Option 1: Environment Variable (Recommended)**
+    <Callout type="warn">
+      **Important: Set Your Base URL**
 
-        Add to your `.env` file:
-        ```dotenv
-        BETTER_AUTH_URL=https://your-domain.com
-        ```
+      You must configure the `baseURL` to avoid `redirect_uri_mismatch` errors. Better Auth uses this to construct the OAuth callback URL sent to Google.
 
-        **Option 2: Explicit Configuration**
+      **Option 1: Environment Variable (Recommended)**
 
-        Pass `baseURL` directly in the auth config as shown above.
-        Without this, the callback URL may default to `localhost`, causing Google OAuth to fail in production.
-        </Callout>
-    </Step>
+      Add to your `.env` file:
 
+      ```dotenv
+      BETTER_AUTH_URL=https://your-domain.com
+      ```
+
+      **Option 2: Explicit Configuration**
+
+      Pass `baseURL` directly in the auth config as shown above.
+      Without this, the callback URL may default to `localhost`, causing Google OAuth to fail in production.
+    </Callout>
+  </Step>
 </Steps>
 
 ## Usage
@@ -71,7 +74,7 @@ description: Google provider setup and usage.
 
 To sign in with Google, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
 
-- `provider`: The provider to use. It should be set to `google`.
+* `provider`: The provider to use. It should be set to `google`.
 
 ```ts title="auth-client.ts"  /
 import { createAuthClient } from "better-auth/client";
@@ -108,6 +111,38 @@ const data = await authClient.signIn.social({
 <Callout>
   If you want to use google one tap, you can use the [One Tap
   Plugin](/docs/plugins/one-tap) guide.
+</Callout>
+
+### Cross-Platform Sign In (Web, iOS, Android)
+
+Google issues a separate Client ID per platform in the same Google Cloud project. Pass an array to `clientId` to accept ID tokens from any of them. See [clientId](/docs/concepts/oauth#clientid) for the shared provider-option semantics.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: [ // [!code highlight]
+            process.env.GOOGLE_WEB_CLIENT_ID as string, // [!code highlight]
+            process.env.GOOGLE_IOS_CLIENT_ID as string, // [!code highlight]
+            process.env.GOOGLE_ANDROID_CLIENT_ID as string, // [!code highlight]
+        ], // [!code highlight]
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+}
+```
+
+Your mobile app signs in with the native Google SDK and forwards the ID token:
+
+```ts title="Mobile app"
+const { idToken, accessToken } = await GoogleSignin.signIn();
+
+await authClient.signIn.social({
+    provider: "google",
+    idToken: { token: idToken, accessToken },
+});
+```
+
+<Callout type="info">
+  The array only expands ID token audience verification. The authorization code flow still uses the first entry paired with the single `clientSecret` and `redirectURI`, so those cannot vary per platform within one provider block.
 </Callout>
 
 ### Always ask to select an account

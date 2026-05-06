@@ -8,6 +8,7 @@ import { validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
+import { postLoginClearedParam } from "./utils";
 
 describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should allow HTTPS URLs unchanged", () => {
@@ -187,6 +188,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	const requestUri = "urn:better-auth:par:test";
+	const requestUriWithPostLoginMarker = "urn:better-auth:par:post-login";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -195,11 +197,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				requestUriResolver: async ({ requestUri: receivedRequestUri }) => {
-					if (receivedRequestUri !== requestUri) {
-						return null;
-					}
-
-					return {
+					const resolvedParams = {
 						response_type: "code",
 						redirect_uri: redirectUri,
 						scope: "openid",
@@ -207,6 +205,19 @@ describe("oauth authorize - request_uri resolution", async () => {
 						code_challenge: "a".repeat(43),
 						code_challenge_method: "S256",
 					};
+
+					if (receivedRequestUri === requestUri) {
+						return resolvedParams;
+					}
+
+					if (receivedRequestUri === requestUriWithPostLoginMarker) {
+						return {
+							...resolvedParams,
+							[postLoginClearedParam]: "attacker-session",
+						};
+					}
+
+					return null;
 				},
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -263,6 +274,27 @@ describe("oauth authorize - request_uri resolution", async () => {
 		);
 		expect(loginRedirectUrl).toContain("state=par-state");
 		expect(loginRedirectUrl).not.toContain("request_uri=");
+	});
+
+	it("should drop reserved post-login markers from resolved PAR parameters", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUriWithPostLoginMarker);
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const loginRedirect = new URL(loginRedirectUrl, authServerBaseUrl);
+		expect(loginRedirect.pathname).toBe("/login");
+		expect(loginRedirect.searchParams.get(postLoginClearedParam)).toBeNull();
 	});
 
 	/**

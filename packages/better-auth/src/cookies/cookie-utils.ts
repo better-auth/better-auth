@@ -14,8 +14,22 @@ export interface CookieAttributes {
 	path?: string | undefined;
 	secure?: boolean | undefined;
 	httponly?: boolean | undefined;
+	partitioned?: boolean | undefined;
 	samesite?: ("strict" | "lax" | "none") | undefined;
+	// TODO: tighten to `string | number | boolean | Date | undefined`.
+	// Kept as `any` for now to preserve the public type surface.
 	[key: string]: any;
+}
+
+interface ParsedCookieOptions {
+	maxAge?: number | undefined;
+	expires?: Date | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httpOnly?: boolean | undefined;
+	partitioned?: boolean | undefined;
+	sameSite?: CookieAttributes["samesite"];
 }
 
 export const SECURE_COOKIE_PREFIX = "__Secure-";
@@ -128,6 +142,9 @@ export function parseSetCookieHeader(
 						? (attrValue.trim().toLowerCase() as "strict" | "lax" | "none")
 						: undefined;
 					break;
+				case "partitioned":
+					attrObj.partitioned = true;
+					break;
 				default:
 					// Handle any other attributes
 					attrObj[normalizedAttrName] = attrValue ? attrValue.trim() : true;
@@ -139,6 +156,49 @@ export function parseSetCookieHeader(
 	});
 
 	return cookies;
+}
+
+export function toCookieOptions(
+	attributes: CookieAttributes,
+): ParsedCookieOptions {
+	return {
+		maxAge: attributes["max-age"],
+		expires: attributes.expires,
+		domain: attributes.domain,
+		path: attributes.path,
+		secure: attributes.secure,
+		httpOnly: attributes.httponly,
+		sameSite: attributes.samesite,
+		partitioned: attributes.partitioned,
+	};
+}
+
+/**
+ * Add or replace a cookie in the request `Cookie` header.
+ *
+ * Cookie pairs are joined with `; `, but `headers.append("cookie", ...)`
+ * joins with `, ` in some runtimes (e.g. Deno, Cloudflare Workers) and
+ * breaks downstream cookie parsing. This builds the header value via
+ * parse-mutate-serialize.
+ */
+export function setRequestCookie(
+	headers: Headers,
+	name: string,
+	value: string,
+): void {
+	const cookieMap = new Map<string, string>();
+	for (const pair of (headers.get("cookie") || "").split(";")) {
+		const trimmed = pair.trim();
+		const eq = trimmed.indexOf("=");
+		if (eq > 0) cookieMap.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+	}
+
+	cookieMap.set(name, value);
+
+	headers.set(
+		"cookie",
+		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
+	);
 }
 
 export function setCookieToHeader(headers: Headers) {

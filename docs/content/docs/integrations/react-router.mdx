@@ -6,7 +6,7 @@ description: Integrate Better Auth with React Router v7 (formerly Remix).
 Better Auth can be easily integrated with React Router v7. This guide will show you how to integrate Better Auth with React Router v7.
 
 <Callout type="info">
-    React Router v7 is the successor to Remix. If you're using Remix v2, the main difference is changing your imports from `@remix-run/*` to `react-router`. The APIs remain the same.
+  React Router v7 is the successor to Remix. If you're using Remix v2, the main difference is changing your imports from `@remix-run/*` to `react-router`. The APIs remain the same.
 </Callout>
 
 You can follow the steps from [installation](/docs/installation) to get started or you can follow this guide to make it the React Router way.
@@ -16,16 +16,17 @@ If you have followed the installation steps, you can skip the first step.
 ## Create auth instance
 
 Create a file named `auth.server.ts` in one of these locations:
-   - Project root
-   - `lib/` folder
-   - `utils/` folder
+
+* Project root
+* `lib/` folder
+* `utils/` folder
 
 You can also nest any of these folders under `app/` folder. (e.g. `app/lib/auth.server.ts`)
 
 And in this file, import Better Auth and create your instance.
 
 <Callout type="warn">
-Make sure to export the auth instance with the variable name `auth` or as a `default` export.
+  Make sure to export the auth instance with the variable name `auth` or as a `default` export.
 </Callout>
 
 ```ts title="app/lib/auth.server.ts"
@@ -44,6 +45,7 @@ export const auth = betterAuth({
 We need to mount the handler to a API route. Create a resource route file `api.auth.$.ts` inside `app/routes/` directory. And add the following code:
 
 ### React Router v7
+
 ```ts title="app/routes/api.auth.$.ts"
 import { auth } from '~/lib/auth.server' // Adjust the path as necessary
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router"
@@ -60,6 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
 ### Remix v2 (Legacy)
 
 If you're still using Remix v2, the only difference is the import:
+
 ```ts title="app/routes/api.auth.$.ts"
 import { auth } from '~/lib/auth.server' // Adjust the path as necessary
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
@@ -74,7 +77,7 @@ export async function action({ request }: ActionFunctionArgs) {
 ```
 
 <Callout type="info">
- You can change the path on your better-auth configuration but it's recommended to keep it as `routes/api.auth.$.ts`
+  You can change the path on your better-auth configuration but it's recommended to keep it as `routes/api.auth.$.ts`
 </Callout>
 
 ## Create a client
@@ -96,6 +99,7 @@ Once you have created the client, you can use it to sign up, sign in, and perfor
 ### Sign Up
 
 #### React Router v7
+
 ```ts title="app/routes/signup.tsx"
 import { Form } from "react-router"
 import { useState } from "react"
@@ -165,6 +169,7 @@ export default function SignUp() {
 ```
 
 #### Remix v2 (Legacy)
+
 ```ts title="app/routes/signup.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"
@@ -236,6 +241,7 @@ export default function SignUp() {
 ### Sign In
 
 #### React Router v7
+
 ```ts title="app/routes/signin.tsx"
 import { Form } from "react-router"
 import { useState } from "react"
@@ -304,6 +310,7 @@ export default function SignIn() {
 ```
 
 ### Remix v2 (Legacy)
+
 ```ts title="app/routes/signin.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"

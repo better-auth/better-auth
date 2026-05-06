@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
 import type { Account } from "../../types";
 
-describe("forget password", async () => {
+describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
 	const mockOnPasswordReset = vi.fn();
 	let token = "";

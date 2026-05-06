@@ -8,8 +8,8 @@ description: The account could not be linked.
 This error occurs only during an OAuth flow when attempting to link the provider account to the
 currently authenticated user. Better Auth blocks the operation if either:
 
-1) The database operation to create/update the linked account fails.
-2) The provider is not considered trusted for linking based on your auth configuration
+1. The database operation to create/update the linked account fails.
+2. The provider is not considered trusted for linking based on your auth configuration
    (`account.accountLinking.trustedProviders`).
 
 ## Common Causes
@@ -36,4 +36,3 @@ currently authenticated user. Better Auth blocks the operation if either:
 
 * Ensure the same auth config is deployed to all environments and that environment variables are loaded as expected.
 * Double-check that the runtime sees the intended `trustedProviders` list.
-

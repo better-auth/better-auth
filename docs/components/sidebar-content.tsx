@@ -17,8 +17,8 @@ import {
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
-	Navigation,
 	Phone,
+	Route,
 	ScanFace,
 	ScrollTextIcon,
 	Server,
@@ -445,11 +445,6 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
-			},
-			{
-				title: "Dynamic Base URL",
-				href: "/docs/concepts/dynamic-base-url",
-				icon: () => <Navigation className="w-4 h-4 text-current" />,
 			},
 		],
 		Icon: () => (
@@ -2436,6 +2431,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Dynamic Base URL",
+				href: "/docs/guides/dynamic-base-url",
+				icon: () => <Route className="w-4 h-4 text-current" />,
+			},
+			{
 				title: "SAML SSO with Okta",
 				href: "/docs/guides/saml-sso-with-okta",
 				icon: () => (
@@ -2836,6 +2836,10 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						title: "signup_disabled",
 						href: "/docs/reference/errors/signup_disabled",
+					},
+					{
+						title: "please_restart_the_process",
+						href: "/docs/reference/errors/please_restart_the_process",
 					},
 				],
 			},

@@ -32,6 +32,45 @@ describe("organization type", () => {
 		expectTypeOf({} satisfies OrganizationOptions);
 		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9135
+	 */
+	it("allows dynamic roles in create invitation input", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					roles: {
+						admin: adminAc,
+						member: memberAc,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+				}),
+			],
+		});
+
+		const dynamicRole = "contractor" as string;
+		const dynamicRoles = ["contractor", "reviewer"] as string[];
+
+		if (false) {
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-role@example.com",
+					role: dynamicRole,
+				},
+			});
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-roles@example.com",
+					role: dynamicRoles,
+				},
+			});
+		}
+	});
 });
 
 describe("organization", async () => {
@@ -1935,6 +1974,109 @@ describe("cancel pending invitations on re-invite", async () => {
 				.length,
 		).toBe(1);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should cancel pending invitation and create a new one when re-inviting without resend", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const originalInviteId = invite.data?.id;
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error).toBeNull();
+		expect(invite2.data?.status).toBe("pending");
+		expect(invite2.data?.id).not.toBe(originalInviteId);
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "pending",
+			).length,
+		).toBe(1);
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "canceled",
+			).length,
+		).toBe(1);
+	});
+});
+
+describe("re-invite without cancelPendingInvitationsOnReInvite still throws", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should still throw USER_IS_ALREADY_INVITED when option is disabled", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
+	});
 });
 
 describe("resend invitation should reuse existing", async () => {
@@ -2550,6 +2692,56 @@ describe("Additional Fields", async () => {
 			teamRequiredField: string;
 			teamOptionalField?: string | undefined;
 			teamHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer team additional fields on $Infer.Team", () => {
+		type Team = typeof auth.$Infer.Team;
+		expectTypeOf<Team>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			organizationId: string;
+			createdAt: Date;
+			updatedAt?: Date | undefined;
+			teamRequiredField: string;
+			teamOptionalField?: string | undefined;
+			teamHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer organization additional fields on $Infer.Organization", () => {
+		type Organization = typeof auth.$Infer.Organization;
+		expectTypeOf<Organization>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			slug: string;
+			createdAt: Date;
+			logo?: string | null | undefined;
+			metadata?: any;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
+			someHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer member additional fields on $Infer.Member", () => {
+		type Member = typeof auth.$Infer.Member;
+		expectTypeOf<Member>().toEqualTypeOf<{
+			id: string;
+			organizationId: string;
+			userId: string;
+			role: "member" | "admin" | "owner";
+			createdAt: Date;
+			teamId?: string | undefined;
+			user: {
+				id: string;
+				email: string;
+				name: string;
+				image?: string | undefined;
+			};
+			memberRequiredField: string;
+			memberOptionalField?: string | undefined;
+			memberHiddenField?: string | undefined;
 		}>();
 	});
 

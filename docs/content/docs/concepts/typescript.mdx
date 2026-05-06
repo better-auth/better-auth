@@ -5,7 +5,6 @@ description: Learn about TypeScript configuration for Better Auth, including str
 
 Better Auth is designed to be type-safe. Both the client and server are built with TypeScript, allowing you to easily infer types.
 
-
 ## TypeScript Config
 
 ### Strict Mode
@@ -33,8 +32,8 @@ if you can't set `strict` to `true`, you can enable `strictNullChecks`:
 When `strict` is `true`, `strictNullChecks` is enabled as well. If you explicitly set `strictNullChecks` to `false`, type inference issues could occur.
 
 <Callout type="warn">
-If you're running into issues with TypeScript inference exceeding maximum length the compiler will serialize,
-then please make sure you're following the instructions above, as well as ensuring that both `declaration` and `composite` are not enabled.
+  If you're running into issues with TypeScript inference exceeding maximum length the compiler will serialize,
+  then please make sure you're following the instructions above, as well as ensuring that both `declaration` and `composite` are not enabled.
 </Callout>
 
 ## Inferring Types
@@ -64,7 +63,6 @@ export const auth = betterAuth({
 type Session = typeof auth.$Infer.Session
 ```
 
-
 ## Additional Fields
 
 Better Auth allows you to add additional fields to the user and session objects. All additional fields are properly inferred and available on the server and client side.
@@ -90,7 +88,6 @@ type Session = typeof auth.$Infer.Session
 ```
 
 In the example above, we added a `role` field to the user object. This field is now available on the `Session` type.
-
 
 ### The `input` property
 

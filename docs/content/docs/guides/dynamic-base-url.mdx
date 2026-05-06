@@ -1,0 +1,155 @@
+---
+title: Dynamic Base URL
+description: Configure Better Auth for preview deployments, multiple domains, and per-request URL resolution.
+---
+
+Use dynamic base URL when your app is served from more than one hostname, such as:
+
+* custom domains like `myapp.com` and `www.myapp.com`
+* preview deployments like `my-app-abc123.vercel.app`
+* branch environments like `feature-branch.myapp.com`
+
+The configuration itself lives on the [`baseURL` option](/docs/reference/options#baseurl). This guide focuses on when to use it and how to structure it safely.
+
+## Basic Setup
+
+Configure `baseURL` as an object with an `allowedHosts` allowlist:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: [
+			"myapp.com",
+			"www.myapp.com",
+			"*.vercel.app",
+		],
+	},
+})
+```
+
+When a request comes in, Better Auth extracts the host from `x-forwarded-host`, `host` header, or the request URL (in that order), validates it against `allowedHosts`, and uses the matched value to build the request-specific base URL.
+
+## Common Deployment Patterns
+
+### Vercel Deployment
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: [
+			"myapp.com",
+			"www.myapp.com",
+			"*.vercel.app",
+		],
+	},
+})
+```
+
+### Development + Production
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: [
+			"localhost:3000",
+			"localhost:5173",
+			"myapp.com",
+			"*.vercel.app",
+		],
+		protocol: process.env.NODE_ENV === "development" ? "http" : "https",
+	},
+})
+```
+
+### Multiple Production Domains
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: [
+			"myapp.com",
+			"myapp.co.uk",
+			"myapp.eu",
+		],
+		protocol: "https",
+	},
+})
+```
+
+## Choosing a Fallback
+
+By default, Better Auth throws if the incoming host does not match `allowedHosts`. That is usually the safer default because it exposes proxy or deployment mistakes immediately.
+
+If you need a fallback, set one explicitly:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: ["myapp.com", "*.vercel.app"],
+		fallback: "https://myapp.com",
+	},
+})
+```
+
+Use this only when falling back to a canonical domain is clearly preferable to failing the request.
+
+## Cookies Across Subdomains
+
+If you need to share cookies across subdomains, you can enable `crossSubDomainCookies` while still using dynamic base URL. Better Auth will derive the cookie domain from the resolved host unless you set `domain` explicitly.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: [
+			"auth.example1.com",
+			"auth.example2.com",
+		],
+		protocol: "https",
+	},
+	advanced: {
+		crossSubDomainCookies: {
+			enabled: true,
+		},
+	},
+})
+```
+
+If you want to force a shared parent domain instead, set it directly:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: ["auth.example1.com", "auth.example2.com"],
+		protocol: "https",
+	},
+	advanced: {
+		crossSubDomainCookies: {
+			enabled: true,
+			domain: ".example.com",
+		},
+	},
+})
+```
+
+See [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) for the full cookie behavior.
+
+## Security Model
+
+Dynamic base URL uses an allowlist model:
+
+1. Only hosts listed in `allowedHosts` are accepted
+2. `x-forwarded-host` and `host` headers are sanitized and validated before use
+3. Unknown hosts throw unless you provide `fallback`
+4. `allowedHosts` are automatically added to [`trustedOrigins`](/docs/reference/options#trustedorigins) (localhost entries get both `http` and `https`)
+
+This keeps multi-domain support explicit instead of trusting arbitrary headers or platform-specific behavior.
+
+## Reference
+
+For the exact option shape and property-level behavior, see [`baseURL` in the options reference](/docs/reference/options#baseurl).

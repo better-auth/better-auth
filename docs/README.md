@@ -1,9 +1,9 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="public/branding/better-auth-logo-wordmark-dark.svg" />
+  <source media="(prefers-color-scheme: dark)" srcset="public/branding/svg/better-auth-wordmark-light.svg" />
 
-  <source media="(prefers-color-scheme: light)" srcset="public/branding/better-auth-logo-wordmark-light.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="public/branding/svg/better-auth-wordmark-dark.svg" />
 
-  <img alt="Better Auth" src="public/branding/better-auth-logo-wordmark-dark.svg" width="280" />
+  <img alt="Better Auth" src="public/branding/svg/better-auth-wordmark-dark.svg" width="280" />
 </picture>
 
 ### Website & Docs
@@ -30,12 +30,12 @@ Open **[localhost:3000](http://localhost:3000)** to preview.
 
 ## Stack
 
-- **Framework**: Next.js 16 (App Router, Turbopack)
-- **Styling**: Tailwind CSS 4
-- **Animation**: Framer Motion
-- **Docs**: Fumadocs
-- **Icons**: Lucide React
-- **Fonts**: Geist Sans & Geist Mono
+* **Framework**: Next.js 16 (App Router, Turbopack)
+* **Styling**: Tailwind CSS 4
+* **Animation**: Framer Motion
+* **Docs**: Fumadocs
+* **Icons**: Lucide React
+* **Fonts**: Geist Sans & Geist Mono
 
 ## Structure
 

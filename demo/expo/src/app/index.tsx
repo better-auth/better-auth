@@ -93,10 +93,10 @@ export default function Index() {
 						variant="link"
 						className="w-full"
 						onPress={() => {
-							router.push("/forget-password");
+							router.push("/forgot-password");
 						}}
 					>
-						<Text className="underline text-center">Forget Password?</Text>
+						<Text className="underline text-center">Forgot Password?</Text>
 					</Button>
 					<Button
 						onPress={() => {

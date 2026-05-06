@@ -141,9 +141,26 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
+		// Synthesize a host header from allowedHosts so setup resolves under
+		// dynamic baseURL. `?` is a wildcard, not a query-string delimiter,
+		// so it's replaced, not split on.
+		const dynamicBaseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? auth.options.baseURL
+			: undefined;
+		const pattern =
+			dynamicBaseURL?.allowedHosts.find(
+				(h) => !h.includes("*") && !h.includes("?"),
+			) ?? dynamicBaseURL?.allowedHosts[0];
+		const host = pattern
+			?.replace(/^https?:\/\//, "")
+			.split(/[/#]/)[0]
+			?.replace(/\*/g, "test")
+			.replace(/\?/g, "x");
+		const headers = host ? new Headers({ host }) : undefined;
 		//@ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
+			headers,
 		});
 	}
 

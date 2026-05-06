@@ -4,41 +4,42 @@ description: Slack provider setup and usage.
 ---
 
 <Steps>
-    <Step> 
-        ### Get your Slack credentials
-        To use Slack as a social provider, you need to create a Slack app and get your credentials.
+  <Step>
+    ### Get your Slack credentials
 
-        1. Go to [Your Apps on Slack API](https://api.slack.com/apps) and click "Create New App"
-        2. Choose "From scratch" and give your app a name and select a development workspace
-        3. In your app settings, navigate to "OAuth & Permissions"
-        4. Under "Redirect URLs", add your redirect URL:
-           - For local development: `http://localhost:3000/api/auth/callback/slack`
-           - For production: `https://yourdomain.com/api/auth/callback/slack`
-        5. Copy your Client ID and Client Secret from the "Basic Information" page
+    To use Slack as a social provider, you need to create a Slack app and get your credentials.
 
-        <Callout>
-            Slack requires HTTPS for redirect URLs in production. For local development, you can use tools like [ngrok](https://ngrok.com/) to create a secure tunnel.
-        </Callout>
-    </Step>
+    1. Go to [Your Apps on Slack API](https://api.slack.com/apps) and click "Create New App"
+    2. Choose "From scratch" and give your app a name and select a development workspace
+    3. In your app settings, navigate to "OAuth & Permissions"
+    4. Under "Redirect URLs", add your redirect URL:
+       * For local development: `http://localhost:3000/api/auth/callback/slack`
+       * For production: `https://yourdomain.com/api/auth/callback/slack`
+    5. Copy your Client ID and Client Secret from the "Basic Information" page
 
-    <Step>
-        ### Configure the provider
-        To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.slack` in your auth configuration.
+    <Callout>
+      Slack requires HTTPS for redirect URLs in production. For local development, you can use tools like [ngrok](https://ngrok.com/) to create a secure tunnel.
+    </Callout>
+  </Step>
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
+  <Step>
+    ### Configure the provider
 
-        export const auth = betterAuth({
-            socialProviders: {
-                slack: { // [!code highlight]
-                    clientId: process.env.SLACK_CLIENT_ID as string, // [!code highlight]
-                    clientSecret: process.env.SLACK_CLIENT_SECRET as string, // [!code highlight]
-                }, // [!code highlight]
-            },
-        })
-        ```
-    </Step>
+    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.slack` in your auth configuration.
 
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            slack: { // [!code highlight]
+                clientId: process.env.SLACK_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.SLACK_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -47,7 +48,7 @@ description: Slack provider setup and usage.
 
 To sign in with Slack, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
 
-- `provider`: The provider to use. It should be set to `slack`.
+* `provider`: The provider to use. It should be set to `slack`.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";

@@ -11,6 +11,12 @@ describe("seat-based billing", () => {
 	const mockStripe = {
 		prices: {
 			list: vi.fn().mockResolvedValue({ data: [] }),
+			retrieve: vi.fn().mockImplementation((priceId: string) =>
+				Promise.resolve({
+					id: priceId,
+					recurring: { usage_type: "licensed", interval: "month" },
+				}),
+			),
 		},
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_seat_org" }),

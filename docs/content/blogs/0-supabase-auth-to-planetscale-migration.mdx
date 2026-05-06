@@ -21,25 +21,30 @@ We’ve noticed that some users are migrating from Supabase to PlanetScale Postg
 ## 1. Setup a PlanetScale Database
 
 <Steps>
-<Step>
-  Open the PlanetScale [dashboard](https://app.planetscale.com/)
-</Step>
-<Step>
-  Create a [new database](https://app.planetscale.com/new?org=better-auth)
-</Step>
-<Step>
-  Get your connection string (PostgreSQL URI)
-```jsx
-postgresql://<username>:<password>@<host>/postgres?sslmode=verify-full
-```
-</Step>
-<Step>
-  Save the database URL in your `.env` file for later use with Better Auth:
-```txt title=".env"
-DATABASE_URL =
-  postgresql://<username>:<password>@<host>/postgres?sslmode=verify-full
-```
-</Step>
+  <Step>
+    Open the PlanetScale [dashboard](https://app.planetscale.com/)
+  </Step>
+
+  <Step>
+    Create a [new database](https://app.planetscale.com/new?org=better-auth)
+  </Step>
+
+  <Step>
+    Get your connection string (PostgreSQL URI)
+
+    ```jsx
+    postgresql://<username>:<password>@<host>/postgres?sslmode=verify-full
+    ```
+  </Step>
+
+  <Step>
+    Save the database URL in your `.env` file for later use with Better Auth:
+
+    ```txt title=".env"
+    DATABASE_URL =
+      postgresql://<username>:<password>@<host>/postgres?sslmode=verify-full
+    ```
+  </Step>
 </Steps>
 
 <Callout>
@@ -49,17 +54,18 @@ DATABASE_URL =
 ## 2. Install Better Auth
 
 <Steps>
-<Step>
-  Install Better Auth
-```package-install
-npm install better-auth
-```
-</Step>
+  <Step>
+    Install Better Auth
 
-<Step>
-  Follow and complete the basic setup
-  [here](https://www.better-auth.com/docs/installation)
-</Step>
+    ```package-install
+    npm install better-auth
+    ```
+  </Step>
+
+  <Step>
+    Follow and complete the basic setup
+    [here](https://www.better-auth.com/docs/installation)
+  </Step>
 </Steps>
 
 <Callout>
@@ -78,20 +84,22 @@ npm install --save-dev @types/pg
 ## 4. Generate & Migrate Better Auth Schema
 
 <Steps>
-<Step>
-  Run this cli command to generate all the schema needed to setup Better Auth:
-```bash 
-npx auth generate 
-```
-</Step>
-<Step>
-  Then run this command to apply the generated schema to your PlanetScale
-    database:
-```bash 
-npx auth migrate 
-```
-</Step>
+  <Step>
+    Run this cli command to generate all the schema needed to setup Better Auth:
 
+    ```bash
+    npx auth generate 
+    ```
+  </Step>
+
+  <Step>
+    Then run this command to apply the generated schema to your PlanetScale
+    database:
+
+    ```bash
+    npx auth migrate 
+    ```
+  </Step>
 </Steps>
 
 <Callout type="success">
@@ -104,7 +112,7 @@ Your auth config should be like this:
 
 <Tabs items={["auth.ts", "auth-client.ts"]}>
   <Tab value="auth.ts">
-    ```ts 
+    ```ts
     import { Pool } from "pg";
     import { betterAuth } from "better-auth";
 
@@ -118,10 +126,10 @@ Your auth config should be like this:
       },
     });
     ```
-    </Tab>
+  </Tab>
 
   <Tab value="auth-client.ts">
-    ```ts 
+    ```ts
     import { createAuthClient } from "better-auth/react";
     export const authClient = createAuthClient({
       baseURL: "http://localhost:3000",
@@ -129,8 +137,7 @@ Your auth config should be like this:
 
     export const { signIn, signUp, useSession } = createAuthClient();
     ```
-    </Tab>
-
+  </Tab>
 </Tabs>
 
 ### 6. The Fun Part
@@ -139,7 +146,7 @@ Now comes the fun part. You are now all setup to move your auth from Supabase Au
 
 <Tabs items={["sign up", "sign in", "session"]}>
   <Tab value="sign up">
-    ```ts 
+    ```ts
     // Supabase Auth
     await supabase.auth.signUp({
       email,
@@ -153,11 +160,10 @@ Now comes the fun part. You are now all setup to move your auth from Supabase Au
       name: "John",
     });
     ```
-
   </Tab>
 
   <Tab value="sign in">
-    ```ts 
+    ```ts
     // Supabase
     await supabase.auth.signInWithPassword({
       email,
@@ -170,20 +176,17 @@ Now comes the fun part. You are now all setup to move your auth from Supabase Au
       password,
     });
     ```
-
   </Tab>
 
   <Tab value="session">
-    ```ts 
+    ```ts
     // Supabase
     const { data, error } = await supabase.auth.getClaims();
 
     // Better Auth
     const { data, error } = await authClient.useSession();
     ```
-
   </Tab>
-
 </Tabs>
 
 ### 7. Migrate your users from Supabase Auth
@@ -193,6 +196,7 @@ Now comes the fun part. You are now all setup to move your auth from Supabase Au
   currently cover migrating two-factor (2FA) or Row Level Security (RLS)
   configurations, both should be possible with additional steps.
 </Callout>
+
 <Callout type="info">
   For a more detailed guide checkout [this
   guide](https://www.better-auth.com/docs/guides/supabase-migration-guide) we
@@ -336,36 +340,27 @@ You've successfully migrated from Supabase Auth to Better Auth on PlanetScale.
 
 ### Tips
 
-- Double-check that all environment variables are set in production.
-- Test all auth flows (sign-up, login, password reset, session refresh) before going live.
-- Remember that this is just the basics and if you've integrated Supabase Auth's auth functions in a lot of placed you'd have to find the suitable Better Auth replacements [here](https://www.better-auth.com/docs).
-- Have fun!
+* Double-check that all environment variables are set in production.
+* Test all auth flows (sign-up, login, password reset, session refresh) before going live.
+* Remember that this is just the basics and if you've integrated Supabase Auth's auth functions in a lot of placed you'd have to find the suitable Better Auth replacements [here](https://www.better-auth.com/docs).
+* Have fun!
 
 ### Learn More!
 
 <Cards>
-  <Card
-    href="https://www.better-auth.com/docs/introduction"
-    title="Better Auth Setup"
-  >
+  <Card href="https://www.better-auth.com/docs/introduction" title="Better Auth Setup">
     Get started with installing Better Auth
   </Card>
-  <Card
-    href="https://planetscale.com/docs/vitess/tutorials/planetscale-quick-start-guide"
-    title="PlanetScale Quick Start"
-  >
+
+  <Card href="https://planetscale.com/docs/vitess/tutorials/planetscale-quick-start-guide" title="PlanetScale Quick Start">
     Get started on PlanetScale here
   </Card>
-  <Card
-    href="https://planetscale.com/docs/postgres/imports/postgres-imports"
-    title="PlanetScale Migration Guides"
-  >
+
+  <Card href="https://planetscale.com/docs/postgres/imports/postgres-imports" title="PlanetScale Migration Guides">
     Use this guide to move your data from Supabase and many more services
   </Card>
-  <Card
-    href="https://www.better-auth.com/docs/guides/supabase-migration-guide"
-    title="Supabase Auth Migration"
-  >
+
+  <Card href="https://www.better-auth.com/docs/guides/supabase-migration-guide" title="Supabase Auth Migration">
     Move your auth from Supabase Auth to your own DB
   </Card>
 </Cards>

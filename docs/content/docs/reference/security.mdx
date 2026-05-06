@@ -5,7 +5,6 @@ description: Better Auth security features.
 
 This page contains information about security features of Better Auth.
 
-
 ## Password Hashing
 
 Better Auth uses the `scrypt` algorithm to hash passwords by default. This algorithm is designed to be memory-hard and CPU-intensive, making it resistant to brute-force attacks. You can customize the password hashing function by setting the `password` option in the configuration. This option should include a `hash` function to hash passwords and a `verify` function to verify them.
@@ -36,7 +35,7 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 
 1. **Avoid simple requests**
    See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. Better Auth only allows requests with a non-simple header or a `Content-Type` header of `application/json`.
-   
+
 2. **Origin Validation**
    Each request’s `Origin` header is verified to confirm it comes from your application or another explicitly trusted source. Requests from untrusted origins are rejected. By default, Better Auth trusts the base URL of your app, but you can specify additional trusted origins via the `trustedOrigins` configuration option.
 
@@ -45,25 +44,25 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 
 4. **Fetch Metadata Protection for First-Login CSRF**
    Better Auth also uses [Fetch Metadata headers](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#fetch_metadata) (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`) to provide additional CSRF protection specifically for **first-login scenarios**, where the client does not yet have any cookies.
-   
+
    This protection applies to **sign-in and sign-up email routes**, which accept form submissions (simple requests) to support progressive enhancement patterns.
-   
+
    When a sign-in or sign-up request is received **without** any cookies:
-   
-   - If the browser indicates a **cross-site navigation** (for example: `Sec-Fetch-Site: cross-site` and `Sec-Fetch-Mode: navigate`), Better Auth **blocks** the request as a potential login CSRF attack.
-   
-   - If the request is **same-origin** or **same-site**, Better Auth still validates the `Origin`/`Referer` against your `trustedOrigins` configuration, using the existing origin validation logic.
-   
-   - If the client does **not** send Fetch Metadata headers (older browsers, some mobile WebViews, non-browser clients), Better Auth falls back to its **previous behavior** and only performs origin validation when cookies are present, preserving backward compatibility.
-   
+
+   * If the browser indicates a **cross-site navigation** (for example: `Sec-Fetch-Site: cross-site` and `Sec-Fetch-Mode: navigate`), Better Auth **blocks** the request as a potential login CSRF attack.
+
+   * If the request is **same-origin** or **same-site**, Better Auth still validates the `Origin`/`Referer` against your `trustedOrigins` configuration, using the existing origin validation logic.
+
+   * If the client does **not** send Fetch Metadata headers (older browsers, some mobile WebViews, non-browser clients), Better Auth falls back to its **previous behavior** and only performs origin validation when cookies are present, preserving backward compatibility.
+
    This mechanism allows modern browsers to receive stronger protection against first-login CSRF attacks **without requiring CSRF tokens or client-side JavaScript**, and works seamlessly with progressive enhancement patterns.
-   
+
    <Callout type="info">
      Non-browser HTTP clients (mobile apps, server-to-server) should set the `Origin` or `Referer` header appropriately when making requests that include cookies. This ensures proper CSRF validation regardless of Fetch Metadata support.
-   </Callout> 
+   </Callout>
 
 5. **No Mutations on GET Requests (with additional safeguards)**
-  `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
+   `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
 
 ### Disabling Security Checks
 
@@ -72,9 +71,10 @@ Better Auth provides two separate options to disable security checks. These opti
 #### `disableCSRFCheck`
 
 Disables **all CSRF protection**, including:
-- Origin header validation when cookies are present
-- Fetch Metadata checks (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`)
-- Cross-site navigation blocking for first-login scenarios
+
+* Origin header validation when cookies are present
+* Fetch Metadata checks (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`)
+* Cross-site navigation blocking for first-login scenarios
 
 ```typescript
 {
@@ -91,10 +91,11 @@ Disables **all CSRF protection**, including:
 #### `disableOriginCheck`
 
 Disables **URL validation** against `trustedOrigins`, including:
-- `callbackURL` validation
-- `redirectTo` validation
-- `errorCallbackURL` validation
-- `newUserCallbackURL` validation
+
+* `callbackURL` validation
+* `redirectTo` validation
+* `errorCallbackURL` validation
+* `newUserCallbackURL` validation
 
 ```typescript
 {
@@ -114,10 +115,10 @@ Disables **URL validation** against `trustedOrigins`, including:
 
 #### Summary
 
-| Option | What it disables |
-|--------|-----------------|
-| `disableCSRFCheck` | CSRF protection only (origin header validation, Fetch Metadata checks) |
-| `disableOriginCheck` | URL validation AND CSRF protection (for backward compatibility) |
+| Option               | What it disables                                                       |
+| -------------------- | ---------------------------------------------------------------------- |
+| `disableCSRFCheck`   | CSRF protection only (origin header validation, Fetch Metadata checks) |
+| `disableOriginCheck` | URL validation AND CSRF protection (for backward compatibility)        |
 
 ## OAuth State and PKCE
 
@@ -125,7 +126,7 @@ To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key fo
 
 ## Cookies
 
-Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
+Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie.
 
 For Cross-Subdomain Cookies, you can set the `crossSubDomainCookies` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
 
@@ -158,10 +159,10 @@ You can configure the IP address header in your Better Auth configuration:
 This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
 
 <Callout type="info">
-**Important**
+  **Important**
 
-- When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
-- In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
+  * When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+  * In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
 </Callout>
 
 ## Trusted Proxy Headers
@@ -179,7 +180,7 @@ When `trustedProxyHeaders` is enabled and no `baseURL` is set in the configurati
 ```
 
 <Callout type="warning">
-Only enable this option if you trust the proxy headers reaching your application. Your reverse proxy or load balancer must be configured to set `X-Forwarded-Host` and `X-Forwarded-Proto` correctly, and end users must not be able to set these headers directly. If untrusted clients can forge these headers, they could manipulate redirects and callback URLs.
+  Only enable this option if you trust the proxy headers reaching your application. Your reverse proxy or load balancer must be configured to set `X-Forwarded-Host` and `X-Forwarded-Proto` correctly, and end users must not be able to set these headers directly. If untrusted clients can forge these headers, they could manipulate redirects and callback URLs.
 </Callout>
 
 When enabled, the base URL resolution follows this priority:
@@ -190,9 +191,10 @@ When enabled, the base URL resolution follows this priority:
 4. The request URL origin as a final fallback
 
 If you're serving your app from multiple approved domains, you'll typically want to:
-- **Omit `baseURL`** from the configuration so it's derived per-request from the proxy headers
-- Set **`trustedOrigins`** to an allowlist of your approved domains (see below)
-- Leave `crossSubDomainCookies` disabled — cookies are host-only by default, which means each domain gets its own independent session
+
+* **Omit `baseURL`** from the configuration so it's derived per-request from the proxy headers
+* Set **`trustedOrigins`** to an allowlist of your approved domains (see below)
+* Leave `crossSubDomainCookies` disabled — cookies are host-only by default, which means each domain gets its own independent session
 
 ## Trusted Origins
 
@@ -211,6 +213,7 @@ The most basic usage is to specify exact origins, below is an example of a trust
   ]
 }
 ```
+
 <Callout type="warning">
   Do not leave the localhost origin in a trusted origins list of a production auth instance.
 </Callout>
@@ -232,15 +235,17 @@ Better Auth supports wildcard patterns in trusted origins, which allows you to t
 #### Protocol-specific wildcards
 
 When using a wildcard pattern with a protocol prefix (like `https://`):
-- The protocol must match exactly
-- The domain can have any subdomain in place of the `*`
-- Requests using a different protocol will be rejected, even if the domain matches
+
+* The protocol must match exactly
+* The domain can have any subdomain in place of the `*`
+* Requests using a different protocol will be rejected, even if the domain matches
 
 #### Protocol-agnostic wildcards
 
 When using a wildcard pattern without a protocol prefix (like `*.example.com`):
-- Any protocol (http, https, etc.) will be accepted
-- The domain must match the wildcard pattern
+
+* Any protocol (http, https, etc.) will be accepted
+* The domain must match the wildcard pattern
 
 ### Custom Schemes
 
@@ -271,7 +276,7 @@ You can also dynamically set the list of trusted origins by providing a function
 ```
 
 <Callout>
-**Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
+  **Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
 </Callout>
 
 ## Email Enumeration Protection

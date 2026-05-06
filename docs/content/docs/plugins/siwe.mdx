@@ -8,78 +8,79 @@ The Sign in with Ethereum (SIWE) plugin allows users to authenticate using their
 ## Installation
 
 <Steps>
-    <Step>
-        ### Add the Server Plugin
+  <Step>
+    ### Add the Server Plugin
 
-        Add the SIWE plugin to your auth configuration:
+    Add the SIWE plugin to your auth configuration:
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth";
-        import { siwe } from "better-auth/plugins"; // [!code highlight]
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { siwe } from "better-auth/plugins"; // [!code highlight]
 
-        export const auth = betterAuth({
-            plugins: [
-                siwe({
-                    domain: "example.com",
-                    emailDomainName: "example.com", // optional
-                    anonymous: false, // optional, default is true
-                    getNonce: async () => {
-                        // Implement your nonce generation logic here
-                        return "your-secure-random-nonce";
-                    },
-                    verifyMessage: async (args) => {
-                        // Implement your SIWE message verification logic here
-                        // This should verify the signature against the message
-                        return true; // return true if signature is valid
-                    },
-                    ensLookup: async (args) => {
-                        // Optional: Implement ENS lookup for user names and avatars
-                        return {
-                            name: "user.eth",
-                            avatar: "https://example.com/avatar.png"
-                        };
-                    },
-                }),
-            ],
-        });
-        ```
-    </Step>
-
-    <Step>
-        ### Migrate the database
-
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
-
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx auth migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx auth generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
-
-    <Step>
-        ### Add the Client Plugin
-
-        ```ts title="auth-client.ts"
-        import { createAuthClient } from "better-auth/client";
-        import { siweClient } from "better-auth/client/plugins"; // [!code highlight]
-
-        export const authClient = createAuthClient({
+    export const auth = betterAuth({
         plugins: [
-            siweClient() // [!code highlight]
-        ]
-        });
-        ```
-    </Step>
+            siwe({
+                domain: "example.com",
+                emailDomainName: "example.com", // optional
+                anonymous: false, // optional, default is true
+                getNonce: async () => {
+                    // Implement your nonce generation logic here
+                    return "your-secure-random-nonce";
+                },
+                verifyMessage: async (args) => {
+                    // Implement your SIWE message verification logic here
+                    // This should verify the signature against the message
+                    return true; // return true if signature is valid
+                },
+                ensLookup: async (args) => {
+                    // Optional: Implement ENS lookup for user names and avatars
+                    return {
+                        name: "user.eth",
+                        avatar: "https://example.com/avatar.png"
+                    };
+                },
+            }),
+        ],
+    });
+    ```
+  </Step>
 
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Add the Client Plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { siweClient } from "better-auth/client/plugins"; // [!code highlight]
+
+    export const authClient = createAuthClient({
+    plugins: [
+        siweClient() // [!code highlight]
+    ]
+    });
+    ```
+  </Step>
 </Steps>
 
 ## Usage
@@ -183,12 +184,12 @@ const { data, error } = await authClient.siwe.verify({
 
 The SIWE plugin accepts the following configuration options:
 
-- **domain**: The domain name of your application (required for SIWE message generation)
-- **emailDomainName**: The email domain name for creating user accounts when not using anonymous mode. Defaults to the domain from your base URL
-- **anonymous**: Whether to allow anonymous sign-ins without requiring an email. Default is `true`
-- **getNonce**: Function to generate a unique nonce for each sign-in attempt. You must implement this function to return a cryptographically secure random string. Must return a `Promise<string>`
-- **verifyMessage**: Function to verify the signed SIWE message. Receives message details and should return `Promise<boolean>`
-- **ensLookup**: Optional function to lookup ENS names and avatars for Ethereum addresses
+* **domain**: The domain name of your application (required for SIWE message generation)
+* **emailDomainName**: The email domain name for creating user accounts when not using anonymous mode. Defaults to the domain from your base URL
+* **anonymous**: Whether to allow anonymous sign-ins without requiring an email. Default is `true`
+* **getNonce**: Function to generate a unique nonce for each sign-in attempt. You must implement this function to return a cryptographically secure random string. Must return a `Promise<string>`
+* **verifyMessage**: Function to verify the signed SIWE message. Receives message details and should return `Promise<boolean>`
+* **ensLookup**: Optional function to lookup ENS names and avatars for Ethereum addresses
 
 ### Client Options
 

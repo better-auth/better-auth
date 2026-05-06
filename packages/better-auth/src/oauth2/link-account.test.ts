@@ -1,4 +1,7 @@
-import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type {
+	DiscordProfile,
+	GoogleProfile,
+} from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -1056,5 +1059,155 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9124
+ */
+describe("oauth2 - providers without email", async () => {
+	const discordTokenResponse = {
+		access_token: "discord-access-token",
+		refresh_token: "discord-refresh-token",
+		token_type: "Bearer",
+		expires_in: 3600,
+		scope: "identify email",
+	};
+
+	function mockDiscordToken(
+		id: string,
+		username: string,
+		email: string | null = null,
+	) {
+		server.use(
+			http.post("https://discord.com/api/oauth2/token", async () =>
+				HttpResponse.json(discordTokenResponse),
+			),
+			http.get("https://discord.com/api/users/*", async () =>
+				HttpResponse.json({
+					id,
+					username,
+					discriminator: "0",
+					global_name: username,
+					avatar: null,
+					mfa_enabled: false,
+					banner: null,
+					accent_color: null,
+					locale: "en-US",
+					verified: email !== null,
+					email,
+					flags: 0,
+					premium_type: 0,
+					public_flags: 0,
+					display_name: username,
+					avatar_decoration: null,
+					banner_color: null,
+				} satisfies Omit<DiscordProfile, "image_url">),
+			),
+		);
+	}
+
+	describe("with mapProfileToUser synthesizing email", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				discord: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser: (profile) => ({
+						email: profile.email ?? `${profile.id}@discord.placeholder.local`,
+					}),
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+
+		it("signs in a Discord phone-only user with a synthesized email", async () => {
+			const discordId = "920138789012345001";
+			mockDiscordToken(discordId, "phoneonly");
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "discord",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/discord", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+					cookieSetter(oAuthHeaders)(context as any);
+				},
+			});
+
+			expect(redirectLocation).not.toContain("error");
+
+			const synthesizedEmail = `${discordId}@discord.placeholder.local`;
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: synthesizedEmail }],
+			});
+			expect(user).toBeTruthy();
+			expect(user?.email).toBe(synthesizedEmail);
+
+			const accounts = await ctx.adapter.findMany<{
+				providerId: string;
+				accountId: string;
+			}>({
+				model: "account",
+				where: [{ field: "userId", value: user!.id }],
+			});
+			const discordAccount = accounts.find((a) => a.providerId === "discord");
+			expect(discordAccount).toBeTruthy();
+			expect(discordAccount?.accountId).toBe(discordId);
+		});
+	});
+
+	describe("without mapProfileToUser", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				discord: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+
+		it("rejects sign-in with email_not_found when the provider returns a null email", async () => {
+			mockDiscordToken("920138789012345002", "phoneonly2");
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "discord",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/discord", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			expect(redirectLocation).toContain("error=email_not_found");
+		});
 	});
 });

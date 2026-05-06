@@ -149,6 +149,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 			baseURL: {
 				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:*"],
 			},
+			advanced: { trustedProxyHeaders: true },
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					baseURL = ctx.context.baseURL;
@@ -177,6 +178,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 			baseURL: {
 				allowedHosts: ["myapp.com"],
 			},
+			advanced: { trustedProxyHeaders: true },
 		});
 
 		await expect(
@@ -227,6 +229,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 				allowedHosts: ["myapp.com"],
 				protocol: "https",
 			},
+			advanced: { trustedProxyHeaders: true },
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					baseURL = ctx.context.baseURL;
@@ -259,6 +262,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 					"preview-*.myapp.com",
 				],
 			},
+			advanced: { trustedProxyHeaders: true },
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					baseURL = ctx.context.baseURL;
@@ -295,6 +299,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 			baseURL: {
 				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
 			},
+			advanced: { trustedProxyHeaders: true },
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					if (ctx.context.baseURL) {
@@ -389,6 +394,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 				crossSubDomainCookies: {
 					enabled: true,
 				},
+				trustedProxyHeaders: true,
 			},
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
@@ -440,6 +446,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 			baseURL: {
 				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:*"],
 			},
+			advanced: { trustedProxyHeaders: true },
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					baseURL = ctx.context.baseURL;

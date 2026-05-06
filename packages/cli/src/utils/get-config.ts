@@ -8,7 +8,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
 import type { TsConfigResult } from "get-tsconfig";
-import { getTsconfig, parseTsconfig } from "get-tsconfig";
+import { createPathsMatcher, getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
@@ -43,40 +43,9 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
-function mergeAliases(
-	target: Record<string, string>,
-	source: Record<string, string>,
-): void {
-	for (const [alias, aliasPath] of Object.entries(source)) {
-		if (!(alias in target)) {
-			target[alias] = aliasPath;
-		}
-	}
-}
+type PathsMatcher = (specifier: string) => string[];
 
-function extractAliases(tsconfig: TsConfigResult): Record<string, string> {
-	const { paths = {}, baseUrl } = tsconfig.config.compilerOptions ?? {};
-	const result: Record<string, string> = {};
-	const configDir = path.dirname(tsconfig.path);
-	const resolvedBaseUrl = baseUrl
-		? path.resolve(configDir, baseUrl)
-		: configDir;
-
-	for (const [alias, aliasPaths = []] of Object.entries(paths)) {
-		for (const aliasedPath of aliasPaths) {
-			const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
-			const finalAliasedPath =
-				aliasedPath.slice(-1) === "*" ? aliasedPath.slice(0, -1) : aliasedPath;
-
-			result[finalAlias || ""] = path.join(resolvedBaseUrl, finalAliasedPath);
-		}
-	}
-	return result;
-}
-
-/**
- * Reads raw tsconfig JSON to get `references` (which get-tsconfig strips out).
- */
+/** Reads `references` from raw tsconfig JSON (stripped out by `parseTsconfig`). */
 function readRawTsconfigReferences(
 	tsconfigPath: string,
 ): Array<{ path: string }> | undefined {
@@ -94,14 +63,12 @@ function readRawTsconfigReferences(
 	}
 }
 
-/**
- * Collect path aliases from tsconfig references recursively.
- */
-function collectReferencesAliases(
+/** Recursively collects tsconfigs reachable via `references`. */
+function collectReferencedTsconfigs(
 	tsconfigPath: string,
 	visited = new Set<string>(),
-): Record<string, string> {
-	const result: Record<string, string> = {};
+): TsConfigResult[] {
+	const result: TsConfigResult[] = [];
 	const refs = readRawTsconfigReferences(tsconfigPath);
 	if (!refs) return result;
 
@@ -117,43 +84,181 @@ function collectReferencesAliases(
 
 		try {
 			const refConfig = parseTsconfig(refTsconfigPath);
-			mergeAliases(
-				result,
-				extractAliases({ path: refTsconfigPath, config: refConfig }),
-			);
+			result.push({ path: refTsconfigPath, config: refConfig });
 		} catch {
 			continue;
 		}
 
-		mergeAliases(result, collectReferencesAliases(refTsconfigPath, visited));
+		result.push(...collectReferencedTsconfigs(refTsconfigPath, visited));
 	}
 	return result;
 }
 
-function getPathAliases(cwd: string): Record<string, string> | null {
+/**
+ * Ordered `paths` matchers from the project tsconfig and any referenced
+ * tsconfigs, following TypeScript canonical resolution semantics.
+ * @see https://github.com/microsoft/TypeScript/blob/main/src/compiler/moduleNameResolver.ts
+ */
+function collectPathsMatchers(cwd: string): PathsMatcher[] {
 	const configName = fs.existsSync(path.join(cwd, "tsconfig.json"))
 		? "tsconfig.json"
 		: "jsconfig.json";
 	const tsconfig = getTsconfig(cwd, configName);
-	if (!tsconfig) {
-		return null;
-	}
+	if (!tsconfig) return [];
+
+	const matchers: PathsMatcher[] = [];
 	try {
-		const result = extractAliases(tsconfig);
-		mergeAliases(result, collectReferencesAliases(tsconfig.path));
-		addSvelteKitEnvModules(result);
-		addCloudflareModules(result);
-		return result;
+		const mainMatcher = createPathsMatcher(tsconfig);
+		if (mainMatcher) matchers.push(mainMatcher);
+		for (const refTsconfig of collectReferencedTsconfigs(tsconfig.path)) {
+			const refMatcher = createPathsMatcher(refTsconfig);
+			if (refMatcher) matchers.push(refMatcher);
+		}
 	} catch (error) {
 		console.error(error);
 		throw new BetterAuthError("Error parsing tsconfig.json");
 	}
+	return matchers;
+}
+
+/**
+ * Source file extensions jiti can load. Shared between the jiti `extensions`
+ * option and `resolveCandidateFile` so both stay in sync.
+ */
+const SOURCE_EXTENSIONS = [
+	".ts",
+	".tsx",
+	".mts",
+	".cts",
+	".js",
+	".jsx",
+	".mjs",
+	".cjs",
+] as const;
+
+const SOURCE_EXTENSIONS_SET: ReadonlySet<string> = new Set(SOURCE_EXTENSIONS);
+
+/** Probes a candidate as-is, with known extensions, and as a directory index. */
+function resolveCandidateFile(candidate: string): string | undefined {
+	try {
+		if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+			return candidate;
+		}
+	} catch {}
+	// A candidate that already has a known extension is either the exact
+	// target or does not exist; extension and index probing would be noise.
+	if (SOURCE_EXTENSIONS_SET.has(path.extname(candidate))) {
+		return undefined;
+	}
+	for (const ext of SOURCE_EXTENSIONS) {
+		const withExt = candidate + ext;
+		if (fs.existsSync(withExt)) return withExt;
+	}
+	for (const ext of SOURCE_EXTENSIONS) {
+		const asIndex = path.join(candidate, `index${ext}`);
+		if (fs.existsSync(asIndex)) return asIndex;
+	}
+	return undefined;
+}
+
+function resolveWithMatchers(
+	specifier: string,
+	matchers: PathsMatcher[],
+): string | undefined {
+	for (const matcher of matchers) {
+		for (const candidate of matcher(specifier)) {
+			const resolved = resolveCandidateFile(candidate);
+			if (resolved) return resolved;
+		}
+	}
+	return undefined;
+}
+
+interface StringLiteralNode {
+	type: "StringLiteral";
+	value: string;
+}
+interface BabelNodePath<Node> {
+	node: Node;
+}
+interface BabelTypes {
+	isIdentifier(node: unknown): node is { name: string };
+	isImport(node: unknown): boolean;
+	isStringLiteral(node: unknown): node is StringLiteralNode;
+}
+
+/**
+ * Callees whose first string argument is a module specifier. `jitiImport` is
+ * a jiti-side preprocessor artifact observed in the AST; revisit on jiti
+ * major version bumps (the regression suite catches a rename but not the why).
+ */
+const LOADER_IDENTIFIERS = new Set(["require", "import", "jitiImport"]);
+
+/**
+ * Rewrites aliased specifiers at AST level. Required because jiti's `alias`
+ * option only supports prefix matching and cannot express mid-path wildcards.
+ *
+ * Matchers always take precedence over native resolution, mirroring
+ * TypeScript's own `paths` → `node_modules` order.
+ */
+function createRewriteImportPathsPlugin(matchers: PathsMatcher[]) {
+	return ({ types: t }: { types: BabelTypes }) => {
+		const rewrite = (source: StringLiteralNode | null | undefined): void => {
+			if (!source) return;
+			const resolved = resolveWithMatchers(source.value, matchers);
+			if (resolved) source.value = resolved;
+		};
+		return {
+			visitor: {
+				ImportDeclaration(p: BabelNodePath<{ source: StringLiteralNode }>) {
+					rewrite(p.node.source);
+				},
+				ExportNamedDeclaration(
+					p: BabelNodePath<{ source: StringLiteralNode | null }>,
+				) {
+					rewrite(p.node.source);
+				},
+				ExportAllDeclaration(p: BabelNodePath<{ source: StringLiteralNode }>) {
+					rewrite(p.node.source);
+				},
+				ImportExpression(p: BabelNodePath<{ source: unknown }>) {
+					// Only string literal sources can be statically rewritten.
+					if (t.isStringLiteral(p.node.source)) rewrite(p.node.source);
+				},
+				CallExpression(
+					p: BabelNodePath<{
+						callee: unknown;
+						arguments: unknown[];
+					}>,
+				) {
+					const { callee, arguments: args } = p.node;
+					const first = args[0];
+					if (!t.isStringLiteral(first)) return;
+					const isKnownLoader =
+						(t.isIdentifier(callee) && LOADER_IDENTIFIERS.has(callee.name)) ||
+						t.isImport(callee);
+					if (!isKnownLoader) return;
+					rewrite(first);
+				},
+			},
+		};
+	};
+}
+
+/** Virtual module aliases; real tsconfig paths go through the babel plugin. */
+function getVirtualModuleAliases(): Record<string, string> {
+	const result: Record<string, string> = {};
+	addSvelteKitEnvModules(result);
+	addCloudflareModules(result);
+	return result;
 }
 /**
  * .tsx files are not supported by Jiti.
  */
 const jitiOptions = (cwd: string): JitiOptions => {
-	const alias = getPathAliases(cwd) || {};
+	const matchers = collectPathsMatchers(cwd);
+	const plugins =
+		matchers.length > 0 ? [createRewriteImportPathsPlugin(matchers)] : [];
 	return {
 		transformOptions: {
 			babel: {
@@ -167,10 +272,11 @@ const jitiOptions = (cwd: string): JitiOptions => {
 					],
 					[babelPresetReact, { runtime: "automatic" }],
 				],
+				plugins,
 			},
 		},
-		extensions: [".ts", ".tsx", ".js", ".jsx"],
-		alias,
+		extensions: [...SOURCE_EXTENSIONS],
+		alias: getVirtualModuleAliases(),
 	};
 };
 

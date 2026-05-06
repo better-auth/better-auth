@@ -354,7 +354,7 @@ export type InvitationInput = z.input<typeof invitationSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type TeamMemberInput = z.input<typeof teamMemberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
-export type TeamInput = z.infer<typeof teamSchema>;
+export type TeamInput = z.input<typeof teamSchema>;
 export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 
 const defaultRoles = ["admin", "member", "owner"] as const;

@@ -12,7 +12,9 @@ import {
 	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
+	setRequestCookie,
 	stripSecureCookiePrefix,
+	toCookieOptions,
 } from "./cookie-utils";
 
 describe("cookies", async () => {
@@ -288,6 +290,35 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		);
 		expect(map.get("c")?.value).toBe("3");
 	});
+
+	it("parses partitioned as a boolean cookie attribute", () => {
+		const map = parseSetCookieHeader(
+			"session=xyz; Path=/; Secure; HttpOnly; SameSite=None; Partitioned",
+		);
+
+		expect(map.get("session")?.value).toBe("xyz");
+		expect(map.get("session")?.secure).toBe(true);
+		expect(map.get("session")?.httponly).toBe(true);
+		expect(map.get("session")?.samesite).toBe("none");
+		expect(map.get("session")?.partitioned).toBe(true);
+	});
+
+	it("converts parsed cookie attributes into cookie options", () => {
+		const attributes = parseSetCookieHeader(
+			"session=xyz; Path=/auth; Expires=Mon, 01 Jan 2026 00:00:00 GMT; Max-Age=300; Secure; HttpOnly; SameSite=None; Partitioned",
+		).get("session");
+
+		expect(attributes).toBeDefined();
+		expect(toCookieOptions(attributes!)).toEqual({
+			path: "/auth",
+			expires: new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+			maxAge: 300,
+			secure: true,
+			httpOnly: true,
+			sameSite: "none",
+			partitioned: true,
+		});
+	});
 });
 
 describe("cookie-utils stripSecureCookiePrefix", () => {
@@ -339,6 +370,44 @@ describe("cookie-utils stripSecureCookiePrefix", () => {
 		const cookieName = `${SECURE_COOKIE_PREFIX}better-auth.session_token`;
 		const result = stripSecureCookiePrefix(cookieName);
 		expect(result).toBe("better-auth.session_token");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-call/issues/54
+ * @see https://github.com/better-auth/better-auth/pull/8089
+ */
+describe("cookie-utils setRequestCookie", () => {
+	it("writes a cookie when the header is empty", () => {
+		const headers = new Headers();
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe("better-auth.session_token=abc");
+	});
+
+	it("preserves existing cookies and joins with `; ` per RFC 6265", () => {
+		const headers = new Headers({ cookie: "preference=dark; locale=en" });
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe(
+			"preference=dark; locale=en; better-auth.session_token=abc",
+		);
+	});
+
+	it("replaces an existing cookie of the same name rather than duplicating it", () => {
+		const headers = new Headers({
+			cookie: "better-auth.session_token=stale; locale=en",
+		});
+		setRequestCookie(headers, "better-auth.session_token", "fresh");
+		expect(headers.get("cookie")).toBe(
+			"better-auth.session_token=fresh; locale=en",
+		);
+	});
+
+	it("ignores malformed pairs in the existing header", () => {
+		const headers = new Headers({ cookie: "valid=1; ; =orphan; locale=en" });
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe(
+			"valid=1; locale=en; better-auth.session_token=abc",
+		);
 	});
 });
 
