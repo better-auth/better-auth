@@ -163,7 +163,8 @@ export const listSSOProviders = () => {
 				openapi: {
 					operationId: "listSSOProviders",
 					summary: "List SSO providers",
-					description: "Returns a list of SSO providers the user has access to",
+					description:
+						"Returns a list of SSO providers the user has access to. When an active organization is set in the session, only providers from that organization are returned.",
 					responses: {
 						"200": {
 							description: "List of SSO providers",
@@ -174,50 +175,81 @@ export const listSSOProviders = () => {
 		},
 		async (ctx) => {
 			const userId = ctx.context.session.user.id;
-
-			const allProviders =
-				await ctx.context.adapter.findMany<SSOProviderRecord>({
-					model: "ssoProvider",
-				});
-
-			const userOwnedProviders = allProviders.filter(
-				(p) => p.userId === userId && !p.organizationId,
-			);
-
-			const orgProviders = allProviders.filter(
-				(p) => p.organizationId !== null && p.organizationId !== undefined,
-			);
+			const session = ctx.context.session.session as {
+				activeOrganizationId?: string | null;
+			};
+			const activeOrganizationId = session.activeOrganizationId;
 
 			const orgPluginEnabled = ctx.context.hasPlugin("organization");
 
-			let accessibleProviders: typeof userOwnedProviders = [
-				...userOwnedProviders,
-			];
+			const userOwnedProviders =
+				await ctx.context.adapter.findMany<SSOProviderRecord>({
+					model: "ssoProvider",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "organizationId", operator: "eq", value: null },
+					],
+				});
 
-			if (orgPluginEnabled && orgProviders.length > 0) {
-				const orgIds = [
-					...new Set(
-						orgProviders
-							.map((p) => p.organizationId)
-							.filter((id): id is string => id !== null && id !== undefined),
-					),
-				];
+			let accessibleProviders: SSOProviderRecord[] = [...userOwnedProviders];
 
-				const adminOrgIds = await batchCheckOrgAdmin(ctx, userId, orgIds);
+			if (orgPluginEnabled) {
+				if (activeOrganizationId) {
+					const isAdmin = await isOrgAdmin(ctx, userId, activeOrganizationId);
+					if (isAdmin) {
+						const activeOrgProviders =
+							await ctx.context.adapter.findMany<SSOProviderRecord>({
+								model: "ssoProvider",
+								where: [
+									{ field: "organizationId", value: activeOrganizationId },
+								],
+							});
+						accessibleProviders = [
+							...accessibleProviders,
+							...activeOrgProviders,
+						];
+					}
+				} else {
+					const allOrgProviders =
+						await ctx.context.adapter.findMany<SSOProviderRecord>({
+							model: "ssoProvider",
+							where: [{ field: "organizationId", operator: "ne", value: null }],
+						});
 
-				const orgAccessibleProviders = orgProviders.filter(
-					(provider) =>
-						provider.organizationId && adminOrgIds.has(provider.organizationId),
-				);
+					if (allOrgProviders.length > 0) {
+						const orgIds = [
+							...new Set(
+								allOrgProviders
+									.map((p) => p.organizationId)
+									.filter(
+										(id): id is string => id !== null && id !== undefined,
+									),
+							),
+						];
 
-				accessibleProviders = [
-					...accessibleProviders,
-					...orgAccessibleProviders,
-				];
-			} else if (!orgPluginEnabled) {
-				const userOwnedOrgProviders = orgProviders.filter(
-					(p) => p.userId === userId,
-				);
+						const adminOrgIds = await batchCheckOrgAdmin(ctx, userId, orgIds);
+
+						const orgAccessibleProviders = allOrgProviders.filter(
+							(provider) =>
+								provider.organizationId &&
+								adminOrgIds.has(provider.organizationId),
+						);
+
+						accessibleProviders = [
+							...accessibleProviders,
+							...orgAccessibleProviders,
+						];
+					}
+				}
+			} else {
+				const userOwnedOrgProviders =
+					await ctx.context.adapter.findMany<SSOProviderRecord>({
+						model: "ssoProvider",
+						where: [
+							{ field: "userId", value: userId },
+							{ field: "organizationId", operator: "ne", value: null },
+						],
+					});
 				accessibleProviders = [
 					...accessibleProviders,
 					...userOwnedOrgProviders,
