@@ -1107,6 +1107,73 @@ describe("oauth2 - providers without email", async () => {
 		);
 	}
 
+	describe("with mapProfileToUser omitting provider id", async () => {
+		const missingProviderId = undefined as unknown as string;
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				discord: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					mapProfileToUser: () => ({ id: missingProviderId }),
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9454
+		 */
+		it("rejects provider user info with a missing id before creating an account", async () => {
+			const email = "missing-id@example.com";
+			mockDiscordToken("920138789012345000", "missing-id", email);
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "discord",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/discord", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			expect(redirectLocation).toContain("error=unable_to_get_user_info");
+
+			const account = await ctx.adapter.findOne<{
+				accountId: string;
+				providerId: string;
+			}>({
+				model: "account",
+				where: [
+					{ field: "accountId", value: "undefined" },
+					{ field: "providerId", value: "discord" },
+				],
+			});
+			expect(account).toBeNull();
+
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: email }],
+			});
+			expect(user).toBeNull();
+		});
+	});
+
+	// Preserve existing coverage for custom profile mapping that only augments
+	// optional fields without removing the provider account identifier.
 	describe("with mapProfileToUser synthesizing email", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
