@@ -679,7 +679,8 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
-					description: "Set the active team",
+					description:
+						"Set the active team for the current active organization",
 					responses: {
 						"200": {
 							description: "Success",
@@ -734,7 +735,19 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				teamId = ctx.body.teamId;
 			}
 
-			const team = await adapter.findTeamById({ teamId });
+			const activeOrganizationId = session.session.activeOrganizationId;
+
+			if (!activeOrganizationId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
+			}
+
+			const team = await adapter.findTeamById({
+				teamId,
+				organizationId: activeOrganizationId,
+			});
 
 			if (!team) {
 				throw APIError.from(

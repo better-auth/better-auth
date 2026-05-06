@@ -29,8 +29,35 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
-				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
+				const url = new URL(request.url);
+				const basePath = ctx.options.basePath ?? "/api/auth";
+				let pathname = url.pathname.replace(basePath, "");
+
+				// remove trailing or leading slashes & add leading slash if not present
+				if (pathname.endsWith("//")) pathname = pathname.slice(0, -1);
+				if (pathname.startsWith("//")) pathname = pathname.slice(1);
+				if (!pathname.startsWith("/")) pathname = "/" + pathname;
+
+				// we don't want to accidentally block email-otp endpoint.
+				const blockedPaths = ["/sign-in/email-otp"].reduce<string[]>(
+					(acc, curr) => {
+						// if custom endpoints includes a blocked path, we dont include the blocked path in the blocked paths array
+						if (options.endpoints?.length && options.endpoints.includes(curr)) {
+							return acc;
+						}
+						return [...acc, curr];
+					},
+					[],
+				);
+				const match = endpoints.some((endpoint) => {
+					return (
+						pathname.includes(endpoint) && !blockedPaths.includes(endpoint)
+					);
+				});
+
+				if (!match) {
 					return undefined;
+				}
 
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
