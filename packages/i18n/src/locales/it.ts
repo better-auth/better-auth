@@ -17,8 +17,7 @@ export const it: TranslationDictionary = {
 	PROVIDER_NOT_FOUND: "Provider non trovato",
 	INVALID_TOKEN: "Token non valido",
 	TOKEN_EXPIRED: "Token scaduto",
-	FAILED_TO_GET_USER_INFO:
-		"Impossibile ottenere le informazioni dell'utente",
+	FAILED_TO_GET_USER_INFO: "Impossibile ottenere le informazioni dell'utente",
 	USER_EMAIL_NOT_FOUND: "Indirizzo e-mail dell'utente non trovato",
 	EMAIL_NOT_VERIFIED: "Indirizzo e-mail non verificato",
 	PASSWORD_TOO_SHORT: "Password troppo corta",
@@ -30,8 +29,7 @@ export const it: TranslationDictionary = {
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "Account delle credenziali non trovato",
 	SESSION_EXPIRED:
 		"Sessione scaduta. Esegui nuovamente l'autenticazione per eseguire questa azione.",
-	FAILED_TO_UNLINK_LAST_ACCOUNT:
-		"Non puoi scollegare il tuo ultimo account",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "Non puoi scollegare il tuo ultimo account",
 	ACCOUNT_NOT_FOUND: "Account non trovato",
 	USER_ALREADY_HAS_PASSWORD:
 		"L'utente ha già una password. Forniscila per eliminare l'account.",

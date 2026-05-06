@@ -27,10 +27,8 @@ export const hi: TranslationDictionary = {
 		"उपयोगकर्ता पहले से मौजूद है। कोई अन्य ईमेल उपयोग करें।",
 	EMAIL_CAN_NOT_BE_UPDATED: "ईमेल अपडेट नहीं किया जा सकता",
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "क्रेडेंशियल अकाउंट नहीं मिला",
-	SESSION_EXPIRED:
-		"सत्र समाप्त हो गया। इस क्रिया को करने के लिए पुनः प्रमाणित करें।",
-	FAILED_TO_UNLINK_LAST_ACCOUNT:
-		"आप अपने अंतिम अकाउंट को अनलिंक नहीं कर सकते",
+	SESSION_EXPIRED: "सत्र समाप्त हो गया। इस क्रिया को करने के लिए पुनः प्रमाणित करें।",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "आप अपने अंतिम अकाउंट को अनलिंक नहीं कर सकते",
 	ACCOUNT_NOT_FOUND: "अकाउंट नहीं मिला",
 	USER_ALREADY_HAS_PASSWORD:
 		"उपयोगकर्ता के पास पहले से पासवर्ड है। अकाउंट हटाने के लिए वह दर्ज करें।",

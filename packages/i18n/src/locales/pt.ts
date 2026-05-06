@@ -23,14 +23,12 @@ export const pt: TranslationDictionary = {
 	PASSWORD_TOO_SHORT: "Senha muito curta",
 	PASSWORD_TOO_LONG: "Senha muito longa",
 	USER_ALREADY_EXISTS: "Usuário já existe",
-	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-		"Usuário já existe. Use outro e-mail.",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "Usuário já existe. Use outro e-mail.",
 	EMAIL_CAN_NOT_BE_UPDATED: "O e-mail não pode ser atualizado",
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "Conta de credencial não encontrada",
 	SESSION_EXPIRED:
 		"Sessão expirada. Autentique-se novamente para realizar esta ação.",
-	FAILED_TO_UNLINK_LAST_ACCOUNT:
-		"Você não pode desvincular sua última conta",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "Você não pode desvincular sua última conta",
 	ACCOUNT_NOT_FOUND: "Conta não encontrada",
 	USER_ALREADY_HAS_PASSWORD:
 		"Usuário já tem uma senha. Forneça-a para excluir a conta.",

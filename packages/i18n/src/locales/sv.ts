@@ -17,8 +17,7 @@ export const sv: TranslationDictionary = {
 	PROVIDER_NOT_FOUND: "Leverantör hittades inte",
 	INVALID_TOKEN: "Ogiltigt token",
 	TOKEN_EXPIRED: "Token har gått ut",
-	FAILED_TO_GET_USER_INFO:
-		"Misslyckades med att hämta användarinformation",
+	FAILED_TO_GET_USER_INFO: "Misslyckades med att hämta användarinformation",
 	USER_EMAIL_NOT_FOUND: "Användarens e-postadress hittades inte",
 	EMAIL_NOT_VERIFIED: "E-postadressen är inte verifierad",
 	PASSWORD_TOO_SHORT: "Lösenordet är för kort",
