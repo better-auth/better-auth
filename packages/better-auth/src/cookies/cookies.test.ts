@@ -12,6 +12,7 @@ import {
 	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
+	setRequestCookie,
 	stripSecureCookiePrefix,
 	toCookieOptions,
 } from "./cookie-utils";
@@ -369,6 +370,44 @@ describe("cookie-utils stripSecureCookiePrefix", () => {
 		const cookieName = `${SECURE_COOKIE_PREFIX}better-auth.session_token`;
 		const result = stripSecureCookiePrefix(cookieName);
 		expect(result).toBe("better-auth.session_token");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-call/issues/54
+ * @see https://github.com/better-auth/better-auth/pull/8089
+ */
+describe("cookie-utils setRequestCookie", () => {
+	it("writes a cookie when the header is empty", () => {
+		const headers = new Headers();
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe("better-auth.session_token=abc");
+	});
+
+	it("preserves existing cookies and joins with `; ` per RFC 6265", () => {
+		const headers = new Headers({ cookie: "preference=dark; locale=en" });
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe(
+			"preference=dark; locale=en; better-auth.session_token=abc",
+		);
+	});
+
+	it("replaces an existing cookie of the same name rather than duplicating it", () => {
+		const headers = new Headers({
+			cookie: "better-auth.session_token=stale; locale=en",
+		});
+		setRequestCookie(headers, "better-auth.session_token", "fresh");
+		expect(headers.get("cookie")).toBe(
+			"better-auth.session_token=fresh; locale=en",
+		);
+	});
+
+	it("ignores malformed pairs in the existing header", () => {
+		const headers = new Headers({ cookie: "valid=1; ; =orphan; locale=en" });
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe(
+			"valid=1; locale=en; better-auth.session_token=abc",
+		);
 	});
 });
 

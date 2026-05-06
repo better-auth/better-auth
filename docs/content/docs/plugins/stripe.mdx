@@ -977,6 +977,39 @@ await stripeClient.customers.update(organization.stripeCustomerId, {
 });
 ```
 
+### Handling user deletion
+
+Organizations with active subscriptions are blocked from deletion automatically, but users are not. To mirror the same behavior on user deletion, throw from the [`beforeDelete`](/docs/concepts/users-accounts#callbacks) callback when a subscription is active:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            beforeDelete: async (user) => {
+                if (!user.stripeCustomerId) return;
+
+                for await (const sub of stripeClient.subscriptions.list({
+                    customer: user.stripeCustomerId,
+                    status: "all",
+                })) {
+                    if (["canceled", "incomplete", "incomplete_expired"].includes(sub.status)) continue;
+
+                    throw new APIError("BAD_REQUEST", {
+                        message: "Cancel your active subscription before deleting your account",
+                    });
+                    // Or cancel immediately: await stripeClient.subscriptions.cancel(sub.id);
+                    // Or at period end:      await stripeClient.subscriptions.update(sub.id, { cancel_at_period_end: true });
+                }
+            },
+        },
+    },
+});
+```
+
 ### Custom Checkout Session Parameters
 
 You can customize the Stripe Checkout session with additional parameters:
