@@ -8666,4 +8666,120 @@ describe("stripe", () => {
 			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9129
+	 * @see https://github.com/better-auth/better-auth/issues/9130
+	 */
+	describe("getCheckoutSessionParams subscription_data merge", () => {
+		const trialOptions = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: process.env.STRIPE_PRICE_ID_1!,
+						name: "starter",
+						lookupKey: "lookup_key_123",
+						freeTrial: { days: 14 },
+					},
+				],
+				getCheckoutSessionParams: async () => ({
+					params: {
+						payment_method_collection: "if_required" as const,
+						subscription_data: {
+							trial_settings: {
+								end_behavior: {
+									missing_payment_method: "cancel" as const,
+								},
+							},
+						},
+					},
+				}),
+			},
+		} satisfies StripeOptions;
+
+		it("preserves plan freeTrial when getCheckoutSessionParams returns custom subscription_data", async () => {
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(trialOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "trial-merge@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					subscription_data: expect.objectContaining({
+						trial_period_days: 14,
+						trial_settings: {
+							end_behavior: { missing_payment_method: "cancel" },
+						},
+					}),
+				}),
+				undefined,
+			);
+		});
+
+		it("preserves internal subscription metadata when getCheckoutSessionParams returns custom subscription_data", async () => {
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(trialOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "metadata-merge@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					subscription_data: expect.objectContaining({
+						metadata: expect.objectContaining({
+							subscriptionId: expect.any(String),
+							userId: expect.any(String),
+							referenceId: expect.any(String),
+						}),
+					}),
+				}),
+				undefined,
+			);
+		});
+	});
 });
