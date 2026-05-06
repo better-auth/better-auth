@@ -462,8 +462,9 @@ describe("i18n plugin", async () => {
 						typeof (dict as Record<string, unknown>)[key],
 						`Locale "${locale}" key "${key}" must be a non-empty string`,
 					).toBe("string");
+					const value = (dict as Record<string, string>)[key];
 					expect(
-						(dict as Record<string, string>)[key].length,
+						value?.length ?? 0,
 						`Locale "${locale}" key "${key}" must not be empty`,
 					).toBeGreaterThan(0);
 				}
