@@ -58,21 +58,34 @@ export const getPasskeyActions = (
 		if (!response.data) {
 			return response;
 		}
+		const mergedExtensions =
+			response.data.extensions || opts?.extensions
+				? {
+						...(response.data.extensions || {}),
+						...(opts?.extensions || {}),
+					}
+				: undefined;
+		let res: AuthenticationResponseJSON;
 		try {
-			const mergedExtensions =
-				response.data.extensions || opts?.extensions
-					? {
-							...(response.data.extensions || {}),
-							...(opts?.extensions || {}),
-						}
-					: undefined;
-			const res = await startAuthentication({
+			res = await startAuthentication({
 				optionsJSON: {
 					...response.data,
 					extensions: mergedExtensions,
 				},
 				useBrowserAutofill: opts?.autoFill,
 			});
+		} catch (err) {
+			return {
+				data: null,
+				error: {
+					code: err instanceof WebAuthnError ? err.code : "AUTH_CANCELLED",
+					message: PASSKEY_ERROR_CODES.AUTH_CANCELLED.message,
+					status: 400,
+					statusText: "BAD_REQUEST",
+				},
+			};
+		}
+		try {
 			const { clientExtensionResults, ...responseBody } = res;
 			const verified = await $fetch<{
 				session: Session;
@@ -93,7 +106,7 @@ export const getPasskeyActions = (
 				return {
 					...verified,
 					webauthn: {
-						response: res as AuthenticationResponseJSON,
+						response: res,
 						clientExtensionResults:
 							clientExtensionResults as AuthenticationExtensionsClientOutputs,
 					},
