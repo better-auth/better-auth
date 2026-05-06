@@ -379,3 +379,77 @@ describe("sign-in with form data", async () => {
 		expect(response.status).toBe(200);
 	});
 });
+
+describe("emailAndPassword.authorize", async () => {
+	it("should call authorize after password verification", async () => {
+		const authorizeFn = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				authorize: authorizeFn,
+			},
+		});
+
+		await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+		});
+
+		expect(authorizeFn).toHaveBeenCalledTimes(1);
+		const callArgs = authorizeFn.mock.calls[0]!;
+		expect(callArgs[0].user.email).toBe(testUser.email);
+		expect(callArgs[0].account.providerId).toBe("credential");
+	});
+
+	it("should not call authorize when password is wrong", async () => {
+		const authorizeFn = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				authorize: authorizeFn,
+			},
+		});
+
+		await expect(
+			auth.api.signInEmail({
+				body: { email: testUser.email, password: "wrong" },
+			}),
+		).rejects.toThrow();
+
+		expect(authorizeFn).not.toHaveBeenCalled();
+	});
+
+	it("should propagate APIError thrown from authorize", async () => {
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				authorize: async () => {
+					throw new APIError("FORBIDDEN", {
+						message: "Account is locked",
+					});
+				},
+			},
+		});
+
+		await expect(
+			auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+			}),
+		).rejects.toThrowError("Account is locked");
+	});
+
+	it("should continue normally when authorize returns void", async () => {
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				authorize: async () => {},
+			},
+		});
+
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+		});
+
+		expect(res.token).toBeDefined();
+		expect(res.user.email).toBe(testUser.email);
+	});
+});

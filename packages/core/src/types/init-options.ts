@@ -698,6 +698,19 @@ export type BetterAuthOptions = {
 					}) => Promise<boolean>;
 				};
 				/**
+				 * Hook called after password verification succeeds,
+				 * before the session is created.
+				 *
+				 * Throw `APIError` to deny login with a specific reason.
+				 */
+				authorize?: (
+					data: {
+						user: User;
+						account: Account;
+					},
+					request?: Request,
+				) => Awaitable<void>;
+				/**
 				 * Automatically sign in the user after sign up
 				 *
 				 * @default true
