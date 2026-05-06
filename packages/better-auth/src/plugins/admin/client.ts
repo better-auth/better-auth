@@ -82,8 +82,17 @@ export const adminClient = <O extends AdminClientOptions>(
 		}),
 		pathMethods: {
 			"/admin/list-users": "GET",
+			"/admin/impersonate-user": "POST",
 			"/admin/stop-impersonating": "POST",
 		},
+		atomListeners: [
+			{
+				matcher: (path) =>
+					path === "/admin/impersonate-user" ||
+					path === "/admin/stop-impersonating",
+				signal: "$sessionSignal",
+			},
+		],
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
