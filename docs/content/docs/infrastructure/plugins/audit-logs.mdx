@@ -120,7 +120,7 @@ export const authClient = createAuthClient({
 });
 ```
 
-### Get audit logs for the current user
+### Get current user's audit logs
 
 Returns audit events for the **current user**. Use this for end-user activity and org views where the caller is a normal member.
 
@@ -160,7 +160,7 @@ Returns the current user's signed-in audit logs.
 
 ```ts
 const signIns = await authClient.dash.getAuditLogs({
-  session,
+  session: session.data,
   eventType: "user_signed_in",
 });
 ```
@@ -171,7 +171,7 @@ Returns the current user's audit logs restricted to the given organization.
 
 ```ts
 const orgLogs = await authClient.dash.getAuditLogs({
-  session,
+  session: session.data,
   organizationId: "org_123",
 });
 ```
@@ -182,17 +182,17 @@ You can combine filters to get more specific results (e.g. all current user's si
 
 ```ts
 const orgSignIns = await authClient.dash.getAuditLogs({
-  session,
+  session: session.data,
   organizationId: "org_123",
   eventType: "user_signed_in",
 });
 ```
 
-You can also limit results to a specific identifier (e.g all current user's signed-in events for an specific org and email).
+You can also limit results to a specific identifier (e.g all current user's events for a specific org and email).
 
 ```ts
 const orgSignIns = await authClient.dash.getAuditLogs({
-  session,
+  session: session.data,
   organizationId: "org_123",
   identifier: "user@example.com",
 });
@@ -212,7 +212,7 @@ async function fetchAllUserAuditLogEvents(session: unknown) {
 
   while (true) {
     const result = await authClient.dash.getAuditLogs({
-      session,
+      session: session.data,
       limit,
       offset,
     });
@@ -268,7 +268,7 @@ Returns all audit events for the given organization:
 
 ```ts
 const orgActivity = await authClient.dash.getAllAuditLogs({
-  session,
+  session: session.data,
   organizationId: "org_123",
 });
 ```
@@ -279,7 +279,7 @@ Returns all audit events for the given user across organizations:
 
 ```ts
 const userActivity = await authClient.dash.getAllAuditLogs({
-  session,
+  session: session.data,
   userId: "user_456",
 });
 ```
@@ -290,7 +290,7 @@ Returns all audit events across organizations for the given event type:
 
 ```ts
 const events = await authClient.dash.getAllAuditLogs({
-  session,
+  session: session.data,
   eventType: "member_invited",
 });
 ```
@@ -301,7 +301,7 @@ You can combine filters to get more specific results (e.g. all audit events for 
 
 ```ts
 const orgEvents = await authClient.dash.getAllAuditLogs({
-  session,
+  session: session.data,
   organizationId: "org_123",
   eventType: "member_invited",
 });
@@ -319,7 +319,7 @@ async function fetchAllAuditLogs(session: unknown) {
 
   while (true) {
     const result = await authClient.dash.getAllAuditLogs({
-      session,
+      session: session.data,
       limit,
       offset,
     });
