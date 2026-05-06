@@ -17,8 +17,7 @@ export const es: TranslationDictionary = {
 	PROVIDER_NOT_FOUND: "Proveedor no encontrado",
 	INVALID_TOKEN: "Token inválido",
 	TOKEN_EXPIRED: "Token expirado",
-	FAILED_TO_GET_USER_INFO:
-		"Error al obtener la información del usuario",
+	FAILED_TO_GET_USER_INFO: "Error al obtener la información del usuario",
 	USER_EMAIL_NOT_FOUND: "Correo electrónico del usuario no encontrado",
 	EMAIL_NOT_VERIFIED: "Correo electrónico no verificado",
 	PASSWORD_TOO_SHORT: "Contraseña demasiado corta",
