@@ -289,7 +289,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				email: email,
 				organizationId: organizationId,
 			});
-			if (alreadyInvited.length && !ctx.body.resend) {
+			if (
+				alreadyInvited.length &&
+				!ctx.body.resend &&
+				!ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
+			) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,

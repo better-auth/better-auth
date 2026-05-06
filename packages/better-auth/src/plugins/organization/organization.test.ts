@@ -1935,6 +1935,109 @@ describe("cancel pending invitations on re-invite", async () => {
 				.length,
 		).toBe(1);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should cancel pending invitation and create a new one when re-inviting without resend", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const originalInviteId = invite.data?.id;
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error).toBeNull();
+		expect(invite2.data?.status).toBe("pending");
+		expect(invite2.data?.id).not.toBe(originalInviteId);
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "pending",
+			).length,
+		).toBe(1);
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "canceled",
+			).length,
+		).toBe(1);
+	});
+});
+
+describe("re-invite without cancelPendingInvitationsOnReInvite still throws", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should still throw USER_IS_ALREADY_INVITED when option is disabled", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
+	});
 });
 
 describe("resend invitation should reuse existing", async () => {
