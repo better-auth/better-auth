@@ -282,8 +282,8 @@ const jitiOptions = (cwd: string): JitiOptions => {
 
 /**
  * Picks the auth instance from the loaded module, supporting `export const auth`,
- * `export default auth`, and `export default { auth }`. Falls back to the module
- * itself so users who export the options object directly still work.
+ * `export default auth`, and `export default { auth }`. Falls back to the raw
+ * module as a defensive default.
  */
 const resolveAuthModule = (mod: unknown): unknown => {
 	const m = mod as { auth?: unknown; default?: { auth?: unknown } };
@@ -313,8 +313,9 @@ export async function getConfig({
 	const fail = (message: string, error?: unknown): never => {
 		if (shouldThrowOnError)
 			throw error instanceof Error ? error : new Error(message);
-		if (error) console.error(message, error);
-		else console.error(message);
+		const log = `[#better-auth]: ${message}`;
+		if (error) console.error(log, error);
+		else console.error(log);
 		process.exit(1);
 	};
 
@@ -337,7 +338,7 @@ export async function getConfig({
 			const options = config?.options;
 			if (!options) {
 				return fail(
-					`[#better-auth]: Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+					`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 				);
 			}
 			return options;
@@ -349,13 +350,13 @@ export async function getConfig({
 				({ config } = await load(possiblePath));
 			} catch (e) {
 				if (isServerOnlyError(e)) return fail(SERVER_ONLY_HINT);
-				return fail("[#better-auth]: Couldn't read your auth config.", e);
+				return fail("Couldn't read your auth config.", e);
 			}
 			// c12 returns `{}` when no file was found at this path; keep searching.
 			if (Object.keys(config).length === 0) continue;
 			if (!config.options) {
 				return fail(
-					"[#better-auth]: Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+					"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
 				);
 			}
 			return config.options;
