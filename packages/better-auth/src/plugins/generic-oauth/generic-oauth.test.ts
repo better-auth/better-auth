@@ -210,7 +210,7 @@ describe("oauth2", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9375
 	 */
-	it("should set account_data cookie on first-time generic-oauth sign-in when storeAccountCookie is enabled", async () => {
+	it("should resolve getAccessToken after first-time generic-oauth sign-in (storeAccountCookie + JWE)", async () => {
 		const { customFetchImpl, auth } = await getTestInstance({
 			advanced: {
 				useSecureCookies: true,
@@ -272,16 +272,24 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const { setCookieHeader } = await simulateOAuthFlow(
-			signInRes.data?.url || "",
-			headers,
-			customFetchImpl,
-		);
+		const { headers: postCallbackHeaders, setCookieHeader } =
+			await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
 
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		const accountDataCookie = cookies.get(accountDataCookieName);
 		expect(accountDataCookie).toBeDefined();
 		expect(accountDataCookie?.value).toBeTruthy();
+
+		const accessTokenRes = await newAuthClient.getAccessToken(
+			{ providerId: "test-store-account" },
+			{ headers: postCallbackHeaders },
+		);
+		expect(accessTokenRes.error).toBeNull();
+		expect(accessTokenRes.data?.accessToken).toBeTruthy();
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
