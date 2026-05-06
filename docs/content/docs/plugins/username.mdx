@@ -125,6 +125,10 @@ To sign in a user with username, you can use the `signIn.username` function prov
 
 To update the username of a user, you can use the `updateUser` function provided by the client.
 
+<Callout type="info">
+  If `immutableUsername` is enabled, users can set their username during sign-up or later if they do not already have a username, but they cannot change it after it has been set.
+</Callout>
+
 <APIMethod path="/update-user" method="POST">
   ```ts
   type updateUser = {
@@ -314,6 +318,28 @@ const auth = betterAuth({
                 username: "post-normalization",
                 displayUsername: "post-normalization",
             }
+        })
+    ]
+})
+```
+
+### Immutable Username
+
+By default, users can update their username. Set `immutableUsername` to `true` to prevent users from changing their username after it has been set.
+
+Users can still set a username during sign-up, or on a later profile update if they haven't already picked a username. Updating other profile fields remains allowed.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            immutableUsername: true
         })
     ]
 })
