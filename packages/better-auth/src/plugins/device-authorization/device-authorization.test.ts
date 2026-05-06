@@ -731,3 +731,33 @@ describe("verificationUri option", async () => {
 		);
 	});
 });
+
+describe("schema option optionality", () => {
+	it("should not throw when schema option is omitted", () => {
+		expect(() =>
+			deviceAuthorization({
+				verificationUri: "https://example.com/device",
+			}),
+		).not.toThrow();
+	});
+
+	it("should not throw when called with empty options", () => {
+		expect(() => deviceAuthorization({})).not.toThrow();
+	});
+
+	it("should not throw when called with no options", () => {
+		expect(() => deviceAuthorization()).not.toThrow();
+	});
+
+	it("should parse options successfully without schema field", () => {
+		const result = deviceAuthorizationOptionsSchema.safeParse({});
+		expect(result.success).toBe(true);
+	});
+
+	it("should accept undefined schema explicitly", () => {
+		const result = deviceAuthorizationOptionsSchema.safeParse({
+			schema: undefined,
+		});
+		expect(result.success).toBe(true);
+	});
+});
