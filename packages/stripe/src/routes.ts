@@ -1124,8 +1124,12 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							// Additional line items (metered prices, add-ons, etc.)
 							...(plan.lineItems ?? []),
 						],
+						mode: "subscription",
+						client_reference_id: referenceId,
+						...params?.params,
 						subscription_data: {
 							...freeTrial,
+							...params?.params?.subscription_data,
 							metadata: subscriptionMetadata.set(
 								{
 									userId: user.id,
@@ -1136,10 +1140,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								params?.params?.subscription_data?.metadata,
 							),
 						},
-						mode: "subscription",
-						client_reference_id: referenceId,
-						...params?.params,
-						// metadata should come after spread to protect internal fields
 						metadata: subscriptionMetadata.set(
 							{
 								userId: user.id,
