@@ -256,7 +256,11 @@ dashClient({
 }),
 ```
 
-### Fetching Audit Logs
+### Get the current user's audit logs
+
+Returns audit events for the **current user**, or organization-scoped events when you pass `organizationId` as a member.
+
+#### Basic query
 
 ```ts
 const session = await authClient.getSession();
@@ -274,7 +278,7 @@ console.log(logs.data?.limit);   // Page size
 console.log(logs.data?.offset);  // Current offset
 ```
 
-### Query Parameters
+#### Query parameters
 
 | Parameter        | Type     | Description                            |
 | ---------------- | -------- | -------------------------------------- |
@@ -287,10 +291,10 @@ console.log(logs.data?.offset);  // Current offset
 | `user`           | `object` | User object with ID                    |
 | `session`        | `object` | Session object with user               |
 
-### Pagination Example
+#### Pagination example
 
 ```ts
-async function getAllAuditLogs(session: unknown) {
+async function fetchAllUserAuditLogEvents(session: unknown) {
   const limit = 100;
   let offset = 0;
   const allEvents = [];
@@ -313,7 +317,7 @@ async function getAllAuditLogs(session: unknown) {
 }
 ```
 
-### Filtering Examples
+#### Filtering examples
 
 ```ts
 // Filter by event type
@@ -335,6 +339,60 @@ const orgSignIns = await authClient.dash.getAuditLogs({
   eventType: "user_signed_in",
 });
 ```
+
+See [Get the current user's audit logs](/docs/infrastructure/plugins/audit-logs#get-the-current-users-audit-logs) for more information.
+
+### Get all audit logs
+
+Returns all audit events for organizations the current user has **admin** or **owner** access to. Requires the [organization plugin](/docs/plugins/organization) for role checks.
+
+#### Basic query
+
+```ts
+const session = await authClient.getSession();
+
+const activity = await authClient.dash.getAllAuditLogs({
+  session: session.data,
+  limit: 50,
+  offset: 0,
+});
+
+console.log(activity.data?.events);
+console.log(activity.data?.total);
+```
+
+#### Query parameters
+
+| Parameter        | Type     | Description                                    |
+| ---------------- | -------- | ---------------------------------------------- |
+| `limit`          | `number` | Results per page (max 100, default 50)         |
+| `offset`         | `number` | Pagination offset (default 0)                  |
+| `organizationId` | `string` | One organization (must be owner or admin)      |
+| `userId`         | `string` | One user’s activity across orgs you administer |
+| `eventType`      | `string` | Filter by event type                           |
+| `identifier`     | `string` | Match `eventData.identifier`                   |
+| `session`        | `object` | Session object with user                       |
+
+#### Filtering examples
+
+```ts
+const orgActivity = await authClient.dash.getAllAuditLogs({
+  session,
+  organizationId: "org_123",
+});
+
+const userActivity = await authClient.dash.getAllAuditLogs({
+  session,
+  userId: "user_456",
+});
+
+const invites = await authClient.dash.getAllAuditLogs({
+  session,
+  eventType: "member_invited",
+});
+```
+
+See [Get all audit logs](/docs/infrastructure/plugins/audit-logs#get-all-audit-logs) for more information.
 
 ## Schema Extensions
 
