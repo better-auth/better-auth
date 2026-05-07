@@ -588,9 +588,9 @@ function generateImport({
 			),
 		);
 		// handles the references field with useNumberId
+		// handles the references field and the primary key with useNumberId
 		const needsInteger =
-			hasNonBigintNumber ||
-			(options.advanced?.database?.generateId === "serial" && hasFkToId);
+			hasNonBigintNumber || options.advanced?.database?.generateId === "serial";
 		if (needsInteger) {
 			coreImports.push("integer");
 		}
