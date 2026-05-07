@@ -4,7 +4,7 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
-import { missingEmailLogMessage } from "../../oauth2/errors";
+import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/error-codes";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
@@ -17,6 +17,7 @@ const schema = z.object({
 	error_description: z.string().optional(),
 	state: z.string().optional(),
 	user: z.string().optional(),
+	iss: z.string().optional(),
 });
 
 export const callbackOAuth = createAuthEndpoint(
@@ -77,6 +78,7 @@ export const callbackOAuth = createAuthEndpoint(
 			error_description,
 			device_id,
 			user: userData,
+			iss,
 		} = queryOrBody;
 
 		if (!state) {
@@ -113,7 +115,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!code) {
 			c.context.logger.error("Code not found");
-			throw redirectOnError("no_code");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CODE);
 		}
 
 		const provider = await getAwaitableValue(c.context.socialProviders, {
@@ -126,7 +128,18 @@ export const callbackOAuth = createAuthEndpoint(
 				c.params.id,
 				"not found",
 			);
-			throw redirectOnError("oauth_provider_not_found");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.PROVIDER_NOT_FOUND);
+		}
+
+		// RFC 9207: validate authorization server issuer identifier.
+		// Only validated when the provider sends the iss parameter;
+		// older OAuth servers that don't support RFC 9207 omit it.
+		if (iss && provider.issuer && iss !== provider.issuer) {
+			c.context.logger.error("OAuth issuer mismatch", {
+				expected: provider.issuer,
+				received: iss,
+			});
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISMATCH);
 		}
 
 		let tokens: OAuth2Tokens | null;
@@ -139,10 +152,10 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
-			throw redirectOnError("invalid_code");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
 		}
 		if (!tokens) {
-			throw redirectOnError("invalid_code");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
 		}
 		const parsedUserData = userData
 			? safeJSONParse<{
@@ -165,15 +178,16 @@ export const callbackOAuth = createAuthEndpoint(
 			})
 			.then((res) => res?.user);
 
-		if (!userInfo || userInfo.id === undefined || userInfo.id === null) {
+		if (!userInfo) {
 			c.context.logger.error("Unable to get user info");
-			return redirectOnError("unable_to_get_user_info");
+			return redirectOnError(
+				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
+			);
 		}
-		const providerAccountId = String(userInfo.id);
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
-			throw redirectOnError("no_callback_url");
+			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CALLBACK_URL);
 		}
 
 		if (link) {
@@ -185,25 +199,29 @@ export const callbackOAuth = createAuthEndpoint(
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				c.context.logger.error("Unable to link account - untrusted provider");
-				return redirectOnError("unable_to_link_account");
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+				);
 			}
 
 			if (
 				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
-				return redirectOnError("email_doesn't_match");
+				return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_DOES_NOT_MATCH);
 			}
 
 			const existingAccount =
 				await c.context.internalAdapter.findAccountByProviderId(
-					providerAccountId,
+					String(userInfo.id),
 					provider.id,
 				);
 
 			if (existingAccount) {
 				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return redirectOnError("account_already_linked_to_different_user");
+					return redirectOnError(
+						OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
+					);
 				}
 				const updateData = Object.fromEntries(
 					Object.entries({
@@ -223,14 +241,16 @@ export const callbackOAuth = createAuthEndpoint(
 				const newAccount = await c.context.internalAdapter.createAccount({
 					userId: link.userId,
 					providerId: provider.id,
-					accountId: providerAccountId,
+					accountId: String(userInfo.id),
 					...tokens,
 					accessToken: await setTokenUtil(tokens.accessToken, c.context),
 					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
 					scope: tokens.scopes?.join(","),
 				});
 				if (!newAccount) {
-					return redirectOnError("unable_to_link_account");
+					return redirectOnError(
+						OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+					);
 				}
 			}
 			let toRedirectTo: string;
@@ -244,19 +264,21 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (!userInfo.email) {
-			c.context.logger.error(missingEmailLogMessage(provider.id));
-			return redirectOnError("email_not_found");
+			c.context.logger.error(
+				"Provider did not return email. This could be due to misconfiguration in the provider settings.",
+			);
+			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
 		const accountData = {
 			providerId: provider.id,
-			accountId: providerAccountId,
+			accountId: String(userInfo.id),
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
-				id: providerAccountId,
+				id: String(userInfo.id),
 				email: userInfo.email,
 				name: userInfo.name || "",
 			},

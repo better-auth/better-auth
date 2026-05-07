@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.6.9",
+  "version": "1.7.0-beta.2",
   "description": "Drizzle adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -40,11 +40,6 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
-    },
-    "./relations-v2": {
-      "dev-source": "./src/relations-v2/index.ts",
-      "types": "./dist/relations-v2/index.d.mts",
-      "default": "./dist/relations-v2/index.mjs"
     }
   },
   "peerDependencies": {

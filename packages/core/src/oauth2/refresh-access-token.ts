@@ -1,22 +1,47 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
+import type { ClientAssertionConfig } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
 export async function refreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
+	clientAssertion,
+	tokenEndpoint,
 	extraParams,
 	resource,
 }: {
 	refreshToken: string;
 	options: AwaitableFunction<Partial<ProviderOptions>>;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
+	/** Token endpoint URL. Used as the JWT `aud` claim when signing assertions. */
+	tokenEndpoint?: string | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+
+	if (authentication === "private_key_jwt") {
+		if (!clientAssertion) {
+			throw new Error(
+				"private_key_jwt authentication requires a clientAssertion configuration",
+			);
+		}
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		const assertionParams = await resolveAssertionParams({
+			clientAssertion,
+			clientId: primaryClientId,
+			tokenEndpoint,
+		});
+		extraParams = { ...extraParams, ...assertionParams };
+	}
+
 	return createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
@@ -38,7 +63,7 @@ export function createRefreshAccessTokenRequest({
 }: {
 	refreshToken: string;
 	options: ProviderOptions;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
@@ -50,12 +75,10 @@ export function createRefreshAccessTokenRequest({
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
-	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
-	// Fixes compatibility with providers like Notion, Twitter, etc.
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
 	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		if (primaryClientId) {
 			headers["authorization"] =
 				"Basic " +
@@ -65,11 +88,8 @@ export function createRefreshAccessTokenRequest({
 				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
 		}
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
+		if (authentication !== "private_key_jwt" && options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
 	}
@@ -100,18 +120,22 @@ export async function refreshAccessToken({
 	options,
 	tokenEndpoint,
 	authentication,
+	clientAssertion,
 	extraParams,
 }: {
 	refreshToken: string;
 	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
 	extraParams?: Record<string, string> | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = await createRefreshAccessTokenRequest({
+	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
+		clientAssertion,
+		tokenEndpoint,
 		extraParams,
 	});
 

@@ -451,7 +451,7 @@ For IdP-initiated flows (e.g., via Okta dashboard), your framework may require a
   <Tab value="next-js-app-router">
     Create this file to prevent 404 errors:
 
-    ```ts title="app/api/auth/sso/saml2/callback/[providerId]/route.ts"
+    ```ts title="app/api/auth/sso/saml2/sp/acs/[providerId]/route.ts"
     import { auth } from "@/lib/auth";
     import { NextResponse } from "next/server";
 
@@ -1057,10 +1057,7 @@ The SSO plugin includes assertion replay protection to prevent attackers from ca
 3. If it's a new assertion, it's stored in the database until its `NotOnOrAfter` expiration
 4. If it's a duplicate (replay attack), the request is rejected
 
-**Both SAML endpoints are protected:**
-
-* `/sso/saml2/callback/:providerId`
-* `/sso/saml2/sp/acs/:providerId`
+The SAML ACS endpoint (`/sso/saml2/sp/acs/:providerId`) is protected against assertion replay.
 
 <Callout type="info">
   Replay protection uses the database verification table, so it works correctly in multi-instance deployments without additional configuration.
@@ -1407,11 +1404,11 @@ you can create a new verification token:
 The plugin automatically creates the following SAML endpoints:
 
 * **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
-* **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}` (supports both GET and POST)
+* **SAML ACS (Assertion Consumer Service)**: `/api/auth/sso/saml2/sp/acs/{providerId}` (supports both GET and POST)
 
 ### SAML Callback URL Configuration
 
-The SAML callback endpoint (`/api/auth/sso/saml2/callback/{providerId}`) handles both **SP-initiated** and **IdP-initiated** SSO flows:
+The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both **SP-initiated** and **IdP-initiated** SSO flows:
 
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
@@ -1507,7 +1504,7 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 **How it works:**
 
 1. User clicks your app icon in the IdP dashboard
-2. IdP POSTs SAMLResponse to `/api/auth/sso/saml2/callback/{providerId}`
+2. IdP POSTs SAMLResponse to `/api/auth/sso/saml2/sp/acs/{providerId}`
 3. Better Auth processes the assertion, creates a session, and redirects to your application
 4. Browser follows the redirect with a GET request (handled automatically)
 

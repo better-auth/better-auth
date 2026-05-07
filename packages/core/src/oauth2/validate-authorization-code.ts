@@ -2,6 +2,8 @@ import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
+import type { ClientAssertionConfig } from "./client-assertion";
+import { resolveAssertionParams } from "./client-assertion";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
@@ -11,6 +13,8 @@ export async function authorizationCodeRequest({
 	redirectURI,
 	options,
 	authentication,
+	clientAssertion,
+	tokenEndpoint,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -21,12 +25,33 @@ export async function authorizationCodeRequest({
 	options: AwaitableFunction<Partial<ProviderOptions>>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
+	/** Token endpoint URL. Used as the JWT `aud` claim when signing assertions. */
+	tokenEndpoint?: string | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
 	options = typeof options === "function" ? await options() : options;
+
+	if (authentication === "private_key_jwt") {
+		if (!clientAssertion) {
+			throw new Error(
+				"private_key_jwt authentication requires a clientAssertion configuration",
+			);
+		}
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+		const assertionParams = await resolveAssertionParams({
+			clientAssertion,
+			clientId: primaryClientId,
+			tokenEndpoint,
+		});
+		additionalParams = { ...additionalParams, ...assertionParams };
+	}
+
 	return createAuthorizationCodeRequest({
 		code,
 		codeVerifier,
@@ -59,7 +84,7 @@ export function createAuthorizationCodeRequest({
 	options: Partial<ProviderOptions>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -86,22 +111,17 @@ export function createAuthorizationCodeRequest({
 			}
 		}
 	}
-	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
-	// Fixes compatibility with providers like Notion, Twitter, etc.
+	const primaryClientId = Array.isArray(options.clientId)
+		? options.clientId[0]
+		: options.clientId;
 	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		const encodedCredentials = base64.encode(
 			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
 	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
 		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
+		if (authentication !== "private_key_jwt" && options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
 	}
@@ -123,6 +143,7 @@ export async function validateAuthorizationCode({
 	options,
 	tokenEndpoint,
 	authentication,
+	clientAssertion,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -134,7 +155,8 @@ export async function validateAuthorizationCode({
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
 	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "private_key_jwt") | undefined;
+	clientAssertion?: ClientAssertionConfig | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -145,6 +167,8 @@ export async function validateAuthorizationCode({
 		redirectURI,
 		options,
 		authentication,
+		clientAssertion,
+		tokenEndpoint,
 		deviceId,
 		headers,
 		additionalParams,

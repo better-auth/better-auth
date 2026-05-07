@@ -9,4 +9,5 @@ export const USERNAME_ERROR_CODES = defineErrorCodes({
 	USERNAME_TOO_LONG: "Username is too long",
 	INVALID_USERNAME: "Username is invalid",
 	INVALID_DISPLAY_USERNAME: "Display username is invalid",
+	USERNAME_IS_IMMUTABLE: "Username cannot be updated",
 });

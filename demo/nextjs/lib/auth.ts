@@ -1,3 +1,4 @@
+import { cimd } from "@better-auth/cimd";
 import { electron } from "@better-auth/electron";
 import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { oauthProvider } from "@better-auth/oauth-provider";
@@ -435,6 +436,7 @@ const authOptions = {
 				oauthAuthServerConfig: true,
 			},
 		}),
+		cimd(),
 		electron(),
 	],
 	trustedOrigins: [

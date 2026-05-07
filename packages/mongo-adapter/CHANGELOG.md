@@ -1,18 +1,13 @@
 # @better-auth/mongo-adapter
 
-## 1.6.9
+## 1.7.0-beta.2
 
 ### Patch Changes
 
-- Updated dependencies [[`815ecf6`](https://github.com/better-auth/better-auth/commit/815ecf62b6f6c5bf656ab55da393ce63d7eed0a6)]:
-  - @better-auth/core@1.6.9
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.2
 
-## 1.6.8
-
-### Patch Changes
-
-- Updated dependencies [[`9aa8e63`](https://github.com/better-auth/better-auth/commit/9aa8e63de84549634216e13e407cf6d8aa61acc3)]:
-  - @better-auth/core@1.6.8
+## 1.7.0-beta.1
 
 ## 1.6.7
 
@@ -33,6 +28,14 @@
 ### Patch Changes
 
 - Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.1
+
+## 1.7.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656)]:
+  - @better-auth/core@1.7.0-beta.0
   - @better-auth/core@1.6.5
 
 ## 1.6.4

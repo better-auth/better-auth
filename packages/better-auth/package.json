@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.6.9",
+  "version": "1.7.0-beta.2",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -402,9 +402,6 @@
       "adapters": [
         "./dist/adapters/index.d.mts"
       ],
-      "adapters/test-adapter": [
-        "./dist/adapters/test-adapter.d.mts"
-      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.mts"
       ],
@@ -533,7 +530,7 @@
     "tsdown": "catalog:",
     "type-fest": "^5.4.4",
     "typescript": "catalog:",
-    "vitest": "catalog:vitest",
+    "vitest": "^4.0.18",
     "vue": "^3.5.29"
   },
   "peerDependencies": {
