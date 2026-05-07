@@ -28,18 +28,7 @@ export const generateDrizzleSchema = async (
 	}
 	generationCount++;
 	const thisCount = generationCount;
-	const i = async (x: string) => {
-		// Clear the Node.js module cache for the generated schema file to ensure fresh import
-		try {
-			const resolvedPath =
-				require?.resolve?.(x) ||
-				(import.meta && new URL(x, import.meta.url).pathname);
-			if (resolvedPath && typeof resolvedPath === "string" && require?.cache) {
-				delete require.cache[resolvedPath];
-			}
-		} catch {}
-		return await import(x);
-	};
+	const i = async (x: string) => import(x);
 
 	const { generateSchema } = (await i(
 		join(

@@ -50,7 +50,7 @@ const { execute } = await testAdapter({
 			"sqlite",
 		);
 
-		const command = `node ./node_modules/drizzle-kit/bin.cjs push --dialect=sqlite --schema=${path.join(import.meta.dirname, fileName)}.ts --url="${dbFilePath}"`;
+		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
@@ -58,7 +58,7 @@ const { execute } = await testAdapter({
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			execSync(command, {
-				cwd: path.join(import.meta.dirname, ".."),
+				cwd: import.meta.dirname,
 				stdio: "inherit",
 			});
 		} catch (error) {

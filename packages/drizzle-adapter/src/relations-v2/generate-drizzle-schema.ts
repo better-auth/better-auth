@@ -108,9 +108,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (typeof type !== "string") {
 				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
 					return {
-						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						sqlite: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+						mysql: `mysqlEnum('${name}', [${type.map((x) => `'${x}'`).join(", ")}])`,
 					}[databaseType];
 				} else {
 					throw new TypeError(
@@ -524,7 +524,12 @@ function generateImport({
 	for (const table of Object.values(tables)) {
 		for (const field of Object.values(table.fields)) {
 			if (field.bigint) hasBigint = true;
-			if (field.type === "json" || (databaseType === "mysql" && (field.type === "number[]" || field.type === "string[]"))) hasJson = true;
+			if (
+				field.type === "json" ||
+				(databaseType === "mysql" &&
+					(field.type === "number[]" || field.type === "string[]"))
+			)
+				hasJson = true;
 		}
 		if (hasJson && hasBigint) break;
 	}
@@ -582,7 +587,7 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const hasFkToId = Object.values(tables).some((table) =>
+		const _hasFkToId = Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
 				(field) => field.references?.field === "id",
 			),
