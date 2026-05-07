@@ -8740,6 +8740,347 @@ describe("stripe", () => {
 			);
 		});
 
+		it("does not let getCheckoutSessionParams override library-owned flow-routing fields", async () => {
+			const hijackOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							success_url: "https://attacker.example/success",
+							cancel_url: "https://attacker.example/cancel",
+							mode: "payment" as const,
+							client_reference_id: "attacker-controlled",
+							customer: "cus_attacker",
+							customer_email: "attacker@example.com",
+							line_items: [{ price: "price_attacker", quantity: 99 }],
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(hijackOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "hijack-attempt@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs.mode).toBe("subscription");
+			expect(callArgs.client_reference_id).not.toBe("attacker-controlled");
+			expect(callArgs.customer).not.toBe("cus_attacker");
+			expect(callArgs.customer_email).not.toBe("attacker@example.com");
+			expect(callArgs.success_url).not.toBe("https://attacker.example/success");
+			expect(callArgs.success_url).toContain("/subscription/success");
+			expect(callArgs.cancel_url).not.toBe("https://attacker.example/cancel");
+			expect(callArgs.line_items).not.toEqual([
+				{ price: "price_attacker", quantity: 99 },
+			]);
+			expect(callArgs.line_items[0].price).toBe("price_lookup_123");
+		});
+
+		it("passes UX-only params from getCheckoutSessionParams through to Stripe", async () => {
+			const passthroughOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							allow_promotion_codes: true,
+							payment_method_collection: "if_required" as const,
+							tax_id_collection: { enabled: true },
+							custom_text: {
+								submit: { message: "Welcome aboard" },
+							},
+							billing_address_collection: "required" as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(passthroughOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "passthrough@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					allow_promotion_codes: true,
+					payment_method_collection: "if_required",
+					tax_id_collection: { enabled: true },
+					custom_text: { submit: { message: "Welcome aboard" } },
+					billing_address_collection: "required",
+				}),
+				undefined,
+			);
+		});
+
+		it("lets getCheckoutSessionParams override customer_update", async () => {
+			const overrideOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							customer_update: { name: "never" } as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(overrideOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "customer-update-override@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.customer_update).toEqual({ name: "never" });
+		});
+
+		it("falls back to library default customer_update when getCheckoutSessionParams omits it", async () => {
+			const defaultOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							allow_promotion_codes: true,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(defaultOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "customer-update-default@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.customer_update).toEqual({
+				name: "auto",
+				address: "auto",
+			});
+		});
+
+		it("uses request-time locale over getCheckoutSessionParams locale", async () => {
+			const localeOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							locale: "ko" as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(localeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "locale-request-wins@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				locale: "en",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.locale).toBe("en");
+		});
+
+		it("falls back to getCheckoutSessionParams locale when request omits locale", async () => {
+			const localeOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							locale: "ko" as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(localeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "locale-fallback@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.locale).toBe("ko");
+		});
+
 		it("preserves internal subscription metadata when getCheckoutSessionParams returns custom subscription_data", async () => {
 			const { client, sessionSetter } = await getTestInstance(
 				{

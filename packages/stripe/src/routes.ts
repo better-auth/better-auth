@@ -1074,21 +1074,38 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					? { trial_period_days: plan.freeTrial.days }
 					: undefined;
 
+			// Strip plugin-owned fields
+			const {
+				mode: _mode,
+				customer: _customer,
+				customer_email: _customer_email,
+				success_url: _success_url,
+				cancel_url: _cancel_url,
+				line_items: _line_items,
+				client_reference_id: _client_reference_id,
+				...additionalParams
+			} = params?.params ?? {};
+
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
+						...additionalParams,
+						mode: "subscription",
 						...(customerId
 							? {
 									customer: customerId,
+									customer_email: undefined,
 									customer_update:
-										customerType !== "user"
+										additionalParams.customer_update ??
+										(customerType !== "user"
 											? ({ address: "auto" } as const)
-											: ({ name: "auto", address: "auto" } as const), // The customer name is automatically set only for users
+											: ({ name: "auto", address: "auto" } as const)), // The customer name is automatically set only for users
 								}
 							: {
+									customer: undefined,
 									customer_email: user.email,
 								}),
-						locale: ctx.body.locale,
+						locale: ctx.body.locale ?? additionalParams.locale,
 						success_url: getUrl(
 							ctx,
 							`${
@@ -1124,12 +1141,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							// Additional line items (metered prices, add-ons, etc.)
 							...(plan.lineItems ?? []),
 						],
-						mode: "subscription",
 						client_reference_id: referenceId,
-						...params?.params,
 						subscription_data: {
 							...freeTrial,
-							...params?.params?.subscription_data,
+							...additionalParams.subscription_data,
 							metadata: subscriptionMetadata.set(
 								{
 									userId: user.id,
@@ -1137,7 +1152,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									referenceId,
 								},
 								ctx.body.metadata,
-								params?.params?.subscription_data?.metadata,
+								additionalParams.subscription_data?.metadata,
 							),
 						},
 						metadata: subscriptionMetadata.set(
@@ -1147,7 +1162,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								referenceId,
 							},
 							ctx.body.metadata,
-							params?.params?.metadata,
+							additionalParams.metadata,
 						),
 					},
 					params?.options,
