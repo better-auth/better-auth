@@ -82,9 +82,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, camelCase);
 			if (field.references?.field === "id") {
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				if (useNumberId) {
 					if (databaseType === "pg") {
@@ -187,9 +185,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		const useNumberId =
-			options.advanced?.database?.useNumberId ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		if (useUUIDs && databaseType === "pg") {
@@ -487,8 +483,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	let formattedCode = code;
 	try {
-		//dynamically import prettier to prevent it from palluting globals with cjs shims by default
-		const { format } = await import("prettier");
+		// Dynamically import prettier to avoid bringing CJS shims into globals by default.
+		// Use a runtime import helper so TypeScript doesn't require `prettier` types at compile time.
+		const dynamicImport = new Function(
+			"moduleName",
+			"return import(moduleName);",
+		) as (moduleName: string) => Promise<{
+			format: (input: string, options: { parser: string }) => Promise<string>;
+		}>;
+		const { format } = await dynamicImport("prettier");
 		formattedCode = await format(code, {
 			parser: "typescript",
 		});
@@ -526,9 +529,7 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId =
-		options.advanced?.database?.useNumberId ||
-		options.advanced?.database?.generateId === "serial";
+	const useNumberId = options.advanced?.database?.generateId === "serial";
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
@@ -589,9 +590,7 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			((options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial") &&
-				hasFkToId);
+			(options.advanced?.database?.generateId === "serial" && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}

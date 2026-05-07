@@ -260,7 +260,6 @@ describe("oauth2", async () => {
 		const accountDataCookieName = ctx.authCookies.accountData.name;
 
 		const newAuthClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -280,8 +279,8 @@ describe("oauth2", async () => {
 		});
 
 		const headers = new Headers();
-		const signInRes = await newAuthClient.signIn.oauth2({
-			providerId: "test-store-account",
+		const signInRes = await newAuthClient.signIn.social({
+			provider: "test-store-account",
 			callbackURL: "http://localhost:3000/dashboard",
 			newUserCallbackURL: "http://localhost:3000/new_user",
 			fetchOptions: {
@@ -1059,7 +1058,6 @@ describe("oauth2", async () => {
 		});
 		const headers = new Headers();
 		const authClient = createAuthClient({
-			plugins: [genericOAuthClient()],
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
@@ -1067,8 +1065,8 @@ describe("oauth2", async () => {
 			},
 		});
 
-		const signInRes = await authClient.signIn.oauth2({
-			providerId: "no-email-unresolved",
+		const signInRes = await authClient.signIn.social({
+			provider: "no-email-unresolved",
 			callbackURL: "http://localhost:3000/dashboard",
 		});
 

@@ -297,6 +297,7 @@ export type SubscriptionOptions = {
 	onSubscriptionUpdate?:
 		| ((data: {
 				event: Stripe.Event;
+				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
 		  }) => Promise<void>)
 		| undefined;
