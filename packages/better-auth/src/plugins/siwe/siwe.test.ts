@@ -67,6 +67,42 @@ describe("siwe", async () => {
 		expect(data?.nonce).toMatch(/^[a-zA-Z0-9]{17}$/);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8631
+	 */
+	it("should support getNonce alias with address input", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ message, signature }) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+
+		const { data, error } = await client.siwe.getNonce({
+			address: walletAddress,
+			chainId,
+		});
+
+		expect(error).toBeNull();
+		expect(data?.nonce).toBe("A1b2C3d4E5f6G7h8J");
+	});
+
 	it("should reject verification if nonce is missing", async () => {
 		const { client } = await getTestInstance(
 			{
