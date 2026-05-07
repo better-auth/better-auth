@@ -1691,6 +1691,9 @@ packages:
   jsonfile@6.2.0:
     resolution: {integrity: sha512-FGuPw30AdOIUTRMC2OMRtQV+jkVj2cfPqSeWXv1NEAJ1qZ5zb1X6z1mFhbfOB/iy3ssJCD+3KuZ8r8C3uVFlAg==}
 
+  jsonfile@6.2.1:
+    resolution: {integrity: sha512-zwOTdL3rFQ/lRdBnntKVOX6k5cKJwEc1HdilT71BWEu7J41gXIB2MRp+vxduPSwZJPWBxEzv4yH1wYLJGUHX4Q==}
+
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
@@ -1773,6 +1776,9 @@ packages:
 
   lodash@4.17.23:
     resolution: {integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==}
+
+  lodash@4.18.1:
+    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
 
   log-symbols@4.1.0:
     resolution: {integrity: sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg==}
@@ -3639,7 +3645,7 @@ snapshots:
       '@electron/asar': 3.4.1
       debug: 4.4.3
       fs-extra: 7.0.1
-      lodash: 4.17.23
+      lodash: 4.18.1
       temp: 0.9.4
     optionalDependencies:
       '@electron/windows-sign': 1.2.2
@@ -3820,7 +3826,7 @@ snapshots:
   fs-extra@11.3.4:
     dependencies:
       graceful-fs: 4.2.11
-      jsonfile: 6.2.0
+      jsonfile: 6.2.1
       universalify: 2.0.1
     optional: true
 
@@ -4056,6 +4062,13 @@ snapshots:
     optionalDependencies:
       graceful-fs: 4.2.11
 
+  jsonfile@6.2.1:
+    dependencies:
+      universalify: 2.0.1
+    optionalDependencies:
+      graceful-fs: 4.2.11
+    optional: true
+
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
@@ -4112,6 +4125,8 @@ snapshots:
       lightningcss-win32-x64-msvc: 1.31.1
 
   lodash@4.17.23: {}
+
+  lodash@4.18.1: {}
 
   log-symbols@4.1.0:
     dependencies:
