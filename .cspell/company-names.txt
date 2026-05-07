@@ -27,3 +27,4 @@ Razorpay
 razorpay
 payu
 PayU
+Mikro
