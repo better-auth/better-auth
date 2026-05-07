@@ -869,6 +869,37 @@ describe("getConfig", async () => {
 			trustedOrigins: ["http://localhost:3000"],
 		});
 	});
+
+	it("should resolve export default { auth }", async () => {
+		const authPath = path.join(tmpDir, "server", "auth");
+		await fs.mkdir(authPath, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authPath, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			 const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					},
+					trustedOrigins: ["http://localhost:3000"]
+			 });
+
+			 export default { auth };`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "server/auth/auth.ts",
+		});
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+			trustedOrigins: ["http://localhost:3000"],
+		});
+	});
+
 	it("should load configs importing cloudflare workers", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "tsconfig.json"),
