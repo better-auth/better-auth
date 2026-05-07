@@ -194,17 +194,21 @@ export const microsoft = (options: MicrosoftOptions) => {
 			}
 
 			try {
-				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-				if (!kid || !jwtAlg) return false;
+				const { kid } = decodeProtectedHeader(token);
+				if (!kid) return false;
 
 				const publicKey = await getMicrosoftPublicKey(kid, tenant, authority);
+				// Microsoft Entra ID signs ID tokens with RS256. Hardcoding the
+				// allowlist prevents algorithm-confusion/downgrade attacks where a
+				// token's own header dictates which algorithms are accepted.
+				// @see https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens#validate-tokens
 				const verifyOptions: {
-					algorithms: [string];
+					algorithms: ["RS256"];
 					audience: string | string[];
 					maxTokenAge: string;
 					issuer?: string;
 				} = {
-					algorithms: [jwtAlg],
+					algorithms: ["RS256"],
 					audience: options.clientId,
 					maxTokenAge: "1h",
 				};
@@ -327,13 +331,13 @@ export const getMicrosoftPublicKey = async (
 	const { data } = await betterFetch<{
 		keys: Array<{
 			kid: string;
-			alg: string;
 			kty: string;
 			use: string;
 			n: string;
 			e: string;
 			x5c?: string[];
 			x5t?: string;
+			alg?: string;
 		}>;
 	}>(`${authority}/${tenant}/discovery/v2.0/keys`);
 
@@ -346,6 +350,17 @@ export const getMicrosoftPublicKey = async (
 	const jwk = data.keys.find((key) => key.kid === kid);
 	if (!jwk) {
 		throw new Error(`JWK with kid ${kid} not found`);
+	}
+
+	// Microsoft Entra ID signs ID tokens with RS256, but the JWKS does not
+	// always include the `alg` field. Default to RS256 for RSA signing keys.
+	// @see https://login.microsoftonline.com/common/discovery/v2.0/keys
+	if (!jwk.alg) {
+		if (jwk.kty === "RSA" && jwk.use === "sig") {
+			jwk.alg = "RS256";
+		} else {
+			throw new Error("Unable to determine algorithm for JWK");
+		}
 	}
 
 	return await importJWK(jwk, jwk.alg);
