@@ -37,13 +37,13 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "dev-source": "./src/index.d.mts",
       "types": "./dist/index.d.mts",
+      "dev-source": "./src/index.d.mts",
       "default": "./dist/index.mjs"
     },
     "./relations-v2": {
-      "dev-source": "./src/relations-v2/index.d.mts",
       "types": "./dist/relations-v2/index.d.mts",
+      "dev-source": "./src/relations-v2/index.d.mts",
       "default": "./dist/relations-v2/index.mjs"
     }
   },
