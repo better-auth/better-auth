@@ -16,6 +16,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -58,6 +59,7 @@ async function getAnonUserEmail(
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			signInAnonymous: createAuthEndpoint(
 				"/sign-in/anonymous",
@@ -124,12 +126,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						newUser.id,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(ctx, {
 						session,

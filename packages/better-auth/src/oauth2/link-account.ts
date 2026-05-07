@@ -6,6 +6,8 @@ import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { setTokenUtil } from "./utils";
 
+// TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
+// call below needs null-safety, and `findOAuthUser` must accept a nullable email.
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	opts: {
@@ -47,11 +49,9 @@ export async function handleOAuthUserInfo(
 			);
 		if (!linkedAccount) {
 			const accountLinking = c.context.options.account?.accountLinking;
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				trustedProviders?.includes(account.providerId);
+				c.context.trustedProviders.includes(account.providerId);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				accountLinking?.enabled === false ||

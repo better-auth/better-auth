@@ -1,5 +1,6 @@
 /// <reference types="electron" />
 
+import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import type { FetchEsque } from "better-auth/client";
@@ -7,7 +8,7 @@ import { createAuthClient } from "better-auth/client";
 import { getMigrations } from "better-auth/db/migration";
 import { oAuthProxy } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { afterAll, beforeAll, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, test, vi } from "vitest";
 import { electronClient } from "../src/client";
 import { electron } from "../src/index";
 import { electronProxyClient } from "../src/proxy";
@@ -108,6 +109,7 @@ function getTestInstance(overrideOpts?: BetterAuthOptions) {
 		client,
 		options,
 		customFetchImpl,
+		storage,
 	};
 }
 
@@ -119,9 +121,18 @@ export function testUtils(overrideOpts?: BetterAuthOptions) {
 		await runMigrations();
 		vi.useFakeTimers();
 	});
+	afterEach(() => {
+		testInstance.storage.clear();
+	});
 	afterAll(() => {
 		vi.useRealTimers();
 	});
 
 	return testInstance;
+}
+
+export function encodeRedirectToken(identifier: string, state: string) {
+	return base64Url.encode(
+		new TextEncoder().encode(JSON.stringify({ identifier, state })),
+	);
 }

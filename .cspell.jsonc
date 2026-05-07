@@ -100,6 +100,7 @@
 		"*.config.ts",
 		"*.json",
 		"docker-compose.yml",
-		"*.sql"
+		"*.sql",
+		".gitignore"
 	]
 }

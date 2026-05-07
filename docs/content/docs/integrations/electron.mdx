@@ -12,12 +12,12 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
 <Steps>
   <Step>
     ### Configure a Better Auth front- & back-end
-    
+
     Before integrating with Electron, ensure you have a Better Auth server and client set up.
-    
+
     To get started, check out our [installation](/docs/installation) guide for setting up Better Auth.
   </Step>
-  
+
   <Step>
     ### Install the required packages
 
@@ -33,18 +33,17 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
       We support two major versions behind the latest stable major release of Electron.
       This keeps you on versions that receive security updates and aligns with [Electron's version support policy](https://www.electronjs.org/docs/latest/tutorial/electron-timelines#breaking-api-changes).
     </Callout>
-
   </Step>
-  
+
   <Step>
     ### Add the Electron plugin to your Better Auth server
-  
+
     Add the Electron plugin to your Better Auth server.
-    
+
     ```ts title="web/lib/auth.ts"
     import { betterAuth } from "better-auth";
     import { electron } from "@better-auth/electron";
-    
+
     export const auth = betterAuth({
       plugins: [electron()],
       emailAndPassword: {
@@ -59,7 +58,7 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
     });
     ```
   </Step>
-  
+
   <Step>
     ### Add the proxy plugin to your web client
 
@@ -80,84 +79,86 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
       ],
     });
     ```
-
   </Step>
-  
+
   <Step>
-      ### Initialize the Electron client
-  
-      ```ts title="electron/lib/auth-client.ts"
-      import { createAuthClient } from "better-auth/client";
-      import { electronClient } from "@better-auth/electron/client";
-      
-      export const authClient = createAuthClient({
-        baseURL: "http://localhost:8081", // Base URL of your Better Auth frontend
-        plugins: [
-          electronClient({
-            signInURL: "https://app.example.com/sign-in", // The URL to redirect to for authentication
-            protocol: {
-              scheme: "com.example.app" // The custom protocol scheme registered by your Electron app
-            },
-            storage: {
-              getItem: async (key) => {
-                // retrieve entry from storage
-              },
-              setItem: async (key, value) => {
-                // set entry in storage
-              },
-            },
-          }),
-        ],
-      });
-      ```
-      
-      If you'd rather not implement your own storage solution, we offer a default option:
-      
-      1. Make sure to install the `conf` package:
-      ```package-install
-      conf
-      ```
-      2. Then, you can use it as follows:
-      
-      ```ts title="electron/lib/auth-client.ts"
-      import { storage } from "@better-auth/electron/storage";
-      
-      electronClient({
-        storage: storage(),
-      });
-      ```
+    ### Initialize the Electron client
 
-      <Callout type="warning">
-          You should never expose the authClient directly
-          to the renderer process. Instead, [create an IPC bridge](#creating-ipc-bridges) to securely communicate between the main and renderer processes.
-      </Callout>
+    ```ts title="electron/lib/auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { electronClient } from "@better-auth/electron/client";
 
+    export const authClient = createAuthClient({
+      baseURL: "http://localhost:8081", // Base URL of your Better Auth frontend
+      plugins: [
+        electronClient({
+          signInURL: "https://app.example.com/sign-in", // The URL to redirect to for authentication
+          protocol: {
+            scheme: "com.example.app" // The custom protocol scheme registered by your Electron app
+          },
+          storage: {
+            getItem: async (key) => {
+              // retrieve entry from storage
+            },
+            setItem: async (key, value) => {
+              // set entry in storage
+            },
+          },
+        }),
+      ],
+    });
+    ```
+
+    If you'd rather not implement your own storage solution, we offer a default option:
+
+    1. Make sure to install the `conf` package:
+
+    ```package-install
+    conf
+    ```
+
+    2. Then, you can use it as follows:
+
+    ```ts title="electron/lib/auth-client.ts"
+    import { storage } from "@better-auth/electron/storage";
+
+    electronClient({
+      storage: storage(),
+    });
+    ```
+
+    <Callout type="warning">
+      You should never expose the authClient directly
+      to the renderer process. Instead, [create an IPC bridge](#creating-ipc-bridges) to securely communicate between the main and renderer processes.
+
+      Also make sure not to expose any sensitive data like tokens or cookies to the renderer process to mitigate injection attacks.
+    </Callout>
   </Step>
-  
+
   <Step>
-      ### Scheme and Trusted Origins
-  
-      The Electron plugin uses deep links to redirect users back to your app after authentication.
-      To enable this, you need to add your app's protocol scheme to the `trustedOrigins` on your **Better Auth server**.
-      
-      First, make sure you have a custom protocol scheme registered in your build configuration.
-      
-      <Tabs items={["electron-forge", "electron-builder"]}>
-        <Tab value="electron-forge">
-          ```ts title="forge.config.js"
-          module.exports = {
-            packagerConfig: {
-              protocols: [{
-                name: "MyApp Protocol",
-                schemes: ["com.example.app"],
-              }],
-            },
-            // ...other config options
-          };
-          ```
-        </Tab>
-        
-        <Tab value="electron-builder">
+    ### Scheme and Trusted Origins
+
+    The Electron plugin uses deep links to redirect users back to your app after authentication.
+    To enable this, you need to add your app's protocol scheme to the `trustedOrigins` on your **Better Auth server**.
+
+    First, make sure you have a custom protocol scheme registered in your build configuration.
+
+    <Tabs items={["electron-forge", "electron-builder"]}>
+      <Tab value="electron-forge">
+        ```ts title="forge.config.js"
+        module.exports = {
+          packagerConfig: {
+            protocols: [{
+              name: "MyApp Protocol",
+              schemes: ["com.example.app"],
+            }],
+          },
+          // ...other config options
+        };
+        ```
+      </Tab>
+
+      <Tab value="electron-builder">
         ```ts title="electron-builder.json5"
         {
           "protocols": [
@@ -169,83 +170,106 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
           // ...other config options
         }
         ```
-        </Tab>
-      </Tabs>
-      
-      Then, update your Better Auth config to include the scheme in `trustedOrigins`:
-      
-      ```ts title="web/lib/auth.ts"
-      export const auth = betterAuth({
-        trustedOrigins: ["com.example.app:/"],
-      });
-      ```
-  </Step>
-  
-  <Step>
-      ### Configure the BrowserWindow
-      
-      Ensure that your `BrowserWindow` is configured with `nodeIntegration` set to `false` and `contextIsolation` set to `true`, to ensure NodeJS APIs aren't exposed to any JavaScript process running in the browser.
-      
-      ```ts title="electron/main.ts"
-      import { BrowserWindow } from "electron";
-      import { join } from "node:path";
+      </Tab>
+    </Tabs>
 
-      const win = new BrowserWindow({
-        webPreferences: {
-          preload: join(__dirname, "preload.mjs"),
-          nodeIntegration: false,
-          contextIsolation: true,
+    Then, update your Better Auth config to include the scheme in `trustedOrigins`:
+
+    ```ts title="web/lib/auth.ts"
+    export const auth = betterAuth({
+      trustedOrigins: ["com.example.app:/"],
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### Configure the BrowserWindow
+
+    Ensure that your `BrowserWindow` is configured with `nodeIntegration` set to `false` and `contextIsolation` set to `true`, to ensure NodeJS APIs aren't exposed to any JavaScript process running in the browser.
+
+    ```ts title="electron/main.ts"
+    import { BrowserWindow } from "electron";
+    import { join } from "node:path";
+
+    const win = new BrowserWindow({
+      webPreferences: {
+        preload: join(__dirname, "preload.mjs"),
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+    ```
+
+    <Callout type="warning">
+      To run your process in `sandbox` mode, you need to ensure that `@better-auth/electron` is bundled into the preload script.
+      Import only `@better-auth/electron/preload` inside the preload script with tree-shaking enabled, to avoid bundling unwanted dependencies.
+
+      The following example uses electron-vite, but the concept applies to any bundler:
+
+      ```ts title="electron.vite.config.ts"
+      import { defineConfig } from "electron-vite";
+
+      export default defineConfig({
+        preload: {
+          build: {
+            externalizeDeps: { // [!code highlight]
+              exclude: ["@better-auth/electron"], // [!code highlight]
+            }, // [!code highlight]
+          },
         },
       });
       ```
 
+      If your config uses a list of externals instead, do **not** add `@better-auth/electron` to that list so it gets bundled.
+    </Callout>
   </Step>
-  
+
   <Step>
-      ### Setup the Main Process
-      
-      In your Electron main process, use the `setupMain()` method from the Electron auth client to handle necessary configurations.
-      
-      This will:
-      - Register the protocol handler for deep links.
-      - Set up content security policies.
-      - Set up IPC bridges for communication between main and renderer processes.
-      
-      ```ts title="electron/main.ts"
-      import { authClient } from "./lib/auth-client";
-      
-      authClient.setupMain();
-      ```
-      
-      Note that this must be called before the app is ready.
+    ### Setup the Main Process
+
+    In your Electron main process, use the `setupMain()` method from the Electron auth client to handle necessary configurations.
+
+    This will:
+
+    * Register the protocol handler for deep links.
+    * Register the [user image proxy](#user-image-proxy) protocol.
+    * Set up content security policies.
+    * Set up IPC bridges for communication between main and renderer processes.
+
+    ```ts title="electron/main.ts"
+    import { authClient } from "./lib/auth-client";
+
+    authClient.setupMain();
+    ```
+
+    Note that this must be called before the app is ready.
   </Step>
-  
+
   <Step>
-      ### Setup the Renderer Process
+    ### Setup the Renderer Process
 
-      In your preload script, use the `setupRenderer()` method from the Electron auth client to expose safe IPC bridges to the renderer process.
+    In your preload script, use the `setupRenderer()` method from the Electron auth client to expose safe IPC bridges to the renderer process.
 
-      ```ts title="electron/preload.ts"
-      import { authClient } from "./lib/auth-client";
+    ```ts title="electron/preload.ts"
+    import { setupRenderer } from "@better-auth/electron/preload";
 
-      authClient.setupRenderer();
+    setupRenderer();
+    ```
+
+    Note that this must also be called before the app is ready.
+
+    <Callout type="info">
+      To infer the types of the exposed bridges, you can use `authClient.$Infer.Bridges` to extend the `Window` interface.
+
+      ```ts title="electron/preload.d.ts"
+      import type { authClient } from "./lib/auth-client";
+
+      declare global {
+        type Bridges = typeof authClient.$Infer.Bridges;
+        interface Window extends Bridges {}
+      }
       ```
-
-      Note that this must also be called before the app is ready.
-
-      <Callout type="info">
-        To infer the types of the exposed bridges, you can use `authClient.$Infer.Bridges` to extend the `Window` interface.
-
-        ```ts title="electron/preload.d.ts"
-        import type { authClient } from "./lib/auth-client";
-
-        declare global {
-          type Bridges = typeof authClient.$Infer.Bridges;
-          interface Window extends Bridges {}
-        }
-        ```
-      </Callout>
-
+    </Callout>
   </Step>
 </Steps>
 
@@ -295,7 +319,7 @@ function SignIn({
 }
 ```
 
-To handle already signed-in users, you can use the `electron.transferUser` method on the client and `electronTransferUser` on the server to transfer the user to the Electron app. [See Example](https://github.com/better-auth/better-auth/blob/main/demo/nextjs/app/(auth)/sign-in/_components/electron.tsx)
+To handle already signed-in users, you can use the `electron.transferUser` method on the client and `electronTransferUser` on the server to transfer the user to the Electron app. [See Example](https://github.com/better-auth/better-auth/blob/main/demo/nextjs/app/\(auth\)/sign-in/_components/electron.tsx)
 
 ### Handling Authentication in Electron
 
@@ -380,6 +404,91 @@ useEffect(() => {
 }, []);
 ```
 
+### Manual Token Exchange
+
+In some environments, deep link redirects may not work reliably (e.g. certain Linux desktop environments, sandboxed browsers, or when the Electron app isn't registered as the default handler for the protocol scheme).
+As a fallback, users can manually copy the authorization code from the web UI and paste it into the Electron app.
+
+**Front-end:**
+
+After authentication completes, the authorization code is available via the `electron.getAuthorizationCode()` method on the proxy client. You can display this code to the user so they can copy it:
+
+```tsx title="web/components/providers.tsx"
+import { useEffect } from "react";
+import { authClient } from "../auth-client";
+
+function Providers({ children }) {
+  useEffect(() => {
+    const authorizationCode = authClient.electron.getAuthorizationCode();
+    if (authorizationCode) {
+      // Display the code to the user
+      console.log("Authorization code:", authorizationCode);
+    }
+  }, []);
+
+  return <>{children}</>;
+}
+```
+
+The authorization code is also returned after a successful sign-in initiated from the Electron app or when using the `transferUser` method.
+
+```tsx title="web/pages/sign-in.tsx"
+const { data } = await authClient.electron.transferUser({
+  fetchOptions: {
+    query: params,
+  },
+});
+
+if (data?.electron_authorization_code) {
+  // Display the code to the user
+}
+```
+
+**Electron:**
+
+In the Electron renderer, provide an input for the user to paste the authorization code, then call `window.authenticate()` to exchange it for a session:
+
+```tsx title="electron/App.tsx"
+function ManualCodeEntry() {
+  return (
+    <input
+      type="text"
+      placeholder="Paste code here"
+      maxLength={32}
+      onChange={(e) => {
+        if (e.target.value.length === 32) {
+          // Important: requestAuth() must have been called before
+          window.authenticate({ token: e.target.value }); // [!code highlight]
+        }
+      }}
+    />
+  );
+}
+```
+
+The `authenticate` bridge sends the authorization code to the main process, which exchanges it for a session using the stored PKCE code verifier and state. On success, the `onAuthenticated` bridge is triggered.
+
+<Callout type="info">
+  The authorization code is a short-lived 32-character string. A `requestAuth()` call must have been made before `authenticate()` can be used, as it relies on the code verifier and state generated during the initial request.
+</Callout>
+
+### User Image Proxy
+
+To avoid CSP issues, the Electron plugin securely proxies user avatar images through a custom `user-image://` protocol.
+
+You can use the image URL directly in your renderer:
+
+```tsx title="electron/App.tsx"
+<img src={user.image} alt="Avatar" />
+{/* or <img src="user-image://<user-id>" /> */}
+```
+
+To configure or disable the proxy, see the [`userImageProxy`](#userimageproxy) option.
+
+<Callout type="warning">
+  To access avatars for users other than the current one, you need to enable the [Admin](/docs/plugins/admin) plugin.
+</Callout>
+
 ### Creating IPC bridges
 
 You should create IPC bridges to extend the functionality exposed to your renderer process. This ensures a minimal, safe API surface.
@@ -412,19 +521,18 @@ contextBridge.exposeInMainWorld("myBridge", (data: Record<string, any>) => {
 ```
 
 <Callout type="info">
-    To infer the types of your bridge, extend the `Window` interface:
+  To infer the types of your bridge, extend the `Window` interface:
 
-    ```ts title="electron/preload.d.ts"
-    import type { authClient } from "./lib/auth-client";
+  ```ts title="electron/preload.d.ts"
+  import type { authClient } from "./lib/auth-client";
 
-    declare global {
-      type Bridges = typeof authClient.$Infer.Bridges;
-      interface Window extends Bridges {
-        myBridge: (data: Record<string, any>) => Promise<any>;
-      }
+  declare global {
+    type Bridges = typeof authClient.$Infer.Bridges;
+    interface Window extends Bridges {
+      myBridge: (data: Record<string, any>) => Promise<any>;
     }
-    ```
-
+  }
+  ```
 </Callout>
 
 Now you can call your custom bridge from anywhere in the renderer process:
@@ -676,6 +784,42 @@ Make sure this matches the clientID provided to both the server and proxy client
 ```ts title="electron/auth-client.ts"
 electronClient({
   clientID: "electron",
+});
+```
+
+#### `sanitizeUser?`
+
+A function to sanitize the user object before it is sent to the renderer process. Use this to strip sensitive fields.
+
+```ts title="electron/auth-client.ts"
+electronClient({
+  sanitizeUser: (user) => {
+    const { sensitiveField, ...rest } = user;
+    return rest;
+  },
+});
+```
+
+#### `userImageProxy?`
+
+Configuration for the user image proxy. See [User Image Proxy](#user-image-proxy) for details.
+
+```ts title="electron/auth-client.ts"
+electronClient({
+  userImageProxy: {
+    enabled: true, // default: true
+    maxSize: 1024 * 1024 * 5, // default: 5MB
+  },
+});
+```
+
+To disable the proxy entirely:
+
+```ts title="electron/auth-client.ts"
+electronClient({
+  userImageProxy: {
+    enabled: false,
+  },
 });
 ```
 

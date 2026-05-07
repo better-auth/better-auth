@@ -7,6 +7,14 @@ MongoDB is a popular NoSQL database that is widely used for building scalable an
 
 Before getting started, make sure you have MongoDB installed and configured. For more information, see [MongoDB Documentation](https://www.mongodb.com/docs/)
 
+## Installation
+
+To use the MongoDB adapter, you need to install the `@better-auth/mongo-adapter` package:
+
+```package-install
+@better-auth/mongo-adapter
+```
+
 ## Example Usage
 
 You can use the MongoDB adapter to connect to your database as follows.
@@ -31,7 +39,6 @@ export const auth = betterAuth({
 
 For MongoDB, we don't need to generate or migrate the schema.
 
-
 ## Joins (Experimental)
 
 Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
@@ -48,6 +55,7 @@ export const auth = betterAuth({
   experimental: { joins: true }
 });
 ```
+
 ## Additional Information
 
-- If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+* If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
+	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
@@ -628,13 +629,23 @@ describe("OIDC Discovery", () => {
 			).toBe(true);
 		});
 
-		it("should return false if both tokenEndpoint and jwksEndpoint are present", () => {
+		it("should return false if tokenEndpoint, jwksEndpoint and authorizationEndpoint are all present", () => {
+			expect(
+				needsRuntimeDiscovery({
+					tokenEndpoint: "https://idp.example.com/oauth2/token",
+					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
+					authorizationEndpoint: "https://idp.example.com/oauth2/authorize",
+				}),
+			).toBe(false);
+		});
+
+		it("should return true if authorizationEndpoint is missing", () => {
 			expect(
 				needsRuntimeDiscovery({
 					tokenEndpoint: "https://idp.example.com/oauth2/token",
 					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
 				}),
-			).toBe(false);
+			).toBe(true);
 		});
 	});
 
@@ -1148,5 +1159,86 @@ describe("OIDC Discovery", () => {
 				}),
 			);
 		});
+	});
+});
+
+describe("ensureRuntimeDiscovery", () => {
+	const isTrustedOrigin = () => true;
+	const issuer = "https://idp.example.com";
+
+	const baseConfig = {
+		issuer,
+		clientId: "client-id",
+		clientSecret: "client-secret",
+		pkce: true,
+		discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
+	};
+
+	const mockDiscoveryDoc = createMockDiscoveryDocument();
+
+	beforeEach(() => {
+		vi.mocked(betterFetch).mockResolvedValue({
+			data: mockDiscoveryDoc,
+			error: null,
+		});
+	});
+
+	it("returns config unchanged when discovery is not needed", async () => {
+		const completeConfig = {
+			...baseConfig,
+			authorizationEndpoint: `${issuer}/oauth2/authorize`,
+			tokenEndpoint: `${issuer}/oauth2/token`,
+			jwksEndpoint: `${issuer}/.well-known/jwks.json`,
+		};
+		const result = await ensureRuntimeDiscovery(
+			completeConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result).toBe(completeConfig);
+		expect(betterFetch).not.toHaveBeenCalled();
+	});
+
+	it("hydrates missing endpoints when discovery is needed", async () => {
+		const result = await ensureRuntimeDiscovery(
+			baseConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result.authorizationEndpoint).toBe(
+			mockDiscoveryDoc.authorization_endpoint,
+		);
+		expect(result.tokenEndpoint).toBe(mockDiscoveryDoc.token_endpoint);
+		expect(result.jwksEndpoint).toBe(mockDiscoveryDoc.jwks_uri);
+		expect(result.userInfoEndpoint).toBe(mockDiscoveryDoc.userinfo_endpoint);
+	});
+
+	it("preserves existing config fields not returned by discovery", async () => {
+		const result = await ensureRuntimeDiscovery(
+			baseConfig,
+			issuer,
+			isTrustedOrigin,
+		);
+		expect(result.clientId).toBe(baseConfig.clientId);
+		expect(result.clientSecret).toBe(baseConfig.clientSecret);
+		expect(result.pkce).toBe(baseConfig.pkce);
+	});
+
+	it("throws when discovery fails", async () => {
+		vi.mocked(betterFetch).mockResolvedValue({
+			data: null,
+			error: { message: "Network error" },
+		});
+		await expect(
+			ensureRuntimeDiscovery(baseConfig, issuer, isTrustedOrigin),
+		).rejects.toThrow(DiscoveryError);
+	});
+
+	it("throws DiscoveryError for untrusted origin", async () => {
+		await expect(
+			ensureRuntimeDiscovery(baseConfig, issuer, () => false),
+		).rejects.toThrow(
+			expect.objectContaining({ code: "discovery_untrusted_origin" }),
+		);
 	});
 });

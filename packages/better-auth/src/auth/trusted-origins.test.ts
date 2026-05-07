@@ -325,4 +325,41 @@ describe("trusted origins", () => {
 			).resolves.toBe(false);
 		});
 	});
+
+	it("should merge trustedOrigins from plugins using init() with user config", async () => {
+		const { isTrustedOrigin } = await createAuthTestInstance({
+			trustedOrigins: async () => ["https://user-dynamic.com"],
+			plugins: [
+				{
+					id: "plugin-a",
+					init() {
+						return {
+							options: {
+								trustedOrigins: ["https://plugin-static.com"],
+							},
+						};
+					},
+				},
+				{
+					id: "plugin-b",
+					init() {
+						return {
+							options: {
+								trustedOrigins: () => ["https://plugin-fn.com"],
+							},
+						};
+					},
+				},
+			],
+		});
+
+		await expect(isTrustedOrigin("https://user-dynamic.com")).resolves.toBe(
+			true,
+		);
+		await expect(isTrustedOrigin("https://plugin-static.com")).resolves.toBe(
+			true,
+		);
+		await expect(isTrustedOrigin("https://plugin-fn.com")).resolves.toBe(true);
+		await expect(isTrustedOrigin("https://unknown.com")).resolves.toBe(false);
+	});
 });

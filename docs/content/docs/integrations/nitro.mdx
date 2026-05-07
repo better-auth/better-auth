@@ -97,7 +97,7 @@ export const auth = betterAuth({
 Use the Better Auth CLI to update your Prisma schema with the required models by running the following command:
 
 ```bash title="Terminal"
-npx @better-auth/cli generate --config server/utils/auth.ts
+npx auth generate --config server/utils/auth.ts
 ```
 
 <Callout>
@@ -117,6 +117,7 @@ export default defineEventHandler((event) => {
   return auth.handler(toWebRequest(event));
 });
 ```
+
 <Callout>
   This is a [catch-all](https://nitro.build/guide/routing#catch-all-route) route that will handle all requests to `/api/auth/*`.
 </Callout>
@@ -145,6 +146,7 @@ export default defineNitroPlugin((plugin) => {
   );
 });
 ```
+
 <Callout>
   This will enable CORS for all routes. You can customize the `origin` property to allow requests from specific domains. Ensure that the config is in sync with your frontend application.
 </Callout>

@@ -7,9 +7,11 @@ import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
+import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
 import { getSchema } from "./schema";
@@ -107,7 +109,8 @@ const signInUsernameBodySchema = z.object({
 	callbackURL: z
 		.string()
 		.meta({
-			description: "The URL to redirect to after email verification",
+			description:
+				"URL to redirect to after sign in (also used as the redirect target for email verification when required)",
 		})
 		.optional(),
 });
@@ -137,6 +140,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 	return {
 		id: "username",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			return {
 				options: {
@@ -211,16 +215,27 @@ export const username = (options?: UsernameOptions | undefined) => {
 											schema: {
 												type: "object",
 												properties: {
+													redirect: {
+														type: "boolean",
+														description:
+															"Whether the client should follow the Location header. True when callbackURL was provided.",
+													},
 													token: {
 														type: "string",
 														description:
 															"Session token for the authenticated session",
 													},
+													url: {
+														type: "string",
+														nullable: true,
+														description:
+															"The callbackURL echoed back so the client can redirect.",
+													},
 													user: {
 														$ref: "#/components/schemas/User",
 													},
 												},
-												required: ["token", "user"],
+												required: ["redirect", "token", "user"],
 											},
 										},
 									},
@@ -397,20 +412,23 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(
 						ctx,
 						{ session, user },
 						ctx.body.rememberMe === false,
 					);
+					if (ctx.body.callbackURL) {
+						ctx.setHeader("Location", ctx.body.callbackURL);
+					}
 					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
 						token: session.token,
+						url: ctx.body.callbackURL,
 						user: parseUserOutput(ctx.context.options, user),
 					});
 				},
@@ -527,27 +545,32 @@ export const username = (options?: UsernameOptions | undefined) => {
 									ERROR_CODES.INVALID_USERNAME,
 								);
 							}
-							const user = await ctx.context.adapter.findOne<User>({
+							const normalizedUsername = normalizer(ctx.body.username);
+							const existingUser = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [
 									{
 										field: "username",
-										value: username,
+										value: normalizedUsername,
 									},
 								],
 							});
 
-							const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
-							const blockChangeUpdateUser =
-								ctx.path === "/update-user" &&
-								user &&
-								ctx.context.session &&
-								user.id !== ctx.context.session.session.userId;
-							if (blockChangeSignUp || blockChangeUpdateUser) {
+							if (ctx.path === "/sign-up/email" && existingUser) {
 								throw APIError.from(
 									"BAD_REQUEST",
 									ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								);
+							}
+
+							if (ctx.path === "/update-user" && existingUser) {
+								const session = await getSessionFromCtx(ctx);
+								if (!session || existingUser.id !== session.user.id) {
+									throw APIError.from(
+										"BAD_REQUEST",
+										ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+									);
+								}
 							}
 						}
 
@@ -576,10 +599,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				},
 				{
 					matcher(context) {
-						return (
-							context.path === "/sign-up/email" ||
-							context.path === "/update-user"
-						);
+						return context.path === "/sign-up/email";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						if (ctx.body.username && !ctx.body.displayUsername) {

@@ -6,6 +6,14 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
+import {
+	insensitiveCompare,
+	insensitiveContains,
+	insensitiveEndsWith,
+	insensitiveIn,
+	insensitiveNotIn,
+	insensitiveStartsWith,
+} from "./query-builders";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -113,11 +121,20 @@ export const memoryAdapter = (
 					}
 
 					const evalClause = (record: any, clause: CleanedWhere): boolean => {
-						const { field, value, operator } = clause;
+						const { field, value, operator, mode = "sensitive" } = clause;
+						const isInsensitive =
+							mode === "insensitive" &&
+							(typeof value === "string" ||
+								(Array.isArray(value) &&
+									value.every((v) => typeof v === "string")));
+
 						switch (operator) {
 							case "in":
 								if (!Array.isArray(value)) {
 									throw new Error("Value must be an array");
+								}
+								if (isInsensitive) {
+									return insensitiveIn(record[field], value);
 								}
 								// @ts-expect-error
 								return value.includes(record[field]);
@@ -125,16 +142,30 @@ export const memoryAdapter = (
 								if (!Array.isArray(value)) {
 									throw new Error("Value must be an array");
 								}
+								if (isInsensitive) {
+									return insensitiveNotIn(record[field], value);
+								}
 								// @ts-expect-error
 								return !value.includes(record[field]);
 							case "contains":
-								return record[field].includes(value);
+								if (isInsensitive) {
+									return insensitiveContains(record[field], value);
+								}
+								return record[field]?.includes(value);
 							case "starts_with":
+								if (isInsensitive) {
+									return insensitiveStartsWith(record[field], value);
+								}
 								return record[field].startsWith(value);
 							case "ends_with":
+								if (isInsensitive) {
+									return insensitiveEndsWith(record[field], value);
+								}
 								return record[field].endsWith(value);
 							case "ne":
-								return record[field] !== value;
+								return isInsensitive
+									? !insensitiveCompare(record[field], value)
+									: record[field] !== value;
 							case "gt":
 								return value != null && Boolean(record[field] > value);
 							case "gte":
@@ -144,7 +175,9 @@ export const memoryAdapter = (
 							case "lte":
 								return value != null && Boolean(record[field] <= value);
 							default:
-								return record[field] === value;
+								return isInsensitive
+									? insensitiveCompare(record[field], value)
+									: record[field] === value;
 						}
 					};
 

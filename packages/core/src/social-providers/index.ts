@@ -22,6 +22,7 @@ import { notion } from "./notion";
 import { paybin } from "./paybin";
 import { paypal } from "./paypal";
 import { polar } from "./polar";
+import { railway } from "./railway";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
@@ -32,6 +33,7 @@ import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
+import { wechat } from "./wechat";
 import { zoom } from "./zoom";
 
 export const socialProviders = {
@@ -67,7 +69,9 @@ export const socialProviders = {
 	paybin,
 	paypal,
 	polar,
+	railway,
 	vercel,
+	wechat,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -102,10 +106,8 @@ export * from "./google";
 export * from "./huggingface";
 export * from "./kakao";
 export * from "./kick";
-export * from "./kick";
 export * from "./line";
 export * from "./linear";
-export * from "./linkedin";
 export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";
@@ -113,6 +115,7 @@ export * from "./notion";
 export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
+export * from "./railway";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./salesforce";
@@ -123,6 +126,7 @@ export * from "./twitch";
 export * from "./twitter";
 export * from "./vercel";
 export * from "./vk";
+export * from "./wechat";
 export * from "./zoom";
 
 export type SocialProviderList = typeof socialProviderList;

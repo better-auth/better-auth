@@ -3,6 +3,7 @@ import { parseCookies } from "better-auth/cookies";
 import type { electron } from "./index";
 import type { ElectronProxyClientOptions } from "./types/client";
 import { parseProtocolScheme } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 	const opts = {
@@ -16,8 +17,24 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 
 	return {
 		id: "electron-proxy",
+		version: PACKAGE_VERSION,
 		getActions: () => {
+			const getAuthorizationCode = () => {
+				if (typeof document === "undefined") return null;
+
+				const authorizationCode = parseCookies(document.cookie).get(
+					redirectCookieName,
+				);
+				return authorizationCode ?? null;
+			};
+
 			return {
+				electron: {
+					/**
+					 * Gets the current authorization code from the cookie.
+					 */
+					getAuthorizationCode,
+				},
 				/**
 				 * Ensures redirecting to the Electron app.
 				 *
@@ -43,12 +60,7 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 					const interval = cfg?.interval || 100;
 
 					const handleRedirect = () => {
-						if (typeof document === "undefined") {
-							return false;
-						}
-						const authorizationCode = parseCookies(document.cookie).get(
-							redirectCookieName,
-						);
+						const authorizationCode = getAuthorizationCode();
 						if (!authorizationCode) {
 							return false;
 						}

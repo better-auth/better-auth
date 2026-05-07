@@ -19,3 +19,7 @@ export function parseProtocolScheme(
 		privileges: protocolOption.privileges || {},
 	};
 }
+
+export function getChannelPrefixWithDelimiter(ns: string = "better-auth") {
+	return ns.length > 0 ? ns + ":" : ns;
+}

@@ -7,6 +7,40 @@ import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6213
+ */
+it("build client without zod runtime", async () => {
+	const esbuildDir = join(fixturesDir, "esbuild");
+	const buildProcess = spawn(
+		"npx",
+		["esbuild", "src/client.ts", "--bundle", "--outfile=dist/client.js"],
+		{
+			cwd: esbuildDir,
+			stdio: "pipe",
+		},
+	);
+	await new Promise<void>((resolve, reject) => {
+		buildProcess.on("close", (code) => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(new Error(`esbuild client build failed with code ${code}`));
+			}
+		});
+	});
+	const outputFile = join(esbuildDir, "dist", "client.js");
+	const outputContent = await readFile(outputFile, "utf-8");
+	assert.ok(
+		!outputContent.includes("ZodString"),
+		"Client bundle should not contain Zod runtime code (ZodString)",
+	);
+	assert.ok(
+		!outputContent.includes("ZodObject"),
+		"Client bundle should not contain Zod runtime code (ZodObject)",
+	);
+});
+
 it("build minimal without unexpected imports", async () => {
 	const esbuildDir = join(fixturesDir, "esbuild");
 	const buildProcess = spawn(

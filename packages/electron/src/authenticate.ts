@@ -1,19 +1,19 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { BetterFetch } from "@better-fetch/fetch";
-import { APIError, getBaseURL } from "better-auth";
+import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
+import { APIError, getBaseURL, safeJSONParse } from "better-auth";
 import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
 import * as z from "zod";
-import { getChannelPrefixWithDelimiter } from "./bridges";
 import type { ElectronClientOptions } from "./types/client";
-import { isProcessType } from "./utils";
+import { normalizeUserOutput } from "./user";
+import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 
-export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
-export const kState = Symbol.for("better-auth:state");
+export const kElectron = Symbol.for("better-auth:electron");
 
 const requestAuthOptionsSchema = (() => {
 	const { provider, idToken, loginHint, ...signInSocialBody } =
@@ -50,8 +50,10 @@ export async function requestAuth(
 		await createHash("SHA-256").digest(codeVerifier),
 	);
 
-	(globalThis as any)[kCodeVerifier] = codeVerifier;
-	(globalThis as any)[kState] = state;
+	((globalThis as any)[kElectron] ??= new Map<string, string>()).set(
+		state,
+		codeVerifier,
+	);
 
 	let url: URL | null = null;
 	if (cfg?.provider) {
@@ -84,51 +86,77 @@ export async function requestAuth(
 	url.searchParams.set("code_challenge_method", "S256");
 	url.searchParams.set("state", state);
 
-	if (url === null) {
-		throw new Error("Failed to construct sign-in URL.");
-	}
-
 	await shell.openExternal(url.toString(), {
 		activate: true,
 	});
 }
 
+export interface ElectronAuthenticateOptions {
+	fetchOptions?: Omit<CreateFetchOption, "method"> | undefined;
+	token: string;
+}
+
 /**
  * Exchanges the authorization code for a session.
  */
-export async function authenticate(
-	$fetch: BetterFetch,
-	options: ElectronClientOptions,
-	body: {
-		token: string;
-	},
-	getWindow: () => Electron.BrowserWindow | null | undefined,
-) {
-	const codeVerifier = (globalThis as any)[kCodeVerifier];
-	const state = (globalThis as any)[kState];
-	(globalThis as any)[kCodeVerifier] = undefined;
-	(globalThis as any)[kState] = undefined;
+export async function authenticate({
+	$fetch,
+	options,
+	token,
+	getWindow,
+	fetchOptions,
+}: ElectronAuthenticateOptions & {
+	$fetch: BetterFetch;
+	options: ElectronClientOptions;
+	getWindow: () => Electron.BrowserWindow | null | undefined;
+}) {
+	if (!isProcessType("browser")) {
+		throw new BetterAuthError(
+			"`authenticate` can only be called in the main process.",
+		);
+	}
+
+	const decoded = safeJSONParse(
+		new TextDecoder().decode(base64Url.decode(decodeURIComponent(token))),
+	) as { identifier: string; state: string };
+
+	const codeVerifier = (globalThis as any)[kElectron]?.get(decoded?.state);
+	(globalThis as any)[kElectron]?.delete(decoded?.state);
 
 	if (!codeVerifier) {
-		throw new Error("Code verifier not found.");
-	}
-	if (!state) {
-		throw new Error("State not found.");
+		throw new BetterAuthError("Code verifier not found.");
 	}
 
-	await $fetch("/electron/token", {
+	return await $fetch<{
+		token: string;
+		user: User & Record<string, any>;
+	}>("/electron/token", {
+		...fetchOptions,
 		method: "POST",
 		body: {
-			...body,
-			state,
+			...(fetchOptions?.body || {}),
+			token: decoded.identifier,
+			state: decoded.state,
 			code_verifier: codeVerifier,
 		},
-		onSuccess: (ctx) => {
+		onSuccess: async (ctx) => {
+			let user: (User & Record<string, any>) | null = ctx.data?.user ?? null;
+			if (user !== null && typeof options.sanitizeUser === "function") {
+				try {
+					user = await options.sanitizeUser(user);
+				} catch (error) {
+					console.error("Error while sanitizing user", error);
+					user = null;
+				}
+			}
+			if (user === null) return;
+			user = normalizeUserOutput(user, options);
+
+			await fetchOptions?.onSuccess?.(ctx);
 			getWindow()?.webContents.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
-				ctx.data.user,
+				user,
 			);
 		},
-		throw: true,
 	});
 }

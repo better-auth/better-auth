@@ -38,6 +38,7 @@ export type BetterAuthPluginErrorCodePart = {
 
 export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	id: LiteralString;
+	version?: string | undefined;
 	/**
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
@@ -45,7 +46,8 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	init?:
 		| ((ctx: AuthContext) =>
 				| Awaitable<{
-						context?: DeepPartial<Omit<AuthContext, "options">>;
+						context?: DeepPartial<Omit<AuthContext, "options">> &
+							Record<string, unknown>;
 						options?: Partial<BetterAuthOptions>;
 				  }>
 				| void

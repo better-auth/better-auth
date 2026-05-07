@@ -6,6 +6,7 @@ import type {
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthPlugin } from "better-auth";
 import { safeJSONParse } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
@@ -17,6 +18,7 @@ import {
 	electronTransferUser,
 } from "./routes";
 import type { ElectronOptions } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -68,7 +70,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		const userId =
 			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
 		if (!userId || client_id !== opts.clientID) {
-			return false;
+			return null;
 		}
 		if (!state) {
 			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_STATE);
@@ -93,17 +95,22 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			expiresAt,
 		});
 
-		ctx.setCookie(redirectCookieName, identifier, {
+		const redirectToken = base64Url.encode(
+			new TextEncoder().encode(JSON.stringify({ identifier, state })),
+		);
+
+		ctx.setCookie(redirectCookieName, redirectToken, {
 			...ctx.context.authCookies.sessionToken.attributes,
 			maxAge: opts.redirectCookieExpiresIn,
 			httpOnly: false,
 		});
 
-		return true;
+		return identifier;
 	};
 
 	return {
 		id: "electron",
+		version: PACKAGE_VERSION,
 		async onRequest(request, _ctx) {
 			if (opts.disableOriginOverride || request.headers.get("origin")) {
 				return;
@@ -192,7 +199,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							transferPayload = safeJSONParse(transferCookie);
 						} else {
 							const query = querySchema.safeParse(ctx.query);
-							if (query.success) {
+							if (query.success && query.data.client_id === opts.clientID) {
 								transferPayload = query.data;
 							}
 						}
@@ -200,9 +207,15 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							return;
 						}
 
-						await handleTransfer(ctx, transferPayload);
+						const identifier = await handleTransfer(ctx, transferPayload);
+						if (identifier === null) {
+							return ctx;
+						}
 
-						return ctx;
+						return ctx.json({
+							...(ctx.context.returned ?? {}),
+							electron_authorization_code: identifier,
+						});
 					}),
 				},
 			],

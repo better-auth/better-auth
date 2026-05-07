@@ -80,6 +80,28 @@ describe("multi-session", async () => {
 		expect(res.data).toHaveLength(2);
 	});
 
+	it("should set active session when only multi-session cookies are present", async () => {
+		const existingCookieHeader = headers.get("cookie") || "";
+		const multiOnlyCookieHeader = existingCookieHeader
+			.split(";")
+			.map((cookie) => cookie.trim())
+			.filter(Boolean)
+			.filter((cookie) => !cookie.startsWith("better-auth.session_token="))
+			.join("; ");
+
+		const multiOnlyHeaders = new Headers();
+		multiOnlyHeaders.set("cookie", multiOnlyCookieHeader);
+
+		const res = await client.multiSession.setActive({
+			sessionToken,
+			fetchOptions: {
+				headers: multiOnlyHeaders,
+			},
+		});
+		expect(res.error).toBeNull();
+		expect(res.data?.user.email).toBe(testUser.email);
+	});
+
 	it("should set active session", async () => {
 		const res = await client.multiSession.setActive({
 			sessionToken,

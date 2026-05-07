@@ -1,3 +1,3 @@
-import { authClient } from "../lib/auth-client";
+import { setupRenderer } from "@better-auth/electron/preload";
 
-authClient.setupRenderer();
+setupRenderer();

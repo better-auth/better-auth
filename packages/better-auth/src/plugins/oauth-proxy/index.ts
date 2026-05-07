@@ -1,9 +1,14 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+	SecretConfig,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
@@ -15,6 +20,7 @@ import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
 import { getOrigin } from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
 import {
 	checkSkipProxy,
 	redirectOnError,
@@ -56,6 +62,21 @@ export interface OAuthProxyOptions {
 	 * @default 60 (1 minute)
 	 */
 	maxAge?: number | undefined;
+	/**
+	 * A dedicated secret used to encrypt and decrypt data passed between
+	 * servers during the OAuth proxy flow.
+	 *
+	 * When set, this secret is used **instead of** the global
+	 * `BETTER_AUTH_SECRET` for all OAuth proxy encryption operations.
+	 * This limits the blast radius if the secret is shared across
+	 * environments (production, preview, development): a leaked proxy
+	 * secret cannot be used to forge sessions or decrypt other data
+	 * protected by the main secret.
+	 *
+	 * All environments participating in the OAuth proxy flow must share
+	 * the same `secret` value.
+	 */
+	secret?: string | SecretConfig | undefined;
 }
 
 /**
@@ -101,9 +122,13 @@ const oauthCallbackQuerySchema = z.object({
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
+	const getEncryptionKey = (
+		ctx: GenericEndpointContext,
+	): string | SecretConfig => opts?.secret ?? ctx.context.secretConfig;
 
 	return {
 		id: "oauth-proxy",
+		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
@@ -148,9 +173,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					},
 				},
 				async (ctx) => {
+					const baseURLStr =
+						typeof ctx.context.options.baseURL === "string"
+							? ctx.context.options.baseURL
+							: getOrigin(ctx.context.baseURL) || "";
 					const defaultErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
-						`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
+						`${stripTrailingSlash(baseURLStr)}/api/auth/error`;
 
 					const encryptedProfile = ctx.query.profile;
 					if (!encryptedProfile) {
@@ -164,7 +193,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					let decryptedPayload: string;
 					try {
 						decryptedPayload = await symmetricDecrypt({
-							key: ctx.context.secret,
+							key: getEncryptionKey(ctx),
 							data: encryptedProfile,
 						});
 					} catch (e) {
@@ -285,7 +314,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						return context.path === "/callback/:id";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const state = ctx.query?.state || ctx.body?.state;
+						// Query takes precedence over body (matches callbackOAuth behavior)
+						const callbackParams = defu(ctx.query, ctx.body);
+
+						const state = callbackParams.state;
 						if (!state || typeof state !== "string") {
 							return;
 						}
@@ -294,7 +326,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let statePackage: OAuthProxyStatePackage | undefined;
 						try {
 							const decryptedPackage = await symmetricDecrypt({
-								key: ctx.context.secret,
+								key: getEncryptionKey(ctx),
 								data: state,
 							});
 							statePackage =
@@ -313,7 +345,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						const query = oauthCallbackQuerySchema.safeParse(ctx.query);
+						const query = oauthCallbackQuerySchema.safeParse(callbackParams);
 						if (!query.success) {
 							ctx.context.logger.warn(
 								"Invalid OAuth callback query",
@@ -327,7 +359,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let stateData: StateData;
 						try {
 							const decryptedState = await symmetricDecrypt({
-								key: ctx.context.secret,
+								key: getEncryptionKey(ctx),
 								data: statePackage.stateCookie,
 							});
 							stateData = parseJSON<StateData>(decryptedState);
@@ -343,6 +375,15 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							stateData.errorURL ||
 							ctx.context.options.onAPIError?.errorURL ||
 							`${ctx.context.baseURL}/error`;
+
+						if (
+							stateData.oauthState !== undefined &&
+							stateData.oauthState !== statePackage.state
+						) {
+							ctx.context.logger.error("OAuth proxy state binding mismatch");
+							throw redirectOnError(ctx, errorURL, "state_mismatch");
+						}
+
 						if (error) {
 							throw redirectOnError(ctx, errorURL, error);
 						}
@@ -432,7 +473,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						};
 
 						const encryptedPayload = await symmetricEncrypt({
-							key: ctx.context.secret,
+							key: getEncryptionKey(ctx),
 							data: JSON.stringify(payload),
 						});
 
@@ -501,7 +542,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							if (verification) {
 								// Encrypt the verification value so it matches cookie mode format
 								stateCookieValue = await symmetricEncrypt({
-									key: ctx.context.secret,
+									key: getEncryptionKey(ctx),
 									data: verification.value,
 								});
 							}
@@ -519,7 +560,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								isOAuthProxy: true,
 							};
 							const encryptedPackage = await symmetricEncrypt({
-								key: ctx.context.secret,
+								key: getEncryptionKey(ctx),
 								data: JSON.stringify(statePackage),
 							});
 
@@ -557,7 +598,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const productionURL =
 							opts?.productionURL ||
-							ctx.context.options.baseURL ||
+							(typeof ctx.context.options.baseURL === "string"
+								? ctx.context.options.baseURL
+								: undefined) ||
 							ctx.context.baseURL;
 						const productionOrigin = getOrigin(productionURL);
 

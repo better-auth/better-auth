@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
 import type { Account } from "../../types";
 
-describe("forget password", async () => {
+describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
 	const mockOnPasswordReset = vi.fn();
 	let token = "";
@@ -35,6 +35,26 @@ describe("forget password", async () => {
 			redirectTo: "http://localhost:3000",
 		});
 		expect(token.length).toBeGreaterThan(10);
+	});
+
+	it("should reject untrusted redirectTo", async () => {
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+			},
+			trustedOrigins: ["http://localhost:3000"],
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://malicious.com",
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
 	it("should fail on invalid password", async () => {

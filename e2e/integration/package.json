@@ -1,12 +1,14 @@
 {
   "name": "@better-auth-test/integration",
+  "private": true,
   "scripts": {
     "e2e:integration": "playwright test"
   },
   "dependencies": {
+    "@better-auth/oauth-provider": "workspace:*",
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.0"
+    "@playwright/test": "^1.58.2"
   }
 }

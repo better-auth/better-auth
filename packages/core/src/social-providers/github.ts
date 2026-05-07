@@ -31,7 +31,7 @@ export interface GithubProfile {
 	company: string;
 	blog: string;
 	location: string;
-	email: string;
+	email: string | null;
 	hireable: boolean;
 	bio: string;
 	twitter_username: string;
@@ -126,7 +126,7 @@ export const github = (options: GithubOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://github.com/login/oauth/access_token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

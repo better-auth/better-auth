@@ -1,25 +1,30 @@
-import {
-	blogCollection,
-	changelogCollection,
-	docs,
-} from "fumadocs-mdx:collections/server";
 import { loader } from "fumadocs-core/source";
 import { toFumadocsSource } from "fumadocs-mdx/runtime/server";
-import { getPageTree } from "@/components/sidebar-content";
+import { blogCollection, docs, docsBeta } from "@/.source/server";
 
 export const source = loader({
 	baseUrl: "/docs",
 	source: docs.toFumadocsSource(),
 });
 
-source.pageTree = getPageTree();
-
-export const changelogs = loader({
-	baseUrl: "/changelogs",
-	source: toFumadocsSource(changelogCollection, []),
+export const sourceBeta = loader({
+	baseUrl: "/docs/beta",
+	source: docsBeta.toFumadocsSource(),
 });
 
+/**
+ * Pick the docs source loader for a given version slug.
+ */
+export function getSourceFor(versionSlug: string | null) {
+	switch (versionSlug) {
+		case "beta":
+			return sourceBeta;
+		default:
+			return source;
+	}
+}
+
 export const blogs = loader({
-	baseUrl: "/blogs",
+	baseUrl: "/blog",
 	source: toFumadocsSource(blogCollection, []),
 });

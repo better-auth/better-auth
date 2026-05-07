@@ -5,4 +5,5 @@ export default defineConfig({
 	format: ["esm"],
 	entry: ["./src/index.ts", "./src/relations-v2/index.ts"],
 	sourcemap: true,
+	treeshake: true,
 });

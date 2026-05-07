@@ -31,6 +31,14 @@ export type StripeCtxSession = {
 	user: User & WithStripeCustomerId;
 };
 
+export type CheckoutSessionLocale = NonNullable<
+	Stripe.Checkout.SessionCreateParams["locale"]
+>;
+
+export type CheckoutSessionLineItem = NonNullable<
+	Stripe.Checkout.SessionCreateParams["line_items"]
+>[number];
+
 export type StripePlan = {
 	/**
 	 * Monthly price id
@@ -74,6 +82,36 @@ export type StripePlan = {
 	 * when a user can subscribe to multiple plans.
 	 */
 	group?: string | undefined;
+	/**
+	 * Per-seat billing price ID
+	 *
+	 * Requires the `organization` plugin. Member changes
+	 * automatically sync the seat quantity in Stripe.
+	 */
+	seatPriceId?: string | undefined;
+	/**
+	 * Proration behavior when updating this plan's subscription.
+	 *
+	 * Controls how Stripe handles mid-cycle price changes.
+	 * - `create_prorations`: Add proration line items to the next invoice (default)
+	 * - `always_invoice`: Create prorations and immediately invoice
+	 * - `none`: No proration; new price applies at next billing cycle
+	 *
+	 * @default "create_prorations"
+	 * @see https://docs.stripe.com/billing/subscriptions/prorations
+	 */
+	prorationBehavior?:
+		| Stripe.SubscriptionUpdateParams.ProrationBehavior
+		| undefined;
+	/**
+	 * Additional line items to include in the checkout session.
+	 *
+	 * All line items must use the same billing interval as the base price (e.g. all monthly or all yearly).
+	 * Stripe does not support mixed-interval subscriptions via Checkout Sessions.
+	 *
+	 * @see https://docs.stripe.com/billing/subscriptions/mixed-interval#limitations
+	 */
+	lineItems?: CheckoutSessionLineItem[] | undefined;
 	/**
 	 * Free trial days
 	 */
@@ -207,6 +245,17 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number | undefined;
+	/**
+	 * The billing interval for this subscription.
+	 * Indicates how often the subscription is billed.
+	 * @see https://docs.stripe.com/api/plans/object#plan_object-interval
+	 */
+	billingInterval?: "day" | "week" | "month" | "year" | undefined;
+	/**
+	 * Stripe Subscription Schedule ID, present when a scheduled
+	 * plan change is pending for this subscription.
+	 */
+	stripeScheduleId?: string | undefined;
 }
 
 export type SubscriptionOptions = {
@@ -242,24 +291,27 @@ export type SubscriptionOptions = {
 		  ) => Promise<void>)
 		| undefined;
 	/**
-	 * A callback to run after a user is about to cancel their subscription
+	 * A callback to run on every subscription update webhook. Use `stripeSubscription`
+	 * to read fields that are not persisted in the local subscription row.
 	 * @returns
 	 */
 	onSubscriptionUpdate?:
 		| ((data: {
 				event: Stripe.Event;
+				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
 		  }) => Promise<void>)
 		| undefined;
 	/**
-	 * A callback to run after a user is about to cancel their subscription
+	 * A callback to run once when a subscription transitions into a pending-cancel state
+	 * (e.g. `cancel_at_period_end` or a scheduled `cancel_at`).
 	 * @returns
 	 */
 	onSubscriptionCancel?:
 		| ((data: {
 				event?: Stripe.Event;
-				subscription: Subscription;
 				stripeSubscription: Stripe.Subscription;
+				subscription: Subscription;
 				cancellationDetails?: Stripe.Subscription.CancellationDetails | null;
 		  }) => Promise<void>)
 		| undefined;

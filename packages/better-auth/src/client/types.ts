@@ -4,12 +4,12 @@ import type {
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
-import type { RawError } from "@better-auth/core/utils/error-codes";
 import type {
 	BetterAuthPluginDBSchema,
 	InferDBFieldsOutput,
-	InferFieldsInputClient,
-} from "../db";
+} from "@better-auth/core/db";
+import type { RawError } from "@better-auth/core/utils/error-codes";
+import type { InferFieldsInputClient } from "../db/field";
 import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
 import type { InferRoutes } from "./path-to-object";
@@ -20,22 +20,25 @@ export type {
 	BetterAuthClientPlugin,
 };
 
+type InferPluginEndpoints<Plugins> =
+	Plugins extends Array<infer Pl>
+		? UnionToIntersection<
+				Pl extends {
+					$InferServerPlugin: infer Plug;
+				}
+					? Plug extends {
+							endpoints: infer Endpoints;
+						}
+						? Endpoints
+						: {}
+					: {}
+			>
+		: {};
+
 export type InferClientAPI<O extends BetterAuthClientOptions> = InferRoutes<
 	O["plugins"] extends Array<any>
-		? Auth["api"] &
-				(O["plugins"] extends Array<infer Pl>
-					? UnionToIntersection<
-							Pl extends {
-								$InferServerPlugin: infer Plug;
-							}
-								? Plug extends {
-										endpoints: infer Endpoints;
-									}
-									? Endpoints
-									: {}
-								: {}
-						>
-					: {})
+		? Omit<Auth["api"], keyof InferPluginEndpoints<O["plugins"]>> &
+				InferPluginEndpoints<O["plugins"]>
 		: Auth["api"],
 	O
 >;

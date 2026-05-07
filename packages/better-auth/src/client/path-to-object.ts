@@ -6,6 +6,7 @@ import type { BetterFetchResponse } from "@better-fetch/fetch";
 import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
 import type {
 	HasRequiredKeys,
+	IsAny,
 	Prettify,
 	UnionToIntersection,
 } from "../types/helper";
@@ -14,6 +15,62 @@ import type {
 	InferSessionFromClient,
 	InferUserFromClient,
 } from "./types";
+
+type KeepNullishFromOriginal<Original, Replaced> =
+	| Replaced
+	| (undefined extends Original ? undefined : never)
+	| (null extends Original ? null : never);
+
+type ReplaceTopLevelField<
+	Data,
+	Field extends "user" | "session",
+	Replaced,
+> = Data extends object
+	? Field extends keyof Data
+		? Omit<Data, Field> & {
+				[K in Field]: KeepNullishFromOriginal<Data[K], Replaced>;
+			}
+		: Data
+	: Data;
+
+type ReplaceAuthUserAndSession<
+	Data,
+	ClientOpts extends BetterAuthClientOptions,
+> = ReplaceTopLevelField<
+	ReplaceTopLevelField<Data, "user", InferUserFromClient<ClientOpts>>,
+	"session",
+	InferSessionFromClient<ClientOpts>
+>;
+
+type MergeCustomSessionField<
+	R extends object,
+	Field extends "user" | "session",
+	InferType,
+> = Field extends keyof R
+	? {
+			[K in Field]: KeepNullishFromOriginal<
+				R[K],
+				NonNullable<R[K]> & InferType
+			>;
+		}
+	: {};
+
+type MergeCustomSessionWithInferred<
+	R,
+	ClientOpts extends BetterAuthClientOptions,
+> = R extends object
+	? Omit<R, "user" | "session"> &
+			MergeCustomSessionField<R, "user", InferUserFromClient<ClientOpts>> &
+			MergeCustomSessionField<R, "session", InferSessionFromClient<ClientOpts>>
+	: never;
+
+type RefineAuthResponse<
+	Data,
+	ClientOpts extends BetterAuthClientOptions,
+> = Data extends { token: unknown } | { redirect: unknown }
+	? // Only auth-like responses should get client-side user/session type refinement.
+		ReplaceAuthUserAndSession<Data, ClientOpts>
+	: Data;
 
 export type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`
@@ -52,27 +109,35 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+type InferCtxQuery<
+	C extends InputContext<any, any>,
+	FetchOptions extends ClientFetchOption,
+> =
+	C["query"] extends Record<string, any>
+		? {
+				query: C["query"];
+				fetchOptions?: FetchOptions | undefined;
+			}
+		: C["query"] extends Record<string, any> | undefined
+			? {
+					query?: C["query"] | undefined;
+					fetchOptions?: FetchOptions | undefined;
+				}
+			: {
+					fetchOptions?: FetchOptions | undefined;
+				};
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > =
-	C["body"] extends Record<string, any>
-		? C["body"] & {
-				fetchOptions?: FetchOptions | undefined;
-			}
-		: C["query"] extends Record<string, any>
-			? {
-					query: C["query"];
+	IsAny<C["body"]> extends true
+		? InferCtxQuery<C, FetchOptions>
+		: C["body"] extends Record<string, any>
+			? C["body"] & {
 					fetchOptions?: FetchOptions | undefined;
 				}
-			: C["query"] extends Record<string, any> | undefined
-				? {
-						query?: C["query"] | undefined;
-						fetchOptions?: FetchOptions | undefined;
-					}
-				: {
-						fetchOptions?: FetchOptions | undefined;
-					};
+			: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -128,13 +193,16 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											T["options"]["metadata"] extends {
 												CUSTOM_SESSION: boolean;
 											}
-												? NonNullable<Awaited<R>>
+												? MergeCustomSessionWithInferred<
+														NonNullable<Awaited<R>>,
+														COpts
+													>
 												: T["path"] extends "/get-session"
 													? {
 															user: InferUserFromClient<COpts>;
 															session: InferSessionFromClient<COpts>;
 														} | null
-													: NonNullable<Awaited<R>>,
+													: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>,
 											T["options"]["error"] extends StandardSchemaV1
 												? // InferOutput
 													NonNullable<
@@ -158,7 +226,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 		: never;
 
 export type InferRoutes<
-	API extends Record<string, Endpoint>,
+	API extends Record<string, unknown>,
 	ClientOpts extends BetterAuthClientOptions,
 > = MergeRoutes<InferRoute<API, ClientOpts>>;
 

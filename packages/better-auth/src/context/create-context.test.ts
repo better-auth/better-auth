@@ -381,7 +381,7 @@ describe("base context creation", () => {
 			);
 		});
 
-		it("should use default maxAge (300) for 20% calculation", async () => {
+		it("should use default maxAge (7 days) for 20% calculation in stateless mode", async () => {
 			const res = await initBase({
 				session: {
 					cookieCache: {
@@ -389,9 +389,11 @@ describe("base context creation", () => {
 					},
 				},
 			});
+			// In stateless mode (no database), maxAge defaults to 7 days (604800s)
+			// updateAge = Math.floor(604800 * 0.2) = 120960
 			expect(res.sessionConfig.cookieRefreshCache).toEqual({
 				enabled: true,
-				updateAge: 60,
+				updateAge: 120960,
 			});
 		});
 
@@ -547,6 +549,179 @@ describe("base context creation", () => {
 			expect(res.trustedOrigins).toContain("http://localhost:3000");
 			expect(res.trustedOrigins).toContain("http://example.com");
 			expect(res.trustedOrigins).toContain("http://test.com");
+		});
+	});
+
+	describe("trusted providers", () => {
+		it("should include static trusted providers", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: ["google", "github"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("github");
+		});
+
+		it("should resolve dynamic trusted providers from function", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: async () => ["google", "microsoft"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("microsoft");
+		});
+
+		it("should return empty array when no trusted providers configured", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+			});
+			expect(res.trustedProviders).toEqual([]);
+		});
+
+		it("should pass request to dynamic trustedProviders function", async () => {
+			const trustedProvidersFn = vi.fn((request?: Request) =>
+				Promise.resolve(["google", "github"]),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			await auth.handler(request);
+
+			expect(trustedProvidersFn).toHaveBeenCalledWith(request);
+		});
+
+		it("should re-resolve trustedProviders per request and pass the Request to the resolver", async () => {
+			const trustedProvidersList = ["provider-a", "provider-b"];
+			const trustedProvidersFn = vi.fn((request?: Request) =>
+				Promise.resolve(trustedProvidersList),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			const response = await auth.handler(request);
+			const data = (await response.json()) as { trustedProviders: string[] };
+
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(2);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, request);
+			expect(data.trustedProviders).toEqual(trustedProvidersList);
+		});
+
+		it("should use request-dependent trustedProviders when resolver returns different lists per request", async () => {
+			const trustedProvidersFn = vi.fn((request?: Request) => {
+				if (!request?.url) return Promise.resolve([]);
+				const url = new URL(request.url);
+				return Promise.resolve(
+					url.searchParams.get("variant") === "first"
+						? ["google", "github"]
+						: ["microsoft", "apple"],
+				);
+			});
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const requestFirst = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=first",
+			);
+			const responseFirst = await auth.handler(requestFirst);
+			const dataFirst = (await responseFirst.json()) as {
+				trustedProviders: string[];
+			};
+
+			const requestSecond = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=second",
+			);
+			const responseSecond = await auth.handler(requestSecond);
+			const dataSecond = (await responseSecond.json()) as {
+				trustedProviders: string[];
+			};
+
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(3);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, requestFirst);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(3, requestSecond);
+			expect(dataFirst.trustedProviders).toEqual(["google", "github"]);
+			expect(dataSecond.trustedProviders).toEqual(["microsoft", "apple"]);
 		});
 	});
 
@@ -1667,8 +1842,19 @@ describe("base context creation", () => {
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(true);
 			expect(ctx.options.session?.cookieCache?.strategy).toBe("jwe");
 			expect(ctx.options.session?.cookieCache?.refreshCache).toBe(true);
+			expect(ctx.options.session?.cookieCache?.maxAge).toBe(60 * 60 * 24 * 7);
 			expect(ctx.oauthConfig.storeStateStrategy).toBe("cookie");
 			expect(ctx.options.database).toBeUndefined();
+		});
+
+		it("should set stateless cookieCache maxAge to match custom session expiresIn", async () => {
+			const customExpiresIn = 60 * 60 * 2; // 2 hours
+			const ctx = await initBase({
+				session: {
+					expiresIn: customExpiresIn,
+				},
+			});
+			expect(ctx.options.session?.cookieCache?.maxAge).toBe(customExpiresIn);
 		});
 
 		it("should allow overriding stateless mode", async () => {

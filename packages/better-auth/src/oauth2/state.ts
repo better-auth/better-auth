@@ -47,7 +47,7 @@ export async function generateState(
 }
 
 export async function parseState(c: GenericEndpointContext) {
-	const state = c.query.state || c.body.state;
+	const state = c.query.state || c.body?.state;
 	const errorURL =
 		c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 

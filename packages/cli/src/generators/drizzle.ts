@@ -266,7 +266,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								}
 							}
 
-							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
+							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
 								attr.references

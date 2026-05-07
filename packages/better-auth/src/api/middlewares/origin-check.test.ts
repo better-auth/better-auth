@@ -537,6 +537,61 @@ describe("origin check middleware", async () => {
 		);
 		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
 	});
+
+	it("should skip origin check for matched paths when skipOriginCheck is set to an array", async () => {
+		const { client } = await getTestInstance({
+			trustedOrigins: ["https://trusted-site.com"],
+			advanced: {
+				disableOriginCheck: false,
+			},
+			plugins: [
+				{
+					id: "test",
+					init() {
+						return {
+							context: {
+								skipOriginCheck: ["/public/data"],
+							},
+						};
+					},
+					endpoints: {
+						publicEndpoint: createAuthEndpoint(
+							"/public/data",
+							{
+								method: "GET",
+								query: z.object({
+									callbackURL: z.string(),
+								}),
+								use: [originCheck((c) => c.query.callbackURL)],
+							},
+							async (c) => c.query.callbackURL,
+						),
+						protectedEndpoint: createAuthEndpoint(
+							"/protected/data",
+							{
+								method: "GET",
+								query: z.object({
+									callbackURL: z.string(),
+								}),
+								use: [originCheck((c) => c.query.callbackURL)],
+							},
+							async (c) => c.query.callbackURL,
+						),
+					},
+				},
+			],
+		});
+
+		const skipped = await client.$fetch(
+			"/public/data?callbackURL=https://malicious.com",
+		);
+		expect(skipped.data).toBe("https://malicious.com");
+
+		const blocked = await client.$fetch(
+			"/protected/data?callbackURL=https://malicious.com",
+		);
+		expect(blocked.error?.status).toBe(403);
+	});
 });
 
 describe("trusted origins with baseURL inferred from request", async () => {

@@ -3,14 +3,20 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
-import { deleteFromPrompt } from "./utils";
+import {
+	normalizeTimestampValue,
+	parsePrompt,
+	removePromptFromQuery,
+	searchParamsToQuery,
+} from "./utils";
 
 export async function consentEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
 	// Obtain oauth query
-	const _query = (await oAuthState.get())?.query as string | undefined;
+	const oauthRequest = await oAuthState.get();
+	const _query = oauthRequest?.query as string | undefined;
 	if (!_query) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "missing oauth query",
@@ -43,7 +49,7 @@ export async function consentEndpoint(
 	if (!accepted) {
 		return {
 			redirect: true,
-			uri: formatErrorURL(
+			url: formatErrorURL(
 				query.get("redirect_uri") ?? "",
 				"access_denied",
 				"User denied access",
@@ -55,6 +61,24 @@ export async function consentEndpoint(
 
 	// Consent accepted
 	const session = await getSessionFromCtx(ctx);
+	const promptSet = parsePrompt(query.get("prompt") ?? "");
+	const hasLoginPrompt = promptSet.has("login");
+	const hasSatisfiedLoginPrompt =
+		hasLoginPrompt &&
+		sessionSatisfiesLoginPrompt(
+			session?.session.createdAt,
+			oauthRequest?.signedQueryIssuedAt,
+		);
+	if (hasLoginPrompt && !hasSatisfiedLoginPrompt) {
+		ctx?.headers?.set("accept", "application/json");
+		ctx.query = searchParamsToQuery(query);
+		const { url } = await authorizeEndpoint(ctx, opts);
+		return {
+			redirect: true,
+			url,
+		};
+	}
+
 	const referenceId = await opts.postLogin?.consentReferenceId?.({
 		user: session?.user!,
 		session: session?.session!,
@@ -115,12 +139,35 @@ export async function consentEndpoint(
 			});
 
 	// Return authorization code
+	if (requestedScopes) {
+		query.set("scope", consent.scopes.join(" "));
+	}
 	ctx?.headers?.set("accept", "application/json");
-	ctx.query = deleteFromPrompt(query, "consent");
-	ctx.context.postLogin = true;
-	const { url } = await authorizeEndpoint(ctx, opts);
+	let authorizationQuery = removePromptFromQuery(query, "consent");
+	if (hasSatisfiedLoginPrompt) {
+		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
+	}
+	ctx.query = searchParamsToQuery(authorizationQuery);
+	const postLoginClearedForThisSession =
+		oauthRequest?.postLoginClearedForSession !== undefined &&
+		oauthRequest.postLoginClearedForSession === session?.session.id;
+	const { url } = await authorizeEndpoint(ctx, opts, {
+		postLogin: postLoginClearedForThisSession,
+	});
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
+}
+
+// Relies on session.createdAt being immutable for the session's lifetime; a
+// refresh path that rewrites it would silently accept a pre-request session.
+function sessionSatisfiesLoginPrompt(
+	sessionCreatedAt: Date | string | undefined,
+	signedQueryIssuedAt: Date | undefined,
+) {
+	if (!signedQueryIssuedAt) return false;
+	const normalized = normalizeTimestampValue(sessionCreatedAt);
+	if (!normalized) return false;
+	return normalized.getTime() >= signedQueryIssuedAt.getTime();
 }
