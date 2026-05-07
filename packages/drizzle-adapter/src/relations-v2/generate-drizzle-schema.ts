@@ -524,7 +524,7 @@ function generateImport({
 	for (const table of Object.values(tables)) {
 		for (const field of Object.values(table.fields)) {
 			if (field.bigint) hasBigint = true;
-			if (field.type === "json") hasJson = true;
+			if (field.type === "json" || (databaseType === "mysql" && (field.type === "number[]" || field.type === "string[]"))) hasJson = true;
 		}
 		if (hasJson && hasBigint) break;
 	}
