@@ -575,12 +575,43 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return null;
 			}
 
+			/**
+			 * Coerce Date values to ISO strings for Drizzle columns that use
+			 * string-mode timestamps (e.g. `timestamp({ mode: "string" })`).
+			 *
+			 * String-mode columns are backed by `PgTimestampString` /
+			 * `MySqlTimestampString` which have `dataType === "string"` and no
+			 * `mapToDriverValue` — they pass the value straight to the driver.
+			 * Passing a Date object in that case causes a driver-level TypeError.
+			 *
+			 * Default-mode columns (`PgTimestamp`, `SQLiteTimestamp`, etc.) have
+			 * `dataType === "date"` and their own `mapToDriverValue` that expects
+			 * a Date, so those values must NOT be converted.
+			 */
+			function coerceDatesForStringColumns(
+				schemaModel: Record<string, any>,
+				values: Record<string, any>,
+			): Record<string, any> {
+				let patched: Record<string, any> | null = null;
+				for (const key in values) {
+					const value = values[key];
+					if (!(value instanceof Date)) continue;
+					const column = schemaModel[key];
+					if (column && column.dataType === "string") {
+						patched ??= { ...values };
+						patched[key] = value.toISOString();
+					}
+				}
+				return patched ?? values;
+			}
+
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
 					checkMissingFields(schemaModel, model, values);
-					const builder = db.insert(schemaModel).values(values);
-					const returned = await withReturning(model, builder, values);
+					const coerced = coerceDatesForStringColumns(schemaModel, values);
+					const builder = db.insert(schemaModel).values(coerced);
+					const returned = await withReturning(model, builder, coerced);
 					return returned;
 				},
 				async findOne({ model, where, select, join }) {
@@ -794,18 +825,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				async update({ model, where, update: values }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
+					const coerced = coerceDatesForStringColumns(
+						schemaModel,
+						values as Record<string, any>,
+					);
 					const builder = db
 						.update(schemaModel)
-						.set(values)
+						.set(coerced)
 						.where(...clause);
-					return await withReturning(model, builder, values as any, where);
+					return await withReturning(model, builder, coerced, where);
 				},
 				async updateMany({ model, where, update: values }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
+					const coerced = coerceDatesForStringColumns(schemaModel, values);
 					const builder = db
 						.update(schemaModel)
-						.set(values)
+						.set(coerced)
 						.where(...clause);
 					return await builder;
 				},
