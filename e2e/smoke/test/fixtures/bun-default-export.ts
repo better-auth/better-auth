@@ -5,7 +5,6 @@ import { getMigrations } from "better-auth/db/migration";
 const database = new Database(":memory:");
 
 export const auth = betterAuth({
-	baseURL: "http://localhost:4001",
 	database,
 	emailAndPassword: {
 		enabled: true,
