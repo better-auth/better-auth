@@ -27,7 +27,6 @@ import {
 	ne,
 	notInArray,
 	or,
-	sql,
 } from "drizzle-orm";
 import {
 	insensitiveEq,
@@ -133,20 +132,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.where(...clause);
 					return res[0];
 				} else if (builderVal && builderVal[0]?.id?.value) {
-					let tId = builderVal[0]?.id?.value;
-					if (!tId) {
-						//get last inserted id
-						const lastInsertIdSql =
-							config.provider === "mssql"
-								? sql`SCOPE_IDENTITY()`
-								: sql`LAST_INSERT_ID()`;
-						const lastInsertId = await db
-							.select({ id: lastInsertIdSql })
-							.from(schemaModel)
-							.orderBy(desc(schemaModel.id))
-							.limit(1);
-						tId = lastInsertId[0].id;
-					}
+					const tId = builderVal[0].id.value;
 					const res = await db
 						.select()
 						.from(schemaModel)
