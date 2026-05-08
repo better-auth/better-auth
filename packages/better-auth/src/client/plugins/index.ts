@@ -1,4 +1,9 @@
 //#region Necessary re-exports
+
+export type {
+	FieldAttributeToObject,
+	RemoveFieldsWithReturnedFalse,
+} from "../../db/field";
 export type * from "../../types/helper";
 //#endregion
 
