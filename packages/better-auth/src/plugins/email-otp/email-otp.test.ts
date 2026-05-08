@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { APIError } from "../../api";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
@@ -1976,6 +1977,68 @@ describe("race condition protection", async () => {
 			password: "newpass2",
 		});
 		expect(res2.error?.code).toBe("INVALID_OTP");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7348
+ */
+describe("sendVerificationOTP error propagation", async () => {
+	it("should propagate APIError thrown in sendVerificationOTP to client", async () => {
+		const { client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ email }) {
+							throw new APIError("BAD_REQUEST", {
+								message: "USER_NOT_FOUND",
+							});
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("USER_NOT_FOUND");
+	});
+
+	it("should propagate generic Error thrown in sendVerificationOTP as 500 to client", async () => {
+		const { client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ email }) {
+							throw new Error("Email service failed");
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(500);
 	});
 });
 

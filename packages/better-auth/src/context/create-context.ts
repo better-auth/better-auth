@@ -398,6 +398,7 @@ Most of the features of Better Auth will not work correctly.`,
 				}
 			} catch (e) {
 				logger.error("Failed to run background task:", e);
+				throw e;
 			}
 		},
 		getPlugin: getPluginFn,
