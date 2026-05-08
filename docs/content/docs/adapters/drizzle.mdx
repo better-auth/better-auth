@@ -37,10 +37,6 @@ export const auth = betterAuth({
 The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
 your database schema based on your Better Auth configuration and plugins.
 
-<Callout type="warn">
-  CLI schema generation is currently supported for `pg`, `mysql`, and `sqlite` only. If you are using `provider: "mssql"`, define your `mssqlTable` schema by hand and pass it to `drizzleAdapter(db, { provider: "mssql", schema })` — MSSQL CLI generation is tracked as a follow-up.
-</Callout>
-
 To generate the schema required by Better Auth, run the following command:
 
 ```package-install
