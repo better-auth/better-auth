@@ -326,6 +326,7 @@ Most of the features of Better Auth will not work correctly.`,
 		},
 		secret,
 		secretConfig,
+		crypto: options.crypto,
 		rateLimit: {
 			...options.rateLimit,
 			enabled: options.rateLimit?.enabled ?? isProduction,

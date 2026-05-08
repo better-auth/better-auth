@@ -342,6 +342,16 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;
 			secretConfig: string | SecretConfig;
+			/**
+			 * Optional encryption hook for the JWE session cookie cache.
+			 * Mirrors `BetterAuthOptions.crypto`.
+			 */
+			crypto?:
+				| {
+						encrypt: (plaintext: string) => Promise<string>;
+						decrypt: (ciphertext: string) => Promise<string>;
+				  }
+				| undefined;
 			sessionConfig: {
 				updateAge: number;
 				expiresIn: number;

@@ -12,7 +12,10 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import type { SessionCryptoHook } from "../crypto/jwt";
 import {
+	hookDecodeSession,
+	hookEncodeSession,
 	signJWT,
 	symmetricDecodeJWT,
 	symmetricEncodeJWT,
@@ -195,13 +198,21 @@ export async function setCookieCache(
 	let data: string;
 
 	if (strategy === "jwe") {
-		// Use JWE strategy (JSON Web Encryption) with A256CBC-HS512 + HKDF
-		data = await symmetricEncodeJWT(
-			sessionData,
-			ctx.context.secretConfig,
-			"better-auth-session",
-			options.maxAge || 60 * 5,
-		);
+		// Use JWE strategy (JSON Web Encryption) with A256CBC-HS512 + HKDF.
+		// When a `crypto` hook is configured, delegate to it instead — the
+		// payload is JSON-stringified and replaced with hook ciphertext.
+		data = ctx.context.crypto
+			? await hookEncodeSession(
+					sessionData,
+					ctx.context.crypto,
+					options.maxAge || 60 * 5,
+				)
+			: await symmetricEncodeJWT(
+					sessionData,
+					ctx.context.secretConfig,
+					"better-auth-session",
+					options.maxAge || 60 * 5,
+				);
 	} else if (strategy === "jwt") {
 		// Use JWT strategy with HMAC-SHA256 signature (HS256), no encryption
 		data = await signJWT(
@@ -420,6 +431,13 @@ export const getCookieCache = async <
 				isSecure?: boolean;
 				secret?: string;
 				strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
+				/**
+				 * Custom encryption hook. When provided alongside
+				 * `strategy: "jwe"`, the built-in JWE codec is bypassed and
+				 * the cookie is decrypted via this hook. Must match the hook
+				 * configured on the `auth` instance.
+				 */
+				crypto?: SessionCryptoHook;
 				version?:
 					| string
 					| ((
@@ -477,22 +495,28 @@ export const getCookieCache = async <
 	}
 
 	if (sessionData) {
-		const secret = config?.secret || env.BETTER_AUTH_SECRET;
-		if (!secret) {
-			throw new BetterAuthError(
-				"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
-			);
-		}
-
 		const strategy = config?.strategy || "compact";
+		const secret = config?.secret || env.BETTER_AUTH_SECRET;
+
+		const requireSecret = () => {
+			if (!secret) {
+				throw new BetterAuthError(
+					"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
+				);
+			}
+			return secret;
+		};
 
 		if (strategy === "jwe") {
-			// Use JWE strategy (encrypted)
-			const payload = await symmetricDecodeJWT<S>(
-				sessionData,
-				secret,
-				"better-auth-session",
-			);
+			// `secret` is not needed when a `crypto` hook is provided —
+			// the hook owns the key.
+			const payload = config?.crypto
+				? await hookDecodeSession<S>(sessionData, config.crypto)
+				: await symmetricDecodeJWT<S>(
+						sessionData,
+						requireSecret(),
+						"better-auth-session",
+					);
 
 			if (payload && payload.session && payload.user) {
 				// Validate version if provided
@@ -514,7 +538,7 @@ export const getCookieCache = async <
 			return null;
 		} else if (strategy === "jwt") {
 			// Use JWT strategy with HMAC signature (HS256), no encryption
-			const payload = await verifyJWT<S>(sessionData, secret);
+			const payload = await verifyJWT<S>(sessionData, requireSecret());
 
 			if (payload && payload.session && payload.user) {
 				// Validate version if provided
@@ -545,7 +569,7 @@ export const getCookieCache = async <
 				return null;
 			}
 			const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
-				secret,
+				requireSecret(),
 				JSON.stringify({
 					...sessionDataPayload.session,
 					expiresAt: sessionDataPayload.expiresAt,

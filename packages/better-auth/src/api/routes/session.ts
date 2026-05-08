@@ -21,7 +21,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
-import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
+import { hookDecodeSession, symmetricDecodeJWT, verifyJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
@@ -112,18 +112,28 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						ctx.context.options.session?.cookieCache?.strategy || "compact";
 
 					if (strategy === "jwe") {
-						// Decode JWE (encrypted)
-						const payload = await symmetricDecodeJWT<{
-							session: Session;
-							user: User;
-							updatedAt: number;
-							version?: string;
-							exp?: number;
-						}>(
-							sessionDataCookie,
-							ctx.context.secretConfig,
-							"better-auth-session",
-						);
+						// Decode JWE (encrypted). When a `crypto` hook is
+						// configured, delegate to it instead of the built-in
+						// JWE codec.
+						const payload = ctx.context.crypto
+							? await hookDecodeSession<{
+									session: Session;
+									user: User;
+									updatedAt: number;
+									version?: string;
+									exp?: number;
+								}>(sessionDataCookie, ctx.context.crypto)
+							: await symmetricDecodeJWT<{
+									session: Session;
+									user: User;
+									updatedAt: number;
+									version?: string;
+									exp?: number;
+								}>(
+									sessionDataCookie,
+									ctx.context.secretConfig,
+									"better-auth-session",
+								);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {

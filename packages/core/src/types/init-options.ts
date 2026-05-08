@@ -465,6 +465,34 @@ export type BetterAuthOptions = {
 	 */
 	secrets?: Array<{ version: number; value: string }> | undefined;
 	/**
+	 * Override symmetric encryption for the JWE session cookie cache.
+	 *
+	 * Active only when `session.cookieCache.strategy === "jwe"`. When set,
+	 * the built-in JWE codec is bypassed: the session payload is
+	 * JSON-stringified, passed to `encrypt`, and the returned ciphertext
+	 * is what gets stored in the cookie. `decrypt` must return the
+	 * original JSON string.
+	 *
+	 * Useful for delegating to a KMS / HashiCorp Vault Transit so the
+	 * application never holds the encryption key.
+	 *
+	 * Strict scope: this hook is NOT used for any other crypto in the
+	 * library (OAuth tokens, 2FA secrets, JWKS rows, OAuth state cookie,
+	 * OIDC codes, email-otp, oauth-proxy). Those continue to use
+	 * `secret` / `secrets`.
+	 *
+	 * NOTE: Enabling this on a running deployment makes existing JWE
+	 * cookies unreadable; affected requests fall through to the database
+	 * / secondary storage on the next read (normal cookie-cache miss
+	 * behavior). No persisted data is impacted.
+	 */
+	crypto?:
+		| {
+				encrypt: (plaintext: string) => Promise<string>;
+				decrypt: (ciphertext: string) => Promise<string>;
+		  }
+		| undefined;
+	/**
 	 * Database configuration
 	 */
 	database?:
