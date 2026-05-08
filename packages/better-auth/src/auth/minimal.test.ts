@@ -13,6 +13,11 @@ describe("auth-minimal", () => {
 		expectTypeOf<T>().toEqualTypeOf<Auth>();
 	});
 
+	it("auth.fetch should be the same reference as auth.handler", () => {
+		const auth = betterAuth({});
+		expect(auth.fetch).toBe(auth.handler);
+	});
+
 	it("should initialize with adapter without Kysely dependencies", async () => {
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
