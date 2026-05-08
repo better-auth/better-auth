@@ -658,6 +658,17 @@ describe("SAML SSO with defaultSSO array", async () => {
 			redirect: true,
 		});
 	});
+
+	it("should fetch sp metadata for a defaultSSO provider", async () => {
+		const spMetadataRes = await auth.api.spMetadata({
+			query: {
+				providerId: "default-saml",
+			},
+		});
+		const spMetadataResValue = await spMetadataRes.text();
+		expect(spMetadataRes.status).toBe(200);
+		expect(spMetadataResValue).toBe(spMetadata);
+	});
 });
 
 describe("SAML SSO with signed AuthnRequests", async () => {
