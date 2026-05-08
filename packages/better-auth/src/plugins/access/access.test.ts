@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAccessControl } from "./access";
 
 describe("access", () => {
@@ -19,6 +19,32 @@ describe("access", () => {
 			project: ["create"],
 		});
 		expect(response.success).toBe(true);
+	});
+
+	it("should preserve exact role statement types", () => {
+		const role2 = ac.newRole({
+			project: ["create", "update"],
+			ui: ["view"],
+		});
+
+		expectTypeOf(role2.statements.project).toEqualTypeOf<
+			readonly ["create", "update"]
+		>();
+		expectTypeOf(role2.statements.ui).toEqualTypeOf<readonly ["view"]>();
+
+		const failedResponse = role2.authorize({
+			project: ["delete-many"],
+		});
+		expect(failedResponse.success).toBe(false);
+	});
+
+	it("should reject invalid role statements at type level", () => {
+		// @ts-expect-error - "publish" is not part of the project statement.
+		ac.newRole({ project: ["publish"] });
+		// @ts-expect-error - "billing" is not a configured resource.
+		ac.newRole({ billing: ["read"] });
+
+		expect(true).toBe(true);
 	});
 
 	it("should validate permissions", async () => {
