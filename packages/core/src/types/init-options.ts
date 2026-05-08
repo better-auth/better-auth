@@ -476,6 +476,22 @@ export type BetterAuthOptions = {
 	 * Useful for delegating to a KMS / HashiCorp Vault Transit so the
 	 * application never holds the encryption key.
 	 *
+	 * **Ciphertext format requirements.** The string returned by `encrypt`
+	 * is written into a `Set-Cookie` value and, for payloads over the
+	 * 4093-byte cookie limit, split into chunks by raw string length and
+	 * re-joined verbatim on read. To stay safe across browsers and the
+	 * chunking path, the ciphertext MUST be:
+	 *
+	 * - printable ASCII only (base64url is recommended);
+	 * - free of cookie delimiters and whitespace (`;`, `,`, `=`, space,
+	 *   tabs, CR, LF) and free of control characters;
+	 * - byte-splittable at any offset (no multi-byte sequences that the
+	 *   chunk re-join could tear).
+	 *
+	 * Vault Transit's `vault:v1:<base64>` and AWS KMS base64 ciphertext
+	 * blobs satisfy these constraints. Raw binary or arbitrary UTF-8 does
+	 * not — base64url-encode it before returning.
+	 *
 	 * Strict scope: this hook is NOT used for any other crypto in the
 	 * library (OAuth tokens, 2FA secrets, JWKS rows, OAuth state cookie,
 	 * OIDC codes, email-otp, oauth-proxy). Those continue to use
