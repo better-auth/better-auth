@@ -26,6 +26,7 @@ export type {
 	StoreIdentifierOption,
 } from "./init-options";
 export type {
+	BeforeSendCallback,
 	BetterAuthPlugin,
 	BetterAuthPluginErrorCodePart,
 	HookEndpointContext,

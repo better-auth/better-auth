@@ -18,6 +18,12 @@ type DeepPartial<T> = T extends Function
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
 
+/**
+ * Runs once before the response is sent.
+ * Multiple registrations run in LIFO order.
+ */
+export type BeforeSendCallback = () => void | Promise<void>;
+
 export type HookEndpointContext = Partial<
 	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
 > & {
@@ -25,6 +31,12 @@ export type HookEndpointContext = Partial<
 	context: AuthContext & {
 		returned?: unknown | undefined;
 		responseHeaders?: Headers | undefined;
+		/**
+		 * Register a callback that runs in LIFO order after every
+		 * `hooks.after` completes and right before the response is
+		 * dispatched.
+		 */
+		registerBeforeSend: (callback: BeforeSendCallback) => void;
 	};
 	headers?: Headers | undefined;
 };

@@ -1,4 +1,8 @@
-import type { AuthContext, HookEndpointContext } from "@better-auth/core";
+import type {
+	AuthContext,
+	BeforeSendCallback,
+	HookEndpointContext,
+} from "@better-auth/core";
 import type { AuthMiddleware } from "@better-auth/core/api";
 import {
 	hasRequestState,
@@ -39,8 +43,43 @@ type InternalContext = Partial<
 		logger: AuthContext["logger"];
 		returned?: unknown | undefined;
 		responseHeaders?: Headers | undefined;
+		registerBeforeSend: (callback: BeforeSendCallback) => void;
 	};
 };
+
+function createBeforeSendQueue(logger: AuthContext["logger"]) {
+	const callbacks: BeforeSendCallback[] = [];
+	let drained = false;
+	return {
+		register(callback: BeforeSendCallback) {
+			if (drained) {
+				logger.warn(
+					"`registerBeforeSend` was called after the response pipeline finished. The callback will be ignored.",
+				);
+				return;
+			}
+			callbacks.push(callback);
+		},
+		async drain() {
+			drained = true;
+			const errors: unknown[] = [];
+			for (let i = callbacks.length - 1; i >= 0; i--) {
+				try {
+					await callbacks[i]!();
+				} catch (err) {
+					errors.push(err);
+				}
+			}
+			if (errors.length === 1) throw errors[0];
+			if (errors.length > 1) {
+				throw new AggregateError(
+					errors,
+					"Errors thrown by `registerBeforeSend` callbacks",
+				);
+			}
+		},
+	};
+}
 
 const defuReplaceArrays = createDefu((obj, key, value) => {
 	if (Array.isArray(obj[key]) && Array.isArray(value)) {
@@ -146,6 +185,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
 
+				const beforeSend = createBeforeSendQueue(authContext.logger);
 				let internalContext: InternalContext = {
 					...context,
 					context: {
@@ -153,6 +193,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 						returned: undefined,
 						responseHeaders: undefined,
 						session: null,
+						registerBeforeSend: beforeSend.register,
 					},
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
@@ -291,6 +332,12 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								endpoint,
 								operationId,
 							);
+
+							/**
+							 * Hooks.after may still mutate `responseHeaders`; drain
+							 * after the loop so callbacks observe the final state.
+							 */
+							await beforeSend.drain();
 
 							if (after.response) {
 								result.response = after.response;

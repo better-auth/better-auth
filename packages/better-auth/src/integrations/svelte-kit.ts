@@ -3,7 +3,6 @@ import type { RequestEvent } from "@sveltejs/kit";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import { PACKAGE_VERSION } from "../version";
-import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => Response | Promise<Response>;
@@ -58,33 +57,27 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 export const sveltekitCookies = (
 	getRequestEvent: () => RequestEvent<any, any>,
 ) => {
-	let hasWarned = false;
-
 	return {
 		id: "sveltekit-cookies",
 		version: PACKAGE_VERSION,
 		hooks: {
-			after: [
+			before: [
 				{
 					matcher() {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (!hasWarned) {
-							warnIfCookiePluginNotLast(ctx.context, "sveltekit-cookies");
-							hasWarned = true;
-						}
-						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
-						if (returned instanceof Headers) {
-							const setCookies = returned?.get("set-cookie");
+						ctx.context.registerBeforeSend(async () => {
+							const returned = ctx.context.responseHeaders;
+							if (!(returned instanceof Headers)) return;
+							const setCookies = returned.get("set-cookie");
 							if (!setCookies) return;
 							const event = getRequestEvent();
 							if (!event) return;
 							const parsed = parseSetCookieHeader(setCookies);
-
 							for (const [name, attributes] of parsed) {
 								try {
 									event.cookies.set(name, attributes.value, {
@@ -95,7 +88,7 @@ export const sveltekitCookies = (
 									// this will avoid any issue related to already streamed response
 								}
 							}
-						}
+						});
 					}),
 				},
 			],
