@@ -13,7 +13,7 @@ body:
       value: |
         Thank you for reporting a bug with better-auth!
 
-        - Feature requests should be opened [here](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml).
+        - If you have a feature request, please use the [feature request form](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml) instead.
         - Before opening a new issue, please check for [existing issues](https://github.com/better-auth/better-auth/issues) and :+1: upvote the existing issue instead. This will result in a quicker resolution.
   - type: textarea
     attributes:
