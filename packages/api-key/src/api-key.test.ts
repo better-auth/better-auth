@@ -1018,7 +1018,7 @@ describe("api-key", async () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/XXXX
+	 * @see https://github.com/better-auth/better-auth/issues/9504
 	 */
 	it("should return 429 when API key rate limit is exceeded via before hook", async () => {
 		const {
