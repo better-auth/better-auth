@@ -49,7 +49,7 @@ export interface DrizzleAdapterConfig {
 	/**
 	 * The database provider
 	 */
-	provider: "pg" | "mysql" | "sqlite";
+	provider: "pg" | "mysql" | "sqlite" | "mssql";
 	/**
 	 * If the table names in the schema are plural
 	 * set this to true. For example, if the schema
@@ -105,10 +105,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				data: Record<string, any>,
 				where?: Where[] | undefined,
 			) => {
-				if (config.provider !== "mysql") {
+				if (config.provider !== "mysql" && config.provider !== "mssql") {
 					const c = await builder.returning();
 					return c[0];
 				}
+				// MySQL and MSSQL do not support .returning() in the same shape:
+				// MySQL has no RETURNING clause; MSSQL uses OUTPUT but with a
+				// different builder shape (.output() before .values()). Both fall
+				// back to executing the write, then re-selecting the affected row.
 				await builder.execute();
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
@@ -132,8 +136,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					let tId = builderVal[0]?.id?.value;
 					if (!tId) {
 						//get last inserted id
+						const lastInsertIdSql =
+							config.provider === "mssql"
+								? sql`SCOPE_IDENTITY()`
+								: sql`LAST_INSERT_ID()`;
 						const lastInsertId = await db
-							.select({ id: sql`LAST_INSERT_ID()` })
+							.select({ id: lastInsertIdSql })
 							.from(schemaModel)
 							.orderBy(desc(schemaModel.id))
 							.limit(1);
