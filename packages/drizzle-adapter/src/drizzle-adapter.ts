@@ -27,6 +27,7 @@ import {
 	ne,
 	notInArray,
 	or,
+	sql,
 } from "drizzle-orm";
 import {
 	insensitiveEq,
@@ -225,6 +226,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				// back to executing the write, then re-selecting the affected row.
 				await builder.execute();
 				const schemaModel = getSchema(model);
+				// MSSQL's drizzle select builder has no .limit(); use TOP(N)
+				// chained on the pre-from builder instead. These two helpers
+				// keep the rest of the code shape-agnostic across providers.
+				const withTop = (b: any, n: number) =>
+					config.provider === "mssql" ? b.top(n) : b;
+				const withLimit = (b: any, n: number) =>
+					config.provider === "mssql" ? b : b.limit(n);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
 					const updatedWhere = where.map((w) => {
@@ -246,23 +254,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					// 1. Known id from the Drizzle builder internals
 					const builderId = builderVal?.[0]?.id?.value;
 					if (builderId) {
-						const res = await tx
-							.select()
-							.from(schemaModel)
-							.where(eq(schemaModel.id, builderId))
-							.limit(1)
-							.execute();
+						const res = await withLimit(
+							withTop(tx.select(), 1)
+								.from(schemaModel)
+								.where(eq(schemaModel.id, builderId)),
+							1,
+						).execute();
 						return res[0] ?? null;
 					}
 
 					// 2. Known id from the data object
 					if (data.id) {
-						const res = await tx
-							.select()
-							.from(schemaModel)
-							.where(eq(schemaModel.id, data.id))
-							.limit(1)
-							.execute();
+						const res = await withLimit(
+							withTop(tx.select(), 1)
+								.from(schemaModel)
+								.where(eq(schemaModel.id, data.id)),
+							1,
+						).execute();
 						return res[0] ?? null;
 					}
 
@@ -276,19 +284,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							config.provider === "mssql"
 								? sql`SCOPE_IDENTITY()`
 								: sql`LAST_INSERT_ID()`;
-						const lastInsertId = await tx
-							.select({ id: lastInsertIdSql })
-							.from(schemaModel)
-							.limit(1)
-							.execute();
+						const lastInsertId = await withLimit(
+							withTop(tx.select({ id: lastInsertIdSql }), 1).from(schemaModel),
+							1,
+						).execute();
 						const lastId = lastInsertId[0]?.id;
 						if (lastId) {
-							const res = await tx
-								.select()
-								.from(schemaModel)
-								.where(eq(schemaModel.id, lastId))
-								.limit(1)
-								.execute();
+							const res = await withLimit(
+								withTop(tx.select(), 1)
+									.from(schemaModel)
+									.where(eq(schemaModel.id, lastId)),
+								1,
+							).execute();
 							return res[0] ?? null;
 						}
 					}
@@ -305,17 +312,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const val = data[dbFieldName];
 							if (val === undefined || val === null) continue;
 							if (!schemaModel[dbFieldName]) continue;
-							const res = await tx
-								.select()
-								.from(schemaModel)
-								.where(eq(schemaModel[dbFieldName], val))
-								.limit(1)
-								.execute();
+							const res = await withLimit(
+								withTop(tx.select(), 1)
+									.from(schemaModel)
+									.where(eq(schemaModel[dbFieldName], val)),
+								1,
+							).execute();
 							if (res[0]) return res[0];
 						}
 					}
 
-					// 5. Full-field match (last resort) — LIMIT 2 to detect ambiguity
+					// 5. Full-field match (last resort) — TOP/LIMIT 2 to detect ambiguity
 					const conditions: SQL<unknown>[] = [];
 					for (const [key, val] of Object.entries(data)) {
 						if (val === undefined || !schemaModel[key]) continue;
@@ -328,12 +335,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (conditions.length > 0) {
 						const combined = and(...conditions);
 						if (combined) {
-							const res = await tx
-								.select()
-								.from(schemaModel)
-								.where(combined)
-								.limit(2)
-								.execute();
+							const res = await withLimit(
+								withTop(tx.select(), 2).from(schemaModel).where(combined),
+								2,
+							).execute();
 							if (res.length === 1) return res[0];
 						}
 					}
@@ -922,37 +927,82 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 
-					let builder = db
-						.select(
-							select?.length && select.length > 0
-								? select.reduce((acc, field) => {
+					const selectShape =
+						select?.length && select.length > 0
+							? select.reduce(
+									(acc, field) => {
 										const fieldName = getFieldName({ model, field });
 										return {
 											...acc,
 											[fieldName]: schemaModel[fieldName],
 										};
-									}, {})
-								: undefined,
-						)
-						.from(schemaModel);
+									},
+									{} as Record<string, unknown>,
+								)
+							: undefined;
+					const baseSelect = selectShape ? db.select(selectShape) : db.select();
 
 					const effectiveLimit = limit;
 					const effectiveOffset = offset;
+					const sortByField = sortBy?.field;
 
-					if (typeof effectiveLimit !== "undefined") {
-						builder = builder.limit(effectiveLimit);
-					}
+					let builder: any;
+					if (config.provider === "mssql") {
+						// MSSQL select builder has no .limit() or .offset() chain.
+						// Two paths exist: TOP(N) (must precede .from()) for the
+						// simple "limit only, no offset, no sort" case, and
+						// OFFSET/FETCH (after ORDER BY) for everything else.
+						// SQL Server requires an ORDER BY when OFFSET/FETCH is used,
+						// so when the caller hasn't supplied one we fall back to
+						// ascending id ordering, which is deterministic and matches
+						// what the existing pg/mysql/sqlite paths effectively do
+						// when no sort is requested.
+						const useTopOnly =
+							typeof effectiveLimit !== "undefined" &&
+							typeof effectiveOffset === "undefined" &&
+							!sortByField;
+						builder = useTopOnly
+							? baseSelect.top(effectiveLimit).from(schemaModel)
+							: baseSelect.from(schemaModel);
 
-					if (typeof effectiveOffset !== "undefined") {
-						builder = builder.offset(effectiveOffset);
-					}
+						if (sortByField) {
+							builder = builder.orderBy(
+								sortFn(
+									schemaModel[getFieldName({ model, field: sortByField })],
+								),
+							);
+						}
 
-					if (sortBy?.field) {
-						builder = builder.orderBy(
-							sortFn(
-								schemaModel[getFieldName({ model, field: sortBy?.field })],
-							),
-						);
+						const needsOffsetFetch =
+							typeof effectiveOffset !== "undefined" ||
+							(typeof effectiveLimit !== "undefined" && !useTopOnly);
+						if (needsOffsetFetch) {
+							if (!sortByField) {
+								builder = builder.orderBy(asc(schemaModel.id));
+							}
+							builder = builder.offset(effectiveOffset ?? 0);
+							if (typeof effectiveLimit !== "undefined") {
+								builder = builder.fetch(effectiveLimit);
+							}
+						}
+					} else {
+						builder = baseSelect.from(schemaModel);
+
+						if (typeof effectiveLimit !== "undefined") {
+							builder = builder.limit(effectiveLimit);
+						}
+
+						if (typeof effectiveOffset !== "undefined") {
+							builder = builder.offset(effectiveOffset);
+						}
+
+						if (sortByField) {
+							builder = builder.orderBy(
+								sortFn(
+									schemaModel[getFieldName({ model, field: sortByField })],
+								),
+							);
+						}
 					}
 
 					const res = await builder.where(...clause);

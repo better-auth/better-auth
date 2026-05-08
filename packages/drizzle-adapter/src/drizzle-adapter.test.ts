@@ -216,13 +216,17 @@ describe("drizzle-adapter", () => {
 			};
 			const returning = vi.fn();
 			const execute = vi.fn().mockResolvedValue(undefined);
-			const limit = vi
-				.fn()
-				.mockReturnValue({ execute: vi.fn().mockResolvedValue([insertedRow]) });
-			const where = vi.fn().mockReturnValue({ limit });
-			const orderBy = vi.fn().mockReturnValue({ limit });
+			// MSSQL select shape: db.select().top(1).from(table).where(...).execute()
+			// — no .limit() in the chain. Asserting that .top() is called and
+			// .limit() is not is what makes this test meaningful for MSSQL.
+			const top = vi.fn();
+			const limit = vi.fn();
+			const finalExecute = vi.fn().mockResolvedValue([insertedRow]);
+			const where = vi.fn().mockReturnValue({ execute: finalExecute, limit });
+			const orderBy = vi.fn().mockReturnValue({ execute: finalExecute, limit });
 			const from = vi.fn().mockReturnValue({ where, orderBy });
-			const select = vi.fn().mockReturnValue({ from });
+			top.mockReturnValue({ from });
+			const select = vi.fn().mockReturnValue({ from, top });
 			const db = {
 				_: { fullSchema: { user: userTable } },
 				insert: vi.fn().mockReturnValue({
@@ -244,6 +248,10 @@ describe("drizzle-adapter", () => {
 
 			expect(execute).toHaveBeenCalledTimes(1);
 			expect(returning).not.toHaveBeenCalled();
+			// MSSQL re-select must use TOP(1), not .limit(1) — the latter
+			// throws at runtime because mssql-core doesn't expose .limit().
+			expect(top).toHaveBeenCalledWith(1);
+			expect(limit).not.toHaveBeenCalled();
 		});
 
 		it("should throw when schema is not provided", async () => {
