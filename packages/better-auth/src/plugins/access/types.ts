@@ -25,6 +25,15 @@ export type RoleStatements<TStatements extends Statements> = {
 	readonly [P in keyof TStatements]?: SubArray<TStatements[P]>;
 };
 
+export type RoleInput<
+	TStatements extends Statements,
+	TRoleStatements extends Statements,
+> = TRoleStatements &
+	(string extends keyof TRoleStatements
+		? {}
+		: RoleStatements<TStatements> &
+				Record<Exclude<keyof TRoleStatements, keyof TStatements>, never>);
+
 export type ExactRoleStatements<TStatements extends Statements> = {
 	readonly [P in keyof TStatements]: readonly [...TStatements[P]];
 };

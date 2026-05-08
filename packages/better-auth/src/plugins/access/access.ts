@@ -3,7 +3,7 @@ import type {
 	ExactRoleStatements,
 	Role,
 	RoleAuthorizeRequest,
-	RoleStatements,
+	RoleInput,
 	Statements,
 } from "./types";
 
@@ -85,9 +85,7 @@ export function createAccessControl<const TStatements extends Statements>(
 ) {
 	return {
 		newRole<const TRoleStatements extends Statements>(
-			statements: TRoleStatements &
-				RoleStatements<TStatements> &
-				Record<Exclude<keyof TRoleStatements, keyof TStatements>, never>,
+			statements: RoleInput<TStatements, TRoleStatements>,
 		) {
 			return role<TRoleStatements, TStatements>(statements);
 		},

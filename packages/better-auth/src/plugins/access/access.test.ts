@@ -47,6 +47,19 @@ describe("access", () => {
 		expect(true).toBe(true);
 	});
 
+	it("should accept dynamic role records", () => {
+		const dynamicStatements: Record<string, string[]> = {
+			project: ["create"],
+			ui: ["view"],
+		};
+
+		const dynamicRole = ac.newRole(dynamicStatements);
+		const response = dynamicRole.authorize({
+			project: ["create"],
+		});
+		expect(response.success).toBe(true);
+	});
+
 	it("should validate permissions", async () => {
 		const response = role1.authorize({
 			project: ["create"],
