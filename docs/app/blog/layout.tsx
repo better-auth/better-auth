@@ -1,18 +1,45 @@
+import { RootProvider } from "fumadocs-ui/provider/next";
 import type { Metadata } from "next";
+import { createMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-	title: "Blog - Better Auth",
-	description: "Latest updates, articles, and insights about Better Auth",
-};
+const description = "Latest updates, articles, and insights about Better Auth";
 
-interface BlogLayoutProps {
+export const metadata: Metadata = createMetadata({
+	title: "Blog",
+	description,
+	openGraph: {
+		url: "/blog",
+		title: "Blog - Better Auth",
+		description,
+		images: ["/api/og-release?heading=Better%20Auth%20Blog"],
+	},
+	twitter: {
+		images: ["/api/og-release?heading=Better%20Auth%20Blog"],
+		title: "Blog - Better Auth",
+		description,
+	},
+	alternates: {
+		types: {
+			"application/rss+xml": [
+				{
+					title: "Better Auth Blog",
+					url: "https://better-auth.com/blog/rss.xml",
+				},
+			],
+		},
+	},
+});
+
+export default function BlogLayout({
+	children,
+}: {
 	children: React.ReactNode;
-}
-
-export default function BlogLayout({ children }: BlogLayoutProps) {
+}) {
 	return (
-		<div className="relative flex min-h-screen flex-col no-scrollbar">
-			<main className="flex-1">{children}</main>
-		</div>
+		<RootProvider>
+			<div className="relative flex min-h-screen flex-col">
+				<main className="flex-1">{children}</main>
+			</div>
+		</RootProvider>
 	);
 }

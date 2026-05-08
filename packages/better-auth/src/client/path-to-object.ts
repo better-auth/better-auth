@@ -6,6 +6,7 @@ import type { BetterFetchResponse } from "@better-fetch/fetch";
 import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
 import type {
 	HasRequiredKeys,
+	IsAny,
 	Prettify,
 	UnionToIntersection,
 } from "../types/helper";
@@ -40,6 +41,28 @@ type ReplaceAuthUserAndSession<
 	"session",
 	InferSessionFromClient<ClientOpts>
 >;
+
+type MergeCustomSessionField<
+	R extends object,
+	Field extends "user" | "session",
+	InferType,
+> = Field extends keyof R
+	? {
+			[K in Field]: KeepNullishFromOriginal<
+				R[K],
+				NonNullable<R[K]> & InferType
+			>;
+		}
+	: {};
+
+type MergeCustomSessionWithInferred<
+	R,
+	ClientOpts extends BetterAuthClientOptions,
+> = R extends object
+	? Omit<R, "user" | "session"> &
+			MergeCustomSessionField<R, "user", InferUserFromClient<ClientOpts>> &
+			MergeCustomSessionField<R, "session", InferSessionFromClient<ClientOpts>>
+	: never;
 
 type RefineAuthResponse<
 	Data,
@@ -86,27 +109,35 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+type InferCtxQuery<
+	C extends InputContext<any, any>,
+	FetchOptions extends ClientFetchOption,
+> =
+	C["query"] extends Record<string, any>
+		? {
+				query: C["query"];
+				fetchOptions?: FetchOptions | undefined;
+			}
+		: C["query"] extends Record<string, any> | undefined
+			? {
+					query?: C["query"] | undefined;
+					fetchOptions?: FetchOptions | undefined;
+				}
+			: {
+					fetchOptions?: FetchOptions | undefined;
+				};
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > =
-	C["body"] extends Record<string, any>
-		? C["body"] & {
-				fetchOptions?: FetchOptions | undefined;
-			}
-		: C["query"] extends Record<string, any>
-			? {
-					query: C["query"];
+	IsAny<C["body"]> extends true
+		? InferCtxQuery<C, FetchOptions>
+		: C["body"] extends Record<string, any>
+			? C["body"] & {
 					fetchOptions?: FetchOptions | undefined;
 				}
-			: C["query"] extends Record<string, any> | undefined
-				? {
-						query?: C["query"] | undefined;
-						fetchOptions?: FetchOptions | undefined;
-					}
-				: {
-						fetchOptions?: FetchOptions | undefined;
-					};
+			: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -162,7 +193,10 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											T["options"]["metadata"] extends {
 												CUSTOM_SESSION: boolean;
 											}
-												? NonNullable<Awaited<R>>
+												? MergeCustomSessionWithInferred<
+														NonNullable<Awaited<R>>,
+														COpts
+													>
 												: T["path"] extends "/get-session"
 													? {
 															user: InferUserFromClient<COpts>;
@@ -192,7 +226,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 		: never;
 
 export type InferRoutes<
-	API extends Record<string, Endpoint>,
+	API extends Record<string, unknown>,
 	ClientOpts extends BetterAuthClientOptions,
 > = MergeRoutes<InferRoute<API, ClientOpts>>;
 

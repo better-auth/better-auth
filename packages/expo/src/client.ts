@@ -3,6 +3,7 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import {
 	parseSetCookieHeader,
@@ -14,6 +15,7 @@ import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
+import { PACKAGE_VERSION } from "./version";
 
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
@@ -286,8 +288,28 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	}
 	return {
 		id: "expo",
+		version: PACKAGE_VERSION,
 		getActions(_, $store) {
 			store = $store;
+			// Restore the last persisted session as the initial value of the session atom
+			const sessionAtom = $store.atoms.session;
+			if (!isWeb && !opts?.disableCache && sessionAtom) {
+				const raw = storage.getItem(localCacheName);
+				const cached = raw
+					? safeJSONParse<{ user: User; session: Session }>(raw)
+					: null;
+				const exp = cached?.session?.expiresAt;
+				const expMs = exp ? new Date(exp).getTime() : Number.NaN;
+				const isFresh =
+					!!cached?.user?.id && !!cached.session?.id && expMs > Date.now();
+				if (isFresh) {
+					sessionAtom.set({
+						...sessionAtom.get(),
+						data: cached,
+						error: null,
+					});
+				}
+			}
 			return {
 				/**
 				 * Get the stored cookie.
@@ -415,48 +437,60 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						};
 					}
 					options = options || {};
-					const storedCookie = storage.getItem(cookieName);
-					const cookie = getCookie(storedCookie || "{}");
 					options.credentials = "omit";
-					options.headers = {
-						...options.headers,
-						...(cookie ? { cookie } : {}),
-						"expo-origin": getOrigin(scheme!),
-						"x-skip-oauth-proxy": "true", // skip oauth proxy for expo
-					};
-					if (options.body?.callbackURL) {
-						if (options.body.callbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.callbackURL, {
-								scheme,
-							});
-							options.body.callbackURL = url;
+					/**
+					 * ID token flow (native sign-in) doesn't need cookie-based auth.
+					 * The ID token itself is cryptographically signed by the provider
+					 * and validated server-side, so no session cookies or origin
+					 * validation is required.
+					 *
+					 * Sending cookie/expo-origin headers for ID token requests triggers
+					 * unnecessary origin checks that fail for custom URL schemes.
+					 */
+					const isIdTokenRequest = options.body?.idToken !== undefined;
+
+					if (isIdTokenRequest) {
+						options.headers = {
+							...options.headers,
+							"x-skip-oauth-proxy": "true",
+						};
+					} else {
+						const storedCookie = storage.getItem(cookieName);
+						const cookie = getCookie(storedCookie || "{}");
+						options.headers = {
+							...options.headers,
+							...(cookie ? { cookie } : {}),
+							"expo-origin": getOrigin(scheme!),
+							"x-skip-oauth-proxy": "true",
+						};
+						if (options.body?.callbackURL) {
+							if (options.body.callbackURL.startsWith("/")) {
+								const url = Linking.createURL(options.body.callbackURL);
+								options.body.callbackURL = url;
+							}
 						}
-					}
-					if (options.body?.newUserCallbackURL) {
-						if (options.body.newUserCallbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.newUserCallbackURL, {
-								scheme,
-							});
-							options.body.newUserCallbackURL = url;
+						if (options.body?.newUserCallbackURL) {
+							if (options.body.newUserCallbackURL.startsWith("/")) {
+								const url = Linking.createURL(options.body.newUserCallbackURL);
+								options.body.newUserCallbackURL = url;
+							}
 						}
-					}
-					if (options.body?.errorCallbackURL) {
-						if (options.body.errorCallbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.errorCallbackURL, {
-								scheme,
-							});
-							options.body.errorCallbackURL = url;
+						if (options.body?.errorCallbackURL) {
+							if (options.body.errorCallbackURL.startsWith("/")) {
+								const url = Linking.createURL(options.body.errorCallbackURL);
+								options.body.errorCallbackURL = url;
+							}
 						}
-					}
-					if (url.includes("/sign-out")) {
-						storage.setItem(cookieName, "{}");
-						store?.atoms.session?.set({
-							...store.atoms.session.get(),
-							data: null,
-							error: null,
-							isPending: false,
-						});
-						storage.setItem(localCacheName, "{}");
+						if (url.includes("/sign-out")) {
+							storage.setItem(cookieName, "{}");
+							store?.atoms.session?.set({
+								...store.atoms.session.get(),
+								data: null,
+								error: null,
+								isPending: false,
+							});
+							storage.setItem(localCacheName, "{}");
+						}
 					}
 					return {
 						url,

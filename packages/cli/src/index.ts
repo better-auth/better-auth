@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { ai } from "./commands/ai";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
@@ -8,6 +9,7 @@ import { login, logout } from "./commands/login";
 import { mcp } from "./commands/mcp";
 import { migrate } from "./commands/migrate";
 import { generateSecret } from "./commands/secret";
+import { upgrade } from "./commands/upgrade";
 import { getPackageInfo } from "./utils/get-package-info";
 
 import "dotenv/config";
@@ -29,6 +31,7 @@ async function main() {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
 	program
+		.addCommand(ai)
 		.addCommand(init)
 		.addCommand(migrate)
 		.addCommand(generate)
@@ -37,6 +40,7 @@ async function main() {
 		.addCommand(login)
 		.addCommand(logout)
 		.addCommand(mcp)
+		.addCommand(upgrade)
 		.version(cliVersion)
 		.description("Better Auth CLI")
 		.action(() => program.help());

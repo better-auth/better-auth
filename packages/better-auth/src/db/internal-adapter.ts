@@ -16,7 +16,7 @@ import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import {
-	parseSessionInput,
+	getSessionDefaultFields,
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
@@ -24,6 +24,7 @@ import {
 	getStorageOption,
 	processIdentifier,
 } from "./verification-token-storage";
+import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
 
 function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
@@ -37,7 +38,7 @@ export const createInternalAdapter = (
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
 		logger: InternalLogger;
-		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		hooks: DatabaseHooksEntry[];
 		generateId: AuthContext["generateId"];
 	},
 ): InternalAdapter => {
@@ -98,6 +99,7 @@ export const createInternalAdapter = (
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						...user,
+						email: user.email?.toLowerCase(),
 					},
 					"user",
 					undefined,
@@ -155,7 +157,10 @@ export const createInternalAdapter = (
 			);
 			return createdAccount as T & Account;
 		},
-		listSessions: async (userId: string) => {
+		listSessions: async (
+			userId: string,
+			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
+		) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -207,6 +212,15 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 			});
 			return sessions;
@@ -293,9 +307,18 @@ export const createInternalAdapter = (
 				...rest
 			} = override || {};
 
+			// When secondary storage is the only store, the database adapter
+			// won't run, so we need to generate an id ourselves.
+			let sessionId: string | undefined;
+			if (secondaryStorage && !storeInDb) {
+				const generatedId = ctx.generateId({ model: "session" });
+				sessionId = generatedId !== false ? generatedId : generateId();
+			}
+
 			// we're parsing default values for session additional fields
-			const defaultAdditionalFields = parseSessionInput(options, {});
+			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
+				...(sessionId ? { id: sessionId } : {}),
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -397,7 +420,14 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+				// When preserveSessionInDatabase is enabled, revoked sessions
+				// remain in the database for audit purposes. Skip the database
+				// fallback to prevent those revoked sessions from being restored.
+				if (
+					!sessionStringified &&
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase)
+				) {
 					return null;
 				}
 				if (sessionStringified) {
@@ -450,7 +480,14 @@ export const createInternalAdapter = (
 				user: parsedUser,
 			};
 		},
-		findSessions: async (sessionTokens: string[]) => {
+		findSessions: async (
+			sessionTokens: string[],
+			options?:
+				| {
+						onlyActiveSessions?: boolean | undefined;
+				  }
+				| undefined,
+		) => {
 			if (secondaryStorage) {
 				const sessions: {
 					session: Session;
@@ -468,7 +505,11 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s?.session) continue;
+							if (!s) return [];
+							const expiresAt = new Date(s.session.expiresAt);
+							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
+								continue;
+							}
 							const session = {
 								session: {
 									...s.session,
@@ -503,6 +544,15 @@ export const createInternalAdapter = (
 						value: sessionTokens,
 						operator: "in",
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 				join: {
 					user: true,
@@ -878,7 +928,10 @@ export const createInternalAdapter = (
 			data: Partial<User> & Record<string, any>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "id",
@@ -896,7 +949,10 @@ export const createInternalAdapter = (
 			data: Partial<User & Record<string, any>>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "email",
@@ -1107,19 +1163,6 @@ export const createInternalAdapter = (
 
 			return (verification[0] as Verification) || null;
 		},
-		/**
-		 * Note: In secondary-only mode, this is a no-op since secondary storage
-		 * is keyed by identifier, not id. Use deleteVerificationByIdentifier instead.
-		 */
-		deleteVerificationValue: async (id: string) => {
-			if (!secondaryStorage || options.verification?.storeInDatabase) {
-				await deleteWithHooks(
-					[{ field: "id", value: id }],
-					"verification",
-					undefined,
-				);
-			}
-		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			const storageOption = getStorageOption(
 				identifier,
@@ -1142,17 +1185,56 @@ export const createInternalAdapter = (
 				);
 			}
 		},
-		updateVerificationValue: async (
-			id: string,
+		updateVerificationByIdentifier: async (
+			identifier: string,
 			data: Partial<Verification>,
 		) => {
-			const verification = await updateWithHooks<Verification>(
-				data,
-				[{ field: "id", value: id }],
-				"verification",
-				undefined,
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
 			);
-			return verification;
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const cached = await secondaryStorage.get(
+					`verification:${storedIdentifier}`,
+				);
+				if (cached) {
+					const parsed = safeJSONParse<Verification>(cached);
+					if (parsed) {
+						const updated = { ...parsed, ...data };
+						const expiresAt = updated.expiresAt ?? parsed.expiresAt;
+						const ttl = getTTLSeconds(
+							expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
+						);
+						if (ttl > 0) {
+							await secondaryStorage.set(
+								`verification:${storedIdentifier}`,
+								JSON.stringify(updated),
+								ttl,
+							);
+						}
+						if (!options.verification?.storeInDatabase) {
+							return updated;
+						}
+					}
+				}
+			}
+
+			if (!secondaryStorage || options.verification?.storeInDatabase) {
+				const verification = await updateWithHooks<Verification>(
+					data,
+					[{ field: "identifier", value: storedIdentifier }],
+					"verification",
+					undefined,
+				);
+				return verification;
+			}
+			return data as Verification;
 		},
+		refreshUserSessions,
 	};
 };

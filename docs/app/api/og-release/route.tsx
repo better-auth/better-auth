@@ -83,7 +83,7 @@ export async function GET(req: Request) {
 							}}
 						/>
 						<div
-							tw="flex text-6xl absolute bottom-56 isolate font-bold"
+							tw="flex text-6xl absolute top-10 isolate font-bold"
 							style={{
 								paddingLeft: "170px",
 								paddingTop: "200px",

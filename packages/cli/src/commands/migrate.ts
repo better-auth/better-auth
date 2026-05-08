@@ -10,7 +10,7 @@ import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
-import * as z from "zod/v4";
+import * as z from "zod";
 import { getConfig } from "../utils/get-config";
 
 /** @internal */

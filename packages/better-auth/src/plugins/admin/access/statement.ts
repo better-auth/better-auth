@@ -7,6 +7,7 @@ export const defaultStatements = {
 		"set-role",
 		"ban",
 		"impersonate",
+		"impersonate-admins",
 		"delete",
 		"set-password",
 		"get",

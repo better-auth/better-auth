@@ -12,7 +12,9 @@ import {
 	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
+	setRequestCookie,
 	stripSecureCookiePrefix,
+	toCookieOptions,
 } from "./cookie-utils";
 
 describe("cookies", async () => {
@@ -226,6 +228,12 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		);
 	});
 
+	it("decodes URI-encoded cookie values", () => {
+		const header = "token=hello%20world%3Dfoo; Path=/";
+		const map = parseSetCookieHeader(header);
+		expect(map.get("token")?.value).toBe("hello world=foo");
+	});
+
 	it("handles cookie with Expires followed by cookie without Expires", () => {
 		const map = parseSetCookieHeader(
 			"session=xyz; Expires=Mon, 01 Jan 2026 00:00:00 GMT, token=abc",
@@ -236,6 +244,80 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		);
 		expect(map.get("token")?.value).toBe("abc");
 		expect(map.get("token")?.expires).toBeUndefined();
+	});
+
+	it("handles Expires when cookie value contains gmt substring", () => {
+		const map = parseSetCookieHeader(
+			"session_data=testsessiondata; Path=/; Expires=Mon, 02 Mar 2026 05:42:16 GMT; Max-Age=300; Secure; HttpOnly; SameSite=lax",
+		);
+
+		expect(map.get("session_data")?.value).toBe("testsessiondata");
+		expect(map.get("session_data")?.expires).toEqual(
+			new Date("Mon, 02 Mar 2026 05:42:16 GMT"),
+		);
+	});
+
+	it("handles non-standard Expires=0", () => {
+		const map = parseSetCookieHeader("a=1; Expires=0, b=2");
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+
+	it("handles RFC 850 date format", () => {
+		const map = parseSetCookieHeader(
+			"a=1; Expires=Sunday, 06-Nov-94 08:49:37 GMT, b=2",
+		);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+
+	it("handles asctime date format (no comma in date)", () => {
+		const map = parseSetCookieHeader(
+			"a=1; Expires=Sun Nov 6 08:49:37 1994, b=2",
+		);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+
+	it("handles mixed cookies with and without Expires", () => {
+		const map = parseSetCookieHeader(
+			"a=1; Path=/; HttpOnly, b=2; Expires=Mon, 01 Jan 2026 00:00:00 GMT; Secure, c=3; SameSite=Lax",
+		);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+		expect(map.get("b")?.expires).toEqual(
+			new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+		);
+		expect(map.get("c")?.value).toBe("3");
+	});
+
+	it("parses partitioned as a boolean cookie attribute", () => {
+		const map = parseSetCookieHeader(
+			"session=xyz; Path=/; Secure; HttpOnly; SameSite=None; Partitioned",
+		);
+
+		expect(map.get("session")?.value).toBe("xyz");
+		expect(map.get("session")?.secure).toBe(true);
+		expect(map.get("session")?.httponly).toBe(true);
+		expect(map.get("session")?.samesite).toBe("none");
+		expect(map.get("session")?.partitioned).toBe(true);
+	});
+
+	it("converts parsed cookie attributes into cookie options", () => {
+		const attributes = parseSetCookieHeader(
+			"session=xyz; Path=/auth; Expires=Mon, 01 Jan 2026 00:00:00 GMT; Max-Age=300; Secure; HttpOnly; SameSite=None; Partitioned",
+		).get("session");
+
+		expect(attributes).toBeDefined();
+		expect(toCookieOptions(attributes!)).toEqual({
+			path: "/auth",
+			expires: new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+			maxAge: 300,
+			secure: true,
+			httpOnly: true,
+			sameSite: "none",
+			partitioned: true,
+		});
 	});
 });
 
@@ -288,6 +370,44 @@ describe("cookie-utils stripSecureCookiePrefix", () => {
 		const cookieName = `${SECURE_COOKIE_PREFIX}better-auth.session_token`;
 		const result = stripSecureCookiePrefix(cookieName);
 		expect(result).toBe("better-auth.session_token");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-call/issues/54
+ * @see https://github.com/better-auth/better-auth/pull/8089
+ */
+describe("cookie-utils setRequestCookie", () => {
+	it("writes a cookie when the header is empty", () => {
+		const headers = new Headers();
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe("better-auth.session_token=abc");
+	});
+
+	it("preserves existing cookies and joins with `; ` per RFC 6265", () => {
+		const headers = new Headers({ cookie: "preference=dark; locale=en" });
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe(
+			"preference=dark; locale=en; better-auth.session_token=abc",
+		);
+	});
+
+	it("replaces an existing cookie of the same name rather than duplicating it", () => {
+		const headers = new Headers({
+			cookie: "better-auth.session_token=stale; locale=en",
+		});
+		setRequestCookie(headers, "better-auth.session_token", "fresh");
+		expect(headers.get("cookie")).toBe(
+			"better-auth.session_token=fresh; locale=en",
+		);
+	});
+
+	it("ignores malformed pairs in the existing header", () => {
+		const headers = new Headers({ cookie: "valid=1; ; =orphan; locale=en" });
+		setRequestCookie(headers, "better-auth.session_token", "abc");
+		expect(headers.get("cookie")).toBe(
+			"valid=1; locale=en; better-auth.session_token=abc",
+		);
 	});
 });
 

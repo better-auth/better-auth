@@ -6,7 +6,7 @@ author:
   name: "Bereket Engida"
   avatar: "/avatars/beka.jpg"
   twitter: "bekacru"
-image: "/release-og/1-3.png"
+image: "https://docs.better-auth.com/release-og/1-3.png"
 tags: ["1.3", "authentication", "oidc", "mcp", "sso", "organization"]
 ---
 
@@ -20,7 +20,7 @@ To upgrade, run:
 npm install better-auth@1.3
 ```
 
----
+***
 
 ## 🚀 Highlights
 
@@ -55,7 +55,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### **OIDC & MCP Plugins – Now Stable**
 
@@ -83,14 +83,13 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### **Stripe Plugin is now production ready**
 
 The Stripe plugin is now stable and usage based pricing is coming very soon.
 
 👉 [Read Stripe docs](/docs/plugins/stripe)
-
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -121,7 +120,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### **New Social Providers**
 
@@ -140,7 +139,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### **SvelteKit Cookie Helper Plugin**
 
@@ -160,7 +159,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### **Email Verification on Sign‑In**
 
@@ -172,7 +171,7 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### **Multi‑Team Support**
 
@@ -202,7 +201,7 @@ export const authClient = createAuthClient({
 });
 ```
 
----
+***
 
 ### **Additional Organization Fields**
 
@@ -227,7 +226,7 @@ Other new options:
 * `maximumMembersPerTeam` – set team member limits
 * `listUserInvitations` – list all invitations for a user
 
----
+***
 
 ### **Generic OAuth Improvements**
 
@@ -244,21 +243,21 @@ export const auth = betterAuth({
 });
 ```
 
----
+***
 
 ### **API Keys**
 
 * `requireName` option for key creation
 * `verifyKey` now supports async functions
 
----
+***
 
 ### **Username**
 
 * Availability checks
 * Custom normalization
 
----
+***
 
 ### ✨ More Features
 
@@ -271,7 +270,7 @@ export const auth = betterAuth({
 * `freshAge` and custom `errorURL` respected properly
 * OAuth2 tokens now include `refresh_token_expires_in`
 
----
+***
 
 ### 🐛 Bug Fixes & Improvements
 
@@ -338,9 +337,9 @@ export const auth = betterAuth({
 * OIDC `offline_access` no longer requires `prompt=consent`
 * Fixed malformed base64 encoding for token validation
 
----
+***
 
 A lot of refinements to make everything smoother, faster, and more reliable.
 👉 [Check the full changelog](https://github.com/better-auth/better-auth/releases/tag/v1.3.0)
 
----
+***

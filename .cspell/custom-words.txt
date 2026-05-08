@@ -13,3 +13,8 @@ prefs
 uncompromised
 myapp
 Neue
+CCPA
+CPRA
+tmcp
+ciba
+CIBA

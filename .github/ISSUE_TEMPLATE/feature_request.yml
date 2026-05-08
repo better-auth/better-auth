@@ -1,5 +1,6 @@
-name: Feature request
-description: Suggest an idea for this project
+name: 💡 Feature request
+description: Suggest a new feature or idea
+type: Feature
 body:
   - type: checkboxes
     attributes:
@@ -10,11 +11,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        This template is used for suggesting a feature with better-auth.
+        Thank you for suggesting a feature with better-auth!
 
-        Bug reports should be opened in [here](https://github.com/better-auth/better-auth/issues/new?assignees=&labels=bug&projects=&template=bug_report.yml).
-
-        Before opening a feature request, please do a [search](https://github.com/better-auth/better-auth/issues) of existing issues and :+1: upvote the existing request instead. This will result in a quicker resolution.
+        - Bug reports should be opened [here](https://github.com/better-auth/better-auth/issues/new?template=bug_report.yml).
+        - Before opening a feature request, please [check](https://github.com/better-auth/better-auth/issues) for existing issues and :+1: upvote the existing request instead. This will result in a quicker resolution.
   - type: textarea
     attributes:
       label: Is your feature request related to a problem? Please describe.
@@ -29,8 +29,6 @@ body:
     attributes:
       label: Describe alternatives you've considered
       description: A clear and concise description of any alternative solutions or features you've considered.
-    validations:
-      required: true
   - type: textarea
     attributes:
       label: Additional context

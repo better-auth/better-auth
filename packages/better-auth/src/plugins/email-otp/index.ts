@@ -3,13 +3,16 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { PACKAGE_VERSION } from "../../version";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
 import { storeOTP } from "./otp-token";
 import {
+	changeEmailEmailOTP,
 	checkVerificationOTP,
 	createVerificationOTP,
 	forgetPasswordEmailOTP,
 	getVerificationOTP,
+	requestEmailChangeEmailOTP,
 	requestPasswordResetEmailOTP,
 	resetPasswordEmailOTP,
 	sendVerificationOTP,
@@ -17,6 +20,7 @@ import {
 	verifyEmailOTP,
 } from "./routes";
 import type { EmailOTPOptions } from "./types";
+import { toOTPIdentifier } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -43,6 +47,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 
 	return {
 		id: "email-otp",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			if (!opts.overrideDefaultEmailVerification) {
 				return;
@@ -78,6 +83,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			requestPasswordResetEmailOTP: requestPasswordResetEmailOTP(opts),
 			forgetPasswordEmailOTP: forgetPasswordEmailOTP(opts),
 			resetPasswordEmailOTP: resetPasswordEmailOTP(opts),
+			requestEmailChangeEmailOTP: requestEmailChangeEmailOTP(opts),
+			changeEmailEmailOTP: changeEmailEmailOTP(opts),
 		},
 		hooks: {
 			after: [
@@ -101,7 +108,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							const storedOTP = await storeOTP(ctx, opts, otp);
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: `${storedOTP}:0`,
-								identifier: `email-verification-otp-${email}`,
+								identifier: toOTPIdentifier("email-verification", email),
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
 							await ctx.context.runInBackgroundOrAwait(
@@ -166,6 +173,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				pathMatcher(path) {
 					return path === "/forget-password/email-otp";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/request-email-change";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/change-email";
 				},
 				window: opts.rateLimit?.window || 60,
 				max: opts.rateLimit?.max || 3,

@@ -1,3 +1,58 @@
-# https://help.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Last matching pattern takes precedence.
+# Only lines that CHANGE the owner from the default need to exist.
+# Everything not listed here falls to the global fallback.
+# Teams must have Write access to the repo.
 
-* @Bekacru @himself65
+# ── Global fallback (covers: core, devtools, infra, and anything unlisted) ──
+* @better-auth/core
+
+# ── Database ──
+/packages/better-auth/src/db/                      @better-auth/data
+/packages/better-auth/src/adapters/                @better-auth/data
+/packages/drizzle-adapter/                         @better-auth/data
+/packages/prisma-adapter/                          @better-auth/data
+/packages/mongo-adapter/                           @better-auth/data
+/packages/kysely-adapter/                          @better-auth/data
+/packages/memory-adapter/                          @better-auth/data
+
+# ── Identity & Auth ──
+/packages/oauth-provider/                          @better-auth/identity
+/packages/better-auth/src/plugins/oidc-provider/   @better-auth/identity
+/packages/better-auth/src/plugins/mcp/             @better-auth/identity
+/packages/better-auth/src/plugins/device-authorization/ @better-auth/identity
+/packages/sso/                                     @better-auth/identity
+/packages/scim/                                    @better-auth/identity
+/packages/core/src/oauth2/                         @better-auth/identity
+/packages/better-auth/src/oauth2/                  @better-auth/identity
+/packages/passkey/                                 @better-auth/identity
+/packages/better-auth/src/plugins/two-factor/      @better-auth/identity
+/packages/better-auth/src/plugins/magic-link/      @better-auth/identity
+/packages/better-auth/src/plugins/email-otp/       @better-auth/identity
+/packages/better-auth/src/plugins/phone-number/    @better-auth/identity
+/packages/better-auth/src/plugins/username/        @better-auth/identity
+/packages/better-auth/src/plugins/anonymous/       @better-auth/identity
+/packages/better-auth/src/plugins/siwe/            @better-auth/identity
+/packages/better-auth/src/plugins/captcha/         @better-auth/identity
+/packages/better-auth/src/plugins/haveibeenpwned/  @better-auth/identity
+/packages/better-auth/src/plugins/generic-oauth/   @better-auth/identity
+/packages/better-auth/src/plugins/oauth-proxy/     @better-auth/identity
+/packages/better-auth/src/plugins/one-tap/         @better-auth/identity
+/packages/core/src/social-providers/               @better-auth/identity
+
+# ── Plugins (non-auth) ──
+/packages/better-auth/src/plugins/organization/    @better-auth/plugins
+/packages/better-auth/src/plugins/admin/           @better-auth/plugins
+/packages/better-auth/src/plugins/access/          @better-auth/plugins
+/packages/stripe/                                  @better-auth/plugins
+/packages/api-key/                                 @better-auth/plugins
+
+# ── Platform ──
+/packages/expo/                                    @better-auth/platform
+/packages/electron/                                @better-auth/platform
+/packages/better-auth/src/integrations/            @better-auth/platform
+
+# ── Documentation ──
+/docs/                                             @better-auth/docs
+/demo/                                             @better-auth/docs

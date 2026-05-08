@@ -8,10 +8,14 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session, User } from "@better-auth/core/db";
-import * as z from "zod";
 import { getSession } from "../../api";
-import { parseSetCookieHeader } from "../../cookies/cookie-utils";
+import {
+	parseSetCookieHeader,
+	toCookieOptions,
+} from "../../cookies/cookie-utils";
+import { getSessionQuerySchema } from "../../cookies/session-store";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -20,29 +24,6 @@ declare module "@better-auth/core" {
 		};
 	}
 }
-
-const getSessionQuerySchema = z.optional(
-	z.object({
-		/**
-		 * If cookie cache is enabled, it will disable the cache
-		 * and fetch the session from the database
-		 */
-		disableCookieCache: z
-			.boolean()
-			.meta({
-				description: "Disable cookie cache and fetch session from database",
-			})
-			.or(z.string().transform((v) => v === "true"))
-			.optional(),
-		disableRefresh: z
-			.boolean()
-			.meta({
-				description:
-					"Disable session refresh. Useful for checking session status, without updating the session",
-			})
-			.optional(),
-	}),
-);
 
 export type CustomSessionPluginOptions = {
 	/**
@@ -68,6 +49,7 @@ export const customSession = <
 ) => {
 	return {
 		id: "custom-session",
+		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
@@ -118,6 +100,7 @@ export const customSession = <
 				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
+						method: "GET",
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
@@ -132,15 +115,7 @@ export const customSession = <
 					for (const cookieStr of session.headers.getSetCookie()) {
 						const parsed = parseSetCookieHeader(cookieStr);
 						parsed.forEach((attrs, name) => {
-							ctx.setCookie(name, attrs.value, {
-								maxAge: attrs["max-age"],
-								expires: attrs.expires,
-								domain: attrs.domain,
-								path: attrs.path,
-								secure: attrs.secure,
-								httpOnly: attrs.httponly,
-								sameSite: attrs.samesite,
-							});
+							ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
 						});
 					}
 					session.headers.delete("set-cookie");

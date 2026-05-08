@@ -46,8 +46,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							content: {
 								"application/json": {
 									schema: {
-										type: "object",
-										nullable: true,
+										// better-call's OpenAPI schema type doesn't yet model OAS 3.1 union `type`.
+										type: ["object", "null"] as unknown as "object",
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",
@@ -119,7 +119,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							updatedAt: number;
 							version?: string;
 							exp?: number;
-						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
+						}>(
+							sessionDataCookie,
+							ctx.context.secretConfig,
+							"better-auth-session",
+						);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
@@ -288,6 +292,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 								// Set the refreshed cookie cache
 								await setCookieCache(ctx, refreshedSession, false);
+
+								// Also refresh the session_token cookie expiry
+								const sessionTokenOptions =
+									ctx.context.authCookies.sessionToken.attributes;
+								const sessionTokenMaxAge = dontRememberMe
+									? undefined
+									: ctx.context.sessionConfig.expiresIn;
+								await ctx.setSignedCookie(
+									ctx.context.authCookies.sessionToken.name,
+									session.session.token,
+									ctx.context.secret,
+									{
+										...sessionTokenOptions,
+										maxAge: sessionTokenMaxAge,
+									},
+								);
 
 								// Parse session and user to ensure additionalFields are included
 								// Rehydrate date fields from JSON strings before parsing
@@ -608,19 +628,12 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 			code: "UNAUTHORIZED",
 		});
 	}
-	if (ctx.context.sessionConfig.freshAge === 0) {
-		return {
-			session,
-		};
-	}
-	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated = new Date(
-		session.session.updatedAt || session.session.createdAt,
-	).getTime();
-	const now = Date.now();
-	const isFresh = now - lastUpdated < freshAge * 1000;
-	if (!isFresh) {
-		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
+	if (ctx.context.sessionConfig.freshAge !== 0) {
+		const createdAt = new Date(session.session.createdAt).getTime();
+		const freshAge = ctx.context.sessionConfig.freshAge * 1000;
+		if (Date.now() - createdAt >= freshAge) {
+			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
+		}
 	}
 	return {
 		session,
@@ -663,6 +676,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			try {
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
+					{ onlyActiveSessions: true },
 				);
 				const activeSessions = sessions.filter((session) => {
 					return session.expiresAt > new Date();

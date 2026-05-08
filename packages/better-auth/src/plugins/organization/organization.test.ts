@@ -32,6 +32,45 @@ describe("organization type", () => {
 		expectTypeOf({} satisfies OrganizationOptions);
 		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9135
+	 */
+	it("allows dynamic roles in create invitation input", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					roles: {
+						admin: adminAc,
+						member: memberAc,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+				}),
+			],
+		});
+
+		const dynamicRole = "contractor" as string;
+		const dynamicRoles = ["contractor", "reviewer"] as string[];
+
+		if (false) {
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-role@example.com",
+					role: dynamicRole,
+				},
+			});
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-roles@example.com",
+					role: dynamicRoles,
+				},
+			});
+		}
+	});
 });
 
 describe("organization", async () => {
@@ -550,6 +589,72 @@ describe("organization", async () => {
 		);
 	});
 
+	/**
+	 * Tests that users can accept invitations sent to mixed-case emails
+	 * when they sign up with different casing. This ensures email case
+	 * normalization is consistent across the invitation flow.
+	 */
+	it("should allow accepting invitation when user signs up with different email casing", async () => {
+		const rng = crypto.randomUUID();
+		const mixedCaseEmail = `Test.User.${rng}@Example.COM`;
+		const user = {
+			email: mixedCaseEmail,
+			password: rng,
+			name: `Test User ${rng}`,
+		};
+		const { headers } = await signInWithTestUser();
+
+		const org = await client.organization.create({
+			name: `test-org-${rng}`,
+			slug: `test-org-${rng}`,
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!org.data) throw new Error("Organization not created");
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data.id,
+			email: mixedCaseEmail,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data)
+			throw new Error(`Invitation not created: ${invite.error?.message}`);
+		expect(invite.data.email).toBe(mixedCaseEmail.toLowerCase());
+
+		await client.signUp.email({
+			email: user.email.toLowerCase(),
+			password: user.password,
+			name: user.name,
+		});
+		const { headers: userHeaders } = await signInWithUser(
+			user.email.toLowerCase(),
+			user.password,
+		);
+
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(userInvitations.data?.length).toBeGreaterThanOrEqual(1);
+		const matchingInvite = userInvitations.data?.find(
+			(i) => i.id === invite.data!.id,
+		);
+		expect(matchingInvite).toBeDefined();
+
+		const acceptRes = await client.organization.acceptInvitation({
+			invitationId: invite.data!.id!,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(acceptRes.data?.invitation.status).toBe("accepted");
+	});
+
 	it("should allow getting a member", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.organization.setActive({
@@ -683,6 +788,41 @@ describe("organization", async () => {
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
 				.message,
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8385
+	 */
+	it("should allow multi-role owner to invite with owner role", async () => {
+		const { headers } = await signInWithTestUser();
+		// Create a fresh org for this test
+		const org = await client.organization.create({
+			name: "multi-role-test-org",
+			slug: "multi-role-test-org",
+			fetchOptions: { headers },
+		});
+		const orgId = org.data!.id;
+		const memberId = org.data!.members[0]!.id;
+
+		// Set the member to have multiple roles including owner
+		const updatedMember = await auth.api.updateMemberRole({
+			headers,
+			body: {
+				organizationId: orgId,
+				role: ["owner", "admin"],
+				memberId,
+			},
+		});
+		expect(updatedMember?.role).toBe("owner,admin");
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "multi-role-invite-test@test.com",
+			role: "owner",
+			fetchOptions: { headers },
+		});
+		expect(invite.error).toBeNull();
+		expect(invite.data?.role).toBe("owner");
 	});
 
 	it("should allow leaving organization", async () => {
@@ -1631,6 +1771,126 @@ describe("access control", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7822
+ */
+describe("dynamic access control should merge DB permissions with built-in roles", async () => {
+	// Extend default ac with a custom resource that default roles don't cover
+	const ac = createAccessControl({
+		...defaultStatements,
+		sales: ["create", "read", "update", "delete"],
+	});
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		plugins: [
+			organization({
+				ac,
+				roles: {
+					owner: ownerAc,
+					admin: adminAc,
+					member: memberAc,
+				},
+				dynamicAccessControl: {
+					enabled: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "test-dac",
+			slug: "test-dac",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("should merge DB permissions with built-in role permissions", async () => {
+		// Insert an "owner" role record in DB with only sales permissions.
+		// The built-in ownerAc does NOT have sales at all.
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					sales: ["create", "read", "delete"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		// DB adds sales:delete which the built-in owner doesn't have
+		const salesDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					sales: ["delete"],
+				},
+			},
+		});
+		expect(salesDelete.success).toBe(true);
+
+		// Built-in ownerAc has organization:["update","delete"], which is NOT in the DB record.
+		// Merge should preserve it.
+		const orgDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(orgDelete.success).toBe(true);
+	});
+
+	it("should not lose built-in actions when DB defines partial actions for the same resource", async () => {
+		// Clean up previous test data
+		await db.delete({
+			model: "organizationRole",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+
+		// Built-in ownerAc has organization:["update","delete"].
+		// DB only defines organization:["update"] (missing "delete").
+		// Merge should preserve both actions.
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					organization: ["update"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const orgUpdate = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["update"],
+				},
+			},
+		});
+		expect(orgUpdate.success).toBe(true);
+
+		// "delete" is only in built-in, not in DB -> must still be preserved
+		const orgDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(orgDelete.success).toBe(true);
+	});
+});
+
 describe("invitation limit", async () => {
 	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
 		plugins: [
@@ -1779,6 +2039,109 @@ describe("cancel pending invitations on re-invite", async () => {
 			listInvitations.data?.filter((invite) => invite.status === "pending")
 				.length,
 		).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should cancel pending invitation and create a new one when re-inviting without resend", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+		const originalInviteId = invite.data?.id;
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9b@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error).toBeNull();
+		expect(invite2.data?.status).toBe("pending");
+		expect(invite2.data?.id).not.toBe(originalInviteId);
+
+		const listInvitations = await client.organization.listInvitations({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "pending",
+			).length,
+		).toBe(1);
+		expect(
+			listInvitations.data?.filter(
+				(i) => i.email === "test9b@test.com" && i.status === "canceled",
+			).length,
+		).toBe(1);
+	});
+});
+
+describe("re-invite without cancelPendingInvitationsOnReInvite still throws", async () => {
+	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test",
+			slug: "test",
+		},
+		{
+			headers,
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9452
+	 */
+	it("should still throw USER_IS_ALREADY_INVITED when option is disabled", async () => {
+		const invite = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite.data?.status).toBe("pending");
+
+		const invite2 = await client.organization.inviteMember(
+			{
+				organizationId: org.data?.id as string,
+				email: "test9c@test.com",
+				role: "member",
+			},
+			{
+				headers,
+			},
+		);
+		expect(invite2.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
+		);
 	});
 });
 
@@ -2395,6 +2758,56 @@ describe("Additional Fields", async () => {
 			teamRequiredField: string;
 			teamOptionalField?: string | undefined;
 			teamHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer team additional fields on $Infer.Team", () => {
+		type Team = typeof auth.$Infer.Team;
+		expectTypeOf<Team>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			organizationId: string;
+			createdAt: Date;
+			updatedAt?: Date | undefined;
+			teamRequiredField: string;
+			teamOptionalField?: string | undefined;
+			teamHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer organization additional fields on $Infer.Organization", () => {
+		type Organization = typeof auth.$Infer.Organization;
+		expectTypeOf<Organization>().toEqualTypeOf<{
+			id: string;
+			name: string;
+			slug: string;
+			createdAt: Date;
+			logo?: string | null | undefined;
+			metadata?: any;
+			someRequiredField: string;
+			someOptionalField?: string | undefined;
+			someHiddenField?: string | undefined;
+		}>();
+	});
+
+	it("should infer member additional fields on $Infer.Member", () => {
+		type Member = typeof auth.$Infer.Member;
+		expectTypeOf<Member>().toEqualTypeOf<{
+			id: string;
+			organizationId: string;
+			userId: string;
+			role: "member" | "admin" | "owner";
+			createdAt: Date;
+			teamId?: string | undefined;
+			user: {
+				id: string;
+				email: string;
+				name: string;
+				image?: string | undefined;
+			};
+			memberRequiredField: string;
+			memberOptionalField?: string | undefined;
+			memberHiddenField?: string | undefined;
 		}>();
 	});
 
@@ -3274,6 +3687,30 @@ describe("organization additionalFields with returned: false", async () => {
 	});
 
 	const { headers } = await signInWithTestUser();
+
+	it("inferOrgAdditionalFields should filter out schema keys without additionalFields", async () => {
+		const { auth: authWithSession } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								logo: { type: "string", required: false },
+							},
+						},
+						session: {
+							fields: { activeOrganizationId: "orgId" },
+						},
+					},
+				}),
+			],
+		});
+		const inferred = inferOrgAdditionalFields<typeof authWithSession>();
+		type Schema = NonNullable<typeof inferred>;
+		// session has no additionalFields, should not be in inferred schema keys
+		type HasSession = "session" extends keyof Schema ? true : false;
+		expectTypeOf<HasSession>().toEqualTypeOf<false>();
+	});
 
 	const client = createAuthClient({
 		plugins: [

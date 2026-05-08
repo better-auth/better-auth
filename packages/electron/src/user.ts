@@ -1,5 +1,6 @@
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
+import { isPublicRoutableHost } from "@better-auth/core/utils/host";
 import { base64 } from "@better-auth/utils/base64";
 import electron from "electron";
 import type { ElectronClientOptions } from "./client";
@@ -47,7 +48,7 @@ export async function fetchUserImage(
 		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
 			return null;
 		}
-		if (!isDevelopment() && isLocalOrigin(parsed)) return null;
+		if (!isDevelopment() && !isPublicRoutableHost(parsed.hostname)) return null;
 		resolvedUrl = parsed.href;
 	} catch {
 		return null;
@@ -158,30 +159,6 @@ async function decodeDataImageUrl(
 	} catch {
 		return null;
 	}
-}
-
-function isLocalOrigin(parsed: URL): boolean {
-	const hostname = parsed.hostname.toLowerCase();
-	if (hostname === "localhost") return true;
-	// IPv4: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16
-	const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-	const m = hostname.match(ipv4);
-	if (m) {
-		const a = Number(m[1]);
-		const b = Number(m[2]);
-		if (a === 127) return true;
-		if (a === 10) return true;
-		if (a === 172 && b >= 16 && b <= 31) return true;
-		if (a === 192 && b === 168) return true;
-		if (a === 169 && b === 254) return true;
-		return false;
-	}
-	// IPv6: ::1 (loopback), fe80::/10 (link-local)
-	const h = hostname.replace(/^\[|\]$/g, "");
-	if (h === "::1" || /^(0:){7}1$/.test(h) || h === "0:0:0:0:0:0:0:1")
-		return true;
-	if (/^fe[89ab][0-9a-f]/i.test(h)) return true;
-	return false;
 }
 
 type SupportedImageType =

@@ -123,7 +123,7 @@ export async function signJWT(
 
 	const privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: JSON.parse(key.privateKey),
 			}).catch(() => {
 				throw new BetterAuthError(

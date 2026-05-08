@@ -1,9 +1,15 @@
-import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	createAuthEndpoint,
+	getSessionFromCtx,
+	sessionMiddleware,
+} from "better-auth/api";
 import * as z from "zod";
+import { publicSessionMiddleware } from "../middleware";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
 import { SafeUrlSchema } from "../types/zod";
 import {
+	assertClientPrivileges,
 	deleteClientEndpoint,
 	getClientEndpoint,
 	getClientPublicEndpoint,
@@ -57,6 +63,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
 				require_pkce: z.boolean().optional(),
+				subject_type: z.enum(["public", "pairwise"]).optional(),
 				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {
@@ -217,6 +224,8 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
+			const session = await getSessionFromCtx(ctx);
+			await assertClientPrivileges(ctx, session, opts, "create");
 			return createOAuthClientEndpoint(ctx, opts, {
 				isRegister: false,
 			});
@@ -413,6 +422,8 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
+			const session = await getSessionFromCtx(ctx);
+			await assertClientPrivileges(ctx, session, opts, "create");
 			return createOAuthClientEndpoint(ctx, opts, {
 				isRegister: false,
 			});
@@ -450,12 +461,35 @@ export const getOAuthClientPublic = (opts: OAuthOptions<Scope[]>) =>
 			}),
 			metadata: {
 				openapi: {
-					description: "Gets publically available client fields",
+					description: "Gets publicly available client fields",
 				},
 			},
 		},
 		async (ctx) => {
-			return getClientPublicEndpoint(ctx, opts);
+			const clientId = ctx.query.client_id;
+			return getClientPublicEndpoint(ctx, opts, clientId);
+		},
+	);
+
+export const getOAuthClientPublicPrelogin = (opts: OAuthOptions<Scope[]>) =>
+	createAuthEndpoint(
+		"/oauth2/public-client-prelogin",
+		{
+			method: "POST",
+			use: [publicSessionMiddleware(opts)],
+			body: z.object({
+				client_id: z.string(),
+				oauth_query: z.string().optional(),
+			}),
+			metadata: {
+				openapi: {
+					description: "Gets publicly available client fields (prior to login)",
+				},
+			},
+		},
+		async (ctx) => {
+			const clientId = ctx.body.client_id;
+			return getClientPublicEndpoint(ctx, opts, clientId);
 		},
 	);
 

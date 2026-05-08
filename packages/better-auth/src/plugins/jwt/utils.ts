@@ -74,7 +74,7 @@ export async function createJwk(
 		privateKey: privateKeyEncryptionEnabled
 			? JSON.stringify(
 					await symmetricEncrypt({
-						key: ctx.context.secret,
+						key: ctx.context.secretConfig,
 						data: stringifiedPrivateWebKey,
 					}),
 				)

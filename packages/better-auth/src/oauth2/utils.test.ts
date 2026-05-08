@@ -7,6 +7,7 @@ import { decryptOAuthToken, setTokenUtil } from "./utils";
 function createMockContext(encryptOAuthTokens: boolean): AuthContext {
 	return {
 		secret: "test-secret-key-for-encryption",
+		secretConfig: "test-secret-key-for-encryption",
 		options: {
 			account: {
 				encryptOAuthTokens,

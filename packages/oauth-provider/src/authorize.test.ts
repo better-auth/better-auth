@@ -8,6 +8,7 @@ import { validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
+import { postLoginClearedParam } from "./utils";
 
 describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should allow HTTPS URLs unchanged", () => {
@@ -148,6 +149,184 @@ describe("oauth authorize - unauthenticated", async () => {
 			`redirect_uri=${encodeURIComponent(redirectUri)}`,
 		);
 	});
+
+	it("should return login_required when prompt=none and user is not logged in", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "prompt-none-login-required");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let callbackRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("error=login_required");
+		expect(callbackRedirectUrl).toContain("state=prompt-none-login-required");
+		expect(callbackRedirectUrl).toContain(
+			`iss=${encodeURIComponent(authServerBaseUrl)}`,
+		);
+		expect(callbackRedirectUrl).not.toContain("/login");
+	});
+});
+
+describe("oauth authorize - request_uri resolution", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const requestUri = "urn:better-auth:par:test";
+	const requestUriWithPostLoginMarker = "urn:better-auth:par:post-login";
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				requestUriResolver: async ({ requestUri: receivedRequestUri }) => {
+					const resolvedParams = {
+						response_type: "code",
+						redirect_uri: redirectUri,
+						scope: "openid",
+						state: "par-state",
+						code_challenge: "a".repeat(43),
+						code_challenge_method: "S256",
+					};
+
+					if (receivedRequestUri === requestUri) {
+						return resolvedParams;
+					}
+
+					if (receivedRequestUri === requestUriWithPostLoginMarker) {
+						return {
+							...resolvedParams,
+							[postLoginClearedParam]: "attacker-session",
+						};
+					}
+
+					return null;
+				},
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const unauthenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		oauthClient = response;
+	});
+
+	it("should sign the resolved PAR parameters for the login redirect", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUri);
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(loginRedirectUrl).toContain("/login");
+		expect(loginRedirectUrl).toContain("response_type=code");
+		expect(loginRedirectUrl).toContain(`client_id=${oauthClient.client_id}`);
+		expect(loginRedirectUrl).toContain("scope=openid");
+		expect(loginRedirectUrl).toContain(
+			`redirect_uri=${encodeURIComponent(redirectUri)}`,
+		);
+		expect(loginRedirectUrl).toContain("state=par-state");
+		expect(loginRedirectUrl).not.toContain("request_uri=");
+	});
+
+	it("should drop reserved post-login markers from resolved PAR parameters", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUriWithPostLoginMarker);
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const loginRedirect = new URL(loginRedirectUrl, authServerBaseUrl);
+		expect(loginRedirect.pathname).toBe("/login");
+		expect(loginRedirect.searchParams.get(postLoginClearedParam)).toBeNull();
+	});
+
+	/**
+	 * RFC 9126 §4: params must come from the stored request, not the URL.
+	 * Extra URL params like prompt or scope must not leak into the signed redirect.
+	 */
+	it("should discard front-channel params not in the stored PAR request", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("request_uri", requestUri);
+		// These params are NOT in the PAR payload — must be discarded
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("scope", "openid profile admin");
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(loginRedirectUrl).toContain("/login");
+		// PAR-resolved scope must win, not the URL-injected one
+		expect(loginRedirectUrl).toContain("scope=openid");
+		expect(loginRedirectUrl).not.toContain("admin");
+		// prompt=none was not in the PAR payload — must not appear
+		expect(loginRedirectUrl).not.toContain("prompt=none");
+	});
 });
 
 describe("oauth authorize - authenticated", async () => {
@@ -179,6 +358,7 @@ describe("oauth authorize - authenticated", async () => {
 	});
 
 	let oauthClient: OAuthClient | null;
+	let oauthClientNeedsConsent: OAuthClient | null;
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	// Registers a confidential client application to work with
@@ -195,6 +375,19 @@ describe("oauth authorize - authenticated", async () => {
 		expect(response?.client_secret).toBeDefined();
 		expect(response?.redirect_uris).toEqual([redirectUri]);
 		oauthClient = response;
+
+		const responseNeedsConsent = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: false,
+			},
+		});
+		expect(responseNeedsConsent?.client_id).toBeDefined();
+		expect(responseNeedsConsent?.user_id).toBeDefined();
+		expect(responseNeedsConsent?.client_secret).toBeDefined();
+		expect(responseNeedsConsent?.redirect_uris).toEqual([redirectUri]);
+		oauthClientNeedsConsent = responseNeedsConsent;
 	});
 
 	it("should authorize and include iss parameter", async () => {
@@ -291,5 +484,36 @@ describe("oauth authorize - authenticated", async () => {
 		const issParam = redirectUrl.searchParams.get("iss");
 
 		expect(issParam).toBe(metadataIssuer);
+	});
+
+	it("should return consent_required when prompt=none and consent is needed", async () => {
+		if (!oauthClientNeedsConsent?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClientNeedsConsent.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "prompt-none-consent-required");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("error=consent_required");
+		expect(callbackRedirectUrl).toContain("state=prompt-none-consent-required");
+		expect(callbackRedirectUrl).toContain(
+			`iss=${encodeURIComponent(authServerBaseUrl)}`,
+		);
+		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
 });

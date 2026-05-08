@@ -16,6 +16,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -58,6 +59,7 @@ async function getAnonUserEmail(
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			signInAnonymous: createAuthEndpoint(
 				"/sign-in/anonymous",

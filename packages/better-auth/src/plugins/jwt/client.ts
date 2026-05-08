@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { JSONWebKeySet } from "jose";
+import { PACKAGE_VERSION } from "../../version";
 import type { jwt } from "./index";
 
 interface JwtClientOptions {
@@ -19,6 +20,7 @@ export const jwtClient = (options?: JwtClientOptions) => {
 
 	return {
 		id: "better-auth-client",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof jwt>,
 		pathMethods: {
 			[jwksPath]: "GET",

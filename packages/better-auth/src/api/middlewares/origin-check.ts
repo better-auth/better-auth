@@ -19,6 +19,29 @@ function shouldSkipCSRFForBackwardCompat(ctx: GenericEndpointContext): boolean {
 }
 
 /**
+ * Checks if the origin check should be skipped for the current request.
+ * Handles both boolean (skip all) and array (skip specific paths) configurations.
+ */
+function shouldSkipOriginCheck(ctx: GenericEndpointContext): boolean {
+	const skipOriginCheck = ctx.context.skipOriginCheck;
+	if (skipOriginCheck === true) {
+		return true;
+	}
+	if (Array.isArray(skipOriginCheck) && ctx.request) {
+		try {
+			const basePath = new URL(ctx.context.baseURL).pathname;
+			const currentPath = normalizePathname(ctx.request.url, basePath);
+			return skipOriginCheck.some((skipPath) =>
+				currentPath.startsWith(skipPath),
+			);
+		} catch {
+			//
+		}
+	}
+	return false;
+}
+
+/**
  * Logs deprecation warning for users relying on coupled behavior.
  * Only logs if user explicitly set disableOriginCheck (not test environment default).
  */
@@ -45,7 +68,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	await validateOrigin(ctx);
 
-	if (ctx.context.skipOriginCheck) {
+	if (shouldSkipOriginCheck(ctx)) {
 		return;
 	}
 
@@ -117,7 +140,7 @@ export const originCheck = (
 		if (!ctx.request) {
 			return;
 		}
-		if (ctx.context.skipOriginCheck) {
+		if (shouldSkipOriginCheck(ctx)) {
 			return;
 		}
 		const callbackURL = getValue(ctx);
@@ -199,20 +222,8 @@ async function validateOrigin(
 		return;
 	}
 
-	const skipOriginCheck = ctx.context.skipOriginCheck;
-	if (Array.isArray(skipOriginCheck)) {
-		try {
-			const basePath = new URL(ctx.context.baseURL).pathname;
-			const currentPath = normalizePathname(ctx.request.url, basePath);
-			const shouldSkipPath = skipOriginCheck.some((skipPath) =>
-				currentPath.startsWith(skipPath),
-			);
-			if (shouldSkipPath) {
-				return;
-			}
-		} catch {
-			// If parsing fails, don't skip - continue with validation
-		}
+	if (shouldSkipOriginCheck(ctx)) {
+		return;
 	}
 
 	const shouldValidate = forceValidate || useCookies;

@@ -18,10 +18,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		bundler: "metro",
 		output: "server",
 	},
-	updates: {
-		fallbackToCacheTimeout: 0,
-	},
-	assetBundlePatterns: ["**/*"],
 	ios: {
 		bundleIdentifier: "your.bundle.identifier",
 		supportsTablet: true,

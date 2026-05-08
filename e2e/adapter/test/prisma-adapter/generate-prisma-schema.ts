@@ -4,12 +4,13 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import type { PrismaClient } from "@prisma/client";
+import type { Dialect } from "./constants";
 
 export async function generatePrismaSchema(
 	betterAuthOptions: BetterAuthOptions,
 	db: PrismaClient,
 	iteration: number,
-	dialect: "sqlite" | "postgresql" | "mysql",
+	dialect: Dialect,
 ) {
 	const i = async (x: string) => await import(x);
 	const { generateSchema } = (await i(
@@ -35,19 +36,14 @@ export async function generatePrismaSchema(
 		adapter: prismaDB({}),
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
-	if (dialect === "postgresql") {
-		code = code?.replace(
-			`env("DATABASE_URL")`,
-			'"postgres://user:password@localhost:5434/better_auth"',
-		);
-	} else if (dialect === "mysql") {
-		code = code?.replace(
-			`env("DATABASE_URL")`,
-			'"mysql://user:password@localhost:3308/better_auth"',
-		);
-	}
+
+	// The CLI may not detect Prisma v7 if process.cwd() doesn't have prisma
+	// in its package.json (e.g. monorepo root). Ensure the schema uses the v7
+	// format: "prisma-client" provider, no url in datasource, and custom output.
 	code = code
-		?.split("\n")
+		?.replace('provider = "prisma-client-js"', 'provider = "prisma-client"')
+		.replace(/\s*url\s*=\s*(?:env\([^)]*\)|"[^"]*")\n?/g, "\n")
+		.split("\n")
 		.map((line, index) => {
 			if (index === 2) {
 				return (

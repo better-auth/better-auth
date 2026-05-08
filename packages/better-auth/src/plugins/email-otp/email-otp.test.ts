@@ -288,6 +288,15 @@ describe("email-otp", async () => {
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
 
+	it("should reject change-email type", async () => {
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "change-email",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("Invalid OTP type");
+	});
+
 	it("should fail on expired otp", async () => {
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
@@ -387,6 +396,599 @@ describe("email-otp", async () => {
 			otp,
 		});
 		expect(verifyRes.error?.code).toBe("OTP_EXPIRED");
+	});
+});
+
+describe("change email", async () => {
+	const otpFn = vi.fn();
+	let otp = "";
+	const { client, testUser, runWithUser } = await getTestInstance(
+		{
+			plugins: [
+				bearer(),
+				emailOTP({
+					async sendVerificationOTP({ email, otp: _otp, type }) {
+						otp = _otp;
+						otpFn(email, _otp, type);
+					},
+					sendVerificationOnSignUp: true,
+					changeEmail: { enabled: true },
+				}),
+			],
+			emailVerification: {
+				autoSignInAfterVerification: true,
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	describe("request", () => {
+		it("should send otp for change email request", async () => {
+			const newEmail = "new-email@test.com";
+			otpFn.mockClear();
+			await runWithUser(testUser.email, testUser.password, async () => {
+				const res = await client.emailOtp.requestEmailChange({
+					newEmail,
+				});
+				expect(res.data?.success).toBe(true);
+				expect(res.error).toBeFalsy();
+			});
+			expect(otpFn).toHaveBeenCalledWith(
+				newEmail,
+				expect.any(String),
+				"change-email",
+			);
+		});
+
+		it("should not send otp for change email request if session does not exist", async () => {
+			const res = await client.emailOtp.requestEmailChange({
+				newEmail: "new-email@test.com",
+			});
+			expect(res.error?.status).toBe(401);
+			expect(res.error?.code).toBe("UNAUTHORIZED");
+		});
+
+		it("should not send otp for change email request if session is invalid", async () => {
+			const res = await client.emailOtp.requestEmailChange({
+				newEmail: "new-email@test.com",
+				fetchOptions: {
+					headers: new Headers({
+						Authorization: "Bearer invalid-session-token",
+					}),
+				},
+			});
+			expect(res.error?.status).toBe(401);
+			expect(res.error?.code).toBe("UNAUTHORIZED");
+		});
+
+		it("should not send otp for change email request when change email with OTP is disabled", async () => {
+			const {
+				client: disabledClient,
+				testUser: disabledTestUser,
+				runWithUser: disabledRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP() {},
+							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: false },
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			let res: Awaited<
+				ReturnType<typeof disabledClient.emailOtp.requestEmailChange>
+			>;
+			await disabledRunWithUser(
+				disabledTestUser.email,
+				disabledTestUser.password,
+				async () => {
+					res = await disabledClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+					});
+				},
+			);
+			expect(res!.error?.status).toBe(400);
+			expect(res!.error?.message).toBe("Change email with OTP is disabled");
+		});
+
+		it("should not send otp for change email request if email is same as old email", async () => {
+			let res: Awaited<ReturnType<typeof client.emailOtp.requestEmailChange>>;
+			await runWithUser(testUser.email, testUser.password, async () => {
+				res = await client.emailOtp.requestEmailChange({
+					newEmail: testUser.email,
+				});
+			});
+			expect(res!.error?.status).toBe(400);
+			expect(res!.error?.message).toContain("Email is the same");
+		});
+
+		it("should not send otp for change email request if email is already used by another account", async () => {
+			const otherUser = {
+				email: "other-user@test.com",
+				password: "password123",
+				name: "Other User",
+			};
+			await client.signUp.email(otherUser);
+
+			otpFn.mockClear();
+			await runWithUser(testUser.email, testUser.password, async () => {
+				const res = await client.emailOtp.requestEmailChange({
+					newEmail: otherUser.email,
+				});
+				expect(res.data?.success).toBe(true);
+			});
+			expect(otpFn).not.toHaveBeenCalledWith(
+				otherUser.email,
+				expect.any(String),
+				"change-email",
+			);
+		});
+
+		describe("when verifyCurrentEmail is enabled", async () => {
+			const verifyCurrentOtpFn = vi.fn();
+			let currentEmailOtp = "";
+			const {
+				client: vcClient,
+				testUser: vcTestUser,
+				runWithUser: vcRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP({ email, otp: _otp, type }) {
+								currentEmailOtp = _otp;
+								verifyCurrentOtpFn(email, _otp, type);
+							},
+							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: true, verifyCurrentEmail: true },
+						}),
+					],
+					emailVerification: {
+						autoSignInAfterVerification: true,
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			it("should require otp when requesting email change", async () => {
+				let res: Awaited<
+					ReturnType<typeof vcClient.emailOtp.requestEmailChange>
+				>;
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					res = await vcClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+					});
+				});
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.message).toBe(
+					"OTP is required to verify current email",
+				);
+			});
+
+			it("should reject invalid current email otp when requesting email change", async () => {
+				let res: Awaited<
+					ReturnType<typeof vcClient.emailOtp.requestEmailChange>
+				>;
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					res = await vcClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+						otp: "000000",
+					});
+				});
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.code).toBe("INVALID_OTP");
+			});
+
+			it("should reject when no email-verification OTP was requested for current email", async () => {
+				let res: Awaited<
+					ReturnType<typeof vcClient.emailOtp.requestEmailChange>
+				>;
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					res = await vcClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+						otp: "123456",
+					});
+				});
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.code).toBe("INVALID_OTP");
+			});
+
+			it("should reject expired current email OTP when requesting email change", async () => {
+				const {
+					client: expClient,
+					testUser: expTestUser,
+					runWithUser: expRunWithUser,
+				} = await getTestInstance(
+					{
+						plugins: [
+							bearer(),
+							emailOTP({
+								async sendVerificationOTP({ otp: _otp, type }) {
+									if (type === "email-verification") {
+										currentEmailOtp = _otp;
+									}
+								},
+								sendVerificationOnSignUp: true,
+								changeEmail: { enabled: true, verifyCurrentEmail: true },
+								expiresIn: 60,
+							}),
+						],
+						emailVerification: {
+							autoSignInAfterVerification: true,
+						},
+					},
+					{
+						clientOptions: {
+							plugins: [emailOTPClient()],
+						},
+					},
+				);
+
+				await expRunWithUser(
+					expTestUser.email,
+					expTestUser.password,
+					async () => {
+						await expClient.emailOtp.sendVerificationOtp({
+							email: expTestUser.email,
+							type: "email-verification",
+						});
+					},
+				);
+				vi.useFakeTimers();
+				await vi.advanceTimersByTimeAsync(61 * 1000);
+
+				let res: Awaited<
+					ReturnType<typeof expClient.emailOtp.requestEmailChange>
+				>;
+				await expRunWithUser(
+					expTestUser.email,
+					expTestUser.password,
+					async () => {
+						res = await expClient.emailOtp.requestEmailChange({
+							newEmail: "new@test.com",
+							otp: currentEmailOtp,
+						});
+					},
+				);
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.code).toBe("OTP_EXPIRED");
+			});
+
+			it("should send change-email OTP when valid current email OTP is provided", async () => {
+				const newEmail = "verified-change@test.com";
+				verifyCurrentOtpFn.mockClear();
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					await vcClient.emailOtp.sendVerificationOtp({
+						email: vcTestUser.email,
+						type: "email-verification",
+					});
+				});
+
+				expect(currentEmailOtp).toBeTruthy();
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					const res = await vcClient.emailOtp.requestEmailChange({
+						newEmail,
+						otp: currentEmailOtp,
+					});
+					expect(res.data?.success).toBe(true);
+					expect(res.error).toBeFalsy();
+				});
+				expect(verifyCurrentOtpFn).toHaveBeenCalledWith(
+					newEmail,
+					expect.any(String),
+					"change-email",
+				);
+			});
+		});
+	});
+
+	describe("change", () => {
+		it("should change email with otp", async () => {
+			const userToChange = {
+				email: "user-to-change@test.com",
+				password: "password123",
+				name: "User To Change",
+			};
+			await client.signUp.email(userToChange);
+
+			const newEmail = "changed-email@test.com";
+			await runWithUser(userToChange.email, userToChange.password, async () => {
+				const requestRes = await client.emailOtp.requestEmailChange({
+					newEmail,
+				});
+				expect(requestRes.data?.success).toBe(true);
+			});
+			expect(otpFn).toHaveBeenCalledWith(
+				newEmail,
+				expect.any(String),
+				"change-email",
+			);
+
+			let sessionEmail: string | undefined;
+			await runWithUser(userToChange.email, userToChange.password, async () => {
+				const changeRes = await client.emailOtp.changeEmail({
+					newEmail,
+					otp,
+				});
+				expect(changeRes.data?.success).toBe(true);
+				expect(changeRes.error).toBeFalsy();
+				const session = await client.getSession();
+				sessionEmail = session.data?.user.email;
+			});
+			expect(sessionEmail).toBe(newEmail);
+		});
+
+		it("should not change email if session does not exist", async () => {
+			const res = await client.emailOtp.changeEmail({
+				newEmail: "other@test.com",
+				otp: "123456",
+			});
+			expect(res.error?.status).toBe(401);
+			expect(res.error?.code).toBe("UNAUTHORIZED");
+		});
+
+		it("should not change email if session is invalid", async () => {
+			const res = await client.emailOtp.changeEmail({
+				newEmail: "other@test.com",
+				otp: "123456",
+				fetchOptions: {
+					headers: new Headers({
+						Authorization: "Bearer invalid-session-token",
+					}),
+				},
+			});
+			expect(res.error?.status).toBe(401);
+			expect(res.error?.code).toBe("UNAUTHORIZED");
+		});
+
+		it("should not change email if session contains different email from otp request email", async () => {
+			const newEmail = "target-email@test.com";
+			await runWithUser(testUser.email, testUser.password, async () => {
+				const requestRes = await client.emailOtp.requestEmailChange({
+					newEmail,
+				});
+				expect(requestRes.data?.success).toBe(true);
+			});
+
+			const otherUser = {
+				email: "other-account@test.com",
+				password: "password123",
+				name: "Other Account",
+			};
+			await client.signUp.email(otherUser);
+
+			let changeRes: Awaited<ReturnType<typeof client.emailOtp.changeEmail>>;
+			await runWithUser(otherUser.email, otherUser.password, async () => {
+				changeRes = await client.emailOtp.changeEmail({
+					newEmail,
+					otp,
+				});
+			});
+			expect(changeRes!.error?.status).toBe(400);
+			expect(changeRes!.error?.code).toBe("INVALID_OTP");
+		});
+
+		it("should not change email if new email is different from otp request email", async () => {
+			const requestedNewEmail = "requested@test.com";
+			const wrongNewEmail = "wrong@test.com";
+			await runWithUser(testUser.email, testUser.password, async () => {
+				const requestRes = await client.emailOtp.requestEmailChange({
+					newEmail: requestedNewEmail,
+				});
+				expect(requestRes.data?.success).toBe(true);
+			});
+
+			let changeRes: Awaited<ReturnType<typeof client.emailOtp.changeEmail>>;
+			await runWithUser(testUser.email, testUser.password, async () => {
+				changeRes = await client.emailOtp.changeEmail({
+					newEmail: wrongNewEmail,
+					otp,
+				});
+			});
+			expect(changeRes!.error?.status).toBe(400);
+			expect(changeRes!.error?.code).toBe("INVALID_OTP");
+		});
+
+		it("should not change email if otp is invalid", async () => {
+			const newEmail = "another-new@test.com";
+			await runWithUser(testUser.email, testUser.password, async () => {
+				const requestRes = await client.emailOtp.requestEmailChange({
+					newEmail,
+				});
+				expect(requestRes.data?.success).toBe(true);
+			});
+
+			let changeRes: Awaited<ReturnType<typeof client.emailOtp.changeEmail>>;
+			await runWithUser(testUser.email, testUser.password, async () => {
+				changeRes = await client.emailOtp.changeEmail({
+					newEmail,
+					otp: "000000",
+				});
+			});
+			expect(changeRes!.error?.status).toBe(400);
+			expect(changeRes!.error?.code).toBe("INVALID_OTP");
+		});
+
+		it("should not change email if otp is expired", async () => {
+			const newEmail = "expired-otp@test.com";
+			const {
+				client: expClient,
+				testUser: expTestUser,
+				runWithUser: expRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP({ otp: _otp }) {
+								otp = _otp;
+							},
+							sendVerificationOnSignUp: true,
+							expiresIn: 60,
+							changeEmail: { enabled: true },
+						}),
+					],
+					emailVerification: {
+						autoSignInAfterVerification: true,
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			await expRunWithUser(
+				expTestUser.email,
+				expTestUser.password,
+				async () => {
+					const requestRes = await expClient.emailOtp.requestEmailChange({
+						newEmail,
+					});
+					expect(requestRes.data?.success).toBe(true);
+				},
+			);
+			vi.useFakeTimers();
+			await vi.advanceTimersByTimeAsync(61 * 1000);
+
+			let changeRes: Awaited<ReturnType<typeof expClient.emailOtp.changeEmail>>;
+			await expRunWithUser(
+				expTestUser.email,
+				expTestUser.password,
+				async () => {
+					changeRes = await expClient.emailOtp.changeEmail({
+						newEmail,
+						otp,
+					});
+				},
+			);
+			expect(changeRes!.error?.status).toBe(400);
+			expect(changeRes!.error?.code).toBe("OTP_EXPIRED");
+		});
+
+		it("should call beforeEmailVerification callback when email is updated", async () => {
+			const beforeEmailVerification = vi.fn();
+			let callbackOtp = "";
+			const {
+				client: cbClient,
+				testUser: cbTestUser,
+				runWithUser: cbRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP({ otp: _otp }) {
+								callbackOtp = _otp;
+							},
+							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: true },
+						}),
+					],
+					emailVerification: {
+						autoSignInAfterVerification: true,
+						beforeEmailVerification,
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			const newEmail = "before-cb@test.com";
+			await cbRunWithUser(cbTestUser.email, cbTestUser.password, async () => {
+				await cbClient.emailOtp.requestEmailChange({ newEmail });
+			});
+			await cbRunWithUser(cbTestUser.email, cbTestUser.password, async () => {
+				await cbClient.emailOtp.changeEmail({
+					newEmail,
+					otp: callbackOtp,
+				});
+			});
+			expect(beforeEmailVerification).toHaveBeenCalledTimes(1);
+			expect(beforeEmailVerification).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: cbTestUser.email,
+				}),
+				expect.any(Object),
+			);
+		});
+
+		it("should call afterEmailVerification callback when email is updated", async () => {
+			const afterEmailVerification = vi.fn();
+			let callbackOtp = "";
+			const {
+				client: cbClient,
+				testUser: cbTestUser,
+				runWithUser: cbRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP({ otp: _otp }) {
+								callbackOtp = _otp;
+							},
+							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: true },
+						}),
+					],
+					emailVerification: {
+						autoSignInAfterVerification: true,
+						afterEmailVerification,
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			const newEmail = "after-cb@test.com";
+			await cbRunWithUser(cbTestUser.email, cbTestUser.password, async () => {
+				await cbClient.emailOtp.requestEmailChange({ newEmail });
+			});
+			await cbRunWithUser(cbTestUser.email, cbTestUser.password, async () => {
+				await cbClient.emailOtp.changeEmail({
+					newEmail,
+					otp: callbackOtp,
+				});
+			});
+			expect(afterEmailVerification).toHaveBeenCalledTimes(1);
+			expect(afterEmailVerification).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: newEmail,
+					emailVerified: true,
+				}),
+				expect.any(Object),
+			);
+		});
 	});
 });
 
@@ -642,13 +1244,15 @@ describe("custom generate otpFn", async () => {
 });
 
 describe("custom storeOTP", async () => {
+	type SendVerificationOtpData = {
+		email: string;
+		otp: string;
+		type: "sign-in" | "email-verification" | "forget-password" | "change-email";
+	};
+
 	// Testing hashed OTPs.
 	describe("hashed", async () => {
-		let sendVerificationOtpFn = async (data: {
-			email: string;
-			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
-		}) => {};
+		let sendVerificationOtpFn = async (data: SendVerificationOtpData) => {};
 
 		function getTheSentOTP() {
 			let gotOtp: string | null = null;
@@ -742,11 +1346,7 @@ describe("custom storeOTP", async () => {
 
 	// Testing encrypted OTPs.
 	describe("encrypted", async () => {
-		let sendVerificationOtpFn = async (data: {
-			email: string;
-			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
-		}) => {};
+		let sendVerificationOtpFn = async (data: SendVerificationOtpData) => {};
 
 		function getTheSentOTP() {
 			let gotOtp: string | null = null;
@@ -833,11 +1433,7 @@ describe("custom storeOTP", async () => {
 	});
 
 	describe("custom encryptor", async () => {
-		let sendVerificationOtpFn = async (data: {
-			email: string;
-			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
-		}) => {};
+		let sendVerificationOtpFn = async (data: SendVerificationOtpData) => {};
 
 		function getTheSentOTP() {
 			let gotOtp: string | null = null;
@@ -930,11 +1526,7 @@ describe("custom storeOTP", async () => {
 	});
 
 	describe("custom hasher", async () => {
-		let sendVerificationOtpFn = async (data: {
-			email: string;
-			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
-		}) => {};
+		let sendVerificationOtpFn = async (data: SendVerificationOtpData) => {};
 
 		function getTheSentOTP() {
 			let gotOtp: string | null = null;
@@ -1384,5 +1976,229 @@ describe("race condition protection", async () => {
 			password: "newpass2",
 		});
 		expect(res2.error?.code).toBe("INVALID_OTP");
+	});
+});
+
+describe("email-otp-resendStrategy", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const otps: string[] = [];
+	const { client, testUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp }) {
+						otps.push(otp);
+					},
+					resendStrategy: "reuse",
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should reuse existing OTP when resendStrategy is reuse", async () => {
+		otps.length = 0;
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		const firstOtp = otps[0];
+		expect(firstOtp).toBeDefined();
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		const secondOtp = otps[1];
+		expect(secondOtp).toBeDefined();
+		expect(secondOtp).toBe(firstOtp);
+	});
+
+	it("should generate new OTP after previous one expires", async () => {
+		otps.length = 0;
+		vi.useFakeTimers();
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+		const firstOtp = otps[0];
+		expect(firstOtp).toBeDefined();
+
+		// Advance past expiry (default 5 minutes)
+		await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+		const secondOtp = otps[1];
+		expect(secondOtp).toBeDefined();
+		expect(secondOtp).not.toBe(firstOtp);
+	});
+
+	it("should generate new OTP when resendStrategy is reuse but storeOTP is hashed", async () => {
+		const hashedOtps: string[] = [];
+		const { client: hashedClient, testUser: hashedUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP({ otp }) {
+								hashedOtps.push(otp);
+							},
+							resendStrategy: "reuse",
+							storeOTP: "hashed",
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+		await hashedClient.emailOtp.sendVerificationOtp({
+			email: hashedUser.email,
+			type: "email-verification",
+		});
+		const firstOtp = hashedOtps[0];
+		expect(firstOtp).toBeDefined();
+
+		// Second request - should get NEW OTP since hashed OTP cannot be retrieved
+		await hashedClient.emailOtp.sendVerificationOtp({
+			email: hashedUser.email,
+			type: "email-verification",
+		});
+		const secondOtp = hashedOtps[1];
+		expect(secondOtp).toBeDefined();
+		expect(secondOtp).not.toBe(firstOtp);
+	});
+
+	it("should generate new OTP when resendStrategy is reuse but storeOTP is custom hash", async () => {
+		const customHashOtps: string[] = [];
+		const { client: hashClient, testUser: hashUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							customHashOtps.push(otp);
+						},
+						resendStrategy: "reuse",
+						storeOTP: {
+							hash: async (otp) => `hashed-${otp}`,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		await hashClient.emailOtp.sendVerificationOtp({
+			email: hashUser.email,
+			type: "email-verification",
+		});
+		const firstOtp = customHashOtps[0];
+		expect(firstOtp).toBeDefined();
+
+		await hashClient.emailOtp.sendVerificationOtp({
+			email: hashUser.email,
+			type: "email-verification",
+		});
+		const secondOtp = customHashOtps[1];
+		expect(secondOtp).toBeDefined();
+		expect(secondOtp).not.toBe(firstOtp);
+	});
+
+	it("should not send OTP for non-existent user on email-verification type", async () => {
+		otps.length = 0;
+		const { client: noSignUpClient } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							otps.push(otp);
+						},
+						resendStrategy: "reuse",
+						disableSignUp: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const res = await noSignUpClient.emailOtp.sendVerificationOtp({
+			email: "nonexistent@test.com",
+			type: "email-verification",
+		});
+		expect(res.data?.success).toBe(true);
+		// OTP should not be sent since user doesn't exist
+		expect(otps.length).toBe(0);
+	});
+
+	it("should generate fresh OTP when attempts are exhausted", async () => {
+		otps.length = 0;
+		const { client: attemptClient, testUser: attemptUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP({ otp }) {
+								otps.push(otp);
+							},
+							resendStrategy: "reuse",
+							allowedAttempts: 2,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+		// Send first OTP
+		await attemptClient.emailOtp.sendVerificationOtp({
+			email: attemptUser.email,
+			type: "email-verification",
+		});
+		const firstOtp = otps[0];
+		expect(firstOtp).toBeDefined();
+
+		// Exhaust attempts by verifying with wrong OTP
+		await attemptClient.emailOtp.verifyEmail({
+			email: attemptUser.email,
+			otp: "wrong1",
+		});
+		await attemptClient.emailOtp.verifyEmail({
+			email: attemptUser.email,
+			otp: "wrong2",
+		});
+
+		// Request new OTP — should generate fresh one since attempts exhausted
+		await attemptClient.emailOtp.sendVerificationOtp({
+			email: attemptUser.email,
+			type: "email-verification",
+		});
+		const secondOtp = otps[1];
+		expect(secondOtp).toBeDefined();
+		expect(secondOtp).not.toBe(firstOtp);
 	});
 });

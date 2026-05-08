@@ -79,9 +79,12 @@ export const useAuthQuery = <T>(
 							: request.retry?.attempts;
 					const retryAttempt = request.retryAttempt || 0;
 					if (retryAttempts && retryAttempt < retryAttempts) return;
+					const isUnauthorized = context.error.status === 401;
 					value.set({
 						error: context.error,
-						data: null,
+						data: isUnauthorized
+							? null // clear session on HTTP 401
+							: value.get().data, // preserve stale data on other errors
 						isPending: false,
 						isRefetching: false,
 						refetch: value.value.refetch,
@@ -103,7 +106,7 @@ export const useAuthQuery = <T>(
 				.catch((error) => {
 					value.set({
 						error,
-						data: null,
+						data: value.get().data,
 						isPending: false,
 						isRefetching: false,
 						refetch: value.value.refetch,
@@ -117,7 +120,7 @@ export const useAuthQuery = <T>(
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
-	let isMounted = false;
+	let isInitialized = false;
 
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(async () => {
@@ -125,14 +128,15 @@ export const useAuthQuery = <T>(
 				// On server, don't trigger fetch
 				return;
 			}
-			if (isMounted) {
+			if (isInitialized) {
 				await fn();
 			} else {
 				onMount(value, () => {
 					const timeoutId = setTimeout(async () => {
-						if (!isMounted) {
+						if (!isInitialized) {
+							// Must set to `true` immediately; see https://github.com/better-auth/better-auth/issues/9077
+							isInitialized = true;
 							await fn();
-							isMounted = true;
 						}
 					}, 0);
 					return () => {

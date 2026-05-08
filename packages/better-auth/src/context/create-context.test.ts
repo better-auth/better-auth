@@ -381,7 +381,7 @@ describe("base context creation", () => {
 			);
 		});
 
-		it("should use default maxAge (300) for 20% calculation", async () => {
+		it("should use default maxAge (7 days) for 20% calculation in stateless mode", async () => {
 			const res = await initBase({
 				session: {
 					cookieCache: {
@@ -389,9 +389,11 @@ describe("base context creation", () => {
 					},
 				},
 			});
+			// In stateless mode (no database), maxAge defaults to 7 days (604800s)
+			// updateAge = Math.floor(604800 * 0.2) = 120960
 			expect(res.sessionConfig.cookieRefreshCache).toEqual({
 				enabled: true,
-				updateAge: 60,
+				updateAge: 120960,
 			});
 		});
 
@@ -1840,8 +1842,19 @@ describe("base context creation", () => {
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(true);
 			expect(ctx.options.session?.cookieCache?.strategy).toBe("jwe");
 			expect(ctx.options.session?.cookieCache?.refreshCache).toBe(true);
+			expect(ctx.options.session?.cookieCache?.maxAge).toBe(60 * 60 * 24 * 7);
 			expect(ctx.oauthConfig.storeStateStrategy).toBe("cookie");
 			expect(ctx.options.database).toBeUndefined();
+		});
+
+		it("should set stateless cookieCache maxAge to match custom session expiresIn", async () => {
+			const customExpiresIn = 60 * 60 * 2; // 2 hours
+			const ctx = await initBase({
+				session: {
+					expiresIn: customExpiresIn,
+				},
+			});
+			expect(ctx.options.session?.cookieCache?.maxAge).toBe(customExpiresIn);
 		});
 
 		it("should allow overriding stateless mode", async () => {

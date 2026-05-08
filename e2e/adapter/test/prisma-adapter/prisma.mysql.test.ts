@@ -1,9 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { testAdapter } from "@better-auth/test-utils/adapter";
-import { createPool } from "mysql2/promise";
 import {
 	authFlowTestSuite,
+	caseInsensitiveTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
@@ -29,13 +29,6 @@ const { execute } = await testAdapter({
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
-		const mysqlDB = createPool({
-			uri: "mysql://user:password@localhost:3308/better_auth",
-			timezone: "Z",
-		});
-		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");
-		await mysqlDB.query("CREATE DATABASE better_auth");
-		await mysqlDB.end();
 		const db = await getPrismaClient(dialect);
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);
@@ -50,6 +43,11 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		caseInsensitiveTestSuite({
+			disableTests: {
+				"findOne - eq with mode sensitive (default) should not match different case": true,
+			},
+		}),
 	],
 	onFinish: async () => {},
 	prefixTests: dialect,

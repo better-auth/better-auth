@@ -198,7 +198,7 @@ export async function setCookieCache(
 		// Use JWE strategy (JSON Web Encryption) with A256CBC-HS512 + HKDF
 		data = await symmetricEncodeJWT(
 			sessionData,
-			ctx.context.secret,
+			ctx.context.secretConfig,
 			"better-auth-session",
 			options.maxAge || 60 * 5,
 		);
@@ -581,4 +581,8 @@ export const getCookieCache = async <
 };
 
 export * from "./cookie-utils";
-export { createSessionStore, getChunkedCookie } from "./session-store";
+export {
+	createSessionStore,
+	getAccountCookie,
+	getChunkedCookie,
+} from "./session-store";
