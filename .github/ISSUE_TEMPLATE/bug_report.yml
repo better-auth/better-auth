@@ -14,7 +14,7 @@ body:
         Thank you for reporting a bug with better-auth!
 
         - Feature requests should be opened [here](https://github.com/better-auth/better-auth/issues/new?template=feature_request.yml).
-        - Before opening a new issue, please [check](https://github.com/better-auth/better-auth/issues) for existing issues and :+1: upvote the existing issue instead. This will result in a quicker resolution.
+        - Before opening a new issue, please check for [existing issues](https://github.com/better-auth/better-auth/issues) and :+1: upvote the existing issue instead. This will result in a quicker resolution.
   - type: textarea
     attributes:
       label: Reproduction
