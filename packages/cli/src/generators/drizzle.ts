@@ -24,7 +24,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 }) => {
 	const tables = getAuthTables(options);
 	const filePath = file || "./auth-schema.ts";
-	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
+	const databaseType: "sqlite" | "mysql" | "pg" | "mssql" | undefined =
 		adapter.options?.provider;
 
 	if (!databaseType) {
@@ -71,6 +71,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
 						return `int('${name}')`;
+					} else if (databaseType === "mssql") {
+						return `int('${name}')`;
 					} else {
 						// using sqlite
 						return `integer('${name}')`;
@@ -83,6 +85,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					if (databaseType === "mysql") {
 						return `varchar('${name}', { length: 36 })`;
 					}
+					if (databaseType === "mssql") {
+						return `varchar('${name}', { length: 36 })`;
+					}
+				}
+				if (databaseType === "mssql") {
+					return `varchar('${name}', { length: 'max' })`;
 				}
 				return `text('${name}')`;
 			}
@@ -93,6 +101,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+						// MSSQL has no native enum — emit a varchar with the enum tag.
+						mssql: `varchar('${name}', { length: 255, enum: [${type
+							.map((x) => `'${x}'`)
+							.join(", ")}] })`,
 					}[databaseType];
 				} else {
 					throw new TypeError(
@@ -100,6 +112,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					);
 				}
 			}
+			// MSSQL: indexed/sorted/unique strings need a bounded length so SQL
+			// Server can build an index; everything else uses varchar(max).
+			const mssqlVarchar = (length: number | "max") =>
+				`varchar('${name}', { length: ${
+					typeof length === "number" ? length : `'${length}'`
+				} })`;
 			const typeMap: Record<
 				typeof type,
 				Record<typeof databaseType, string>
@@ -116,11 +134,21 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								: field.index
 									? `varchar('${name}', { length: 255 })`
 									: `text('${name}')`,
+					mssql: field.unique
+						? mssqlVarchar(255)
+						: field.references
+							? mssqlVarchar(36)
+							: field.sortable
+								? mssqlVarchar(255)
+								: field.index
+									? mssqlVarchar(255)
+									: mssqlVarchar("max"),
 				},
 				boolean: {
 					sqlite: `integer('${name}', { mode: 'boolean' })`,
 					pg: `boolean('${name}')`,
 					mysql: `boolean('${name}')`,
+					mssql: `bit('${name}')`,
 				},
 				number: {
 					sqlite: `integer('${name}')`,
@@ -130,11 +158,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: field.bigint
 						? `bigint('${name}', { mode: 'number' })`
 						: `int('${name}')`,
+					mssql: field.bigint
+						? `bigint('${name}', { mode: 'number' })`
+						: `int('${name}')`,
 				},
 				date: {
 					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
 					pg: `timestamp('${name}')`,
 					mysql: `timestamp('${name}', { fsp: 3 })`,
+					mssql: `datetime2('${name}', { precision: 3 })`,
 				},
 				"number[]": {
 					sqlite: `text('${name}', { mode: "json" })`,
@@ -142,16 +174,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						? `bigint('${name}', { mode: 'number' }).array()`
 						: `integer('${name}').array()`,
 					mysql: `text('${name}', { mode: 'json' })`,
+					// MSSQL has no array type — store JSON in nvarchar(max).
+					mssql: `varchar('${name}', { length: 'max', mode: "json" })`,
 				},
 				"string[]": {
 					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `text('${name}').array()`,
 					mysql: `text('${name}', { mode: "json" })`,
+					mssql: `varchar('${name}', { length: 'max', mode: "json" })`,
 				},
 				json: {
 					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `jsonb('${name}')`,
 					mysql: `json('${name}', { mode: "json" })`,
+					mssql: `varchar('${name}', { length: 'max', mode: "json" })`,
 				},
 			} as const;
 			const dbTypeMap = (
@@ -177,6 +213,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				id = `integer("id").generatedByDefaultAsIdentity().primaryKey()`;
 			} else if (databaseType === "sqlite") {
 				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
+			} else if (databaseType === "mssql") {
+				id = `int("id").identity().primaryKey()`;
 			} else {
 				id = `int("id").autoincrement().primaryKey()`;
 			}
@@ -185,6 +223,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				id = `varchar('id', { length: 36 }).primaryKey()`;
 			} else if (databaseType === "pg") {
 				id = `text('id').primaryKey()`;
+			} else if (databaseType === "mssql") {
+				id = `varchar('id', { length: 36 }).primaryKey()`;
 			} else {
 				id = `text('id').primaryKey()`;
 			}
@@ -244,6 +284,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									) {
 										if (databaseType === "sqlite") {
 											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
+										} else if (databaseType === "mssql") {
+											// MSSQL drizzle has no .defaultNow() — emit the SQL function.
+											type += `.default(sql\`SYSUTCDATETIME()\`)`;
 										} else {
 											type += `.defaultNow()`;
 										}
@@ -529,7 +572,7 @@ function generateImport({
 	tables,
 	options,
 }: {
-	databaseType: "sqlite" | "mysql" | "pg";
+	databaseType: "sqlite" | "mysql" | "pg" | "mssql";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
@@ -557,12 +600,19 @@ function generateImport({
 			? "varchar, text"
 			: databaseType === "pg"
 				? "text"
-				: "text",
+				: databaseType === "mssql"
+					? "varchar"
+					: "text",
 	);
 	coreImports.push(
 		hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "",
 	);
-	coreImports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
+	if (databaseType === "mssql") {
+		// MSSQL has no native boolean (uses bit) and no timestamp (uses datetime2).
+		coreImports.push("datetime2, bit");
+	} else if (databaseType !== "sqlite") {
+		coreImports.push("timestamp, boolean");
+	}
 	if (databaseType === "mysql") {
 		// Only include int for MySQL if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
@@ -612,6 +662,18 @@ function generateImport({
 		if (needsInteger) {
 			coreImports.push("integer");
 		}
+	} else if (databaseType === "mssql") {
+		// `int` is needed for non-bigint numbers and for serial-id FKs/primary keys.
+		const hasNonBigintNumber = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					(field.type === "number" || field.type === "number[]") &&
+					!field.bigint,
+			),
+		);
+		if (useNumberId || hasNonBigintNumber) {
+			coreImports.push("int");
+		}
 	} else {
 		coreImports.push("integer");
 	}
@@ -626,9 +688,10 @@ function generateImport({
 		// sqlite uses text for JSON, so there's no need to handle this case
 	}
 
-	// Add sql import for SQLite timestamps with defaultNow
-	const hasSQLiteTimestamp =
-		databaseType === "sqlite" &&
+	// SQLite and MSSQL render their `now()` defaults via the `sql` template tag
+	// (sqlite uses unixepoch, mssql uses SYSUTCDATETIME()).
+	const hasNowDefault =
+		(databaseType === "sqlite" || databaseType === "mssql") &&
 		Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
 				(field) =>
@@ -639,7 +702,7 @@ function generateImport({
 			),
 		);
 
-	if (hasSQLiteTimestamp) {
+	if (hasNowDefault) {
 		rootImports.push("sql");
 	}
 
