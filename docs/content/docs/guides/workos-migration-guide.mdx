@@ -125,8 +125,7 @@ Before getting started, let’s review which WorkOS authentication features are 
 
     {/* cspell:disable-next-line */}
 
-    You probably used metadata in WorkOS. To preserve that metadata and the user id from WorkOS (e.g., user\_01KBT4BMFF7ASGRDD0WZ6W63FF), extend the `user` schema as shown below. Better Auth provides a more flexible way to store user data. For more information, see [here](/docs/concepts/database#extending-core-schema).
-
+    You probably used metadata in WorkOS. To preserve that metadata and the user id from WorkOS (e.g., user\_01KBT4BMFF7ASGRDD0WZ6W63FF), [extend the `user` schema](/docs/concepts/database#extending-core-schema) as shown below. Better Auth provides a more flexible way to store user data.
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
     import { Pool } from "pg";
