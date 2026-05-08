@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import type { GenericOAuthConfig } from "../../plugins/generic-oauth";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -25,6 +26,32 @@ describe("sign-out", async () => {
 
 			expect(afterSessionDeleted).toHaveBeenCalled();
 		});
+	});
+
+	it("should clear local session cookie when reading the session fails", async () => {
+		const instance = await getTestInstance();
+		const { headers } = await instance.signInWithTestUser();
+		const context = await instance.auth.$context;
+		vi.spyOn(context.internalAdapter, "findSession").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		let setCookieHeader = "";
+
+		const res = await instance.client.signOut({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		});
+
+		expect(res.data).toEqual({
+			success: true,
+		});
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		expect(cookies.get("better-auth.session_token")?.value).toBe("");
+		expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(0);
 	});
 
 	const baseOAuthConfig = {

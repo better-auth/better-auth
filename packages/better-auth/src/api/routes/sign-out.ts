@@ -90,9 +90,17 @@ export const signOut = createAuthEndpoint(
 			ctx.context.authCookies.sessionToken.name,
 			ctx.context.secret,
 		);
-		const currentSession = sessionCookieToken
-			? await ctx.context.internalAdapter.findSession(sessionCookieToken)
-			: null;
+		let currentSession: Awaited<
+			ReturnType<typeof ctx.context.internalAdapter.findSession>
+		> | null = null;
+		if (sessionCookieToken) {
+			try {
+				currentSession =
+					await ctx.context.internalAdapter.findSession(sessionCookieToken);
+			} catch (e) {
+				ctx.context.logger.error("Failed to read session from database", e);
+			}
+		}
 		if (sessionCookieToken) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
