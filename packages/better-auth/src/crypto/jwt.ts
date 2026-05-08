@@ -1,3 +1,4 @@
+import type { Awaitable } from "@better-auth/core";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
@@ -88,8 +89,8 @@ function getAllSecrets(
 }
 
 export type SessionCryptoHook = {
-	encrypt: (plaintext: string) => Promise<string>;
-	decrypt: (ciphertext: string) => Promise<string>;
+	encrypt: (plaintext: string) => Awaitable<string>;
+	decrypt: (ciphertext: string) => Awaitable<string>;
 };
 
 export async function hookEncodeSession<T extends Record<string, any>>(

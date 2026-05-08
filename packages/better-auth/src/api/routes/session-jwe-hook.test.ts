@@ -212,4 +212,38 @@ describe("custom crypto hook for JWE session cookie cache", async () => {
 		});
 		expect(session.data).toBeNull();
 	});
+
+	it("accepts synchronous encrypt/decrypt hooks (Awaitable)", async () => {
+		// Synchronous functions must satisfy the type without `as` or
+		// Promise wrapping. If `Awaitable<string>` regresses to
+		// `Promise<string>`, this assignment fails to compile.
+		const hook = {
+			encrypt: vi.fn(
+				(plaintext: string): string =>
+					`sync:${Buffer.from(plaintext, "utf8").toString("base64")}`,
+			),
+			decrypt: vi.fn((ciphertext: string): string => {
+				if (!ciphertext.startsWith("sync:"))
+					throw new Error("not a sync token");
+				return Buffer.from(ciphertext.slice("sync:".length), "base64").toString(
+					"utf8",
+				);
+			}),
+		};
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, strategy: "jwe" } },
+			crypto: hook,
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.email).toBe(testUser.email);
+		expect(hook.encrypt).toHaveBeenCalled();
+		expect(hook.decrypt).toHaveBeenCalled();
+	});
 });

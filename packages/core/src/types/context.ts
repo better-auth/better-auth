@@ -348,8 +348,8 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 */
 			crypto?:
 				| {
-						encrypt: (plaintext: string) => Promise<string>;
-						decrypt: (ciphertext: string) => Promise<string>;
+						encrypt: (plaintext: string) => Awaitable<string>;
+						decrypt: (ciphertext: string) => Awaitable<string>;
 				  }
 				| undefined;
 			sessionConfig: {
