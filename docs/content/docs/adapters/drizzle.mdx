@@ -26,7 +26,7 @@ import { db } from "./database.ts";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { // [!code highlight]
-    provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
+    provider: "sqlite", // or "pg", "mysql", or "mssql" // [!code highlight]
   }), // [!code highlight]
   //... the rest of your config
 });
@@ -100,7 +100,7 @@ import { schema } from "./schema";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: "sqlite", // or "pg" or "mysql"
+    provider: "sqlite", // or "pg", "mysql", or "mssql"
     schema: { // [!code highlight]
       ...schema, // [!code highlight]
       user: schema.users, // [!code highlight]
@@ -118,7 +118,7 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: "sqlite", // or "pg" or "mysql"
+    provider: "sqlite", // or "pg", "mysql", or "mssql"
     schema,
   }),
   user: {
@@ -152,7 +152,7 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: "sqlite", // or "pg" or "mysql"
+    provider: "sqlite", // or "pg", "mysql", or "mssql"
     schema,
   }),
   user: {

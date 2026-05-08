@@ -89,6 +89,19 @@ describe("drizzle-adapter", () => {
 		expect(db.transaction).toHaveBeenCalled();
 	});
 
+	it("should create drizzle adapter with mssql provider", () => {
+		const db = {
+			_: {
+				fullSchema: {},
+			},
+		} as any;
+		const config = {
+			provider: "mssql" as const,
+		};
+		const adapter = drizzleAdapter(db, config);
+		expect(adapter).toBeDefined();
+	});
+
 	describe("checkMissingFields", () => {
 		function createMockDb(schema: Record<string, Record<string, any>>) {
 			return {
@@ -184,6 +197,53 @@ describe("drizzle-adapter", () => {
 			).rejects.toThrow(
 				/does not exist in the "user" Drizzle schema.*update your drizzle schema/,
 			);
+		});
+
+		it("should not call .returning() on mssql (uses execute + re-select)", async () => {
+			const userTable = {
+				id: { name: "id" },
+				name: { name: "name" },
+				email: { name: "email" },
+				emailVerified: { name: "emailVerified" },
+				image: { name: "image" },
+				createdAt: { name: "createdAt" },
+				updatedAt: { name: "updatedAt" },
+			};
+			const insertedRow = {
+				id: "abc",
+				name: "Test",
+				email: "test@example.com",
+			};
+			const returning = vi.fn();
+			const execute = vi.fn().mockResolvedValue(undefined);
+			const limit = vi
+				.fn()
+				.mockReturnValue({ execute: vi.fn().mockResolvedValue([insertedRow]) });
+			const where = vi.fn().mockReturnValue({ limit });
+			const orderBy = vi.fn().mockReturnValue({ limit });
+			const from = vi.fn().mockReturnValue({ where, orderBy });
+			const select = vi.fn().mockReturnValue({ from });
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({
+						config: { values: [{ id: { value: "abc" } }] },
+						execute,
+						returning,
+					}),
+				}),
+				select,
+			} as any;
+			const factory = drizzleAdapter(db, { provider: "mssql" });
+			const adapter = factory({ secret: defaultSecret });
+
+			await adapter.create({
+				model: "user",
+				data: { name: "Test", email: "test@example.com" },
+			});
+
+			expect(execute).toHaveBeenCalledTimes(1);
+			expect(returning).not.toHaveBeenCalled();
 		});
 
 		it("should throw when schema is not provided", async () => {
