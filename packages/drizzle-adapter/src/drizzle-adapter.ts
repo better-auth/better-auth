@@ -27,7 +27,6 @@ import {
 	ne,
 	notInArray,
 	or,
-	sql,
 } from "drizzle-orm";
 import {
 	insensitiveEq,
