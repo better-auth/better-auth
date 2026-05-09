@@ -1021,54 +1021,44 @@ describe("api-key", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9504
 	 */
 	it("should return 429 when API key rate limit is exceeded via before hook", async () => {
-		const {
-			client: rlClient,
-			auth: rlAuth,
-			signInWithTestUser: rlSignIn,
-		} = await getTestInstance(
-			{
-				plugins: [
-					apiKey({
-						rateLimit: {
-							enabled: true,
-							timeWindow: 60000,
-							maxRequests: 2,
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
+		const { client: rlClient, signInWithTestUser: rlSignIn } =
+			await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+							rateLimit: {
+								enabled: true,
+								timeWindow: 60000,
+								maxRequests: 2,
+							},
+						}),
+					],
 				},
-			},
-		);
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
 
-		const { headers: rlUserHeaders } = await rlSignIn();
+		const { headers: userHeaders } = await rlSignIn();
 		const { data: rlKey } = await rlClient.apiKey.create(
 			{},
-			{ headers: rlUserHeaders },
+			{ headers: userHeaders },
 		);
-		if (!rlKey) return;
+		if (!rlKey) throw new Error("apiKey.create returned null");
 
 		const headers = new Headers();
 		headers.set("x-api-key", rlKey.key);
 
-		// First 2 requests should succeed
 		for (let i = 0; i < 2; i++) {
-			const res = await rlAuth.api.getSession({
-				headers,
-				asResponse: true,
-			});
-			expect(res.status).toBe(200);
+			const res = await rlClient.getSession({ fetchOptions: { headers } });
+			expect(res.error).toBeNull();
 		}
 
-		// 3rd request should be rate limited with 429, not 401
-		const res = await rlAuth.api.getSession({
-			headers,
-			asResponse: true,
-		});
-		expect(res.status).toBe(429);
+		const res = await rlClient.getSession({ fetchOptions: { headers } });
+		expect(res.error?.status).toBe(429);
 	});
 
 	it("should check if verifying an API key's remaining count does go down", async () => {
