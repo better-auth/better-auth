@@ -39,7 +39,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        PLAYWRIGHT_VERSION=$(pnpm --filter=. ls @playwright/test --json | jq --raw-output '.[0].devDependencies["@playwright/test"].version')
+        PLAYWRIGHT_VERSION=$(pnpm ls @playwright/test --json | jq --raw-output '.[0].devDependencies["@playwright/test"].version')
         if [ -z "$PLAYWRIGHT_VERSION" ] || [ "$PLAYWRIGHT_VERSION" = "null" ]; then
           echo "::error::Could not detect @playwright/test version in ${{ inputs.working-directory }}. Ensure dependencies are installed before running this action."
           exit 1
