@@ -217,6 +217,9 @@ Most of the features of Better Auth will not work correctly.`,
 				const providerFactory =
 					socialProviders[key as keyof typeof socialProviders];
 				if (!providerFactory) {
+					logger.warn(
+						`Unknown social provider "${key}" in options.socialProviders; this entry will be ignored.`,
+					);
 					return null;
 				}
 				const provider = providerFactory(config as never);

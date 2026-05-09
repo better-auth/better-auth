@@ -266,14 +266,17 @@ describe("oauth2 - email verification on link", async () => {
 			},
 		});
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test_code" },
 			method: "GET",
 			headers: oAuthHeaders,
 			onError(context) {
 				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
 			},
 		});
+		return redirectLocation;
 	}
 
 	it("should update emailVerified when linking account with verified email", async () => {
@@ -300,7 +303,7 @@ describe("oauth2 - email verification on link", async () => {
 
 		// Link with Google account that has verified email
 		mockEmailVerified = true;
-		await linkGoogleAccount();
+		const redirectLocation = await linkGoogleAccount();
 
 		// Verify email is now verified
 		user = await ctx.adapter.findOne<User>({
@@ -308,6 +311,7 @@ describe("oauth2 - email verification on link", async () => {
 			where: [{ field: "id", value: userId }],
 		});
 		expect(user?.emailVerified).toBe(true);
+		expect(redirectLocation).not.toContain("error=email_not_verified");
 	});
 
 	it("should not update emailVerified when provider reports unverified", async () => {

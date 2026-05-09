@@ -1009,12 +1009,21 @@ describe("Google Provider — multiple client IDs", async () => {
 	const iosClientId = "456-ios.googleusercontent.com";
 	const androidClientId = "789-android.googleusercontent.com";
 
-	const signIdToken = (audience: string) =>
+	const signIdToken = (
+		audience: string,
+		payload?: {
+			email?: string;
+			email_verified?: boolean;
+			name?: string;
+			sub?: string;
+		},
+	) =>
 		new SignJWT({
 			email: "mobile-user@example.com",
 			email_verified: true,
 			name: "Mobile User",
 			sub: "google-sub-999",
+			...payload,
 		})
 			.setProtectedHeader({ alg: "RS256", kid: googleKid })
 			.setIssuedAt()
@@ -1058,6 +1067,39 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(res.data!.redirect).toBe(false);
 		const data = res.data as { user: { email: string } };
 		expect(data.user.email).toBe("mobile-user@example.com");
+	});
+
+	it("returns EMAIL_NOT_VERIFIED for an unverified id token when social verification is required", async () => {
+		const idToken = await signIdToken(webClientId, {
+			email: "mobile-unverified@example.com",
+			email_verified: false,
+			name: "Mobile Unverified",
+			sub: "google-sub-unverified",
+		});
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					requireEmailVerification: true,
+					google: {
+						clientId: [webClientId, iosClientId, androidClientId],
+						clientSecret: "test-secret",
+					},
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: false,
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
 	});
 
 	it("rejects an id token whose audience is not configured", async () => {

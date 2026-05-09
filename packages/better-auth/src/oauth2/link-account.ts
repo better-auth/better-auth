@@ -22,6 +22,11 @@ export async function handleOAuthUserInfo(
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
 		opts;
+	const getVerificationURL = (token: string) =>
+		`${c.context.baseURL}/verify-email?${new URLSearchParams({
+			token,
+			callbackURL: String(callbackURL),
+		})}`;
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),
@@ -93,7 +98,7 @@ export async function handleOAuthUserInfo(
 				!dbUser.user.emailVerified &&
 				userInfo.email.toLowerCase() === dbUser.user.email
 			) {
-				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
 				});
 			}
@@ -134,7 +139,7 @@ export async function handleOAuthUserInfo(
 				!dbUser.user.emailVerified &&
 				userInfo.email.toLowerCase() === dbUser.user.email
 			) {
-				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+				user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
 				});
 			}
@@ -199,7 +204,7 @@ export async function handleOAuthUserInfo(
 					undefined,
 					c.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				const url = getVerificationURL(token);
 				await c.context.runInBackgroundOrAwait(
 					c.context.options.emailVerification.sendVerificationEmail(
 						{
@@ -251,7 +256,7 @@ export async function handleOAuthUserInfo(
 				undefined,
 				c.context.options.emailVerification?.expiresIn,
 			);
-			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+			const url = getVerificationURL(token);
 			await c.context.runInBackgroundOrAwait(
 				c.context.options.emailVerification.sendVerificationEmail(
 					{

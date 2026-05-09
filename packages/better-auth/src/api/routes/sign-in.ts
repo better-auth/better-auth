@@ -320,6 +320,12 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						c.context.options.emailAndPassword?.requireEmailVerification,
 				});
 				if (data.error) {
+					if (data.error === "email not verified") {
+						throw APIError.from(
+							"FORBIDDEN",
+							BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+						);
+					}
 					throw APIError.from("UNAUTHORIZED", {
 						message: data.error,
 						code: "OAUTH_LINK_ERROR",
