@@ -36,41 +36,60 @@ export interface SIWEPluginOptions {
 	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
-const getSiweNonceBodySchema = z.object({
-	walletAddress: z
-		.string()
-		.regex(/^0[xX][a-fA-F0-9]{40}$/i)
-		.length(42),
-	chainId: z.number().int().positive().optional().default(1),
-});
+const walletAddressInputSchema = z
+	.string()
+	.regex(/^0[xX][a-fA-F0-9]{40}$/i)
+	.length(42);
 
-export const siwe = (options: SIWEPluginOptions) =>
-	({
+const getSiweNonceBodySchema = z
+	.object({
+		walletAddress: walletAddressInputSchema.optional(),
+		address: walletAddressInputSchema.optional(),
+		chainId: z.number().int().positive().optional().default(1),
+	})
+	.refine((body) => body.walletAddress || body.address, {
+		message: "walletAddress or address is required",
+		path: ["walletAddress"],
+	});
+
+export const siwe = (options: SIWEPluginOptions) => {
+	const createSiweNonceEndpoint = (path: "/siwe/nonce" | "/siwe/get-nonce") =>
+		createAuthEndpoint(
+			path,
+			{
+				method: "POST",
+				body: getSiweNonceBodySchema,
+			},
+			async (ctx) => {
+				const rawWalletAddress = ctx.body.walletAddress ?? ctx.body.address;
+				if (!rawWalletAddress) {
+					throw APIError.fromStatus("BAD_REQUEST", {
+						message: "walletAddress or address is required",
+						status: 400,
+					});
+				}
+				const { chainId } = ctx.body;
+				const walletAddress = toChecksumAddress(rawWalletAddress);
+				const nonce = await options.getNonce();
+
+				// Store nonce with wallet address and chain ID context
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: `siwe:${walletAddress}:${chainId}`,
+					value: nonce,
+					expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+				});
+
+				return ctx.json({ nonce });
+			},
+		);
+
+	return {
 		id: "siwe",
 		version: PACKAGE_VERSION,
 		schema: mergeSchema(schema, options?.schema) as WalletAddressSchema,
 		endpoints: {
-			getSiweNonce: createAuthEndpoint(
-				"/siwe/nonce",
-				{
-					method: "POST",
-					body: getSiweNonceBodySchema,
-				},
-				async (ctx) => {
-					const { walletAddress: rawWalletAddress, chainId } = ctx.body;
-					const walletAddress = toChecksumAddress(rawWalletAddress);
-					const nonce = await options.getNonce();
-
-					// Store nonce with wallet address and chain ID context
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `siwe:${walletAddress}:${chainId}`,
-						value: nonce,
-						expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-					});
-
-					return ctx.json({ nonce });
-				},
-			),
+			getSiweNonce: createSiweNonceEndpoint("/siwe/nonce"),
+			getNonce: createSiweNonceEndpoint("/siwe/get-nonce"),
 			verifySiweMessage: createAuthEndpoint(
 				"/siwe/verify",
 				{
@@ -305,4 +324,5 @@ export const siwe = (options: SIWEPluginOptions) =>
 			),
 		},
 		options,
-	}) satisfies BetterAuthPlugin;
+	} satisfies BetterAuthPlugin;
+};

@@ -43,6 +43,7 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+				index: true,
 			},
 			createdAt: {
 				type: "date",
@@ -161,6 +162,7 @@ export const schema = {
 					model: "oauthClient",
 					field: "clientId",
 				},
+				index: true,
 			},
 			// Session used during authorization
 			sessionId: {
@@ -172,6 +174,7 @@ export const schema = {
 					// session can be deleted but refresh still active
 					onDelete: "set null",
 				},
+				index: true,
 			},
 			userId: {
 				type: "string",
@@ -180,6 +183,7 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+				index: true,
 			},
 			referenceId: {
 				type: "string",
@@ -232,6 +236,7 @@ export const schema = {
 					model: "oauthClient",
 					field: "clientId",
 				},
+				index: true,
 			},
 			sessionId: {
 				type: "string",
@@ -244,6 +249,7 @@ export const schema = {
 					// session can be deleted but refresh still active
 					onDelete: "set null",
 				},
+				index: true,
 			},
 			userId: {
 				type: "string",
@@ -252,6 +258,7 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+				index: true,
 			},
 			referenceId: {
 				type: "string",
@@ -264,6 +271,7 @@ export const schema = {
 					model: "oauthRefreshToken",
 					field: "id",
 				},
+				index: true,
 			},
 			expiresAt: {
 				type: "date",
@@ -288,6 +296,7 @@ export const schema = {
 					model: "oauthClient",
 					field: "clientId",
 				},
+				index: true,
 			},
 			userId: {
 				type: "string",
@@ -296,6 +305,7 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+				index: true,
 			},
 			referenceId: {
 				type: "string",

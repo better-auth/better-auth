@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
+import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
 export function toNextJsHandler(
 	auth:
@@ -24,6 +25,8 @@ export function toNextJsHandler(
 }
 
 export const nextCookies = () => {
+	let hasWarned = false;
+
 	return {
 		id: "next-cookies",
 		version: PACKAGE_VERSION,
@@ -34,6 +37,10 @@ export const nextCookies = () => {
 						return ctx.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (!hasWarned) {
+							warnIfCookiePluginNotLast(ctx.context, "next-cookies");
+							hasWarned = true;
+						}
 						// Real HTTP requests (via router) set cookies through
 						// response headers -- no need to skip refresh.
 						if ("_flag" in ctx && ctx._flag === "router") {

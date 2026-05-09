@@ -2081,6 +2081,16 @@ export const getNormalTestSuiteTests = (
 			findResult!.updatedAt = user.updatedAt;
 			expect(findResult).toEqual(expectedResult);
 		},
+		"update - should return null when where is empty": async () => {
+			const result = await adapter.update<User>({
+				model: "user",
+				where: [],
+				update: { name: "test-name" },
+			});
+
+			expect(result).toBeNull();
+		},
+
 		"updateMany - should update all models when where is empty": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			await adapter.updateMany({

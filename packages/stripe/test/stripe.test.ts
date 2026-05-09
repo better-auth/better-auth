@@ -4933,6 +4933,190 @@ describe("stripe", () => {
 			// Verify the cancelAt date is correct
 			expect(updatedSub!.cancelAt!.getTime()).toBe(cancelAt * 1000);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9321
+		 */
+		it("should pass stripeSubscription to onSubscriptionUpdate", async () => {
+			const onSubscriptionUpdate = vi.fn();
+
+			const now = Math.floor(Date.now() / 1000);
+			const cancelAt = now + 15 * 24 * 60 * 60;
+
+			const webhookEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_9321",
+						customer: "cus_9321",
+						status: "active",
+						cancel_at_period_end: true,
+						cancel_at: cancelAt,
+						canceled_at: now,
+						ended_at: null,
+						items: {
+							data: [
+								{
+									price: { id: "price_starter_123", lookup_key: null },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: now + 30 * 24 * 60 * 60,
+								},
+							],
+						},
+					},
+				},
+			};
+
+			const constructEventAsync = vi.fn().mockResolvedValue(webhookEvent);
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: { constructEventAsync },
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					onSubscriptionUpdate,
+				},
+			} as unknown as StripeOptions;
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{ database: memory, plugins: [stripe(testOptions)] },
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const { id: userId } = await webhookCtx.adapter.create({
+				model: "user",
+				data: { email: "9321@test.com" },
+			});
+			await webhookCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_9321",
+					stripeSubscriptionId: "sub_9321",
+					status: "active",
+					plan: "starter",
+				},
+			});
+
+			await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(onSubscriptionUpdate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					stripeSubscription: expect.any(Object),
+				}),
+			);
+		});
+
+		it("should pass the post-update subscription row to onSubscriptionCancel (symmetry with onSubscriptionUpdate)", async () => {
+			const onSubscriptionCancel = vi.fn();
+
+			const now = Math.floor(Date.now() / 1000);
+			const periodEnd = now + 30 * 24 * 60 * 60;
+			const cancelAt = now + 15 * 24 * 60 * 60;
+
+			const cancelEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_cancel_timing",
+						customer: "cus_cancel_timing",
+						status: "active",
+						cancel_at_period_end: true,
+						cancel_at: cancelAt,
+						canceled_at: now,
+						ended_at: null,
+						items: {
+							data: [
+								{
+									price: { id: "price_starter_123", lookup_key: null },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: periodEnd,
+								},
+							],
+						},
+						cancellation_details: {
+							reason: "cancellation_requested",
+							feedback: null,
+							comment: null,
+						},
+					},
+				},
+			};
+
+			const constructEventAsync = vi.fn().mockResolvedValue(cancelEvent);
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: { constructEventAsync },
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					onSubscriptionCancel,
+				},
+			} as unknown as StripeOptions;
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const { id: userId } = await webhookCtx.adapter.create({
+				model: "user",
+				data: { email: "cancel-timing@test.com" },
+			});
+
+			await webhookCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_cancel_timing",
+					stripeSubscriptionId: "sub_cancel_timing",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: false,
+					cancelAt: null,
+					canceledAt: null,
+				},
+			});
+
+			await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(cancelEvent),
+				}),
+			);
+
+			expect(onSubscriptionCancel).toHaveBeenCalledTimes(1);
+			const arg = onSubscriptionCancel.mock.calls[0]?.[0];
+			expect(arg.subscription).toMatchObject({
+				cancelAtPeriodEnd: true,
+				cancelAt: expect.any(Date),
+				canceledAt: expect.any(Date),
+			});
+		});
 	});
 
 	describe("webhook: immediate cancellation (subscription deleted)", () => {
@@ -8480,6 +8664,463 @@ describe("stripe", () => {
 
 			expect(meteredItem).toBeDefined();
 			expect(meteredItem).not.toHaveProperty("quantity");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9129
+	 * @see https://github.com/better-auth/better-auth/issues/9130
+	 */
+	describe("getCheckoutSessionParams subscription_data merge", () => {
+		const trialOptions = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: process.env.STRIPE_PRICE_ID_1!,
+						name: "starter",
+						lookupKey: "lookup_key_123",
+						freeTrial: { days: 14 },
+					},
+				],
+				getCheckoutSessionParams: async () => ({
+					params: {
+						payment_method_collection: "if_required" as const,
+						subscription_data: {
+							trial_settings: {
+								end_behavior: {
+									missing_payment_method: "cancel" as const,
+								},
+							},
+						},
+					},
+				}),
+			},
+		} satisfies StripeOptions;
+
+		it("preserves plan freeTrial when getCheckoutSessionParams returns custom subscription_data", async () => {
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(trialOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "trial-merge@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					subscription_data: expect.objectContaining({
+						trial_period_days: 14,
+						trial_settings: {
+							end_behavior: { missing_payment_method: "cancel" },
+						},
+					}),
+				}),
+				undefined,
+			);
+		});
+
+		it("does not let getCheckoutSessionParams override library-owned flow-routing fields", async () => {
+			const hijackOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							success_url: "https://attacker.example/success",
+							cancel_url: "https://attacker.example/cancel",
+							mode: "payment" as const,
+							client_reference_id: "attacker-controlled",
+							customer: "cus_attacker",
+							customer_email: "attacker@example.com",
+							line_items: [{ price: "price_attacker", quantity: 99 }],
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(hijackOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "hijack-attempt@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs.mode).toBe("subscription");
+			expect(callArgs.client_reference_id).not.toBe("attacker-controlled");
+			expect(callArgs.customer).not.toBe("cus_attacker");
+			expect(callArgs.customer_email).not.toBe("attacker@example.com");
+			expect(callArgs.success_url).not.toBe("https://attacker.example/success");
+			expect(callArgs.success_url).toContain("/subscription/success");
+			expect(callArgs.cancel_url).not.toBe("https://attacker.example/cancel");
+			expect(callArgs.line_items).not.toEqual([
+				{ price: "price_attacker", quantity: 99 },
+			]);
+			expect(callArgs.line_items[0].price).toBe("price_lookup_123");
+		});
+
+		it("passes UX-only params from getCheckoutSessionParams through to Stripe", async () => {
+			const passthroughOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							allow_promotion_codes: true,
+							payment_method_collection: "if_required" as const,
+							tax_id_collection: { enabled: true },
+							custom_text: {
+								submit: { message: "Welcome aboard" },
+							},
+							billing_address_collection: "required" as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(passthroughOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "passthrough@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					allow_promotion_codes: true,
+					payment_method_collection: "if_required",
+					tax_id_collection: { enabled: true },
+					custom_text: { submit: { message: "Welcome aboard" } },
+					billing_address_collection: "required",
+				}),
+				undefined,
+			);
+		});
+
+		it("lets getCheckoutSessionParams override customer_update", async () => {
+			const overrideOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							customer_update: { name: "never" } as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(overrideOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "customer-update-override@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.customer_update).toEqual({ name: "never" });
+		});
+
+		it("falls back to library default customer_update when getCheckoutSessionParams omits it", async () => {
+			const defaultOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							allow_promotion_codes: true,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(defaultOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "customer-update-default@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.customer_update).toEqual({
+				name: "auto",
+				address: "auto",
+			});
+		});
+
+		it("uses request-time locale over getCheckoutSessionParams locale", async () => {
+			const localeOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							locale: "ko" as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(localeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "locale-request-wins@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				locale: "en",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.locale).toBe("en");
+		});
+
+		it("falls back to getCheckoutSessionParams locale when request omits locale", async () => {
+			const localeOptions = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: process.env.STRIPE_PRICE_ID_1!,
+							name: "starter",
+							lookupKey: "lookup_key_123",
+						},
+					],
+					getCheckoutSessionParams: async () => ({
+						params: {
+							locale: "ko" as const,
+						},
+					}),
+				},
+			} satisfies StripeOptions;
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(localeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "locale-fallback@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(callArgs.locale).toBe("ko");
+		});
+
+		it("preserves internal subscription metadata when getCheckoutSessionParams returns custom subscription_data", async () => {
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(trialOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const email = "metadata-merge@email.com";
+			await client.signUp.email({ ...testUser, email }, { throw: true });
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			mockStripe.checkout.sessions.create.mockClear();
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					subscription_data: expect.objectContaining({
+						metadata: expect.objectContaining({
+							subscriptionId: expect.any(String),
+							userId: expect.any(String),
+							referenceId: expect.any(String),
+						}),
+					}),
+				}),
+				undefined,
+			);
 		});
 	});
 });
