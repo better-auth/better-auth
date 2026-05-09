@@ -151,7 +151,12 @@ export interface InternalAdapter<
 
 	deleteAccounts(userId: string): Promise<void>;
 
-	deleteAccount(accountId: string): Promise<void>;
+	/**
+	 * Delete an account by its primary key.
+	 *
+	 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+	 */
+	deleteAccount(id: string): Promise<void>;
 
 	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
 

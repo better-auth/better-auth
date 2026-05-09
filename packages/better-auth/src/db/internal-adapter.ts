@@ -735,9 +735,19 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteAccount: async (accountId: string) => {
+		/**
+		 * Delete an account by its primary key.
+		 *
+		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 */
+		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
-				[{ field: "id", value: accountId }],
+				[
+					{
+						field: "id",
+						value: id,
+					},
+				],
 				"account",
 				undefined,
 			);
