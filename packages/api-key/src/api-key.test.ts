@@ -4639,5 +4639,37 @@ describe("api-key", async () => {
 			expect(updatedKey.configId).toBe("org-keys");
 			expect(updatedKey.referenceId).toBe(org.id);
 		});
+		it("should return 429 when API key rate limit is exceeded", async () => {
+			const { data: apiKey2 } = await rateLimitClient.apiKey.create(
+				{},
+				{ headers: rateLimitUserHeaders },
+			);
+
+			if (!apiKey2) return;
+
+			for (let i = 0; i < 20; i++) {
+				const response = await rateLimitAuth.api.verifyApiKey({
+					body: {
+						key: apiKey2.key,
+					},
+					headers: rateLimitUserHeaders,
+					asResponse: true,
+				});
+
+				if (i >= 10) {
+					expect(response.status).toBe(200);
+
+					const body = await response.json();
+
+					expect(body.error.code).toBe("RATE_LIMITED");
+				} else {
+					expect(response.status).toBe(200);
+
+					const body = await response.json();
+
+					expect(body.valid).toBe(true);
+				}
+			}
+		});
 	});
 });
