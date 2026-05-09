@@ -266,7 +266,95 @@ Example using a database hook:
   * `[key: string]`: any additional data you pass in the OAuth flow
 </Callout>
 
+## Handling Providers Without Email
+
+Better Auth currently requires an email address on every user record. Most providers return one with the `email` scope, but several can legitimately omit it. When that happens the OAuth flow fails with `error=email_not_found` (or `error=email_is_missing` for the Generic OAuth plugin).
+
+The table below summarises, for each affected provider, when `email` may be absent, which stable identifier you can use as a fallback in `mapProfileToUser`, and how much to trust the provider's `email_verified` signal.
+
+| Provider           | When `email` may be absent                                                                                                                                               | Stable fallback ID                                  | `email_verified` trust                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Discord            | Phone-only accounts; `email` scope not granted                                                                                                                           | `profile.id` (snowflake)                            | Reliable (dedicated `verified` field)                                                                                                                               |
+| Apple              | Every sign-in after the first (Apple only emits `email` on the initial consent)                                                                                          | `profile.sub` (stable per Apple Team)               | Reliable; relay addresses are also flagged verified                                                                                                                 |
+| GitHub             | User has set email to private; GitHub App lacks the "Email addresses" permission                                                                                         | `profile.id` (numeric)                              | Reliable                                                                                                                                                            |
+| Facebook           | No valid email on file, even with the `email` permission granted                                                                                                         | `profile.id` (app-scoped)                           | Unknown: Graph API exposes no per-email verification flag                                                                                                           |
+| LinkedIn           | No confirmed email on the member; `email` scope not granted                                                                                                              | `profile.sub` (pairwise per app)                    | Reliable when present                                                                                                                                               |
+| Microsoft Entra ID | Managed users without a `mail` attribute, unless `email` is configured as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) | `profile.oid` plus `profile.tid` (or `profile.sub`) | **Untrustworthy**: Microsoft [explicitly warns](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference) never to use for authorization |
+
+### Synthesize a placeholder email with `mapProfileToUser`
+
+Fall back to the provider's stable ID when the `email` field is null or absent:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    discord: {
+      clientId: process.env.DISCORD_CLIENT_ID!,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET!,
+      mapProfileToUser: (profile) => ({
+        email: profile.email ?? `${profile.id}@discord.placeholder.local`,
+      }),
+    },
+    apple: {
+      clientId: process.env.APPLE_CLIENT_ID!,
+      clientSecret: process.env.APPLE_CLIENT_SECRET!,
+      mapProfileToUser: (profile) => ({
+        email: profile.email ?? `${profile.sub}@apple.placeholder.local`,
+      }),
+    },
+    microsoft: {
+      clientId: process.env.MICROSOFT_CLIENT_ID!,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
+      mapProfileToUser: (profile) => ({
+        email: profile.email ?? `${profile.oid}@entra.placeholder.local`,
+      }),
+    },
+  },
+});
+```
+
+<Callout type="warn">
+  Synthesized emails are placeholders, not contact addresses. Plugins that send mail (password reset, magic link, email verification, organization invites) cannot deliver to them. Use a domain you control, or a reserved suffix like `.invalid` or `.local`, so no real inbox is ever addressed by mistake.
+</Callout>
+
+### Provider-specific notes
+
+* **Apple**: persist the email the first time you see it. Apple provides no user-info endpoint, so if you don't store it on first sign-in you cannot retrieve it later. Both `email_verified` and `is_private_email` are serialized as **strings** (`"true"` / `"false"`), not booleans.
+* **GitHub**: the `user:email` scope is requested by default. Private emails still return `null` on `/user`; the primary verified address is available at [`/user/emails`](https://docs.github.com/en/rest/users/emails).
+* **Microsoft Entra ID**: because `email` is tenant-mutable and never verified, use `profile.oid` (immutable, stable within the tenant) as the identity anchor; treat `email` as a profile attribute only. Microsoft's [claims validation guidance](https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation) explicitly warns never to use `email`, `preferred_username`, or `unique_name` for authorization decisions.
+* **Facebook**: without a per-email verification flag, treat every Facebook email as unverified unless you run your own verification challenge.
+
+First-class support for emailless users, using the stable `(providerId, accountId)` pair as the identity key (in line with [OpenID Connect Core §5.7](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability)), is tracked in [#9124](https://github.com/better-auth/better-auth/issues/9124).
+
 ## Provider Options
+
+### clientId
+
+The OAuth 2.0 Client ID issued by the provider.
+
+For providers that verify ID tokens by audience (Google, Apple, Microsoft Entra, Facebook, Cognito), you can pass an array to accept tokens issued for any of the configured clients. The first entry is used when Better Auth drives the authorization code flow; all entries are accepted when verifying an ID token's `aud` claim. This enables cross-platform sign-in (Web, iOS, Android) with a single backend configuration, where each platform's native SDK issues tokens under its own Client ID.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Other configurations...
+  socialProviders: {
+    google: {
+      clientId: [
+        process.env.GOOGLE_WEB_CLIENT_ID as string,
+        process.env.GOOGLE_IOS_CLIENT_ID as string,
+        process.env.GOOGLE_ANDROID_CLIENT_ID as string,
+      ],
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+  },
+});
+```
+
+All Client IDs must live in the same provider project so consent is shared. For providers that don't verify ID tokens by audience, only a single string is accepted.
 
 ### scope
 

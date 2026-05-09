@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "@better-auth/sso": "workspace:*"
+    "@better-auth/sso": "workspace:*",
+    "@better-auth/passkey": "workspace:*"
   }
 }

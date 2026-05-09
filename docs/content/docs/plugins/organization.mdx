@@ -897,10 +897,11 @@ To invite users to an organization, you can use the `invite` function provided b
 
 <Callout>
   * If the user is already a member of the organization, the invitation will be
-    canceled. - If the user is already invited to the organization, unless
-    `resend` is set to `true`, the invitation will not be sent again. - If
-    `cancelPendingInvitationsOnReInvite` is set to `true`, the invitation will be
-    canceled if the user is already invited to the organization and a new
+    canceled.
+  * If the user is already invited to the organization, unless `resend` is set
+    to `true`, the invitation will not be sent again.
+  * If `cancelPendingInvitationsOnReInvite` is set to `true`, the invitation will
+    be canceled if the user is already invited to the organization and a new
     invitation is sent.
 </Callout>
 
@@ -1860,15 +1861,16 @@ Delete a team from an organization:
 
 #### Set Active Team
 
-Sets the given team as the current active team. If `teamId` is `null` the current active team is unset.
+Sets the given team as the current active team for the current active organization. If `teamId` is `null` the current active team is unset.
 
 <APIMethod path="/organization/set-active-team" method="POST" requireSession>
   ```ts
   type setActiveTeam = {
       /**
        * The team ID of the team to set as the current active team.
+       * The team must belong to the current active organization.
        */
-      teamId?: string = "team-id"
+      teamId?: string | null = "team-id"
   }
   ```
 </APIMethod>

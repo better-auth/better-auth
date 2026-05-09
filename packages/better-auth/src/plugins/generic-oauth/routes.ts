@@ -11,6 +11,7 @@ import { decodeJwt } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
@@ -282,9 +283,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				`${ctx.context.baseURL}/error`;
 			if (ctx.query.error || !ctx.query.code) {
 				throw ctx.redirect(
-					`${defaultErrorURL}?error=${
-						ctx.query.error || "oAuth_code_missing"
-					}&error_description=${ctx.query.error_description}`,
+					`${defaultErrorURL}?error=${encodeURIComponent(ctx.query.error || "oAuth_code_missing")}&error_description=${encodeURIComponent(ctx.query.error_description || "")}`,
 				);
 			}
 			const providerId = ctx.params?.providerId;
@@ -322,9 +321,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					`${ctx.context.baseURL}/error`;
 				let url = errorURL || defaultErrorURL;
 				if (url.includes("?")) {
-					url = `${url}&error=${error}`;
+					url = `${url}&error=${encodeURIComponent(error)}`;
 				} else {
-					url = `${url}?error=${error}`;
+					url = `${url}?error=${encodeURIComponent(error)}`;
 				}
 				throw ctx.redirect(url);
 			}
@@ -433,7 +432,12 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						? mapUser.email.toLowerCase()
 						: userInfo.email?.toLowerCase();
 					if (!email) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
+						ctx.context.logger.error(
+							missingEmailLogMessage(providerConfig.providerId, {
+								source: "generic",
+							}),
+							userInfo,
+						);
 						throw redirectOnError("email_is_missing");
 					}
 					const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);

@@ -1,7 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { parseSetCookieHeader } from "../cookies";
+import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
+import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
 /**
  * TanStack Start cookie plugin for Solid.js.
@@ -21,6 +22,8 @@ import { PACKAGE_VERSION } from "../version";
  * ```
  */
 export const tanstackStartCookies = () => {
+	let hasWarned = false;
+
 	return {
 		id: "tanstack-start-cookies-solid",
 		version: PACKAGE_VERSION,
@@ -31,6 +34,13 @@ export const tanstackStartCookies = () => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (!hasWarned) {
+							warnIfCookiePluginNotLast(
+								ctx.context,
+								"tanstack-start-cookies-solid",
+							);
+							hasWarned = true;
+						}
 						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
@@ -44,16 +54,8 @@ export const tanstackStartCookies = () => {
 							);
 							parsed.forEach((value, key) => {
 								if (!key) return;
-								const opts = {
-									sameSite: value.samesite,
-									secure: value.secure,
-									maxAge: value["max-age"],
-									httpOnly: value.httponly,
-									domain: value.domain,
-									path: value.path,
-								} as const;
 								try {
-									setCookie(key, value.value, opts);
+									setCookie(key, value.value, toCookieOptions(value));
 								} catch {
 									// this will fail if the cookie is being set on server component
 								}
