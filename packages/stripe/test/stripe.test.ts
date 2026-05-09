@@ -1,23 +1,15 @@
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { Auth, User } from "better-auth";
-import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
-import {
-	assert,
-	beforeEach,
-	describe,
-	expect,
-	expectTypeOf,
-	it,
-	vi,
-} from "vitest";
+import { assert, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { StripePlugin } from "../src";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import { customerMetadata, subscriptionMetadata } from "../src/metadata";
 import type { StripeOptions, Subscription } from "../src/types";
+import { test } from "./_fixtures";
 
 describe("stripe type", () => {
 	it("should api endpoint exists", () => {
@@ -59,7 +51,11 @@ describe("stripe type", () => {
 		expectTypeOf<MyAuth["api"]["createBillingPortal"]>().toBeFunction();
 	});
 
-	it("should infer plugin schema fields on user type", async () => {
+	test("should infer plugin schema fields on user type", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				stripe({
@@ -73,7 +69,11 @@ describe("stripe type", () => {
 		>().toEqualTypeOf<string | null | undefined>();
 	});
 
-	it("should infer plugin schema fields alongside additional user fields", async () => {
+	test("should infer plugin schema fields alongside additional user fields", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				stripe({
@@ -144,120 +144,17 @@ describe("stripe - metadata helpers", () => {
 });
 
 describe("stripe", () => {
-	const mockStripe = {
-		prices: {
-			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
-			retrieve: vi.fn().mockImplementation((priceId: string) =>
-				Promise.resolve({
-					id: priceId,
-					recurring: { usage_type: "licensed", interval: "month" },
-				}),
-			),
-		},
-		customers: {
-			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
-			list: vi.fn().mockResolvedValue({ data: [] }),
-			search: vi.fn().mockResolvedValue({ data: [] }),
-			retrieve: vi.fn().mockResolvedValue({
-				id: "cus_mock123",
-				email: "test@email.com",
-				deleted: false,
-			}),
-			update: vi.fn().mockResolvedValue({
-				id: "cus_mock123",
-				email: "newemail@example.com",
-			}),
-		},
-		checkout: {
-			sessions: {
-				create: vi.fn().mockResolvedValue({
-					url: "https://checkout.stripe.com/mock",
-					id: "",
-				}),
-			},
-		},
-		billingPortal: {
-			sessions: {
-				create: vi
-					.fn()
-					.mockResolvedValue({ url: "https://billing.stripe.com/mock" }),
-			},
-		},
-		subscriptions: {
-			retrieve: vi.fn(),
-			list: vi.fn().mockResolvedValue({ data: [] }),
-			update: vi.fn(),
-		},
-		subscriptionSchedules: {
-			list: vi.fn().mockResolvedValue({ data: [] }),
-			create: vi.fn().mockResolvedValue({
-				id: "sub_sched_mock",
-				phases: [
-					{
-						start_date: Math.floor(Date.now() / 1000),
-						end_date: Math.floor(Date.now() / 1000) + 30 * 86400,
-						items: [{ price: "price_mock", quantity: 1 }],
-					},
-				],
-			}),
-			retrieve: vi
-				.fn()
-				.mockResolvedValue({ id: "sub_sched_mock", status: "active" }),
-			update: vi.fn().mockResolvedValue({}),
-			release: vi.fn().mockResolvedValue({}),
-		},
-		webhooks: {
-			constructEventAsync: vi.fn(),
-		},
-	};
-	const _stripe = mockStripe as unknown as Stripe;
-	const stripeOptions = {
-		stripeClient: _stripe,
-		stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
-		createCustomerOnSignUp: true,
-		subscription: {
-			enabled: true,
-			plans: [
-				{
-					priceId: process.env.STRIPE_PRICE_ID_1!,
-					name: "starter",
-					lookupKey: "lookup_key_123",
-				},
-				{
-					priceId: process.env.STRIPE_PRICE_ID_2!,
-					name: "premium",
-					lookupKey: "lookup_key_234",
-				},
-			],
-		},
-	} satisfies StripeOptions;
-
 	const testUser = {
 		email: "test@email.com",
 		password: "password",
 		name: "Test User",
 	};
-	const data = {
-		user: [],
-		session: [],
-		verification: [],
-		account: [],
-		customer: [],
-		subscription: [],
-	};
 
-	beforeEach(() => {
-		data.user = [];
-		data.session = [];
-		data.verification = [];
-		data.account = [];
-		data.customer = [];
-		data.subscription = [];
-	});
-
-	const memory = memoryAdapter(data);
-
-	it("should create a customer on sign up", async () => {
+	test("should create a customer on sign up", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth } = await getTestInstance(
 			{
 				database: memory,
@@ -290,7 +187,11 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should create a subscription", async () => {
+	test("should create a subscription", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -344,7 +245,11 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async () => {
+	test("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -394,11 +299,11 @@ describe("stripe", () => {
 			onSuccess: sessionSetter(userBHeaders),
 		});
 
-		mockStripe.checkout.sessions.create.mockClear();
-		mockStripe.billingPortal.sessions.create.mockClear();
-		mockStripe.subscriptions.list.mockClear();
-		mockStripe.subscriptions.update.mockClear();
-		mockStripe.subscriptionSchedules.list.mockClear();
+		stripeMock.checkout.sessions.create.mockClear();
+		stripeMock.billingPortal.sessions.create.mockClear();
+		stripeMock.subscriptions.list.mockClear();
+		stripeMock.subscriptions.update.mockClear();
+		stripeMock.subscriptionSchedules.list.mockClear();
 
 		const upgradeRes = await client.subscription.upgrade({
 			plan: "premium",
@@ -406,8 +311,8 @@ describe("stripe", () => {
 			fetchOptions: { headers: userBHeaders },
 		});
 		expect(upgradeRes.error?.message).toContain("Subscription not found");
-		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
-		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalled();
 
 		const cancelHeaders = new Headers(userBHeaders);
 		cancelHeaders.set("content-type", "application/json");
@@ -425,7 +330,7 @@ describe("stripe", () => {
 		expect((await cancelResponse.json()).message).toContain(
 			"Subscription not found",
 		);
-		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalled();
 
 		const restoreHeaders = new Headers(userBHeaders);
 		restoreHeaders.set("content-type", "application/json");
@@ -442,10 +347,14 @@ describe("stripe", () => {
 		expect((await restoreResponse.json()).message).toContain(
 			"Subscription not found",
 		);
-		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+		expect(stripeMock.subscriptions.update).not.toHaveBeenCalled();
 	});
 
-	it("should pass metadata to subscription when upgrading", async () => {
+	test("should pass metadata to subscription when upgrading", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -499,7 +408,7 @@ describe("stripe", () => {
 			},
 		});
 
-		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+		expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				subscription_data: expect.objectContaining({
 					metadata: expect.objectContaining(customMetadata),
@@ -510,7 +419,11 @@ describe("stripe", () => {
 		);
 	});
 
-	it("should list active subscriptions", async () => {
+	test("should list active subscriptions", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -592,7 +505,11 @@ describe("stripe", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7721
 	 */
-	it("should return annualDiscountPriceId when subscription billingInterval is year", async () => {
+	test("should return annualDiscountPriceId when subscription billingInterval is year", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const annualPriceId = "price_annual_starter";
 		const monthlyPriceId = "price_monthly_starter";
 		const optionsWithAnnual = {
@@ -704,7 +621,11 @@ describe("stripe", () => {
 		expect(monthlyListRes.data?.[0]?.priceId).toBe(monthlyPriceId);
 	});
 
-	it("should handle subscription webhook events", async () => {
+	test("should handle subscription webhook events", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { auth: testAuth } = await getTestInstance(
 			{
 				database: memory,
@@ -824,7 +745,11 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should handle subscription webhook events with trial", async () => {
+	test("should handle subscription webhook events with trial", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { auth: testAuth } = await getTestInstance(
 			{
 				database: memory,
@@ -948,7 +873,11 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should handle subscription deletion webhook", async () => {
+	test("should handle subscription deletion webhook", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { auth: testAuth } = await getTestInstance(
 			{
 				database: memory,
@@ -1065,7 +994,11 @@ describe("stripe", () => {
 		}
 	});
 
-	it("should handle customer.subscription.created webhook event", async () => {
+	test("should handle customer.subscription.created webhook event", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
 			webhooks: {
@@ -1164,7 +1097,11 @@ describe("stripe", () => {
 		expect(subscription?.billingInterval).toBe("year");
 	});
 
-	it("should store billingInterval as year for annual subscriptions", async () => {
+	test("should store billingInterval as year for annual subscriptions", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
 			webhooks: {
@@ -1255,7 +1192,11 @@ describe("stripe", () => {
 		expect(subscription?.billingInterval).toBe("year");
 	});
 
-	it("should return billingInterval in subscription.list() response", async () => {
+	test("should return billingInterval in subscription.list() response", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const {
 			client,
 			auth: testAuth,
@@ -1298,7 +1239,11 @@ describe("stripe", () => {
 		expect(result[0]?.billingInterval).toBe("year");
 	});
 
-	it("should not create duplicate subscription if already exists", async () => {
+	test("should not create duplicate subscription if already exists", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const onSubscriptionCreatedCallback = vi.fn();
 
 		const stripeForTest = {
@@ -1410,7 +1355,11 @@ describe("stripe", () => {
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
 	});
 
-	it("should skip subscription creation when user not found", async () => {
+	test("should skip subscription creation when user not found", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const onSubscriptionCreatedCallback = vi.fn();
 
 		const stripeForTest = {
@@ -1494,7 +1443,11 @@ describe("stripe", () => {
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
 	});
 
-	it("should skip subscription creation when plan not found", async () => {
+	test("should skip subscription creation when plan not found", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const onSubscriptionCreatedCallback = vi.fn();
 
 		const stripeForTest = {
@@ -1589,7 +1542,11 @@ describe("stripe", () => {
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
 	});
 
-	it("should skip creating subscription when metadata.subscriptionId exists", async () => {
+	test("should skip creating subscription when metadata.subscriptionId exists", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
 			webhooks: {
@@ -1720,7 +1677,11 @@ describe("stripe", () => {
 		expect(allSubscriptions.length).toBe(1);
 	});
 
-	it("should execute subscription event handlers", async () => {
+	test("should execute subscription event handlers", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { auth: testAuth } = await getTestInstance(
 			{
 				database: memory,
@@ -1987,7 +1948,11 @@ describe("stripe", () => {
 		expect(onSubscriptionDeleted).toHaveBeenCalled();
 	});
 
-	it("should return updated subscription in onSubscriptionUpdate callback", async () => {
+	test("should return updated subscription in onSubscriptionUpdate callback", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const onSubscriptionUpdate = vi.fn();
 
 		// Simulate subscription update event (e.g., seat change from 1 to 5)
@@ -2097,7 +2062,11 @@ describe("stripe", () => {
 		expect(updatedSub?.seats).toBe(5);
 	});
 
-	it("should sync stripeScheduleId from webhook when schedule is present", async () => {
+	test("should sync stripeScheduleId from webhook when schedule is present", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const updateEvent = {
 			type: "customer.subscription.updated",
 			data: {
@@ -2177,7 +2146,11 @@ describe("stripe", () => {
 		expect(sub?.stripeScheduleId).toBe("sub_schedule_from_stripe");
 	});
 
-	it("should clear stripeScheduleId from webhook when schedule is removed", async () => {
+	test("should clear stripeScheduleId from webhook when schedule is removed", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const updateEvent = {
 			type: "customer.subscription.updated",
 			data: {
@@ -2258,7 +2231,11 @@ describe("stripe", () => {
 		expect(sub?.stripeScheduleId).toBeNull();
 	});
 
-	it("should clear stripeScheduleId on subscription deleted webhook", async () => {
+	test("should clear stripeScheduleId on subscription deleted webhook", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const deleteEvent = {
 			type: "customer.subscription.deleted",
 			data: {
@@ -2329,7 +2306,11 @@ describe("stripe", () => {
 		expect(sub?.status).toBe("canceled");
 	});
 
-	it("should allow seat upgrades for the same plan", async () => {
+	test("should allow seat upgrades for the same plan", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -2398,7 +2379,11 @@ describe("stripe", () => {
 		expect(upgradeRes.data?.url).toBeDefined();
 	});
 
-	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
+	test("should prevent duplicate subscriptions with same plan and same seats", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const starterPriceId = "price_starter_duplicate_test";
 		const subscriptionId = "sub_duplicate_test_123";
 
@@ -2475,7 +2460,7 @@ describe("stripe", () => {
 		});
 
 		// Mock Stripe to return the existing subscription with the same price ID
-		mockStripe.subscriptions.list.mockResolvedValue({
+		stripeMock.subscriptions.list.mockResolvedValue({
 			data: [
 				{
 					id: subscriptionId,
@@ -2507,7 +2492,11 @@ describe("stripe", () => {
 		expect(upgradeRes.error?.message).toContain("already subscribed");
 	});
 
-	it("should allow upgrade from monthly to annual billing for the same plan", async () => {
+	test("should allow upgrade from monthly to annual billing for the same plan", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const monthlyPriceId = "price_monthly_starter_123";
 		const annualPriceId = "price_annual_starter_456";
 		const subscriptionId = "sub_monthly_to_annual_123";
@@ -2564,7 +2553,7 @@ describe("stripe", () => {
 			where: [{ field: "referenceId", value: userRes.user.id }],
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValue({
+		stripeMock.subscriptions.list.mockResolvedValue({
 			data: [
 				{
 					id: subscriptionId,
@@ -2583,8 +2572,8 @@ describe("stripe", () => {
 		});
 
 		// Clear mocks before the upgrade call
-		mockStripe.checkout.sessions.create.mockClear();
-		mockStripe.billingPortal.sessions.create.mockClear();
+		stripeMock.checkout.sessions.create.mockClear();
+		stripeMock.billingPortal.sessions.create.mockClear();
 
 		const upgradeRes = await client.subscription.upgrade({
 			plan: "starter",
@@ -2599,7 +2588,7 @@ describe("stripe", () => {
 		expect(upgradeRes.data?.url).toBeDefined();
 
 		// Verify billing portal was called with the annual price ID
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				flow_data: expect.objectContaining({
 					type: "subscription_update_confirm",
@@ -2613,11 +2602,11 @@ describe("stripe", () => {
 		);
 
 		// Should use billing portal, not checkout (since user has existing subscription)
-		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalled();
 	});
 
-	it.for([
+	test.for([
 		{
 			name: "past",
 			periodEnd: new Date(Date.now() - 24 * 60 * 60 * 1000),
@@ -2631,7 +2620,7 @@ describe("stripe", () => {
 	])("should handle re-subscribing when periodEnd is in the $name", async ({
 		periodEnd,
 		shouldAllow,
-	}) => {
+	}, { stripeMock, memory, stripeOptions }) => {
 		const starterPriceId = "price_starter_periodend_test";
 		const subscriptionId = "sub_periodend_test_123";
 
@@ -2691,7 +2680,7 @@ describe("stripe", () => {
 		});
 
 		// Mock Stripe to return the existing subscription with the same price ID
-		mockStripe.subscriptions.list.mockResolvedValue({
+		stripeMock.subscriptions.list.mockResolvedValue({
 			data: [
 				{
 					id: subscriptionId,
@@ -2725,7 +2714,11 @@ describe("stripe", () => {
 		}
 	});
 
-	it("should only call Stripe customers.create once for signup and upgrade", async () => {
+	test("should only call Stripe customers.create once for signup and upgrade", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -2758,10 +2751,14 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
+		expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
 	});
 
-	it("should create billing portal session", async () => {
+	test("should create billing portal session", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -2804,19 +2801,22 @@ describe("stripe", () => {
 		});
 		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
 		expect(billingPortalRes.data?.redirect).toBe(true);
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith({
 			customer: expect.any(String),
 			return_url: "http://localhost:3000/dashboard",
 		});
 	});
 
-	it("should create billing portal session for an existing custom referenceId", async () => {
+	test("should create billing portal session for an existing custom referenceId", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		// cspell:disable-next-line -- random test workspace ID
 		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
 
 		const testOptions = {
 			...stripeOptions,
-			stripeClient: _stripe,
 			subscription: {
 				...stripeOptions.subscription,
 				authorizeReference: async () => true,
@@ -2866,7 +2866,7 @@ describe("stripe", () => {
 			},
 		});
 
-		mockStripe.billingPortal.sessions.create.mockClear();
+		stripeMock.billingPortal.sessions.create.mockClear();
 
 		const billingPortalRes = await testClient.subscription.billingPortal({
 			referenceId: customReferenceId,
@@ -2878,19 +2878,22 @@ describe("stripe", () => {
 
 		expect(billingPortalRes.error).toBeNull();
 		expect(billingPortalRes.data?.url).toBe("https://billing.stripe.com/mock");
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith({
 			customer: "cus_custom_reference",
 			return_url: "http://localhost:3000/dashboard",
 		});
 	});
 
-	it("should not update personal subscription when upgrading with a custom referenceId", async () => {
+	test("should not update personal subscription when upgrading with a custom referenceId", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		// cspell:disable-next-line -- random test workspace ID
 		const customReferenceId = "workspace_b67GF32Cljh7u588AuEblmLVobclDRcP";
 
 		const testOptions = {
 			...stripeOptions,
-			stripeClient: _stripe,
 			subscription: {
 				...stripeOptions.subscription,
 				authorizeReference: async () => true,
@@ -2947,7 +2950,7 @@ describe("stripe", () => {
 			where: [{ field: "id", value: personalSub!.id }],
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValue({
+		stripeMock.subscriptions.list.mockResolvedValue({
 			data: [
 				{
 					id: "sub_personal_active_123",
@@ -2972,7 +2975,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 		// It should NOT go through billing portal (which would update the personal sub)
-		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalled();
 		expect(upgradeRes.data?.url).toBeDefined();
 
 		const orgSub = await testCtx.adapter.findOne<Subscription>({
@@ -2992,7 +2995,11 @@ describe("stripe", () => {
 		expect(personalAfter?.status).toBe("active");
 	});
 
-	it("should prevent multiple free trials for the same user", async () => {
+	test("should prevent multiple free trials for the same user", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -3091,7 +3098,11 @@ describe("stripe", () => {
 		expect(hasTrialData).toBe(true);
 	});
 
-	it("should upgrade existing subscription instead of creating new one", async () => {
+	test("should upgrade existing subscription instead of creating new one", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		// Reset mocks for this test
 		vi.clearAllMocks();
 
@@ -3125,7 +3136,7 @@ describe("stripe", () => {
 		);
 
 		// Mock customers.search to find existing user customer
-		mockStripe.customers.search.mockResolvedValueOnce({
+		stripeMock.customers.search.mockResolvedValueOnce({
 			data: [{ id: "cus_test_123" }],
 		});
 
@@ -3176,7 +3187,7 @@ describe("stripe", () => {
 		});
 
 		// Mock Stripe subscriptions.list to return the active subscription
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_active_test_123",
@@ -3198,8 +3209,8 @@ describe("stripe", () => {
 		});
 
 		// Clear mock calls before the upgrade
-		mockStripe.checkout.sessions.create.mockClear();
-		mockStripe.billingPortal.sessions.create.mockClear();
+		stripeMock.checkout.sessions.create.mockClear();
+		stripeMock.billingPortal.sessions.create.mockClear();
 
 		// Now upgrade to premium plan - should use billing portal to update existing subscription
 		const upgradeRes = await client.subscription.upgrade({
@@ -3208,7 +3219,7 @@ describe("stripe", () => {
 		});
 
 		// Verify that billing portal was called (indicating update, not new subscription)
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				customer: "cus_mock123",
 				flow_data: expect.objectContaining({
@@ -3221,7 +3232,7 @@ describe("stripe", () => {
 		);
 
 		// Should not create a new checkout session
-		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
 
 		// Verify the response has a redirect URL
 		expect(upgradeRes.data?.url).toBe("https://billing.stripe.com/mock");
@@ -3240,7 +3251,11 @@ describe("stripe", () => {
 		expect(allSubs).toHaveLength(1); // Should still have only one subscription
 	});
 
-	it("should prevent multiple free trials across different plans", async () => {
+	test("should prevent multiple free trials across different plans", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -3347,7 +3362,11 @@ describe("stripe", () => {
 		expect(hasEverTrialed).toBe(true);
 	});
 
-	it("should update stripe customer email when user email changes", async () => {
+	test("should update stripe customer email when user email changes", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth } = await getTestInstance(
 			{
 				database: memory,
@@ -3363,12 +3382,12 @@ describe("stripe", () => {
 		const ctx = await auth.$context;
 
 		// Setup mock for customer retrieve and update
-		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+		stripeMock.customers.retrieve = vi.fn().mockResolvedValue({
 			id: "cus_mock123",
 			email: "test@email.com",
 			deleted: false,
 		});
-		mockStripe.customers.update = vi.fn().mockResolvedValue({
+		stripeMock.customers.update = vi.fn().mockResolvedValue({
 			id: "cus_mock123",
 			email: "newemail@example.com",
 		});
@@ -3381,7 +3400,7 @@ describe("stripe", () => {
 		expect(userRes.user).toBeDefined();
 
 		// Verify customer was created during signup
-		expect(mockStripe.customers.create).toHaveBeenCalledWith({
+		expect(stripeMock.customers.create).toHaveBeenCalledWith({
 			email: testUser.email,
 			name: testUser.name,
 			metadata: {
@@ -3394,12 +3413,12 @@ describe("stripe", () => {
 		vi.clearAllMocks();
 
 		// Re-setup the retrieve mock for the update flow
-		mockStripe.customers.retrieve = vi.fn().mockResolvedValue({
+		stripeMock.customers.retrieve = vi.fn().mockResolvedValue({
 			id: "cus_mock123",
 			email: "test@email.com",
 			deleted: false,
 		});
-		mockStripe.customers.update = vi.fn().mockResolvedValue({
+		stripeMock.customers.update = vi.fn().mockResolvedValue({
 			id: "cus_mock123",
 			email: "newemail@example.com",
 		});
@@ -3416,16 +3435,20 @@ describe("stripe", () => {
 		);
 
 		// Verify that Stripe customer.retrieve was called
-		expect(mockStripe.customers.retrieve).toHaveBeenCalledWith("cus_mock123");
+		expect(stripeMock.customers.retrieve).toHaveBeenCalledWith("cus_mock123");
 
 		// Verify that Stripe customer.update was called with the new email
-		expect(mockStripe.customers.update).toHaveBeenCalledWith("cus_mock123", {
+		expect(stripeMock.customers.update).toHaveBeenCalledWith("cus_mock123", {
 			email: "newemail@example.com",
 		});
 	});
 
 	describe("getCustomerCreateParams", () => {
-		it("should call getCustomerCreateParams and merge with default params", async () => {
+		test("should call getCustomerCreateParams and merge with default params", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const getCustomerCreateParamsMock = vi
 				.fn()
 				.mockResolvedValue({ metadata: { customField: "customValue" } });
@@ -3474,7 +3497,7 @@ describe("stripe", () => {
 			);
 
 			// Verify customer was created with merged params
-			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+			expect(stripeMock.customers.create).toHaveBeenCalledWith(
 				expect.objectContaining({
 					email: "custom-params@email.com",
 					name: "Custom User",
@@ -3486,7 +3509,11 @@ describe("stripe", () => {
 			);
 		});
 
-		it("should use getCustomerCreateParams to add custom address", async () => {
+		test("should use getCustomerCreateParams to add custom address", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const getCustomerCreateParamsMock = vi.fn().mockResolvedValue({
 				address: {
 					line1: "123 Main St",
@@ -3529,7 +3556,7 @@ describe("stripe", () => {
 			);
 
 			// Verify customer was created with address
-			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+			expect(stripeMock.customers.create).toHaveBeenCalledWith(
 				expect.objectContaining({
 					email: "address-user@email.com",
 					name: "Address User",
@@ -3547,7 +3574,11 @@ describe("stripe", () => {
 			);
 		});
 
-		it("should properly merge nested objects using defu", async () => {
+		test("should properly merge nested objects using defu", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const getCustomerCreateParamsMock = vi.fn().mockResolvedValue({
 				metadata: {
 					customField: "customValue",
@@ -3589,7 +3620,7 @@ describe("stripe", () => {
 
 			// Verify customer was created with properly merged params
 			// defu merges objects and preserves all fields
-			expect(mockStripe.customers.create).toHaveBeenCalledWith(
+			expect(stripeMock.customers.create).toHaveBeenCalledWith(
 				expect.objectContaining({
 					email: "merge-test@email.com",
 					name: "Merge User",
@@ -3604,7 +3635,11 @@ describe("stripe", () => {
 			);
 		});
 
-		it("should work without getCustomerCreateParams", async () => {
+		test("should work without getCustomerCreateParams", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			// This test ensures backward compatibility
 			const testOptions = {
 				...stripeOptions,
@@ -3638,7 +3673,7 @@ describe("stripe", () => {
 			);
 
 			// Verify customer was created with default params only
-			expect(mockStripe.customers.create).toHaveBeenCalledWith({
+			expect(stripeMock.customers.create).toHaveBeenCalledWith({
 				email: "no-custom-params@email.com",
 				name: "Default User",
 				metadata: {
@@ -3650,7 +3685,11 @@ describe("stripe", () => {
 	});
 
 	describe("Webhook Error Handling (Stripe v19)", () => {
-		it("should handle invalid webhook signature with constructEventAsync", async () => {
+		test("should handle invalid webhook signature with constructEventAsync", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const mockError = new Error("Invalid signature");
 			const stripeWithError = {
 				...stripeOptions.stripeClient,
@@ -3692,7 +3731,11 @@ describe("stripe", () => {
 			expect(data.message).toContain("Failed to construct Stripe event");
 		});
 
-		it("should reject webhook request without stripe-signature header", async () => {
+		test("should reject webhook request without stripe-signature header", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { auth: testAuth } = await getTestInstance(
 				{
 					database: memory,
@@ -3720,7 +3763,11 @@ describe("stripe", () => {
 			expect(data.message).toContain("Stripe signature not found");
 		});
 
-		it("should handle constructEventAsync returning null/undefined", async () => {
+		test("should handle constructEventAsync returning null/undefined", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const stripeWithNull = {
 				...stripeOptions.stripeClient,
 				webhooks: {
@@ -3761,7 +3808,11 @@ describe("stripe", () => {
 			expect(data.message).toContain("Failed to construct Stripe event");
 		});
 
-		it("should handle async errors in webhook event processing", async () => {
+		test("should handle async errors in webhook event processing", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const errorThrowingHandler = vi
 				.fn()
 				.mockRejectedValue(new Error("Event processing failed"));
@@ -3843,7 +3894,11 @@ describe("stripe", () => {
 			expect(stripeForTest.subscriptions.retrieve).toHaveBeenCalled();
 		});
 
-		it("should successfully process webhook with valid async signature verification", async () => {
+		test("should successfully process webhook with valid async signature verification", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const mockEvent = {
 				type: "customer.subscription.updated",
 				data: {
@@ -3935,7 +3990,11 @@ describe("stripe", () => {
 			expect(data).toEqual({ success: true });
 		});
 
-		it("should call constructEventAsync with exactly 3 required parameters", async () => {
+		test("should call constructEventAsync with exactly 3 required parameters", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const mockEvent = {
 				type: "customer.subscription.created",
 				data: {
@@ -3997,7 +4056,11 @@ describe("stripe", () => {
 			);
 		});
 
-		it("should support Stripe v18 with sync constructEvent method", async () => {
+		test("should support Stripe v18 with sync constructEvent method", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const mockEvent = {
 				type: "customer.subscription.updated",
 				data: {
@@ -4095,7 +4158,11 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should support flexible limits types", async () => {
+	test("should support flexible limits types", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const flexiblePlans = [
 			{
 				name: "flexible",
@@ -4202,11 +4269,15 @@ describe("stripe", () => {
 	});
 
 	describe("Duplicate customer prevention on signup", () => {
-		it("should NOT create duplicate customer when email already exists in Stripe", async () => {
+		test("should NOT create duplicate customer when email already exists in Stripe", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const existingEmail = "duplicate-email@example.com";
 			const existingCustomerId = "cus_stripe_existing_456";
 
-			mockStripe.customers.search.mockResolvedValueOnce({
+			stripeMock.customers.search.mockResolvedValueOnce({
 				data: [
 					{
 						id: existingCustomerId,
@@ -4248,13 +4319,13 @@ describe("stripe", () => {
 			);
 
 			// Should check for existing user customer by email (excluding organization customers)
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
+			expect(stripeMock.customers.search).toHaveBeenCalledWith({
 				query: `email:"${existingEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 
 			// Should NOT create duplicate customer
-			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+			expect(stripeMock.customers.create).not.toHaveBeenCalled();
 
 			// Verify user has the EXISTING Stripe customer ID (not new duplicate)
 			const user = await testCtx.adapter.findOne<
@@ -4266,14 +4337,18 @@ describe("stripe", () => {
 			expect(user?.stripeCustomerId).toBe(existingCustomerId); // Should use existing ID
 		});
 
-		it("should CREATE customer only when user has no stripeCustomerId and none exists in Stripe", async () => {
+		test("should CREATE customer only when user has no stripeCustomerId and none exists in Stripe", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const newEmail = "brand-new@example.com";
 
-			mockStripe.customers.search.mockResolvedValueOnce({
+			stripeMock.customers.search.mockResolvedValueOnce({
 				data: [],
 			});
 
-			mockStripe.customers.create.mockResolvedValueOnce({
+			stripeMock.customers.create.mockResolvedValueOnce({
 				id: "cus_new_created_789",
 				email: newEmail,
 			});
@@ -4310,14 +4385,14 @@ describe("stripe", () => {
 			);
 
 			// Should check for existing user customer first (excluding organization customers)
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
+			expect(stripeMock.customers.search).toHaveBeenCalledWith({
 				query: `email:"${newEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 
 			// Should create new customer (this is correct behavior)
-			expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
-			expect(mockStripe.customers.create).toHaveBeenCalledWith({
+			expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
+			expect(stripeMock.customers.create).toHaveBeenCalledWith({
 				email: newEmail,
 				name: "Brand New User",
 				metadata: {
@@ -4338,7 +4413,11 @@ describe("stripe", () => {
 	});
 
 	describe("User/Organization customer collision prevention", () => {
-		it("should NOT return organization customer when searching for user customer with same email", async () => {
+		test("should NOT return organization customer when searching for user customer with same email", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			// Scenario: Organization has a Stripe customer with email "shared@example.com"
 			// When a user signs up with the same email, the search should NOT find the org customer
 			const sharedEmail = "shared@example.com";
@@ -4347,11 +4426,11 @@ describe("stripe", () => {
 			// Mock: Only organization customer exists with this email
 			// The search query includes `-metadata['customerType']:'organization'`
 			// so this should NOT be returned
-			mockStripe.customers.search.mockResolvedValueOnce({
+			stripeMock.customers.search.mockResolvedValueOnce({
 				data: [], // Organization customer is excluded by the search query
 			});
 
-			mockStripe.customers.create.mockResolvedValueOnce({
+			stripeMock.customers.create.mockResolvedValueOnce({
 				id: "cus_user_new_456",
 				email: sharedEmail,
 			});
@@ -4388,14 +4467,14 @@ describe("stripe", () => {
 			);
 
 			// Should search with query that EXCLUDES organization customers
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
+			expect(stripeMock.customers.search).toHaveBeenCalledWith({
 				query: `email:"${sharedEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 
 			// Should create NEW user customer (not use org customer)
-			expect(mockStripe.customers.create).toHaveBeenCalledTimes(1);
-			expect(mockStripe.customers.create).toHaveBeenCalledWith({
+			expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
+			expect(stripeMock.customers.create).toHaveBeenCalledWith({
 				email: sharedEmail,
 				name: "User With Shared Email",
 				metadata: {
@@ -4415,14 +4494,18 @@ describe("stripe", () => {
 			expect(user?.stripeCustomerId).not.toBe(orgCustomerId);
 		});
 
-		it("should find existing user customer even when organization customer with same email exists", async () => {
+		test("should find existing user customer even when organization customer with same email exists", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			// Scenario: Both user and organization customers exist with same email
 			// The search should only return the user customer
 			const sharedEmail = "both-exist@example.com";
 			const existingUserCustomerId = "cus_user_existing_789";
 
 			// Mock: Search returns ONLY user customer (org customer excluded by query)
-			mockStripe.customers.search.mockResolvedValueOnce({
+			stripeMock.customers.search.mockResolvedValueOnce({
 				data: [
 					{
 						id: existingUserCustomerId,
@@ -4468,13 +4551,13 @@ describe("stripe", () => {
 			);
 
 			// Should search excluding organization customers
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
+			expect(stripeMock.customers.search).toHaveBeenCalledWith({
 				query: `email:"${sharedEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 
 			// Should NOT create new customer - use existing user customer
-			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+			expect(stripeMock.customers.create).not.toHaveBeenCalled();
 
 			// Verify user has the existing user customer ID
 			const user = await testCtx.adapter.findOne<
@@ -4486,16 +4569,20 @@ describe("stripe", () => {
 			expect(user?.stripeCustomerId).toBe(existingUserCustomerId);
 		});
 
-		it("should create organization customer with customerType metadata", async () => {
+		test("should create organization customer with customerType metadata", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			// Test that organization customers are properly tagged
 			const orgEmail = "org@example.com";
 			const orgId = "org_test_123";
 
-			mockStripe.customers.search.mockResolvedValueOnce({
+			stripeMock.customers.search.mockResolvedValueOnce({
 				data: [],
 			});
 
-			mockStripe.customers.create.mockResolvedValueOnce({
+			stripeMock.customers.create.mockResolvedValueOnce({
 				id: "cus_org_new_999",
 				email: orgEmail,
 			});
@@ -4551,7 +4638,7 @@ describe("stripe", () => {
 			}
 
 			// Verify organization customer was created with correct metadata
-			expect(mockStripe.customers.create).toHaveBeenCalledWith({
+			expect(stripeMock.customers.create).toHaveBeenCalledWith({
 				email: orgEmail,
 				name: "Test Organization",
 				metadata: {
@@ -4574,7 +4661,11 @@ describe("stripe", () => {
 			return p;
 		}
 
-		it("should fall back to customers.list when customers.search is unavailable (user signup)", async () => {
+		test("should fall back to customers.list when customers.search is unavailable (user signup)", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const fallbackEmail = "fallback-user@example.com";
 			const existingCustomerId = "cus_fallback_123";
 
@@ -4599,10 +4690,10 @@ describe("stripe", () => {
 			vi.clearAllMocks();
 
 			// Make search fail, list succeed
-			mockStripe.customers.search.mockRejectedValueOnce(
+			stripeMock.customers.search.mockRejectedValueOnce(
 				new Error("search feature unavailable for merchant"),
 			);
-			mockStripe.customers.list.mockReturnValueOnce(
+			stripeMock.customers.list.mockReturnValueOnce(
 				mockStripeList([
 					{
 						id: existingCustomerId,
@@ -4622,17 +4713,21 @@ describe("stripe", () => {
 			);
 
 			// Search was attempted first
-			expect(mockStripe.customers.search).toHaveBeenCalled();
+			expect(stripeMock.customers.search).toHaveBeenCalled();
 			// Fell back to list after search failure
-			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+			expect(stripeMock.customers.list).toHaveBeenCalledWith({
 				email: fallbackEmail,
 				limit: 100,
 			});
 			// Should NOT create duplicate — used existing customer from list fallback
-			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+			expect(stripeMock.customers.create).not.toHaveBeenCalled();
 		});
 
-		it("should fall back to customers.list when customers.search is unavailable (user upgrade)", async () => {
+		test("should fall back to customers.list when customers.search is unavailable (user upgrade)", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const fallbackEmail = "fallback-upgrade@example.com";
 			const existingCustomerId = "cus_fallback_upgrade_123";
 
@@ -4680,10 +4775,10 @@ describe("stripe", () => {
 			vi.clearAllMocks();
 
 			// Make search fail, list succeed with existing customer
-			mockStripe.customers.search.mockRejectedValueOnce(
+			stripeMock.customers.search.mockRejectedValueOnce(
 				new Error("search feature unavailable for merchant"),
 			);
-			mockStripe.customers.list.mockReturnValueOnce(
+			stripeMock.customers.list.mockReturnValueOnce(
 				mockStripeList([
 					{
 						id: existingCustomerId,
@@ -4693,7 +4788,7 @@ describe("stripe", () => {
 				]),
 			);
 
-			mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+			stripeMock.checkout.sessions.create.mockResolvedValueOnce({
 				url: "https://checkout.stripe.com/mock-fallback",
 				id: "cs_fallback",
 			});
@@ -4704,19 +4799,23 @@ describe("stripe", () => {
 			});
 
 			// Search was attempted first
-			expect(mockStripe.customers.search).toHaveBeenCalled();
+			expect(stripeMock.customers.search).toHaveBeenCalled();
 			// Fell back to list after search failure
-			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+			expect(stripeMock.customers.list).toHaveBeenCalledWith({
 				email: fallbackEmail,
 				limit: 100,
 			});
 			// Should use existing customer, not create a new one
-			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+			expect(stripeMock.customers.create).not.toHaveBeenCalled();
 		});
 	});
 
 	describe("webhook: cancel_at_period_end cancellation", () => {
-		it("should sync cancelAtPeriodEnd and canceledAt when user cancels via Billing Portal (at_period_end mode)", async () => {
+		test("should sync cancelAtPeriodEnd and canceledAt when user cancels via Billing Portal (at_period_end mode)", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { auth } = await getTestInstance(
 				{
 					database: memory,
@@ -4826,7 +4925,11 @@ describe("stripe", () => {
 			});
 		});
 
-		it("should sync cancelAt when subscription is scheduled to cancel at a specific date", async () => {
+		test("should sync cancelAt when subscription is scheduled to cancel at a specific date", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { auth } = await getTestInstance(
 				{
 					database: memory,
@@ -4937,7 +5040,11 @@ describe("stripe", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/9321
 		 */
-		it("should pass stripeSubscription to onSubscriptionUpdate", async () => {
+		test("should pass stripeSubscription to onSubscriptionUpdate", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const onSubscriptionUpdate = vi.fn();
 
 			const now = Math.floor(Date.now() / 1000);
@@ -5020,7 +5127,11 @@ describe("stripe", () => {
 			);
 		});
 
-		it("should pass the post-update subscription row to onSubscriptionCancel (symmetry with onSubscriptionUpdate)", async () => {
+		test("should pass the post-update subscription row to onSubscriptionCancel (symmetry with onSubscriptionUpdate)", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const onSubscriptionCancel = vi.fn();
 
 			const now = Math.floor(Date.now() / 1000);
@@ -5120,7 +5231,11 @@ describe("stripe", () => {
 	});
 
 	describe("webhook: immediate cancellation (subscription deleted)", () => {
-		it("should set status=canceled and endedAt when subscription is immediately canceled", async () => {
+		test("should set status=canceled and endedAt when subscription is immediately canceled", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { auth } = await getTestInstance(
 				{
 					database: memory,
@@ -5206,7 +5321,11 @@ describe("stripe", () => {
 			expect(updatedSub!.endedAt).not.toBeNull();
 		});
 
-		it("should set endedAt when cancel_at_period_end subscription reaches period end", async () => {
+		test("should set endedAt when cancel_at_period_end subscription reaches period end", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { auth } = await getTestInstance(
 				{
 					database: memory,
@@ -5304,7 +5423,11 @@ describe("stripe", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/6863
 	 */
 	describe("trial abuse prevention", () => {
-		it("should check all subscriptions for trial history even when processing a specific incomplete subscription", async () => {
+		test("should check all subscriptions for trial history even when processing a specific incomplete subscription", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
@@ -5379,11 +5502,15 @@ describe("stripe", () => {
 			expect(upgradeRes.data?.url).toBeDefined();
 
 			// Verify that NO trial was granted despite processing the incomplete subscription
-			const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+			const callArgs = stripeMock.checkout.sessions.create.mock.lastCall?.[0];
 			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
 		});
 
-		it("should propagate trial data from Stripe event on subscription.deleted", async () => {
+		test("should propagate trial data from Stripe event on subscription.deleted", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { auth } = await getTestInstance(
 				{
 					database: memory,
@@ -5479,7 +5606,11 @@ describe("stripe", () => {
 			expect(updatedSub!.trialEnd!.getTime()).toBe(trialEnd * 1000);
 		});
 
-		it("should propagate trial data from Stripe event on subscription.updated", async () => {
+		test("should propagate trial data from Stripe event on subscription.updated", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { auth } = await getTestInstance(
 				{
 					database: memory,
@@ -5590,7 +5721,11 @@ describe("stripe", () => {
 			expect(updatedSub!.trialEnd!.getTime()).toBe(trialEnd * 1000);
 		});
 
-		it("should prevent trial abuse after subscription canceled during trial", async () => {
+		test("should prevent trial abuse after subscription canceled during trial", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
@@ -5709,13 +5844,17 @@ describe("stripe", () => {
 			expect(upgradeRes.data?.url).toBeDefined();
 
 			// Verify no trial was granted (trial_period_days should be absent)
-			const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+			const callArgs = stripeMock.checkout.sessions.create.mock.lastCall?.[0];
 			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
 		});
 	});
 
 	describe("restore subscription", () => {
-		it("should clear cancelAtPeriodEnd when restoring a cancel_at_period_end subscription", async () => {
+		test("should clear cancelAtPeriodEnd when restoring a cancel_at_period_end subscription", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
@@ -5760,7 +5899,7 @@ describe("stripe", () => {
 				},
 			});
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_restore_period_end",
@@ -5771,7 +5910,7 @@ describe("stripe", () => {
 				],
 			});
 
-			mockStripe.subscriptions.update.mockResolvedValueOnce({
+			stripeMock.subscriptions.update.mockResolvedValueOnce({
 				id: "sub_restore_period_end",
 				status: "active",
 				cancel_at_period_end: false,
@@ -5785,7 +5924,7 @@ describe("stripe", () => {
 			expect(restoreRes.data).toBeDefined();
 
 			// Verify Stripe was called with correct params (cancel_at_period_end: false)
-			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+			expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
 				"sub_restore_period_end",
 				{ cancel_at_period_end: false },
 			);
@@ -5802,7 +5941,11 @@ describe("stripe", () => {
 			});
 		});
 
-		it("should clear cancelAt when restoring a cancel_at (specific date) subscription", async () => {
+		test("should clear cancelAt when restoring a cancel_at (specific date) subscription", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
@@ -5849,7 +5992,7 @@ describe("stripe", () => {
 				},
 			});
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_restore_cancel_at",
@@ -5860,7 +6003,7 @@ describe("stripe", () => {
 				],
 			});
 
-			mockStripe.subscriptions.update.mockResolvedValueOnce({
+			stripeMock.subscriptions.update.mockResolvedValueOnce({
 				id: "sub_restore_cancel_at",
 				status: "active",
 				cancel_at_period_end: false,
@@ -5874,7 +6017,7 @@ describe("stripe", () => {
 			expect(restoreRes.data).toBeDefined();
 
 			// Verify Stripe was called with correct params (cancel_at: "" to clear)
-			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+			expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
 				"sub_restore_cancel_at",
 				{ cancel_at: "" },
 			);
@@ -5891,7 +6034,11 @@ describe("stripe", () => {
 			});
 		});
 
-		it("should release schedule and clear stripeScheduleId when restoring a pending schedule", async () => {
+		test("should release schedule and clear stripeScheduleId when restoring a pending schedule", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
@@ -5935,7 +6082,7 @@ describe("stripe", () => {
 				},
 			});
 
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+			stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
 				id: "sub_restore_schedule",
 				status: "active",
 			});
@@ -5947,12 +6094,12 @@ describe("stripe", () => {
 			expect(restoreRes.data).toBeDefined();
 
 			// Should release the schedule
-			expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
+			expect(stripeMock.subscriptionSchedules.release).toHaveBeenCalledWith(
 				"sub_schedule_pending",
 			);
 
 			// Should NOT call subscriptions.update (that's for cancel restore)
-			expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+			expect(stripeMock.subscriptions.update).not.toHaveBeenCalled();
 
 			// DB should have stripeScheduleId cleared
 			const updatedSub = await ctx.adapter.findOne<Subscription>({
@@ -5962,7 +6109,11 @@ describe("stripe", () => {
 			expect(updatedSub?.stripeScheduleId).toBeNull();
 		});
 
-		it("should reject restore when no pending cancel and no pending schedule", async () => {
+		test("should reject restore when no pending cancel and no pending schedule", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
@@ -6014,7 +6165,11 @@ describe("stripe", () => {
 	});
 
 	describe("cancel subscription fallback (missed webhook)", () => {
-		it("should sync from Stripe when cancel request fails because subscription is already canceled", async () => {
+		test("should sync from Stripe when cancel request fails because subscription is already canceled", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
@@ -6063,7 +6218,7 @@ describe("stripe", () => {
 			});
 
 			// Stripe has the subscription already scheduled to cancel with cancel_at
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_missed_webhook",
@@ -6075,12 +6230,12 @@ describe("stripe", () => {
 			});
 
 			// Billing portal returns error because subscription is already set to cancel
-			mockStripe.billingPortal.sessions.create.mockRejectedValueOnce(
+			stripeMock.billingPortal.sessions.create.mockRejectedValueOnce(
 				new Error("This subscription is already set to be canceled"),
 			);
 
 			// When fallback kicks in, it retrieves from Stripe
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+			stripeMock.subscriptions.retrieve.mockResolvedValueOnce({
 				id: "sub_missed_webhook",
 				status: "active",
 				cancel_at_period_end: false,
@@ -6116,7 +6271,11 @@ describe("stripe", () => {
 
 	describe("referenceMiddleware", () => {
 		describe("referenceMiddleware - user subscription", () => {
-			it("should pass when no explicit referenceId is provided", async () => {
+			test("should pass when no explicit referenceId is provided", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const { client, sessionSetter } = await getTestInstance(
 					{
 						plugins: [stripe(stripeOptions)],
@@ -6145,7 +6304,11 @@ describe("stripe", () => {
 				expect(res.data?.url).toBeDefined();
 			});
 
-			it("should pass when referenceId equals user id", async () => {
+			test("should pass when referenceId equals user id", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const { client, sessionSetter } = await getTestInstance(
 					{
 						plugins: [stripe(stripeOptions)],
@@ -6181,7 +6344,11 @@ describe("stripe", () => {
 				expect(res.data?.url).toBeDefined();
 			});
 
-			it("should reject when authorizeReference is not defined but other referenceId is provided", async () => {
+			test("should reject when authorizeReference is not defined but other referenceId is provided", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const { client, sessionSetter } = await getTestInstance(
 					{
 						plugins: [stripe(stripeOptions)],
@@ -6220,7 +6387,11 @@ describe("stripe", () => {
 				expect(res.error?.code).toBe("REFERENCE_ID_NOT_ALLOWED");
 			});
 
-			it("should reject another user's referenceId when authorizeReference returns false", async () => {
+			test("should reject another user's referenceId when authorizeReference returns false", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -6267,7 +6438,11 @@ describe("stripe", () => {
 				expect(res.error?.code).toBe("UNAUTHORIZED");
 			});
 
-			it("should allow another user's referenceId when authorizeReference returns true", async () => {
+			test("should allow another user's referenceId when authorizeReference returns true", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -6320,7 +6495,7 @@ describe("stripe", () => {
 					},
 					where: [{ field: "id", value: targetUser.user.id }],
 				});
-				mockStripe.checkout.sessions.create.mockClear();
+				stripeMock.checkout.sessions.create.mockClear();
 
 				const res = await client.subscription.upgrade({
 					plan: "starter",
@@ -6330,7 +6505,7 @@ describe("stripe", () => {
 
 				expect(res.error).toBeNull();
 				expect(res.data?.url).toBeDefined();
-				expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
 					expect.objectContaining({
 						customer: "cus_actor_reference",
 						metadata: expect.objectContaining({
@@ -6352,7 +6527,11 @@ describe("stripe", () => {
 		});
 
 		describe("referenceMiddleware - organization subscription", () => {
-			it("should reject when authorizeReference is not defined", async () => {
+			test("should reject when authorizeReference is not defined", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const { client, sessionSetter } = await getTestInstance(
 					{
 						plugins: [stripe(stripeOptions)],
@@ -6388,7 +6567,11 @@ describe("stripe", () => {
 				expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 			});
 
-			it("should reject when no referenceId or activeOrganizationId", async () => {
+			test("should reject when no referenceId or activeOrganizationId", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -6431,7 +6614,11 @@ describe("stripe", () => {
 				expect(res.error?.code).toBe("ORGANIZATION_REFERENCE_ID_REQUIRED");
 			});
 
-			it("should reject when authorizeReference returns false", async () => {
+			test("should reject when authorizeReference returns false", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					subscription: {
@@ -6475,7 +6662,11 @@ describe("stripe", () => {
 				expect(res.error?.code).toBe("UNAUTHORIZED");
 			});
 
-			it("should pass when authorizeReference returns true", async () => {
+			test("should pass when authorizeReference returns true", async ({
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
 				const stripeOptionsWithAuth: StripeOptions = {
 					...stripeOptions,
 					organization: {
@@ -6529,7 +6720,11 @@ describe("stripe", () => {
 		});
 	});
 
-	it("should upgrade existing active subscription even when canceled subscription exists for same referenceId", async () => {
+	test("should upgrade existing active subscription even when canceled subscription exists for same referenceId", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
@@ -6596,7 +6791,7 @@ describe("stripe", () => {
 		});
 
 		// Mock Stripe subscriptions.list to return the active subscription
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_stripe_active",
@@ -6621,11 +6816,15 @@ describe("stripe", () => {
 		});
 
 		// Should use billing portal to upgrade existing subscription (not create new checkout)
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
-		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
 	});
 
-	it("should schedule plan change at period end when scheduleAtPeriodEnd is true", async () => {
+	test("should schedule plan change at period end when scheduleAtPeriodEnd is true", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		vi.clearAllMocks();
 
 		const { client, auth, sessionSetter } = await getTestInstance(
@@ -6672,7 +6871,7 @@ describe("stripe", () => {
 		});
 
 		// Mock Stripe subscriptions.list to return active premium subscription
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_schedule_test",
@@ -6700,10 +6899,10 @@ describe("stripe", () => {
 		});
 
 		// Should use Subscription Schedules, not billing portal or checkout
-		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
+		expect(stripeMock.subscriptionSchedules.create).toHaveBeenCalledWith({
 			from_subscription: "sub_schedule_test",
 		});
-		expect(mockStripe.subscriptionSchedules.update).toHaveBeenCalledWith(
+		expect(stripeMock.subscriptionSchedules.update).toHaveBeenCalledWith(
 			"sub_sched_mock",
 			expect.objectContaining({
 				metadata: { source: "@better-auth/stripe" },
@@ -6715,9 +6914,9 @@ describe("stripe", () => {
 				]),
 			}),
 		);
-		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
-		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
-		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(stripeMock.subscriptions.update).not.toHaveBeenCalled();
 
 		// Plan should remain unchanged (webhook handles it at period end),
 		// but stripeScheduleId should be stored so clients can detect pending changes
@@ -6732,7 +6931,11 @@ describe("stripe", () => {
 		expect(res.data?.redirect).toBe(true);
 	});
 
-	it("should release existing schedule before scheduling a new one", async () => {
+	test("should release existing schedule before scheduling a new one", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		vi.clearAllMocks();
 
 		const { client, auth, sessionSetter } = await getTestInstance(
@@ -6777,7 +6980,7 @@ describe("stripe", () => {
 			where: [{ field: "id", value: userRes.user.id }],
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_with_schedule",
@@ -6799,7 +7002,7 @@ describe("stripe", () => {
 		});
 
 		// Mock an existing active schedule for this subscription
-		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
+		stripeMock.subscriptionSchedules.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_sched_existing",
@@ -6817,17 +7020,21 @@ describe("stripe", () => {
 		});
 
 		// Should release the existing schedule first
-		expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
+		expect(stripeMock.subscriptionSchedules.release).toHaveBeenCalledWith(
 			"sub_sched_existing",
 		);
 
 		// Then create a new one
-		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
+		expect(stripeMock.subscriptionSchedules.create).toHaveBeenCalledWith({
 			from_subscription: "sub_with_schedule",
 		});
 	});
 
-	it("should release existing schedule before immediate upgrade", async () => {
+	test("should release existing schedule before immediate upgrade", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		vi.clearAllMocks();
 
 		const { client, auth, sessionSetter } = await getTestInstance(
@@ -6872,7 +7079,7 @@ describe("stripe", () => {
 			where: [{ field: "id", value: userRes.user.id }],
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_scheduled_then_upgrade",
@@ -6894,7 +7101,7 @@ describe("stripe", () => {
 		});
 
 		// Mock an existing active schedule (from a previous downgrade scheduling)
-		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
+		stripeMock.subscriptionSchedules.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_schedule_old",
@@ -6912,16 +7119,20 @@ describe("stripe", () => {
 		});
 
 		// Should release the existing schedule
-		expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
+		expect(stripeMock.subscriptionSchedules.release).toHaveBeenCalledWith(
 			"sub_schedule_old",
 		);
 
 		// Should use billing portal for immediate upgrade, not schedules
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
-		expect(mockStripe.subscriptionSchedules.create).not.toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(stripeMock.subscriptionSchedules.create).not.toHaveBeenCalled();
 	});
 
-	it("should not release schedules created outside the plugin", async () => {
+	test("should not release schedules created outside the plugin", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
 		vi.clearAllMocks();
 
 		const { client, auth, sessionSetter } = await getTestInstance(
@@ -6966,7 +7177,7 @@ describe("stripe", () => {
 			where: [{ field: "id", value: userRes.user.id }],
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_external_schedule",
@@ -6986,7 +7197,7 @@ describe("stripe", () => {
 		});
 
 		// Schedule created externally (no @better-auth/stripe metadata)
-		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
+		stripeMock.subscriptionSchedules.list.mockResolvedValueOnce({
 			data: [
 				{
 					id: "sub_sched_external",
@@ -7003,15 +7214,15 @@ describe("stripe", () => {
 		});
 
 		// Should NOT release the external schedule
-		expect(mockStripe.subscriptionSchedules.release).not.toHaveBeenCalled();
+		expect(stripeMock.subscriptionSchedules.release).not.toHaveBeenCalled();
 
 		// Should still proceed with the upgrade via billing portal
-		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalled();
 	});
 
 	describe("line item replacement on plan change", () => {
-		const lineItemOptions: StripeOptions = {
-			stripeClient: mockStripe as unknown as Stripe,
+		const buildLineItemOptions = (mock: Stripe): StripeOptions => ({
+			stripeClient: mock,
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			createCustomerOnSignUp: true,
 			subscription: {
@@ -7035,15 +7246,21 @@ describe("stripe", () => {
 					},
 				],
 			},
-		};
+		});
 
-		it("should swap line item prices when upgrading immediately", async () => {
+		test("should swap line item prices when upgrading immediately", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(lineItemOptions)],
+					plugins: [
+						stripe(buildLineItemOptions(stripeMock as unknown as Stripe)),
+					],
 				},
 				{
 					disableTestUser: true,
@@ -7082,7 +7299,7 @@ describe("stripe", () => {
 				where: [{ field: "id", value: userRes.user.id }],
 			});
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_lineitem",
@@ -7110,7 +7327,7 @@ describe("stripe", () => {
 				],
 			});
 
-			mockStripe.subscriptions.update.mockResolvedValueOnce({
+			stripeMock.subscriptions.update.mockResolvedValueOnce({
 				id: "sub_lineitem",
 				status: "active",
 			});
@@ -7122,10 +7339,10 @@ describe("stripe", () => {
 
 			// Should use subscriptions.update (not billing portal)
 			// because line item prices changed between plans
-			expect(mockStripe.subscriptions.update).toHaveBeenCalled();
-			expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+			expect(stripeMock.subscriptions.update).toHaveBeenCalled();
+			expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalled();
 
-			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			const updateCall = stripeMock.subscriptions.update.mock.calls[0]!;
 			expect(updateCall[0]).toBe("sub_lineitem");
 			const items = updateCall[1]!.items;
 
@@ -7148,13 +7365,19 @@ describe("stripe", () => {
 			);
 		});
 
-		it("should swap line item prices in scheduled phase", async () => {
+		test("should swap line item prices in scheduled phase", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(lineItemOptions)],
+					plugins: [
+						stripe(buildLineItemOptions(stripeMock as unknown as Stripe)),
+					],
 				},
 				{
 					disableTestUser: true,
@@ -7196,7 +7419,7 @@ describe("stripe", () => {
 			const now = Math.floor(Date.now() / 1000);
 			const periodEnd = now + 30 * 86400;
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_lineitem_sched",
@@ -7224,7 +7447,7 @@ describe("stripe", () => {
 				],
 			});
 
-			mockStripe.subscriptionSchedules.create.mockResolvedValueOnce({
+			stripeMock.subscriptionSchedules.create.mockResolvedValueOnce({
 				id: "sub_sched_lineitem",
 				phases: [
 					{
@@ -7245,11 +7468,11 @@ describe("stripe", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalled();
-			expect(mockStripe.subscriptionSchedules.update).toHaveBeenCalled();
+			expect(stripeMock.subscriptionSchedules.create).toHaveBeenCalled();
+			expect(stripeMock.subscriptionSchedules.update).toHaveBeenCalled();
 
 			const scheduleUpdate =
-				mockStripe.subscriptionSchedules.update.mock.calls[0]!;
+				stripeMock.subscriptionSchedules.update.mock.calls[0]!;
 			const phase2Items = scheduleUpdate[1]!.phases[1].items;
 
 			// Multiset diff: base in-place, old line items removed, new added
@@ -7267,8 +7490,8 @@ describe("stripe", () => {
 	});
 
 	describe("line item add/remove on asymmetric plan change", () => {
-		const asymmetricOptions: StripeOptions = {
-			stripeClient: mockStripe as unknown as Stripe,
+		const buildAsymmetricOptions = (mock: Stripe): StripeOptions => ({
+			stripeClient: mock,
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			createCustomerOnSignUp: true,
 			subscription: {
@@ -7289,15 +7512,21 @@ describe("stripe", () => {
 					},
 				],
 			},
-		};
+		});
 
-		it("should add new line items when upgrading to a plan with more items", async () => {
+		test("should add new line items when upgrading to a plan with more items", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(asymmetricOptions)],
+					plugins: [
+						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
+					],
 				},
 				{
 					disableTestUser: true,
@@ -7336,7 +7565,7 @@ describe("stripe", () => {
 				where: [{ field: "id", value: userRes.user.id }],
 			});
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_asym_up",
@@ -7359,7 +7588,7 @@ describe("stripe", () => {
 				],
 			});
 
-			mockStripe.subscriptions.update.mockResolvedValueOnce({
+			stripeMock.subscriptions.update.mockResolvedValueOnce({
 				id: "sub_asym_up",
 				status: "active",
 			});
@@ -7369,8 +7598,8 @@ describe("stripe", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.subscriptions.update).toHaveBeenCalled();
-			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			expect(stripeMock.subscriptions.update).toHaveBeenCalled();
+			const updateCall = stripeMock.subscriptions.update.mock.calls[0]!;
 			const items = updateCall[1]!.items;
 
 			// Multiset diff: base update + 1 delete + 2 adds
@@ -7392,13 +7621,19 @@ describe("stripe", () => {
 			);
 		});
 
-		it("should remove extra line items when downgrading to a plan with fewer items", async () => {
+		test("should remove extra line items when downgrading to a plan with fewer items", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(asymmetricOptions)],
+					plugins: [
+						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
+					],
 				},
 				{
 					disableTestUser: true,
@@ -7437,7 +7672,7 @@ describe("stripe", () => {
 				where: [{ field: "id", value: userRes.user.id }],
 			});
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_asym_down",
@@ -7465,7 +7700,7 @@ describe("stripe", () => {
 				],
 			});
 
-			mockStripe.subscriptions.update.mockResolvedValueOnce({
+			stripeMock.subscriptions.update.mockResolvedValueOnce({
 				id: "sub_asym_down",
 				status: "active",
 			});
@@ -7475,8 +7710,8 @@ describe("stripe", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.subscriptions.update).toHaveBeenCalled();
-			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			expect(stripeMock.subscriptions.update).toHaveBeenCalled();
+			const updateCall = stripeMock.subscriptions.update.mock.calls[0]!;
 			const items = updateCall[1]!.items;
 
 			// Multiset diff: base update + 2 deletes + 1 add
@@ -7500,8 +7735,8 @@ describe("stripe", () => {
 	});
 
 	describe("duplicate line item prevention", () => {
-		const asymmetricOptions: StripeOptions = {
-			stripeClient: mockStripe as unknown as Stripe,
+		const buildAsymmetricOptions = (mock: Stripe): StripeOptions => ({
+			stripeClient: mock,
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
 			createCustomerOnSignUp: true,
 			subscription: {
@@ -7522,15 +7757,21 @@ describe("stripe", () => {
 					},
 				],
 			},
-		};
+		});
 
-		it("should not duplicate line items already present in the subscription (immediate)", async () => {
+		test("should not duplicate line items already present in the subscription (immediate)", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(asymmetricOptions)],
+					plugins: [
+						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
+					],
 				},
 				{
 					disableTestUser: true,
@@ -7570,7 +7811,7 @@ describe("stripe", () => {
 			});
 
 			// Subscription already has price_premium_security (shouldn't be there)
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_dup",
@@ -7603,8 +7844,8 @@ describe("stripe", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.subscriptions.update).toHaveBeenCalled();
-			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			expect(stripeMock.subscriptions.update).toHaveBeenCalled();
+			const updateCall = stripeMock.subscriptions.update.mock.calls[0]!;
 			const items = updateCall[1]!.items;
 
 			// si_stale already carries price_premium_security, so the API call
@@ -7616,13 +7857,19 @@ describe("stripe", () => {
 			expect(securityAdds).toHaveLength(0);
 		});
 
-		it("should not duplicate line items already present in scheduled phase", async () => {
+		test("should not duplicate line items already present in scheduled phase", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(asymmetricOptions)],
+					plugins: [
+						stripe(buildAsymmetricOptions(stripeMock as unknown as Stripe)),
+					],
 				},
 				{
 					disableTestUser: true,
@@ -7664,7 +7911,7 @@ describe("stripe", () => {
 			const now = Math.floor(Date.now() / 1000);
 			const periodEnd = now + 30 * 86400;
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
+			stripeMock.subscriptions.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: "sub_dup_sched",
@@ -7692,7 +7939,7 @@ describe("stripe", () => {
 				],
 			});
 
-			mockStripe.subscriptionSchedules.create.mockResolvedValueOnce({
+			stripeMock.subscriptionSchedules.create.mockResolvedValueOnce({
 				id: "sub_sched_dup",
 				phases: [
 					{
@@ -7713,9 +7960,9 @@ describe("stripe", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.subscriptionSchedules.update).toHaveBeenCalled();
+			expect(stripeMock.subscriptionSchedules.update).toHaveBeenCalled();
 			const scheduleUpdate =
-				mockStripe.subscriptionSchedules.update.mock.calls[0]!;
+				stripeMock.subscriptionSchedules.update.mock.calls[0]!;
 			const phase2Items = scheduleUpdate[1]!.phases[1].items;
 
 			// price_premium_security should appear only once
@@ -7727,7 +7974,11 @@ describe("stripe", () => {
 	});
 
 	describe("subscriptionSuccess - checkoutSessionId flow", () => {
-		it("should update subscription via checkoutSessionId and redirect", async () => {
+		test("should update subscription via checkoutSessionId and redirect", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const testSubscriptionId = "sub_success_test";
 			const testCheckoutSessionId = "cs_test_123";
 			const testCustomerId = "cus_success_test";
@@ -7860,7 +8111,11 @@ describe("stripe", () => {
 			expect(updated?.periodEnd).toBeInstanceOf(Date);
 		});
 
-		it("should redirect without update when checkoutSessionId is missing", async () => {
+		test("should redirect without update when checkoutSessionId is missing", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const {
 				client,
 				auth: testAuth,
@@ -7910,7 +8165,11 @@ describe("stripe", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/8255
 		 */
-		it("should replace {CHECKOUT_SESSION_ID} placeholder in callbackURL with actual session ID", async () => {
+		test("should replace {CHECKOUT_SESSION_ID} placeholder in callbackURL with actual session ID", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const testSubscriptionId = "sub_placeholder_test";
 			const testCheckoutSessionId = "cs_placeholder_456";
 			const testCustomerId = "cus_placeholder_test";
@@ -8035,7 +8294,11 @@ describe("stripe", () => {
 			expect(location).not.toContain("%7BCHECKOUT_SESSION_ID%7D");
 		});
 
-		it("should redirect when checkout session retrieval fails", async () => {
+		test("should redirect when checkout session retrieval fails", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const stripeForTest = {
 				...stripeOptions.stripeClient,
 				checkout: {
@@ -8102,15 +8365,19 @@ describe("stripe", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/8920
 	 */
 	describe("metered usage pricing", () => {
-		it("should not include quantity for metered base price in checkout session", async () => {
+		test("should not include quantity for metered base price in checkout session", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const meteredPriceId = "price_metered_base";
 
 			const meteredMockStripe = {
-				...mockStripe,
+				...stripeMock,
 				prices: {
-					...mockStripe.prices,
+					...stripeMock.prices,
 					retrieve: vi.fn().mockResolvedValue({
 						id: meteredPriceId,
 						recurring: {
@@ -8175,15 +8442,19 @@ describe("stripe", () => {
 			expect(baseLineItem).not.toHaveProperty("quantity");
 		});
 
-		it("should still include quantity for licensed base price in checkout session", async () => {
+		test("should still include quantity for licensed base price in checkout session", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const licensedPriceId = "price_licensed_base";
 
 			const licensedMockStripe = {
-				...mockStripe,
+				...stripeMock,
 				prices: {
-					...mockStripe.prices,
+					...stripeMock.prices,
 					retrieve: vi.fn().mockResolvedValue({
 						id: licensedPriceId,
 						recurring: {
@@ -8252,7 +8523,11 @@ describe("stripe", () => {
 			expect(baseLineItem).toHaveProperty("quantity", 1);
 		});
 
-		it("should not include quantity for metered price during billing portal upgrade", async () => {
+		test("should not include quantity for metered price during billing portal upgrade", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const oldPriceId = "price_old_licensed";
@@ -8260,9 +8535,9 @@ describe("stripe", () => {
 			const subscriptionId = "sub_metered_upgrade";
 
 			const upgradeMockStripe = {
-				...mockStripe,
+				...stripeMock,
 				prices: {
-					...mockStripe.prices,
+					...stripeMock.prices,
 					retrieve: vi.fn().mockResolvedValue({
 						id: meteredPriceId,
 						recurring: {
@@ -8272,7 +8547,7 @@ describe("stripe", () => {
 					}),
 				},
 				subscriptions: {
-					...mockStripe.subscriptions,
+					...stripeMock.subscriptions,
 					list: vi.fn().mockResolvedValue({
 						data: [
 							{
@@ -8300,7 +8575,7 @@ describe("stripe", () => {
 					update: vi.fn().mockResolvedValue({}),
 				},
 				subscriptionSchedules: {
-					...mockStripe.subscriptionSchedules,
+					...stripeMock.subscriptionSchedules,
 					list: vi.fn().mockResolvedValue({ data: [] }),
 				},
 			};
@@ -8383,7 +8658,11 @@ describe("stripe", () => {
 			expect(portalItem).not.toHaveProperty("quantity");
 		});
 
-		it("should not include quantity for metered price during direct subscription upgrade", async () => {
+		test("should not include quantity for metered price during direct subscription upgrade", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const oldPriceId = "price_old_licensed";
@@ -8391,9 +8670,9 @@ describe("stripe", () => {
 			const subscriptionId = "sub_metered_direct";
 
 			const upgradeMockStripe = {
-				...mockStripe,
+				...stripeMock,
 				prices: {
-					...mockStripe.prices,
+					...stripeMock.prices,
 					retrieve: vi.fn().mockResolvedValue({
 						id: meteredPriceId,
 						recurring: {
@@ -8403,7 +8682,7 @@ describe("stripe", () => {
 					}),
 				},
 				subscriptions: {
-					...mockStripe.subscriptions,
+					...stripeMock.subscriptions,
 					list: vi.fn().mockResolvedValue({
 						data: [
 							{
@@ -8431,7 +8710,7 @@ describe("stripe", () => {
 					update: vi.fn().mockResolvedValue({}),
 				},
 				subscriptionSchedules: {
-					...mockStripe.subscriptionSchedules,
+					...stripeMock.subscriptionSchedules,
 					list: vi.fn().mockResolvedValue({ data: [] }),
 				},
 			};
@@ -8514,7 +8793,11 @@ describe("stripe", () => {
 			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 
-		it("should not include quantity for metered price during scheduled upgrade", async () => {
+		test("should not include quantity for metered price during scheduled upgrade", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			vi.clearAllMocks();
 
 			const oldPriceId = "price_old_scheduled";
@@ -8522,9 +8805,9 @@ describe("stripe", () => {
 			const subscriptionId = "sub_metered_scheduled";
 
 			const scheduleMockStripe = {
-				...mockStripe,
+				...stripeMock,
 				prices: {
-					...mockStripe.prices,
+					...stripeMock.prices,
 					retrieve: vi.fn().mockResolvedValue({
 						id: meteredPriceId,
 						recurring: {
@@ -8534,7 +8817,7 @@ describe("stripe", () => {
 					}),
 				},
 				subscriptions: {
-					...mockStripe.subscriptions,
+					...stripeMock.subscriptions,
 					list: vi.fn().mockResolvedValue({
 						data: [
 							{
@@ -8564,7 +8847,7 @@ describe("stripe", () => {
 					}),
 				},
 				subscriptionSchedules: {
-					...mockStripe.subscriptionSchedules,
+					...stripeMock.subscriptionSchedules,
 					list: vi.fn().mockResolvedValue({ data: [] }),
 					create: vi.fn().mockResolvedValue({
 						id: "sub_sched_metered",
@@ -8672,13 +8955,15 @@ describe("stripe", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9130
 	 */
 	describe("getCheckoutSessionParams subscription_data merge", () => {
-		const trialOptions = {
-			...stripeOptions,
+		const buildTrialOptions = (mock: Stripe): StripeOptions => ({
+			stripeClient: mock,
+			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "test_secret",
+			createCustomerOnSignUp: true,
 			subscription: {
 				enabled: true,
 				plans: [
 					{
-						priceId: process.env.STRIPE_PRICE_ID_1!,
+						priceId: process.env.STRIPE_PRICE_ID_1 ?? "price_test_1",
 						name: "starter",
 						lookupKey: "lookup_key_123",
 						freeTrial: { days: 14 },
@@ -8697,13 +8982,17 @@ describe("stripe", () => {
 					},
 				}),
 			},
-		} satisfies StripeOptions;
+		});
 
-		it("preserves plan freeTrial when getCheckoutSessionParams returns custom subscription_data", async () => {
+		test("preserves plan freeTrial when getCheckoutSessionParams returns custom subscription_data", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { client, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(trialOptions)],
+					plugins: [stripe(buildTrialOptions(stripeMock as unknown as Stripe))],
 				},
 				{
 					disableTestUser: true,
@@ -8721,13 +9010,13 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
 				expect.objectContaining({
 					subscription_data: expect.objectContaining({
 						trial_period_days: 14,
@@ -8740,7 +9029,11 @@ describe("stripe", () => {
 			);
 		});
 
-		it("does not let getCheckoutSessionParams override library-owned flow-routing fields", async () => {
+		test("does not let getCheckoutSessionParams override library-owned flow-routing fields", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const hijackOptions = {
 				...stripeOptions,
 				subscription: {
@@ -8787,13 +9080,13 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				fetchOptions: { headers },
 			});
 
-			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			const callArgs = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(callArgs).toBeDefined();
 			expect(callArgs.mode).toBe("subscription");
 			expect(callArgs.client_reference_id).not.toBe("attacker-controlled");
@@ -8808,7 +9101,11 @@ describe("stripe", () => {
 			expect(callArgs.line_items[0].price).toBe("price_lookup_123");
 		});
 
-		it("passes UX-only params from getCheckoutSessionParams through to Stripe", async () => {
+		test("passes UX-only params from getCheckoutSessionParams through to Stripe", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const passthroughOptions = {
 				...stripeOptions,
 				subscription: {
@@ -8855,13 +9152,13 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
 				expect.objectContaining({
 					allow_promotion_codes: true,
 					payment_method_collection: "if_required",
@@ -8873,7 +9170,11 @@ describe("stripe", () => {
 			);
 		});
 
-		it("lets getCheckoutSessionParams override customer_update", async () => {
+		test("lets getCheckoutSessionParams override customer_update", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const overrideOptions = {
 				...stripeOptions,
 				subscription: {
@@ -8914,17 +9215,21 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				fetchOptions: { headers },
 			});
 
-			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			const callArgs = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(callArgs.customer_update).toEqual({ name: "never" });
 		});
 
-		it("falls back to library default customer_update when getCheckoutSessionParams omits it", async () => {
+		test("falls back to library default customer_update when getCheckoutSessionParams omits it", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const defaultOptions = {
 				...stripeOptions,
 				subscription: {
@@ -8965,20 +9270,24 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				fetchOptions: { headers },
 			});
 
-			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			const callArgs = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(callArgs.customer_update).toEqual({
 				name: "auto",
 				address: "auto",
 			});
 		});
 
-		it("uses request-time locale over getCheckoutSessionParams locale", async () => {
+		test("uses request-time locale over getCheckoutSessionParams locale", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const localeOptions = {
 				...stripeOptions,
 				subscription: {
@@ -9019,18 +9328,22 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				locale: "en",
 				fetchOptions: { headers },
 			});
 
-			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			const callArgs = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(callArgs.locale).toBe("en");
 		});
 
-		it("falls back to getCheckoutSessionParams locale when request omits locale", async () => {
+		test("falls back to getCheckoutSessionParams locale when request omits locale", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const localeOptions = {
 				...stripeOptions,
 				subscription: {
@@ -9071,21 +9384,25 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				fetchOptions: { headers },
 			});
 
-			const callArgs = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			const callArgs = stripeMock.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(callArgs.locale).toBe("ko");
 		});
 
-		it("preserves internal subscription metadata when getCheckoutSessionParams returns custom subscription_data", async () => {
+		test("preserves internal subscription metadata when getCheckoutSessionParams returns custom subscription_data", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const { client, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
-					plugins: [stripe(trialOptions)],
+					plugins: [stripe(buildTrialOptions(stripeMock as unknown as Stripe))],
 				},
 				{
 					disableTestUser: true,
@@ -9103,13 +9420,13 @@ describe("stripe", () => {
 				{ throw: true, onSuccess: sessionSetter(headers) },
 			);
 
-			mockStripe.checkout.sessions.create.mockClear();
+			stripeMock.checkout.sessions.create.mockClear();
 			await client.subscription.upgrade({
 				plan: "starter",
 				fetchOptions: { headers },
 			});
 
-			expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
 				expect.objectContaining({
 					subscription_data: expect.objectContaining({
 						metadata: expect.objectContaining({
