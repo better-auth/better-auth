@@ -1,5 +1,28 @@
 # better-auth
 
+## 1.7.0-beta.3
+
+### Minor Changes
+
+- [#8733](https://github.com/better-auth/better-auth/pull/8733) [`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `hydrateSession` to seed the client with a server-fetched session so `useSession` returns data on the first render.
+
+- [#9431](https://github.com/better-auth/better-auth/pull/9431) [`523f95c`](https://github.com/better-auth/better-auth/commit/523f95c10db24b790bbd75fe85c86c34d3465267) Thanks [@pi0](https://github.com/pi0)! - feat: make `Auth` instance fetchable
+
+- [#9240](https://github.com/better-auth/better-auth/pull/9240) [`729c00d`](https://github.com/better-auth/better-auth/commit/729c00d74c94f558893da1e3a9ee86451d1b23da) Thanks [@adrianmxb](https://github.com/adrianmxb)! - feat(username): add immutable username option
+
+  This allows users to set their username during sign-up or first update, but prevents changing it to a different value afterwards. Users can still update other profile fields.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.3
+  - @better-auth/drizzle-adapter@1.7.0-beta.3
+  - @better-auth/kysely-adapter@1.7.0-beta.3
+  - @better-auth/memory-adapter@1.7.0-beta.3
+  - @better-auth/mongo-adapter@1.7.0-beta.3
+  - @better-auth/prisma-adapter@1.7.0-beta.3
+  - @better-auth/telemetry@1.7.0-beta.3
+
 ## 1.7.0-beta.2
 
 ### Minor Changes
