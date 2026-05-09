@@ -1218,7 +1218,7 @@ describe("--adapter flag support (mock adapter)", () => {
 		const mockAdapter = createMockAdapter("unsupported-adapter");
 		let error: Error | undefined;
 		try {
-			generateSchema({
+			await generateSchema({
 				adapter: mockAdapter,
 				file: "test.txt",
 				options: {
