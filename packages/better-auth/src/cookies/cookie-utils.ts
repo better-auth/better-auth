@@ -173,6 +173,34 @@ export function toCookieOptions(
 	};
 }
 
+/**
+ * Add or replace a cookie in the request `Cookie` header.
+ *
+ * Cookie pairs are joined with `; `, but `headers.append("cookie", ...)`
+ * joins with `, ` in some runtimes (e.g. Deno, Cloudflare Workers) and
+ * breaks downstream cookie parsing. This builds the header value via
+ * parse-mutate-serialize.
+ */
+export function setRequestCookie(
+	headers: Headers,
+	name: string,
+	value: string,
+): void {
+	const cookieMap = new Map<string, string>();
+	for (const pair of (headers.get("cookie") || "").split(";")) {
+		const trimmed = pair.trim();
+		const eq = trimmed.indexOf("=");
+		if (eq > 0) cookieMap.set(trimmed.slice(0, eq), trimmed.slice(eq + 1));
+	}
+
+	cookieMap.set(name, value);
+
+	headers.set(
+		"cookie",
+		Array.from(cookieMap, ([k, v]) => `${k}=${v}`).join("; "),
+	);
+}
+
 export function setCookieToHeader(headers: Headers) {
 	return (context: { response: Response }) => {
 		const setCookieHeader = context.response.headers.get("set-cookie");
