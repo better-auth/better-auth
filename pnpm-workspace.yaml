@@ -4,8 +4,6 @@ packages:
   - e2e/**
   - test
 
-blockExoticSubdeps: true
-
 overrides:
   axios: <1.14.0
   node-forge: '>=1.4.0 <2'
