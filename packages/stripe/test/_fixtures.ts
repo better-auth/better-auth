@@ -3,7 +3,16 @@ import type Stripe from "stripe";
 import { test as baseTest, vi } from "vitest";
 import type { StripeOptions } from "../src/types";
 
-function createStripeMock() {
+export function createStripeMock(
+	overrides: {
+		customerId?: string;
+		customerEmail?: string;
+		checkoutSessionId?: string;
+	} = {},
+) {
+	const customerId = overrides.customerId ?? "cus_mock123";
+	const customerEmail = overrides.customerEmail ?? "test@email.com";
+	const checkoutSessionId = overrides.checkoutSessionId ?? "";
 	return {
 		prices: {
 			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
@@ -15,24 +24,25 @@ function createStripeMock() {
 			),
 		},
 		customers: {
-			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
+			create: vi.fn().mockResolvedValue({ id: customerId }),
 			list: vi.fn().mockResolvedValue({ data: [] }),
 			search: vi.fn().mockResolvedValue({ data: [] }),
 			retrieve: vi.fn().mockResolvedValue({
-				id: "cus_mock123",
-				email: "test@email.com",
+				id: customerId,
+				email: customerEmail,
 				deleted: false,
 			}),
 			update: vi.fn().mockResolvedValue({
-				id: "cus_mock123",
-				email: "newemail@example.com",
+				id: customerId,
+				email: customerEmail,
 			}),
+			del: vi.fn().mockResolvedValue({ id: customerId, deleted: true }),
 		},
 		checkout: {
 			sessions: {
 				create: vi.fn().mockResolvedValue({
 					url: "https://checkout.stripe.com/mock",
-					id: "",
+					id: checkoutSessionId,
 				}),
 			},
 		},
