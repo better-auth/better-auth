@@ -9,8 +9,26 @@ import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
+import { getDate } from "../../utils/date";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
+
+/**
+ * Derive a stable, short identifier for a JWT token so we can
+ * track whether it has already been consumed.  We use the first
+ * 43 characters of the base64url-encoded SHA-256 digest of the
+ * raw token string (≈ 256 bits of entropy, URL-safe, no padding).
+ */
+async function getTokenIdentifier(token: string): Promise<string> {
+	const encoded = new TextEncoder().encode(token);
+	const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	const base64 = btoa(String.fromCharCode(...hashArray))
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
+	return `used-email-token:${base64}`;
+}
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -303,6 +321,44 @@ export const verifyEmail = createAuthEndpoint(
 			requestType: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
+		/**
+		 * Enforce single-use for change-email tokens BEFORE any DB lookups.
+		 * JWT-based tokens are stateless so they remain cryptographically valid
+		 * until expiry. We store a record of consumed tokens in the verification
+		 * table so replaying the same link is rejected immediately — even after
+		 * the email has already been updated in the DB (which would otherwise
+		 * cause a misleading USER_NOT_FOUND error on reuse).
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/9479
+		 */
+		if (
+			parsed.updateTo &&
+			(parsed.requestType === "change-email-confirmation" ||
+				parsed.requestType === "change-email-verification")
+		) {
+			const tokenIdentifier = await getTokenIdentifier(token);
+			console.log("[DEBUG] tokenIdentifier:", tokenIdentifier);
+			console.log("[DEBUG] requestType:", parsed.requestType);
+			const alreadyUsed =
+				await ctx.context.internalAdapter.findVerificationValue(
+					tokenIdentifier,
+				);
+			console.log("[DEBUG] alreadyUsed:", alreadyUsed);
+			if (alreadyUsed) {
+				console.log("[DEBUG] Rejecting reused token");
+				return redirectOnError(BASE_ERROR_CODES.TOKEN_ALREADY_USED);
+			}
+			const tombstone =
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: tokenIdentifier,
+					value: "used",
+					expiresAt: getDate(
+						ctx.context.options.emailVerification?.expiresIn ?? 3600,
+						"sec",
+					),
+				});
+			console.log("[DEBUG] tombstone written:", tombstone);
+		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);

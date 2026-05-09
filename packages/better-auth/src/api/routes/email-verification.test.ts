@@ -684,3 +684,198 @@ describe("Email Verification Secondary Storage", async () => {
 		expect(result.status).toBe(true);
 	});
 });
+
+describe("Email Change Token Single-Use Enforcement", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9479
+	 */
+
+	it("should reject a reused change-email-confirmation token", async () => {
+		let capturedToken: string;
+		const { client, auth, signInWithTestUser, cookieSetter, db, testUser } =
+			await getTestInstance({
+				emailAndPassword: { enabled: true },
+				emailVerification: {
+					async sendVerificationEmail({ token: t }) {
+						capturedToken = t;
+					},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+						async sendChangeEmailConfirmation(data) {
+							capturedToken = data.token;
+						},
+					},
+				},
+			});
+
+		// sendChangeEmailConfirmation only fires when the user's email is
+		// already verified. Set that directly in the DB before signing in.
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: { newEmail: "single-use-confirm@example.com" },
+				headers,
+			});
+
+			// Snapshot the confirmation token NOW before the first verifyEmail call
+			// overwrites capturedToken via the sendVerificationEmail callback.
+			const confirmationToken = capturedToken;
+
+			// First use of the confirmation token should succeed
+			const firstUseHeaders = new Headers();
+			const firstResult = await client.verifyEmail({
+				query: { token: confirmationToken },
+				fetchOptions: { onSuccess: cookieSetter(firstUseHeaders), headers },
+			});
+			expect(firstResult.error).toBeNull();
+
+			// Second use of the same confirmation token must be rejected.
+			// (capturedToken has since been overwritten with the verification token
+			// by sendVerificationEmail, so we use the snapshot.)
+			const secondResult = await client.verifyEmail({
+				query: { token: confirmationToken },
+				fetchOptions: { headers },
+			});
+			console.log(
+				"[TEST DEBUG] secondResult.data:",
+				JSON.stringify(secondResult.data),
+			);
+			console.log(
+				"[TEST DEBUG] secondResult.error:",
+				JSON.stringify(secondResult.error),
+			);
+			expect(secondResult.error?.code).toBe("TOKEN_ALREADY_USED");
+		});
+	});
+
+	it("should reject a reused change-email-verification token", async () => {
+		let capturedToken: string;
+		const { client, auth, signInWithTestUser, cookieSetter, db, testUser } =
+			await getTestInstance({
+				emailAndPassword: { enabled: true },
+				emailVerification: {
+					async sendVerificationEmail({ token: t }) {
+						capturedToken = t;
+					},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+						async sendChangeEmailConfirmation(data) {
+							capturedToken = data.token;
+						},
+					},
+				},
+			});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: { newEmail: "single-use-verify@example.com" },
+				headers,
+			});
+
+			// Step 1: consume the confirmation token (sent to old email)
+			const confirmationHeaders = new Headers();
+			await client.verifyEmail({
+				query: { token: capturedToken },
+				fetchOptions: { onSuccess: cookieSetter(confirmationHeaders), headers },
+			});
+
+			// capturedToken is now the change-email-verification token (new email)
+			const verificationToken = capturedToken;
+
+			// Step 2: first use of verification token should apply the email change
+			const firstUseHeaders = new Headers();
+			const firstResult = await client.verifyEmail({
+				query: { token: verificationToken },
+				fetchOptions: {
+					onSuccess: cookieSetter(firstUseHeaders),
+					headers: confirmationHeaders,
+				},
+			});
+			expect(firstResult.error).toBeNull();
+
+			// Step 3: second use of the same verification token must be rejected
+			const secondResult = await client.verifyEmail({
+				query: { token: verificationToken },
+				fetchOptions: { headers: firstUseHeaders },
+			});
+			expect(secondResult.error?.code).toBe("TOKEN_ALREADY_USED");
+		});
+	});
+
+	it("should not send side-effect emails when a token is reused", async () => {
+		const sendEmailMock = vi.fn();
+		let capturedToken: string;
+
+		const { client, auth, signInWithTestUser, cookieSetter, db, testUser } =
+			await getTestInstance({
+				emailAndPassword: { enabled: true },
+				emailVerification: {
+					async sendVerificationEmail({ token: t }) {
+						capturedToken = t;
+						sendEmailMock("verification");
+					},
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+						async sendChangeEmailConfirmation(data) {
+							capturedToken = data.token;
+							sendEmailMock("confirmation");
+						},
+					},
+				},
+			});
+
+		await db.update({
+			model: "user",
+			update: { emailVerified: true },
+			where: [{ field: "email", value: testUser.email }],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async (headers) => {
+			// Triggering change-email sends one confirmation email
+			await auth.api.changeEmail({
+				body: { newEmail: "no-side-effects@example.com" },
+				headers,
+			});
+			expect(sendEmailMock).toHaveBeenCalledTimes(1);
+			const confirmationToken = capturedToken;
+
+			// First use: consumes confirmation token, triggers verification email
+			const firstHeaders = new Headers();
+			await client.verifyEmail({
+				query: { token: confirmationToken },
+				fetchOptions: { onSuccess: cookieSetter(firstHeaders), headers },
+			});
+			expect(sendEmailMock).toHaveBeenCalledTimes(2);
+
+			// Reuse of confirmation token — must NOT trigger another email
+			await client.verifyEmail({
+				query: { token: confirmationToken },
+				fetchOptions: { headers },
+			});
+			expect(sendEmailMock).toHaveBeenCalledTimes(2); // still 2
+		});
+	});
+});
