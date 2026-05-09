@@ -167,190 +167,211 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					},
 					async () =>
 						runWithEndpointContext(internalContext, async () => {
-							const { beforeHooks, afterHooks } = getHooks(authContext);
-							const before = await runBeforeHooks(
-								internalContext,
-								beforeHooks,
-								endpoint,
-								operationId,
-							);
-							/**
-							 * If `before.context` is returned, it should
-							 * get merged with the original context
-							 */
-							if (
-								"context" in before &&
-								before.context &&
-								typeof before.context === "object"
-							) {
-								const { headers, ...rest } = before.context as {
-									headers: Headers;
-								};
+							const { beforeHooks, afterHooks, finallyHooks } =
+								getHooks(authContext);
+							try {
+								const before = await runBeforeHooks(
+									internalContext,
+									beforeHooks,
+									endpoint,
+									operationId,
+								);
 								/**
-								 * Headers should be merged differently
-								 * so the hook doesn't override the whole
-								 * header
+								 * If `before.context` is returned, it should
+								 * get merged with the original context
 								 */
-								if (headers) {
-									headers.forEach((value, key) => {
-										(internalContext.headers as Headers).set(key, value);
-									});
-								}
-								internalContext = defuReplaceArrays(rest, internalContext);
-							} else if (before) {
-								/* Return before hook response if it's anything other than a context return */
-								return shouldReturnResponse
-									? toResponse(before, {
-											headers: context?.headers,
-										})
-									: context?.returnHeaders
-										? {
-												headers: context?.headers,
-												response: before,
-											}
-										: before;
-							}
-
-							internalContext.asResponse = false;
-							internalContext.returnHeaders = true;
-							internalContext.returnStatus = true;
-							const result = (await runWithEndpointContext(
-								internalContext,
-								() =>
-									withSpan(
-										`handler ${route}`,
-										{
-											[ATTR_HTTP_ROUTE]: route,
-											[ATTR_OPERATION_ID]: operationId,
-										},
-										() => (endpoint as any)(internalContext as any),
-									),
-							).catch((e: any) => {
-								if (isAPIError(e)) {
+								if (
+									"context" in before &&
+									before.context &&
+									typeof before.context === "object"
+								) {
+									const { headers, ...rest } = before.context as {
+										headers: Headers;
+									};
 									/**
-									 * API Errors from response are caught
-									 * and returned to hooks.
-									 *
-									 * Headers come from two sources that must both
-									 * survive:
-									 * - `kAPIErrorHeaderSymbol`: ctx.responseHeaders
-									 *   accumulated via c.setCookie / c.setHeader
-									 *   before the throw.
-									 * - `e.headers`: explicit headers on the APIError
-									 *   (e.g. `location` from c.redirect).
-									 *
-									 * Start from the accumulated ctx headers, then
-									 * apply e.headers on top — appending `set-cookie`
-									 * and setting others — so explicit APIError
-									 * headers override while cookies accumulate.
+									 * Headers should be merged differently
+									 * so the hook doesn't override the whole
+									 * header
 									 */
-									const ctxHeaders = (
-										e as {
-											[kAPIErrorHeaderSymbol]?: Headers;
-										}
-									)[kAPIErrorHeaderSymbol];
-									const errHeaders = e.headers ? new Headers(e.headers) : null;
-									let headers: Headers | null = null;
-									if (ctxHeaders || errHeaders) {
-										headers = new Headers();
-										ctxHeaders?.forEach((value, key) => {
-											headers!.append(key, value);
-										});
-										errHeaders?.forEach((value, key) => {
-											if (key.toLowerCase() === "set-cookie") {
-												headers!.append(key, value);
-											} else {
-												headers!.set(key, value);
-											}
+									if (headers) {
+										headers.forEach((value, key) => {
+											(internalContext.headers as Headers).set(key, value);
 										});
 									}
-									return {
-										response: e,
-										status: e.statusCode,
-										headers,
-									};
+									internalContext = defuReplaceArrays(rest, internalContext);
+								} else if (before) {
+									/* Return before hook response if it's anything other than a context return */
+									return shouldReturnResponse
+										? toResponse(before, {
+												headers: context?.headers,
+											})
+										: context?.returnHeaders
+											? {
+													headers: context?.headers,
+													response: before,
+												}
+											: before;
 								}
-								throw e;
-							})) as {
-								headers: Headers;
-								response: any;
-								status: number;
-							};
 
-							//if response object is returned we skip after hooks and post processing
-							if (result && result instanceof Response) {
-								return result;
-							}
+								internalContext.asResponse = false;
+								internalContext.returnHeaders = true;
+								internalContext.returnStatus = true;
+								const result = (await runWithEndpointContext(
+									internalContext,
+									() =>
+										withSpan(
+											`handler ${route}`,
+											{
+												[ATTR_HTTP_ROUTE]: route,
+												[ATTR_OPERATION_ID]: operationId,
+											},
+											() => (endpoint as any)(internalContext as any),
+										),
+								).catch((e: any) => {
+									if (isAPIError(e)) {
+										/**
+										 * API Errors from response are caught
+										 * and returned to hooks.
+										 *
+										 * Headers come from two sources that must both
+										 * survive:
+										 * - `kAPIErrorHeaderSymbol`: ctx.responseHeaders
+										 *   accumulated via c.setCookie / c.setHeader
+										 *   before the throw.
+										 * - `e.headers`: explicit headers on the APIError
+										 *   (e.g. `location` from c.redirect).
+										 *
+										 * Start from the accumulated ctx headers, then
+										 * apply e.headers on top — appending `set-cookie`
+										 * and setting others — so explicit APIError
+										 * headers override while cookies accumulate.
+										 */
+										const ctxHeaders = (
+											e as {
+												[kAPIErrorHeaderSymbol]?: Headers;
+											}
+										)[kAPIErrorHeaderSymbol];
+										const errHeaders = e.headers
+											? new Headers(e.headers)
+											: null;
+										let headers: Headers | null = null;
+										if (ctxHeaders || errHeaders) {
+											headers = new Headers();
+											ctxHeaders?.forEach((value, key) => {
+												headers!.append(key, value);
+											});
+											errHeaders?.forEach((value, key) => {
+												if (key.toLowerCase() === "set-cookie") {
+													headers!.append(key, value);
+												} else {
+													headers!.set(key, value);
+												}
+											});
+										}
+										return {
+											response: e,
+											status: e.statusCode,
+											headers,
+										};
+									}
+									throw e;
+								})) as {
+									headers: Headers;
+									response: any;
+									status: number;
+								};
 
-							internalContext.context.returned = result.response;
-							internalContext.context.responseHeaders = result.headers;
+								//if response object is returned we skip after hooks and post processing
+								if (result && result instanceof Response) {
+									return result;
+								}
 
-							const after = await runAfterHooks(
-								internalContext,
-								afterHooks,
-								endpoint,
-								operationId,
-							);
+								internalContext.context.returned = result.response;
+								internalContext.context.responseHeaders = result.headers;
 
-							if (after.response) {
-								result.response = after.response;
-							}
+								const after = await runHookList(
+									internalContext,
+									afterHooks,
+									"after",
+									endpoint,
+									operationId,
+								);
 
-							if (
-								isAPIError(result.response) &&
-								shouldPublishLog(authContext.logger.level, "debug")
-							) {
-								// inherit stack from errorStack if debug mode is enabled
-								result.response.stack = result.response.errorStack;
-							}
+								if (after.response) {
+									result.response = after.response;
+								}
 
-							if (isAPIError(result.response) && !shouldReturnResponse) {
+								if (
+									isAPIError(result.response) &&
+									shouldPublishLog(authContext.logger.level, "debug")
+								) {
+									// inherit stack from errorStack if debug mode is enabled
+									result.response.stack = result.response.errorStack;
+								}
+
+								if (isAPIError(result.response) && !shouldReturnResponse) {
+									/**
+									 * Non-response path: we re-throw the raw APIError
+									 * to callers of `auth.api.*`. `result.headers`
+									 * holds the merged ctx + explicit headers (see
+									 * catch block above) — rewrite
+									 * `kAPIErrorHeaderSymbol` with the merged set so
+									 * downstream pipelines (e.g. better-call's
+									 * response builder, or an outer hook catch) see
+									 * the same headers we'd have written on the
+									 * response.
+									 */
+									if (result.headers) {
+										Object.defineProperty(
+											result.response,
+											kAPIErrorHeaderSymbol,
+											{
+												enumerable: false,
+												configurable: true,
+												writable: false,
+												value: result.headers,
+											},
+										);
+									}
+									throw result.response;
+								}
+
+								const response = shouldReturnResponse
+									? toResponse(result.response, {
+											headers: result.headers,
+											status: result.status,
+										})
+									: context?.returnHeaders
+										? context?.returnStatus
+											? {
+													headers: result.headers,
+													response: result.response,
+													status: result.status,
+												}
+											: {
+													headers: result.headers,
+													response: result.response,
+												}
+										: context?.returnStatus
+											? { response: result.response, status: result.status }
+											: result.response;
+								return response;
+							} finally {
 								/**
-								 * Non-response path: we re-throw the raw APIError
-								 * to callers of `auth.api.*`. `result.headers`
-								 * holds the merged ctx + explicit headers (see
-								 * catch block above) — rewrite
-								 * `kAPIErrorHeaderSymbol` with the merged set so
-								 * downstream pipelines (e.g. better-call's
-								 * response builder, or an outer hook catch) see
-								 * the same headers we'd have written on the
-								 * response.
+								 * Runs at the end of the request lifecycle even
+								 * when an earlier phase throws. Mirrors `try /
+								 * finally` so handlers observe the final
+								 * `responseHeaders` regardless of plugin
+								 * declaration order.
 								 */
-								if (result.headers) {
-									Object.defineProperty(
-										result.response,
-										kAPIErrorHeaderSymbol,
-										{
-											enumerable: false,
-											configurable: true,
-											writable: false,
-											value: result.headers,
-										},
-									);
-								}
-								throw result.response;
+								await runHookList(
+									internalContext,
+									finallyHooks,
+									"finally",
+									endpoint,
+									operationId,
+								);
 							}
-
-							const response = shouldReturnResponse
-								? toResponse(result.response, {
-										headers: result.headers,
-										status: result.status,
-									})
-								: context?.returnHeaders
-									? context?.returnStatus
-										? {
-												headers: result.headers,
-												response: result.response,
-												status: result.status,
-											}
-										: {
-												headers: result.headers,
-												response: result.response,
-											}
-									: context?.returnStatus
-										? { response: result.response, status: result.status }
-										: result.response;
-							return response;
 						}),
 				);
 			};
@@ -441,9 +462,10 @@ async function runBeforeHooks(
 	return { context: modifiedContext };
 }
 
-async function runAfterHooks(
+async function runHookList(
 	context: InternalContext,
 	hooks: Hook[],
+	hookType: "after" | "finally",
 	endpoint: Endpoint,
 	operationId: string,
 ) {
@@ -452,9 +474,9 @@ async function runAfterHooks(
 			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
 			const route = endpoint.path ?? "/:virtual";
 			const result = (await withSpan(
-				`hook after ${route} ${hookSource}`,
+				`hook ${hookType} ${route} ${hookSource}`,
 				{
-					[ATTR_HOOK_TYPE]: "after",
+					[ATTR_HOOK_TYPE]: hookType,
 					[ATTR_HTTP_ROUTE]: route,
 					[ATTR_CONTEXT]: hookSource,
 					[ATTR_OPERATION_ID]: operationId,
@@ -513,6 +535,7 @@ function getHooks(authContext: AuthContext) {
 	const plugins = authContext.options.plugins || [];
 	const beforeHooks: Hook[] = [];
 	const afterHooks: Hook[] = [];
+	const finallyHooks: Hook[] = [];
 	const beforeHookHandler = authContext.options.hooks?.before;
 	if (beforeHookHandler) {
 		hooksSourceWeakMap.set(beforeHookHandler, "user");
@@ -529,6 +552,14 @@ function getHooks(authContext: AuthContext) {
 			handler: afterHookHandler,
 		});
 	}
+	const finallyHookHandler = authContext.options.hooks?.finally;
+	if (finallyHookHandler) {
+		hooksSourceWeakMap.set(finallyHookHandler, "user");
+		finallyHooks.push({
+			matcher: () => true,
+			handler: finallyHookHandler,
+		});
+	}
 	const pluginBeforeHooks = plugins.flatMap((plugin) =>
 		(plugin.hooks?.before ?? []).map((h) => {
 			hooksSourceWeakMap.set(h.handler, `plugin:${plugin.id}`);
@@ -541,15 +572,23 @@ function getHooks(authContext: AuthContext) {
 			return h;
 		}),
 	);
+	const pluginFinallyHooks = plugins.flatMap((plugin) =>
+		(plugin.hooks?.finally ?? []).map((h) => {
+			hooksSourceWeakMap.set(h.handler, `plugin:${plugin.id}`);
+			return h;
+		}),
+	);
 
 	/**
 	 * Add plugin added hooks at last
 	 */
 	if (pluginBeforeHooks.length) beforeHooks.push(...pluginBeforeHooks);
 	if (pluginAfterHooks.length) afterHooks.push(...pluginAfterHooks);
+	if (pluginFinallyHooks.length) finallyHooks.push(...pluginFinallyHooks);
 
 	return {
 		beforeHooks,
 		afterHooks,
+		finallyHooks,
 	};
 }

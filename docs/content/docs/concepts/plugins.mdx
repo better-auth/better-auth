@@ -238,7 +238,11 @@ This will add an `age` field to the `user` table and all `user` returning endpoi
 
 ### Hooks
 
-Hooks are used to run code before or after an action is performed, either from a client or directly on the server. You can add hooks to the server by passing a `hooks` object, which should contain `before` and `after` properties.
+Hooks let you run code at three points in an endpoint's lifecycle, either from a client or directly on the server. Pass a `hooks` object containing any of `before`, `after`, or `finally` properties.
+
+* **`before`** runs before the endpoint handler. Use it to validate input, modify context, or short-circuit the request.
+* **`after`** runs after the endpoint handler succeeds. Use it to read or modify the response.
+* **`finally`** runs at the very end of the request, even when an earlier phase throws. Plugin declaration order does not affect when it runs. See the [Finally Hooks section in Hooks](/docs/concepts/hooks#finally-hooks) for the full semantic.
 
 ```ts title="plugin.ts"
 import { createAuthMiddleware } from "better-auth/api";
@@ -266,6 +270,12 @@ const myPlugin = () => {
                     return ctx.json({
                         message: "Hello World"
                     }) // if you want to modify the response
+                })
+            }],
+            finally: [{
+                matcher: () => true,
+                handler: createAuthMiddleware(async (ctx) => {
+                    // runs at the end of every request, even on error
                 })
             }]
         }

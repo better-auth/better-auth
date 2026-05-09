@@ -1,6 +1,6 @@
 ---
 title: Hooks
-description: Learn how to use before and after hooks to customize endpoint behavior, modify requests and responses, handle cookies, throw errors, access auth context, and run background tasks.
+description: Learn how to use before, after, and finally hooks to customize endpoint behavior, modify requests and responses, handle cookies, throw errors, access auth context, and run background tasks.
 ---
 
 Hooks in Better Auth let you "hook into" the lifecycle and execute custom logic. They provide a way to customize Better Auth's behavior without writing a full plugin.
@@ -91,6 +91,30 @@ export const auth = betterAuth({
     },
 });
 ```
+
+## Finally Hooks
+
+**Finally hooks** run at the end of every request, even when a `before` or `after` hook throws. They execute after all `before` and `after` hooks from every plugin, so plugin declaration order does not affect their timing. The handler receives no error argument and is invoked regardless of success or failure.
+
+Use them for pipeline-end side effects: incrementing metrics, finalizing telemetry spans, or syncing accumulated state into an external store.
+
+### Example: Count every request including failed ones
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+import { metrics } from "@/lib/metrics";
+
+export const auth = betterAuth({
+    hooks: {
+        finally: createAuthMiddleware(async (ctx) => {
+            metrics.increment("auth.request", { path: ctx.path });
+        }),
+    },
+});
+```
+
+If a finally hook itself throws, that error supersedes any earlier request error. Wrap the side effect in `try / catch` if you want finally-side failures to stay silent.
 
 ## Ctx
 
