@@ -1,7 +1,2 @@
-allowBuilds:
-  better-sqlite3: true
-
-overrides:
-  node-forge: ^1.4.0
-  picomatch@>=4: ^4.0.4
-  '@xmldom/xmldom': ^0.8.12
+onlyBuiltDependencies:
+  - better-sqlite3

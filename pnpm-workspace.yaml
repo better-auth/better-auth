@@ -4,6 +4,8 @@ packages:
   - e2e/**
   - test
 
+blockExoticSubdeps: true
+
 overrides:
   axios: <1.14.0
   node-forge: '>=1.4.0 <2'
@@ -50,26 +52,28 @@ catalogs:
     '@vitest/ui': ^4.1.5
     vitest: ^4.1.5
 
-allowBuilds:
-  '@parcel/watcher': true
-  '@prisma/client': true
-  '@prisma/engines': true
-  '@swc/core': true
-  '@tsparticles/engine': true
-  better-sqlite3: true
-  esbuild: true
-  lefthook: true
-  less: true
-  msw: true
-  prisma: true
-  protobufjs: true
-  sharp: true
-  workerd: true
-  electron: false
+ignoredBuiltDependencies:
+  - electron
 
 linkWorkspacePackages: true
 
 minimumReleaseAge: 0
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@swc/core'
+  - '@tsparticles/engine'
+  - better-sqlite3
+  - esbuild
+  - lefthook
+  - less
+  - msw
+  - prisma
+  - protobufjs
+  - sharp
+  - workerd
 
 patchedDependencies:
   '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch

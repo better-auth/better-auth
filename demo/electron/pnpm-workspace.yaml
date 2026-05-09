@@ -1,10 +1,4 @@
-allowBuilds:
-  electron: true
-  electron-winstaller: true
-  esbuild: true
-
-shamefullyHoist: true
-
-overrides:
-  '@xmldom/xmldom': ^0.8.12
-  tar: ^7.5.11
+onlyBuiltDependencies:
+  - electron
+  - electron-winstaller
+  - esbuild
