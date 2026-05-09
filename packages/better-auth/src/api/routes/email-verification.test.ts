@@ -745,14 +745,6 @@ describe("Email Change Token Single-Use Enforcement", async () => {
 				query: { token: confirmationToken },
 				fetchOptions: { headers },
 			});
-			console.log(
-				"[TEST DEBUG] secondResult.data:",
-				JSON.stringify(secondResult.data),
-			);
-			console.log(
-				"[TEST DEBUG] secondResult.error:",
-				JSON.stringify(secondResult.error),
-			);
 			expect(secondResult.error?.code).toBe("TOKEN_ALREADY_USED");
 		});
 	});

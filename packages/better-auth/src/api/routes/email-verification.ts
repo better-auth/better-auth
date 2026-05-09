@@ -337,27 +337,21 @@ export const verifyEmail = createAuthEndpoint(
 				parsed.requestType === "change-email-verification")
 		) {
 			const tokenIdentifier = await getTokenIdentifier(token);
-			console.log("[DEBUG] tokenIdentifier:", tokenIdentifier);
-			console.log("[DEBUG] requestType:", parsed.requestType);
 			const alreadyUsed =
 				await ctx.context.internalAdapter.findVerificationValue(
 					tokenIdentifier,
 				);
-			console.log("[DEBUG] alreadyUsed:", alreadyUsed);
 			if (alreadyUsed) {
-				console.log("[DEBUG] Rejecting reused token");
 				return redirectOnError(BASE_ERROR_CODES.TOKEN_ALREADY_USED);
 			}
-			const tombstone =
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: tokenIdentifier,
-					value: "used",
-					expiresAt: getDate(
-						ctx.context.options.emailVerification?.expiresIn ?? 3600,
-						"sec",
-					),
-				});
-			console.log("[DEBUG] tombstone written:", tombstone);
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: tokenIdentifier,
+				value: "used",
+				expiresAt: getDate(
+					ctx.context.options.emailVerification?.expiresIn ?? 3600,
+					"sec",
+				),
+			});
 		}
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
