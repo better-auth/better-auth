@@ -41,12 +41,13 @@ export async function getTelemetryAuthConfig(
 		},
 		socialProviders: await Promise.all(
 			Object.keys(options.socialProviders || {}).map(async (key) => {
+				if (key === "requireEmailVerification") return {};
 				const p =
 					options.socialProviders?.[
 						key as keyof typeof options.socialProviders
 					];
 				if (!p) return {};
-				const provider = typeof p === "function" ? await p() : p;
+				const provider: any = typeof p === "function" ? await p() : p;
 				return {
 					id: key,
 					mapProfileToUser: !!provider.mapProfileToUser,
