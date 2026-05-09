@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.6.10
+
+### Patch Changes
+
+- [#9395](https://github.com/better-auth/better-auth/pull/9395) [`2220a6d`](https://github.com/better-auth/better-auth/commit/2220a6d6c25ebd24c8568131636389dc0c12f82b) Thanks [@cyphercodes](https://github.com/cyphercodes)! - Route Cloudflare Workers instrumentation imports to the pure no-op entry when OpenTelemetry is not installed.
+
 ## 1.6.9
 
 ### Patch Changes

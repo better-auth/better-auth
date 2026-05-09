@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.6.9",
+  "version": "1.6.10",
   "description": "Testing utilities for Better Auth adapter development",
   "type": "module",
   "license": "MIT",
