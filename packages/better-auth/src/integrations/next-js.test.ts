@@ -160,4 +160,69 @@ describe("next-js integration", () => {
 
 		expect(session).not.toBeNull();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8911
+	 */
+	it("forwards cookies set by plugins ordered after nextCookies()", async () => {
+		const cookiesSet: Array<{ name: string; value: string }> = [];
+		const cookiesMock = vi.fn(async () => ({
+			set: vi.fn((name: string, value: string) => {
+				cookiesSet.push({ name, value });
+			}),
+			delete: vi.fn(),
+			get: vi.fn(),
+		}));
+
+		vi.doMock("next/headers.js", () => ({
+			cookies: cookiesMock,
+			headers: vi.fn(async () => new Headers()),
+		}));
+
+		const [{ getTestInstance }, { nextCookies }, { createAuthMiddleware }] =
+			await Promise.all([
+				import("../test-utils/test-instance"),
+				import("./next-js"),
+				import("@better-auth/core/api"),
+			]);
+
+		const lateCookieName = "late-plugin-cookie";
+		const lateCookieValue = "late-value";
+		const lateCookiePlugin = {
+			id: "late-cookie",
+			hooks: {
+				after: [
+					{
+						matcher: () => true,
+						handler: createAuthMiddleware(async (ctx) => {
+							ctx.setCookie(lateCookieName, lateCookieValue);
+						}),
+					},
+				],
+			},
+		};
+
+		const { auth, testUser } = await getTestInstance({
+			plugins: [nextCookies(), lateCookiePlugin],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		const setCookieHeaders = signInRes.headers.getSetCookie();
+		const lateInResponseHeaders = setCookieHeaders.some((c) =>
+			c.includes(lateCookieName),
+		);
+		expect(lateInResponseHeaders).toBe(true);
+
+		const lateInCookieStore = cookiesSet.some(
+			(c) => c.name === lateCookieName && c.value === lateCookieValue,
+		);
+		expect(lateInCookieStore).toBe(true);
+	});
 });

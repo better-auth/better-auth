@@ -3,7 +3,6 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
-import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
 export function toNextJsHandler(
 	auth:
@@ -25,8 +24,6 @@ export function toNextJsHandler(
 }
 
 export const nextCookies = () => {
-	let hasWarned = false;
-
 	return {
 		id: "next-cookies",
 		version: PACKAGE_VERSION,
@@ -37,10 +34,6 @@ export const nextCookies = () => {
 						return ctx.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (!hasWarned) {
-							warnIfCookiePluginNotLast(ctx.context, "next-cookies");
-							hasWarned = true;
-						}
 						// Real HTTP requests (via router) set cookies through
 						// response headers -- no need to skip refresh.
 						if ("_flag" in ctx && ctx._flag === "router") {
@@ -74,50 +67,48 @@ export const nextCookies = () => {
 					}),
 				},
 			],
-			after: [
+			finally: [
 				{
-					matcher(ctx) {
+					matcher() {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
-						if (returned instanceof Headers) {
-							const setCookies = returned?.get("set-cookie");
-							if (!setCookies) return;
-							const parsed = parseSetCookieHeader(setCookies);
-							let cookieHelper: Awaited<
-								ReturnType<typeof import("next/headers.js").cookies>
-							>;
-							try {
-								const { cookies } = await import("next/headers.js");
-								cookieHelper = await cookies();
-							} catch (error) {
-								if (
-									error instanceof Error &&
-									(error.message.startsWith(
-										"`cookies` was called outside a request scope.",
-									) ||
-										error.message.includes("Cannot find module"))
-								) {
-									// Monorepo workspaces outside of Next.js hit this path.
-									// @see https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
-									return;
-								}
-								throw error;
+						const returned = ctx.context.responseHeaders;
+						if (!(returned instanceof Headers)) return;
+						const setCookies = returned.get("set-cookie");
+						if (!setCookies) return;
+						const parsed = parseSetCookieHeader(setCookies);
+						let cookieHelper: Awaited<
+							ReturnType<typeof import("next/headers.js").cookies>
+						>;
+						try {
+							const { cookies } = await import("next/headers.js");
+							cookieHelper = await cookies();
+						} catch (error) {
+							if (
+								error instanceof Error &&
+								(error.message.startsWith(
+									"`cookies` was called outside a request scope.",
+								) ||
+									error.message.includes("Cannot find module"))
+							) {
+								// Monorepo workspaces outside of Next.js hit this path.
+								// @see https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
+								return;
 							}
-							parsed.forEach((value, key) => {
-								if (!key) return;
-								try {
-									cookieHelper.set(key, value.value, toCookieOptions(value));
-								} catch {
-									// this will fail if the cookie is being set on server component
-								}
-							});
-							return;
+							throw error;
 						}
+						parsed.forEach((value, key) => {
+							if (!key) return;
+							try {
+								cookieHelper.set(key, value.value, toCookieOptions(value));
+							} catch {
+								// this will fail if the cookie is being set on server component
+							}
+						});
 					}),
 				},
 			],

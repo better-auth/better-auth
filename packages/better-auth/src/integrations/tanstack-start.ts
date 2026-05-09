@@ -2,7 +2,6 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
-import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
 /**
  * TanStack Start cookie plugin for React.
@@ -22,43 +21,33 @@ import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
  * ```
  */
 export const tanstackStartCookies = () => {
-	let hasWarned = false;
-
 	return {
 		id: "tanstack-start-cookies",
 		version: PACKAGE_VERSION,
 		hooks: {
-			after: [
+			finally: [
 				{
-					matcher(ctx) {
+					matcher() {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (!hasWarned) {
-							warnIfCookiePluginNotLast(ctx.context, "tanstack-start-cookies");
-							hasWarned = true;
-						}
-						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
-						if (returned instanceof Headers) {
-							const setCookies = returned?.get("set-cookie");
-							if (!setCookies) return;
-							const parsed = parseSetCookieHeader(setCookies);
-							const { setCookie } = await import(
-								"@tanstack/react-start/server"
-							);
-							parsed.forEach((value, key) => {
-								if (!key) return;
-								try {
-									setCookie(key, value.value, toCookieOptions(value));
-								} catch {
-									// this will fail if the cookie is being set on server component
-								}
-							});
-							return;
-						}
+						const returned = ctx.context.responseHeaders;
+						if (!(returned instanceof Headers)) return;
+						const setCookies = returned.get("set-cookie");
+						if (!setCookies) return;
+						const parsed = parseSetCookieHeader(setCookies);
+						const { setCookie } = await import("@tanstack/react-start/server");
+						parsed.forEach((value, key) => {
+							if (!key) return;
+							try {
+								setCookie(key, value.value, toCookieOptions(value));
+							} catch {
+								// this will fail if the cookie is being set on server component
+							}
+						});
 					}),
 				},
 			],
