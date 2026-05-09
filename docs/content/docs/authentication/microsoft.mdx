@@ -39,6 +39,10 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
     ```
 
     **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
+
+    <Callout type="warn">
+      Entra does not emit the `email` claim for managed users by default, and the value is [tenant-mutable and never verified by Microsoft](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference); it must not be used for authorization decisions. Request `email` as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) for managed users, and use `profile.oid` (plus `profile.tid` when correlating across tenants) as the stable identity anchor. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the `mapProfileToUser` fallback.
+    </Callout>
   </Step>
 </Steps>
 

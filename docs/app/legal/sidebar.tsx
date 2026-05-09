@@ -36,14 +36,7 @@ export function LegalSidebar() {
 						<span className="text-[11px] uppercase tracking-wider">
 							{page.name}
 						</span>
-						<span
-							className={cn(
-								"text-[11px] font-mono transition-opacity",
-								active ? "opacity-100" : "opacity-0",
-							)}
-						>
-							→
-						</span>
+						{active && <span className="text-[11px] font-mono">→</span>}
 					</Link>
 				);
 			})}

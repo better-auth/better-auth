@@ -640,4 +640,47 @@ describe("Email Verification Secondary Storage", async () => {
 			);
 		});
 	});
+
+	it("should handle email case insensitivity when sending verification email while signed in", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth, signInWithUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				sendVerificationEmail,
+			},
+		});
+
+		const mixedCaseEmail = "Test.Email.Case@Example.COM";
+		const password = "password123";
+
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: mixedCaseEmail,
+				password,
+				name: "Test User",
+			},
+		});
+		expect(signUpResult.user.email).toBe(mixedCaseEmail.toLowerCase());
+		expect(signUpResult.user.emailVerified).toBe(false);
+
+		const { headers } = await signInWithUser(
+			mixedCaseEmail.toLowerCase(),
+			password,
+		);
+
+		const session = await auth.api.getSession({ headers });
+		expect(session).toBeTruthy();
+		expect(session?.user.email).toBe(mixedCaseEmail.toLowerCase());
+		expect(session?.user.emailVerified).toBe(false);
+
+		const result = await auth.api.sendVerificationEmail({
+			body: {
+				email: mixedCaseEmail.toUpperCase(),
+			},
+			headers,
+		});
+		expect(result.status).toBe(true);
+	});
 });
