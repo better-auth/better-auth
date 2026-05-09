@@ -21,9 +21,20 @@ import type {
 import type { OrganizationOptions } from "../types";
 
 const baseInvitationSchema = z.object({
-	email: z.string().meta({
-		description: "The email address of the user to invite",
-	}),
+	email: z
+		.string()
+		.meta({
+			description:
+				"The email address of the user to invite. Either email or phoneNumber must be provided.",
+		})
+		.optional(),
+	phoneNumber: z
+		.string()
+		.meta({
+			description:
+				"The phone number of the user to invite. Either email or phoneNumber must be provided.",
+		})
+		.optional(),
 	role: z
 		.union([
 			z.string().meta({
@@ -89,9 +100,14 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					body: {} as {
 						/**
 						 * The email address of the user
-						 * to invite
+						 * to invite. Either email or phoneNumber must be provided.
 						 */
-						email: string;
+						email?: string | undefined;
+						/**
+						 * The phone number of the user
+						 * to invite. Either email or phoneNumber must be provided.
+						 */
+						phoneNumber?: string | undefined;
 						/**
 						 * The role to assign to the user
 						 */
@@ -184,10 +200,20 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				);
 			}
 
-			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.email().safeParse(email);
-			if (!isValidEmail.success) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			const phoneNumber = ctx.body.phoneNumber || null;
+			const email = ctx.body.email?.toLowerCase() || null;
+
+			if (!email && !phoneNumber) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Either email or phoneNumber must be provided",
+				});
+			}
+
+			if (email) {
+				const isValidEmail = z.email().safeParse(email);
+				if (!isValidEmail.success) {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+				}
 			}
 
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
@@ -275,18 +301,27 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				);
 			}
 
-			const alreadyMember = await adapter.findMemberByEmail({
-				email: email,
-				organizationId: organizationId,
-			});
-			if (alreadyMember) {
+			const alreadyMemberByEmail = email
+				? await adapter.findMemberByEmail({
+						email,
+						organizationId,
+					})
+				: null;
+			const alreadyMemberByPhone = phoneNumber
+				? await adapter.findMemberByPhoneNumber({
+						phoneNumber,
+						organizationId,
+					})
+				: null;
+			if (alreadyMemberByEmail || alreadyMemberByPhone) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
 			const alreadyInvited = await adapter.findPendingInvitation({
-				email: email,
+				email,
+				phoneNumber,
 				organizationId: organizationId,
 			});
 			if (alreadyInvited.length && !ctx.body.resend) {
@@ -333,7 +368,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					expiresAt: newExpiresAt,
 				};
 
-				if (ctx.context.orgOptions.sendInvitationEmail) {
+				if (
+					ctx.context.orgOptions.sendInvitationEmail &&
+					updatedInvitation.email
+				) {
 					await ctx.context.runInBackgroundOrAwait(
 						ctx.context.orgOptions.sendInvitationEmail(
 							{
@@ -442,6 +480,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			const {
 				email: _,
+				phoneNumber: _ph,
 				role: __,
 				organizationId: ___,
 				resend: ____,
@@ -450,7 +489,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			let invitationData = {
 				role: roles,
-				email: email,
+				email,
+				phoneNumber,
 				organizationId: organizationId,
 				teamIds,
 				...(additionalFields ? additionalFields : {}),
@@ -482,7 +522,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				user: session.user,
 			});
 
-			if (ctx.context.orgOptions.sendInvitationEmail) {
+			if (ctx.context.orgOptions.sendInvitationEmail && invitation.email) {
 				await ctx.context.runInBackgroundOrAwait(
 					ctx.context.orgOptions.sendInvitationEmail(
 						{
@@ -573,7 +613,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			const isRecipient = invitation.phoneNumber
+				? (session.user as any).phoneNumber === invitation.phoneNumber
+				: invitation.email &&
+					invitation.email.toLowerCase() === session.user.email.toLowerCase();
+
+			if (!isRecipient) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -581,6 +626,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (
+				invitation.email &&
 				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
 				!session.user.emailVerified
 			) {
@@ -771,7 +817,12 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 					code: "INVITATION_NOT_FOUND",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			const isRecipientReject = invitation.phoneNumber
+				? (session.user as any).phoneNumber === invitation.phoneNumber
+				: invitation.email &&
+					invitation.email.toLowerCase() === session.user.email.toLowerCase();
+
+			if (!isRecipientReject) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -779,6 +830,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (
+				invitation.email &&
 				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
 				!session.user.emailVerified
 			) {
@@ -1036,7 +1088,12 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+			const isRecipientGet = invitation.phoneNumber
+				? (session.user as any).phoneNumber === invitation.phoneNumber
+				: invitation.email &&
+					invitation.email.toLowerCase() === session.user.email.toLowerCase();
+
+			if (!isRecipientGet) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
@@ -1223,15 +1280,33 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			}
 
 			const userEmail = session?.user.email || ctx.query?.email;
-			if (!userEmail) {
+			const userPhoneNumber = (session?.user as any)?.phoneNumber;
+
+			if (!userEmail && !userPhoneNumber) {
 				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "Missing session headers, or email query parameter.",
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
-			const invitations = await adapter.listUserInvitations(userEmail);
-			const pendingInvitations = invitations.filter(
+			// Fetch invitations by both email and phone number, then deduplicate
+			const emailInvitations = userEmail
+				? await adapter.listUserInvitations(userEmail, "email")
+				: [];
+			const phoneInvitations = userPhoneNumber
+				? await adapter.listUserInvitations(userPhoneNumber, "phoneNumber")
+				: [];
+
+			const seenIds = new Set<string>();
+			const allInvitations = [...emailInvitations, ...phoneInvitations].filter(
+				(inv) => {
+					if (seenIds.has(inv.id)) return false;
+					seenIds.add(inv.id);
+					return true;
+				},
+			);
+
+			const pendingInvitations = allInvitations.filter(
 				(inv) => inv.status === "pending",
 			);
 			return ctx.json(pendingInvitations);

@@ -917,7 +917,53 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			return invitations;
 		},
-		listUserInvitations: async (email: string) => {
+		findMemberByPhoneNumber: async (data: {
+			phoneNumber: string;
+			organizationId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const user = await adapter.findOne<User>({
+				model: "user",
+				where: [
+					{
+						field: "phoneNumber",
+						value: data.phoneNumber,
+					},
+				],
+			});
+			if (!user) {
+				return null;
+			}
+			const member = await adapter.findOne<InferMember<O, false>>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+					{
+						field: "userId",
+						value: user.id,
+					},
+				],
+			});
+			if (!member) {
+				return null;
+			}
+			return {
+				...member,
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					image: user.image,
+				},
+			};
+		},
+		listUserInvitations: async (
+			identifier: string,
+			identifierType: "email" | "phoneNumber" = "email",
+		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitations = await adapter.findMany<
 				InferInvitation<O, false> & {
@@ -925,7 +971,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				}
 			>({
 				model: "invitation",
-				where: [{ field: "email", value: email.toLowerCase() }],
+				where: [
+					{
+						field: identifierType,
+						value:
+							identifierType === "email"
+								? identifier.toLowerCase()
+								: identifier,
+					},
+				],
 				join: {
 					organization: true,
 				},
@@ -940,7 +994,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			user,
 		}: {
 			invitation: {
-				email: string;
+				email?: string | null;
+				phoneNumber?: string | null;
 				role: string;
 				organizationId: string;
 				teamIds: string[];
@@ -985,17 +1040,18 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return invitation;
 		},
 		findPendingInvitation: async (data: {
-			email: string;
+			email?: string | null;
+			phoneNumber?: string | null;
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const identifierWhere = data.phoneNumber
+				? { field: "phoneNumber", value: data.phoneNumber }
+				: { field: "email", value: data.email!.toLowerCase() };
 			const invitation = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
 				where: [
-					{
-						field: "email",
-						value: data.email.toLowerCase(),
-					},
+					identifierWhere,
 					{
 						field: "organizationId",
 						value: data.organizationId,

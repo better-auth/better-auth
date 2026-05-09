@@ -2839,7 +2839,8 @@ describe("Additional Fields", async () => {
 		type ExpectedInvitations = {
 			id: string;
 			organizationId: string;
-			email: string;
+			email: string | null;
+			phoneNumber: string | null;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			inviterId: string;
@@ -3038,7 +3039,8 @@ describe("Additional Fields", async () => {
 	let invitation: {
 		id: string;
 		organizationId: string;
-		email: string;
+		email: string | null;
+		phoneNumber: string | null;
 		role: "member" | "admin" | "owner";
 		status: InvitationStatus;
 		inviterId: string;
@@ -3131,7 +3133,8 @@ describe("Additional Fields", async () => {
 		type ExpectedResult = {
 			id: string;
 			organizationId: string;
-			email: string;
+			email: string | null;
+			phoneNumber: string | null;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			inviterId: string;
@@ -3165,7 +3168,8 @@ describe("Additional Fields", async () => {
 			invitation: {
 				id: string;
 				organizationId: string;
-				email: string;
+				email: string | null;
+				phoneNumber: string | null;
 				role: "member" | "admin" | "owner";
 				status: InvitationStatus;
 				inviterId: string;
@@ -3211,7 +3215,8 @@ describe("Additional Fields", async () => {
 		expectTypeOf<ResultInvitation>().toEqualTypeOf<{
 			id: string;
 			organizationId: string;
-			email: string;
+			email: string | null;
+			phoneNumber: string | null;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			createdAt: Date;
