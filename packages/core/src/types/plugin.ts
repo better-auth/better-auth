@@ -96,6 +96,15 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 					matcher: (context: HookEndpointContext) => boolean;
 					handler: AuthMiddleware;
 				}[];
+				/**
+				 * Runs at the end of the request lifecycle, even when an
+				 * earlier phase throws. Plugin declaration order does not
+				 * affect drain timing.
+				 */
+				finally?: {
+					matcher: (context: HookEndpointContext) => boolean;
+					handler: AuthMiddleware;
+				}[];
 		  }
 		| undefined;
 	/**

@@ -1566,6 +1566,11 @@ export type BetterAuthOptions = {
 				 * After a request is processed
 				 */
 				after?: AuthMiddleware;
+				/**
+				 * Runs at the end of the request lifecycle, even when an
+				 * earlier phase throws.
+				 */
+				finally?: AuthMiddleware;
 		  }
 		| undefined;
 	/**
