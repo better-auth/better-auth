@@ -33,7 +33,7 @@ function parseCookiesFromContext(
 	}
 
 	const cookies: Record<string, string> = {};
-	const pairs = cookieHeader.split("; ");
+	const pairs = cookieHeader.split(/;\s*/);
 
 	for (const pair of pairs) {
 		const [name, ...valueParts] = pair.split("=");
@@ -248,7 +248,7 @@ export function getChunkedCookie(
 	}
 
 	const cookies: Record<string, string> = {};
-	const pairs = cookieHeader.split("; ");
+	const pairs = cookieHeader.split(/;\s*/);
 	for (const pair of pairs) {
 		const [name, ...valueParts] = pair.split("=");
 		if (name && valueParts.length > 0) {

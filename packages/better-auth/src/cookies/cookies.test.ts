@@ -494,6 +494,18 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
+	it("should parse cookie headers without spaces after semicolons", () => {
+		const headers = new Headers({
+			cookie:
+				"better-auth.session_token=token-123;better-auth.session_data=data",
+		});
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		expect(getSessionCookie(request)).toBe("token-123");
+	});
+
 	describe.each([".", "-"])("with '%s' separator", (separator) => {
 		describe.each([
 			["", "regular"],
