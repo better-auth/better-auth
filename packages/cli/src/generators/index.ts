@@ -10,22 +10,15 @@ export const adapters = {
 	kysely: generateKyselySchema,
 };
 
-export const generateSchema = (opts: {
+export const generateSchema = async (opts: {
 	adapter: DBAdapter;
 	file?: string;
 	options: BetterAuthOptions;
 }) => {
 	const adapter = opts.adapter;
-	const generator =
-		adapter.id in adapters
-			? adapters[adapter.id as keyof typeof adapters]
-			: null;
-	if (generator) {
-		// generator from the built-in list above
-		return generator(opts);
-	}
+
+	// use the custom adapter's createSchema method if it exists
 	if (adapter.createSchema) {
-		// use the custom adapter's createSchema method
 		return adapter
 			.createSchema(opts.options, opts.file)
 			.then(({ code, path: fileName, overwrite }) => ({
@@ -35,7 +28,13 @@ export const generateSchema = (opts: {
 			}));
 	}
 
+	const generator = adapters[adapter.id as keyof typeof adapters] ?? null;
+	if (generator) {
+		// generator from the built-in list above
+		return await generator(opts);
+	}
+
 	throw new Error(
-		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement createSchema`,
+		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement the "createSchema" method on the adapter.`,
 	);
 };
