@@ -157,7 +157,7 @@ export async function validateApiKey({
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
 	if (success === false) {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("TOO_MANY_REQUESTS", {
 			message: message ?? undefined,
 			code: "RATE_LIMITED" as const,
 			details: {
