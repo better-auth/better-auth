@@ -8,6 +8,26 @@
   - @better-auth/core@1.7.0-beta.2
 
 ## 1.7.0-beta.1
+## 1.6.10
+
+### Patch Changes
+
+- Updated dependencies [[`2220a6d`](https://github.com/better-auth/better-auth/commit/2220a6d6c25ebd24c8568131636389dc0c12f82b)]:
+  - @better-auth/core@1.6.10
+
+## 1.6.9
+
+### Patch Changes
+
+- Updated dependencies [[`815ecf6`](https://github.com/better-auth/better-auth/commit/815ecf62b6f6c5bf656ab55da393ce63d7eed0a6)]:
+  - @better-auth/core@1.6.9
+
+## 1.6.8
+
+### Patch Changes
+
+- Updated dependencies [[`9aa8e63`](https://github.com/better-auth/better-auth/commit/9aa8e63de84549634216e13e407cf6d8aa61acc3)]:
+  - @better-auth/core@1.6.8
 
 ## 1.6.7
 

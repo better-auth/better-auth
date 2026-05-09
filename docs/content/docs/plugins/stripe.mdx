@@ -620,8 +620,8 @@ subscription: {
         // Called when a subscription is created outside the checkout flow (e.g. Stripe dashboard)
         await sendSubscriptionCreatedEmail(subscription.referenceId, plan.name);
     },
-    onSubscriptionUpdate: async ({ event, subscription }) => {
-        // Called when a subscription is updated
+    onSubscriptionUpdate: async ({ event, subscription, stripeSubscription }) => {
+        // Called when a subscription is updated. Use `stripeSubscription` for raw Stripe fields like `cancellation_details`.
         console.log(`Subscription ${subscription.id} updated`);
     },
     onSubscriptionCancel: async ({ event, subscription, stripeSubscription, cancellationDetails }) => {
@@ -847,18 +847,18 @@ stripe({
 
 ### Subscription Options
 
-| Option                     | Type                         | Description                                                                                                                   |
-| -------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                                   |
-| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                              |
-| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                                |
-| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                       |
-| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.         |
-| `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context. |
-| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.         |
-| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription }`.                                                    |
-| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.          |
-| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                |
+| Option                     | Type                         | Description                                                                                                                                                                |
+| -------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                                                                                |
+| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                                                                           |
+| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                                                                             |
+| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                                                                    |
+| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.                                                      |
+| `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context.                                              |
+| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.                                                      |
+| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription, stripeSubscription }`. Use `stripeSubscription` for raw Stripe fields like `cancellation_details`. |
+| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.                                                       |
+| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                                                             |
 
 #### Plan Configuration
 
@@ -974,6 +974,39 @@ To change the billing email after checkout, update it through the Stripe Dashboa
 ```ts
 await stripeClient.customers.update(organization.stripeCustomerId, {
     email: "billing@company.com"
+});
+```
+
+### Handling user deletion
+
+Organizations with active subscriptions are blocked from deletion automatically, but users are not. To mirror the same behavior on user deletion, throw from the [`beforeDelete`](/docs/concepts/users-accounts#callbacks) callback when a subscription is active:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+    user: {
+        deleteUser: {
+            enabled: true,
+            beforeDelete: async (user) => {
+                if (!user.stripeCustomerId) return;
+
+                for await (const sub of stripeClient.subscriptions.list({
+                    customer: user.stripeCustomerId,
+                    status: "all",
+                })) {
+                    if (["canceled", "incomplete", "incomplete_expired"].includes(sub.status)) continue;
+
+                    throw new APIError("BAD_REQUEST", {
+                        message: "Cancel your active subscription before deleting your account",
+                    });
+                    // Or cancel immediately: await stripeClient.subscriptions.cancel(sub.id);
+                    // Or at period end:      await stripeClient.subscriptions.update(sub.id, { cancel_at_period_end: true });
+                }
+            },
+        },
+    },
 });
 ```
 
