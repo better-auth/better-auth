@@ -106,7 +106,7 @@
       "deno": "./dist/instrumentation/index.mjs",
       "bun": "./dist/instrumentation/index.mjs",
       "edge": "./dist/instrumentation/pure.index.mjs",
-      "workerd": "./dist/instrumentation/index.mjs",
+      "workerd": "./dist/instrumentation/pure.index.mjs",
       "browser": "./dist/instrumentation/pure.index.mjs",
       "default": "./dist/instrumentation/index.mjs"
     }

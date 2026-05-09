@@ -29,6 +29,10 @@ description: Discord provider setup and usage.
         },
     })
     ```
+
+    <Callout>
+      Discord returns `email: null` for phone-only accounts, even with the `email` scope granted. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the recommended `mapProfileToUser` fallback.
+    </Callout>
   </Step>
 </Steps>
 

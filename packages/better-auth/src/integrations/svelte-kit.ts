@@ -3,6 +3,7 @@ import type { RequestEvent } from "@sveltejs/kit";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import { PACKAGE_VERSION } from "../version";
+import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
 export const toSvelteKitHandler = (auth: {
 	handler: (request: Request) => Response | Promise<Response>;
@@ -57,6 +58,8 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 export const sveltekitCookies = (
 	getRequestEvent: () => RequestEvent<any, any>,
 ) => {
+	let hasWarned = false;
+
 	return {
 		id: "sveltekit-cookies",
 		version: PACKAGE_VERSION,
@@ -67,6 +70,10 @@ export const sveltekitCookies = (
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (!hasWarned) {
+							warnIfCookiePluginNotLast(ctx.context, "sveltekit-cookies");
+							hasWarned = true;
+						}
 						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;

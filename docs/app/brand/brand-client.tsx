@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { brandAssetPaths, brandLogoPreviews } from "@/lib/brand-assets";
 
 const colorTokens = [
 	{ name: "background", label: "Background" },
@@ -58,29 +59,6 @@ const shadows = [
 	{ label: "md", token: "shadow-md" },
 	{ label: "lg", token: "shadow-lg" },
 	{ label: "xl", token: "shadow-xl" },
-];
-
-const logos = [
-	{
-		label: "Mark · Light",
-		src: "/branding/better-auth-logo-light.svg",
-		bg: "bg-white",
-	},
-	{
-		label: "Mark · Dark",
-		src: "/branding/better-auth-logo-dark.svg",
-		bg: "bg-black",
-	},
-	{
-		label: "Wordmark · Light",
-		src: "/branding/better-auth-logo-wordmark-light.svg",
-		bg: "bg-white",
-	},
-	{
-		label: "Wordmark · Dark",
-		src: "/branding/better-auth-logo-wordmark-dark.svg",
-		bg: "bg-black",
-	},
 ];
 
 export function BrandClient() {
@@ -180,7 +158,7 @@ function SideRail() {
 
 					<div className="flex items-center gap-3 pt-1">
 						<a
-							href="/branding/better-auth-brand-assets.zip"
+							href={brandAssetPaths.assetsZip}
 							className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-colors"
 						>
 							Download assets
@@ -761,7 +739,7 @@ function LogoBlock() {
 			description="Use the mark at 24px minimum. Prefer the wordmark when the brand needs to read at a distance."
 		>
 			<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-				{logos.map((l) => (
+				{brandLogoPreviews.map((l) => (
 					<a
 						key={l.src}
 						href={l.src}
@@ -769,14 +747,14 @@ function LogoBlock() {
 						className="border border-foreground/10 group"
 					>
 						<div
-							className={`h-28 w-full flex items-center justify-center ${l.bg}`}
+							className={`h-28 w-full flex items-center justify-center p-6 ${l.bg}`}
 						>
 							<Image
 								src={l.src}
 								alt={l.label}
 								width={120}
 								height={60}
-								className="max-h-16 w-auto"
+								className="max-h-12 w-auto max-w-full"
 							/>
 						</div>
 						<div className="flex items-baseline justify-between border-t border-foreground/10 px-3 py-2">

@@ -68,7 +68,7 @@ For OAuth apps, you don't have to do anything special (just follow the steps abo
 That's all! Now you can copy the Client ID and Client Secret of your app!
 
 <Callout>
-  If you get "email\_not\_found" error, it's because you selected a Github app & did not configure this part!
+  If you get an `email_not_found` error, it is most often because either (a) you created a GitHub App and did not grant the "Email addresses: Read-only" permission, or (b) the user has set their primary email to private, in which case `GET /user` returns `email: null`. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the recommended `mapProfileToUser` fallback; the user's private addresses are also available via [`/user/emails`](https://docs.github.com/en/rest/users/emails).
 </Callout>
 
 ### Why don't I have a refresh token?
