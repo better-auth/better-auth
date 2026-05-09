@@ -68,7 +68,7 @@ Before getting started, let’s review which WorkOS authentication features are 
 
     ### Email & Password
 
-    Enable Email & Password authentication as shown below. Since WorkOS verifies each user’s email by default, this setup is similar to the default behavior. You can adjust it if needed. For more information, see [here](/docs/authentication/email-password).
+    Enable Email & Password authentication as shown below. Since WorkOS verifies each user’s email by default, this setup is similar to the default behavior. You can adjust it if needed. For more information, see the [email/password authentication documentation](/docs/authentication/email-password).
 
     ```ts
     import { betterAuth } from "better-auth";
@@ -125,7 +125,7 @@ Before getting started, let’s review which WorkOS authentication features are 
 
     {/* cspell:disable-next-line */}
 
-    You probably used metadata in WorkOS. To preserve that metadata and the user id from WorkOS (e.g., user\_01KBT4BMFF7ASGRDD0WZ6W63FF), extend the `user` schema as shown below. Better Auth provides a more flexible way to store user data. For more information, see [here](/docs/concepts/database#extending-core-schema).
+    You probably used metadata in WorkOS. To preserve that metadata and the user id from WorkOS (e.g., user\_01KBT4BMFF7ASGRDD0WZ6W63FF), extend the `user` schema as shown below. Better Auth provides a more flexible way to store user data. For more information, see the [extending the core schema documentation](/docs/concepts/database#extending-core-schema).
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -148,7 +148,7 @@ Before getting started, let’s review which WorkOS authentication features are 
 
     ### Plugins
 
-    Refer to the [section](#before-we-begin) mapping WorkOS features to Better Auth. If a feature you used in WorkOS is available as a Better Auth plugin, add it to the plugin options. Better Auth provides a wider range of out-of-the-box features through plugins. For more information, see [here](/docs/concepts/plugins).
+    Refer to the [section](#before-we-begin) mapping WorkOS features to Better Auth. If a feature you used in WorkOS is available as a Better Auth plugin, add it to the plugin options. Better Auth provides a wider range of out-of-the-box features through plugins. For more information, see the [plugin documentation](/docs/concepts/plugins).
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -173,7 +173,7 @@ Before getting started, let’s review which WorkOS authentication features are 
   <Step>
     ## Generate Schema
 
-    Better Auth allows you to control your own database, and you can easily generate the appropriate schema for your auth instance using the CLI. For more information, see [here](/docs/concepts/cli).
+    Better Auth allows you to control your own database, and you can easily generate the appropriate schema for your auth instance using the CLI. For more information, see the [CLI documentation](/docs/concepts/cli).
 
     ### Default database adapter
 
@@ -479,7 +479,7 @@ Before getting started, let’s review which WorkOS authentication features are 
   <Step>
     ## Create Client Instance
 
-    This client instance includes a set of functions for interacting with the Better Auth server instance. For more information, see [here](/docs/concepts/client).
+    This client instance includes a set of functions for interacting with the Better Auth server instance. For more information, see the [client documentation](/docs/concepts/client).
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/react";
