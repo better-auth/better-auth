@@ -1,5 +1,13 @@
 # @better-auth/sso
 
+## 1.7.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [[`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671), [`523f95c`](https://github.com/better-auth/better-auth/commit/523f95c10db24b790bbd75fe85c86c34d3465267), [`729c00d`](https://github.com/better-auth/better-auth/commit/729c00d74c94f558893da1e3a9ee86451d1b23da)]:
+  - better-auth@1.7.0-beta.3
+  - @better-auth/core@1.7.0-beta.3
+
 ## 1.7.0-beta.2
 
 ### Patch Changes
@@ -75,6 +83,7 @@
   ### Improvements
   - Extracted shared `validateInResponseTo()` and `validateAudience()` into `packages/sso/src/saml/response-validation.ts`, eliminating ~160 lines of duplicated validation logic between the two ACS handlers.
   - Fixed `SAMLAssertionExtract` type to match samlify's actual extractor output shape.
+
 ## 1.6.10
 
 ### Patch Changes

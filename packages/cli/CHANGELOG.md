@@ -1,5 +1,18 @@
 # auth
 
+## 1.7.0-beta.3
+
+### Minor Changes
+
+- [#9501](https://github.com/better-auth/better-auth/pull/9501) [`526aa32`](https://github.com/better-auth/better-auth/commit/526aa322efd648cc2d2583897ab3d24ba565fa6f) Thanks [@bytaesu](https://github.com/bytaesu)! - The CLI now auto-detects auth configs that export the same instance as both a named export and the default export (e.g. `export const auth = betterAuth(...); export default auth;`). Previously such configs failed when no explicit `--config` path was passed.
+
+### Patch Changes
+
+- Updated dependencies [[`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671), [`523f95c`](https://github.com/better-auth/better-auth/commit/523f95c10db24b790bbd75fe85c86c34d3465267), [`729c00d`](https://github.com/better-auth/better-auth/commit/729c00d74c94f558893da1e3a9ee86451d1b23da)]:
+  - better-auth@1.7.0-beta.3
+  - @better-auth/core@1.7.0-beta.3
+  - @better-auth/telemetry@1.7.0-beta.3
+
 ## 1.7.0-beta.2
 
 ### Patch Changes
@@ -19,6 +32,7 @@
   - @better-auth/telemetry@1.7.0-beta.1
 
 ## 1.7.0-beta.0
+
 ## 1.6.10
 
 ### Patch Changes
