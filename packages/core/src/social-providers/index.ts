@@ -86,6 +86,13 @@ export const SocialProviderListEnum = z
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
+	/**
+	 * Require emails returned by social providers to be verified before a session
+	 * can be created. When unset, social sign-in follows
+	 * `emailAndPassword.requireEmailVerification`.
+	 */
+	requireEmailVerification?: boolean | undefined;
+} & {
 	[K in SocialProviderList[number]]?: AwaitableFunction<
 		Parameters<(typeof socialProviders)[K]>[0] & {
 			enabled?: boolean | undefined;

@@ -194,12 +194,15 @@ Most of the features of Better Auth will not work correctly.`,
 			(
 				Object.entries(
 					options.socialProviders || {},
-				) as unknown as Entries<SocialProviders>
+				) as Entries<SocialProviders>
 			).map(async ([key, originalConfig]) => {
-				const config =
+				if (key === "requireEmailVerification") {
+					return null;
+				}
+				const config: any =
 					typeof originalConfig === "function"
 						? await originalConfig()
-						: originalConfig;
+						: (originalConfig as any);
 				if (config == null) {
 					return null;
 				}
@@ -211,7 +214,12 @@ Most of the features of Better Auth will not work correctly.`,
 						`Social provider ${key} is missing clientId or clientSecret`,
 					);
 				}
-				const provider = socialProviders[key](config as never);
+				const providerFactory =
+					socialProviders[key as keyof typeof socialProviders];
+				if (!providerFactory) {
+					return null;
+				}
+				const provider = providerFactory(config as never);
 				(provider as OAuthProvider).disableImplicitSignUp =
 					config.disableImplicitSignUp;
 				return provider as OAuthProvider;

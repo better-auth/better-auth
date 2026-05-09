@@ -13,6 +13,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { parseSetCookieHeader } from "../cookies";
 import { signJWT } from "../crypto";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
@@ -32,6 +33,177 @@ afterEach(() => {
 });
 
 afterAll(() => server.close());
+
+describe("oauth2 - require email verification before session creation", async () => {
+	async function setupOAuthCallback({
+		sendVerificationEmail = vi.fn(async () => {}),
+		sendOnSignIn,
+		emailPasswordRequireEmailVerification = true,
+		socialRequireEmailVerification,
+	}: {
+		sendVerificationEmail?: ((...args: any[]) => Promise<void>) | undefined;
+		sendOnSignIn?: boolean | undefined;
+		emailPasswordRequireEmailVerification?: boolean | undefined;
+		socialRequireEmailVerification?: boolean | undefined;
+	} = {}) {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					requireEmailVerification: socialRequireEmailVerification,
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+					},
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: emailPasswordRequireEmailVerification,
+				},
+				emailVerification: {
+					sendOnSignIn,
+					sendVerificationEmail,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+
+		async function callbackWithProfile(profile: {
+			email: string;
+			email_verified: boolean;
+			name: string;
+			sub: string;
+		}) {
+			server.use(
+				http.post("https://oauth2.googleapis.com/token", async () => {
+					const idToken = await signJWT(
+						{
+							...profile,
+							iat: 1234567890,
+							exp: 1234567890,
+							aud: "test",
+							iss: "test",
+						},
+						DEFAULT_SECRET,
+					);
+					return HttpResponse.json({
+						access_token: "test_access_token",
+						refresh_token: "test_refresh_token",
+						id_token: idToken,
+					});
+				}),
+			);
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+			let redirectLocation = "";
+			let setCookie = "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers,
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					redirectLocation = context.response.headers.get("location") || "";
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			});
+
+			return { redirectLocation, setCookie };
+		}
+
+		return { callbackWithProfile, ctx };
+	}
+
+	it("should block session creation for a new OAuth user with an unverified provider email", async () => {
+		const sendVerificationEmail = vi.fn(async () => {});
+		const { callbackWithProfile, ctx } = await setupOAuthCallback({
+			emailPasswordRequireEmailVerification: false,
+			sendVerificationEmail,
+			socialRequireEmailVerification: true,
+		});
+		const email = "oauth-unverified-new@example.com";
+
+		const { redirectLocation, setCookie } = await callbackWithProfile({
+			email,
+			email_verified: false,
+			name: "OAuth Unverified",
+			sub: "oauth_unverified_new",
+		});
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(
+			parseSetCookieHeader(setCookie).get("better-auth.session_token")?.value,
+		).toBeUndefined();
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user?.emailVerified).toBe(false);
+	});
+
+	it("should create a session for a new OAuth user with a verified provider email", async () => {
+		const sendVerificationEmail = vi.fn(async () => {});
+		const { callbackWithProfile } = await setupOAuthCallback({
+			emailPasswordRequireEmailVerification: false,
+			sendVerificationEmail,
+			socialRequireEmailVerification: true,
+		});
+
+		const { redirectLocation, setCookie } = await callbackWithProfile({
+			email: "oauth-verified-new@example.com",
+			email_verified: true,
+			name: "OAuth Verified",
+			sub: "oauth_verified_new",
+		});
+
+		expect(redirectLocation).toContain("/welcome");
+		expect(
+			parseSetCookieHeader(setCookie).get("better-auth.session_token")?.value,
+		).toBeDefined();
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should block session creation for an existing linked OAuth user whose email remains unverified", async () => {
+		const sendVerificationEmail = vi.fn(async () => {});
+		const { callbackWithProfile } = await setupOAuthCallback({
+			sendOnSignIn: true,
+			sendVerificationEmail,
+		});
+		const profile = {
+			email: "oauth-unverified-existing@example.com",
+			email_verified: false,
+			name: "OAuth Unverified Existing",
+			sub: "oauth_unverified_existing",
+		};
+
+		await callbackWithProfile(profile);
+		sendVerificationEmail.mockClear();
+
+		const { redirectLocation, setCookie } = await callbackWithProfile(profile);
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(
+			parseSetCookieHeader(setCookie).get("better-auth.session_token")?.value,
+		).toBeUndefined();
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+});
 
 describe("oauth2 - email verification on link", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({

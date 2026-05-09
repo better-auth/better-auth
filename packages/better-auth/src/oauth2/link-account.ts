@@ -17,6 +17,7 @@ export async function handleOAuthUserInfo(
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
+		requireEmailVerification?: boolean | undefined;
 	},
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
@@ -182,10 +183,14 @@ export async function handleOAuthUserInfo(
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, createdAccount);
 			}
+			const shouldSendVerificationEmail =
+				c.context.options.emailVerification?.sendOnSignUp ??
+				opts.requireEmailVerification ??
+				c.context.options.emailAndPassword?.requireEmailVerification;
 			if (
 				!userInfo.emailVerified &&
 				user &&
-				c.context.options.emailVerification?.sendOnSignUp &&
+				shouldSendVerificationEmail &&
 				c.context.options.emailVerification?.sendVerificationEmail
 			) {
 				const token = await createEmailVerificationToken(
@@ -227,6 +232,41 @@ export async function handleOAuthUserInfo(
 			error: "unable to create user",
 			data: null,
 			isRegister: false,
+		};
+	}
+
+	if (
+		(opts.requireEmailVerification ??
+			c.context.options.emailAndPassword?.requireEmailVerification) &&
+		!user.emailVerified
+	) {
+		if (
+			!isRegister &&
+			c.context.options.emailVerification?.sendOnSignIn &&
+			c.context.options.emailVerification?.sendVerificationEmail
+		) {
+			const token = await createEmailVerificationToken(
+				c.context.secret,
+				user.email,
+				undefined,
+				c.context.options.emailVerification?.expiresIn,
+			);
+			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+			await c.context.runInBackgroundOrAwait(
+				c.context.options.emailVerification.sendVerificationEmail(
+					{
+						user,
+						url,
+						token,
+					},
+					c.request,
+				),
+			);
+		}
+		return {
+			error: "email not verified",
+			data: null,
+			isRegister,
 		};
 	}
 

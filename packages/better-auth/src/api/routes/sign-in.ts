@@ -315,6 +315,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 						provider.disableSignUp,
+					requireEmailVerification:
+						c.context.options.socialProviders?.requireEmailVerification ??
+						c.context.options.emailAndPassword?.requireEmailVerification,
 				});
 				if (data.error) {
 					throw APIError.from("UNAUTHORIZED", {
