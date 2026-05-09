@@ -1260,6 +1260,17 @@ describe("response headers on APIError", async () => {
 				);
 			},
 		),
+		setCookieThenRedirect: createAuthEndpoint(
+			"/set-cookie-then-redirect",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				c.setCookie("session", "", { maxAge: 0 });
+				c.setCookie("session_data", "", { maxAge: 0 });
+				throw c.redirect("/dashboard");
+			},
+		),
 	};
 
 	const authContext = init({});
@@ -1304,5 +1315,19 @@ describe("response headers on APIError", async () => {
 		expect(merged).toBeInstanceOf(Headers);
 		expect(merged?.get("location")).toBe("/login");
 		expect(merged?.get("set-cookie") ?? "").toMatch(/(^|,\s*)session=;/);
+	});
+
+	it("does not duplicate Set-Cookie when c.redirect reuses ctx.responseHeaders as e.headers", async () => {
+		const response = await authEndpoints.setCookieThenRedirect({
+			asResponse: true,
+		});
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe("/dashboard");
+
+		const setCookies = response.headers.getSetCookie();
+		expect(setCookies).toHaveLength(2);
+		expect(setCookies.some((c) => c.startsWith("session="))).toBe(true);
+		expect(setCookies.some((c) => c.startsWith("session_data="))).toBe(true);
 	});
 });
