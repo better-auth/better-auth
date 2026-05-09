@@ -6,7 +6,7 @@ import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
 import { test } from "./_fixtures";
 
-describe("stripe", () => {
+describe("stripe subscription", () => {
 	const testUser = {
 		email: "test@email.com",
 		password: "password",
