@@ -1,5 +1,39 @@
 # @better-auth/oauth-provider
 
+## 1.6.10
+
+### Patch Changes
+
+- [#9344](https://github.com/better-auth/better-auth/pull/9344) [`408a307`](https://github.com/better-auth/better-auth/commit/408a3076bdd5b450c96bdad82be797ac8a8d3f83) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oauth-provider): bind consent-accept postLogin skip to the signing session
+
+  When `authorize` emits a signed redirect past the postLogin gate it now
+  records `ba_pl=<sessionId>` in the signed authorization query. On consent
+  accept, `authorizeEndpoint` is called with `{ postLogin: true }` only when
+  the incoming signed query's marker matches the current session's id;
+  otherwise it re-enters `authorize` with `postLogin.shouldRedirect` still
+  enforced. Resolves the post-consent bounce back to the postLogin page for
+  `setActive`-driven flows, blocks a direct POST to `/oauth2/consent` with
+  a pre-postLogin signed query from skipping `shouldRedirect`, and prevents
+  a different or newly logged-in session from re-using another session's
+  marker to skip `shouldRedirect`.
+
+- [#9389](https://github.com/better-auth/better-auth/pull/9389) [`f7bc1c7`](https://github.com/better-auth/better-auth/commit/f7bc1c73490d657a8ffa92a58ecfa9d8403d4fda) Thanks [@zllovesuki](https://github.com/zllovesuki)! - Add indexes to OAuth provider foreign-key fields in generated schemas.
+
+- [#9344](https://github.com/better-auth/better-auth/pull/9344) [`408a307`](https://github.com/better-auth/better-auth/commit/408a3076bdd5b450c96bdad82be797ac8a8d3f83) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(oauth-provider): complete stale `prompt=login consent` continuations after forced login
+
+  Consent continuations now carry the signed authorization request issue time and
+  only clear a lingering `login` prompt when the active session was created for
+  that request. This preserves forced reauthentication semantics while avoiding
+  the loop where a completed reauthentication is sent back to `/login`.
+
+- [#9406](https://github.com/better-auth/better-auth/pull/9406) [`d427d1d`](https://github.com/better-auth/better-auth/commit/d427d1dba91db8861d935ca5838f49eb7e617f67) Thanks [@cyphercodes](https://github.com/cyphercodes)! - Export OAuth provider helper types used by public declarations so downstream declaration emit can name auth instances portably.
+
+- [#9324](https://github.com/better-auth/better-auth/pull/9324) [`6b03a45`](https://github.com/better-auth/better-auth/commit/6b03a45a14d905aa070068290adfedfd4c5f4e2d) Thanks [@dvanmali](https://github.com/dvanmali)! - Make `sessionId` optional in refresh token types to match the refresh token schema.
+
+- Updated dependencies [[`1e0f26d`](https://github.com/better-auth/better-auth/commit/1e0f26d4c83608d14a533f33458ade0f8504fd16), [`8c1e917`](https://github.com/better-auth/better-auth/commit/8c1e91757d91d103c332e90201c39ce5892c37e8), [`b2d655c`](https://github.com/better-auth/better-auth/commit/b2d655c77c7c627ada17456d1de106fdce6fa18e), [`09f1327`](https://github.com/better-auth/better-auth/commit/09f1327acb9c6bbfeb272dc62c7013172cf33153), [`906b7b3`](https://github.com/better-auth/better-auth/commit/906b7b34a710d49798e166395da2bcd2be13ef46), [`e9c978e`](https://github.com/better-auth/better-auth/commit/e9c978e2af9e61d35f50fd040305cbb8fdda32ba), [`e71aad3`](https://github.com/better-auth/better-auth/commit/e71aad3b6d67502cfb770fa8890f3ab58c537114), [`80a655d`](https://github.com/better-auth/better-auth/commit/80a655d271dcae5f785a70f13be60f80fb828cf1), [`15ff28a`](https://github.com/better-auth/better-auth/commit/15ff28a957a18df8ecd2aa08d66b94c91ae9a6a4), [`88a7c67`](https://github.com/better-auth/better-auth/commit/88a7c678f4db3f7da580d53071b2595b92354a45), [`9a7b51d`](https://github.com/better-auth/better-auth/commit/9a7b51d0d3dfbc6b2697fe5f9edd0bb480bdf89b), [`1b25902`](https://github.com/better-auth/better-auth/commit/1b259024dcd1bbbc08559ee057f22c01929a72a7), [`cf59136`](https://github.com/better-auth/better-auth/commit/cf591360e72a8d01741618cd61cdeea84cf8398a), [`a597ee0`](https://github.com/better-auth/better-auth/commit/a597ee01ed4e6d85aba5ee9f15100acc578390d9), [`fc02ced`](https://github.com/better-auth/better-auth/commit/fc02cedb708e2b5987a177539a903cc35155a426), [`9f1ef1f`](https://github.com/better-auth/better-auth/commit/9f1ef1f7e5500e0b3dbe2a18e25e3519847cd7a9), [`36ef808`](https://github.com/better-auth/better-auth/commit/36ef808c6cedec6eeb9a3a4e6790e0ab46d96ff3), [`c1336c5`](https://github.com/better-auth/better-auth/commit/c1336c563d45f93ca3fd4da4e6c767fc267d86d0), [`3a9a2c3`](https://github.com/better-auth/better-auth/commit/3a9a2c37eeab1d0c98845a47642d4dc27fe54ceb), [`fde0432`](https://github.com/better-auth/better-auth/commit/fde043207ef3d5a5e1f74aa5ddabf77d523d52d4), [`2220a6d`](https://github.com/better-auth/better-auth/commit/2220a6d6c25ebd24c8568131636389dc0c12f82b)]:
+  - better-auth@1.6.10
+  - @better-auth/core@1.6.10
+
 ## 1.6.9
 
 ### Patch Changes
