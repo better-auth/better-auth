@@ -227,7 +227,7 @@ export const auth = betterAuth({
 
 Better Auth supports various database configurations including [PostgreSQL](/docs/adapters/postgresql), [MySQL](/docs/adapters/mysql), and [SQLite](/docs/adapters/sqlite).
 
-Read more about databases [here](/docs/concepts/database).
+Read more about [databases](/docs/concepts/database).
 
 ## `secondaryStorage`
 
@@ -244,7 +244,7 @@ export const auth = betterAuth({
 })
 ```
 
-Read more about secondary storage [here](/docs/concepts/database#secondary-storage).
+Read more about [secondary storage](/docs/concepts/database#secondary-storage).
 
 ## `emailVerification`
 
@@ -648,6 +648,26 @@ export const auth = betterAuth({
 * `backgroundTasks`: Configure background task handling for deferred operations
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 * OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+
+<h3 id="advanced-database"><code>database</code></h3>
+
+Set custom strategies for ID generation and findMany queries.
+
+* `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
+* `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	advanced: {
+		database: {
+			generateId: "uuid",
+			defaultFindManyLimit: 50,
+		},
+	},
+});
+```
 
 ### `backgroundTasks`
 

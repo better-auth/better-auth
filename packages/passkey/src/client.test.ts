@@ -144,4 +144,61 @@ describe("passkey client", () => {
 			credProps: true,
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9373
+	 */
+	it("returns an auth error without logging expected authentication ceremony failures", async () => {
+		mocks.startAuthentication.mockRejectedValueOnce(
+			new Error(
+				"Resident credentials or empty 'allowCredentials' lists are not supported at this time.",
+			),
+		);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-authenticate-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rpId: "example.com",
+						allowCredentials: [],
+						userVerification: "preferred",
+					},
+				};
+			}
+			if (path === "/passkey/verify-authentication") {
+				throw new Error("verification should not run after ceremony failure");
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		try {
+			const result = await actions.signIn.passkey({ autoFill: true });
+
+			expect(result).toEqual({
+				data: null,
+				error: {
+					code: "AUTH_CANCELLED",
+					message: "Auth cancelled",
+					status: 400,
+					statusText: "BAD_REQUEST",
+				},
+			});
+			expect(consoleError).not.toHaveBeenCalled();
+			expect(fetchMock).not.toHaveBeenCalledWith(
+				"/passkey/verify-authentication",
+				expect.anything(),
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
 });

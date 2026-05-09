@@ -301,7 +301,9 @@ async function createRefreshToken(
 	}
 
 	// Issue new refresh token
-	const refreshToken = await ctx.context.adapter.create({
+	const refreshToken = await ctx.context.adapter.create<
+		OAuthRefreshToken<Scope[]> & { id: string }
+	>({
 		model: "oauthRefreshToken",
 		data: {
 			token: await storeToken(opts.storeTokens, token, "refresh_token"),
