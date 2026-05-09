@@ -61,32 +61,30 @@ export const sveltekitCookies = (
 		id: "sveltekit-cookies",
 		version: PACKAGE_VERSION,
 		hooks: {
-			after: [
+			finally: [
 				{
 					matcher() {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
-						if (returned instanceof Headers) {
-							const setCookies = returned?.get("set-cookie");
-							if (!setCookies) return;
-							const event = getRequestEvent();
-							if (!event) return;
-							const parsed = parseSetCookieHeader(setCookies);
-
-							for (const [name, attributes] of parsed) {
-								try {
-									event.cookies.set(name, attributes.value, {
-										...toCookieOptions(attributes),
-										path: attributes.path || "/",
-									});
-								} catch {
-									// this will avoid any issue related to already streamed response
-								}
+						const returned = ctx.context.responseHeaders;
+						if (!(returned instanceof Headers)) return;
+						const setCookies = returned.get("set-cookie");
+						if (!setCookies) return;
+						const event = getRequestEvent();
+						if (!event) return;
+						const parsed = parseSetCookieHeader(setCookies);
+						for (const [name, attributes] of parsed) {
+							try {
+								event.cookies.set(name, attributes.value, {
+									...toCookieOptions(attributes),
+									path: attributes.path || "/",
+								});
+							} catch {
+								// this will avoid any issue related to already streamed response
 							}
 						}
 					}),
