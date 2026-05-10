@@ -3,6 +3,18 @@ import type Stripe from "stripe";
 import { test as baseTest, vi } from "vitest";
 import type { StripeOptions } from "../src/types";
 
+export const TEST_WEBHOOK_SECRET = "test_secret";
+
+export const TEST_PRICES = {
+	starter: "price_test_1",
+	premium: "price_test_2",
+} as const;
+
+export const TEST_LOOKUP_KEYS = {
+	starter: "lookup_key_123",
+	premium: "lookup_key_234",
+} as const;
+
 export function createStripeMock(
 	overrides: {
 		customerId?: string;
@@ -83,20 +95,20 @@ export function createStripeMock(
 function createStripeOptions(stripeMock: ReturnType<typeof createStripeMock>) {
 	return {
 		stripeClient: stripeMock as unknown as Stripe,
-		stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "test_secret",
+		stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 		createCustomerOnSignUp: true,
 		subscription: {
 			enabled: true,
 			plans: [
 				{
-					priceId: process.env.STRIPE_PRICE_ID_1 ?? "price_test_1",
+					priceId: TEST_PRICES.starter,
 					name: "starter",
-					lookupKey: "lookup_key_123",
+					lookupKey: TEST_LOOKUP_KEYS.starter,
 				},
 				{
-					priceId: process.env.STRIPE_PRICE_ID_2 ?? "price_test_2",
+					priceId: TEST_PRICES.premium,
 					name: "premium",
-					lookupKey: "lookup_key_234",
+					lookupKey: TEST_LOOKUP_KEYS.premium,
 				},
 			],
 		},

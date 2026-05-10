@@ -9,7 +9,7 @@ import {
 	createSubscriptionEvent,
 	createSubscriptionItem,
 } from "./_factories";
-import { test } from "./_fixtures";
+import { TEST_PRICES, test } from "./_fixtures";
 
 const testUser = {
 	email: "test@email.com",
@@ -69,7 +69,7 @@ describe("stripe webhook", () => {
 				data: [
 					createSubscriptionItem({
 						price: {
-							id: process.env.STRIPE_PRICE_ID_1,
+							id: TEST_PRICES.starter,
 						} as Stripe.Price,
 					}),
 				],
@@ -196,7 +196,7 @@ describe("stripe webhook", () => {
 				data: [
 					createSubscriptionItem({
 						price: {
-							id: process.env.STRIPE_PRICE_ID_1,
+							id: TEST_PRICES.starter,
 						} as Stripe.Price,
 					}),
 				],
@@ -447,7 +447,7 @@ describe("stripe webhook", () => {
 						data: [
 							{
 								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
+									id: TEST_PRICES.starter,
 									recurring: {
 										interval: "year",
 									},
@@ -549,7 +549,7 @@ describe("stripe webhook", () => {
 						data: [
 							{
 								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
+									id: TEST_PRICES.starter,
 									recurring: { interval: "year" },
 								},
 								quantity: 1,
@@ -659,7 +659,7 @@ describe("stripe webhook", () => {
 					items: {
 						data: [
 							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -751,7 +751,7 @@ describe("stripe webhook", () => {
 					items: {
 						data: [
 							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -987,7 +987,7 @@ describe("stripe webhook", () => {
 					items: {
 						data: [
 							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -1086,7 +1086,7 @@ describe("stripe webhook", () => {
 				data: [
 					createSubscriptionItem({
 						price: {
-							id: process.env.STRIPE_PRICE_ID_1,
+							id: TEST_PRICES.starter,
 						} as Stripe.Price,
 					}),
 				],
@@ -1169,7 +1169,7 @@ describe("stripe webhook", () => {
 					data: [
 						createSubscriptionItem({
 							price: {
-								id: process.env.STRIPE_PRICE_ID_1,
+								id: TEST_PRICES.starter,
 							} as Stripe.Price,
 						}),
 					],
@@ -1217,7 +1217,7 @@ describe("stripe webhook", () => {
 					data: [
 						createSubscriptionItem({
 							price: {
-								id: process.env.STRIPE_PRICE_ID_1,
+								id: TEST_PRICES.starter,
 							} as Stripe.Price,
 						}),
 					],
@@ -1253,7 +1253,7 @@ describe("stripe webhook", () => {
 					data: [
 						createSubscriptionItem({
 							price: {
-								id: process.env.STRIPE_PRICE_ID_1,
+								id: TEST_PRICES.starter,
 							} as Stripe.Price,
 						}),
 					],
@@ -1332,7 +1332,7 @@ describe("stripe webhook", () => {
 					data: [
 						createSubscriptionItem({
 							price: {
-								id: process.env.STRIPE_PRICE_ID_1,
+								id: TEST_PRICES.starter,
 							} as Stripe.Price,
 							quantity: 5, // Updated from 1 to 5
 						}),
@@ -1439,7 +1439,7 @@ describe("stripe webhook", () => {
 					items: {
 						data: [
 							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -1522,7 +1522,7 @@ describe("stripe webhook", () => {
 					items: {
 						data: [
 							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -1885,7 +1885,7 @@ describe("stripe webhook", () => {
 						data: [
 							createSubscriptionItem({
 								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
+									id: TEST_PRICES.starter,
 								} as Stripe.Price,
 							}),
 						],
@@ -2040,7 +2040,7 @@ describe("stripe webhook", () => {
 						data: [
 							createSubscriptionItem({
 								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
+									id: TEST_PRICES.starter,
 								} as Stripe.Price,
 							}),
 						],

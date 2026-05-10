@@ -4,7 +4,12 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
-import { test } from "./_fixtures";
+import {
+	TEST_LOOKUP_KEYS,
+	TEST_PRICES,
+	TEST_WEBHOOK_SECRET,
+	test,
+} from "./_fixtures";
 
 const testUser = {
 	email: "test@email.com",
@@ -16,7 +21,7 @@ describe("stripe checkout", () => {
 	describe("line item replacement on plan change", () => {
 		const buildLineItemOptions = (mock: Stripe): StripeOptions => ({
 			stripeClient: mock,
-			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
 				enabled: true,
@@ -282,7 +287,7 @@ describe("stripe checkout", () => {
 	describe("line item add/remove on asymmetric plan change", () => {
 		const buildAsymmetricOptions = (mock: Stripe): StripeOptions => ({
 			stripeClient: mock,
-			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
 				enabled: true,
@@ -524,7 +529,7 @@ describe("stripe checkout", () => {
 	describe("duplicate line item prevention", () => {
 		const buildAsymmetricOptions = (mock: Stripe): StripeOptions => ({
 			stripeClient: mock,
-			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
 				enabled: true,
@@ -790,7 +795,7 @@ describe("stripe checkout", () => {
 									data: [
 										{
 											price: {
-												id: process.env.STRIPE_PRICE_ID_1,
+												id: TEST_PRICES.starter,
 												recurring: { interval: "month" },
 											},
 											quantity: 1,
@@ -891,7 +896,9 @@ describe("stripe checkout", () => {
 			expect(updated?.status).toBe("active");
 			expect(updated?.stripeSubscriptionId).toBe(testSubscriptionId);
 			expect(updated?.periodStart).toBeInstanceOf(Date);
+			expect(updated?.periodStart?.getTime()).not.toBeNaN();
 			expect(updated?.periodEnd).toBeInstanceOf(Date);
+			expect(updated?.periodEnd?.getTime()).not.toBeNaN();
 		});
 
 		test("should redirect without update when checkoutSessionId is missing", async ({
@@ -979,7 +986,7 @@ describe("stripe checkout", () => {
 									data: [
 										{
 											price: {
-												id: process.env.STRIPE_PRICE_ID_1,
+												id: TEST_PRICES.starter,
 												recurring: { interval: "month" },
 											},
 											quantity: 1,
@@ -1730,15 +1737,15 @@ describe("stripe checkout", () => {
 	describe("getCheckoutSessionParams subscription_data merge", () => {
 		const buildTrialOptions = (mock: Stripe): StripeOptions => ({
 			stripeClient: mock,
-			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "test_secret",
+			stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 			createCustomerOnSignUp: true,
 			subscription: {
 				enabled: true,
 				plans: [
 					{
-						priceId: process.env.STRIPE_PRICE_ID_1 ?? "price_test_1",
+						priceId: TEST_PRICES.starter,
 						name: "starter",
-						lookupKey: "lookup_key_123",
+						lookupKey: TEST_LOOKUP_KEYS.starter,
 						freeTrial: { days: 14 },
 					},
 				],
@@ -1812,9 +1819,9 @@ describe("stripe checkout", () => {
 					enabled: true,
 					plans: [
 						{
-							priceId: process.env.STRIPE_PRICE_ID_1!,
+							priceId: TEST_PRICES.starter,
 							name: "starter",
-							lookupKey: "lookup_key_123",
+							lookupKey: TEST_LOOKUP_KEYS.starter,
 						},
 					],
 					getCheckoutSessionParams: async () => ({
@@ -1884,9 +1891,9 @@ describe("stripe checkout", () => {
 					enabled: true,
 					plans: [
 						{
-							priceId: process.env.STRIPE_PRICE_ID_1!,
+							priceId: TEST_PRICES.starter,
 							name: "starter",
-							lookupKey: "lookup_key_123",
+							lookupKey: TEST_LOOKUP_KEYS.starter,
 						},
 					],
 					getCheckoutSessionParams: async () => ({
@@ -1953,9 +1960,9 @@ describe("stripe checkout", () => {
 					enabled: true,
 					plans: [
 						{
-							priceId: process.env.STRIPE_PRICE_ID_1!,
+							priceId: TEST_PRICES.starter,
 							name: "starter",
-							lookupKey: "lookup_key_123",
+							lookupKey: TEST_LOOKUP_KEYS.starter,
 						},
 					],
 					getCheckoutSessionParams: async () => ({
@@ -2008,9 +2015,9 @@ describe("stripe checkout", () => {
 					enabled: true,
 					plans: [
 						{
-							priceId: process.env.STRIPE_PRICE_ID_1!,
+							priceId: TEST_PRICES.starter,
 							name: "starter",
-							lookupKey: "lookup_key_123",
+							lookupKey: TEST_LOOKUP_KEYS.starter,
 						},
 					],
 					getCheckoutSessionParams: async () => ({
@@ -2066,9 +2073,9 @@ describe("stripe checkout", () => {
 					enabled: true,
 					plans: [
 						{
-							priceId: process.env.STRIPE_PRICE_ID_1!,
+							priceId: TEST_PRICES.starter,
 							name: "starter",
-							lookupKey: "lookup_key_123",
+							lookupKey: TEST_LOOKUP_KEYS.starter,
 						},
 					],
 					getCheckoutSessionParams: async () => ({
@@ -2122,9 +2129,9 @@ describe("stripe checkout", () => {
 					enabled: true,
 					plans: [
 						{
-							priceId: process.env.STRIPE_PRICE_ID_1!,
+							priceId: TEST_PRICES.starter,
 							name: "starter",
-							lookupKey: "lookup_key_123",
+							lookupKey: TEST_LOOKUP_KEYS.starter,
 						},
 					],
 					getCheckoutSessionParams: async () => ({

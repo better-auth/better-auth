@@ -35,7 +35,7 @@ export function createSubscriptionItem(
 		created: now,
 		discounts: [],
 		metadata: {},
-		tax_rates: null,
+		tax_rates: [],
 		...overrides,
 	} as Stripe.SubscriptionItem;
 }

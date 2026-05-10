@@ -5,7 +5,7 @@ import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
 import { createSubscriptionEvent, createSubscriptionItem } from "./_factories";
-import { test } from "./_fixtures";
+import { TEST_PRICES, test } from "./_fixtures";
 
 describe("stripe subscription", () => {
 	const testUser = {
@@ -350,7 +350,7 @@ describe("stripe subscription", () => {
 						name: "starter",
 					},
 					{
-						priceId: process.env.STRIPE_PRICE_ID_2!,
+						priceId: TEST_PRICES.premium,
 						name: "premium",
 					},
 				],
@@ -1108,7 +1108,7 @@ describe("stripe subscription", () => {
 						data: [
 							{
 								id: "si_1",
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 							},
 						],
@@ -1345,7 +1345,7 @@ describe("stripe subscription", () => {
 						data: [
 							{
 								id: "si_test_123",
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -1856,7 +1856,7 @@ describe("stripe subscription", () => {
 							createSubscriptionItem({
 								id: "si_test_item",
 								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
+									id: TEST_PRICES.starter,
 								} as Stripe.Price,
 								current_period_start: now,
 								current_period_end: periodEnd,
@@ -2538,7 +2538,7 @@ describe("stripe subscription", () => {
 						data: [
 							{
 								id: "si_test_item",
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 							},
 						],
@@ -2618,7 +2618,7 @@ describe("stripe subscription", () => {
 						data: [
 							{
 								id: "si_premium_123",
-								price: { id: process.env.STRIPE_PRICE_ID_2 },
+								price: { id: TEST_PRICES.premium },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
@@ -2728,7 +2728,7 @@ describe("stripe subscription", () => {
 						data: [
 							{
 								id: "si_premium_456",
-								price: { id: process.env.STRIPE_PRICE_ID_2 },
+								price: { id: TEST_PRICES.premium },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
@@ -2827,7 +2827,7 @@ describe("stripe subscription", () => {
 						data: [
 							{
 								id: "si_starter_789",
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
@@ -2925,7 +2925,7 @@ describe("stripe subscription", () => {
 						data: [
 							{
 								id: "si_ext",
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: { id: TEST_PRICES.starter },
 								quantity: 1,
 							},
 						],

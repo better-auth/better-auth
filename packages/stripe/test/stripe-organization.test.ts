@@ -7,7 +7,13 @@ import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
 import { createSubscriptionEvent, createSubscriptionItem } from "./_factories";
-import { test as baseTest, createStripeMock } from "./_fixtures";
+import {
+	test as baseTest,
+	createStripeMock,
+	TEST_LOOKUP_KEYS,
+	TEST_PRICES,
+	TEST_WEBHOOK_SECRET,
+} from "./_fixtures";
 
 const test = baseTest.extend<{
 	stripeMock: ReturnType<typeof createStripeMock>;
@@ -26,21 +32,21 @@ const test = baseTest.extend<{
 const buildOrgStripeOptions = (mock: Stripe) =>
 	({
 		stripeClient: mock,
-		stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "test_secret",
+		stripeWebhookSecret: TEST_WEBHOOK_SECRET,
 		createCustomerOnSignUp: false,
 		organization: { enabled: true as const },
 		subscription: {
 			enabled: true as const,
 			plans: [
 				{
-					priceId: process.env.STRIPE_PRICE_ID_1 ?? "price_test_1",
+					priceId: TEST_PRICES.starter,
 					name: "starter",
-					lookupKey: "lookup_key_123",
+					lookupKey: TEST_LOOKUP_KEYS.starter,
 				},
 				{
-					priceId: process.env.STRIPE_PRICE_ID_2 ?? "price_test_2",
+					priceId: TEST_PRICES.premium,
 					name: "premium",
-					lookupKey: "lookup_key_234",
+					lookupKey: TEST_LOOKUP_KEYS.premium,
 				},
 			],
 			authorizeReference: async () => true,
@@ -644,7 +650,7 @@ describe("stripe - organization customer", () => {
 				data: [
 					createSubscriptionItem({
 						price: {
-							id: process.env.STRIPE_PRICE_ID_1,
+							id: TEST_PRICES.starter,
 							lookup_key: null,
 						} as Stripe.Price,
 						quantity: 5,
@@ -1006,7 +1012,7 @@ describe("stripe - organization customer", () => {
 						createSubscriptionItem({
 							price: {
 								id: "price_premium_123", // Different price ID
-								lookup_key: "lookup_key_234", // Matches premium plan
+								lookup_key: TEST_LOOKUP_KEYS.premium, // Matches premium plan
 							} as Stripe.Price,
 							quantity: 10,
 						}),
@@ -1145,7 +1151,7 @@ describe("stripe - organization customer", () => {
 					data: [
 						createSubscriptionItem({
 							price: {
-								id: process.env.STRIPE_PRICE_ID_1,
+								id: TEST_PRICES.starter,
 								lookup_key: null,
 							} as Stripe.Price,
 							quantity: 5,
@@ -1586,7 +1592,7 @@ describe("stripe - organization customer", () => {
 					data: [
 						createSubscriptionItem({
 							price: {
-								id: process.env.STRIPE_PRICE_ID_1,
+								id: TEST_PRICES.starter,
 								lookup_key: null,
 							} as Stripe.Price,
 							quantity: 5,
