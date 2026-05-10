@@ -196,6 +196,10 @@ Most of the features of Better Auth will not work correctly.`,
 					options.socialProviders || {},
 				) as unknown as Entries<SocialProviders>
 			).map(async ([key, originalConfig]) => {
+				// Skip non-provider keys such as `requireEmailVerification`
+				if (!(key in socialProviders)) {
+					return null;
+				}
 				const config =
 					typeof originalConfig === "function"
 						? await originalConfig()

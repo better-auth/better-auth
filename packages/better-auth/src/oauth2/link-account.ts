@@ -230,6 +230,17 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
+	if (
+		c.context.options.socialProviders?.requireEmailVerification &&
+		!user.emailVerified
+	) {
+		return {
+			error: "email_not_verified",
+			data: null,
+			isRegister: false,
+		};
+	}
+
 	const session = await c.context.internalAdapter.createSession(user.id);
 	if (!session) {
 		return {

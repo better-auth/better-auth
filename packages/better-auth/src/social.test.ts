@@ -2386,3 +2386,171 @@ describe("Railway Provider", async () => {
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
 	});
 });
+
+describe("socialProviders.requireEmailVerification", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9486
+	 *
+	 * Google returns user info via the id_token JWT embedded in the token
+	 * endpoint response — not via a separate userinfo HTTP call. We override
+	 * the token endpoint with mswServer.use() so the signed JWT carries the
+	 * email_verified value we want to test.
+	 */
+
+	async function makeGoogleIdToken(emailVerified: boolean, sub: string) {
+		const data: GoogleProfile = {
+			email: `${sub}@example.com`,
+			email_verified: emailVerified,
+			name: "Test User",
+			picture: "https://test.com/picture.png",
+			exp: 9999999999,
+			sub,
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "test",
+			given_name: "Test",
+			family_name: "User",
+		};
+		return signJWT(data, DEFAULT_SECRET);
+	}
+
+	it("should block sign-in when provider email is not verified and requireEmailVerification is true", async () => {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const idToken = await makeGoogleIdToken(false, "unverified-123");
+				return HttpResponse.json({
+					access_token: "test",
+					refresh_token: "test",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				requireEmailVerification: true,
+				google: { clientId: "test", clientSecret: "test" },
+			},
+			advanced: { disableOriginCheck: true },
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation: string | null = null;
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				redirectLocation = context.response.headers.get("location");
+			},
+		});
+
+		// Must redirect with error — no session cookie
+		expect(redirectLocation).toContain("email_not_verified");
+	});
+
+	it("should allow sign-in when provider email is verified and requireEmailVerification is true", async () => {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const idToken = await makeGoogleIdToken(true, "verified-456");
+				return HttpResponse.json({
+					access_token: "test",
+					refresh_token: "test",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				requireEmailVerification: true,
+				google: { clientId: "test", clientSecret: "test" },
+			},
+			advanced: { disableOriginCheck: true },
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let sessionCookie: string | undefined;
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				sessionCookie = cookies.get("better-auth.session_token")?.value;
+			},
+		});
+
+		expect(sessionCookie).toBeDefined();
+	});
+
+	it("should allow sign-in regardless of email_verified when requireEmailVerification is false (default)", async () => {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const idToken = await makeGoogleIdToken(
+					false,
+					"unverified-default-789",
+				);
+				return HttpResponse.json({
+					access_token: "test",
+					refresh_token: "test",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+			advanced: { disableOriginCheck: true },
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let sessionCookie: string | undefined;
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				sessionCookie = cookies.get("better-auth.session_token")?.value;
+			},
+		});
+
+		// Default: session is created even without email_verified
+		expect(sessionCookie).toBeDefined();
+	});
+});
