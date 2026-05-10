@@ -2448,17 +2448,24 @@ describe("socialProviders.requireEmailVerification", async () => {
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 		let redirectLocation: string | null = null;
 
+		let sessionCookieOnBlock: string | undefined;
+
 		await client.$fetch("/callback/google", {
 			query: { state, code: "test" },
 			headers,
 			method: "GET",
 			onError(context) {
 				redirectLocation = context.response.headers.get("location");
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				sessionCookieOnBlock = cookies.get("better-auth.session_token")?.value;
 			},
 		});
 
-		// Must redirect with error — no session cookie
+		// Must redirect with error and must NOT set a session cookie
 		expect(redirectLocation).toContain("email_not_verified");
+		expect(sessionCookieOnBlock).toBeUndefined();
 	});
 
 	it("should allow sign-in when provider email is verified and requireEmailVerification is true", async () => {
