@@ -49,9 +49,8 @@ function parseData(data: string | undefined) {
 async function resolveRequiredInput(options: {
 	email?: string | undefined;
 	password?: string | undefined;
-	name?: string | undefined;
 }) {
-	let { email, password, name } = options;
+	let { email, password } = options;
 
 	if (!email) {
 		const response = await prompts({
@@ -71,24 +70,12 @@ async function resolveRequiredInput(options: {
 		password = response.password;
 	}
 
-	if (!name) {
-		const response = await prompts({
-			type: "text",
-			name: "name",
-			message: "Admin name",
-			initial: "Admin",
-		});
-		name = response.name;
-	}
-
 	if (!email) exitWithError("Admin email is required.");
 	if (!password) exitWithError("Admin password is required.");
-	if (!name) exitWithError("Admin name is required.");
 
 	return {
 		email,
 		password,
-		name,
 	};
 }
 
@@ -100,7 +87,7 @@ export async function createAdminAction(opts: unknown) {
 			config: z.string().optional(),
 			email: z.string().optional(),
 			password: z.string().optional(),
-			name: z.string().optional(),
+			name: z.string().default("Admin"),
 			role: z.string().default("admin"),
 			data: z.string().optional(),
 			emailVerified: z.boolean().default(true),
@@ -147,7 +134,9 @@ export async function createAdminAction(opts: unknown) {
 		);
 	}
 
-	const { email, password, name } = await resolveRequiredInput(options);
+	if (!options.name) exitWithError("Admin name is required.");
+
+	const { email, password } = await resolveRequiredInput(options);
 	const emailResult = z.email().safeParse(email);
 	if (!emailResult.success) {
 		exitWithError("Invalid email address.");
@@ -157,22 +146,30 @@ export async function createAdminAction(opts: unknown) {
 		emailVerified: options.emailVerified,
 	};
 
-	const context = await auth.$context;
-	const totalUsers = await context.internalAdapter.countTotalUsers();
-	if (totalUsers > 0 && !options.force && !options.yes) {
-		const response = await prompts({
-			type: "confirm",
-			name: "confirmed",
-			message: `Found ${totalUsers} existing user${
-				totalUsers === 1 ? "" : "s"
-			}. Create an admin user anyway?`,
-			initial: false,
-		});
-		if (!response.confirmed) {
-			console.log("Create admin cancelled.");
-			process.exit(0);
-			return;
+	try {
+		const context = await auth.$context;
+		const totalUsers = await context.internalAdapter.countTotalUsers();
+		if (totalUsers > 0 && !options.force && !options.yes) {
+			const response = await prompts({
+				type: "confirm",
+				name: "confirmed",
+				message: `Found ${totalUsers} existing user${
+					totalUsers === 1 ? "" : "s"
+				}. Create an admin user anyway?`,
+				initial: false,
+			});
+			if (!response.confirmed) {
+				console.log("Create admin cancelled.");
+				process.exit(0);
+				return;
+			}
 		}
+	} catch (error) {
+		exitWithError(
+			`Failed to inspect existing users. Make sure your database is reachable and your Better Auth schema is migrated before running this command.${
+				error instanceof Error ? `\n${error.message}` : ""
+			}`,
+		);
 	}
 
 	try {
@@ -180,7 +177,7 @@ export async function createAdminAction(opts: unknown) {
 			body: {
 				email,
 				password,
-				name,
+				name: options.name,
 				role: options.role,
 				data,
 			},

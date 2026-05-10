@@ -15,6 +15,7 @@ describe("create-admin", () => {
 	let db: Database.Database;
 
 	beforeEach(() => {
+		vi.mocked(prompts).mockReset();
 		vi.spyOn(process, "exit").mockImplementation((code) => {
 			return code as never;
 		});
@@ -84,6 +85,23 @@ describe("create-admin", () => {
 		expect(signIn.user.email).toBe("admin@example.com");
 	});
 
+	it("uses Admin as the default name without prompting", async () => {
+		await setupAuth();
+
+		await createAdminAction({
+			cwd: process.cwd(),
+			config: "test/auth.ts",
+			email: "admin@example.com",
+			password: "secure-password",
+		});
+
+		const user = db
+			.prepare("SELECT name FROM user WHERE email = ?")
+			.get("admin@example.com") as { name: string };
+		expect(user.name).toBe("Admin");
+		expect(prompts).not.toHaveBeenCalled();
+	});
+
 	it("passes additional user data to the admin create-user API", async () => {
 		await setupAuth();
 
@@ -137,6 +155,49 @@ describe("create-admin", () => {
 				name: "Root Admin",
 			}),
 		).rejects.toThrow(/admin plugin is required/i);
+	});
+
+	it("returns a friendly error when existing-user inspection fails", async () => {
+		const adapter = {
+			id: "test",
+			create: vi.fn(),
+			findOne: vi.fn(),
+			findMany: vi.fn(),
+			count: vi.fn().mockRejectedValue(new Error("missing user table")),
+			update: vi.fn(),
+			updateMany: vi.fn(),
+			delete: vi.fn(),
+			deleteMany: vi.fn(),
+			transaction: vi.fn(async (callback: (adapter: unknown) => unknown) =>
+				callback(adapter),
+			),
+		} as any;
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: () => adapter,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [admin()],
+		});
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+
+		await expect(
+			createAdminAction({
+				cwd: process.cwd(),
+				config: "test/auth.ts",
+				email: "admin@example.com",
+				password: "secure-password",
+			}),
+		).rejects.toThrow(/Failed to inspect existing users/);
+		await expect(
+			createAdminAction({
+				cwd: process.cwd(),
+				config: "test/auth.ts",
+				email: "admin@example.com",
+				password: "secure-password",
+			}),
+		).rejects.toThrow(/missing user table/);
 	});
 
 	it("asks for confirmation when users already exist", async () => {
