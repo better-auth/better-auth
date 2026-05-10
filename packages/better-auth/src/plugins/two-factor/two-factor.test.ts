@@ -2349,9 +2349,14 @@ describe("twoFactorMethods in sign-in response", () => {
 });
 
 /**
- * @see https://github.com/better-auth/better-auth/issues/8627
+ * @see https://github.com/better-auth/better-auth/pull/9205
+ *
+ * 2FA enforcement is intentionally scoped to credential sign-in paths
+ * only. These tests lock that scope in so a future refactor does not
+ * accidentally broaden enforcement to non-credential sign-in flows
+ * without a dedicated release.
  */
-describe("2FA enforcement on non-credential sign-in paths", async () => {
+describe("2FA enforcement scope", async () => {
 	let magicLinkURL = "";
 	const { auth, signInWithTestUser, testUser } = await getTestInstance({
 		secret: DEFAULT_SECRET,
@@ -2370,7 +2375,7 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 		],
 	});
 
-	it("should enforce 2FA on magic-link sign-in", async () => {
+	it("should not challenge 2FA on magic-link sign-in", async () => {
 		const { headers } = await signInWithTestUser();
 		await auth.api.enableTwoFactor({
 			body: { password: testUser.password },
@@ -2385,23 +2390,22 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 
 		const url = new URL(magicLinkURL);
 		const token = url.searchParams.get("token")!;
-		const callbackURL = url.searchParams.get("callbackURL")!;
 
 		const verifyRes = await auth.api.magicLinkVerify({
-			query: { token, callbackURL },
+			query: { token },
 			headers: new Headers(),
 			asResponse: true,
 		});
 
 		const json = await verifyRes.json();
-		expect(json.twoFactorRedirect).toBe(true);
+		expect(json.twoFactorRedirect).toBeUndefined();
 	});
 
-	it("should not enforce 2FA on authenticated non-sign-in endpoints", async () => {
+	it("should not challenge 2FA on authenticated non-sign-in endpoints", async () => {
 		const {
-			auth: a,
+			auth: instance,
 			signInWithTestUser: signIn,
-			testUser: tu,
+			testUser: user,
 		} = await getTestInstance({
 			secret: DEFAULT_SECRET,
 			plugins: [
@@ -2411,20 +2415,20 @@ describe("2FA enforcement on non-credential sign-in paths", async () => {
 				}),
 			],
 		});
-		let { headers: h } = await signIn();
-		const enableRes = await a.api.enableTwoFactor({
-			body: { password: tu.password },
-			headers: h,
+		let { headers } = await signIn();
+		const enableRes = await instance.api.enableTwoFactor({
+			body: { password: user.password },
+			headers,
 			asResponse: true,
 		});
-		h = convertSetCookieToCookie(enableRes.headers);
+		headers = convertSetCookieToCookie(enableRes.headers);
 
-		const session = await a.api.getSession({ headers: h });
+		const session = await instance.api.getSession({ headers });
 		expect(session?.user.twoFactorEnabled).toBe(true);
 
-		const updateRes = await a.api.updateUser({
+		const updateRes = await instance.api.updateUser({
 			body: { name: "updated-name" },
-			headers: h,
+			headers,
 			asResponse: true,
 		});
 

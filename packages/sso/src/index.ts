@@ -1,7 +1,6 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
-import * as saml from "samlify";
 import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
@@ -25,6 +24,7 @@ import {
 	sloEndpoint,
 	spMetadata,
 } from "./routes/sso";
+import { saml } from "./samlify";
 
 export {
 	DEFAULT_CLOCK_SKEW_MS,

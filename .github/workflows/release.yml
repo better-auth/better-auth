@@ -177,8 +177,10 @@ jobs:
           fi
 
           # Count PR links in both files
-          RAW_COUNT=$(grep -coP '\[#\d+\]' "$RAW_PATH" || true)
-          FINAL_COUNT=$(grep -coP '\[#\d+\]' "$FINAL" || true)
+          RAW_COUNT=$(grep -coP '\[#\d+\]' "$RAW_PATH" 2>/dev/null || true)
+          RAW_COUNT=${RAW_COUNT:-0}
+          FINAL_COUNT=$(grep -coP '\[#\d+\]' "$FINAL" 2>/dev/null || true)
+          FINAL_COUNT=${FINAL_COUNT:-0}
 
           if [ "$FINAL_COUNT" -lt "$RAW_COUNT" ]; then
             echo "::warning::AI output has fewer PR links ($FINAL_COUNT) than raw ($RAW_COUNT). Falling back to raw notes."

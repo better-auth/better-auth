@@ -9,25 +9,16 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Icons } from "@/components/icons";
-import { ThemeToggle } from "@/components/theme-toggle";
 import type { ContributorInfo } from "@/lib/community-stats";
 import { cn } from "@/lib/utils";
 import {
-	AiNativeSection,
 	DatabaseSection,
+	IntegrationsSection,
 	PluginEcosystem,
 	ServerClientTabs,
 	SocialProvidersSection,
 } from "./framework-sections";
 import { TrustedBy } from "./trusted-by";
-
-const cliCommands = [
-	{ name: "npm", command: "npx auth init" },
-	{ name: "yarn", command: "yarn dlx auth init" },
-	{ name: "pnpm", command: "pnpm dlx auth init" },
-	{ name: "bun", command: "bunx auth init" },
-];
 
 const mcpCommands = [
 	{ name: "Cursor", command: "npx auth mcp --cursor" },
@@ -345,171 +336,35 @@ function InstallBlock() {
 												)}
 											</button>
 										) : (
-											<>
-												<button
-													onClick={() => {
-														if (copied) return;
-														setPmOpen(!pmOpen);
-													}}
-													className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors p-1"
-													aria-label="Copy command"
-												>
-													{copied ? (
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															viewBox="0 0 24 24"
-															className="h-4 w-4"
-														>
-															<path
-																fill="currentColor"
-																d="M9 16.17L4.83 12l-1.42 1.41L9 19L21 7l-1.41-1.41z"
-															/>
-														</svg>
-													) : (
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															viewBox="0 0 24 24"
-															className="h-4 w-4"
-														>
-															<path
-																fill="currentColor"
-																d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"
-															/>
-														</svg>
-													)}
-												</button>
-												{pmOpen && (
-													<>
-														<div
-															className="fixed inset-0 z-40"
-															role="button"
-															tabIndex={-1}
-															aria-label="Close dropdown"
-															onClick={() => setPmOpen(false)}
-															onKeyDown={(e) => {
-																if (e.key === "Escape") setPmOpen(false);
-															}}
+											<button
+												onClick={() => copy("npx auth init")}
+												className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors p-1"
+												aria-label="Copy command"
+											>
+												{copied ? (
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 24 24"
+														className="h-4 w-4"
+													>
+														<path
+															fill="currentColor"
+															d="M9 16.17L4.83 12l-1.42 1.41L9 19L21 7l-1.41-1.41z"
 														/>
-														<div className="absolute right-0 top-full mt-2 w-[138px] bg-white dark:bg-[#050505] border border-neutral-200 dark:border-white/[0.07] shadow-2xl shadow-black/10 dark:shadow-black/80 z-50 rounded-sm">
-															{cliCommands.map((pm, i) => (
-																<button
-																	key={pm.name}
-																	onClick={() => copy(pm.command)}
-																	className={cn(
-																		"flex items-center gap-2.5 w-full px-3 py-2 text-[12px] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.05] transition-all text-left",
-																		i < cliCommands.length - 1 &&
-																			"border-b border-neutral-100 dark:border-white/[0.06]",
-																	)}
-																>
-																	{pm.name === "npm" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 256 256"
-																		>
-																			<path
-																				fill="#C12127"
-																				d="M0 256V0h256v256z"
-																			/>
-																			<path
-																				fill="#FFF"
-																				d="M48 48h160v160h-32V80h-48v128H48z"
-																			/>
-																		</svg>
-																	)}
-																	{pm.name === "yarn" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 256 256"
-																		>
-																			<path
-																				fill="#368FB9"
-																				d="M128 0C57.328 0 0 57.328 0 128s57.328 128 128 128s128-57.328 128-128S198.672 0 128 0"
-																			/>
-																			<path
-																				fill="#FFF"
-																				d="M203.317 174.06c-7.907 1.878-11.91 3.608-21.695 9.983c-15.271 9.884-31.976 14.48-31.976 14.48s-1.383 2.076-5.387 3.015c-6.918 1.68-32.963 3.114-35.335 3.163c-6.376.05-10.28-1.63-11.367-4.25c-3.311-7.907 4.744-11.367 4.744-11.367s-1.779-1.087-2.817-2.076c-.939-.939-1.927-2.816-2.224-2.125c-1.235 3.015-1.878 10.379-5.189 13.69c-4.547 4.596-13.146 3.064-18.236.395c-5.585-2.965.395-9.933.395-9.933s-3.015 1.779-5.436-1.878c-2.175-3.36-4.2-9.094-3.657-16.16c.593-8.056 9.587-15.865 9.587-15.865s-1.581-11.91 3.608-24.117c4.695-11.12 17.347-20.065 17.347-20.065s-10.626-11.762-6.672-22.338c2.57-6.92 3.608-6.87 4.448-7.166c2.965-1.137 5.831-2.373 7.957-4.695c10.625-11.466 24.166-9.292 24.166-9.292s6.425-19.52 12.356-15.715c1.828 1.186 8.401 15.814 8.401 15.814s7.018-4.102 7.809-2.57c4.25 8.254 4.744 24.019 2.866 33.607c-3.163 15.814-11.07 24.315-14.233 29.652c-.741 1.236 8.5 5.14 14.332 21.3c5.387 14.777.593 27.182 1.433 28.566c.148.247.198.346.198.346s6.177.494 18.582-7.166c6.622-4.102 14.48-8.698 23.425-8.797c8.65-.149 9.094 9.983 2.57 11.564"
-																			/>
-																		</svg>
-																	)}
-																	{pm.name === "pnpm" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 256 256"
-																		>
-																			<path
-																				fill="#F9AD00"
-																				d="M0 0h77.37v77.37H0zm89.32 0h77.37v77.37H89.32zm89.31 0h77.37v77.37h-77.37zM89.32 89.32h77.37v77.37H89.32zm89.31 0h77.37v77.37h-77.37z"
-																			/>
-																			<path
-																				fill="#4E4E4E"
-																				d="M0 89.32h77.37v77.37H0zm0 89.31h77.37v77.37H0zm89.32 0h77.37v77.37H89.32zm89.31 0h77.37v77.37h-77.37z"
-																			/>
-																		</svg>
-																	)}
-																	{pm.name === "bun" && (
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 256 225"
-																		>
-																			<path
-																				fill="#FBF0DF"
-																				d="M234.937 114.066c0 49.288-50.779 89.243-113.418 89.243S8.101 163.354 8.101 114.066c0-30.558 19.443-57.552 49.32-73.56C87.3 24.498 105.9 8.101 121.52 8.101s28.97 13.384 64.097 32.405c29.878 16.008 49.32 43.002 49.32 73.56"
-																			/>
-																			<path
-																				fill="#F6DECE"
-																				d="M234.937 114.066a70.2 70.2 0 0 0-2.593-18.73c-8.846 107.909-140.476 113.093-192.227 80.818a129.62 129.62 0 0 0 81.402 27.155c62.542 0 113.418-40.02 113.418-89.243"
-																			/>
-																			<path
-																				fill="#CCBEA7"
-																				d="M112.186 16.3a53.18 53.18 0 0 1-18.244 40.409c-.907.81-.194 2.365.972 1.912c10.92-4.245 25.665-16.948 19.443-42.58c-.259-1.459-2.17-1.07-2.17.259m7.356 0a52.63 52.63 0 0 1 5.217 43.65c-.388 1.134 1.005 2.106 1.783 1.166c7.096-9.073 13.286-27.09-5.25-46.534c-.94-.842-2.398.454-1.75 1.588zm8.944-.551a53.2 53.2 0 0 1 22.198 38.108a1.07 1.07 0 0 0 2.106.357c2.981-11.31 1.296-30.59-23.235-40.604c-1.296-.518-2.138 1.232-1.069 2.01zM68.666 49.45a54.9 54.9 0 0 0 33.928-29.164c.584-1.167 2.43-.713 2.14.583c-5.607 25.924-24.37 31.336-36.035 30.623c-1.232.032-1.2-1.685-.033-2.042"
-																			/>
-																			<g transform="translate(53.792 88.4)">
-																				<ellipse
-																					cx="117.047"
-																					cy="40.183"
-																					fill="#FEBBD0"
-																					rx="18.957"
-																					ry="11.147"
-																				/>
-																				<ellipse
-																					cx="18.957"
-																					cy="40.183"
-																					fill="#FEBBD0"
-																					rx="18.957"
-																					ry="11.147"
-																				/>
-																				<path
-																					fill="#2E2218"
-																					d="M27.868 35.71a17.855 17.855 0 1 0-17.822-17.854c0 9.848 7.974 17.837 17.822 17.855m80.268 0A17.855 17.855 0 1 0 90.41 17.857c-.018 9.818 7.908 17.801 17.726 17.855"
-																				/>
-																				<path
-																					fill="#FFF"
-																					d="M22.36 18.99a6.708 6.708 0 1 0 .064-13.416a6.708 6.708 0 0 0-.065 13.416m80.267 0a6.708 6.708 0 1 0-.065 0z"
-																				/>
-																			</g>
-																			<path
-																				fill="#B71422"
-																				d="M144.365 137.722a28.94 28.94 0 0 1-9.463 15.263a22.07 22.07 0 0 1-12.962 6.092a22.17 22.17 0 0 1-13.383-6.092a28.94 28.94 0 0 1-9.333-15.263a2.333 2.333 0 0 1 2.593-2.625h39.988a2.333 2.333 0 0 1 2.56 2.625"
-																			/>
-																		</svg>
-																	)}
-																	<span className="font-mono text-[11px]">
-																		{pm.command.split(" ")[0]}
-																	</span>
-																</button>
-															))}
-														</div>
-													</>
+													</svg>
+												) : (
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 24 24"
+														className="h-4 w-4"
+													>
+														<path
+															fill="currentColor"
+															d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"
+														/>
+													</svg>
 												)}
-											</>
+											</button>
 										)}
 									</div>
 								</div>
@@ -831,388 +686,11 @@ function InstallBlock() {
 	);
 }
 
-const sentinelEvents = [
-	{
-		action: "Blocked",
-		color: "bg-red-500",
-		identifier: "akash.prish@dropmeon.com",
-		ip: "::1",
-		reason: "Disposable Email",
-		location: "Unknown",
-		path: "/sign-up/email",
-		time: "2 min ago",
-	},
-	{
-		action: "Blocked",
-		color: "bg-red-500",
-		identifier: "kamef69609@cucadas.com",
-		ip: "Unknown IP",
-		reason: "Disposable Email",
-		location: "Unknown",
-		path: "/sign-up/email",
-		time: "4 min ago",
-	},
-	{
-		action: "Challenged",
-		color: "bg-yellow-500",
-		identifier: "195.142.xx.xx",
-		ip: "",
-		reason: "Suspicious IP",
-		location: "Moscow, RU",
-		path: "/sign-in",
-		time: "7 min ago",
-	},
-	{
-		action: "Blocked",
-		color: "bg-red-500",
-		identifier: "bot-crawler-7x",
-		ip: "52.14.xx.xx",
-		reason: "Bot Detected",
-		location: "US-East",
-		path: "/api/auth",
-		time: "12 min ago",
-	},
-	{
-		action: "Blocked",
-		color: "bg-red-500",
-		identifier: "admin@tempmail.ninja",
-		ip: "::1",
-		reason: "Breached Password",
-		location: "Unknown",
-		path: "/sign-up/email",
-		time: "18 min ago",
-	},
-];
-
-function SentinelSection() {
-	return (
-		<div className="mt-10 mb-4">
-			<div className="flex items-center gap-3 mb-6">
-				<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
-					Sentinel
-				</span>
-				<div className="flex-1 border-t border-foreground/[0.06]" />
-			</div>
-
-			<div className="mb-5">
-				<h3 className="text-base sm:text-lg  text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-					Security infrastructure for your app.
-				</h3>
-				<p className="text-[14px] text-foreground/70 dark:text-foreground/55 leading-relaxed max-w-2xl">
-					Bot detection, brute force protection, disposable email blocking, geo
-					restrictions, and more &mdash; all working in real time before threats
-					reach your users.
-				</p>
-			</div>
-
-			<div className="relative group/sentinel">
-				{/* Outer dashed border — top and sides only, sides fade out toward bottom */}
-				<div className="absolute -inset-2 sm:-inset-3 border-t border-dashed border-foreground/[0.08] pointer-events-none" />
-				<div
-					className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -left-2 sm:-left-3 w-px border-l border-dashed border-foreground/[0.08] pointer-events-none"
-					style={{
-						maskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-						WebkitMaskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-					}}
-				/>
-				<div
-					className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -right-2 sm:-right-3 w-px border-r border-dashed border-foreground/[0.08] pointer-events-none"
-					style={{
-						maskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-						WebkitMaskImage:
-							"linear-gradient(to bottom, black 40%, transparent 100%)",
-					}}
-				/>
-				{/* Top corner accents */}
-				<span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none -translate-x-0.5 -translate-y-0.5">
-					&#x250C;
-				</span>
-				<span className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none translate-x-0.5 -translate-y-0.5">
-					&#x2510;
-				</span>
-
-				<div
-					className="relative overflow-hidden border-t border-x border-foreground/[0.1]"
-					style={{
-						maskImage:
-							"linear-gradient(to bottom, black 60%, transparent 100%)",
-						WebkitMaskImage:
-							"linear-gradient(to bottom, black 60%, transparent 100%)",
-					}}
-				>
-					{/* Header bar */}
-					<div className="flex items-center justify-between px-4 py-2.5 bg-foreground/[0.02] border-b border-foreground/[0.08]">
-						<div className="flex items-center gap-2">
-							{/* Shield icon */}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="1.5"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								className="text-foreground/50 dark:text-foreground/35"
-							>
-								<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-							</svg>
-							<span className="text-[11px] font-medium text-foreground/60 dark:text-foreground/45">
-								Sentinel
-							</span>
-							<span className="text-[10px] font-mono text-foreground/50  ml-1">
-								Monitor and analyze security events
-							</span>
-						</div>
-						<div className="hidden sm:flex items-center gap-3">
-							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-red-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Blocked
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									847
-								</span>
-							</span>
-							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-yellow-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Challenged
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									124
-								</span>
-							</span>
-							<span className="flex items-center gap-1.5 text-[9px] font-mono">
-								<span className="size-1.5 rounded-full bg-green-500" />
-								<span className="text-foreground/50 dark:text-foreground/35">
-									Allowed
-								</span>
-								<span className="text-foreground/70 dark:text-foreground/50">
-									12.4k
-								</span>
-							</span>
-						</div>
-					</div>
-
-					{/* Table header */}
-					<div className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2 border-b border-foreground/[0.06] bg-foreground/[0.01]">
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Action
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Identifier
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Reason
-						</span>
-						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Location
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
-							Path
-						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50 text-right">
-							Time
-						</span>
-					</div>
-
-					{/* Event rows */}
-					{sentinelEvents.map((event) => (
-						<div
-							key={event.identifier}
-							className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2.5 border-b border-dashed border-foreground/[0.04] hover:bg-foreground/[0.02] transition-colors"
-						>
-							<span className="flex items-center gap-1.5">
-								<span
-									className={cn("size-1.5 rounded-full shrink-0", event.color)}
-								/>
-								<span
-									className={cn(
-										"text-[10px] font-mono",
-										event.action === "Blocked"
-											? "text-red-500/80 dark:text-red-400/70"
-											: "text-yellow-500/80 dark:text-yellow-400/70",
-									)}
-								>
-									{event.action}
-								</span>
-							</span>
-							<div className="min-w-0 pr-2">
-								<span className="text-[10px] font-mono text-foreground/60 dark:text-foreground/45 block truncate">
-									{event.identifier}
-								</span>
-								{event.ip && (
-									<span className="text-[9px] font-mono text-foreground/50  block truncate">
-										{event.ip}
-									</span>
-								)}
-							</div>
-							<span className="text-[10px] font-mono text-foreground/40 dark:text-foreground/30 truncate">
-								{event.reason}
-							</span>
-							<span className="hidden sm:block text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
-								{event.location}
-							</span>
-							<span className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
-								{event.path}
-							</span>
-							<span className="text-[10px] font-mono text-foreground/30 dark:text-foreground/20 text-right">
-								{event.time}
-							</span>
-						</div>
-					))}
-				</div>
-			</div>
-
-			{/* Protection tags */}
-			<div className="flex flex-wrap gap-1.5 mt-4">
-				{(
-					[
-						{
-							tag: "Bot Detection",
-							icon: (
-								<>
-									<circle cx="12" cy="12" r="10" />
-									<path d="M2 12h20" />
-									<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-								</>
-							),
-						},
-						{
-							tag: "Brute Force",
-							icon: (
-								<>
-									<rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-									<path d="M7 11V7a5 5 0 0 1 10 0v4" />
-								</>
-							),
-						},
-						{
-							tag: "Breached Passwords",
-							icon: (
-								<>
-									<path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z" />
-									<circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
-								</>
-							),
-						},
-						{
-							tag: "Impossible Travel",
-							icon: (
-								<>
-									<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
-								</>
-							),
-						},
-						{
-							tag: "Rate Limiting",
-							icon: (
-								<>
-									<circle cx="12" cy="12" r="10" />
-									<polyline points="12 6 12 12 16 14" />
-								</>
-							),
-						},
-						{
-							tag: "Geo Blocking",
-							icon: (
-								<>
-									<circle cx="12" cy="12" r="10" />
-									<path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-									<path d="M2 12h20" />
-								</>
-							),
-						},
-						{
-							tag: "Suspicious IPs",
-							icon: (
-								<>
-									<path d="M6 18h8" />
-									<path d="M3 22h18" />
-									<path d="M14 22a7 7 0 1 0 0-14h-1" />
-									<path d="M9 14h2" />
-									<path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z" />
-									<path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3" />
-								</>
-							),
-						},
-						{
-							tag: "Disposable Emails",
-							icon: (
-								<>
-									<rect width="20" height="16" x="2" y="4" rx="2" />
-									<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-								</>
-							),
-						},
-						{
-							tag: "Email Abuse",
-							icon: (
-								<>
-									<path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.8 0L13 14" />
-									<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-									<path d="m17 21 5-5" />
-									<path d="m22 21-5-5" />
-								</>
-							),
-						},
-						{
-							tag: "Free Trial Abuse",
-							icon: (
-								<>
-									<path d="M6 3h12l4 6-10 13L2 9Z" />
-									<path d="M11 3 8 9l4 13 4-13-3-6" />
-									<path d="M2 9h20" />
-								</>
-							),
-						},
-						{
-							tag: "Stale Users",
-							icon: (
-								<>
-									<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-									<circle cx="9" cy="7" r="4" />
-									<line x1="17" x2="22" y1="11" y2="11" />
-								</>
-							),
-						},
-					] as const
-				).map(({ tag, icon }) => (
-					<span
-						key={tag}
-						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border border-foreground/[0.14] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/85 dark:hover:text-foreground/75 transition-colors"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="10"
-							height="10"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							className="opacity-80 shrink-0"
-						>
-							{icon}
-						</svg>
-						{tag}
-					</span>
-				))}
-			</div>
-		</div>
-	);
-}
-
 const EMPTY_CONTRIBUTORS: ContributorInfo[] = [];
 
 type CommunityHeroStats = {
 	npmDownloads: number;
+	npmWeeklyHistory: number[];
 	githubStars: number;
 	contributors: number;
 };
@@ -1239,11 +717,11 @@ function ContributorsSection({
 
 	return (
 		<div className="mt-10 pt-8">
-			<div className="flex items-center gap-3 mb-2">
-				<span className="text-base text-foreground/85 dark:text-foreground/75">
+			<div className="flex items-center gap-4 mb-2">
+				<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 					Contributors
 				</span>
-				<div className="h-px flex-1 bg-foreground/[0.08]" />
+				<div className="flex-1 border-t border-foreground/10" />
 			</div>
 			<p className="text-[13px] text-foreground/50 dark:text-foreground/40 mb-5 leading-relaxed">
 				Built by a community of{" "}
@@ -1330,17 +808,60 @@ function formatCount(num: number | null | undefined): string {
 	return num.toString();
 }
 
-const footerLinks = [
-	{ label: "Terms", href: "/legal/terms" },
-	{ label: "Privacy", href: "/legal/privacy" },
-	{ label: "Blog", href: "/blog" },
-	{ label: "Community", href: "/community" },
-	{ label: "Changelog", href: "/changelog" },
-];
+function _NpmSparkline({ data: raw }: { data: number[] }) {
+	// Drop the last bucket — it's the incomplete current week
+	const data = raw.length > 2 ? raw.slice(0, -1) : raw;
+	const w = 120;
+	const h = 32;
+	const pad = 1;
+	const max = Math.max(...data);
+	const min = Math.min(...data);
+	const range = max - min || 1;
+	const points = data.map((v, i) => {
+		const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+		const y = h - pad - ((v - min) / range) * (h - pad * 2);
+		return `${x},${y}`;
+	});
+	const line = points.join(" ");
+	const areaPath = `M${points[0]} ${points.map((p) => `L${p}`).join(" ")} L${w - pad},${h} L${pad},${h} Z`;
+
+	return (
+		<svg
+			width={w}
+			height={h}
+			viewBox={`0 0 ${w} ${h}`}
+			className="shrink-0 ml-auto"
+		>
+			<defs>
+				<linearGradient id="npm-spark-fill" x1="0" y1="0" x2="0" y2="1">
+					<stop
+						offset="0%"
+						className="[stop-color:theme(colors.emerald.500)]"
+						stopOpacity="0.15"
+					/>
+					<stop
+						offset="100%"
+						className="[stop-color:theme(colors.emerald.500)]"
+						stopOpacity="0"
+					/>
+				</linearGradient>
+			</defs>
+			<path d={areaPath} fill="url(#npm-spark-fill)" />
+			<polyline
+				points={line}
+				fill="none"
+				className="stroke-emerald-500/50"
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+		</svg>
+	);
+}
 
 function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 	return (
-		<div className="relative mt-10 pt-8 pb-0 overflow-hidden">
+		<div className="relative mt-10 pt-8 pb-16 overflow-hidden">
 			{/* Watermark logo */}
 			<div
 				className="absolute -right-10 top-1/2 -translate-y-1/2 pointer-events-none select-none opacity-[0.03] dark:opacity-[0.04]"
@@ -1392,12 +913,15 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
 									height="11"
-									viewBox="0 0 24 24"
-									fill="currentColor"
+									viewBox="0 0 128 128"
 								>
 									<path
-										d="M0 0v24h24V0H0zm6.168 20.16H3.84V7.68h2.328v12.48zm6.168 0H6.168V7.68H16.5v12.48h-2.328V9.84h-1.836v10.32zm8.16 0h-6.168V7.68H20.16v12.48h-2.16V9.84h-1.836v10.32z"
-										transform="scale(0.9) translate(1.3, 1.3)"
+										fill="#cb3837"
+										d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"
+									/>
+									<path
+										fill="#fff"
+										d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
 									/>
 								</svg>
 								<span className="text-xs font-mono">
@@ -1468,60 +992,6 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 					</Link>
 				</div>
 			</div>
-
-			{/* Footer */}
-			<div className="relative mt-10 pt-14">
-				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-					<div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
-						{footerLinks.map((link, i) => (
-							<span key={link.label} className="flex items-center">
-								<Link
-									href={link.href}
-									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/50 hover:text-foreground/80 transition-colors"
-								>
-									{link.label}
-								</Link>
-								{i < footerLinks.length - 1 && (
-									<span className="text-foreground/10 mx-1 text-[10px] select-none">
-										/
-									</span>
-								)}
-							</span>
-						))}
-					</div>
-
-					<div className="flex items-center justify-between w-full sm:w-auto sm:gap-4 shrink-0">
-						<span className="text-[10px] text-foreground/50 font-mono">
-							© {new Date().getFullYear()} Better Auth Inc.
-						</span>
-						<div className="flex items-center gap-3 sm:gap-4">
-							<span className="text-foreground/10 select-none hidden sm:inline">
-								·
-							</span>
-							<Link
-								href="https://x.com/better_auth"
-								aria-label="Twitter/X"
-								className="text-foreground/50 hover:text-foreground/80 transition-colors"
-							>
-								<Icons.XIcon className="h-3.5 w-3.5" />
-							</Link>
-							<Link
-								href="https://github.com/better-auth"
-								aria-label="GitHub"
-								className="text-foreground/50 hover:text-foreground/80 transition-colors"
-							>
-								<Icons.gitHub className="h-3.5 w-3.5" />
-							</Link>
-							<div className="h-4 w-4 flex text-foreground/15 items-center justify-center select-none">
-								|
-							</div>
-							<div className="-ml-4 sm:-ml-5">
-								<ThemeToggle />
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
 		</div>
 	);
 }
@@ -1534,6 +1004,9 @@ export function HeroReadMe({
 	stats: CommunityHeroStats;
 }) {
 	const [socialHovered, setSocialHovered] = useState(false);
+	const [frameworkTab, setFrameworkTab] = useState<
+		"declarative" | "database" | "oauth" | "integrations"
+	>("declarative");
 
 	return (
 		<motion.div
@@ -1549,7 +1022,7 @@ export function HeroReadMe({
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						transition={{ duration: 0.4, delay: 0.3 }}
-						className="overflow-x-hidden no-scrollbar pb-0"
+						className="no-scrollbar pb-0"
 					>
 						<h1 className="flex items-center gap-3 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 mb-4 sm:mb-5">
 							README
@@ -1557,28 +1030,34 @@ export function HeroReadMe({
 						</h1>
 
 						<p className="text-sm sm:text-[15px] text-foreground/80 mb-6 sm:mb-8 leading-relaxed">
-							Better Auth is an authentication framework. It provides a
-							comprehensive set of features out of the box and includes a Plugin
-							ecosystem that simplifies adding advanced functionalities and
-							infrastructure to help own your auth at scale.
+							Auth that lives{" "}
+							<span className="font-medium text-foreground/90 dark:text-foreground/80">
+								inside your app
+							</span>
+							. Composable, plugin-based, and built to scale — powering from
+							weekend projects to the biggest{" "}
+							<span className="font-medium text-foreground/90 dark:text-foreground/80">
+								consumer and enterprise apps
+							</span>{" "}
+							on the planet.
 						</p>
 
 						<InstallBlock />
 
 						<div className="flex items-center gap-3 my-4">
 							<div className="flex-1 border-t border-foreground/6"></div>
-							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[11px] sm:text-xs text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Trusted By
 							</span>
 						</div>
 
 						<TrustedBy />
 
-						<div className="flex items-center gap-3 my-4">
-							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+						<div className="flex items-center gap-4 my-4">
+							<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 								Features
 							</span>
-							<div className="flex-1 border-t border-foreground/10"></div>
+							<div className="flex-1 border-t border-foreground/10" />
 						</div>
 
 						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/[0.08] overflow-hidden">
@@ -1586,66 +1065,66 @@ export function HeroReadMe({
 								{
 									label: "Framework Agnostic",
 									headline: "Works with your stack.",
-									desc: "First-class support for Next.js, Nuxt, SvelteKit, Astro, Hono, Express, and 20+ more.",
+									desc: "Next.js, Nuxt, SvelteKit, Astro, Hono, and 20+ more.",
 									logos: true,
 									href: "/docs",
 								},
 								{
 									label: "Email & Password",
 									headline: "Built-in credential auth.",
-									desc: "Session management, email verification, and password reset out of the box.",
+									desc: "Sessions, email verification, and password reset included.",
 									credential: true,
 									href: "/docs",
 								},
 								{
 									label: "Social Sign-on",
-									headline: "40+ social providers.",
-									desc: "Google, GitHub, Apple, Discord, Microsoft, and more — each a few lines of config.",
+									headline: "Social sign-on.",
+									desc: "Google, GitHub, Apple, Discord, and more.",
 									social: true,
 									href: "/docs",
 								},
 								{
 									label: "Organizations",
 									headline: "Multi-tenancy built in.",
-									desc: "Teams, roles, invitations, and member management with fine-grained access control.",
+									desc: "Teams, roles, invitations, and access control.",
 									org: true,
 									href: "/docs",
 								},
 								{
 									label: "Enterprise",
-									headline: "SSO, SAML & SCIM.",
-									desc: "Enterprise SSO, SAML 2.0, SCIM provisioning, and directory sync for B2B products.",
+									headline: "Enterprise ready.",
+									desc: "SSO, SAML 2.0, SCIM, and directory sync.",
 									enterprise: true,
 									href: "/docs",
 								},
 								{
 									label: "Plugins",
 									headline: "50+ and growing.",
-									desc: "Passkeys, magic links, anonymous auth, API keys, JWTs, and a community ecosystem.",
+									desc: "Passkeys, magic links, API keys, JWTs, and more.",
 									plugins: true,
 									href: "/docs",
 								},
 								{
 									label: "Agent Auth",
 									headline: "Auth for AI agents.",
-									desc: "MCP server auth, async auth flows, token exchange, and agent-to-agent delegation.",
+									desc: "MCP auth, token exchange, and agent delegation.",
 									agent: true,
 									href: "/docs",
 								},
 								{
 									label: "Infrastructure",
 									headline: "Security & observability.",
-									desc: "Bot detection, real-time behavior analysis, IP blocking, email validation, and more.",
+									desc: "Bot detection, IP blocking, and email validation.",
 									security: true,
-									href: "/products/infrastructure",
+									href: "/pricing",
 									managed: true,
 								},
 								{
 									label: "Dashboard",
 									headline: "User management.",
-									desc: "Manage users, sessions, and organizations. Track sign-ups, active users, and growth.",
+									desc: "Manage users, sessions, and organizations.",
 									dashboard: true,
-									href: "/products/infrastructure",
+									href: "/pricing",
 									managed: true,
 								},
 							].map((feature, i) => (
@@ -1670,7 +1149,7 @@ export function HeroReadMe({
 											}
 										}}
 										className={cn(
-											"group/card relative p-4 lg:p-5 border-foreground/[0.08] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
+											"group/card relative p-4 lg:p-5 border-foreground/[0.08] min-h-[100px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
 											// Bottom border: all except last; 3-col last row starts at 6
 											i < 8 && "border-b",
 											i >= 6 && "md:border-b-0",
@@ -1700,21 +1179,15 @@ export function HeroReadMe({
 												<polyline points="7 7 17 7 17 17" />
 											</svg>
 										</span>
-										<div className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wider transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
-											<span className="text-foreground/45 dark:text-foreground/30 mr-1.5 transition-colors duration-200 group-hover/card:text-foreground/60 dark:group-hover/card:text-foreground/40">
+										<div className="mb-1">
+											<div className="text-[11px] font-mono text-foreground/45 dark:text-foreground/30 tracking-wider transition-colors duration-200 group-hover/card:text-foreground/60 dark:group-hover/card:text-foreground/40">
 												{String(i + 1).padStart(2, "0")}
-											</span>
-											{feature.label}
-											{"managed" in feature && feature.managed && (
-												<span className="ml-1.5 text-[8px] normal-case tracking-widest text-foreground/40 dark:text-foreground/30 border border-dashed border-foreground/10 px-1 py-px">
-													managed
-												</span>
-											)}
+											</div>
+											<div className="text-[13px] font-medium text-foreground/80 dark:text-neutral-100 transition-colors duration-200">
+												{feature.headline}
+											</div>
 										</div>
-										<div className="text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-snug mb-1.5 transition-colors duration-200 group-hover/card:text-neutral-950 dark:group-hover/card:text-white">
-											{feature.headline}
-										</div>
-										<div className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
+										<div className="text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
 											{feature.desc}
 										</div>
 										{"logos" in feature && feature.logos && (
@@ -1725,7 +1198,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 24 24"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0s]"
 												>
 													<path
 														fill="currentColor"
@@ -1738,7 +1211,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 24 24"
-													className="text-[#00DC82] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.05s]"
+													className="text-[#00DC82] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.05s]"
 												>
 													<path
 														fill="currentColor"
@@ -1751,7 +1224,7 @@ export function HeroReadMe({
 													width="13"
 													height="15"
 													viewBox="0 0 426 512"
-													className="text-[#FF3E00] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.1s]"
+													className="text-[#FF3E00] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.1s]"
 												>
 													<path
 														fill="currentColor"
@@ -1763,7 +1236,7 @@ export function HeroReadMe({
 													height="13"
 													viewBox="0 0 663 660"
 													width="13"
-													className="text-neutral-800 dark:text-neutral-200 opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.15s]"
+													className="text-[#EF4444] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.15s]"
 													xmlns="http://www.w3.org/2000/svg"
 												>
 													<path
@@ -1778,7 +1251,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 128 128"
-													className="text-[#4F88C6] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.2s]"
+													className="text-[#2C4F7C] dark:text-[#66AAEE] opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.2s]"
 												>
 													<path
 														fill="currentColor"
@@ -1791,7 +1264,7 @@ export function HeroReadMe({
 													width="15"
 													height="15"
 													viewBox="0 0 32 32"
-													className="text-[#000020] dark:text-[#FAFAFA] opacity-60 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s]"
+													className="text-neutral-800 dark:text-neutral-200 opacity-90 transition-all duration-300 group-hover/card:opacity-100 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s]"
 												>
 													<path
 														fill="currentColor"
@@ -2223,313 +1696,490 @@ export function HeroReadMe({
 							</span>
 						</div>
 
-						<div className="my-6">
-							<div className="flex items-center gap-3 mb-5">
-								<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
-									Declarative Config
-								</span>
-								<div className="flex-1 border-t border-foreground/10" />
-							</div>
-							<ServerClientTabs />
-						</div>
-
-						{/* Database */}
-						<div className="my-8">
-							<DatabaseSection />
-						</div>
-
-						<AiNativeSection />
-
-						<div className="flex items-center gap-3 mt-8 mb-5">
-							<span className="text-base text-foreground/85 dark:text-foreground/75">
-								OAuth Providers
-							</span>
-							<div className="h-px flex-1 bg-foreground/[0.08]" />
-						</div>
-
-						<SocialProvidersSection />
-
-						<div className="mt-8">
-							<PluginEcosystem />
-						</div>
-
-						{/* Infrastructure transition */}
-						<div className="mt-16 mb-8">
+						<div className="my-4">
 							<div className="flex items-center gap-4">
-								<span className="text-lg sm:text-xl font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
-									Infrastructure
+								<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+									Framework
 								</span>
-								<div className="flex-1 border-t border-foreground/10" />
+								<div className="flex-1 border-t border-foreground/10"></div>
 							</div>
-							<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-xl">
-								Managed infrastructure on top of the open-source framework.
+							<p className="text-[15px] sm:text-base text-foreground/50 mt-1">
+								The most comprehensive authentication framework for TypeScript.
 							</p>
 						</div>
 
-						{/* Dashboard */}
-						<div className="mt-10 mb-4">
-							<div className="mb-5">
-								<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-									User management and monitoring platform.
-								</h3>
-								<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
-									Monitor sign-ups, manage users, track sessions, and surface
-									security insights — with an agentic Cmd+K to do it all in
-									natural language.
+						<div className="mt-8 mb-10">
+							<div className="border-r border-foreground/[0.1] bg-foreground/[0.01] overflow-hidden">
+								<div className="flex flex-col lg:flex-row">
+									<div className="min-w-0 flex-1 min-h-[320px] sm:min-h-[360px] lg:h-[400px] overflow-hidden">
+										<AnimatePresence mode="wait" initial={false}>
+											<motion.div
+												key={frameworkTab}
+												initial={{ opacity: 0, y: 6 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: -4 }}
+												transition={{ duration: 0.2, ease: "easeOut" }}
+												className="pr-3 sm:pr-5 pb-5 h-full"
+											>
+												{frameworkTab === "declarative" && <ServerClientTabs />}
+												{frameworkTab === "database" && <DatabaseSection />}
+												{frameworkTab === "oauth" && <SocialProvidersSection />}
+												{frameworkTab === "integrations" && (
+													<IntegrationsSection />
+												)}
+											</motion.div>
+										</AnimatePresence>
+									</div>
+
+									<div className="flex flex-row lg:flex-col lg:w-56 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-foreground/[0.1] bg-neutral-50 dark:bg-black overflow-x-auto lg:overflow-visible">
+										{[
+											{ id: "declarative", label: "Declarative Config" },
+											{ id: "database", label: "Bring Your Own Database" },
+											{ id: "oauth", label: "OAuth Providers" },
+											{ id: "integrations", label: "Integrations" },
+										].map((tab) => (
+											<button
+												key={tab.id}
+												type="button"
+												onClick={() =>
+													setFrameworkTab(
+														tab.id as
+															| "declarative"
+															| "database"
+															| "oauth"
+															| "integrations",
+													)
+												}
+												className={cn(
+													"relative flex-1 lg:flex-none text-left px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-[11px] lg:text-xs font-mono tracking-wider uppercase transition-colors border-r lg:border-r-0 lg:border-b last:border-r-0 lg:last:border-b-0 border-foreground/[0.08] whitespace-nowrap lg:whitespace-normal",
+													frameworkTab === tab.id
+														? "text-foreground/85 bg-foreground/[0.04]"
+														: "text-foreground/45 hover:text-foreground/70",
+												)}
+											>
+												{tab.id === "database" ? (
+													<>
+														Bring Your Own{" "}
+														<span className="text-amber-600 dark:text-amber-400">
+															Database
+														</span>
+													</>
+												) : (
+													tab.label
+												)}
+												{frameworkTab === tab.id && (
+													<span className="absolute inset-y-0 right-0 w-[1.5px] bg-foreground/65 hidden lg:block" />
+												)}
+											</button>
+										))}
+										<div className="hidden lg:flex flex-1 items-end p-4">
+											<p className="text-[13px] leading-relaxed text-foreground/60 dark:text-foreground/50">
+												{frameworkTab === "declarative" &&
+													"No dashboard clicks. Your auth lives in code — version controlled, type-safe, and reviewable in PRs."}
+												{frameworkTab === "database" &&
+													"Use any database. Connect with a connection string or your favorite ORM. Your data stays yours."}
+												{frameworkTab === "oauth" &&
+													"40+ preconfigured providers. Add Google, GitHub, Apple, and more in seconds."}
+												{frameworkTab === "integrations" &&
+													"Works with every major framework. First-class support for 20+ integrations."}
+											</p>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div className="mt-8">
+								<PluginEcosystem />
+							</div>
+						</div>
+
+						{/* Infrastructure */}
+						<div className="relative mt-8 pt-6 pb-2">
+							{/* Grain noise background — full bleed with fade edges */}
+							<div
+								className="absolute top-0 bottom-0 z-0 pointer-events-none"
+								style={{
+									left: "50%",
+									transform: "translateX(-50%)",
+									width: "100vw",
+									maskImage:
+										"linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)",
+									WebkitMaskImage:
+										"linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)",
+								}}
+							>
+								<div className="absolute inset-0 bg-neutral-200/20 dark:bg-black/30" />
+								<div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.07]">
+									<svg className="w-full h-full">
+										<filter id="infra-grain">
+											<feTurbulence
+												type="fractalNoise"
+												baseFrequency="0.85"
+												numOctaves="4"
+												stitchTiles="stitch"
+											/>
+											<feColorMatrix type="saturate" values="0" />
+										</filter>
+										<rect
+											width="100%"
+											height="100%"
+											filter="url(#infra-grain)"
+										/>
+									</svg>
+								</div>
+							</div>
+
+							<div className="relative z-10 mb-6">
+								<div className="flex items-center gap-4 mb-2">
+									<span className="text-lg font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+										Infrastructure
+									</span>
+									<div className="flex-1 border-t border-foreground/10" />
+								</div>
+								<p className="text-[15px] sm:text-base text-foreground/75 dark:text-foreground/65 leading-relaxed">
+									Connect to our infrastructure and power your self-hosted
+									Better Auth with a dashboard, audit logs, security detection,
+									enterprise features, and more.
 								</p>
 							</div>
 
-							<div className="relative group/dash">
-								{/* Outer dashed border — top and sides only, sides fade out toward bottom */}
-								<div className="absolute -inset-2 sm:-inset-3 border-t border-dashed border-foreground/[0.08] pointer-events-none" />
-								<div
-									className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -left-2 sm:-left-3 w-px border-l border-dashed border-foreground/[0.08] pointer-events-none"
-									style={{
-										maskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-										WebkitMaskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-									}}
-								>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1.5 bg-foreground/40 dark:bg-foreground/30 blur-[1px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite",
-										}}
-									/>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1 bg-foreground/25 dark:bg-foreground/20 blur-[2px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite 2s",
-										}}
-									/>
-								</div>
-								<div
-									className="absolute -top-2 sm:-top-3 -bottom-2 sm:-bottom-3 -right-2 sm:-right-3 w-px border-r border-dashed border-foreground/[0.08] pointer-events-none"
-									style={{
-										maskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-										WebkitMaskImage:
-											"linear-gradient(to bottom, black 40%, transparent 100%)",
-									}}
-								>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1.5 bg-foreground/40 dark:bg-foreground/30 blur-[1px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite 1s",
-										}}
-									/>
-									<div
-										className="absolute left-1/2 -translate-x-1/2 size-1 bg-foreground/25 dark:bg-foreground/20 blur-[2px] pointer-events-none"
-										style={{
-											animation: "sparkle-down 4s ease-in-out infinite 3s",
-										}}
-									/>
-								</div>
-								{/* Top corner accents only */}
-								<span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none -translate-x-0.5 -translate-y-0.5">
-									&#x250C;
-								</span>
-								<span className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 text-[8px] font-mono text-foreground/20 select-none pointer-events-none translate-x-0.5 -translate-y-0.5">
-									&#x2510;
-								</span>
-
-								<div
-									className="relative overflow-hidden border-t border-x border-foreground/[0.1]"
-									style={{
-										maskImage:
-											"linear-gradient(to bottom, black 60%, transparent 100%)",
-										WebkitMaskImage:
-											"linear-gradient(to bottom, black 60%, transparent 100%)",
-									}}
-								>
-									{/* Terminal-style header bar */}
-									<div className="flex items-center justify-between px-4 py-2.5 bg-foreground/[0.02] border-b border-dashed border-foreground/[0.08]">
-										<div className="flex items-center gap-2">
-											<div className="flex items-center gap-1.5">
-												<span className="size-2 rounded-full bg-foreground/10" />
-												<span className="size-2 rounded-full bg-foreground/10" />
-												<span className="size-2 rounded-full bg-foreground/10" />
-											</div>
-											<span className="text-[10px] font-mono text-foreground/30 ml-2">
-												dash.better-auth.com/the-next-big-thing
+							{/* Dashboard video */}
+							<div
+								className="relative z-10 overflow-hidden border border-foreground/[0.08]"
+								style={{
+									maskImage:
+										"linear-gradient(to bottom, black 60%, transparent 100%)",
+									WebkitMaskImage:
+										"linear-gradient(to bottom, black 60%, transparent 100%)",
+								}}
+							>
+								<div className="flex items-center justify-between px-4 py-2 bg-foreground/[0.02] border-b border-foreground/[0.06]">
+									<div className="flex items-center gap-2">
+										<div className="flex items-center gap-1.5">
+											<span className="size-2 rounded-full bg-foreground/10" />
+											<span className="size-2 rounded-full bg-foreground/10" />
+											<span className="size-2 rounded-full bg-foreground/10" />
+										</div>
+										<span className="text-[10px] font-mono text-foreground/30 ml-2">
+											dash.better-auth.com
+										</span>
+									</div>
+									<div className="flex items-center gap-3">
+										{["Overview", "Users", "Orgs", "Events"].map((tab, i) => (
+											<span
+												key={tab}
+												className={cn(
+													"text-[9px] font-mono uppercase tracking-wider",
+													i === 0 ? "text-foreground/50" : "text-foreground/20",
+												)}
+											>
+												{tab}
 											</span>
-										</div>
-										<div className="flex items-center gap-3">
-											{["Overview", "Users", "Orgs", "Events"].map((tab, i) => (
-												<span
-													key={tab}
-													className={cn(
-														"text-[9px] font-mono uppercase tracking-wider",
-														i === 0
-															? "text-foreground/60 dark:text-foreground/45"
-															: "text-foreground/20 dark:text-foreground/12",
-													)}
-												>
-													{tab}
-												</span>
-											))}
-										</div>
+										))}
 									</div>
-
-									{/* Dashboard demo video — crop top border from video */}
-									<div className="overflow-hidden" suppressHydrationWarning>
-										<video
-											src={"/demo-dark.mp4"}
-											autoPlay
-											loop
-											muted
-											playsInline
-											className="w-full h-auto -mt-[2px] dark:block hidden"
-											suppressHydrationWarning
-										/>
-										<video
-											src={"/demo-light.mp4"}
-											autoPlay
-											loop
-											muted
-											playsInline
-											className="w-full h-auto -mt-[2px] dark:hidden"
-											suppressHydrationWarning
-										/>
-									</div>
+								</div>
+								<div className="overflow-hidden" suppressHydrationWarning>
+									<video
+										src={"/demo-dark.mp4"}
+										autoPlay
+										loop
+										muted
+										playsInline
+										className="w-full h-auto -mt-[2px] dark:block hidden"
+										suppressHydrationWarning
+									/>
+									<video
+										src={"/demo-light.mp4"}
+										autoPlay
+										loop
+										muted
+										playsInline
+										className="w-full h-auto -mt-[2px] dark:hidden"
+										suppressHydrationWarning
+									/>
 								</div>
 							</div>
 
-							{/* Feature callouts */}
-							<div className="grid grid-cols-2 sm:grid-cols-4 mt-3">
+							{/* Feature grid — 3 columns */}
+							<div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 mt-4 -mx-px">
 								{[
-									{ label: "User Management", desc: "CRUD, sessions, bans" },
-									{ label: "Live Events", desc: "Real-time auth feed" },
-									{ label: "Agent Dashboard", desc: "Cmd+K agentic UI" },
-									{ label: "Security Insights", desc: "Actionable alerts" },
-								].map((item, i) => (
+									{
+										title: "Dashboard",
+										features: [
+											"User management",
+											"Session monitoring",
+											"Organization oversight",
+											"User analytics",
+										],
+									},
+									{
+										title: "Audit Logs",
+										features: [
+											"Auto-captured events",
+											"Filter & search",
+											"Configurable retention",
+											"Log drain to SIEM",
+										],
+									},
+									{
+										title: "Enterprise",
+										features: [
+											"Self-service SSO",
+											"SCIM provisioning",
+											"Directory sync",
+											"RBAC",
+										],
+									},
+								].map((group) => (
 									<div
-										key={item.label}
-										className={cn(
-											"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
-											i > 0 && "-ml-px",
-										)}
+										key={group.title}
+										className="relative overflow-hidden border-t border-r border-b border-dashed border-foreground/[0.06] first:border-l -mt-px p-4"
 									>
-										<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
-											{item.label}
-										</div>
-										<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
-											{item.desc}
-										</div>
+										{group.title === "Dashboard" && (
+											<div
+												className="absolute inset-0 pointer-events-none"
+												style={{
+													backgroundImage:
+														"radial-gradient(circle, rgb(180 160 130 / 0.3) 1.2px, transparent 1.2px)",
+													backgroundSize: "6px 6px",
+													maskImage:
+														"linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 45%)",
+													WebkitMaskImage:
+														"linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 45%)",
+												}}
+											/>
+										)}
+										<h4 className="relative text-[11px] sm:text-xs font-mono font-semibold uppercase tracking-widest text-foreground/90 dark:text-foreground/75 mb-3">
+											{group.title}
+										</h4>
+										<ul className="space-y-1.5">
+											{group.features.map((f) => (
+												<li
+													key={f}
+													className="flex items-start gap-2 text-[13px] sm:text-[14px] text-foreground/70 dark:text-foreground/55"
+												>
+													<span className="text-foreground/35 mt-0.5 font-mono text-[11px] leading-none select-none shrink-0">
+														+
+													</span>
+													<span>{f}</span>
+												</li>
+											))}
+										</ul>
+										{/* Enterprise half-circle with provider icons */}
+										{group.title === "Enterprise" && (
+											<div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-[160px] h-[160px] pointer-events-none">
+												{/* Half-circle arcs */}
+												<svg
+													className="absolute inset-0 w-full h-full"
+													viewBox="0 0 160 160"
+												>
+													<circle
+														cx="80"
+														cy="80"
+														r="68"
+														fill="none"
+														stroke="currentColor"
+														strokeWidth="0.75"
+														className="text-foreground/20"
+														strokeDasharray="3 3"
+													/>
+													<circle
+														cx="80"
+														cy="80"
+														r="44"
+														fill="none"
+														stroke="currentColor"
+														strokeWidth="0.75"
+														className="text-foreground/12"
+														strokeDasharray="2 4"
+													/>
+												</svg>
+												{/* Okta — 270° top of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[68px] top-0">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="15"
+														height="15"
+														viewBox="0 0 256 256"
+														className="text-foreground/60"
+													>
+														<path
+															fill="currentColor"
+															d="m140.844 1.778l-5.266 64.853a66 66 0 0 0-7.542-.427c-3.203 0-6.334.214-9.393.712l-2.99-31.432a1.72 1.72 0 0 1 1.709-1.848h5.337l-2.562-31.787C120.066.853 120.848 0 121.774 0h17.434c.996 0 1.779.853 1.636 1.849zm-43.976 3.2c-.285-.925-1.281-1.494-2.206-1.138L78.295 9.813c-.925.356-1.352 1.423-.925 2.276l13.307 29.013l-5.052 1.85c-.926.355-1.352 1.421-.926 2.275l13.592 28.515a61 61 0 0 1 15.868-6.044L96.94 4.978zM56.734 23.04l37.643 53.049c-4.768 3.129-9.108 6.827-12.809 11.093L59.011 64.996a1.72 1.72 0 0 1 .071-2.49l4.127-3.413L40.794 36.41c-.711-.711-.64-1.849.142-2.489l13.307-11.164c.783-.64 1.85-.498 2.42.284zM25.139 53.76c-.783-.569-1.921-.284-2.42.569l-8.68 15.075c-.499.854-.143 1.92.71 2.347L43.64 85.404l-2.704 4.623c-.498.853-.142 1.99.783 2.346l28.749 13.156a60.2 60.2 0 0 1 8.254-14.791zM3.862 94.72c.143-.996 1.139-1.564 2.064-1.351l62.976 16.427a62.3 62.3 0 0 0-2.704 16.782l-31.524-2.56a1.642 1.642 0 0 1-1.494-1.991l.925-5.263l-31.808-2.986c-.996-.071-1.637-.996-1.495-1.991l2.99-17.138zm-2.348 42.524c-.996.072-1.637.996-1.494 1.992l3.06 17.137c.142.996 1.138 1.565 2.063 1.351l30.883-8.035l.925 5.262c.143.996 1.139 1.565 2.064 1.351l30.456-8.39c-1.779-5.263-2.917-10.88-3.202-16.64l-64.826 5.972zM11.62 182.33c-.498-.853-.143-1.92.711-2.347l58.778-27.875c2.206 5.262 5.195 10.169 8.753 14.577L54.1 185.031c-.783.569-1.921.356-2.42-.498l-2.704-4.693l-26.257 18.133c-.783.57-1.922.285-2.42-.569l-8.752-15.075zm71.23-12.231L37.094 216.39c-.712.711-.64 1.849.142 2.489l13.378 11.164c.783.64 1.85.498 2.42-.284l18.501-26.027l4.127 3.485c.783.64 1.922.498 2.49-.356l17.933-26.026c-4.839-2.987-9.322-6.614-13.165-10.738zm-9.037 74.31c-.925-.355-1.352-1.421-.925-2.275L100 182.97c4.98 2.56 10.389 4.48 16.01 5.547l-7.97 30.577c-.213.925-1.28 1.494-2.205 1.138l-5.052-1.849l-8.468 30.791c-.285.925-1.281 1.494-2.206 1.138l-16.367-5.973zm46.68-55.11l-5.265 64.853c-.071.996.711 1.849 1.637 1.849h17.434c.996 0 1.779-.853 1.636-1.849l-2.561-31.787h5.336a1.72 1.72 0 0 0 1.708-1.848l-2.988-31.432c-3.06.498-6.191.712-9.393.712c-2.562 0-5.053-.143-7.543-.498m62.763-175.574c.427-.924 0-1.92-.925-2.275l-16.366-5.973c-.926-.356-1.922.213-2.206 1.137l-8.468 30.791l-5.053-1.848c-.925-.356-1.921.213-2.206 1.137l-7.97 30.578c5.693 1.138 11.03 3.058 16.011 5.547zm35.722 25.814L173.222 85.83a62 62 0 0 0-13.165-10.738l17.933-26.026c.569-.783 1.707-.996 2.49-.356l4.127 3.485l18.502-26.027c.57-.782 1.708-.925 2.42-.285l13.377 11.165c.783.64.783 1.778.143 2.489zm24.764 36.409c.925-.427 1.21-1.494.711-2.347L235.7 58.524c-.498-.853-1.637-1.066-2.42-.568l-26.257 18.133l-2.704-4.622c-.499-.854-1.637-1.138-2.42-.498l-25.76 18.347c3.558 4.408 6.476 9.315 8.753 14.577l58.778-27.875zm9.25 23.609l2.99 17.137c.142.996-.499 1.85-1.495 1.991l-64.826 6.045c-.285-5.831-1.424-11.378-3.203-16.64l30.457-8.391c.925-.285 1.921.355 2.063 1.35l.925 5.263l30.884-8.035c.925-.214 1.92.355 2.063 1.35zm-2.917 62.933c.925.213 1.921-.356 2.064-1.351L255.126 144c.143-.996-.498-1.849-1.494-1.991l-31.808-2.987l.925-5.262c.142-.996-.498-1.849-1.495-1.991l-31.523-2.56a62.3 62.3 0 0 1-2.704 16.782l62.976 16.427zM233.28 201.6c-.498.853-1.636 1.067-2.419.569l-53.583-36.978a60.2 60.2 0 0 0 8.254-14.791l28.749 13.156c.925.426 1.28 1.493.783 2.346l-2.704 4.622l28.89 13.654c.854.426 1.21 1.493.712 2.346zm-71.657-21.831l37.643 53.049c.57.782 1.708.924 2.42.284l13.306-11.164c.783-.64.783-1.778.143-2.49l-22.415-22.684l4.127-3.413c.783-.64.783-1.778.07-2.489l-22.557-22.186c-3.771 4.266-8.04 8.035-12.808 11.093zm-.356 72.249c-.925.355-1.921-.214-2.206-1.138l-17.22-62.72a61 61 0 0 0 15.868-6.044l13.592 28.515c.426.925 0 1.991-.926 2.276l-5.052 1.849l13.307 29.013c.427.924 0 1.92-.925 2.275l-16.367 5.974z"
+														/>
+													</svg>
+												</div>
+												{/* Microsoft — 225° upper-left of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[20px] top-[20px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="13"
+														height="13"
+														viewBox="0 0 256 256"
+													>
+														<path
+															fill="#F1511B"
+															d="M121.666 121.666H0V0h121.666z"
+														/>
+														<path
+															fill="#80CC28"
+															d="M256 121.666H134.335V0H256z"
+														/>
+														<path
+															fill="#00ADEF"
+															d="M121.663 256.002H0V134.336h121.663z"
+														/>
+														<path
+															fill="#FBBC09"
+															d="M256 256.002H134.335V134.336H256z"
+														/>
+													</svg>
+												</div>
+												{/* Google — 180° leftmost of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-0 top-[68px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="13"
+														height="13"
+														viewBox="0 0 16 16"
+													>
+														<g
+															fill="none"
+															fillRule="evenodd"
+															clipRule="evenodd"
+														>
+															<path
+																fill="#f44336"
+																d="M7.209 1.061c.725-.081 1.154-.081 1.933 0a6.57 6.57 0 0 1 3.65 1.82a100 100 0 0 0-1.986 1.93q-1.876-1.59-4.188-.734q-1.696.78-2.362 2.528a78 78 0 0 1-2.148-1.658a.26.26 0 0 0-.16-.027q1.683-3.245 5.26-3.86"
+																opacity=".987"
+															/>
+															<path
+																fill="#ffc107"
+																d="M1.946 4.92q.085-.013.161.027a78 78 0 0 0 2.148 1.658A7.6 7.6 0 0 0 4.04 7.99q.037.678.215 1.331L2 11.116Q.527 8.038 1.946 4.92"
+																opacity=".997"
+															/>
+															<path
+																fill="#448aff"
+																d="M12.685 13.29a26 26 0 0 0-2.202-1.74q1.15-.812 1.396-2.228H8.122V6.713q3.25-.027 6.497.055q.616 3.345-1.423 6.032a7 7 0 0 1-.51.49"
+																opacity=".999"
+															/>
+															<path
+																fill="#43a047"
+																d="M4.255 9.322q1.23 3.057 4.51 2.854a3.94 3.94 0 0 0 1.718-.626q1.148.812 2.202 1.74a6.62 6.62 0 0 1-4.027 1.684a6.4 6.4 0 0 1-1.02 0Q3.82 14.524 2 11.116z"
+																opacity=".993"
+															/>
+														</g>
+													</svg>
+												</div>
+												{/* Keycloak — 135° lower-left of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[20px] top-[116px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="13"
+														height="13"
+														viewBox="0 0 24 24"
+														className="text-foreground/60"
+													>
+														<path
+															fill="currentColor"
+															d="m18.742 1.182l-12.493.002C4.155 4.784 2.079 8.393 0 12.002c2.071 3.612 4.162 7.214 6.252 10.816l12.49-.004l3.089-5.404h2.158v-.002H24L23.996 6.59h-2.168zM8.327 4.792h2.081l1.04 1.8l-3.12 5.413l3.117 5.403l-1.035 1.81H8.327a2048 2048 0 0 0-4.168-7.204zm6.241 0l2.086.003q2.088 3.608 4.166 7.222l-4.167 7.2h-2.08c-.382-.562-1.038-1.808-1.038-1.808l3.123-5.405l-3.124-5.413z"
+														/>
+													</svg>
+												</div>
+												{/* Ping Identity — 90° bottom of outer arc */}
+												<div className="absolute size-6 flex items-center justify-center left-[68px] top-[136px]">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="12"
+														height="12"
+														viewBox="0 0 24 24"
+													>
+														<path
+															d="M23.7476 0H0V23.3473H23.7476V0Z"
+															fill="#D20E0F"
+														/>
+													</svg>
+												</div>
+											</div>
+										)}
 									</div>
 								))}
 							</div>
 
-							{/* Audit Logs */}
-							<div className="mt-10">
-								<div className="mb-4">
-									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-										Audit Logs
-									</h3>
-									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
-										Every auth event captured automatically — sign-ins, password
-										resets, MFA challenges, session changes, and more. Filter,
-										search, and export with configurable retention and log drain
-										to your SIEM.
-									</p>
-								</div>
-								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
-									{[
-										{ label: "Auto Capture", desc: "Every auth event logged" },
-										{ label: "Log Explorer", desc: "Filter & search events" },
-										{ label: "Retention", desc: "1 day to custom" },
-										{ label: "Log Drain", desc: "Export to your SIEM" },
-									].map((item, i) => (
-										<div
-											key={item.label}
-											className={cn(
-												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
-												i > 0 && "-ml-px",
-											)}
-										>
-											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
-												{item.label}
-											</div>
-											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
-												{item.desc}
-											</div>
+							{/* Sentinel row */}
+							<div className="relative z-10 border border-dashed border-foreground/[0.06] -mt-px -mx-px p-4">
+								<div className="flex flex-col sm:flex-row sm:items-start gap-4">
+									<div className="sm:w-1/3">
+										<div className="flex items-center gap-2 mb-1">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="12"
+												height="12"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="1.5"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="text-foreground/70"
+											>
+												<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+											</svg>
+											<h4 className="text-[11px] sm:text-xs font-mono font-semibold uppercase tracking-widest text-foreground/90 dark:text-foreground/75">
+												Sentinel
+											</h4>
 										</div>
-									))}
+										<p className="text-[13px] sm:text-[14px] text-foreground/60 dark:text-foreground/50 leading-relaxed">
+											Real-time threat detection before it reaches your users.
+										</p>
+									</div>
+									<div className="flex-1 flex flex-wrap gap-1.5">
+										{[
+											"Bot Detection",
+											"Brute Force",
+											"Breached Passwords",
+											"Impossible Travel",
+											"Rate Limiting",
+											"Geo Blocking",
+											"Suspicious IPs",
+											"Disposable Emails",
+											"Email Abuse",
+											"Free Trial Abuse",
+										].map((tag) => (
+											<span
+												key={tag}
+												className="inline-flex items-center px-2 py-1 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border border-foreground/[0.12] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/80 dark:hover:text-foreground/65 transition-colors"
+											>
+												{tag}
+											</span>
+										))}
+									</div>
 								</div>
 							</div>
 
-							{/* Transactional Comms */}
-							<div className="mt-10">
-								<div className="mb-4">
-									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-										Transactional Comms
-									</h3>
-									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
-										Built-in email and SMS delivery for verification codes,
-										magic links, password resets, and MFA. Customizable
-										templates, abuse protection, and delivery tracking — no
-										third-party setup required.
-									</p>
-								</div>
-								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
-									{[
-										{ label: "Email & SMS", desc: "Built-in delivery" },
-										{ label: "Templates", desc: "Fully customizable" },
-										{
-											label: "Abuse Protection",
-											desc: "Rate limits & blocking",
-										},
-										{ label: "Delivery Tracking", desc: "Status & analytics" },
-									].map((item, i) => (
-										<div
-											key={item.label}
-											className={cn(
-												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
-												i > 0 && "-ml-px",
-											)}
-										>
-											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
-												{item.label}
-											</div>
-											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
-												{item.desc}
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-						</div>
-
-						{/* Sentinel */}
-						<SentinelSection />
-
-						{/* Infrastructure CTA */}
-						<div className="mt-8 mb-4">
-							<div className="border border-dashed border-foreground/[0.10] p-5 flex items-center justify-between">
-								<div>
-									<p className="text-[11px] font-mono uppercase tracking-widest text-foreground/80 dark:text-foreground/80 mb-1">
+							{/* CTA */}
+							<div className="relative z-10 flex items-center justify-between mt-4 px-6 py-5 border border-dashed border-foreground/[0.08] bg-foreground/[0.01]">
+								<div className="flex flex-col gap-0.5">
+									<span className="text-[13px] sm:text-[14px] font-medium text-foreground/90 dark:text-foreground/85">
 										Explore plans
-									</p>
-									<p className="text-[12px] text-foreground/50 dark:text-foreground/40 leading-relaxed">
+									</span>
+									<span className="text-[11px] sm:text-[12px] text-foreground/75 dark:text-foreground/60">
 										Dashboard, audit logs, security detection, transactional
 										comms, and more.
-									</p>
+									</span>
 								</div>
 								<Link
-									href="/products/infrastructure"
-									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2 border border-dashed border-foreground/[0.14] text-foreground dark:text-foreground/80 hover:text-foreground hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
+									href="/pricing"
+									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2.5 bg-foreground text-background hover:opacity-90 transition-all font-mono text-[11px] uppercase tracking-widest group"
 								>
-									<span className="font-mono text-[11px] uppercase tracking-widest">
-										View Plans
-									</span>
+									View Plans
 									<svg
-										className="h-2.5 w-2.5 opacity-50"
+										className="h-2.5 w-2.5 opacity-70 group-hover:translate-x-0.5 transition-transform"
 										viewBox="0 0 10 10"
 										fill="none"
 									>
 										<path
-											d="M1 9L9 1M9 1H3M9 1V7"
+											d="M1 5H9M9 5L5 1M9 5L5 9"
 											stroke="currentColor"
 											strokeWidth="1.2"
 										/>

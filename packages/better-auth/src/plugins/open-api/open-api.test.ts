@@ -197,6 +197,29 @@ describe("open-api", async () => {
 		).not.toThrow();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9260
+	 */
+	it("should not require token/user in /sign-in/social response and allow redirect to be true or false", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const responseSchema =
+			paths["/sign-in/social"].post.responses["200"].content["application/json"]
+				.schema;
+
+		expect(responseSchema.required).toEqual(["redirect"]);
+		expect(responseSchema.required).not.toContain("token");
+		expect(responseSchema.required).not.toContain("user");
+
+		expect(responseSchema.properties.redirect.enum).toBeUndefined();
+		expect(responseSchema.properties.redirect.type).toBe("boolean");
+
+		expect(responseSchema.properties.token).toBeDefined();
+		expect(responseSchema.properties.user).toBeDefined();
+		expect(responseSchema.properties.url).toBeDefined();
+	});
+
 	it("should correctly unwrap ZodDefault and infer inner type", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;

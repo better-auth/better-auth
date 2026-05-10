@@ -60,11 +60,10 @@ fastify.route({
       // Forward response to client
       reply.status(response.status);
       response.headers.forEach((value, key) => reply.header(key, value));
-      reply.send(response.body ? await response.text() : null);
-
+      return reply.send(response.body ? await response.text() : null);
     } catch (error) {
       fastify.log.error("Authentication Error:", error);
-      reply.status(500).send({ 
+      return reply.status(500).send({ 
         error: "Internal authentication error",
         code: "AUTH_FAILURE"
       });

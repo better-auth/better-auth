@@ -1,9 +1,9 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="public/branding/better-auth-logo-wordmark-dark.svg" />
+  <source media="(prefers-color-scheme: dark)" srcset="public/branding/svg/better-auth-wordmark-light.svg" />
 
-  <source media="(prefers-color-scheme: light)" srcset="public/branding/better-auth-logo-wordmark-light.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="public/branding/svg/better-auth-wordmark-dark.svg" />
 
-  <img alt="Better Auth" src="public/branding/better-auth-logo-wordmark-dark.svg" width="280" />
+  <img alt="Better Auth" src="public/branding/svg/better-auth-wordmark-dark.svg" width="280" />
 </picture>
 
 ### Website & Docs
