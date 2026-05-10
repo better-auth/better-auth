@@ -197,7 +197,7 @@ Most of the features of Better Auth will not work correctly.`,
 				) as unknown as Entries<SocialProviders>
 			).map(async ([key, originalConfig]) => {
 				// Skip non-provider keys such as `requireEmailVerification`
-				if (!(key in socialProviders)) {
+				if (!Object.prototype.hasOwnProperty.call(socialProviders, key)) {
 					return null;
 				}
 				const config =

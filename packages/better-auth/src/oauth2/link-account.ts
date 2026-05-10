@@ -230,9 +230,20 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
+	/**
+	 * If the operator requires email verification for social sign-in,
+	 * block the session when the provider did not confirm the email.
+	 *
+	 * We check userInfo.emailVerified (the value from the OAuth provider)
+	 * rather than user.emailVerified (the DB record) because the local user
+	 * variable may be stale — earlier in this function we may have called
+	 * updateUser({ emailVerified: true }) without reassigning user.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/9486
+	 */
 	if (
 		c.context.options.socialProviders?.requireEmailVerification &&
-		!user.emailVerified
+		!userInfo.emailVerified
 	) {
 		return {
 			error: "email_not_verified",
