@@ -33,10 +33,12 @@ function parseCookiesFromContext(
 	}
 
 	const cookies: Record<string, string> = {};
-	const pairs = cookieHeader.split("; ");
+	const pairs = cookieHeader.split(";");
 
 	for (const pair of pairs) {
-		const [name, ...valueParts] = pair.split("=");
+		const trimmed = pair.trim();
+		if (!trimmed) continue;
+		const [name, ...valueParts] = trimmed.split("=");
 		if (name && valueParts.length > 0) {
 			cookies[name] = valueParts.join("=");
 		}
@@ -248,9 +250,11 @@ export function getChunkedCookie(
 	}
 
 	const cookies: Record<string, string> = {};
-	const pairs = cookieHeader.split("; ");
+	const pairs = cookieHeader.split(";");
 	for (const pair of pairs) {
-		const [name, ...valueParts] = pair.split("=");
+		const trimmed = pair.trim();
+		if (!trimmed) continue;
+		const [name, ...valueParts] = trimmed.split("=");
 		if (name && valueParts.length > 0) {
 			cookies[name] = valueParts.join("=");
 		}

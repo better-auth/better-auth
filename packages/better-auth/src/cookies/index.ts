@@ -357,11 +357,13 @@ export function deleteSessionCookie(
 }
 
 export function parseCookies(cookieHeader: string) {
-	const cookies = cookieHeader.split("; ");
+	const cookies = cookieHeader.split(";");
 	const cookieMap = new Map<string, string>();
 
 	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split(/=(.*)/s);
+		const trimmed = cookie.trim();
+		if (!trimmed) return;
+		const [name, value] = trimmed.split(/=(.*)/s);
 		cookieMap.set(name!, value!);
 	});
 	return cookieMap;

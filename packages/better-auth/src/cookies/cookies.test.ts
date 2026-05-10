@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	expireCookie,
+	getChunkedCookie,
 	getCookieCache,
 	getCookies,
 	getSessionCookie,
@@ -1435,6 +1436,65 @@ describe("parse cookies", () => {
 		);
 		expect(parsedCookies.get("better-auth.session_data")).toBe(
 			"session-data.signature=",
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9465
+ */
+describe("Cookie header without whitespace after semicolon", () => {
+	it("parseCookies returns each pair when separator is `;` only", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature;better-auth.session_data=session-data.signature";
+
+		const parsed = parseCookies(cookieHeader);
+
+		expect(parsed.get("better-auth.session_token")).toBe(
+			"session-token.signature",
+		);
+		expect(parsed.get("better-auth.session_data")).toBe(
+			"session-data.signature",
+		);
+	});
+
+	it("parseCookies tolerates mixed `;`, `; `, and `;\\t` separators", () => {
+		const cookieHeader = "a=1; b=2;c=3;\td=4";
+
+		const parsed = parseCookies(cookieHeader);
+
+		expect(parsed.get("a")).toBe("1");
+		expect(parsed.get("b")).toBe("2");
+		expect(parsed.get("c")).toBe("3");
+		expect(parsed.get("d")).toBe("4");
+	});
+
+	it("getSessionCookie finds the session cookie when separator is `;` only", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"preference=dark;better-auth.session_token=token-123",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		expect(getSessionCookie(request)).toBe("token-123");
+	});
+
+	it("getChunkedCookie reconstructs chunks across `;`-only separators", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_data.0=chunkA;better-auth.session_data.1=chunkB",
+		);
+		const ctx = {
+			getCookie: () => undefined,
+			headers,
+		} as unknown as Parameters<typeof getChunkedCookie>[0];
+
+		expect(getChunkedCookie(ctx, "better-auth.session_data")).toBe(
+			"chunkAchunkB",
 		);
 	});
 });
