@@ -6,6 +6,7 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
+import { createSubscriptionEvent, createSubscriptionItem } from "./_factories";
 import { test as baseTest, createStripeMock } from "./_fixtures";
 
 const test = baseTest.extend<{
@@ -1270,34 +1271,34 @@ describe("seat-based billing", () => {
 			stripeMock,
 		}) => {
 			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
-			const now = Math.floor(Date.now() / 1000);
-			const mockEvent = {
-				type: "customer.subscription.created",
-				data: {
-					object: {
-						id: "sub_webhook_seat",
-						customer: "cus_webhook_seat",
-						status: "active",
-						items: {
-							data: [
-								{
-									price: { id: "price_team_base", lookup_key: null },
-									quantity: 1,
-									current_period_start: now,
-									current_period_end: now + 30 * 24 * 60 * 60,
-								},
-								{
-									price: { id: "price_team_seat", lookup_key: null },
-									quantity: 5,
-									current_period_start: now,
-									current_period_end: now + 30 * 24 * 60 * 60,
-								},
-							],
-						},
-						cancel_at_period_end: false,
+			const _now = Math.floor(Date.now() / 1000);
+			const mockEvent = createSubscriptionEvent(
+				"customer.subscription.created",
+				{
+					id: "sub_webhook_seat",
+					customer: "cus_webhook_seat",
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								price: {
+									id: "price_team_base",
+									lookup_key: null,
+								} as Stripe.Price,
+							}),
+							createSubscriptionItem({
+								price: {
+									id: "price_team_seat",
+									lookup_key: null,
+								} as Stripe.Price,
+								quantity: 5,
+							}),
+						],
+						has_more: false,
+						url: "/v1/subscription_items",
 					},
 				},
-			};
+			);
 
 			const webhookOptions: StripeOptions = {
 				...seatOptions,
@@ -1375,7 +1376,7 @@ describe("seat-based billing", () => {
 			stripeMock,
 		}) => {
 			const seatOptions = buildSeatPlanOptions(stripeMock as unknown as Stripe);
-			const now = Math.floor(Date.now() / 1000);
+			const _now = Math.floor(Date.now() / 1000);
 			const webhookMock = vi.fn();
 
 			const webhookOptions: StripeOptions = {
@@ -1406,37 +1407,34 @@ describe("seat-based billing", () => {
 				},
 			});
 
-			const mockUpdateEvent = {
-				type: "customer.subscription.updated",
-				data: {
-					object: {
-						id: "sub_seat_update",
-						customer: "cus_seat_update",
-						status: "active",
-						cancel_at_period_end: false,
-						cancel_at: null,
-						canceled_at: null,
-						ended_at: null,
-						items: {
-							data: [
-								{
-									price: { id: "price_team_base", lookup_key: null },
-									quantity: 1,
-									current_period_start: now,
-									current_period_end: now + 30 * 24 * 60 * 60,
-								},
-								{
-									price: { id: "price_team_seat", lookup_key: null },
-									quantity: 8,
-									current_period_start: now,
-									current_period_end: now + 30 * 24 * 60 * 60,
-								},
-							],
-						},
-						metadata: { subscriptionId: sub.id },
+			const mockUpdateEvent = createSubscriptionEvent(
+				"customer.subscription.updated",
+				{
+					id: "sub_seat_update",
+					customer: "cus_seat_update",
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								price: {
+									id: "price_team_base",
+									lookup_key: null,
+								} as Stripe.Price,
+							}),
+							createSubscriptionItem({
+								price: {
+									id: "price_team_seat",
+									lookup_key: null,
+								} as Stripe.Price,
+								quantity: 8,
+							}),
+						],
+						has_more: false,
+						url: "/v1/subscription_items",
 					},
+					metadata: { subscriptionId: sub.id },
 				},
-			};
+			);
 
 			webhookMock.mockResolvedValue(mockUpdateEvent);
 

@@ -4,6 +4,7 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
+import { createSubscriptionEvent, createSubscriptionItem } from "./_factories";
 import { test } from "./_fixtures";
 
 describe("stripe subscription", () => {
@@ -1744,22 +1745,18 @@ describe("stripe subscription", () => {
 			});
 
 			// customer.subscription.deleted fires with trial data from Stripe
-			const webhookEvent = {
-				type: "customer.subscription.deleted",
-				data: {
-					object: {
-						id: "sub_trial_deleted_propagate",
-						customer: "cus_trial_deleted_propagate",
-						status: "canceled",
-						trial_start: trialStart,
-						trial_end: trialEnd,
-						cancel_at_period_end: false,
-						cancel_at: null,
-						canceled_at: now,
-						ended_at: now,
-					},
+			const webhookEvent = createSubscriptionEvent(
+				"customer.subscription.deleted",
+				{
+					id: "sub_trial_deleted_propagate",
+					customer: "cus_trial_deleted_propagate",
+					status: "canceled",
+					trial_start: trialStart,
+					trial_end: trialEnd,
+					canceled_at: now,
+					ended_at: now,
 				},
-			};
+			);
 
 			const stripeForTest = {
 				...stripeOptions.stripeClient,
@@ -1845,36 +1842,31 @@ describe("stripe subscription", () => {
 			});
 
 			// customer.subscription.updated fires when trial ends (status: trialing → active)
-			const webhookEvent = {
-				type: "customer.subscription.updated",
-				data: {
-					object: {
-						id: "sub_trial_updated_propagate",
-						customer: "cus_trial_updated_propagate",
-						status: "active",
-						trial_start: trialStart,
-						trial_end: trialEnd,
-						cancel_at_period_end: false,
-						cancel_at: null,
-						canceled_at: null,
-						ended_at: null,
-						metadata: {
-							subscriptionId,
-						},
-						items: {
-							data: [
-								{
-									id: "si_test_item",
-									price: { id: process.env.STRIPE_PRICE_ID_1 },
-									quantity: 1,
-									current_period_start: now,
-									current_period_end: periodEnd,
-								},
-							],
-						},
+			const webhookEvent = createSubscriptionEvent(
+				"customer.subscription.updated",
+				{
+					id: "sub_trial_updated_propagate",
+					customer: "cus_trial_updated_propagate",
+					trial_start: trialStart,
+					trial_end: trialEnd,
+					metadata: { subscriptionId },
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								id: "si_test_item",
+								price: {
+									id: process.env.STRIPE_PRICE_ID_1,
+								} as Stripe.Price,
+								current_period_start: now,
+								current_period_end: periodEnd,
+							}),
+						],
+						has_more: false,
+						url: "/v1/subscription_items",
 					},
 				},
-			};
+			);
 
 			const stripeForTest = {
 				...stripeOptions.stripeClient,
@@ -1983,22 +1975,18 @@ describe("stripe subscription", () => {
 			});
 
 			// Step 2: Simulate customer.subscription.deleted with trial data from Stripe
-			const deleteEvent = {
-				type: "customer.subscription.deleted" as const,
-				data: {
-					object: {
-						id: "sub_trial_abuse_old",
-						customer: "cus_trial_abuse",
-						status: "canceled" as const,
-						trial_start: trialStart,
-						trial_end: trialEnd,
-						cancel_at_period_end: false,
-						cancel_at: null,
-						canceled_at: now,
-						ended_at: now,
-					},
+			const deleteEvent = createSubscriptionEvent(
+				"customer.subscription.deleted",
+				{
+					id: "sub_trial_abuse_old",
+					customer: "cus_trial_abuse",
+					status: "canceled",
+					trial_start: trialStart,
+					trial_end: trialEnd,
+					canceled_at: now,
+					ended_at: now,
 				},
-			};
+			);
 
 			const stripeForWebhook = {
 				...stripeOptions.stripeClient,

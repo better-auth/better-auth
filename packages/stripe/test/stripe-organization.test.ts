@@ -6,6 +6,7 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
+import { createSubscriptionEvent, createSubscriptionItem } from "./_factories";
 import { test as baseTest, createStripeMock } from "./_fixtures";
 
 const test = baseTest.extend<{
@@ -635,31 +636,24 @@ describe("stripe - organization customer", () => {
 		const orgStripeOptions = buildOrgStripeOptions(
 			stripeMock as unknown as Stripe,
 		);
-		const mockEvent = {
-			type: "customer.subscription.created",
-			data: {
-				object: {
-					id: "sub_org_webhook_123",
-					customer: "cus_org_webhook_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
-									lookup_key: null,
-								},
-								quantity: 5,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end:
-									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-							},
-						],
-					},
-					cancel_at_period_end: false,
-				},
+		const mockEvent = createSubscriptionEvent("customer.subscription.created", {
+			id: "sub_org_webhook_123",
+			customer: "cus_org_webhook_123",
+			items: {
+				object: "list",
+				data: [
+					createSubscriptionItem({
+						price: {
+							id: process.env.STRIPE_PRICE_ID_1,
+							lookup_key: null,
+						} as Stripe.Price,
+						quantity: 5,
+					}),
+				],
+				has_more: false,
+				url: "/v1/subscription_items",
 			},
-		};
+		});
 
 		const stripeForOrgWebhook = {
 			...stripeMock,
@@ -1001,34 +995,27 @@ describe("stripe - organization customer", () => {
 		const onSubscriptionUpdate = vi.fn();
 		const onSubscriptionCancel = vi.fn();
 
-		const mockUpdateEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: "sub_org_update_123",
-					customer: "cus_org_update_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: "price_premium_123", // Different price ID
-									lookup_key: "lookup_key_234", // Matches premium plan
-								},
-								quantity: 10,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end:
-									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-							},
-						],
-					},
-					cancel_at_period_end: false,
-					cancel_at: null,
-					canceled_at: null,
-					ended_at: null,
+		const mockUpdateEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: "sub_org_update_123",
+				customer: "cus_org_update_123",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: {
+								id: "price_premium_123", // Different price ID
+								lookup_key: "lookup_key_234", // Matches premium plan
+							} as Stripe.Price,
+							quantity: 10,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
+		);
 
 		const stripeForOrgUpdateWebhook = {
 			...stripeMock,
@@ -1148,37 +1135,36 @@ describe("stripe - organization customer", () => {
 		const onSubscriptionCancel = vi.fn();
 
 		const cancelAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
-		const mockCancelEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: "sub_org_cancel_webhook_123",
-					customer: "cus_org_cancel_webhook_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
-									lookup_key: null,
-								},
-								quantity: 5,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end: cancelAt,
-							},
-						],
-					},
-					cancel_at_period_end: true,
-					cancel_at: cancelAt,
-					canceled_at: Math.floor(Date.now() / 1000),
-					ended_at: null,
-					cancellation_details: {
-						reason: "cancellation_requested",
-						comment: "User requested cancellation",
-					},
+		const mockCancelEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: "sub_org_cancel_webhook_123",
+				customer: "cus_org_cancel_webhook_123",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: {
+								id: process.env.STRIPE_PRICE_ID_1,
+								lookup_key: null,
+							} as Stripe.Price,
+							quantity: 5,
+							current_period_end: cancelAt,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
+				},
+				cancel_at_period_end: true,
+				cancel_at: cancelAt,
+				canceled_at: Math.floor(Date.now() / 1000),
+				cancellation_details: {
+					reason: "cancellation_requested",
+					comment: "User requested cancellation",
+					feedback: null,
 				},
 			},
-		};
+		);
 
 		const stripeForOrgCancelWebhook = {
 			...stripeMock,
@@ -1297,20 +1283,17 @@ describe("stripe - organization customer", () => {
 		);
 		const onSubscriptionDeleted = vi.fn();
 
-		const mockDeleteEvent = {
-			type: "customer.subscription.deleted",
-			data: {
-				object: {
-					id: "sub_org_delete_123",
-					customer: "cus_org_delete_123",
-					status: "canceled",
-					cancel_at_period_end: false,
-					cancel_at: null,
-					canceled_at: Math.floor(Date.now() / 1000),
-					ended_at: Math.floor(Date.now() / 1000),
-				},
+		const now = Math.floor(Date.now() / 1000);
+		const mockDeleteEvent = createSubscriptionEvent(
+			"customer.subscription.deleted",
+			{
+				id: "sub_org_delete_123",
+				customer: "cus_org_delete_123",
+				status: "canceled",
+				canceled_at: now,
+				ended_at: now,
 			},
-		};
+		);
 
 		const stripeForOrgDeleteWebhook = {
 			...stripeMock,
@@ -1593,33 +1576,27 @@ describe("stripe - organization customer", () => {
 		);
 		const onSubscriptionCreated = vi.fn();
 
-		const mockCreateEvent = {
-			type: "customer.subscription.created",
-			data: {
-				object: {
-					id: "sub_org_created_callback_123",
-					customer: "cus_org_created_callback_123",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: {
-									id: process.env.STRIPE_PRICE_ID_1,
-									lookup_key: null,
-								},
-								quantity: 5,
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end:
-									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-							},
-						],
-					},
-					cancel_at_period_end: false,
-					trial_start: null,
-					trial_end: null,
+		const mockCreateEvent = createSubscriptionEvent(
+			"customer.subscription.created",
+			{
+				id: "sub_org_created_callback_123",
+				customer: "cus_org_created_callback_123",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: {
+								id: process.env.STRIPE_PRICE_ID_1,
+								lookup_key: null,
+							} as Stripe.Price,
+							quantity: 5,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
+		);
 
 		const stripeForCreatedCallback = {
 			...stripeMock,
