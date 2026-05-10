@@ -189,10 +189,34 @@ const cookieNameRegex = /^[\w!#$%&'*.^`|~+-]+$/;
 const cookieValueRegex = /^[ !#-:<-[\]-~]*$/;
 
 /**
+ * Trim leading/trailing OWS (space / horizontal tab) per RFC 7230 §3.2.3.
+ * Narrower than `String.prototype.trim()`, which strips CR/LF and other
+ * whitespace and would let CTLs escape `cookieValueRegex`.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.3
+ */
+function trimOWS(s: string): string {
+	let start = 0;
+	let end = s.length;
+	while (start < end) {
+		const c = s.charCodeAt(start);
+		if (c !== 0x20 && c !== 0x09) break;
+		start++;
+	}
+	while (end > start) {
+		const c = s.charCodeAt(end - 1);
+		if (c !== 0x20 && c !== 0x09) break;
+		end--;
+	}
+	return start === 0 && end === s.length ? s : s.slice(start, end);
+}
+
+/**
  * Tolerates `;` separators without the SP that RFC 6265 §4.2.1 mandates,
  * since proxies and runtimes commonly strip it. Silently drops entries
  * whose name violates RFC 7230 token or whose value violates RFC 6265
- * cookie-octet (plus space and comma).
+ * cookie-octet (plus space and comma). Strips optional surrounding
+ * double-quotes per RFC 6265 §4.1.1.
  */
 export function parseCookies(cookie: string): Map<string, string> {
 	const cookieMap = new Map<string, string>();
@@ -200,8 +224,11 @@ export function parseCookies(cookie: string): Map<string, string> {
 	for (const chunk of cookie.split(";")) {
 		const eq = chunk.indexOf("=");
 		if (eq === -1) continue;
-		const key = chunk.slice(0, eq).trim();
-		const val = chunk.slice(eq + 1).trim();
+		const key = trimOWS(chunk.slice(0, eq));
+		let val = trimOWS(chunk.slice(eq + 1));
+		if (val.length >= 2 && val[0] === '"' && val[val.length - 1] === '"') {
+			val = val.slice(1, -1);
+		}
 		if (cookieNameRegex.test(key) && cookieValueRegex.test(val)) {
 			cookieMap.set(key, val);
 		}

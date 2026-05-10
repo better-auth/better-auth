@@ -1531,6 +1531,21 @@ describe("parseCookies validation", () => {
 		const map = parseCookies("a=b=c=d");
 		expect(map.get("a")).toBe("b=c=d");
 	});
+
+	it("rejects entries with CR/LF in raw key or value (no trim escape)", () => {
+		const map = parseCookies("a=ok\r; b\r=1; c=v\nv; d=ok");
+		expect(map.has("a")).toBe(false);
+		expect(map.has("b")).toBe(false);
+		expect(map.has("c")).toBe(false);
+		expect(map.get("d")).toBe("ok");
+	});
+
+	it("strips double-quoted values per RFC 6265 §4.1.1", () => {
+		const map = parseCookies('a="hello"; b=plain; c="with space"');
+		expect(map.get("a")).toBe("hello");
+		expect(map.get("b")).toBe("plain");
+		expect(map.get("c")).toBe("with space");
+	});
 });
 
 describe("applySetCookies", () => {
