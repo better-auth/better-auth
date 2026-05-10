@@ -47,6 +47,8 @@ export async function getTelemetryAuthConfig(
 					];
 				if (!p) return {};
 				const provider = typeof p === "function" ? await p() : p;
+				// Skip non-provider config keys like `requireEmailVerification`
+				if (typeof provider !== "object" || provider === null) return {};
 				return {
 					id: key,
 					mapProfileToUser: !!provider.mapProfileToUser,
