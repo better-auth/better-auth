@@ -154,6 +154,67 @@ describe("anonymous", async () => {
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
 	});
 
+	it("should call onLinkAccount when anonymous user verifies email", async () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9485
+		 */
+		const linkAccountFn = vi.fn();
+		let verificationToken = "";
+
+		const { client, sessionSetter, auth } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async onLinkAccount(data) {
+							linkAccountFn(data);
+						},
+					}),
+				],
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					autoSignInAfterVerification: true,
+					async sendVerificationEmail({ url }) {
+						verificationToken = new URL(url).searchParams.get("token") || "";
+					},
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		const anonHeaders = new Headers();
+
+		await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(anonHeaders),
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "newuser@example.com",
+				password: "password123",
+				name: "New User",
+			},
+			headers: anonHeaders,
+		});
+
+		await auth.api.verifyEmail({
+			query: { token: verificationToken },
+			headers: anonHeaders,
+		});
+
+		expect(linkAccountFn).toHaveBeenCalledTimes(1);
+		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+
 	it("should work with generateName", async () => {
 		const { client, sessionSetter } = await getTestInstance(
 			{
