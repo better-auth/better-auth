@@ -44,7 +44,6 @@ describe("stripe checkout", () => {
 		test("should swap line item prices when upgrading immediately", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -161,7 +160,6 @@ describe("stripe checkout", () => {
 		test("should swap line item prices in scheduled phase", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -309,7 +307,6 @@ describe("stripe checkout", () => {
 		test("should add new line items when upgrading to a plan with more items", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -416,7 +413,6 @@ describe("stripe checkout", () => {
 		test("should remove extra line items when downgrading to a plan with fewer items", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -553,7 +549,6 @@ describe("stripe checkout", () => {
 		test("should not duplicate line items already present in the subscription (immediate)", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -651,7 +646,6 @@ describe("stripe checkout", () => {
 		test("should not duplicate line items already present in scheduled phase", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -765,7 +759,6 @@ describe("stripe checkout", () => {
 	});
 	describe("subscriptionSuccess - checkoutSessionId flow", () => {
 		test("should update subscription via checkoutSessionId and redirect", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -902,7 +895,6 @@ describe("stripe checkout", () => {
 		});
 
 		test("should redirect without update when checkoutSessionId is missing", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -956,7 +948,6 @@ describe("stripe checkout", () => {
 		 * @see https://github.com/better-auth/better-auth/issues/8255
 		 */
 		test("should replace {CHECKOUT_SESSION_ID} placeholder in callbackURL with actual session ID", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -1085,7 +1076,6 @@ describe("stripe checkout", () => {
 		});
 
 		test("should redirect when checkout session retrieval fails", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -1157,7 +1147,6 @@ describe("stripe checkout", () => {
 		test("should not include quantity for metered base price in checkout session", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -1234,7 +1223,6 @@ describe("stripe checkout", () => {
 		test("should still include quantity for licensed base price in checkout session", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -1315,7 +1303,6 @@ describe("stripe checkout", () => {
 		test("should not include quantity for metered price during billing portal upgrade", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -1450,7 +1437,6 @@ describe("stripe checkout", () => {
 		test("should not include quantity for metered price during direct subscription upgrade", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -1585,7 +1571,6 @@ describe("stripe checkout", () => {
 		test("should not include quantity for metered price during scheduled upgrade", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			vi.clearAllMocks();
 
@@ -1775,7 +1760,6 @@ describe("stripe checkout", () => {
 		test("preserves plan freeTrial when getCheckoutSessionParams returns custom subscription_data", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			const { client, sessionSetter } = await getTestInstance(
 				{
@@ -2185,7 +2169,6 @@ describe("stripe checkout", () => {
 		test("preserves internal subscription metadata when getCheckoutSessionParams returns custom subscription_data", async ({
 			stripeMock,
 			memory,
-			stripeOptions,
 		}) => {
 			const { client, sessionSetter } = await getTestInstance(
 				{

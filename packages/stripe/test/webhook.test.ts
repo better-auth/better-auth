@@ -1,6 +1,6 @@
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
-import { describe, expect, vi } from "vitest";
+import { assert, describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
@@ -19,7 +19,6 @@ const testUser = {
 
 describe("stripe webhook", () => {
 	test("should handle subscription webhook events", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -146,7 +145,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should handle subscription webhook events with trial", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -280,7 +278,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should handle subscription deletion webhook", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -401,7 +398,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should handle customer.subscription.created webhook event", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -504,7 +500,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should store billingInterval as year for annual subscriptions", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -598,7 +593,6 @@ describe("stripe webhook", () => {
 		expect(subscription?.billingInterval).toBe("year");
 	});
 	test("should not create duplicate subscription if already exists", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -714,7 +708,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should skip subscription creation when user not found", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -802,7 +795,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should skip subscription creation when plan not found", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -901,7 +893,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should skip creating subscription when metadata.subscriptionId exists", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -1036,7 +1027,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should execute subscription event handlers", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -1326,7 +1316,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should return updated subscription in onSubscriptionUpdate callback", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -1436,7 +1425,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should sync stripeScheduleId from webhook when schedule is present", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -1520,7 +1508,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should clear stripeScheduleId from webhook when schedule is removed", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -1605,7 +1592,6 @@ describe("stripe webhook", () => {
 	});
 
 	test("should clear stripeScheduleId on subscription deleted webhook", async ({
-		stripeMock,
 		memory,
 		stripeOptions,
 	}) => {
@@ -1681,7 +1667,6 @@ describe("stripe webhook", () => {
 
 	describe("Webhook Error Handling (Stripe v19)", () => {
 		test("should handle invalid webhook signature with constructEventAsync", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -1727,7 +1712,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should reject webhook request without stripe-signature header", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -1759,7 +1743,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should handle constructEventAsync returning null/undefined", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -1804,7 +1787,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should handle async errors in webhook event processing", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -1890,7 +1872,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should successfully process webhook with valid async signature verification", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -1981,7 +1962,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should call constructEventAsync with exactly 3 required parameters", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -2047,7 +2027,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should support Stripe v18 with sync constructEvent method", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -2144,7 +2123,6 @@ describe("stripe webhook", () => {
 	});
 	describe("webhook: cancel_at_period_end cancellation", () => {
 		test("should sync cancelAtPeriodEnd and canceledAt when user cancels via Billing Portal (at_period_end mode)", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -2258,7 +2236,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should sync cancelAt when subscription is scheduled to cancel at a specific date", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -2373,7 +2350,6 @@ describe("stripe webhook", () => {
 		 * @see https://github.com/better-auth/better-auth/issues/9321
 		 */
 		test("should pass stripeSubscription to onSubscriptionUpdate", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -2460,7 +2436,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should pass the post-update subscription row to onSubscriptionCancel (symmetry with onSubscriptionUpdate)", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -2563,7 +2538,6 @@ describe("stripe webhook", () => {
 	});
 	describe("webhook: immediate cancellation (subscription deleted)", () => {
 		test("should set status=canceled and endedAt when subscription is immediately canceled", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
@@ -2653,7 +2627,6 @@ describe("stripe webhook", () => {
 		});
 
 		test("should set endedAt when cancel_at_period_end subscription reaches period end", async ({
-			stripeMock,
 			memory,
 			stripeOptions,
 		}) => {
