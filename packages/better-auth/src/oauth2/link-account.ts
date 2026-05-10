@@ -241,10 +241,7 @@ export async function handleOAuthUserInfo(
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/9486
 	 */
-	if (
-		c.context.options.socialProviders?.requireEmailVerification &&
-		!userInfo.emailVerified
-	) {
+	if (c.context.options.requireEmailVerification && !userInfo.emailVerified) {
 		return {
 			error: "email_not_verified",
 			data: null,

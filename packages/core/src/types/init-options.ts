@@ -768,6 +768,17 @@ export type BetterAuthOptions = {
 	 */
 	socialProviders?: SocialProviders | undefined;
 	/**
+	 * When true, social sign-in is blocked for users whose email has not been
+	 * verified by the OAuth provider. The OAuth callback will redirect with an
+	 * `email_not_verified` error instead of creating a session.
+	 *
+	 * Useful for providers like Microsoft Entra ID that do not set
+	 * `email_verified: true` by default.
+	 *
+	 * @default false
+	 */
+	requireEmailVerification?: boolean;
+	/**
 	 * List of Better Auth plugins
 	 */
 	plugins?: ([] | BetterAuthPlugin[]) | undefined;

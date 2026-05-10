@@ -2431,8 +2431,8 @@ describe("socialProviders.requireEmailVerification", async () => {
 		);
 
 		const { client, cookieSetter } = await getTestInstance({
+			requireEmailVerification: true,
 			socialProviders: {
-				requireEmailVerification: true,
 				google: { clientId: "test", clientSecret: "test" },
 			},
 			advanced: { disableOriginCheck: true },
@@ -2474,8 +2474,8 @@ describe("socialProviders.requireEmailVerification", async () => {
 		);
 
 		const { client, cookieSetter } = await getTestInstance({
+			requireEmailVerification: true,
 			socialProviders: {
-				requireEmailVerification: true,
 				google: { clientId: "test", clientSecret: "test" },
 			},
 			advanced: { disableOriginCheck: true },

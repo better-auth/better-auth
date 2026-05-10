@@ -86,8 +86,6 @@ export const SocialProviderListEnum = z
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
-	requireEmailVerification?: boolean;
-} & {
 	[K in SocialProviderList[number]]?: AwaitableFunction<
 		Parameters<(typeof socialProviders)[K]>[0] & {
 			enabled?: boolean | undefined;
