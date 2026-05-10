@@ -4,6 +4,11 @@ import { describe, expect, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
+import {
+	createSubscription,
+	createSubscriptionEvent,
+	createSubscriptionItem,
+} from "./_factories";
 import { test } from "./_fixtures";
 
 const testUser = {
@@ -58,20 +63,21 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		const mockSubscription = {
+		const mockSubscription = createSubscription({
 			id: testSubscriptionId,
-			status: "active",
 			items: {
+				object: "list",
 				data: [
-					{
-						price: { id: process.env.STRIPE_PRICE_ID_1 },
-						quantity: 1,
-					},
+					createSubscriptionItem({
+						price: {
+							id: process.env.STRIPE_PRICE_ID_1,
+						} as Stripe.Price,
+					}),
 				],
+				has_more: false,
+				url: "/v1/subscription_items",
 			},
-			current_period_start: Math.floor(Date.now() / 1000),
-			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-		};
+		});
 
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
@@ -135,6 +141,8 @@ describe("stripe webhook", () => {
 			periodEnd: expect.any(Date),
 			plan: "starter",
 		});
+		expect(updatedSubscription?.periodStart?.getTime()).not.toBeNaN();
+		expect(updatedSubscription?.periodEnd?.getTime()).not.toBeNaN();
 	});
 
 	test("should handle subscription webhook events with trial", async ({
@@ -182,22 +190,24 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		const mockSubscription = {
+		const now = Math.floor(Date.now() / 1000);
+		const mockSubscription = createSubscription({
 			id: testSubscriptionId,
-			status: "active",
 			items: {
+				object: "list",
 				data: [
-					{
-						price: { id: process.env.STRIPE_PRICE_ID_1 },
-						quantity: 1,
-					},
+					createSubscriptionItem({
+						price: {
+							id: process.env.STRIPE_PRICE_ID_1,
+						} as Stripe.Price,
+					}),
 				],
+				has_more: false,
+				url: "/v1/subscription_items",
 			},
-			current_period_start: Math.floor(Date.now() / 1000),
-			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-			trial_start: Math.floor(Date.now() / 1000),
-			trial_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-		};
+			trial_start: now,
+			trial_end: now + 30 * 24 * 60 * 60,
+		});
 
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
@@ -263,6 +273,10 @@ describe("stripe webhook", () => {
 			trialStart: expect.any(Date),
 			trialEnd: expect.any(Date),
 		});
+		expect(updatedSubscription?.periodStart?.getTime()).not.toBeNaN();
+		expect(updatedSubscription?.periodEnd?.getTime()).not.toBeNaN();
+		expect(updatedSubscription?.trialStart?.getTime()).not.toBeNaN();
+		expect(updatedSubscription?.trialEnd?.getTime()).not.toBeNaN();
 	});
 
 	test("should handle subscription deletion webhook", async ({
@@ -1076,14 +1090,20 @@ describe("stripe webhook", () => {
 			},
 		};
 
-		const mockSubscription = {
-			status: "active",
+		const mockSubscription = createSubscription({
 			items: {
-				data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
+				object: "list",
+				data: [
+					createSubscriptionItem({
+						price: {
+							id: process.env.STRIPE_PRICE_ID_1,
+						} as Stripe.Price,
+					}),
+				],
+				has_more: false,
+				url: "/v1/subscription_items",
 			},
-			current_period_start: Math.floor(Date.now() / 1000),
-			current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-		};
+		});
 
 		const mockStripeForEvents = {
 			...testOptions.stripeClient,
@@ -1149,21 +1169,25 @@ describe("stripe webhook", () => {
 			}),
 		);
 
-		const updateEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: testSubscriptionId,
-					customer: "cus_123",
-					status: "active",
-					items: {
-						data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
-					},
-					current_period_start: Math.floor(Date.now() / 1000),
-					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		const updateEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: testSubscriptionId,
+				customer: "cus_123",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: {
+								id: process.env.STRIPE_PRICE_ID_1,
+							} as Stripe.Price,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
+		);
 
 		const updateRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -1187,26 +1211,31 @@ describe("stripe webhook", () => {
 			}),
 		);
 
-		const userCancelEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: testSubscriptionId,
-					customer: "cus_123",
-					status: "active",
-					cancel_at_period_end: true,
-					cancellation_details: {
-						reason: "cancellation_requested",
-						comment: "Customer canceled subscription",
-					},
-					items: {
-						data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
-					},
-					current_period_start: Math.floor(Date.now() / 1000),
-					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		const userCancelEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: testSubscriptionId,
+				customer: "cus_123",
+				cancel_at_period_end: true,
+				cancellation_details: {
+					reason: "cancellation_requested",
+					comment: "Customer canceled subscription",
+					feedback: null,
+				},
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: {
+								id: process.env.STRIPE_PRICE_ID_1,
+							} as Stripe.Price,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
+		);
 
 		const userCancelRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -1223,22 +1252,26 @@ describe("stripe webhook", () => {
 			userCancelEvent,
 		);
 		await eventTestAuth.handler(userCancelRequest);
-		const cancelEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: testSubscriptionId,
-					customer: "cus_123",
-					status: "active",
-					cancel_at_period_end: true,
-					items: {
-						data: [{ price: { id: process.env.STRIPE_PRICE_ID_1 } }],
-					},
-					current_period_start: Math.floor(Date.now() / 1000),
-					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		const cancelEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: testSubscriptionId,
+				customer: "cus_123",
+				cancel_at_period_end: true,
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: {
+								id: process.env.STRIPE_PRICE_ID_1,
+							} as Stripe.Price,
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
+		);
 
 		const cancelRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -1300,30 +1333,26 @@ describe("stripe webhook", () => {
 		const onSubscriptionUpdate = vi.fn();
 
 		// Simulate subscription update event (e.g., seat change from 1 to 5)
-		const updateEvent = {
-			type: "customer.subscription.updated",
-			data: {
-				object: {
-					id: "sub_update_test",
-					customer: "cus_update_test",
-					status: "active",
-					items: {
-						data: [
-							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
-								quantity: 5, // Updated from 1 to 5
-								current_period_start: Math.floor(Date.now() / 1000),
-								current_period_end:
-									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-							},
-						],
-					},
-					current_period_start: Math.floor(Date.now() / 1000),
-					current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+		const updateEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: "sub_update_test",
+				customer: "cus_update_test",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: {
+								id: process.env.STRIPE_PRICE_ID_1,
+							} as Stripe.Price,
+							quantity: 5, // Updated from 1 to 5
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
 				},
 			},
-		};
-
+		);
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
 			webhooks: {
@@ -1865,30 +1894,25 @@ describe("stripe webhook", () => {
 			memory,
 			stripeOptions,
 		}) => {
-			const mockEvent = {
-				type: "customer.subscription.updated",
-				data: {
-					object: {
-						id: "sub_test_async",
-						customer: "cus_test_async",
-						status: "active",
-						items: {
-							data: [
-								{
-									price: { id: process.env.STRIPE_PRICE_ID_1 },
-									quantity: 1,
-									current_period_start: Math.floor(Date.now() / 1000),
-									current_period_end:
-										Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-								},
-							],
-						},
-						current_period_start: Math.floor(Date.now() / 1000),
-						current_period_end:
-							Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+			const mockEvent = createSubscriptionEvent(
+				"customer.subscription.updated",
+				{
+					id: "sub_test_async",
+					customer: "cus_test_async",
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								price: {
+									id: process.env.STRIPE_PRICE_ID_1,
+								} as Stripe.Price,
+							}),
+						],
+						has_more: false,
+						url: "/v1/subscription_items",
 					},
 				},
-			};
+			);
 
 			const stripeForTest = {
 				...stripeOptions.stripeClient,
@@ -2027,30 +2051,25 @@ describe("stripe webhook", () => {
 			memory,
 			stripeOptions,
 		}) => {
-			const mockEvent = {
-				type: "customer.subscription.updated",
-				data: {
-					object: {
-						id: "sub_test_v18",
-						customer: "cus_test_v18",
-						status: "active",
-						items: {
-							data: [
-								{
-									price: { id: process.env.STRIPE_PRICE_ID_1 },
-									quantity: 1,
-									current_period_start: Math.floor(Date.now() / 1000),
-									current_period_end:
-										Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-								},
-							],
-						},
-						current_period_start: Math.floor(Date.now() / 1000),
-						current_period_end:
-							Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+			const mockEvent = createSubscriptionEvent(
+				"customer.subscription.updated",
+				{
+					id: "sub_test_v18",
+					customer: "cus_test_v18",
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								price: {
+									id: process.env.STRIPE_PRICE_ID_1,
+								} as Stripe.Price,
+							}),
+						],
+						has_more: false,
+						url: "/v1/subscription_items",
 					},
 				},
-			};
+			);
 
 			// Simulate Stripe v18 - only has sync constructEvent, no constructEventAsync
 			const stripeV18 = {
