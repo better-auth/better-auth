@@ -10,6 +10,7 @@ import {
 } from "../cookies";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
+	applySetCookies,
 	HOST_COOKIE_PREFIX,
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -1496,6 +1497,67 @@ describe("Cookie header without whitespace after semicolon", () => {
 		expect(getChunkedCookie(ctx, "better-auth.session_data")).toBe(
 			"chunkAchunkB",
 		);
+	});
+});
+
+describe("parseCookies validation", () => {
+	it("returns empty map for empty header", () => {
+		expect(parseCookies("").size).toBe(0);
+	});
+
+	it("rejects names containing characters outside RFC 7230 token", () => {
+		const map = parseCookies("bad name=v1; ok=v2; bad,name=v3; bad:name=v4");
+		expect(map.has("bad name")).toBe(false);
+		expect(map.has("bad,name")).toBe(false);
+		expect(map.has("bad:name")).toBe(false);
+		expect(map.get("ok")).toBe("v2");
+	});
+
+	it("rejects values containing control chars, double-quote, or backslash", () => {
+		const map = parseCookies('a=ok; b=has\rcr; c=has"quote; d=has\\slash');
+		expect(map.get("a")).toBe("ok");
+		expect(map.has("b")).toBe(false);
+		expect(map.has("c")).toBe(false);
+		expect(map.has("d")).toBe(false);
+	});
+
+	it("accepts values with space and comma (real-world deviation)", () => {
+		const map = parseCookies("a=hello world; b=v1,v2");
+		expect(map.get("a")).toBe("hello world");
+		expect(map.get("b")).toBe("v1,v2");
+	});
+
+	it("splits on first `=` only, preserving subsequent `=` in value", () => {
+		const map = parseCookies("a=b=c=d");
+		expect(map.get("a")).toBe("b=c=d");
+	});
+});
+
+describe("applySetCookies", () => {
+	it("merges into empty Cookie header", () => {
+		const headers = new Headers();
+		applySetCookies(headers, ["a=1; Path=/"]);
+		expect(headers.get("cookie")).toBe("a=1");
+	});
+
+	it("strips Set-Cookie attributes (only name=value lands)", () => {
+		const headers = new Headers();
+		applySetCookies(headers, [
+			"a=1; Path=/; HttpOnly; Secure; Max-Age=3600; SameSite=Lax",
+		]);
+		expect(headers.get("cookie")).toBe("a=1");
+	});
+
+	it("merges multiple Set-Cookie values", () => {
+		const headers = new Headers();
+		applySetCookies(headers, ["a=1; Path=/", "b=2; Path=/"]);
+		expect(headers.get("cookie")).toBe("a=1; b=2");
+	});
+
+	it("last-wins on duplicate cookie name (existing + new)", () => {
+		const headers = new Headers({ cookie: "a=old; b=keep" });
+		applySetCookies(headers, ["a=new; Path=/"]);
+		expect(headers.get("cookie")).toBe("a=new; b=keep");
 	});
 });
 
