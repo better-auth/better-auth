@@ -21,6 +21,16 @@ export const docs = defineDocs({
 	},
 });
 
+export const docsBeta = defineDocs({
+	dir: "./content/docs-beta",
+	docs: {
+		postprocess: {
+			includeProcessedMarkdown: true,
+		},
+		async: true,
+	},
+});
+
 export const blogCollection = defineCollections({
 	type: "doc",
 	dir: "./content/blogs",

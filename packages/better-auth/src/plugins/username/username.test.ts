@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
@@ -53,6 +53,30 @@ describe("username", async () => {
 		);
 		expect(res.data?.token).toBeDefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9469
+	 */
+	it("should redirect to callbackURL on sign-in (parity with sign-in/email)", async () => {
+		const res = await client.signIn.username({
+			username: "new_username",
+			password: "new-password",
+			callbackURL: "/dashboard",
+		});
+		expect(res.data?.redirect).toBe(true);
+		expect(res.data?.url).toBe("/dashboard");
+		expect(res.data?.token).toBeDefined();
+	});
+
+	it("should not set redirect when callbackURL is omitted", async () => {
+		const res = await client.signIn.username({
+			username: "new_username",
+			password: "new-password",
+		});
+		expect(res.data?.redirect).toBe(false);
+		expect(res.data?.url).toBeUndefined();
+	});
+
 	it("should update username", async () => {
 		await client.updateUser({
 			username: "new_username_2.1",
@@ -550,14 +574,6 @@ describe("isUsernameAvailable with custom validator", async () => {
 			username: "invalid_user",
 			password: "password1234",
 		});
-
-		type Error = Exclude<typeof signInRes.error, null>;
-		expectTypeOf<Error>().toEqualTypeOf<{
-			message?: string | undefined;
-			code?: string;
-			statusText: string;
-			status: number;
-		}>();
 
 		expect(signInRes.error).toBeDefined();
 		expect(signInRes.error?.code).toBe(

@@ -1,10 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
 
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
-import { APIError } from "../error";
+import { logger } from "../env";
+import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -20,7 +22,7 @@ export interface AppleProfile {
 	 * The email address is either the user's real email address or the proxy
 	 * address, depending on their status private email relay service.
 	 */
-	email: string;
+	email?: string;
 	/**
 	 * A string or Boolean value that indicates whether the service verifies
 	 * the email. The value can either be a string ("true" or "false") or a
@@ -70,7 +72,7 @@ export interface AppleNonConformUser {
 }
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
-	clientId: string;
+	clientId: string | string[];
 	appBundleIdentifier?: string | undefined;
 	audience?: (string | string[]) | undefined;
 }
@@ -81,6 +83,12 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
+			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
+				logger.error(
+					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
+				);
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+			}
 			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
 			if (options.scope) _scope.push(...options.scope);
 			if (scopes) _scope.push(...scopes);

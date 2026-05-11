@@ -109,7 +109,8 @@ const signInUsernameBodySchema = z.object({
 	callbackURL: z
 		.string()
 		.meta({
-			description: "The URL to redirect to after email verification",
+			description:
+				"URL to redirect to after sign in (also used as the redirect target for email verification when required)",
 		})
 		.optional(),
 });
@@ -214,16 +215,27 @@ export const username = (options?: UsernameOptions | undefined) => {
 											schema: {
 												type: "object",
 												properties: {
+													redirect: {
+														type: "boolean",
+														description:
+															"Whether the client should follow the Location header. True when callbackURL was provided.",
+													},
 													token: {
 														type: "string",
 														description:
 															"Session token for the authenticated session",
 													},
+													url: {
+														type: "string",
+														nullable: true,
+														description:
+															"The callbackURL echoed back so the client can redirect.",
+													},
 													user: {
 														$ref: "#/components/schemas/User",
 													},
 												},
-												required: ["token", "user"],
+												required: ["redirect", "token", "user"],
 											},
 										},
 									},
@@ -410,8 +422,13 @@ export const username = (options?: UsernameOptions | undefined) => {
 						{ session, user },
 						ctx.body.rememberMe === false,
 					);
+					if (ctx.body.callbackURL) {
+						ctx.setHeader("Location", ctx.body.callbackURL);
+					}
 					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
 						token: session.token,
+						url: ctx.body.callbackURL,
 						user: parseUserOutput(ctx.context.options, user),
 					});
 				},

@@ -3,7 +3,7 @@ title: OAuth Proxy
 description: OAuth Proxy plugin for Better Auth
 ---
 
-A proxy plugin that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider. 
+A proxy plugin that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider.
 
 ## Installation
 
@@ -32,6 +32,7 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
 
     The plugin will automatically route OAuth requests through your production server.
   </Step>
+
   <Step>
     ### Register the callback URL with your OAuth provider
 
@@ -43,6 +44,7 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
 
     Only the production callback URL needs to be registered. The plugin handles routing OAuth requests from preview and development environments through production automatically.
   </Step>
+
   <Step>
     ### Add trusted origins
 
@@ -61,7 +63,7 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
 </Steps>
 
 <Callout type="info">
-All environments participating in the OAuth proxy flow must share the same encryption key. By default, the plugin uses `BETTER_AUTH_SECRET`. To avoid sharing your main secret across environments, you can provide a dedicated `secret` option (see [Options](#options)).
+  All environments participating in the OAuth proxy flow must share the same encryption key. By default, the plugin uses `BETTER_AUTH_SECRET`. To avoid sharing your main secret across environments, you can provide a dedicated `secret` option (see [Options](#options)).
 </Callout>
 
 ## How it works
@@ -86,7 +88,7 @@ await authClient.signIn.social({
 The encrypted profile data is passed via URL query parameters and can only be decrypted by servers sharing the same secret. This also allows preview deployments to use separate databases from production if needed.
 
 <Callout type="info">
-This plugin is intended for development and preview environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
+  This plugin is intended for development and preview environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
 </Callout>
 
 ## Options
