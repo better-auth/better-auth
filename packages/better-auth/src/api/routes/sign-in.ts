@@ -1,8 +1,12 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { User } from "@better-auth/core/db";
+import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
+import type { RawError } from "@better-auth/core/utils/error-codes";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
@@ -478,126 +482,120 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					message: "Email and password is not enabled",
 				});
 			}
-			const { email, password } = ctx.body;
+
+			const { email } = ctx.body;
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
+
 			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 				includeAccounts: true,
 			});
 
-			if (!user) {
-				// Hash password to prevent timing attacks from revealing valid email addresses
-				// By hashing passwords for invalid emails, we ensure consistent response times
-				await ctx.context.password.hash(password);
-				ctx.context.logger.error("User not found", { email });
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
-
-			const credentialAccount = user.accounts.find(
-				(a) => a.providerId === "credential",
-			);
-			if (!credentialAccount) {
-				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Credential account not found", { email });
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
-			const currentPassword = credentialAccount?.password;
-			if (!currentPassword) {
-				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Password not found", { email });
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
-			const validPassword = await ctx.context.password.verify({
-				hash: currentPassword,
-				password,
-			});
-			if (!validPassword) {
-				ctx.context.logger.error("Invalid password");
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
-
-			if (
-				ctx.context.options?.emailAndPassword?.requireEmailVerification &&
-				!user.user.emailVerified
-			) {
-				if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
-				}
-
-				if (ctx.context.options?.emailVerification?.sendOnSignIn) {
-					const token = await createEmailVerificationToken(
-						ctx.context.secret,
-						user.user.email,
-						undefined,
-						ctx.context.options.emailVerification?.expiresIn,
-					);
-					const callbackURL = ctx.body.callbackURL
-						? encodeURIComponent(ctx.body.callbackURL)
-						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-					await ctx.context.runInBackgroundOrAwait(
-						ctx.context.options.emailVerification.sendVerificationEmail(
-							{
-								user: user.user,
-								url,
-								token,
-							},
-							ctx.request,
-						),
-					);
-				}
-
-				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
-			}
-
-			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
-				ctx.body.rememberMe === false,
-			);
-
-			if (!session) {
-				ctx.context.logger.error("Failed to create session");
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-				);
-			}
-
-			await setSessionCookie(
+			return await signInWithPassword(
 				ctx,
-				{
-					session,
-					user: user.user,
-				},
-				ctx.body.rememberMe === false,
+				{ email },
+				BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
+				user?.user as User<O["user"], O["plugins"]> | undefined,
+				user?.accounts,
+				ctx.body,
 			);
-
-			if (ctx.body.callbackURL) {
-				ctx.setHeader("Location", ctx.body.callbackURL);
-			}
-
-			return ctx.json({
-				redirect: !!ctx.body.callbackURL,
-				token: session.token,
-				url: ctx.body.callbackURL,
-				user: parseUserOutput(ctx.context.options, user.user) as User<
-					O["user"],
-					O["plugins"]
-				>,
-			});
 		},
 	);
+
+export async function signInWithPassword<U extends User>(
+	ctx: GenericEndpointContext,
+	logContext: object,
+	invalidUserOrPasswordError: RawError,
+	user: U | undefined,
+	accounts: Account[] | undefined,
+	options: { password: string; rememberMe?: boolean; callbackURL?: string },
+) {
+	if (!user) {
+		// Hash password to prevent timing attacks from revealing valid email addresses
+		// By hashing passwords for invalid emails, we ensure consistent response times
+		await ctx.context.password.hash(options.password);
+		ctx.context.logger.error("User not found", logContext);
+		throw APIError.from("UNAUTHORIZED", invalidUserOrPasswordError);
+	}
+
+	const credentialAccount = accounts?.find(
+		(a) => a.providerId === "credential",
+	);
+	if (!credentialAccount) {
+		await ctx.context.password.hash(options.password);
+		ctx.context.logger.error("Credential account not found", logContext);
+		throw APIError.from("UNAUTHORIZED", invalidUserOrPasswordError);
+	}
+
+	const currentPassword = credentialAccount?.password;
+	if (!currentPassword) {
+		await ctx.context.password.hash(options.password);
+		ctx.context.logger.error("Password not found", logContext);
+		throw APIError.from("UNAUTHORIZED", invalidUserOrPasswordError);
+	}
+
+	const validPassword = await ctx.context.password.verify({
+		hash: currentPassword,
+		password: options.password,
+	});
+	if (!validPassword) {
+		ctx.context.logger.error("Invalid password");
+		throw APIError.from("UNAUTHORIZED", invalidUserOrPasswordError);
+	}
+
+	if (
+		ctx.context.options?.emailAndPassword?.requireEmailVerification &&
+		!user.emailVerified
+	) {
+		if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
+			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
+		}
+
+		if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+			const token = await createEmailVerificationToken(
+				ctx.context.secret,
+				user.email,
+				undefined,
+				ctx.context.options.emailVerification?.expiresIn,
+			);
+			const callbackURL = options.callbackURL || "/";
+			const url = `${ctx.context.baseURL}/verify-email?${new URLSearchParams({ token, callbackURL })}`;
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.emailVerification.sendVerificationEmail(
+					{ user, url, token },
+					ctx.request,
+				),
+			);
+		}
+
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
+	}
+
+	const session = await ctx.context.internalAdapter.createSession(
+		user.id,
+		options.rememberMe === false,
+	);
+
+	if (!session) {
+		ctx.context.logger.error("Failed to create session");
+		throw APIError.from(
+			"UNAUTHORIZED",
+			BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+		);
+	}
+
+	await setSessionCookie(ctx, { session, user }, options.rememberMe === false);
+
+	if (options.callbackURL) {
+		ctx.setHeader("Location", options.callbackURL);
+	}
+
+	return ctx.json({
+		redirect: !!options.callbackURL,
+		token: session.token,
+		url: options.callbackURL,
+		user: parseUserOutput(ctx.context.options, user),
+	});
+}
