@@ -191,6 +191,39 @@ When a user is already signed in (via email, Google, etc.) and signs in with Blu
 
 Metadata endpoints are not rate limited.
 
+## React Native / Expo
+
+The plugin works with `@better-auth/expo` out of the box via the standard server-driven OAuth flow:
+
+1. The mobile app opens an in-app browser to `/atproto/sign-in` with the app's deep-link scheme as the `callbackURL` (e.g. `myapp://auth`).
+2. The atproto OAuth flow runs on the better-auth server.
+3. When the server's `/atproto/callback` redirects to the deep link, `@better-auth/expo`'s hook injects the session cookie as a `?cookie=...` query parameter.
+4. The Expo client picks up the cookie via the deep-link handler and stores the session.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { atproto } from "@better-auth/atproto"
+import { expo } from "@better-auth/expo"
+
+export const auth = betterAuth({
+  baseURL: "https://myapp.com",
+  trustedOrigins: ["myapp://"], // your app's scheme
+  plugins: [
+    atproto({ privateKey: process.env.ATPROTO_PRIVATE_KEY }),
+    expo(),
+  ],
+})
+```
+
+```ts title="mobile sign-in"
+await authClient.signIn.atproto({
+  handle: "alice.bsky.social",
+  callbackURL: "myapp://auth",
+})
+```
+
+On-device atproto OAuth (using a React Native atproto OAuth client) is not supported today — it would require a runtime-agnostic rewrite on top of `@atproto/oauth-client`. Track interest in this on the [issue tracker](https://github.com/better-auth/better-auth/issues).
+
 ## Runtime support
 
 This plugin currently depends on `@atproto/oauth-client-node` and requires a Node.js-compatible runtime (Node, Bun). Cloudflare Workers and Deno support would require a runtime-agnostic rewrite on top of `@atproto/oauth-client`. Track interest in this on the [issue tracker](https://github.com/better-auth/better-auth/issues).
