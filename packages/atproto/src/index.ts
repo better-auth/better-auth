@@ -93,7 +93,7 @@ export const atproto = (options: AtprotoAuthOptions = {}): BetterAuthPlugin => {
 					grant_types: ["authorization_code", "refresh_token"],
 					scope,
 					response_types: ["code"],
-					application_type: "web",
+					application_type: isLocal ? "native" : "web",
 					token_endpoint_auth_method: isLocal ? "none" : "private_key_jwt",
 					dpop_bound_access_tokens: true,
 					...(isLocal

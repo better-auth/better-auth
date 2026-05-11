@@ -190,8 +190,7 @@ export function createAtprotoEndpoints(
 					});
 				} else if (currentUserId) {
 					const linkingEnabled =
-						(ctx.context.options as any).account?.accountLinking?.enabled !==
-						false;
+						ctx.context.options.account?.accountLinking?.enabled !== false;
 					if (!linkingEnabled) {
 						throw new APIError("FORBIDDEN", {
 							message:
