@@ -309,6 +309,28 @@ const spEncryptionKey = `
     ISbutnQPUN5fsaIsgKDIV3T7n6519t6brobcW5bdigmf5ebFeZJ16/lYy6V77UM5
     -----END RSA PRIVATE KEY-----
     `;
+// This certificate is not related to the IdP or SP, but is used to test
+//  handling of multiple certificates in the metadata.
+const unrelatedCertificate = `
+	-----BEGIN CERTIFICATE-----
+	MIIDATCCAemgAwIBAgIUTDC29D27otkSCpMVYZSZ7135bZcwDQYJKoZIhvcNAQEL
+	BQAwEDEOMAwGA1UEAwwFVGVzdDIwHhcNMjYwMzI3MTcyNDA4WhcNMzYwMzI0MTcy
+	NDA4WjAQMQ4wDAYDVQQDDAVUZXN0MjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+	AQoCggEBALXz/zRq88hhlLTJ47MoLdFqwjC9A9HiV6xOdezHhZ+vBaqCXsUcru9N
+	3FfG6EVtuxSTLQIfgMpxifS4tF2tqkxBcW7JDGIuN02hjeWzlVztyAzISlZJUrGS
+	kNnE11Br7p4O3OC1OcrpTBi/uBUPBiCFeeQCSIk+pf0h7Y4NUa27oTsZ6Qy0II7A
+	2m5yqtlfyvxyLKIVIlDt1yCcvvJ2MSdiCcGDfyB/BmL5ow8kaR6bal1w/NRh8pNr
+	OOjHmx3W+6Qv6g1M/mK7tITlstEEFJyWdzw6yEAZ7jyrHMkJKj9wTgmMxlx/H1d7
+	st234qgFjm6w3WxA0AwaqNcjiD3SpxkCAwEAAaNTMFEwHQYDVR0OBBYEFPegA1b2
+	piumrJ5DhMqgauhDrSYpMB8GA1UdIwQYMBaAFPegA1b2piumrJ5DhMqgauhDrSYp
+	MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAE9imWiQSn1nde7x
+	HPCZTuu3ydTNl6vT8yDHYUYBAC7kqUuhJ3gFd8x6toolxP2FvVuF4I7ovvRpW5zk
+	eJ/AGOY4YB5g6K0MUpgy42V5WDXTqLR/62VCH+jQHgIjd0I728FWVoElXHYhupnR
+	EKG5qVkfs8ySaBr/IV5nTSa0R9IyJX+Sb+qqITcD4CUmtNSwB1XhJq403VFCwiu+
+	TQNsZdoNl0fm5SR11rDA3IffIxeAvTtZwSJ/hOfBQM1RnM24t6xYX7Oe/2ZPhN7v
+	epyw0Ikhqk/BFtQCRei+t1HJ9GIu6qnsC7CxrUA80IcxZjeg7N6ua+uctzRWzDhn
+	kBGIJYs=
+	-----END CERTIFICATE-----`;
 const generateRequestID = () => {
 	return "_" + randomUUID();
 };
@@ -1138,6 +1160,89 @@ describe("SAML SSO", async () => {
 		let redirectLocation = "";
 		await betterFetch(
 			"http://localhost:8081/api/sso/saml2/callback/saml-provider-1",
+			{
+				method: "POST",
+				redirect: "manual",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse.samlResponse,
+				}),
+				onError: (context) => {
+					expect(context.response.status).toBe(302);
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			},
+		);
+		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+	});
+
+	it.each([
+		[unrelatedCertificate, certificate],
+		[certificate, unrelatedCertificate],
+	])("should validate SAML response when any of multiple IDP signing certs match", async (cert1, cert2) => {
+		const headers = await getAuthHeaders();
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-multi-cert",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: [cert1, cert2],
+					callbackUrl: "http://localhost:8081/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+						privateKey: idpPrivateKey,
+						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
+						isAssertionEncrypted: true,
+						encPrivateKey: idpEncryptionKey,
+						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+						privateKey: spPrivateKey,
+						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
+						isAssertionEncrypted: true,
+						encPrivateKey: spEncryptionKey,
+						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provider-multi-cert",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url as string, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+		let redirectLocation = "";
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/callback/saml-provider-multi-cert",
 			{
 				method: "POST",
 				redirect: "manual",
