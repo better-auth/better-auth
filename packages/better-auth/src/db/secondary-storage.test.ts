@@ -233,8 +233,15 @@ describe("secondary storage - storeSessionInDatabase", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
+ */
 describe("secondary storage - admin removeUser cleans up sessions", async () => {
 	const store = new Map<string, string>();
+
+	beforeEach(() => {
+		store.clear();
+	});
 
 	const { client, signInWithUser, customFetchImpl } = await getTestInstance({
 		plugins: [admin()],
@@ -316,8 +323,15 @@ describe("secondary storage - admin removeUser cleans up sessions", async () => 
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
+ */
 describe("secondary storage - /delete-anonymous-user cleans up sessions", async () => {
 	const store = new Map<string, string>();
+
+	beforeEach(() => {
+		store.clear();
+	});
 
 	const { client, auth, sessionSetter } = await getTestInstance(
 		{

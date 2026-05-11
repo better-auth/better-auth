@@ -656,6 +656,9 @@ describe("SCIM", () => {
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
+		 */
 		it("should clear secondary storage sessions when deleting a user via SCIM", async () => {
 			const store = new Map<string, string>();
 			const adminUser = {
