@@ -1016,6 +1016,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			await ctx.context.internalAdapter.deleteSessions(userId);
 			await ctx.context.internalAdapter.deleteUser(userId);
 
 			ctx.setStatus(204);
