@@ -15,6 +15,7 @@ export type DBAdapterDebugLogOption =
 			findMany?: boolean | undefined;
 			delete?: boolean | undefined;
 			deleteMany?: boolean | undefined;
+			claimOne?: boolean | undefined;
 			count?: boolean | undefined;
 	  }
 	| {
@@ -211,6 +212,7 @@ export interface DBAdapterFactoryConfig<
 					| "updateMany"
 					| "delete"
 					| "deleteMany"
+					| "claimOne"
 					| "count";
 				/**
 				 * The model name.
@@ -446,6 +448,23 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
+	 * Atomically claim a single row matching the where clause: delete it and
+	 * return the deleted row, or return `null` if no row matched.
+	 * Implementations MUST NOT delete any additional rows that also match a
+	 * non-unique predicate.
+	 *
+	 * Under concurrent invocation against the same row, exactly one caller
+	 * receives the row; subsequent racers receive `null`. This is the
+	 * race-safe primitive for consuming single-use credentials
+	 * (verification tokens, authorization codes, one-time tokens).
+	 *
+	 * Always defined on the factory-wrapped adapter. When the underlying
+	 * `CustomAdapter` does not implement `claimOne`, the factory provides
+	 * a fallback that wraps `findMany + deleteMany` in `transaction(...)`
+	 * and returns the row only when the delete reports an affected row.
+	 */
+	claimOne: <T>(data: { model: string; where: Where[] }) => Promise<T | null>;
+	/**
 	 * Execute multiple operations in a transaction.
 	 * If the adapter doesn't support transactions, operations will be executed sequentially.
 	 */
@@ -531,6 +550,19 @@ export interface CustomAdapter {
 		model: string;
 		where: CleanedWhere[];
 	}) => Promise<number>;
+	/**
+	 * Optional native atomic single-row claim. When omitted, the adapter
+	 * factory falls back to `transaction(findMany + deleteMany)`.
+	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,
+	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the
+	 * strongest race-safety guarantee. Implementations must delete at most
+	 * one matching row. TODO(claim-one-required): tighten to required in the
+	 * next minor on `next`.
+	 */
+	claimOne?: <T>(data: {
+		model: string;
+		where: CleanedWhere[];
+	}) => Promise<T | null>;
 	count: ({
 		model,
 		where,

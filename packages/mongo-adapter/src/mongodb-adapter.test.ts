@@ -10,6 +10,34 @@ describe("mongodb-adapter", () => {
 		const adapter = mongodbAdapter(db);
 		expect(adapter).toBeDefined();
 	});
+
+	it("claimOne returns the deleted document from Mongo metadata", async () => {
+		const deleted = {
+			_id: "verification-id",
+			identifier: "magic-link-token",
+		};
+		const findOneAndDelete = vi.fn(async () => ({ value: deleted }));
+		const db = {
+			collection: vi.fn(() => ({
+				findOneAndDelete,
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		const result = await adapter.claimOne({
+			model: "verification",
+			where: [{ field: "identifier", value: "magic-link-token" }],
+		});
+
+		expect(result).toMatchObject({
+			id: "verification-id",
+			identifier: "magic-link-token",
+		});
+		expect(findOneAndDelete).toHaveBeenCalledWith(
+			{ identifier: "magic-link-token" },
+			expect.objectContaining({ includeResultMetadata: true }),
+		);
+	});
 });
 
 describe("uuid support", () => {

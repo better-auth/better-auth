@@ -386,6 +386,14 @@ export const memoryAdapter = (
 					});
 					return count;
 				},
+				claimOne: async ({ model, where }) => {
+					const table = db[model]!;
+					const matches = convertWhereClause(where, model);
+					const target = matches[0];
+					if (!target) return null;
+					db[model] = table.filter((record) => record !== target);
+					return target as any;
+				},
 				updateMany({ model, where, update }) {
 					const res = convertWhereClause(where, model);
 					res.forEach((record) => {

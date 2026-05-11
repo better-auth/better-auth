@@ -4690,6 +4690,7 @@ describe("api-key", async () => {
 });
 
 describe("listApiKeys with integer user.id (postgres + serial)", async () => {
+	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
 	const { auth, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [apiKey()],
@@ -4699,6 +4700,7 @@ describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 		},
 		{
 			testWith: "postgres",
+			testUser: { email: testUserEmail },
 			clientOptions: { plugins: [apiKeyClient()] },
 		},
 	);

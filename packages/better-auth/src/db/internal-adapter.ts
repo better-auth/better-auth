@@ -45,6 +45,7 @@ export const createInternalAdapter = (
 	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
+	const verificationConsumeLocks = new Map<string, Promise<void>>();
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -52,6 +53,7 @@ export const createInternalAdapter = (
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
@@ -84,6 +86,28 @@ export const createInternalAdapter = (
 				);
 			}),
 		);
+	}
+
+	async function withVerificationConsumeLock<T>(
+		key: string,
+		fn: () => Promise<T>,
+	): Promise<T> {
+		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
+		let release!: () => void;
+		const current = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const next = previous.catch(() => {}).then(() => current);
+		verificationConsumeLocks.set(key, next);
+		await previous.catch(() => {});
+		try {
+			return await fn();
+		} finally {
+			release();
+			if (verificationConsumeLocks.get(key) === next) {
+				verificationConsumeLocks.delete(key);
+			}
+		}
 	}
 
 	return {
@@ -1194,6 +1218,142 @@ export const createInternalAdapter = (
 					undefined,
 				);
 			}
+		},
+		/**
+		 * Atomically consume a single-use verification row by `identifier` and
+		 * return it. The first concurrent caller receives the latest row for the
+		 * identifier; every other caller racing against it receives `null`.
+		 *
+		 * Race-safe replacement for the `findVerificationValue` then
+		 * `deleteVerificationByIdentifier` pair. Callers MUST gate any state
+		 * change (issue session, mint token, change password) on a non-null
+		 * return value, because consuming one row invalidates the whole
+		 * identifier and stale rows cannot be replayed.
+		 *
+		 * Expiry is intentionally not checked here. Callers retain their
+		 * existing expiry handling so each call site can surface its own
+		 * error code (for example `token_expired` vs `invalid_grant`).
+		 *
+		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
+		 * only when the configured storage implements `getAndDelete`; otherwise
+		 * it falls back to an in-process lock around `get` then `delete`.
+		 *
+		 * FIXME(consume-atomic): make `SecondaryStorage.getAndDelete` required
+		 * in the next breaking release, or require database-backed verification
+		 * storage for security-sensitive consume paths. The compatibility
+		 * fallback cannot coordinate across multiple application processes.
+		 */
+		consumeVerificationValue: async (
+			identifier: string,
+		): Promise<Verification | null> => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+			const identifiersToTry =
+				storageOption && storageOption !== "plain"
+					? [storedIdentifier, identifier]
+					: [storedIdentifier];
+
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				const parseCachedVerification = (raw: unknown) => {
+					if (!raw) return null;
+					return safeJSONParse<Verification>(
+						typeof raw === "string" ? raw : String(raw),
+					);
+				};
+				const consumeCacheKey = async (key: string) => {
+					if (secondaryStorage.getAndDelete) {
+						return parseCachedVerification(
+							await secondaryStorage.getAndDelete(key),
+						);
+					}
+					return withVerificationConsumeLock(key, async () => {
+						const raw = await secondaryStorage.get(key);
+						const parsed = parseCachedVerification(raw);
+						if (!parsed) return null;
+						await secondaryStorage.delete(key);
+						return parsed;
+					});
+				};
+
+				for (const stored of identifiersToTry) {
+					const cacheKey = `verification:${stored}`;
+					const cached = await consumeCacheKey(cacheKey);
+					if (!cached) continue;
+					await Promise.all(
+						identifiersToTry
+							.filter((candidate) => candidate !== stored)
+							.map((candidate) =>
+								secondaryStorage.delete(`verification:${candidate}`),
+							),
+					);
+					return cached;
+				}
+				return null;
+			}
+
+			async function consumeByIdentifier(
+				id: string,
+			): Promise<Verification | null> {
+				const where = [{ field: "identifier", value: id }];
+				return withVerificationConsumeLock(`verification:${id}`, () =>
+					runWithTransaction(adapter, async () => {
+						const txAdapter = await getCurrentAdapter(adapter);
+						const rows = await txAdapter.findMany<Verification>({
+							model: "verification",
+							where,
+							sortBy: { field: "createdAt", direction: "desc" },
+							limit: 1,
+						});
+						const latest = rows[0] ?? null;
+						if (!latest) return null;
+
+						// FIXME(consume-identifier-atomic): add an adapter primitive that
+						// deletes all rows for an identifier and returns the latest row in
+						// one operation. Until then, claim the latest row as the race gate
+						// and invalidate stale rows inside the same transaction/local lock.
+						const hookWhere = [{ field: "id", value: latest.id }];
+						return consumeOneWithHooks<Verification>(
+							"verification",
+							hookWhere,
+							async () => {
+								const claimed = await txAdapter.claimOne<Verification>({
+									model: "verification",
+									where: hookWhere,
+								});
+								if (!claimed) return null;
+								await txAdapter.deleteMany({
+									model: "verification",
+									where,
+								});
+								return claimed;
+							},
+							latest,
+						);
+					}),
+				);
+			}
+
+			let consumed: Verification | null = null;
+			for (const stored of identifiersToTry) {
+				consumed = await consumeByIdentifier(stored);
+				if (consumed) break;
+			}
+
+			if (consumed && secondaryStorage) {
+				await Promise.all(
+					identifiersToTry.map((stored) =>
+						secondaryStorage.delete(`verification:${stored}`),
+					),
+				);
+			}
+
+			return consumed;
 		},
 		updateVerificationByIdentifier: async (
 			identifier: string,

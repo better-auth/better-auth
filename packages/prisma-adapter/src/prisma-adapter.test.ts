@@ -213,4 +213,73 @@ describe("prisma-adapter", () => {
 			name: "Updated",
 		});
 	});
+
+	it("claimOne rechecks non-unique predicates before deleting", async () => {
+		const target = {
+			id: "verification-id",
+			identifier: "magic-link-token",
+			value: "otp",
+		};
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createTestAdapter({
+			$transaction: transaction,
+			verification: {
+				delete: vi.fn(),
+			},
+		});
+
+		const result = await adapter.claimOne({
+			model: "verification",
+			where: [{ field: "identifier", value: "magic-link-token" }],
+		});
+
+		expect(result).toEqual(target);
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(txClient.verification.deleteMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ identifier: { equals: "magic-link-token" } },
+					{ id: { equals: "verification-id" } },
+				],
+			},
+		});
+	});
+
+	it("claimOne does not open a nested transaction from a transaction adapter", async () => {
+		const target = {
+			id: "verification-id",
+			identifier: "magic-link-token",
+		};
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = prismaAdapter(
+			{
+				$transaction: transaction,
+			} as never,
+			{
+				provider: "sqlite",
+				transaction: true,
+			},
+		)({} as BetterAuthOptions);
+
+		await adapter.transaction(async (trx) => {
+			await trx.claimOne({
+				model: "verification",
+				where: [{ field: "identifier", value: "magic-link-token" }],
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+	});
 });
