@@ -102,12 +102,15 @@ export const auth = betterAuth({
 })
 ```
 
-Common IPv6 subnet prefix lengths:
+Common IPv6 prefix lengths:
 
 * `128`: Individual IPv6 address. Most restrictive. Only safe when you control the network and trust that each address maps to a distinct client.
 * `64` (default): /64 subnet. Typical home or business allocation.
+* `56`: /56 subnet. Residential ISP allocation per [RFC 6177](https://datatracker.ietf.org/doc/html/rfc6177).
 * `48`: /48 subnet. Larger network allocation.
 * `32`: /32 subnet. ISP-level allocation.
+
+Any integer prefix length from `0` to `128` is accepted; the values above are the most common.
 
 <Callout type="info">
   IPv6 subnet configuration only affects IPv6 addresses. IPv4 addresses are always rate limited individually.
