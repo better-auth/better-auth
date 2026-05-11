@@ -669,6 +669,27 @@ export type BetterAuthOptions = {
 					request?: Request,
 				) => Promise<void>;
 				/**
+				 * Optional callback triggered when `/request-password-reset`
+				 * is called for an email that has no account. Use it to
+				 * encourage account creation (e.g. send a "create your
+				 * account" email) without breaking enumeration protection
+				 * — the HTTP response is identical regardless of whether
+				 * the email exists.
+				 *
+				 * If unset, no email is sent for unknown emails.
+				 */
+				sendResetPasswordNoAccount?: (
+					/**
+					 * @param email the email address that was submitted
+					 * but has no associated account
+					 */
+					data: { email: string },
+					/**
+					 * The request object
+					 */
+					request?: Request,
+				) => Promise<void>;
+				/**
 				 * Number of seconds the reset password token is
 				 * valid for.
 				 * @default 1 hour (60 * 60)
