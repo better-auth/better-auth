@@ -141,18 +141,17 @@ function sanitizeProvider(
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
 					certificate: (() => {
-						try {
-							const certs = Array.isArray(samlConfig.cert)
-								? samlConfig.cert
-								: [samlConfig.cert];
-							if (certs.length === 0) {
-								throw new Error("No certificates provided");
+						const certs = Array.isArray(samlConfig.cert)
+							? samlConfig.cert
+							: [samlConfig.cert];
+						const parsed = certs.map((cert) => {
+							try {
+								return parseCertificate(cert);
+							} catch {
+								return { error: "Failed to parse certificate" };
 							}
-							const parsed = certs.map((cert) => parseCertificate(cert));
-							return parsed.length === 1 ? parsed[0] : parsed;
-						} catch {
-							return { error: "Failed to parse certificate" };
-						}
+						});
+						return parsed.length === 1 ? parsed[0] : parsed;
 					})(),
 				}
 			: undefined,
