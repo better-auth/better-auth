@@ -146,7 +146,7 @@ function sanitizeProvider(
 								? samlConfig.cert
 								: [samlConfig.cert];
 							if (certs.length === 0) {
-								return { error: "No certificates provided" };
+								throw new Error("No certificates provided");
 							}
 							const parsed = certs.map((cert) => parseCertificate(cert));
 							return parsed.length === 1 ? parsed[0] : parsed;
