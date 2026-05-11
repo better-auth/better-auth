@@ -10,6 +10,21 @@ import { detectPackageManager } from "../utils/check-package-managers";
 import { fetchLatestVersion } from "../utils/fetch-latest-version";
 import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
+import { removeDependencies } from "../utils/remove-dependencies";
+
+/**
+ * Map of better-auth packages that were renamed on npm. The CLI was
+ * published as `@better-auth/cli` until v1.4.21 and then renamed to
+ * `auth`; the old name is unmaintained on npm. Leaving it pinned in
+ * a project drags an obsolete `better-auth@1.4.21` (and its old
+ * `better-call`) into the install tree, which silently breaks the
+ * current `@better-auth/core` peer-dep resolution.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/9558
+ */
+const RENAMED_PACKAGES: Record<string, string> = {
+	"@better-auth/cli": "auth",
+};
 
 function isBetterAuthPackage(name: string): boolean {
 	return name === "better-auth" || name.startsWith("@better-auth/");
@@ -17,6 +32,14 @@ function isBetterAuthPackage(name: string): boolean {
 
 interface UpgradeEntry {
 	name: string;
+	current: string;
+	latest: string;
+	depType: "prod" | "dev";
+}
+
+interface RenameEntry {
+	oldName: string;
+	newName: string;
 	current: string;
 	latest: string;
 	depType: "prod" | "dev";
@@ -49,39 +72,65 @@ async function upgradeAction(opts: unknown) {
 	const deps = packageJson.dependencies ?? {};
 	const devDeps = packageJson.devDependencies ?? {};
 
-	const candidates: {
+	const upgradeScans: {
 		name: string;
 		current: string;
 		depType: "prod" | "dev";
 	}[] = [];
+	const renameScans: {
+		oldName: string;
+		newName: string;
+		current: string;
+		depType: "prod" | "dev";
+	}[] = [];
+
+	const classify = (name: string, version: string, depType: "prod" | "dev") => {
+		if (version.startsWith("workspace:")) return;
+		if (name in RENAMED_PACKAGES) {
+			renameScans.push({
+				oldName: name,
+				newName: RENAMED_PACKAGES[name]!,
+				current: version,
+				depType,
+			});
+			return;
+		}
+		if (isBetterAuthPackage(name)) {
+			upgradeScans.push({ name, current: version, depType });
+		}
+	};
 
 	for (const [name, version] of Object.entries(deps) as [string, string][]) {
-		if (isBetterAuthPackage(name) && !version.startsWith("workspace:")) {
-			candidates.push({ name, current: version, depType: "prod" });
-		}
+		classify(name, version, "prod");
 	}
 	for (const [name, version] of Object.entries(devDeps) as [string, string][]) {
-		if (isBetterAuthPackage(name) && !version.startsWith("workspace:")) {
-			candidates.push({ name, current: version, depType: "dev" });
-		}
+		classify(name, version, "dev");
 	}
 
-	if (candidates.length === 0) {
+	if (upgradeScans.length === 0 && renameScans.length === 0) {
 		console.log("No better-auth packages found in this project.");
 		return;
 	}
 
 	const spinner = yoctoSpinner({ text: "checking for updates..." }).start();
 
-	const results = await Promise.allSettled(
-		candidates.map(async (c) => {
-			const latest = await fetchLatestVersion(c.name);
-			return { ...c, latest };
-		}),
-	);
+	const [upgradeResults, renameResults] = await Promise.all([
+		Promise.allSettled(
+			upgradeScans.map(async (c) => {
+				const latest = await fetchLatestVersion(c.name);
+				return { ...c, latest };
+			}),
+		),
+		Promise.allSettled(
+			renameScans.map(async (c) => {
+				const latest = await fetchLatestVersion(c.newName);
+				return { ...c, latest };
+			}),
+		),
+	]);
 
 	const upgrades: UpgradeEntry[] = [];
-	for (const result of results) {
+	for (const result of upgradeResults) {
 		if (result.status !== "fulfilled" || !result.value.latest) {
 			continue;
 		}
@@ -92,27 +141,58 @@ async function upgradeAction(opts: unknown) {
 		}
 	}
 
+	const renames: RenameEntry[] = [];
+	for (const result of renameResults) {
+		if (result.status !== "fulfilled" || !result.value.latest) {
+			continue;
+		}
+		const { oldName, newName, current, latest, depType } = result.value;
+		renames.push({ oldName, newName, current, latest, depType });
+	}
+
 	spinner.stop();
 
-	if (upgrades.length === 0) {
+	if (upgrades.length === 0 && renames.length === 0) {
 		console.log("All better-auth packages are up to date.");
 		return;
 	}
 
-	console.log(`\nThe following packages can be upgraded:\n`);
-	for (const u of upgrades) {
+	if (renames.length > 0) {
 		console.log(
-			`  ${chalk.cyan(u.name)}  ${chalk.gray(u.current)} ${chalk.white("→")} ${chalk.green(u.latest)}`,
+			`\nThe following packages were renamed and will be replaced:\n`,
 		);
+		for (const r of renames) {
+			console.log(
+				`  ${chalk.cyan(r.oldName)} ${chalk.gray(r.current)} ${chalk.white("→")} ${chalk.cyan(r.newName)} ${chalk.green(r.latest)}`,
+			);
+		}
+		console.log(
+			chalk.gray(
+				`  keeping the old name causes peer-dep skew (see issue #9558)`,
+			),
+		);
+		console.log();
 	}
-	console.log();
+
+	if (upgrades.length > 0) {
+		console.log(`\nThe following packages can be upgraded:\n`);
+		for (const u of upgrades) {
+			console.log(
+				`  ${chalk.cyan(u.name)}  ${chalk.gray(u.current)} ${chalk.white("→")} ${chalk.green(u.latest)}`,
+			);
+		}
+		console.log();
+	}
 
 	let confirmed = options.yes;
 	if (!confirmed) {
 		const response = await prompts({
 			type: "confirm",
 			name: "confirmed",
-			message: "Do you want to upgrade these packages?",
+			message:
+				renames.length > 0
+					? "Do you want to apply these changes?"
+					: "Do you want to upgrade these packages?",
 			initial: true,
 		});
 		confirmed = response.confirmed;
@@ -125,18 +205,51 @@ async function upgradeAction(opts: unknown) {
 
 	const { packageManager } = await detectPackageManager(cwd, packageJson);
 
-	const prodUpgrades = upgrades
-		.filter((u) => u.depType === "prod")
-		.map((u) => `${u.name}@${u.latest}`);
-	const devUpgrades = upgrades
-		.filter((u) => u.depType === "dev")
-		.map((u) => `${u.name}@${u.latest}`);
-
 	const installSpinner = yoctoSpinner({
-		text: "installing updates...",
+		text:
+			renames.length > 0
+				? "applying renames and updates..."
+				: "installing updates...",
 	}).start();
 
 	try {
+		if (renames.length > 0) {
+			await removeDependencies({
+				dependencies: renames.map((r) => r.oldName),
+				packageManager,
+				cwd,
+			});
+			const prodRenames = renames
+				.filter((r) => r.depType === "prod")
+				.map((r) => `${r.newName}@${r.latest}`);
+			const devRenames = renames
+				.filter((r) => r.depType === "dev")
+				.map((r) => `${r.newName}@${r.latest}`);
+			if (prodRenames.length > 0) {
+				await installDependencies({
+					dependencies: prodRenames,
+					packageManager,
+					cwd,
+					type: "prod",
+				});
+			}
+			if (devRenames.length > 0) {
+				await installDependencies({
+					dependencies: devRenames,
+					packageManager,
+					cwd,
+					type: "dev",
+				});
+			}
+		}
+
+		const prodUpgrades = upgrades
+			.filter((u) => u.depType === "prod")
+			.map((u) => `${u.name}@${u.latest}`);
+		const devUpgrades = upgrades
+			.filter((u) => u.depType === "dev")
+			.map((u) => `${u.name}@${u.latest}`);
+
 		if (prodUpgrades.length > 0) {
 			await installDependencies({
 				dependencies: prodUpgrades,
@@ -175,3 +288,5 @@ export const upgrade = new Command("upgrade")
 		false,
 	)
 	.action(upgradeAction);
+
+export { upgradeAction };
