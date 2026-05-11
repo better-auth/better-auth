@@ -77,4 +77,26 @@ describe("atprotoClient", () => {
 		});
 		expect(res.data?.url).toBe("https://pds.example.com/authorize?x=1");
 	});
+
+	it("caller-supplied fetchOptions cannot override the fixed method/body", async () => {
+		const { client } = await getTestInstance(
+			{ plugins: [atproto()] },
+			{ clientOptions: { plugins: [atprotoClient()] } },
+		);
+		oauthMocks.authorize.mockResolvedValueOnce(
+			new URL("https://pds.example.com/authorize?x=1"),
+		);
+		// Try to force a GET with no body. The client should still POST the
+		// handle/callbackURL — otherwise the server endpoint would return 405
+		// or the body would be missing and authorize() wouldn't be called.
+		const res = await client.signIn.atproto(
+			{ handle: "alice.bsky.social", callbackURL: "/dashboard" },
+			{ method: "GET", body: undefined } as RequestInit,
+		);
+		expect(res.data?.url).toBe("https://pds.example.com/authorize?x=1");
+		expect(oauthMocks.authorize).toHaveBeenCalledWith(
+			"alice.bsky.social",
+			expect.any(Object),
+		);
+	});
 });

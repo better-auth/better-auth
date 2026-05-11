@@ -14,12 +14,12 @@ export const atprotoClient = () => {
 					const res = await $fetch<{ url: string; redirect: boolean }>(
 						"/atproto/sign-in",
 						{
+							...fetchOptions,
 							method: "POST",
 							body: {
 								handle: data.handle,
 								callbackURL: data.callbackURL,
 							},
-							...fetchOptions,
 						},
 					);
 					if (res.data?.url && typeof window !== "undefined") {
@@ -38,12 +38,12 @@ export const atprotoClient = () => {
 						avatar?: string;
 						banner?: string;
 						description?: string;
-					}>("/atproto/session", { method: "GET", ...fetchOptions });
+					}>("/atproto/session", { ...fetchOptions, method: "GET" });
 				},
 				restore: async (fetchOptions?: RequestInit) => {
 					return $fetch<{ active: boolean; did?: string }>("/atproto/restore", {
-						method: "POST",
 						...fetchOptions,
+						method: "POST",
 					});
 				},
 			},
