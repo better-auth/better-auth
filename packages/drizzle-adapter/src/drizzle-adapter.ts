@@ -865,8 +865,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					else if (
 						res &&
 						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
-					)
-						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
+					) {
+						const raw = res.affectedRows ?? res.rowsAffected ?? res.changes;
+						// MSSQL driver returns rowsAffected as number[] (one entry per batch statement)
+						count = Array.isArray(raw)
+							? raw.reduce((sum, n) => sum + n, 0)
+							: raw;
+					}
 					if (typeof count !== "number") {
 						logger.error(
 							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
