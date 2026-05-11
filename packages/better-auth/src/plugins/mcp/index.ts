@@ -17,7 +17,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { resolveDynamicTrustedProxyHeaders } from "../../context/helpers";
 import { expireCookie, parseSetCookieHeader } from "../../cookies";
-import { generateRandomString } from "../../crypto";
+import { constantTimeEqual, generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
 import {
 	getBaseURL,
@@ -326,15 +326,6 @@ export const mcp = (options: MCPOptions) => {
 					},
 				},
 				async (ctx) => {
-					//cors
-					ctx.setHeader("Access-Control-Allow-Origin", "*");
-					ctx.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-					ctx.setHeader(
-						"Access-Control-Allow-Headers",
-						"Content-Type, Authorization",
-					);
-					ctx.setHeader("Access-Control-Max-Age", "86400");
-
 					let { body } = ctx;
 					if (!body) {
 						throw ctx.error("BAD_REQUEST", {
@@ -356,34 +347,56 @@ export const mcp = (options: MCPOptions) => {
 						ctx.request?.headers.get("authorization") || null;
 					if (
 						authorization &&
-						!client_id &&
 						!client_secret &&
 						authorization.startsWith("Basic ")
 					) {
+						let decoded: string;
 						try {
 							const encoded = authorization.replace("Basic ", "");
-							const decoded = new TextDecoder().decode(base64.decode(encoded));
-							if (!decoded.includes(":")) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description: "invalid authorization header format",
-									error: "invalid_client",
-								});
-							}
-							const [id, secret] = decoded.split(":");
-							if (!id || !secret) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description: "invalid authorization header format",
-									error: "invalid_client",
-								});
-							}
-							client_id = id;
-							client_secret = secret;
+							decoded = new TextDecoder().decode(base64.decode(encoded));
 						} catch {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid authorization header format",
 								error: "invalid_client",
 							});
 						}
+						// RFC 6749 §2.3.1: split on the first `:` (the secret may contain
+						// further colons), then percent-decode each half before comparing
+						// against stored credentials (the client encodes reserved
+						// characters per RFC 3986 before base64).
+						const colonIndex = decoded.indexOf(":");
+						if (colonIndex === -1) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+						let id: string;
+						let secret: string;
+						try {
+							id = decodeURIComponent(decoded.slice(0, colonIndex));
+							secret = decodeURIComponent(decoded.slice(colonIndex + 1));
+						} catch {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+						if (!id || !secret) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid authorization header format",
+								error: "invalid_client",
+							});
+						}
+						if (client_id && client_id.toString() !== id) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"client_id in body does not match Authorization header",
+								error: "invalid_client",
+							});
+						}
+						client_id = id;
+						client_secret = secret;
 					}
 					const {
 						grant_type,
@@ -425,6 +438,52 @@ export const mcp = (options: MCPOptions) => {
 								error_description: "refresh token expired",
 								error: "invalid_grant",
 							});
+						}
+						const refreshClient = await ctx.context.adapter
+							.findOne<Record<string, any>>({
+								model: modelName.oauthClient,
+								where: [{ field: "clientId", value: client_id.toString() }],
+							})
+							.then((res) => {
+								if (!res) {
+									return null;
+								}
+								return {
+									...res,
+									redirectUrls: res.redirectUrls.split(","),
+									metadata: res.metadata ? JSON.parse(res.metadata) : {},
+								} as Client;
+							});
+						if (!refreshClient) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_id",
+								error: "invalid_client",
+							});
+						}
+						if (refreshClient.disabled) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "client is disabled",
+								error: "invalid_client",
+							});
+						}
+						if (refreshClient.type !== "public") {
+							if (!refreshClient.clientSecret || !client_secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description:
+										"client_secret is required for confidential clients",
+									error: "invalid_client",
+								});
+							}
+							const isValidSecret = constantTimeEqual(
+								refreshClient.clientSecret,
+								client_secret.toString(),
+							);
+							if (!isValidSecret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid client_secret",
+									error: "invalid_client",
+								});
+							}
 						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
@@ -562,15 +621,17 @@ export const mcp = (options: MCPOptions) => {
 						// PKCE validation happens later in the flow, so we skip client_secret validation
 					} else {
 						// For confidential clients, validate client_secret
-						if (!client_secret) {
+						if (!client.clientSecret || !client_secret) {
 							throw new APIError("UNAUTHORIZED", {
 								error_description:
 									"client_secret is required for confidential clients",
 								error: "invalid_client",
 							});
 						}
-						const isValidSecret =
-							client.clientSecret === client_secret.toString();
+						const isValidSecret = constantTimeEqual(
+							client.clientSecret,
+							client_secret.toString(),
+						);
 						if (!isValidSecret) {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid client_secret",
