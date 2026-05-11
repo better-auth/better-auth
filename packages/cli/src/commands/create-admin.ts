@@ -27,7 +27,6 @@ type CreateUserApi = (input: {
 function exitWithError(message: string): never {
 	console.error(chalk.red(`Error: ${message}`));
 	process.exit(1);
-	throw new Error(message);
 }
 
 function parseData(data: string | undefined) {
@@ -133,8 +132,6 @@ export async function createAdminAction(opts: unknown) {
 			"The admin plugin is required. Add `admin()` to your Better Auth plugins before running this command.",
 		);
 	}
-
-	if (!options.name) exitWithError("Admin name is required.");
 
 	const { email, password } = await resolveRequiredInput(options);
 	const emailResult = z.email().safeParse(email);

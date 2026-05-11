@@ -13,10 +13,18 @@ vi.mock("prompts", () => ({
 
 describe("create-admin", () => {
 	let db: Database.Database;
+	let lastConsoleError = "";
 
 	beforeEach(() => {
+		lastConsoleError = "";
 		vi.mocked(prompts).mockReset();
+		vi.spyOn(console, "error").mockImplementation((message) => {
+			lastConsoleError = String(message);
+		});
 		vi.spyOn(process, "exit").mockImplementation((code) => {
+			if (code && Number(code) !== 0) {
+				throw new Error(lastConsoleError || "process.exit(" + code + ")");
+			}
 			return code as never;
 		});
 	});
