@@ -207,12 +207,13 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				disableIpTracking?: boolean;
 				/**
-				 * IPv6 subnet prefix length for rate limiting.
-				 * IPv6 addresses will be normalized to this subnet.
+				 * IPv6 prefix length used to collapse addresses before rate-limit keying.
+				 * Any integer from 0 to 128 is accepted; common values are 32, 48, 56, 64, 128.
+				 * Out-of-range values fall back to safe behavior (negative -> mask all, > 128 -> no mask).
 				 *
 				 * @default 64
 				 */
-				ipv6Subnet?: 128 | 64 | 48 | 32;
+				ipv6Subnet?: number;
 		  }
 		| undefined;
 	/**
