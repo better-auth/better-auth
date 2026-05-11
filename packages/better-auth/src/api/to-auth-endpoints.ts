@@ -182,15 +182,10 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 								throw e;
 							});
 							if (beforeHookError) {
-								internalContext.context.returned = beforeHookError;
-								internalContext.context.responseHeaders = (
-									beforeHookError as APIError
-								).headers
-									? new Headers(
-											(beforeHookError as APIError).headers as
-												| HeadersInit
-												| undefined,
-										)
+								const hookError = beforeHookError as APIError;
+								internalContext.context.returned = hookError;
+								internalContext.context.responseHeaders = hookError.headers
+									? new Headers(hookError.headers as HeadersInit | undefined)
 									: undefined;
 								internalContext.asResponse = false;
 								internalContext.returnHeaders = true;
@@ -200,20 +195,30 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 									endpoint,
 									operationId,
 								);
-								const error = (after.response ?? beforeHookError) as APIError;
-								if (
-									isAPIError(error) &&
-									shouldPublishLog(authContext.logger.level, "debug")
-								) {
-									error.stack = error.errorStack;
+
+								const response = after.response ?? hookError;
+
+								if (isAPIError(response)) {
+									if (shouldPublishLog(authContext.logger.level, "debug")) {
+										response.stack = response.errorStack;
+									}
+									if (context?.asResponse) {
+										return toResponse(response, {
+											headers: after.headers,
+											status: response.statusCode,
+										});
+									}
+									throw response;
 								}
+
 								if (context?.asResponse) {
-									return toResponse(error, {
+									return toResponse(response, {
 										headers: after.headers,
-										status: error.statusCode,
 									});
 								}
-								throw error;
+								return context?.returnHeaders
+									? { headers: after.headers, response }
+									: response;
 							}
 							/**
 							 * If `before.context` is returned, it should
