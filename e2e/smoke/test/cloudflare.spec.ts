@@ -7,6 +7,13 @@ import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
+const stripComments = (source: string) => {
+	// Keep this simple: we only need to avoid comment-only false positives.
+	return source
+		.replace(/\/\*[\s\S]*?\*\//g, "")
+		.replace(/(^|[^\\])\/\/.*$/gm, "$1");
+};
+
 describe("(cloudflare) simple server", () => {
 	it("check repo", async (t) => {
 		const cp = spawn("npm", ["run", "check"], {
@@ -52,6 +59,7 @@ describe("(cloudflare) simple server", () => {
 			join(fixturesDir, "cloudflare", "dist", "index.js"),
 			"utf-8",
 		);
+		const indexJsWithoutComments = stripComments(indexJs);
 
 		const unexpectedContents = new Set([
 			"createRequire",
@@ -60,7 +68,7 @@ describe("(cloudflare) simple server", () => {
 		]);
 		for (const content of unexpectedContents) {
 			assert(
-				!indexJs.includes(content),
+				!indexJsWithoutComments.includes(content),
 				`index.js should not contain "${content}"`,
 			);
 		}
