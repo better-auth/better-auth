@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
+import { symmetricDecodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
@@ -221,6 +222,106 @@ describe("oauth2", async () => {
 			scope: expect.any(String),
 			idToken: expect.any(String),
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9375
+	 */
+	it("should resolve getAccessToken after first-time generic-oauth sign-in (storeAccountCookie + JWE)", async () => {
+		const { customFetchImpl, auth } = await getTestInstance({
+			advanced: {
+				useSecureCookies: true,
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-store-account",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const newAuthClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const newUserEmail = "first-time-generic-oauth@test.com";
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: newUserEmail,
+				name: "First Time SSO",
+				sub: "first-time-sso",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const headers = new Headers();
+		const signInRes = await newAuthClient.signIn.social({
+			provider: "test-store-account",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { headers: postCallbackHeaders, setCookieHeader } =
+			await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		const accountDataCookie = cookies.get(accountDataCookieName);
+		expect(accountDataCookie).toBeDefined();
+		expect(accountDataCookie?.value).toBeTruthy();
+		expect(accountDataCookie!.value!.startsWith("ey")).toBe(true);
+		expect(accountDataCookie!.httponly).toBe(true);
+		expect(accountDataCookie!.secure).toBe(true);
+		expect(accountDataCookie!.samesite).toBe("lax");
+		expect(accountDataCookie!["max-age"]).toBeGreaterThan(0);
+
+		await expect(
+			symmetricDecodeJWT(
+				accountDataCookie!.value!,
+				ctx.secret,
+				"better-auth-account",
+			),
+		).resolves.toMatchObject({
+			providerId: "test-store-account",
+			accessToken: expect.any(String),
+		});
+
+		const accessTokenRes = await newAuthClient.getAccessToken(
+			{ providerId: "test-store-account" },
+			{ headers: postCallbackHeaders },
+		);
+		expect(accessTokenRes.error).toBeNull();
+		expect(accessTokenRes.data?.accessToken).toBeTruthy();
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
@@ -928,6 +1029,56 @@ describe("oauth2", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9124
+	 */
+	it("redirects with email_not_found when both the provider and mapProfileToUser omit email", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: "no-email-no-synthesis",
+				name: "No Email User",
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "no-email-unresolved",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const signInRes = await authClient.signIn.social({
+			provider: "no-email-unresolved",
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		const { callbackURL } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toContain("error=email_not_found");
+	});
+
 	it("should work with cookie-based state storage", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
@@ -995,6 +1146,9 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe("OAuth2 Cookie State");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8897
+	 */
 	it("should reject cookie-backed OAuth when callback state does not match the issued state", async () => {
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
