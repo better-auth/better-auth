@@ -676,7 +676,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 									action: "deleteMany",
 								}),
 							});
-							return result?.count > 0 ? ((target as any) ?? null) : null;
+							return result?.count > 0 ? (target as any) : null;
 						} catch (e: any) {
 							if (isPrismaNotFoundError(e)) return null;
 							throw e;
