@@ -6,7 +6,6 @@ import type { DatabaseSync } from "node:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
-	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
@@ -18,16 +17,14 @@ import type {
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
-import {
-	CompiledQuery,
-	DEFAULT_MIGRATION_LOCK_TABLE,
-	DEFAULT_MIGRATION_TABLE,
-	DefaultQueryCompiler,
-	sql,
-} from "kysely";
+import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 
 class NodeSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
+		return true;
+	}
+
+	get supportsMultipleConnections(): boolean {
 		return true;
 	}
 
@@ -194,6 +191,11 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 			.$castTo<{ name: string }>();
 
 		if (!options.withInternalKyselyTables) {
+			const { DEFAULT_MIGRATION_TABLE, DEFAULT_MIGRATION_LOCK_TABLE } =
+				await import("kysely/migration").catch(
+					() => import("kysely") as never as typeof import("kysely/migration"),
+				);
+
 			query = query
 				// @ts-expect-error
 				.where("name", "!=", DEFAULT_MIGRATION_TABLE)
@@ -207,7 +209,7 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 
 	async getMetadata(
 		options?: DatabaseMetadataOptions | undefined,
-	): Promise<DatabaseMetadata> {
+	): Promise<{ tables: TableMetadata[] }> {
 		return {
 			tables: await this.getTables(options),
 		};
@@ -255,6 +257,7 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 				hasDefaultValue: col.dflt_value != null,
 			})),
 			isView: true,
+			isForeign: false,
 		};
 	}
 }
