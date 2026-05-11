@@ -88,17 +88,17 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
 				throw APIError.from("BAD_REQUEST", msg);
 			}
-			const isMember = await adapter.checkMembership({
+			const member = await adapter.getMember({
 				userId: session.user.id,
 				organizationId: organization.id as unknown as RealOrganizationId,
 			});
-			if (!isMember) {
+			if (!member) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				const code = "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION";
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
-			return ctx.json(organization);
+			return ctx.json({ ...organization, member: member });
 		},
 	);

@@ -189,7 +189,7 @@ type Result = {
 You can set the active organization for the current session using the `organization.setActive` method.
 The active organization is stored in the session and can be used to scope requests to a specific organization.
 
-You can learn more about [Active Organizations](/docs/plugins/organization-new/active-organization).
+You can learn more about [Active Organizations](/docs/plugins/organization/active-organizations).
 
 <APIMethod path="/organization/set-active" method="POST" requireSession>
   ```ts
@@ -292,7 +292,7 @@ any endpoint parameters for `organizationId` will accept the organization's `slu
 This is useful if your client side organization state only knows the organization's `slug`, and not its `id`.
 (E.g., via a query parameter or url parameter)
 
-Learn more about [Organization Identifiers](/docs/plugins/organization-new/organization-identifiers).
+Learn more about [Organization Identifiers](/docs/plugins/organization/organization-identifiers).
 
 ```ts
 organization({
@@ -330,11 +330,11 @@ organization({
 
 ### `ac`
 
-Configure access control for the organization plugin. See the [Access Control](/docs/plugins/organization-new/access-control) documentation for more details.
+Configure access control for the organization plugin. See the [Access Control](/docs/plugins/organization/access-control) documentation for more details.
 
 ### `hooks`
 
-Hooks allow you to run custom logic at various points in the organization lifecycle. See the [Hooks](/docs/plugins/organization-new/hooks) documentation for more details.
+Hooks allow you to run custom logic at various points in the organization lifecycle.
 
 ### `schema`
 

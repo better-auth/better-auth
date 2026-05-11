@@ -248,3 +248,64 @@ describe("set active organization", async (it) => {
 		expect(session.data?.session.activeOrganizationId).toBeNull();
 	});
 });
+
+describe("set active organization with slug", async (it) => {
+	const plugin = organization({ defaultOrganizationIdField: "slug" });
+	const { auth, client, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	let orgSlug: string;
+	let orgId: string;
+
+	it("setup: create organization", async () => {
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: orgData,
+		});
+		orgSlug = org.slug;
+		orgId = org.id;
+	});
+
+	it("should set active organization using slug", async () => {
+		const result = await client.organization.setActive({
+			organizationId: orgSlug,
+			fetchOptions: { headers },
+		});
+
+		expect(result.data?.slug).toBe(orgSlug);
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(session.data?.session.activeOrganizationId).toBe(orgId);
+	});
+
+	it("should reject setting active organization using id when slug mode is configured", async () => {
+		const result = await client.organization.setActive({
+			organizationId: orgId,
+			fetchOptions: { headers },
+		});
+
+		expect(result.error?.status).toBe(400);
+	});
+
+	it("should allow unsetting active organization in slug mode", async () => {
+		await client.organization.setActive({
+			organizationId: orgSlug,
+			fetchOptions: { headers },
+		});
+
+		const result = await client.organization.setActive({
+			organizationId: null,
+			fetchOptions: { headers },
+		});
+
+		expect(result.data).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(session.data?.session.activeOrganizationId).toBeNull();
+	});
+});

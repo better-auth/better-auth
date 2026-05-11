@@ -100,6 +100,106 @@ describe("get full organization", async (it) => {
 		);
 	});
 
+	it("should return null when no organizationId is provided and no active organization is set", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: `no-active-org-${crypto.randomUUID()}@test.com`,
+				password: "password",
+				name: "no active org user",
+			},
+			{
+				onSuccess: cookieSetter(newHeaders),
+			},
+		);
+
+		const result = await client.organization.getFullOrganization({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(result.data).toBeNull();
+	});
+
+	it("should fall back to active organization when no organizationId is provided", async () => {
+		const orgData = getOrganizationData();
+		const createdOrg = await auth.api.createOrganization({
+			headers,
+			body: orgData,
+		});
+
+		await auth.api.setActiveOrganization({
+			headers,
+			body: { organizationId: createdOrg.id },
+		});
+
+		const org = await auth.api.getFullOrganization({ headers });
+		expect(org).not.toBeNull();
+		expect(org?.id).toBe(createdOrg.id);
+		expect(org?.members.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("should respect membersLimit query parameter", async () => {
+		const orgData = getOrganizationData();
+		const createdOrg = await auth.api.createOrganization({
+			headers,
+			body: orgData,
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const user = await auth.api.signUpEmail({
+				body: {
+					email: `member-limit-${i}-${crypto.randomUUID()}@test.com`,
+					password: "password",
+					name: `member ${i}`,
+				},
+			});
+			await auth.api.addMember({
+				body: {
+					organizationId: createdOrg.id,
+					userId: user.user.id,
+					role: "member",
+				},
+			});
+		}
+
+		const orgFull = await auth.api.getFullOrganization({
+			headers,
+			query: {
+				organizationId: createdOrg.id,
+			},
+		});
+		expect(orgFull?.members.length).toBe(4);
+
+		const orgLimited = await auth.api.getFullOrganization({
+			headers,
+			query: {
+				organizationId: createdOrg.id,
+				membersLimit: 2,
+			},
+		});
+		expect(orgLimited?.members.length).toBe(2);
+	});
+
+	it("should include member field in response with current user's membership", async () => {
+		const orgData = getOrganizationData();
+		const createdOrg = await auth.api.createOrganization({
+			headers,
+			body: orgData,
+		});
+
+		const org = await auth.api.getFullOrganization({
+			headers,
+			query: {
+				organizationId: createdOrg.id,
+			},
+		});
+
+		expect(org?.member).toBeDefined();
+		expect(org?.member.role).toBe("owner");
+		expect(org?.member.organizationId).toBe(createdOrg.id);
+	});
+
 	describe("should work with slug", async (it) => {
 		const plugin = organization({ defaultOrganizationIdField: "slug" });
 		const { auth, signInWithTestUser } = await defineInstance([plugin]);
