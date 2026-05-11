@@ -615,14 +615,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return organizations;
 		},
-		createTeam: async (data: Omit<TeamInput, "id">) => {
+		createTeam: async (data: TeamInput) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<
-				Omit<TeamInput, "id">,
-				InferTeam<O, false>
-			>({
+			const team = await adapter.create<TeamInput, InferTeam<O, false>>({
 				model: "team",
 				data,
+				forceAllowId: true,
 			});
 			return team;
 		},
@@ -930,9 +928,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					organization: true,
 				},
 			});
-			return invitations.map(({ organization, ...inv }) => ({
+			return invitations.filter(Boolean).map(({ organization, ...inv }) => ({
 				...inv,
-				organizationName: organization.name,
+				organizationName: organization?.name,
 			}));
 		},
 		createInvitation: async ({
@@ -954,7 +952,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				"sec",
 			);
 			const invite = await adapter.create<
-				Omit<InvitationInput, "id">,
+				InvitationInput,
 				InferInvitation<O, false>
 			>({
 				model: "invitation",
@@ -967,6 +965,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					teamId:
 						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
 				},
+				forceAllowId: true,
 			});
 
 			return invite;

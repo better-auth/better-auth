@@ -1,16 +1,19 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
+import { logger } from "../env";
+import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
 export interface FacebookProfile {
 	id: string;
 	name: string;
-	email: string;
-	email_verified: boolean;
+	email?: string;
+	email_verified?: boolean;
 	picture: {
 		data: {
 			height: number;
@@ -22,7 +25,7 @@ export interface FacebookProfile {
 }
 
 export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * Extend list of fields to retrieve from the Facebook user profile.
 	 *
@@ -41,6 +44,12 @@ export const facebook = (options: FacebookOptions) => {
 		id: "facebook",
 		name: "Facebook",
 		async createAuthorizationURL({ state, scopes, redirectURI, loginHint }) {
+			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
+				logger.error(
+					"Client ID and client secret are required for Facebook. Make sure to provide them in the options.",
+				);
+				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+			}
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "public_profile"];
@@ -195,7 +204,7 @@ export const facebook = (options: FacebookOptions) => {
 					name: profile.name,
 					email: profile.email,
 					image: profile.picture.data.url,
-					emailVerified: profile.email_verified,
+					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
 				data: profile,

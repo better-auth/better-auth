@@ -3,6 +3,7 @@ import { parseCookies } from "better-auth/cookies";
 import type { electron } from "./index";
 import type { ElectronProxyClientOptions } from "./types/client";
 import { parseProtocolScheme } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 	const opts = {
@@ -16,6 +17,7 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 
 	return {
 		id: "electron-proxy",
+		version: PACKAGE_VERSION,
 		getActions: () => {
 			const getAuthorizationCode = () => {
 				if (typeof document === "undefined") return null;

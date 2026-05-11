@@ -61,6 +61,11 @@ export async function parseRelayState(c: GenericEndpointContext) {
 	try {
 		parsedData = await parseGenericState(c, state, {
 			cookieName: "relay_state",
+			/**
+			 * SAML ACS receives a POST from the IdP, which is typically cross-origin.
+			 * SameSite=Lax (default) cookies are not sent on cross-site POST requests.
+			 */
+			skipStateCookieCheck: true,
 		});
 	} catch (error) {
 		c.context.logger.error("Failed to parse relay state", error);

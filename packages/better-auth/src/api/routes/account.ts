@@ -11,6 +11,7 @@ import {
 	setAccountCookie,
 } from "../../cookies/session-store";
 import { parseAccountOutput } from "../../db/schema";
+import { missingEmailLogMessage } from "../../oauth2/errors";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
@@ -269,9 +270,10 @@ export const linkSocialAccount = createAuthEndpoint(
 			const linkingUserId = String(linkingUserInfo.user.id);
 
 			if (!linkingUserInfo.user.email) {
-				c.context.logger.error("User email not found", {
-					provider: c.body.provider,
-				});
+				c.context.logger.error(
+					missingEmailLogMessage(c.body.provider, { source: "id_token" }),
+					{ provider: c.body.provider },
+				);
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
@@ -524,8 +526,9 @@ export const getAccessToken = createAuthEndpoint(
 		let account: Account | undefined = undefined;
 		if (
 			accountData &&
+			accountData.userId === resolvedUserId &&
 			providerId === accountData.providerId &&
-			(!accountId || accountData.id === accountId)
+			(!accountId || accountData.accountId === accountId)
 		) {
 			account = accountData;
 		} else {
@@ -715,6 +718,7 @@ export const refreshToken = createAuthEndpoint(
 		const accountData = await getAccountCookie(ctx);
 		if (
 			accountData &&
+			accountData.userId === resolvedUserId &&
 			(!providerId || providerId === accountData?.providerId)
 		) {
 			account = accountData;

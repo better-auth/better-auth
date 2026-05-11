@@ -12,6 +12,7 @@ describe("have-i-been-pwned", async () => {
 		},
 	);
 	const ctx = await auth.$context;
+
 	it("should prevent account creation with compromised password", async () => {
 		const uniqueEmail = `test-${Date.now()}@example.com`;
 		const compromisedPassword = "123456789";
@@ -62,5 +63,29 @@ describe("have-i-been-pwned", async () => {
 		);
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
+	});
+
+	describe("when enabled is false", async () => {
+		const { client: disabledClient } = await getTestInstance(
+			{
+				plugins: [haveIBeenPwned({ enabled: false })],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		it("should allow account creation with compromised password", async () => {
+			const uniqueEmail = `test-${Date.now()}@example.com`;
+
+			const result = await disabledClient.signUp.email({
+				email: uniqueEmail,
+				password: "123456789",
+				name: "Test User",
+			});
+
+			expect(result.error).toBeNull();
+			expect(result.data?.user).toBeDefined();
+		});
 	});
 });

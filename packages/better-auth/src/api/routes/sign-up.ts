@@ -232,8 +232,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const shouldReturnGenericDuplicateResponse =
+					ctx.context.options.emailAndPassword.requireEmailVerification ||
+					ctx.context.options.emailAndPassword.autoSignIn === false;
+				const shouldSkipAutoSignIn =
 					ctx.context.options.emailAndPassword.autoSignIn === false ||
-					ctx.context.options.emailAndPassword.requireEmailVerification;
+					shouldReturnGenericDuplicateResponse;
 				const additionalUserFields = parseUserInput(
 					ctx.context.options,
 					rest,
@@ -391,7 +394,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					}
 				}
 
-				if (shouldReturnGenericDuplicateResponse) {
+				if (shouldSkipAutoSignIn) {
 					return ctx.json({
 						token: null,
 						user: parseUserOutput(ctx.context.options, createdUser) as User<

@@ -46,11 +46,16 @@ export const auth = betterAuth({
 ```
 
 To run your application with Node.js SQLite:
+
 ```bash
 node your-app.js
 ```
 
 ### Bun Built-in SQLite
+
+<Callout type="warning">
+  Use `bunx` with the `--bun` flag to run cli commands to prevent seeing type errors related to recognizing the `bun:sqlite` module, eg: `bunx --bun auth@latest generate`
+</Callout>
 
 You can also use the built-in [SQLite](https://bun.com/docs/api/sqlite) module in Bun, which is similar to the Node.js version:
 
@@ -74,31 +79,34 @@ your database schema based on your Better Auth configuration and plugins.
       <th>
         <p className="font-bold text-[16px] mb-1">SQLite Schema Generation</p>
       </th>
+
       <th>
         <p className="font-bold text-[16px] mb-1">SQLite Schema Migration</p>
       </th>
     </tr>
   </thead>
+
   <tbody>
     <tr className="h-10">
-      <td>&#9989; Supported</td>
-      <td>&#9989; Supported</td>
+      <td>✅ Supported</td>
+      <td>✅ Supported</td>
     </tr>
   </tbody>
 </table>
 
 <Tabs items={["migrate", "generate"]}>
-   <Tab value="migrate">
-   ```package-install
-   npx auth@latest migrate
-   ```
-   </Tab>
-   <Tab value="generate">
-   ```package-install
-   npx auth@latest generate
-   ```
-   </Tab>
- </Tabs>
+  <Tab value="migrate">
+    ```package-install
+    npx auth@latest migrate
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```package-install
+    npx auth@latest generate
+    ```
+  </Tab>
+</Tabs>
 
 ## Joins (Experimental)
 
@@ -114,6 +122,7 @@ export const auth = betterAuth({
   experimental: { joins: true }
 });
 ```
+
 <Callout type="warn">
   It's possible that you may need to run migrations after enabling this feature.
 </Callout>

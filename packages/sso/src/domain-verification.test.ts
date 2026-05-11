@@ -530,6 +530,53 @@ describe("Domain verification", async () => {
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8361
+		 */
+		it("should verify a provider domain ownership with a bare domain", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "bare-domain-provider",
+					issuer: "http://hello.com:8081",
+					domain: "hello.com",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const requestResponse = await auth.api.requestDomainVerification({
+				body: { providerId: "bare-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(requestResponse.status).toBe(201);
+			const { domainVerificationToken } = await requestResponse.json();
+
+			dnsMock.resolveTxt.mockResolvedValue([
+				[`_better-auth-token-bare-domain-provider=${domainVerificationToken}`],
+			]);
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: "bare-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(verifyResponse.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-bare-domain-provider.hello.com",
+			);
+		});
+
 		it("should return bad request when provider ID exceeds DNS label limit", async () => {
 			const longProviderId = "a".repeat(50);
 			const { auth, getAuthHeaders } = createTestAuth();

@@ -127,6 +127,7 @@ export interface TiktokOptions extends ProviderOptions {
 }
 
 export const tiktok = (options: TiktokOptions) => {
+	const tokenEndpoint = "https://open.tiktokapis.com/v2/oauth/token/";
 	return {
 		id: "tiktok",
 		name: "TikTok",
@@ -151,7 +152,7 @@ export const tiktok = (options: TiktokOptions) => {
 					clientKey: options.clientKey,
 					clientSecret: options.clientSecret,
 				},
-				tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -162,7 +163,7 @@ export const tiktok = (options: TiktokOptions) => {
 						options: {
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://open.tiktokapis.com/v2/oauth/token/",
+						tokenEndpoint,
 						authentication: "post",
 						extraParams: {
 							client_key: options.clientKey,

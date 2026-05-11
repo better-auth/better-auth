@@ -7,6 +7,7 @@ import {
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
+import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import {
 	getUserInfo,
@@ -72,6 +73,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 	return {
 		id: "generic-oauth",
+		version: PACKAGE_VERSION,
 		init: (ctx: AuthContext) => {
 			const genericProviders = options.config.map((c) => {
 				let finalUserInfoUrl = c.userInfoUrl;

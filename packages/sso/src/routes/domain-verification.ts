@@ -6,6 +6,7 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import type { SSOOptions, SSOProvider } from "../types";
+import { getHostnameFromDomain } from "../utils";
 
 const DNS_LABEL_MAX_LENGTH = 63;
 const DEFAULT_TOKEN_PREFIX = "better-auth-token";
@@ -241,8 +242,15 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
+			const hostname = getHostnameFromDomain(provider.domain);
+			if (!hostname) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Invalid domain",
+					code: "INVALID_DOMAIN",
+				});
+			}
+
 			try {
-				const hostname = new URL(provider.domain).hostname;
 				const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
 				records = dnsRecords.flat();
 			} catch (error) {
