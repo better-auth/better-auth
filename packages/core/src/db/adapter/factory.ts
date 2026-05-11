@@ -1354,6 +1354,11 @@ export const createAdapterFactory =
 					// engines with real transaction isolation; race window narrows
 					// (does not close) on adapters that fall through to sequential
 					// execution. Remove this branch when claimOne becomes required.
+					// FIXME(claim-one-nested-transaction): custom adapters without a
+					// native claimOne have no portable signal for "already inside a
+					// transaction". First-party adapters mark transaction-scoped
+					// adapters as as-is; make that capability explicit in the next
+					// breaking adapter contract.
 					res = await withSpan(
 						`db claimOne ${model}`,
 						{

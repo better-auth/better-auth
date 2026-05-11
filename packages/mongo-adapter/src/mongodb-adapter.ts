@@ -632,10 +632,11 @@ export const mongodbAdapter = (
 				},
 				async claimOne({ model, where }) {
 					const clause = convertWhereClause({ where, model });
-					const doc = await db
-						.collection(model)
-						.findOneAndDelete(clause, { session });
-					return (doc as any) ?? null;
+					const doc = await db.collection(model).findOneAndDelete(clause, {
+						session,
+						includeResultMetadata: true,
+					});
+					return ((doc as any)?.value as any) ?? null;
 				},
 			};
 		};
@@ -671,7 +672,10 @@ export const mongodbAdapter = (
 								session.startTransaction();
 
 								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
+									config: {
+										...adapterOptions!.config,
+										transaction: false,
+									},
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
 

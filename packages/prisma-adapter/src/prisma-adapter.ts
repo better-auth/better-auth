@@ -73,7 +73,10 @@ type PrismaClientInternal = {
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
-		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			prisma: PrismaClient,
+			inTransaction = false,
+		): AdapterFactoryCustomizeAdapterCreator =>
 		({
 			getFieldName,
 			getModelName,
@@ -624,9 +627,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// `prisma.model.delete` requires a WhereUniqueInput. When the
 					// caller keys on the primary key we get a single round trip;
-					// otherwise we fall back to find-then-delete inside an
-					// interactive transaction so two racers serialize behind the
-					// same row.
+					// otherwise we fall back to find-then-deleteMany inside a
+					// transaction. deleteMany rechecks the original predicate with the
+					// selected id so we do not delete a row that stopped matching.
+					// FIXME(claim-one-prisma-locking): Prisma has no portable
+					// row-locking API for findFirst. Add provider-specific locking
+					// when a breaking adapter contract can expose it cleanly.
 					const hasIdField = where?.some((w) => w.field === "id");
 					if (hasIdField) {
 						const whereClause = convertWhereClause({
@@ -648,21 +654,37 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where,
 						action: "findOne",
 					});
-					return (prisma as PrismaClientInternal).$transaction(async (tx) => {
+					const claimFromTransaction = async (tx: PrismaClient) => {
 						const target = await (tx as any)[model].findFirst({
 							where: findWhere,
 						});
 						if (!target) return null;
 						try {
-							const row = await (tx as any)[model].delete({
-								where: { id: (target as any).id },
+							const result = await (tx as any)[model].deleteMany({
+								where: convertWhereClause({
+									model,
+									where: [
+										...(where ?? []),
+										{
+											field: "id",
+											value: (target as any).id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "deleteMany",
+								}),
 							});
-							return (row as any) ?? null;
+							return result?.count > 0 ? ((target as any) ?? null) : null;
 						} catch (e: any) {
 							if (isPrismaNotFoundError(e)) return null;
 							throw e;
 						}
-					});
+					};
+					return inTransaction || typeof db.$transaction !== "function"
+						? claimFromTransaction(db)
+						: db.$transaction(claimFromTransaction);
 				},
 				options: config,
 			};
@@ -685,8 +707,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					? (cb) =>
 							(prisma as PrismaClientInternal).$transaction((tx) => {
 								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
-									adapter: createCustomAdapter(tx),
+									config: {
+										...adapterOptions!.config,
+										transaction: false,
+									},
+									adapter: createCustomAdapter(tx, true),
 								})(lazyOptions!);
 								return cb(adapter);
 							})

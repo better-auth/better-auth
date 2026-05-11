@@ -23,17 +23,15 @@ describe("kysely-adapter", () => {
 	});
 
 	it("claimOne deletes only the selected row for non-unique predicates", async () => {
-		const selected = {
+		const selectQuery = {
+			select: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			limit: vi.fn(() => selectQuery),
+		};
+		const deleted = {
 			id: "verification-1",
 			identifier: "same-identifier",
 			value: "first",
-		};
-		const deleted = { ...selected };
-		const selectQuery = {
-			selectAll: vi.fn(() => selectQuery),
-			where: vi.fn(() => selectQuery),
-			limit: vi.fn(() => selectQuery),
-			executeTakeFirst: vi.fn().mockResolvedValue(selected),
 		};
 		const deleteQuery = {
 			where: vi.fn(() => deleteQuery),
@@ -52,12 +50,13 @@ describe("kysely-adapter", () => {
 		});
 
 		expect(result).toEqual(deleted);
+		expect(selectQuery.select).toHaveBeenCalledWith("verification.id");
 		expect(selectQuery.where).toHaveBeenCalledTimes(1);
 		expect(deleteQuery.where).toHaveBeenCalledTimes(1);
 		expect(deleteQuery.where).toHaveBeenCalledWith(
 			"verification.id",
-			"=",
-			"verification-1",
+			"in",
+			selectQuery,
 		);
 		expect(deleteQuery.returningAll).toHaveBeenCalledTimes(1);
 	});

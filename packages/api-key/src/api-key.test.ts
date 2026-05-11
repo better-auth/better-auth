@@ -4702,9 +4702,9 @@ describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 			clientOptions: { plugins: [apiKeyClient()] },
 		},
 	);
-	const { headers } = await signInWithTestUser();
 
 	it("returns the key that createApiKey just wrote", async () => {
+		const { headers } = await signInWithTestUser();
 		const created = await auth.api.createApiKey({ body: {}, headers });
 		expect(created.id).toBeDefined();
 

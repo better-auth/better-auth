@@ -36,6 +36,13 @@ export interface RedisStorageConfig {
  */
 export function redisStorage(config: RedisStorageConfig) {
 	const { client, keyPrefix = "better-auth:" } = config;
+	const getAndDeleteScript = `
+local value = redis.call("GET", KEYS[1])
+if value ~= false then
+  redis.call("DEL", KEYS[1])
+end
+return value
+`;
 
 	const prefixKey = (key: string): string => {
 		return `${keyPrefix}${key}`;
@@ -47,7 +54,7 @@ export function redisStorage(config: RedisStorageConfig) {
 		},
 
 		async getAndDelete(key: string) {
-			return client.call("GETDEL", prefixKey(key));
+			return client.eval(getAndDeleteScript, 1, prefixKey(key));
 		},
 
 		async set(key: string, value: string, ttl?: number | undefined) {
