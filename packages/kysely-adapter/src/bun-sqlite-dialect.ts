@@ -255,6 +255,7 @@ class BunSqliteIntrospector implements DatabaseIntrospector {
 				hasDefaultValue: col.dflt_value != null,
 			})),
 			isView: true,
+			isForeign: false,
 		};
 	}
 }
