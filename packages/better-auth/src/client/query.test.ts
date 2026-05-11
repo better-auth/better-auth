@@ -216,6 +216,9 @@ describe("useAuthQuery - error handling", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9549
+ */
 describe("useAuthQuery - refetch", () => {
 	it("can pass signal", async () => {
 		const abortError = new Error("aborted");

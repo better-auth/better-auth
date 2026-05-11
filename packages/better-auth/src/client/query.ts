@@ -13,7 +13,9 @@ export type AuthQueryAtom<T> = PreinitializedWritableAtom<{
 	isPending: boolean;
 	isRefetching: boolean;
 	refetch: (
-		queryParams?: { query?: SessionQueryParams } | undefined,
+		queryParams?:
+			| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+			| undefined,
 	) => Promise<void>;
 }>;
 
