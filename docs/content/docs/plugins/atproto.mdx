@@ -1,9 +1,9 @@
 ---
-title: AT Protocol (Bluesky)
-description: Sign in with Bluesky / AT Protocol OAuth
+title: AT Protocol (Atmosphere)
+description: Sign in via AT Protocol / Atmosphere OAuth
 ---
 
-The AT Protocol plugin lets users sign in with their Bluesky handle using OAuth 2.0 with PKCE and DPoP. It supports localhost development without tunnels, persists atproto sessions for downstream API calls, and links Bluesky accounts to existing better-auth users.
+The AT Protocol plugin lets users sign in with their AT Protocol handle (e.g. a Bluesky handle like `alice.bsky.social`) using OAuth 2.0 with PKCE and DPoP. It works with any AT Protocol PDS in the [Atmosphere ecosystem](https://atproto.com/guides/glossary). It supports localhost development without tunnels, persists atproto sessions for downstream API calls, and links AT Protocol accounts to existing better-auth users.
 
 ## Installation
 
@@ -137,12 +137,12 @@ The plugin extends the `user` table and adds two new tables.
 
 ### `user` extensions
 
-| Column          | Type            | Description                          |
-| --------------- | --------------- | ------------------------------------ |
-| `atprotoDid`    | string (unique) | AT Protocol DID (`did:plc:...`)      |
-| `atprotoHandle` | string          | Bluesky handle (`alice.bsky.social`) |
-| `atprotoBio`    | string          | Profile description                  |
-| `atprotoBanner` | string          | Banner image URL                     |
+| Column          | Type            | Description                                   |
+| --------------- | --------------- | --------------------------------------------- |
+| `atprotoDid`    | string (unique) | AT Protocol DID (`did:plc:...`)               |
+| `atprotoHandle` | string          | AT Protocol handle (e.g. `alice.bsky.social`) |
+| `atprotoBio`    | string          | Profile description                           |
+| `atprotoBanner` | string          | Banner image URL                              |
 
 ### `atprotoState`
 
@@ -180,7 +180,7 @@ export const auth = betterAuth({
 
 ## Account linking
 
-When a user is already signed in (via email, Google, etc.) and signs in with Bluesky, the plugin links the Bluesky account to their existing user. This respects `account.accountLinking.enabled` — if linking is disabled, the plugin returns `FORBIDDEN` instead.
+When a user is already signed in (via email, Google, etc.) and signs in via AT Protocol, the plugin links the AT Protocol account to their existing user. This respects `account.accountLinking.enabled` — if linking is disabled, the plugin returns `FORBIDDEN` instead.
 
 ## Rate limits
 
