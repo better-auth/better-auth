@@ -2,6 +2,8 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import { beforeEach, describe, expect, it } from "vitest";
 import { admin } from "../plugins/admin/admin";
 import { adminClient } from "../plugins/admin/client";
+import { anonymous } from "../plugins/anonymous";
+import { anonymousClient } from "../plugins/anonymous/client";
 import { getTestInstance } from "../test-utils/test-instance";
 
 describe("secondary storage - get returns JSON string", async () => {
@@ -310,6 +312,55 @@ describe("secondary storage - admin removeUser cleans up sessions", async () => 
 		const after = await client.getSession({
 			fetchOptions: { headers: victimHeaders },
 		});
+		expect(after.data).toBeNull();
+	});
+});
+
+describe("secondary storage - /delete-anonymous-user cleans up sessions", async () => {
+	const store = new Map<string, string>();
+
+	const { client, auth, sessionSetter } = await getTestInstance(
+		{
+			plugins: [anonymous()],
+			secondaryStorage: {
+				set(key, value, ttl) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			rateLimit: {
+				enabled: false,
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [anonymousClient()],
+			},
+		},
+	);
+
+	it("should clear secondary storage sessions when an anonymous user calls /delete-anonymous-user", async () => {
+		const headers = new Headers();
+		await client.signIn.anonymous({
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data).not.toBeNull();
+
+		const sessionToken = session.data!.session.token;
+		expect(store.has(sessionToken)).toBe(true);
+
+		await auth.api.deleteAnonymousUser({ headers });
+
+		expect(store.has(sessionToken)).toBe(false);
+
+		const after = await client.getSession({ fetchOptions: { headers } });
 		expect(after.data).toBeNull();
 	});
 });

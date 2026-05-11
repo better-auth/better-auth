@@ -335,8 +335,15 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						) {
 							return;
 						}
-						await ctx.context.internalAdapter.deleteSessions(session.user.id);
-						await ctx.context.internalAdapter.deleteUser(session.user.id);
+						try {
+							await ctx.context.internalAdapter.deleteSessions(session.user.id);
+							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						} catch (error) {
+							ctx.context.logger.error(
+								"Failed to clean up anonymous user during post-link cleanup",
+								error,
+							);
+						}
 					}),
 				},
 			],
