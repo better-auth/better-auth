@@ -63,13 +63,15 @@ describe("list user invitations", async (it) => {
 			invitedUser.password,
 		);
 
-		// Create organization
+		// Create organization with logo
 		const orgData = getOrganizationData();
+		const orgLogo = "https://example.com/logo.png";
 		const org = await auth.api.createOrganization({
 			headers: adminHeaders,
 			body: {
 				name: orgData.name,
 				slug: orgData.slug,
+				logo: orgLogo,
 			},
 		});
 
@@ -91,6 +93,58 @@ describe("list user invitations", async (it) => {
 		expect(userInvitations).toHaveLength(1);
 		expect(userInvitations[0]?.id).toBe(invitation.invitation.id);
 		expect(userInvitations[0]?.organizationName).toBe(orgData.name);
+		expect(userInvitations[0]?.organizationLogo).toBe(orgLogo);
+	});
+
+	it("should return null organizationLogo when organization has no logo", async () => {
+		const rng = crypto.randomUUID();
+		const orgAdminUser = {
+			email: `org-admin-no-logo-${rng}@test.com`,
+			password: rng,
+			name: `org-admin-no-logo-${rng}`,
+		};
+		const invitedUser = {
+			email: `invited-no-logo-${rng}@test.com`,
+			password: rng,
+			name: `invited-no-logo-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: orgAdminUser });
+		await auth.api.signUpEmail({ body: invitedUser });
+
+		const { headers: adminHeaders } = await signInWithUser(
+			orgAdminUser.email,
+			orgAdminUser.password,
+		);
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedUser.email,
+			invitedUser.password,
+		);
+
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			headers: adminHeaders,
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+		});
+
+		await auth.api.createInvitation({
+			headers: adminHeaders,
+			body: {
+				organizationId: org.id,
+				email: invitedUser.email,
+				role: "member",
+			},
+		});
+
+		const userInvitations = await auth.api.listUserInvitations({
+			headers: invitedHeaders,
+		});
+
+		expect(userInvitations).toHaveLength(1);
+		expect(userInvitations[0]?.organizationLogo).toBeNull();
 	});
 
 	it("should allow listing invitations for a user using server (with email query)", async () => {

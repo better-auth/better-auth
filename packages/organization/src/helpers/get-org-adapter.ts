@@ -843,6 +843,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return invitations.map(({ organization, ...inv }) => ({
 				...filterInvitationOutput(inv),
 				organizationName: organization.name,
+				organizationLogo: organization.logo ?? null,
 			}));
 		},
 		/**

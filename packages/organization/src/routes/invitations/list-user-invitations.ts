@@ -61,6 +61,10 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 												organizationName: {
 													type: "string",
 												},
+												organizationLogo: {
+													type: "string",
+													nullable: true,
+												},
 												inviterId: {
 													type: "string",
 													description:
