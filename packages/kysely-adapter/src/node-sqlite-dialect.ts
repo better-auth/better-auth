@@ -25,7 +25,7 @@ class NodeSqliteAdapter implements DialectAdapterBase {
 	}
 
 	get supportsMultipleConnections(): boolean {
-		return false;
+		return true;
 	}
 
 	get supportsTransactionalDdl(): boolean {
