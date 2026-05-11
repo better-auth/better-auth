@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "2fa",
+    "atproto",
     "passkey",
     "magic-link",
     "email-otp",

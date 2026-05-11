@@ -1,0 +1,196 @@
+---
+title: AT Protocol (Bluesky)
+description: Sign in with Bluesky / AT Protocol OAuth
+---
+
+The AT Protocol plugin lets users sign in with their Bluesky handle using OAuth 2.0 with PKCE and DPoP. It supports localhost development without tunnels, persists atproto sessions for downstream API calls, and links Bluesky accounts to existing better-auth users.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    npm install @better-auth/atproto
+    ```
+  </Step>
+
+  <Step>
+    ### Generate a private key (production only)
+
+    AT Protocol OAuth requires an ES256 key for production deployments to sign DPoP proofs and `private_key_jwt` token requests.
+
+    ```bash
+    openssl ecparam -name prime256v1 -genkey -noout -out ec-private.pem
+    ```
+
+    No key is needed for `http://localhost` / `http://127.0.0.1` — the plugin uses AT Protocol's loopback client mode.
+  </Step>
+
+  <Step>
+    ### Add the server plugin
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { atproto } from "@better-auth/atproto" // [!code highlight]
+
+    export const auth = betterAuth({
+      baseURL: "https://myapp.com",
+      plugins: [
+        atproto({ // [!code highlight]
+          privateKey: process.env.ATPROTO_PRIVATE_KEY, // [!code highlight]
+        }), // [!code highlight]
+      ],
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    The plugin adds columns to the `user` table and creates two new tables. Run migrations or generate the schema:
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { atprotoClient } from "@better-auth/atproto/client" // [!code highlight]
+
+    export const authClient = createAuthClient({
+      plugins: [
+        atprotoClient() // [!code highlight]
+      ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Sign in
+
+    ```ts
+    await authClient.signIn.atproto({
+      handle: "alice.bsky.social",
+      callbackURL: "/dashboard",
+    })
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+```ts title="auth.ts"
+atproto({
+  // PEM-encoded ES256 private key. Required for production, optional on localhost.
+  privateKey: process.env.ATPROTO_PRIVATE_KEY,
+
+  clientMetadata: {
+    // Name shown on the authorization screen.
+    clientName: "My App",
+    // OAuth scopes. Default: "atproto transition:generic"
+    scope: "atproto transition:generic",
+  },
+
+  // Customize how the atproto profile maps to better-auth user fields.
+  mapProfileToUser: (profile) => ({
+    name: profile.displayName || `@${profile.handle}`,
+    image: profile.avatar,
+  }),
+
+  // When true, only existing users can sign in. New users get FORBIDDEN.
+  disableSignUp: false,
+})
+```
+
+## Endpoints
+
+| Method | Path                            | Auth | Description                                        |
+| ------ | ------------------------------- | ---- | -------------------------------------------------- |
+| GET    | `/atproto/client-metadata.json` | No   | OAuth client metadata for PDS discovery            |
+| GET    | `/atproto/jwks.json`            | No   | Public JWKS for `private_key_jwt` auth             |
+| POST   | `/atproto/sign-in`              | No   | Initiate sign-in. Body: `{ handle, callbackURL? }` |
+| GET    | `/atproto/callback`             | No   | OAuth callback (handled automatically)             |
+| GET    | `/atproto/session`              | Yes  | atproto session status + fresh profile             |
+| POST   | `/atproto/restore`              | Yes  | Lightweight session check (no profile fetch)       |
+
+`callbackURL` is validated against `trustedOrigins` to prevent open redirects. Add your app origins (e.g. `https://myapp.com`) to `trustedOrigins` for absolute redirect URLs.
+
+## Schema
+
+The plugin extends the `user` table and adds two new tables.
+
+### `user` extensions
+
+| Column          | Type            | Description                          |
+| --------------- | --------------- | ------------------------------------ |
+| `atprotoDid`    | string (unique) | AT Protocol DID (`did:plc:...`)      |
+| `atprotoHandle` | string          | Bluesky handle (`alice.bsky.social`) |
+| `atprotoBio`    | string          | Profile description                  |
+| `atprotoBanner` | string          | Banner image URL                     |
+
+### `atprotoState`
+
+Ephemeral storage for in-flight OAuth requests (auto-expires after 10 minutes).
+
+| Column      | Type            |
+| ----------- | --------------- |
+| `key`       | string (unique) |
+| `state`     | string (JSON)   |
+| `expiresAt` | date            |
+
+### `atprotoSession`
+
+Persistent storage for atproto OAuth sessions (tokens + DPoP keys).
+
+| Column      | Type                             |
+| ----------- | -------------------------------- |
+| `did`       | string (unique)                  |
+| `session`   | string (JSON)                    |
+| `userId`    | string (FK → `user.id`, cascade) |
+| `updatedAt` | date                             |
+
+## Localhost development
+
+For local development no private key or tunnel is needed. The plugin uses AT Protocol's loopback client mode when `baseURL` is `http://localhost:*` or `http://127.0.0.1:*`.
+
+```ts
+export const auth = betterAuth({
+  baseURL: "http://localhost:3000",
+  plugins: [
+    atproto(), // no privateKey needed
+  ],
+})
+```
+
+## Account linking
+
+When a user is already signed in (via email, Google, etc.) and signs in with Bluesky, the plugin links the Bluesky account to their existing user. This respects `account.accountLinking.enabled` — if linking is disabled, the plugin returns `FORBIDDEN` instead.
+
+## Rate limits
+
+| Endpoint            | Window | Max |
+| ------------------- | ------ | --- |
+| `/atproto/sign-in`  | 60s    | 5   |
+| `/atproto/callback` | 60s    | 10  |
+
+Metadata endpoints are not rate limited.
+
+## Runtime support
+
+This plugin currently depends on `@atproto/oauth-client-node` and requires a Node.js-compatible runtime (Node, Bun). Cloudflare Workers and Deno support would require a runtime-agnostic rewrite on top of `@atproto/oauth-client`. Track interest in this on the [issue tracker](https://github.com/better-auth/better-auth/issues).
