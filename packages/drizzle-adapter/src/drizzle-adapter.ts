@@ -836,6 +836,60 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 					return count;
 				},
+				async claimOne({ model, where }) {
+					const schemaModel = getSchema(model);
+					const clause = convertWhereClause(where, model);
+					const idField = getFieldName({ model, field: "id" });
+					const idColumn = schemaModel[idField];
+
+					if (config.provider === "mysql") {
+						// MySQL has no DELETE ... RETURNING. Hold the row under
+						// SELECT ... FOR UPDATE inside a transaction so concurrent
+						// claimants block until the row is gone.
+						return db.transaction(async (tx: DB) => {
+							const rows = await tx
+								.select()
+								.from(schemaModel)
+								.where(...clause)
+								.for("update")
+								.limit(1);
+							const target = rows[0];
+							if (!target) return null;
+							const targetId = target[idField] ?? (target as any).id;
+							if (targetId === undefined || targetId === null || !idColumn) {
+								return null;
+							}
+							const delRes = await tx
+								.delete(schemaModel)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const count =
+								(delRes &&
+									(delRes.rowsAffected ??
+										delRes.affectedRows ??
+										delRes.changes)) ??
+								0;
+							return count > 0 ? (target as any) : null;
+						});
+					}
+
+					const rows = await db
+						.select()
+						.from(schemaModel)
+						.where(...clause)
+						.limit(1);
+					const target = rows[0];
+					if (!target) return null;
+					const targetId = target[idField] ?? (target as any).id;
+					if (targetId === undefined || targetId === null || !idColumn) {
+						return null;
+					}
+					const deleted = await db
+						.delete(schemaModel)
+						.where(eq(idColumn, targetId))
+						.returning();
+					return (deleted[0] as any) ?? null;
+				},
 				options: config,
 			};
 		};

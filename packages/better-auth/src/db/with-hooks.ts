@@ -415,11 +415,98 @@ export function getWithHooks(
 		return deleted;
 	}
 
+	/**
+	 * Wraps an atomic claim operation in the plugin `delete.before` and
+	 * `delete.after` hook lifecycle. The caller supplies a `claimFn` that
+	 * performs the actual single-row delete-and-return (typically the
+	 * adapter's `claimOne`). The first concurrent caller wins, subsequent
+	 * racers resolve to `null` without firing `delete.after` hooks.
+	 *
+	 * `preSnapshot` lets the caller hand in a row it already fetched so
+	 * `delete.before` hooks don't trigger a second read. Without it, the
+	 * helper falls back to a best-effort `findMany` against `hookWhere`.
+	 * The snapshot only feeds `delete.before`; the `claimFn` return value
+	 * is the race gate.
+	 *
+	 * Returning `false` from a `delete.before` hook aborts the claim and
+	 * the helper resolves to `null` (no `claimFn` call, no after hooks).
+	 */
+	async function consumeOneWithHooks<T extends Record<string, any>>(
+		model: BaseModelNames,
+		hookWhere: Where[],
+		claimFn: () => Promise<T | null>,
+		preSnapshot?: T | null,
+	): Promise<T | null> {
+		const context = await getCurrentAuthContext().catch(() => null);
+		const beforeHooks = hooksEntries.flatMap(({ source, hooks }) => {
+			const fn = hooks[model]?.delete?.before;
+			return fn ? [{ source, fn }] : [];
+		});
+
+		let snapshot: T | null = preSnapshot ?? null;
+		if (beforeHooks.length) {
+			if (!snapshot) {
+				try {
+					const rows = await (await getCurrentAdapter(adapter)).findMany<T>({
+						model,
+						where: hookWhere,
+						limit: 1,
+					});
+					snapshot = rows[0] || null;
+				} catch {}
+			}
+
+			if (snapshot) {
+				for (const { source, fn } of beforeHooks) {
+					const result = await withSpan(
+						`db delete.before ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.before",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							fn(snapshot as any, context),
+					);
+					if (result === false) {
+						return null;
+					}
+				}
+			}
+		}
+
+		const claimed = await claimFn();
+		if (!claimed) return null;
+
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.delete?.after;
+			if (toRun) {
+				await queueAfterTransactionHook(async () => {
+					await withSpan(
+						`db delete.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(claimed as any, context),
+					);
+				});
+			}
+		}
+
+		return claimed;
+	}
+
 	return {
 		createWithHooks,
 		updateWithHooks,
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		consumeOneWithHooks,
 	};
 }

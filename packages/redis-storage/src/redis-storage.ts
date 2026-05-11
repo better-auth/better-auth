@@ -46,6 +46,10 @@ export function redisStorage(config: RedisStorageConfig) {
 			return client.get(prefixKey(key));
 		},
 
+		async getAndDelete(key: string) {
+			return client.call("GETDEL", prefixKey(key));
+		},
+
 		async set(key: string, value: string, ttl?: number | undefined) {
 			const prefixedKey = prefixKey(key);
 			if (ttl !== undefined && ttl > 0) {

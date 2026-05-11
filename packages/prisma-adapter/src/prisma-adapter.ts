@@ -48,6 +48,12 @@ export interface PrismaConfig {
 
 interface PrismaClient {}
 
+function isPrismaNotFoundError(e: any): boolean {
+	return (
+		e?.code === "P2025" || e?.meta?.cause === "Record to delete does not exist."
+	);
+}
+
 type PrismaClientInternal = {
 	$transaction: (
 		callback: (db: PrismaClient) => Awaitable<any>,
@@ -593,9 +599,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
-						// If the record doesn't exist, we don't want to throw an error
-						if (e?.meta?.cause === "Record to delete does not exist.") return;
-						if (e?.code === "P2025") return; // Prisma 7+
+						if (isPrismaNotFoundError(e)) return;
 						// otherwise if it's an unknown error, we want to just log it for debugging.
 						console.log(e);
 					}
@@ -610,6 +614,55 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where: whereClause,
 					});
 					return result ? (result.count as number) : 0;
+				},
+				async claimOne({ model, where }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+
+					// `prisma.model.delete` requires a WhereUniqueInput. When the
+					// caller keys on the primary key we get a single round trip;
+					// otherwise we fall back to find-then-delete inside an
+					// interactive transaction so two racers serialize behind the
+					// same row.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (hasIdField) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "delete",
+						});
+						try {
+							const row = await db[model]!.delete({ where: whereClause });
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					}
+
+					const findWhere = convertWhereClause({
+						model,
+						where,
+						action: "findOne",
+					});
+					return (prisma as PrismaClientInternal).$transaction(async (tx) => {
+						const target = await (tx as any)[model].findFirst({
+							where: findWhere,
+						});
+						if (!target) return null;
+						try {
+							const row = await (tx as any)[model].delete({
+								where: { id: (target as any).id },
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					});
 				},
 				options: config,
 			};

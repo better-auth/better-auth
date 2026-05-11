@@ -133,6 +133,8 @@ export const createAdapterFactory =
 							!config.debugLogs.deleteMany
 						) {
 							return;
+						} else if (method === "claimOne" && !config.debugLogs.claimOne) {
+							return;
 						} else if (method === "count" && !config.debugLogs.count) {
 							return;
 						}
@@ -485,6 +487,7 @@ export const createAdapterFactory =
 				| "updateMany"
 				| "delete"
 				| "deleteMany"
+				| "claimOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -1311,6 +1314,100 @@ export const createAdapterFactory =
 					{ model, data: res },
 				);
 				return res;
+			},
+			claimOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+			}: {
+				model: string;
+				where: Where[];
+			}): Promise<T | null> => {
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "claimOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "claimOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("claimOne")} ${formatAction("ClaimOne")}:`,
+					{ model, where },
+				);
+
+				let res: T | null;
+				if (adapterInstance.claimOne) {
+					res = await withSpan(
+						`db claimOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "claimOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() => adapterInstance.claimOne!<T>({ model, where }),
+					);
+				} else {
+					// TODO(claim-one-required): adapters without native `claimOne`
+					// fall back to `transaction(findMany + delete)`. Race-safe on
+					// engines with real transaction isolation; race window narrows
+					// (does not close) on adapters that fall through to sequential
+					// execution. Remove this branch when claimOne becomes required.
+					res = await withSpan(
+						`db claimOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "claimOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							adapter.transaction(async (trx) => {
+								const rows = await trx.findMany<Record<string, any>>({
+									model,
+									where,
+									limit: 1,
+								});
+								const target = rows[0];
+								if (!target) return null;
+								await trx.delete({
+									model,
+									where: [
+										{
+											field: "id",
+											value: target.id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+								});
+								return target as T;
+							}),
+					);
+				}
+
+				debugLog(
+					{ method: "claimOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("claimOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (!config.disableTransformOutput && res) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "claimOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("claimOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
 			},
 			count: async ({
 				model: unsafeModel,

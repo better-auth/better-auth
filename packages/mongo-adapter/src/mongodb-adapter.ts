@@ -630,6 +630,13 @@ export const mongodbAdapter = (
 						.deleteMany(clause, { session });
 					return res.deletedCount;
 				},
+				async claimOne({ model, where }) {
+					const clause = convertWhereClause({ where, model });
+					const doc = await db
+						.collection(model)
+						.findOneAndDelete(clause, { session });
+					return (doc as any) ?? null;
+				},
 			};
 		};
 
