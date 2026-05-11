@@ -6,6 +6,7 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { toBoolean } from "../../utils/boolean";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -41,6 +42,7 @@ const oneTapCallbackBodySchema = z.object({
 export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			oneTapCallback: createAuthEndpoint(
 				"/one-tap/callback",
@@ -103,10 +105,17 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							message: "invalid id token",
 						});
 					}
-					const { email, email_verified, name, picture, sub } = payload;
-					if (!email) {
+					const {
+						email: rawEmail,
+						email_verified,
+						name,
+						picture,
+						sub,
+					} = payload;
+					if (!rawEmail) {
 						return ctx.json({ error: "Email not available in token" });
 					}
+					const email = rawEmail.toLowerCase();
 
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {

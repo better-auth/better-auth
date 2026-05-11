@@ -9,6 +9,7 @@ type VerificationEmail = {
 	email: string;
 	token: string;
 	url: string;
+	metadata?: Record<string, any>;
 };
 
 describe("magic link", async () => {
@@ -49,6 +50,23 @@ describe("magic link", async () => {
 			url: expect.stringContaining(
 				"http://localhost:3000/api/auth/magic-link/verify",
 			),
+		});
+		expect(verificationEmail.metadata).toBeUndefined();
+	});
+
+	it("should forward metadata to sendMagicLink", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+			metadata: {
+				inviteId: "123",
+			},
+		});
+
+		expect(verificationEmail).toMatchObject({
+			email: testUser.email,
+			metadata: {
+				inviteId: "123",
+			},
 		});
 	});
 	it("should verify magic link", async () => {
@@ -275,6 +293,77 @@ describe("magic link", async () => {
 
 		expect(customGenerateToken).toHaveBeenCalled();
 		expect(verificationEmail.token).toBe("custom_token");
+	});
+
+	it("should return additional fields", async () => {
+		const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					foo: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000/api/auth",
+		});
+
+		const email = "test-email@test.com";
+		await client.signIn.magicLink({
+			email,
+		});
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		expect(response.data?.user).toBeDefined();
+		// @ts-expect-error
+		expect(response.data?.user.foo).toBeNull();
+
+		await auth.api.updateUser({
+			body: {
+				foo: "bar",
+			},
+			headers,
+		});
+
+		await client.signIn.magicLink({
+			email,
+		});
+		{
+			const response = await client.magicLink.verify({
+				query: {
+					token: new URL(verificationEmail.url).searchParams.get("token")!,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+
+			// @ts-expect-error
+			expect(response.data?.user.foo).toBe("bar");
+		}
 	});
 });
 

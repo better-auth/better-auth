@@ -24,16 +24,6 @@ export async function tryCatch<T, E = Error>(
 	}
 }
 
-export function enterAlternateScreen() {
-	process.stdout.write("\u001B[?1049h");
-	process.stdout.write("\u001B[2J"); // Clear screen
-	process.stdout.write("\u001B[H"); // Move cursor to home
-}
-
-export function exitAlternateScreen() {
-	process.stdout.write("\u001B[?1049l");
-}
-
 export const generateSecretHash = () => {
 	return Crypto.randomBytes(16).toString("hex");
 };

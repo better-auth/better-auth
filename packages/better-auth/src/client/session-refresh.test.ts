@@ -725,6 +725,103 @@ describe("session-refresh", () => {
 		vi.useRealTimers();
 	});
 
+	it("should preserve session when $fetch returns unwrapped data (throw: true)", async () => {
+		vi.useFakeTimers();
+
+		const initialData = {
+			user: { id: "1", email: "old@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const refreshedData = {
+			user: { id: "1", email: "new@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const sessionAtom: SessionAtom = atom({
+			data: initialData,
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		// When throw: true, $fetch returns data directly instead of { data, error }
+		const mockFetch = vi.fn(async () => refreshedData);
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(refreshedData);
+		expect(updatedSession.data?.user?.email).toBe("new@test.com");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should preserve session on visibilitychange when $fetch returns unwrapped data (throw: true)", async () => {
+		vi.useFakeTimers();
+
+		const initialData = {
+			user: { id: "1", email: "old@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const refreshedData = {
+			user: { id: "1", email: "new@test.com" },
+			session: { id: "session-1" },
+		};
+
+		const sessionAtom: SessionAtom = atom({
+			data: initialData,
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		// When throw: true, $fetch returns data directly
+		const mockFetch = vi.fn(async () => refreshedData);
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchOnWindowFocus: true,
+				},
+			},
+		});
+
+		manager.init();
+
+		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
+
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(refreshedData);
+		expect(updatedSession.data?.user?.email).toBe("new@test.com");
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
 	it("should broadcast session update when broadcastSessionUpdate is called with signout", () => {
 		const channel = getGlobalBroadcastChannel();
 		const postSpy = vi.spyOn(channel, "post");

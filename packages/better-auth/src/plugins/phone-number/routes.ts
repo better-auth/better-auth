@@ -280,15 +280,29 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
-			await ctx.context.runInBackgroundOrAwait(
-				opts.sendOTP(
-					{
-						phoneNumber: ctx.body.phoneNumber,
-						code,
-					},
-					ctx,
-				),
+			const sendOTPResult = opts.sendOTP(
+				{
+					phoneNumber: ctx.body.phoneNumber,
+					code,
+				},
+				ctx,
 			);
+			if (
+				ctx.context.options.advanced?.backgroundTasks?.handler &&
+				sendOTPResult instanceof Promise
+			) {
+				try {
+					ctx.context.runInBackground(
+						sendOTPResult.catch((e) => {
+							ctx.context.logger.error("Failed to run background task:", e);
+						}),
+					);
+				} catch (e) {
+					ctx.context.logger.error("Failed to run background task:", e);
+				}
+			} else {
+				await sendOTPResult;
+			}
 			return ctx.json({ message: "code sent" });
 		},
 	);
@@ -553,6 +567,19 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 							[opts.phoneNumberVerified]: true,
 						},
 					);
+				if (!user) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+					);
+				}
+				await opts?.callbackOnVerification?.(
+					{
+						phoneNumber: ctx.body.phoneNumber,
+						user,
+					},
+					ctx,
+				);
 				return ctx.json({
 					status: true,
 					token: session.session.token,

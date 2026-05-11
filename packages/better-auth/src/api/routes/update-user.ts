@@ -490,7 +490,7 @@ export const deleteUser = createAuthEndpoint(
 		}
 
 		if (ctx.body.token) {
-			// @ts-expect-error
+			//@ts-expect-error
 			await deleteUserCallback({
 				...ctx,
 				query: {
@@ -537,10 +537,9 @@ export const deleteUser = createAuthEndpoint(
 		}
 
 		if (!ctx.body.password && ctx.context.sessionConfig.freshAge !== 0) {
-			const currentAge = new Date(session.session.createdAt).getTime();
+			const createdAt = new Date(session.session.createdAt).getTime();
 			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
-			const now = Date.now();
-			if (now - currentAge > freshAge) {
+			if (Date.now() - createdAt >= freshAge) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.SESSION_EXPIRED);
 			}
 		}
@@ -718,9 +717,10 @@ export const changeEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			ctx.context.logger.error("Change email is disabled.");
-			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Change email is disabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED,
+			);
 		}
 
 		const newEmail = ctx.body.newEmail.toLowerCase();

@@ -99,6 +99,7 @@ export const createInternalAdapter = (
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						...user,
+						email: user.email?.toLowerCase(),
 					},
 					"user",
 					undefined,
@@ -306,9 +307,18 @@ export const createInternalAdapter = (
 				...rest
 			} = override || {};
 
+			// When secondary storage is the only store, the database adapter
+			// won't run, so we need to generate an id ourselves.
+			let sessionId: string | undefined;
+			if (secondaryStorage && !storeInDb) {
+				const generatedId = ctx.generateId({ model: "session" });
+				sessionId = generatedId !== false ? generatedId : generateId();
+			}
+
 			// we're parsing default values for session additional fields
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
+				...(sessionId ? { id: sessionId } : {}),
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -410,7 +420,14 @@ export const createInternalAdapter = (
 		} | null> => {
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
-				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+				// When preserveSessionInDatabase is enabled, revoked sessions
+				// remain in the database for audit purposes. Skip the database
+				// fallback to prevent those revoked sessions from being restored.
+				if (
+					!sessionStringified &&
+					(!options.session?.storeSessionInDatabase ||
+						ctx.options.session?.preserveSessionInDatabase)
+				) {
 					return null;
 				}
 				if (sessionStringified) {
@@ -718,9 +735,19 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteAccount: async (accountId: string) => {
+		/**
+		 * Delete an account by its primary key.
+		 *
+		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 */
+		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
-				[{ field: "id", value: accountId }],
+				[
+					{
+						field: "id",
+						value: id,
+					},
+				],
 				"account",
 				undefined,
 			);
@@ -911,7 +938,10 @@ export const createInternalAdapter = (
 			data: Partial<User> & Record<string, any>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "id",
@@ -929,7 +959,10 @@ export const createInternalAdapter = (
 			data: Partial<User & Record<string, any>>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "email",
@@ -1212,5 +1245,6 @@ export const createInternalAdapter = (
 			}
 			return data as Verification;
 		},
+		refreshUserSessions,
 	};
 };

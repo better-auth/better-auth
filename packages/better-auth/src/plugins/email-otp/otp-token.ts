@@ -4,8 +4,9 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
-import type { EmailOTPOptions } from "./types";
-import { defaultKeyHasher } from "./utils";
+import { getDate } from "../../utils/date";
+import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
+import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
 export async function storeOTP(
 	ctx: GenericEndpointContext,
@@ -58,4 +59,56 @@ export async function verifyStoredOTP(
 	}
 
 	return constantTimeEqual(otp, storedOtp);
+}
+
+/**
+ * Retrieves the plain-text OTP from a stored value.
+ * Returns `null` if the OTP is hashed and cannot be recovered.
+ */
+async function retrieveOTP(
+	ctx: GenericEndpointContext,
+	opts: EmailOTPOptions,
+	storedOtp: string,
+): Promise<string | null> {
+	if (opts.storeOTP === "plain" || opts.storeOTP === undefined) {
+		return storedOtp;
+	}
+	if (opts.storeOTP === "encrypted") {
+		return await symmetricDecrypt({
+			key: ctx.context.secretConfig,
+			data: storedOtp,
+		});
+	}
+	if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
+		return await opts.storeOTP.decrypt(storedOtp);
+	}
+	// hashed or custom hash -> cannot recover
+	return null;
+}
+
+/**
+ * Tries to reuse an existing unexpired OTP.
+ * Returns the plain-text OTP if reusable, `null` otherwise.
+ */
+export async function tryReuseOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	identifier: string,
+): Promise<string | null> {
+	const existing =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (!existing || existing.expiresAt < new Date()) return null;
+
+	const [storedOtpValue, attempts] = splitAtLastColon(existing.value);
+	const allowedAttempts = opts.allowedAttempts || 3;
+	if (attempts && parseInt(attempts) >= allowedAttempts) return null;
+
+	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
+	if (!plainOtp) return null;
+
+	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	});
+
+	return plainOtp;
 }

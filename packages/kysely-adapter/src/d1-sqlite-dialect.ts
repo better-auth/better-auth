@@ -107,8 +107,6 @@ class D1SqliteConnection implements DatabaseConnection {
 					: BigInt(results.meta.last_row_id),
 			rows: (results?.results as O[]) || [],
 			numAffectedRows,
-			// @ts-expect-error - deprecated in kysely >= 0.23, keep for backward compatibility
-			numUpdatedOrDeletedRows: numAffectedRows,
 		};
 	}
 

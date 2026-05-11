@@ -1,7 +1,15 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthMiddleware } from "../../api";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
@@ -331,6 +339,131 @@ describe("lastLoginMethod", async () => {
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
 	});
+
+	it("should ignore missing path in after hooks", async () => {
+		const plugin = lastLoginMethod();
+		const handler = plugin.hooks?.after?.[0]?.handler;
+		const setCookie = vi.fn();
+
+		await expect(
+			handler?.({
+				path: undefined,
+				setCookie,
+				context: {
+					responseHeaders: undefined,
+					authCookies: {
+						sessionToken: {
+							name: "better-auth.session_token",
+							attributes: {},
+						},
+					},
+				},
+			} as any),
+		).resolves.toBeUndefined();
+
+		expect(setCookie).not.toHaveBeenCalled();
+	});
+
+	it("should ignore missing path in database hooks", async () => {
+		const updateUser = vi.fn();
+		const plugin = lastLoginMethod({ storeInDatabase: true });
+		const initResult = await plugin.init?.({
+			internalAdapter: {
+				updateUser,
+			},
+			logger: {
+				error: vi.fn(),
+			},
+		} as any);
+		const userCreateBefore =
+			initResult?.options?.databaseHooks?.user?.create?.before;
+		const sessionCreateAfter =
+			initResult?.options?.databaseHooks?.session?.create?.after;
+
+		await expect(
+			userCreateBefore?.(
+				{
+					email: "test@example.com",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		await expect(
+			sessionCreateAfter?.(
+				{
+					userId: "user-123",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		expect(updateUser).not.toHaveBeenCalled();
+	});
+
+	it("should normalize missing path for custom resolver in database hooks", async () => {
+		const customResolveMethod = vi.fn((ctx) => {
+			return ctx.path.startsWith("/magic-link") ? "magic-link" : null;
+		});
+		const updateUser = vi.fn();
+		const plugin = lastLoginMethod({
+			storeInDatabase: true,
+			customResolveMethod,
+		});
+		const initResult = await plugin.init?.({
+			internalAdapter: {
+				updateUser,
+			},
+			logger: {
+				error: vi.fn(),
+			},
+		} as any);
+		const userCreateBefore =
+			initResult?.options?.databaseHooks?.user?.create?.before;
+		const sessionCreateAfter =
+			initResult?.options?.databaseHooks?.session?.create?.after;
+
+		await expect(
+			userCreateBefore?.(
+				{
+					email: "test@example.com",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		await expect(
+			sessionCreateAfter?.(
+				{
+					userId: "user-123",
+				} as any,
+				{
+					path: undefined,
+				} as any,
+			),
+		).resolves.toBeUndefined();
+
+		expect(customResolveMethod).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				path: "",
+			}),
+		);
+		expect(customResolveMethod).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				path: "",
+			}),
+		);
+		expect(updateUser).not.toHaveBeenCalled();
+	});
+
 	it("should update the last login method in the database on subsequent logins", async () => {
 		const { client, auth } = await getTestInstance({
 			plugins: [lastLoginMethod({ storeInDatabase: true })],

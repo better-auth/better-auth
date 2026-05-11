@@ -58,6 +58,7 @@ type InferPluginOptions<
  *
  * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
  *   id: 'my-plugin',
+ *   version: '1.0.0',
  *   options,
  * } satisfies BetterAuthPlugin);
  *
@@ -79,7 +80,9 @@ export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
-> = EndpointContext<string, any, any, any, any, any, any, AuthContext<Options>>;
+> = EndpointContext<string, any> & {
+	context: AuthContext<Options>;
+};
 
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
@@ -148,7 +151,12 @@ export interface InternalAdapter<
 
 	deleteAccounts(userId: string): Promise<void>;
 
-	deleteAccount(accountId: string): Promise<void>;
+	/**
+	 * Delete an account by its primary key.
+	 *
+	 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+	 */
+	deleteAccount(id: string): Promise<void>;
 
 	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
 
@@ -212,6 +220,8 @@ export interface InternalAdapter<
 		identifier: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
+
+	refreshUserSessions(user: User): Promise<void>;
 }
 
 type CreateCookieGetterFn = (

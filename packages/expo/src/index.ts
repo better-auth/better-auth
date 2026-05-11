@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { expoAuthorizationProxy } from "./routes";
+import { PACKAGE_VERSION } from "./version";
 
 export interface ExpoOptions {
 	/**
@@ -21,6 +22,7 @@ declare module "@better-auth/core" {
 export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
+		version: PACKAGE_VERSION,
 		init: (ctx) => {
 			const trustedOrigins =
 				process.env.NODE_ENV === "development" ? ["exp://"] : [];

@@ -328,6 +328,14 @@ export type Where = {
 	 * @default AND
 	 */
 	connector?: ("AND" | "OR") | undefined;
+	/**
+	 * Case sensitivity for string comparisons.
+	 * When "insensitive", string equality and pattern matching (contains, starts_with, ends_with)
+	 * will be case-insensitive. Only applies to string values.
+	 *
+	 * @default "sensitive"
+	 */
+	mode?: "sensitive" | "insensitive" | undefined;
 };
 
 /**

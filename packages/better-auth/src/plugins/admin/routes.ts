@@ -427,7 +427,7 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 			use: [adminMiddleware],
 			metadata: {
 				openapi: {
-					operationId: "updateUser",
+					operationId: "adminUpdateUser",
 					summary: "Update a user",
 					description: "Update a user's details",
 					responses: {
@@ -728,7 +728,7 @@ export const listUserSessions = (opts: AdminOptions) =>
 			body: listUserSessionsBodySchema,
 			metadata: {
 				openapi: {
-					operationId: "listUserSessions",
+					operationId: "adminListUserSessions",
 					summary: "List user sessions",
 					description: "List user sessions",
 					responses: {
@@ -1568,13 +1568,11 @@ const userHasPermissionBodySchema = z
 		}),
 	})
 	.and(
-		z.union([
+		z.xor([
 			z.object({
 				permission: z.record(z.string(), z.array(z.string())),
-				permissions: z.undefined(),
 			}),
 			z.object({
-				permission: z.undefined(),
 				permissions: z.record(z.string(), z.array(z.string())),
 			}),
 		]),

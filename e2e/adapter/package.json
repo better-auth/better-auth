@@ -7,7 +7,7 @@
     "@types/pg": "^8.16.0",
     "better-sqlite3": "^12.6.2",
     "drizzle-kit": "^0.30.6",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "mongodb": "^7.1.0",
     "mysql2": "^3.18.2",
     "pg": "^8.19.0",
@@ -16,6 +16,6 @@
   },
   "dependencies": {
     "deepmerge": "^4.3.1",
-    "kysely": "^0.28.11"
+    "kysely": "^0.28.14"
   }
 }
