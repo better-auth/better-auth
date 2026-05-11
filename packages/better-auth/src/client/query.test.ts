@@ -215,3 +215,36 @@ describe("useAuthQuery - error handling", () => {
 		});
 	});
 });
+
+describe("useAuthQuery - refetch", () => {
+	it("can pass signal", async () => {
+		const abortError = new Error("aborted");
+
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: (request, init) => {
+					if (init?.signal?.aborted) {
+						throw abortError;
+					}
+					return Promise.resolve(new Response());
+				},
+			},
+		});
+
+		const session = client.useSession()();
+
+		await session.refetch();
+
+		expect(session.error).toBeNull();
+
+		const controller = new AbortController();
+		controller.abort();
+
+		await session.refetch({
+			fetchOptions: { signal: controller.signal },
+		});
+
+		expect(session.error).toBe(abortError);
+	});
+});

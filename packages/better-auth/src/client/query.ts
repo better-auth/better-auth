@@ -43,7 +43,9 @@ export const useAuthQuery = <T>(
 	});
 
 	const fn = async (
-		queryParams?: { query?: SessionQueryParams } | undefined,
+		queryParams?:
+			| { fetchOptions?: ClientFetchOption; query?: SessionQueryParams }
+			| undefined,
 	) => {
 		return new Promise<void>((resolve) => {
 			const opts =
@@ -57,6 +59,7 @@ export const useAuthQuery = <T>(
 
 			$fetch<T>(path, {
 				...opts,
+				...queryParams?.fetchOptions,
 				query: {
 					...opts?.query,
 					...queryParams?.query,
