@@ -173,7 +173,8 @@ export const listSSOProviders = () => {
 					description: "Returns a list of SSO providers the user has access to",
 					responses: {
 						"200": {
-							description: "List of SSO providers",
+							description:
+								"List of SSO providers. SAML Providers with multiple certificates will return an array of certificates in the certificate field, otherwise it will be a single certificate object.",
 						},
 					},
 				},
@@ -299,7 +300,8 @@ export const getSSOProvider = () => {
 					description: "Returns sanitized details for a specific SSO provider",
 					responses: {
 						"200": {
-							description: "SSO provider details",
+							description:
+								"SSO provider details. SAML Providers with multiple certificates will return an array of certificates in the certificate field, otherwise it will be a single certificate object.",
 						},
 						"404": {
 							description: "Provider not found",
@@ -409,7 +411,8 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
 					responses: {
 						"200": {
-							description: "SSO provider updated successfully",
+							description:
+								"SSO provider updated successfully. SAML Providers with multiple certificates will return an array of certificates in the certificate field, otherwise it will be a single certificate object.",
 						},
 						"404": {
 							description: "Provider not found",
