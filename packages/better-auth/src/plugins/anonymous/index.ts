@@ -246,6 +246,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							ctx.path?.startsWith("/one-tap/callback") ||
 							ctx.path?.startsWith("/passkey/verify-authentication") ||
 							ctx.path?.startsWith("/phone-number/verify") ||
+							ctx.path?.startsWith("/verify-email") ||
 							false
 						);
 					},
