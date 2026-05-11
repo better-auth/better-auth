@@ -318,6 +318,18 @@ describe("drizzle-adapter", () => {
 				result: [{ affectedRows: 2 }],
 				expected: 2,
 			},
+			// MSSQL returns rowsAffected as number[] (one entry per batch
+			// statement) rather than a plain number.
+			{
+				provider: "mssql" as const,
+				result: { rowsAffected: [2] },
+				expected: 2,
+			},
+			{
+				provider: "mssql" as const,
+				result: { rowsAffected: [1, 1] },
+				expected: 2,
+			},
 			// postgres-js / bun-sql return an Array subclass carrying `count`;
 			// a non-RETURNING write has length 0, so the count must be read off
 			// the array itself, not from `result.length`.

@@ -95,16 +95,23 @@ function getAffectedRowCount(
 function readDriverRowCount(result: unknown): unknown {
 	if (!result || typeof result !== "object") return undefined;
 	const driverResult = result as Record<string, unknown>;
-	if ("affectedRows" in driverResult) return driverResult.affectedRows;
-	if ("rowsAffected" in driverResult) return driverResult.rowsAffected;
-	if ("changes" in driverResult) return driverResult.changes;
+	// MSSQL returns rowsAffected as number[] (one entry per batch statement).
+	const sumIfArray = (raw: unknown) =>
+		Array.isArray(raw)
+			? raw.reduce((sum: number, n: number) => sum + n, 0)
+			: raw;
+	if ("affectedRows" in driverResult)
+		return sumIfArray(driverResult.affectedRows);
+	if ("rowsAffected" in driverResult)
+		return sumIfArray(driverResult.rowsAffected);
+	if ("changes" in driverResult) return sumIfArray(driverResult.changes);
 
 	// Cloudflare D1 nests the affected-row count under `meta.changes`.
 	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
 	if ("meta" in driverResult) {
 		const meta = driverResult.meta;
 		if (meta && typeof meta === "object" && "changes" in meta) {
-			return meta.changes;
+			return sumIfArray(meta.changes);
 		}
 	}
 
