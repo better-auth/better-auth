@@ -124,29 +124,42 @@ export const generatePasskeyRegistrationOptions = (
 				openapi: {
 					operationId: "generatePasskeyRegistrationOptions",
 					description: "Generate registration options for a new passkey",
+					parameters: [
+						{
+							name: "authenticatorAttachment",
+							in: "query",
+							required: false,
+							description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
+                          "cross-platform" for authenticators that can be used across devices.`,
+							schema: {
+								type: "string",
+							},
+						},
+						{
+							name: "name",
+							in: "query",
+							required: false,
+							description: `Optional custom name for the passkey.
+                          This can help identify the passkey when managing multiple credentials.`,
+							schema: {
+								type: "string",
+							},
+						},
+						{
+							name: "context",
+							in: "query",
+							required: false,
+							description:
+								"Optional context for passkey-first registration flows.",
+							schema: {
+								type: "string",
+							},
+						},
+					],
 					responses: {
 						200: {
 							description: "Success",
-							parameters: {
-								query: {
-									authenticatorAttachment: {
-										description: `Type of authenticator to use for registration.
-                          "platform" for device-specific authenticators,
-                          "cross-platform" for authenticators that can be used across devices.`,
-										required: false,
-									},
-									name: {
-										description: `Optional custom name for the passkey.
-                          This can help identify the passkey when managing multiple credentials.`,
-										required: false,
-									},
-									context: {
-										description:
-											"Optional context for passkey-first registration flows.",
-										required: false,
-									},
-								},
-							},
 							content: {
 								"application/json": {
 									schema: {
