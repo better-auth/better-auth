@@ -160,34 +160,48 @@ export function createAtprotoEndpoints(
 					// No existing session, proceed with regular flow.
 				}
 
-				const existingUser = await internalAdapter.findOAuthUser(
-					placeholderEmail,
-					did,
-					ATPROTO_PROVIDER_ID,
-				);
+				// Look up by (providerId, accountId=DID) only. We deliberately do
+				// not use `internalAdapter.findOAuthUser`, which falls back to an
+				// email lookup — and our synthetic `*@atproto.invalid` placeholder
+				// email could collide with an unrelated user holding that exact
+				// email, silently auto-linking the atproto DID to the wrong
+				// account and bypassing the normal account-linking safeguards.
+				const existingAccount = await adapter.findOne<{ userId: string }>({
+					model: "account",
+					where: [
+						{ field: "providerId", value: ATPROTO_PROVIDER_ID },
+						{ field: "accountId", value: did },
+					],
+				});
+				let existingUser: {
+					user: Record<string, unknown> & { id: string };
+				} | null = null;
+				if (existingAccount) {
+					const user = await internalAdapter.findUserById(
+						existingAccount.userId,
+					);
+					if (user) {
+						existingUser = {
+							user: user as Record<string, unknown> & { id: string },
+						};
+					}
+				}
 
 				let userId: string;
 				let userRecord: Record<string, unknown>;
 
 				if (existingUser) {
 					userId = existingUser.user.id;
-					userRecord = existingUser.user as Record<string, unknown>;
-					if (!existingUser.linkedAccount) {
-						await internalAdapter.linkAccount({
-							providerId: ATPROTO_PROVIDER_ID,
-							accountId: did,
-							userId,
-							accessToken: "atproto-session",
-							refreshToken: undefined,
-							accessTokenExpiresAt: undefined,
-							refreshTokenExpiresAt: undefined,
-						});
-					}
+					const update = buildUserUpdate(did, profile, /*newUser*/ true);
 					await adapter.update({
 						model: "user",
 						where: [{ field: "id", value: userId }],
-						update: buildUserUpdate(did, profile, /*newUser*/ true),
+						update,
 					});
+					// Merge the update locally so the session cookie's cached user
+					// payload carries the freshly written atproto fields without
+					// an extra round-trip.
+					userRecord = { ...existingUser.user, ...update };
 				} else if (currentUserId) {
 					const linkingEnabled =
 						ctx.context.options.account?.accountLinking?.enabled !== false;
@@ -198,14 +212,12 @@ export function createAtprotoEndpoints(
 						});
 					}
 					userId = currentUserId;
-					// Fetch user record for session cookie
 					const foundUser = await internalAdapter.findUserById(userId);
 					if (!foundUser) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
 							message: "User not found",
 						});
 					}
-					userRecord = foundUser as Record<string, unknown>;
 					await internalAdapter.linkAccount({
 						providerId: ATPROTO_PROVIDER_ID,
 						accountId: did,
@@ -215,11 +227,13 @@ export function createAtprotoEndpoints(
 						accessTokenExpiresAt: undefined,
 						refreshTokenExpiresAt: undefined,
 					});
+					const update = buildUserUpdate(did, profile, /*newUser*/ false);
 					await adapter.update({
 						model: "user",
 						where: [{ field: "id", value: userId }],
-						update: buildUserUpdate(did, profile, /*newUser*/ false),
+						update,
 					});
+					userRecord = { ...(foundUser as Record<string, unknown>), ...update };
 				} else {
 					if (options.disableSignUp) {
 						throw new APIError("FORBIDDEN", {
@@ -251,12 +265,16 @@ export function createAtprotoEndpoints(
 						});
 					}
 					userId = created.user.id;
-					userRecord = created.user as Record<string, unknown>;
+					const update = buildUserUpdate(did, profile, /*newUser*/ true);
 					await adapter.update({
 						model: "user",
 						where: [{ field: "id", value: userId }],
-						update: buildUserUpdate(did, profile, /*newUser*/ true),
+						update,
 					});
+					userRecord = {
+						...(created.user as Record<string, unknown>),
+						...update,
+					};
 				}
 
 				// Backfill userId on the atprotoSession row so it links to the user.

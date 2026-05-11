@@ -336,6 +336,126 @@ describe("atproto callback", () => {
 		expect(res.status).toBe(403);
 	});
 
+	it("persists atprotoDid/atprotoHandle on the user row after callback", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [atproto()],
+			disableTestUser: true,
+		} as never);
+
+		const { Agent } = await import("@atproto/api");
+		vi.mocked(Agent).mockImplementation(function () {
+			return {
+				getProfile: vi.fn().mockResolvedValue({
+					data: {
+						handle: "alice.bsky.social",
+						displayName: "Alice",
+						avatar: "https://cdn/avatar.jpg",
+						description: "hi",
+					},
+				}),
+			};
+		} as never);
+
+		oauthMocks.callback.mockResolvedValueOnce({
+			session: { did: "did:plc:fields-test" },
+			state: JSON.stringify({ callbackURL: "/" }),
+		});
+
+		const req = new Request(
+			"http://localhost:3000/api/auth/atproto/callback?code=x&state=y",
+			{ method: "GET", redirect: "manual" },
+		);
+		await auth.handler(req);
+
+		// Query the user row directly to assert the atproto fields landed
+		// (and so by extension, the session cookie's cached user payload —
+		// which is built from the same userRecord — has them too).
+		const ctx = await auth.$context;
+		const account = await ctx.adapter.findOne<{ userId: string }>({
+			model: "account",
+			where: [
+				{ field: "providerId", value: "atproto" },
+				{ field: "accountId", value: "did:plc:fields-test" },
+			],
+		});
+		expect(account?.userId).toBeDefined();
+		const user = await ctx.adapter.findOne<{
+			atprotoDid?: string;
+			atprotoHandle?: string;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: account!.userId }],
+		});
+		expect(user?.atprotoDid).toBe("did:plc:fields-test");
+		expect(user?.atprotoHandle).toBe("alice.bsky.social");
+	});
+
+	it("does not auto-link an atproto DID to a user holding the synthetic placeholder email", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [atproto()],
+			disableTestUser: true,
+			emailAndPassword: { enabled: true },
+		} as never);
+
+		const ctx = await auth.$context;
+		// Pre-create a user whose email happens to match the placeholder
+		// pattern that the atproto plugin would derive for did:plc:colliding.
+		// Without the direct-account-lookup fix, this user would be picked
+		// up via the email fallback in `findOAuthUser` and silently linked.
+		const sanitized = "did_plc_colliding";
+		const placeholder = `${sanitized}@atproto.invalid`;
+		const preexisting = await ctx.adapter.create<{ id: string }>({
+			model: "user",
+			data: {
+				name: "Unrelated User",
+				email: placeholder,
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const { Agent } = await import("@atproto/api");
+		vi.mocked(Agent).mockImplementation(function () {
+			return {
+				getProfile: vi.fn().mockResolvedValue({
+					data: { handle: "stranger.bsky.social" },
+				}),
+			};
+		} as never);
+
+		oauthMocks.callback.mockResolvedValueOnce({
+			session: { did: "did:plc:colliding" },
+			state: JSON.stringify({ callbackURL: "/" }),
+		});
+
+		const req = new Request(
+			"http://localhost:3000/api/auth/atproto/callback?code=x&state=y",
+			{ method: "GET", redirect: "manual" },
+		);
+		await auth.handler(req);
+
+		// The pre-existing user must NOT have had the atproto DID linked.
+		const preexistingAfter = await ctx.adapter.findOne<{
+			atprotoDid?: string;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: preexisting.id }],
+		});
+		expect(preexistingAfter?.atprotoDid).toBeFalsy();
+
+		// And no account row should reference the pre-existing user with the
+		// atproto provider.
+		const linkedAccount = await ctx.adapter.findOne({
+			model: "account",
+			where: [
+				{ field: "providerId", value: "atproto" },
+				{ field: "userId", value: preexisting.id },
+			],
+		});
+		expect(linkedAccount).toBeNull();
+	});
+
 	it("returns BAD_REQUEST when appState.callbackURL is untrusted", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [atproto()],
