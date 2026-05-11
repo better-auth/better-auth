@@ -32,6 +32,45 @@ describe("organization type", () => {
 		expectTypeOf({} satisfies OrganizationOptions);
 		expectTypeOf({ schema: {} } satisfies OrganizationOptions);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9135
+	 */
+	it("allows dynamic roles in create invitation input", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					roles: {
+						admin: adminAc,
+						member: memberAc,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+				}),
+			],
+		});
+
+		const dynamicRole = "contractor" as string;
+		const dynamicRoles = ["contractor", "reviewer"] as string[];
+
+		if (false) {
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-role@example.com",
+					role: dynamicRole,
+				},
+			});
+			void auth.api.createInvitation({
+				headers: new Headers(),
+				body: {
+					email: "dynamic-roles@example.com",
+					role: dynamicRoles,
+				},
+			});
+		}
+	});
 });
 
 describe("organization", async () => {
@@ -548,6 +587,72 @@ describe("organization", async () => {
 			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
 				.message,
 		);
+	});
+
+	/**
+	 * Tests that users can accept invitations sent to mixed-case emails
+	 * when they sign up with different casing. This ensures email case
+	 * normalization is consistent across the invitation flow.
+	 */
+	it("should allow accepting invitation when user signs up with different email casing", async () => {
+		const rng = crypto.randomUUID();
+		const mixedCaseEmail = `Test.User.${rng}@Example.COM`;
+		const user = {
+			email: mixedCaseEmail,
+			password: rng,
+			name: `Test User ${rng}`,
+		};
+		const { headers } = await signInWithTestUser();
+
+		const org = await client.organization.create({
+			name: `test-org-${rng}`,
+			slug: `test-org-${rng}`,
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!org.data) throw new Error("Organization not created");
+
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data.id,
+			email: mixedCaseEmail,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		if (!invite.data)
+			throw new Error(`Invitation not created: ${invite.error?.message}`);
+		expect(invite.data.email).toBe(mixedCaseEmail.toLowerCase());
+
+		await client.signUp.email({
+			email: user.email.toLowerCase(),
+			password: user.password,
+			name: user.name,
+		});
+		const { headers: userHeaders } = await signInWithUser(
+			user.email.toLowerCase(),
+			user.password,
+		);
+
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(userInvitations.data?.length).toBeGreaterThanOrEqual(1);
+		const matchingInvite = userInvitations.data?.find(
+			(i) => i.id === invite.data!.id,
+		);
+		expect(matchingInvite).toBeDefined();
+
+		const acceptRes = await client.organization.acceptInvitation({
+			invitationId: invite.data!.id!,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(acceptRes.data?.invitation.status).toBe("accepted");
 	});
 
 	it("should allow getting a member", async () => {

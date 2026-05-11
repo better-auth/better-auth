@@ -99,6 +99,7 @@ export const createInternalAdapter = (
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						...user,
+						email: user.email?.toLowerCase(),
 					},
 					"user",
 					undefined,
@@ -734,9 +735,19 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		deleteAccount: async (accountId: string) => {
+		/**
+		 * Delete an account by its primary key.
+		 *
+		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 */
+		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
-				[{ field: "id", value: accountId }],
+				[
+					{
+						field: "id",
+						value: id,
+					},
+				],
 				"account",
 				undefined,
 			);
@@ -927,7 +938,10 @@ export const createInternalAdapter = (
 			data: Partial<User> & Record<string, any>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "id",
@@ -945,7 +959,10 @@ export const createInternalAdapter = (
 			data: Partial<User & Record<string, any>>,
 		) => {
 			const user = await updateWithHooks<User>(
-				data,
+				{
+					...data,
+					...(data.email ? { email: data.email.toLowerCase() } : {}),
+				},
 				[
 					{
 						field: "email",
@@ -1228,5 +1245,6 @@ export const createInternalAdapter = (
 			}
 			return data as Verification;
 		},
+		refreshUserSessions,
 	};
 };
