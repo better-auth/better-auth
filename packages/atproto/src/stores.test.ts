@@ -18,7 +18,9 @@ function makeAdapter(): AdapterStub {
 	return {
 		findOne: vi.fn().mockResolvedValue(null),
 		create: vi.fn().mockResolvedValue({ id: "1" }),
-		update: vi.fn().mockResolvedValue({}),
+		// `update` returns null when no row matches the where clause; the stores
+		// use that signal to decide whether to fall back to `create`.
+		update: vi.fn().mockResolvedValue(null),
 		delete: vi.fn().mockResolvedValue({}),
 		deleteMany: vi.fn().mockResolvedValue({}),
 	} as unknown as AdapterStub;
@@ -49,11 +51,21 @@ describe("createStateStore", () => {
 	});
 	it("set: updates when row exists", async () => {
 		const adapter = makeAdapter();
-		adapter.findOne.mockResolvedValueOnce({ id: "row-1" });
+		adapter.update.mockResolvedValueOnce({ id: "row-1" });
 		const store = createStateStore(adapter);
 		await store.set("key-1", { x: 1 } as unknown as NodeSavedState);
-		expect(adapter.update).toHaveBeenCalled();
+		expect(adapter.update).toHaveBeenCalledTimes(1);
 		expect(adapter.create).not.toHaveBeenCalled();
+	});
+	it("set: falls back to update when concurrent create loses the race", async () => {
+		const adapter = makeAdapter();
+		// First update sees no row → create attempted → create throws (race
+		// with another writer that just inserted) → fallback update wins.
+		adapter.create.mockRejectedValueOnce(new Error("unique constraint"));
+		const store = createStateStore(adapter);
+		await store.set("key-1", { x: 1 } as unknown as NodeSavedState);
+		expect(adapter.update).toHaveBeenCalledTimes(2);
+		expect(adapter.create).toHaveBeenCalledTimes(1);
 	});
 	it("get: returns parsed state when not expired", async () => {
 		const adapter = makeAdapter();
@@ -144,13 +156,23 @@ describe("createSessionStore", () => {
 	});
 	it("set: updates existing session", async () => {
 		const adapter = makeAdapter();
-		adapter.findOne.mockResolvedValueOnce({ id: "row-1" });
+		adapter.update.mockResolvedValueOnce({ id: "row-1" });
 		const store = createSessionStore(adapter);
 		await store.set("did:plc:abc", {
 			tokens: 2,
 		} as unknown as NodeSavedSession);
-		expect(adapter.update).toHaveBeenCalled();
+		expect(adapter.update).toHaveBeenCalledTimes(1);
 		expect(adapter.create).not.toHaveBeenCalled();
+	});
+	it("set: falls back to update when concurrent create loses the race", async () => {
+		const adapter = makeAdapter();
+		adapter.create.mockRejectedValueOnce(new Error("unique constraint"));
+		const store = createSessionStore(adapter);
+		await store.set("did:plc:abc", {
+			tokens: 2,
+		} as unknown as NodeSavedSession);
+		expect(adapter.update).toHaveBeenCalledTimes(2);
+		expect(adapter.create).toHaveBeenCalledTimes(1);
 	});
 	it("get: returns parsed session", async () => {
 		const adapter = makeAdapter();

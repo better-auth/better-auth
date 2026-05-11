@@ -21,28 +21,28 @@ export function createStateStore(adapter: AtprotoAdapter): NodeSavedStateStore {
 		set: async (key: string, val: NodeSavedState) => {
 			const now = new Date();
 			const expiresAt = new Date(now.getTime() + STATE_TTL_MS);
-			const existing = (await adapter.findOne({
+			const data = { state: JSON.stringify(val), expiresAt };
+			// Update-first → create-on-null → update-on-race-loss. The unique
+			// constraint on `key` makes this race-safe: only one of two
+			// concurrent creates can win, and the loser falls back to update.
+			const updated = await adapter.update({
 				model: "atprotoState",
 				where: [{ field: "key", value: key }],
-			})) as { id: string } | null;
-			if (existing) {
-				await adapter.update({
-					model: "atprotoState",
-					where: [{ field: "id", value: existing.id }],
-					update: {
-						state: JSON.stringify(val),
-						expiresAt,
-					},
-				});
-			} else {
-				await adapter.create({
-					model: "atprotoState",
-					data: {
-						key,
-						state: JSON.stringify(val),
-						expiresAt,
-					},
-				});
+				update: data,
+			});
+			if (updated === null) {
+				try {
+					await adapter.create({
+						model: "atprotoState",
+						data: { key, ...data },
+					});
+				} catch {
+					await adapter.update({
+						model: "atprotoState",
+						where: [{ field: "key", value: key }],
+						update: data,
+					});
+				}
 			}
 
 			// Opportunistic sweep of expired rows.
@@ -83,32 +83,32 @@ export function createSessionStore(
 	return {
 		set: async (sub: string, val: NodeSavedSession) => {
 			const updatedAt = new Date();
-			const existing = (await adapter.findOne({
+			const data = { session: JSON.stringify(val), updatedAt };
+			// Update-first → create-on-null → update-on-race-loss. The unique
+			// constraint on `did` makes this race-safe across concurrent writers
+			// (e.g. multi-instance deployments where NodeOAuthClient's per-DID
+			// `requestLock` doesn't span processes).
+			const updated = await adapter.update({
 				model: "atprotoSession",
 				where: [{ field: "did", value: sub }],
-			})) as { id: string } | null;
-			if (existing) {
-				await adapter.update({
-					model: "atprotoSession",
-					where: [{ field: "id", value: existing.id }],
-					update: {
-						session: JSON.stringify(val),
-						updatedAt,
-					},
-				});
-			} else {
-				// userId is backfilled by the callback handler once it knows
-				// which better-auth user this DID belongs to. Stored as null
-				// (rather than empty string) to satisfy FK constraints on Postgres/MySQL.
-				await adapter.create({
-					model: "atprotoSession",
-					data: {
-						did: sub,
-						session: JSON.stringify(val),
-						userId: null,
-						updatedAt,
-					},
-				});
+				update: data,
+			});
+			if (updated === null) {
+				try {
+					// userId is backfilled by the callback handler once it knows
+					// which better-auth user this DID belongs to. Stored as null
+					// (rather than empty string) to satisfy FK constraints.
+					await adapter.create({
+						model: "atprotoSession",
+						data: { did: sub, ...data, userId: null },
+					});
+				} catch {
+					await adapter.update({
+						model: "atprotoSession",
+						where: [{ field: "did", value: sub }],
+						update: data,
+					});
+				}
 			}
 		},
 		get: async (sub: string): Promise<NodeSavedSession | undefined> => {
