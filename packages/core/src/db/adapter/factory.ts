@@ -1339,6 +1339,7 @@ export const createAdapterFactory =
 				);
 
 				let res: T | null;
+				let resultNeedsOutputTransform = true;
 				if (adapterInstance.claimOne) {
 					res = await withSpan(
 						`db claimOne ${model}`,
@@ -1350,7 +1351,7 @@ export const createAdapterFactory =
 					);
 				} else {
 					// TODO(claim-one-required): adapters without native `claimOne`
-					// fall back to `transaction(findMany + delete)`. Race-safe on
+					// fall back to `transaction(findMany + deleteMany)`. Race-safe on
 					// engines with real transaction isolation; race window narrows
 					// (does not close) on adapters that fall through to sequential
 					// execution. Remove this branch when claimOne becomes required.
@@ -1368,15 +1369,16 @@ export const createAdapterFactory =
 						() =>
 							adapter.transaction(async (trx) => {
 								const rows = await trx.findMany<Record<string, any>>({
-									model,
-									where,
+									model: unsafeModel,
+									where: unsafeWhere,
 									limit: 1,
 								});
 								const target = rows[0];
 								if (!target) return null;
-								await trx.delete({
-									model,
+								const deleted = await trx.deleteMany({
+									model: unsafeModel,
 									where: [
+										...unsafeWhere,
 										{
 											field: "id",
 											value: target.id,
@@ -1386,9 +1388,10 @@ export const createAdapterFactory =
 										},
 									],
 								});
-								return target as T;
+								return deleted > 0 ? (target as T) : null;
 							}),
 					);
+					resultNeedsOutputTransform = false;
 				}
 
 				debugLog(
@@ -1398,7 +1401,11 @@ export const createAdapterFactory =
 					{ model, data: res },
 				);
 				let transformed: any = res;
-				if (!config.disableTransformOutput && res) {
+				if (
+					!config.disableTransformOutput &&
+					resultNeedsOutputTransform &&
+					res
+				) {
 					transformed = await transformOutput(
 						res as Record<string, any>,
 						unsafeModel,

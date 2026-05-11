@@ -460,7 +460,8 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 *
 	 * Always defined on the factory-wrapped adapter. When the underlying
 	 * `CustomAdapter` does not implement `claimOne`, the factory provides
-	 * a fallback that wraps `findMany + delete` in `transaction(...)`.
+	 * a fallback that wraps `findMany + deleteMany` in `transaction(...)`
+	 * and returns the row only when the delete reports an affected row.
 	 */
 	claimOne: <T>(data: { model: string; where: Where[] }) => Promise<T | null>;
 	/**
@@ -551,8 +552,8 @@ export interface CustomAdapter {
 	}) => Promise<number>;
 	/**
 	 * Optional native atomic single-row claim. When omitted, the adapter
-	 * factory falls back to `transaction(findMany + delete)`. Implementing
-	 * this method natively (e.g. `DELETE ... RETURNING *`,
+	 * factory falls back to `transaction(findMany + deleteMany)`.
+	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,
 	 * `findOneAndDelete`, `OUTPUT deleted.*`) gives one round trip and the
 	 * strongest race-safety guarantee. Implementations must delete at most
 	 * one matching row. TODO(claim-one-required): tighten to required in the
