@@ -36,6 +36,7 @@ export interface RedisStorageConfig {
  */
 export function redisStorage(config: RedisStorageConfig) {
 	const { client, keyPrefix = "better-auth:" } = config;
+	let supportsGetDel = true;
 	const getAndDeleteScript = `
 local value = redis.call("GET", KEYS[1])
 if value ~= false then
@@ -47,6 +48,9 @@ return value
 	const prefixKey = (key: string): string => {
 		return `${keyPrefix}${key}`;
 	};
+	const isUnknownCommandError = (error: unknown) =>
+		error instanceof Error &&
+		error.message.toLowerCase().includes("unknown command");
 
 	return {
 		async get(key: string) {
@@ -54,7 +58,20 @@ return value
 		},
 
 		async getAndDelete(key: string) {
-			return client.eval(getAndDeleteScript, 1, prefixKey(key));
+			const prefixedKey = prefixKey(key);
+			if (supportsGetDel) {
+				try {
+					return await client.call("GETDEL", prefixedKey);
+				} catch (error) {
+					if (!isUnknownCommandError(error)) {
+						throw error;
+					}
+					supportsGetDel = false;
+				}
+			}
+			// TODO(redis-6.2-required): require Redis >= 6.2 in the next
+			// breaking branch and remove this Lua compatibility fallback.
+			return client.eval(getAndDeleteScript, 1, prefixedKey);
 		},
 
 		async set(key: string, value: string, ttl?: number | undefined) {
