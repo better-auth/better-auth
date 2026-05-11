@@ -53,6 +53,7 @@ describe("upgradeAction", () => {
 		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(console, "warn").mockImplementation(() => {});
 
 		vi.clearAllMocks();
 		mockDetectPackageManager.mockResolvedValue({
@@ -142,7 +143,7 @@ describe("upgradeAction", () => {
 		);
 	});
 
-	test("skips rename when the new package has no published version", async () => {
+	test("warns and skips when the renamed package has no published replacement", async () => {
 		mockGetPackageInfo.mockReturnValue({
 			name: "stub",
 			devDependencies: { "@better-auth/cli": "~1.4.21" },
@@ -150,10 +151,14 @@ describe("upgradeAction", () => {
 		mockFetchLatestVersion.mockResolvedValue(null);
 		mockPrompts.mockResolvedValue({ confirmed: true } as never);
 
+		const warn = vi.spyOn(console, "warn");
 		await upgradeAction({ cwd, yes: true });
 
 		expect(mockRemoveDependencies).not.toHaveBeenCalled();
 		expect(mockInstallDependencies).not.toHaveBeenCalled();
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("@better-auth/cli"),
+		);
 	});
 
 	test("workspace-pinned packages are ignored", async () => {
@@ -182,6 +187,73 @@ describe("upgradeAction", () => {
 
 		await upgradeAction({ cwd });
 
+		expect(mockRemoveDependencies).not.toHaveBeenCalled();
+		expect(mockInstallDependencies).not.toHaveBeenCalled();
+	});
+
+	test("dedupes when the renamed package appears in both deps and devDeps", async () => {
+		mockGetPackageInfo.mockReturnValue({
+			name: "weird",
+			dependencies: { "@better-auth/cli": "~1.4.21" },
+			devDependencies: { "@better-auth/cli": "~1.4.21" },
+		});
+		mockFetchLatestVersion.mockResolvedValue("1.6.10");
+		mockPrompts.mockResolvedValue({ confirmed: true } as never);
+
+		await upgradeAction({ cwd, yes: true });
+
+		// remove is called once with a single entry — not a duplicated list.
+		expect(mockRemoveDependencies).toHaveBeenCalledTimes(1);
+		expect(mockRemoveDependencies).toHaveBeenCalledWith(
+			expect.objectContaining({ dependencies: ["@better-auth/cli"] }),
+		);
+
+		// install lands in the first scanned section (prod) only — not both.
+		const installCalls = mockInstallDependencies.mock.calls.map((c) => c[0]);
+		expect(installCalls).toEqual([
+			expect.objectContaining({
+				dependencies: ["auth@1.6.10"],
+				type: "prod",
+			}),
+		]);
+	});
+
+	test("upgrades the `auth` package itself when listed in deps", async () => {
+		mockGetPackageInfo.mockReturnValue({
+			name: "post-rename",
+			devDependencies: {
+				auth: "1.5.0",
+				"better-auth": "^1.5.0",
+			},
+		});
+		mockFetchLatestVersion.mockResolvedValue("1.6.10");
+		mockPrompts.mockResolvedValue({ confirmed: true } as never);
+
+		await upgradeAction({ cwd, yes: true });
+
+		const installCalls = mockInstallDependencies.mock.calls.map((c) => c[0]);
+		const flatDeps = installCalls.flatMap((c) =>
+			Array.isArray(c.dependencies) ? c.dependencies : [c.dependencies],
+		);
+		expect(flatDeps).toEqual(
+			expect.arrayContaining(["auth@1.6.10", "better-auth@1.6.10"]),
+		);
+	});
+
+	test("ignores inherited object-prototype keys (e.g. toString)", async () => {
+		mockGetPackageInfo.mockReturnValue({
+			name: "prototype-pollution-guard",
+			devDependencies: {
+				// `toString` is a key on Object.prototype; the rename check
+				// must not treat it as a known rename and try to resolve it.
+				toString: "1.0.0",
+			},
+		});
+		mockFetchLatestVersion.mockResolvedValue("1.6.10");
+
+		await upgradeAction({ cwd, yes: true });
+
+		expect(mockFetchLatestVersion).not.toHaveBeenCalled();
 		expect(mockRemoveDependencies).not.toHaveBeenCalled();
 		expect(mockInstallDependencies).not.toHaveBeenCalled();
 	});

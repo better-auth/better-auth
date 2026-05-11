@@ -27,7 +27,11 @@ const RENAMED_PACKAGES: Record<string, string> = {
 };
 
 function isBetterAuthPackage(name: string): boolean {
-	return name === "better-auth" || name.startsWith("@better-auth/");
+	return (
+		name === "better-auth" ||
+		name === "auth" ||
+		name.startsWith("@better-auth/")
+	);
 }
 
 interface UpgradeEntry {
@@ -86,7 +90,7 @@ async function upgradeAction(opts: unknown) {
 
 	const classify = (name: string, version: string, depType: "prod" | "dev") => {
 		if (version.startsWith("workspace:")) return;
-		if (name in RENAMED_PACKAGES) {
+		if (Object.hasOwn(RENAMED_PACKAGES, name)) {
 			renameScans.push({
 				oldName: name,
 				newName: RENAMED_PACKAGES[name]!,
@@ -141,19 +145,39 @@ async function upgradeAction(opts: unknown) {
 		}
 	}
 
+	// Dedupe renames by oldName. If a package somehow appears in both
+	// `dependencies` and `devDependencies`, the first scan wins (prod
+	// before dev, by classify order). Keeps the remove + install pair
+	// from acting on the same name twice.
 	const renames: RenameEntry[] = [];
+	const unresolvedRenames: string[] = [];
+	const seenOldNames = new Set<string>();
 	for (const result of renameResults) {
-		if (result.status !== "fulfilled" || !result.value.latest) {
+		if (result.status !== "fulfilled") continue;
+		const { oldName, newName, current, latest, depType } = result.value;
+		if (seenOldNames.has(oldName)) continue;
+		seenOldNames.add(oldName);
+		if (!latest) {
+			unresolvedRenames.push(oldName);
 			continue;
 		}
-		const { oldName, newName, current, latest, depType } = result.value;
 		renames.push({ oldName, newName, current, latest, depType });
 	}
 
 	spinner.stop();
 
+	if (unresolvedRenames.length > 0) {
+		console.warn(
+			chalk.yellow(
+				`Warning: could not fetch a replacement version for ${unresolvedRenames.join(", ")}. They will be left in place.`,
+			),
+		);
+	}
+
 	if (upgrades.length === 0 && renames.length === 0) {
-		console.log("All better-auth packages are up to date.");
+		if (unresolvedRenames.length === 0) {
+			console.log("All better-auth packages are up to date.");
+		}
 		return;
 	}
 
