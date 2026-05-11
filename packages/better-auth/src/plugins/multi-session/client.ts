@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { PACKAGE_VERSION } from "../../version";
 import type { multiSession } from ".";
 import { MULTI_SESSION_ERROR_CODES } from "./error-codes";
 
@@ -7,6 +8,7 @@ export * from "./error-codes";
 export const multiSessionClient = () => {
 	return {
 		id: "multi-session",
+		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof multiSession>,
 		atomListeners: [
 			{

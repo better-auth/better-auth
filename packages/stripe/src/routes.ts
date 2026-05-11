@@ -18,6 +18,7 @@ import {
 import { customerMetadata, subscriptionMetadata } from "./metadata";
 import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
 import type {
+	CheckoutSessionLocale,
 	CustomerType,
 	StripeCtxSession,
 	StripeOptions,
@@ -36,6 +37,43 @@ import {
 } from "./utils";
 
 /**
+ * Resolves a Stripe price object, either from a lookup key or by retrieving
+ * by ID. Used to inspect `recurring.usage_type` for metered billing.
+ * @internal
+ */
+async function resolveStripePrice(
+	stripeClient: Stripe,
+	priceId: string | undefined,
+	lookupKey: string | undefined,
+): Promise<Stripe.Price | undefined> {
+	try {
+		if (lookupKey) {
+			const prices = await stripeClient.prices.list({
+				lookup_keys: [lookupKey],
+				active: true,
+				limit: 1,
+			});
+			const priceData = prices.data[0];
+			if (priceData) return priceData;
+		}
+		if (priceId) {
+			return await stripeClient.prices.retrieve(priceId);
+		}
+	} catch {
+		// If price retrieval fails, default to licensed behavior (include quantity)
+	}
+	return undefined;
+}
+
+/**
+ * Checks if a Stripe price uses metered (usage-based) billing.
+ * @internal
+ */
+function isMeteredPrice(price: Stripe.Price | undefined): boolean {
+	return price?.recurring?.usage_type === "metered";
+}
+
+/**
  * Converts a relative URL to an absolute URL using baseURL.
  * @internal
  */
@@ -46,23 +84,6 @@ function getUrl(ctx: GenericEndpointContext, url: string) {
 	return `${ctx.context.options.baseURL}${
 		url.startsWith("/") ? url : `/${url}`
 	}`;
-}
-
-/**
- * Resolves a Stripe price ID from a lookup key.
- * @internal
- */
-async function resolvePriceIdFromLookupKey(
-	stripeClient: Stripe,
-	lookupKey: string,
-): Promise<string | undefined> {
-	if (!lookupKey) return undefined;
-	const prices = await stripeClient.prices.list({
-		lookup_keys: [lookupKey],
-		active: true,
-		limit: 1,
-	});
-	return prices.data[0]?.id;
 }
 
 /**
@@ -167,7 +188,7 @@ const upgradeSubscriptionBodySchema = z.object({
 	 * If not provided or set to `auto`, the browser's locale is used.
 	 */
 	locale: z
-		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+		.custom<CheckoutSessionLocale>((localization) => {
 			return typeof localization === "string";
 		})
 		.meta({
@@ -568,16 +589,20 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const lookupKey = ctx.body.annual
 				? plan.annualDiscountLookupKey
 				: plan.lookupKey;
-			const resolvedPriceId = lookupKey
-				? await resolvePriceIdFromLookupKey(client, lookupKey)
-				: undefined;
+			const resolvedPrice = await resolveStripePrice(
+				client,
+				priceId,
+				lookupKey,
+			);
 
-			const priceIdToUse = priceId || resolvedPriceId;
+			const priceIdToUse = resolvedPrice?.id ?? priceId;
 			if (!priceIdToUse) {
 				throw ctx.error("BAD_REQUEST", {
 					message: "Price ID not found for the selected plan",
 				});
 			}
+
+			const isMetered = isMeteredPrice(resolvedPrice);
 
 			// For org subscriptions with seat-based billing, seats are auto-managed.
 			// Quantity = memberCount; use Stripe graduated pricing for free tiers.
@@ -788,7 +813,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						if (itemPriceId === stripeSubscriptionPriceId) {
 							newPhaseItems.push({
 								price: priceIdToUse,
-								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+								...(isMetered
+									? {}
+									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
 							continue;
 						}
@@ -892,7 +919,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							itemUpdates.push({
 								id: si.id,
 								price: priceIdToUse,
-								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+								...(isMetered
+									? {}
+									: { quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1 }),
 							});
 							continue;
 						}
@@ -952,7 +981,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 										{
 											id: planItem.id,
 											price: priceIdToUse,
-											...(isAutoManagedSeats
+											...(isAutoManagedSeats || isMetered
 												? {}
 												: { quantity: ctx.body.seats || 1 }),
 										},
@@ -1045,21 +1074,38 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					? { trial_period_days: plan.freeTrial.days }
 					: undefined;
 
+			// Strip plugin-owned fields
+			const {
+				mode: _mode,
+				customer: _customer,
+				customer_email: _customer_email,
+				success_url: _success_url,
+				cancel_url: _cancel_url,
+				line_items: _line_items,
+				client_reference_id: _client_reference_id,
+				...additionalParams
+			} = params?.params ?? {};
+
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
+						...additionalParams,
+						mode: "subscription",
 						...(customerId
 							? {
 									customer: customerId,
+									customer_email: undefined,
 									customer_update:
-										customerType !== "user"
+										additionalParams.customer_update ??
+										(customerType !== "user"
 											? ({ address: "auto" } as const)
-											: ({ name: "auto", address: "auto" } as const), // The customer name is automatically set only for users
+											: ({ name: "auto", address: "auto" } as const)), // The customer name is automatically set only for users
 								}
 							: {
+									customer: undefined,
 									customer_email: user.email,
 								}),
-						locale: ctx.body.locale,
+						locale: ctx.body.locale ?? additionalParams.locale,
 						success_url: getUrl(
 							ctx,
 							`${
@@ -1078,7 +1124,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								? [
 										{
 											price: priceIdToUse,
-											quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+											...(isMetered
+												? {}
+												: {
+														quantity: isAutoManagedSeats
+															? 1
+															: ctx.body.seats || 1,
+													}),
 										},
 									]
 								: []),
@@ -1089,8 +1141,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							// Additional line items (metered prices, add-ons, etc.)
 							...(plan.lineItems ?? []),
 						],
+						client_reference_id: referenceId,
 						subscription_data: {
 							...freeTrial,
+							...additionalParams.subscription_data,
 							metadata: subscriptionMetadata.set(
 								{
 									userId: user.id,
@@ -1098,13 +1152,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									referenceId,
 								},
 								ctx.body.metadata,
-								params?.params?.subscription_data?.metadata,
+								additionalParams.subscription_data?.metadata,
 							),
 						},
-						mode: "subscription",
-						client_reference_id: referenceId,
-						...params?.params,
-						// metadata should come after spread to protect internal fields
 						metadata: subscriptionMetadata.set(
 							{
 								userId: user.id,
@@ -1112,7 +1162,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								referenceId,
 							},
 							ctx.body.metadata,
-							params?.params?.metadata,
+							additionalParams.metadata,
 						),
 					},
 					params?.options,
@@ -1123,10 +1173,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						code: e.code,
 					});
 				});
-			return ctx.json({
+
+			const response: Stripe.Response<Stripe.Checkout.Session> & {
+				redirect: boolean;
+			} = {
 				...checkoutSession,
 				redirect: !ctx.body.disableRedirect,
-			});
+			};
+			return ctx.json(response);
 		},
 	);
 };
@@ -1804,7 +1858,7 @@ const createBillingPortalBodySchema = z.object({
 	 * If not provided or set to `auto`, the browser's locale is used.
 	 */
 	locale: z
-		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+		.custom<CheckoutSessionLocale>((localization) => {
 			return typeof localization === "string";
 		})
 		.meta({

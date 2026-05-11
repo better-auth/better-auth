@@ -1,3 +1,13 @@
+export type {
+	AssertionSigningAlgorithm,
+	ClientAssertionConfig,
+} from "./client-assertion";
+export {
+	ASSERTION_SIGNING_ALGORITHMS,
+	CLIENT_ASSERTION_TYPE,
+	resolveAssertionParams,
+	signClientAssertion,
+} from "./client-assertion";
 export {
 	clientCredentialsToken,
 	clientCredentialsTokenRequest,
@@ -15,7 +25,11 @@ export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
-export { generateCodeChallenge, getOAuth2Tokens } from "./utils";
+export {
+	generateCodeChallenge,
+	getOAuth2Tokens,
+	getPrimaryClientId,
+} from "./utils";
 export {
 	authorizationCodeRequest,
 	createAuthorizationCodeRequest,

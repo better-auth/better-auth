@@ -7,6 +7,7 @@ import type { JWTPayload, JWTVerifyOptions } from "jose";
 import { handleMcpErrors } from "./mcp";
 import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
+import { PACKAGE_VERSION } from "./version";
 
 export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	auth?: T,
@@ -44,6 +45,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 
 	return {
 		id: "oauth-provider-resource-client",
+		version: PACKAGE_VERSION,
 		getActions() {
 			return {
 				/**

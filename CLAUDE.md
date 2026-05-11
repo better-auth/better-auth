@@ -1,74 +1,46 @@
-# CLAUDE.md
+# Better Auth Development Guide
 
-This file provides guidance to AI assistants (Claude Code, Cursor, etc.)
-when working with code in this repository.
+This is the Better Auth repository - a comprehensive authentication framework for TypeScript, designed to be runtime and framework-agnostic.
 
-## Project Overview
+## Project Structure
 
-Better Auth is a comprehensive, framework-agnostic authentication
-framework for TypeScript.
+- `packages/better-auth` - Main authentication library
+- `packages/core` - Shared core types and utilities
+- `packages/cli` - CLI tool
+- `packages/*` - Database adapters, plugins, integrations
+- `docs/` - Documentation site (Next.js + Fumadocs), content in `docs/content/docs/`
+- `test/` - Shared test workspace
+- `e2e/` - End-to-end tests (smoke, adapter, integration)
+- `demo/` - Example apps
 
-## Development Commands
+## Commands
 
-```bash
-# Install dependencies
-pnpm install
+- ALWAYS use `pnpm` (never npm, yarn, or bun)
+- NEVER run `pnpm test` (runs all packages). Use `vitest path/to/test -t <pattern>`
+- Type check: `pnpm typecheck`
+- Formatting/linting runs automatically on commit (Lefthook + Biome). No need to run manually.
 
-# Build all packages
-pnpm build
+## Writing Code
 
-# Run all tests
-pnpm test
-
-# Lint code
-pnpm lint
-
-# Fix linting issues
-pnpm lint:fix
-
-# Type check
-pnpm typecheck
-
-# Format code
-pnpm format
-
-# Check formatting
-pnpm format:check
-```
-
-Do not run `pnpm test` directly because it runs tests in all packages,
-which takes a long time, use `vitest /path/to/<test-file> -t <pattern>` to
-run specific tests.
-
-## Architecture
-
-### Package Structure
-
-* `packages/better-auth` - Main authentication library
-* `packages/core` - Core utilities and types
-* `packages/cli` - Command-line interface
-* `packages/*` - Database adapters, plugins, and integrations
-* `docs/` - Documentation site (Next.js + Fumadocs)
-* `demo/` - Demo apps
-* `e2e/` - End-to-end tests (smoke, adapter, integration)
-
-## Code Style
-
-* Formatter: Biome (tabs for code, 2-space for JSON)
-* Avoid unsafe typecasts or types like `any`
-* Avoid classes, use functions and objects
-* Do not use runtime-specific feature like `Buffer` in codebase except
-  test, use `Uint8Array` instead
+- Must work across Node.js, Bun, Deno, and Cloudflare Workers. Avoid runtime-specific APIs.
+- Biome (tabs for code, 2 spaces for JSON)
+- NEVER use `any`. NEVER use classes.
+- Use `Uint8Array` instead of `Buffer` (except in tests)
+- Import zod as `import * as z from "zod"`
+- Use `import type` for type-only imports
+- Use `node:` protocol for Node.js built-ins (e.g. `node:crypto`)
+- JSDoc comments for public APIs
+- Plugins should be as independent as possible. When working on a plugin, prefer modifying the plugin over changing core.
 
 ## Testing
 
-* Most of the tests use Vitest
-* Some tests under `e2e/` directory use Playwright
-* Adapter tests require Docker containers running (`docker compose up -d`)
-* Consider using test helpers like `getTestInstance()` from
-  `better-auth/test` first
-* If a test is to prevent regression of a specific numbered GitHub issue,
-  add a JSDoc `@see` comment with the issue URL above the `it()` or `describe()`:
+- Most tests use Vitest; some under `e2e/` use Playwright
+- Use `getTestInstance()` from `better-auth/test`. It returns `{ client, auth, sessionSetter, ... }`
+- Pass client plugins via `clientOptions.plugins`
+- NEVER create separate clients with `createAuthClient()` in tests
+- Default test DB is SQLite in-memory; use `testWith` for other databases
+- Adapter tests need Docker: `docker compose up -d`
+- Regression tests: add `@see` comment with issue URL above `it()` or `describe()`:
   ```typescript
   /**
    * @see https://github.com/better-auth/better-auth/issues/{issue_number}
@@ -78,27 +50,12 @@ run specific tests.
   });
   ```
 
-## Documentation
+## Important Development Notes
 
-* Please update the documentation when you make changes to the public API
-* Documentation is located in the `docs/` directory, built with
-  [Next.js](https://nextjs.org/docs/llms.txt) + [Fumadocs](https://www.fumadocs.dev/llms.txt)
-* Content lives in `docs/content/docs/` organized by topic (authentication,
-  adapters, concepts, guides, plugins, examples, reference)
-
-## Git Workflow
-
-* PRs should target the `main` branch
-* Commit format: `feat(scope): description` or `fix(scope): description`,
-  following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
-* Use `docs:` for documentation, `chore:` for non-functional changes
-
-## Postmortems
-
-Check `postmortem/` directory for lessons learned from past issues.
-
-## After Everything is done
-
-**Unless the user asked for it or you are working on CI, DO NOT COMMIT**
-
-* Make sure `pnpm format:check`, `pnpm lint` and `pnpm typecheck` pass
+- Bug fixes and new features MUST include tests
+- For bug fixes: if the issue is reproducible in a test, write a failing test first, then implement the fix
+- Update docs (`docs/content/docs/`) when changing public API
+- Ensure `pnpm typecheck` passes before finishing
+- DO NOT COMMIT unless the user explicitly asks
+- Conventional Commits: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`. Use `!` for breaking changes (e.g. `feat(auth)!:`)
+- PRs target `main`

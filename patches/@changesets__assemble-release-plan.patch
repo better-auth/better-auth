@@ -1,0 +1,44 @@
+diff --git a/dist/changesets-assemble-release-plan.cjs.js b/dist/changesets-assemble-release-plan.cjs.js
+index e07ba6e793021b6cfdec898afca517e293386ddb..c3c7c78be51bbc4bf25da83d634f8899afc68bf9 100644
+--- a/dist/changesets-assemble-release-plan.cjs.js
++++ b/dist/changesets-assemble-release-plan.cjs.js
+@@ -216,7 +216,7 @@ function determineDependents({
+             onlyUpdatePeerDependentsWhenOutOfRange: config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.onlyUpdatePeerDependentsWhenOutOfRange
+           })) {
+             type = "major";
+-          } else if ((!releases.has(dependent) || releases.get(dependent).type === "none") && (config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.updateInternalDependents === "always" || !semverSatisfies__default["default"](incrementVersion(nextRelease, preInfo), versionRange))) {
++          } else if ((!releases.has(dependent) || releases.get(dependent).type === "none") && (config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.updateInternalDependents === "always" || !semverSatisfies__default["default"](incrementVersion(nextRelease, preInfo), versionRange, preInfo ? { includePrerelease: true } : undefined))) {
+             switch (depType) {
+               case "dependencies":
+               case "optionalDependencies":
+@@ -321,7 +321,7 @@ function shouldBumpMajor({
+   return depType === "peerDependencies" && nextRelease.type !== "none" && nextRelease.type !== "patch" && (
+   // 1. If onlyUpdatePeerDependentsWhenOutOfRange set to true, bump major if the version is leaving the range.
+   // 2. If onlyUpdatePeerDependentsWhenOutOfRange set to false, bump major regardless whether or not the version is leaving the range.
+-  !onlyUpdatePeerDependentsWhenOutOfRange || !semverSatisfies__default["default"](incrementVersion(nextRelease, preInfo), versionRange)) && (
++  !onlyUpdatePeerDependentsWhenOutOfRange || !semverSatisfies__default["default"](incrementVersion(nextRelease, preInfo), versionRange, preInfo ? { includePrerelease: true } : undefined)) && (
+   // bump major only if the dependent doesn't already has a major release.
+   !releases.has(dependent) || releases.has(dependent) && releases.get(dependent).type !== "major");
+ }
+diff --git a/dist/changesets-assemble-release-plan.esm.js b/dist/changesets-assemble-release-plan.esm.js
+index ea2be567403c4ef94a65f3218ccb683cf5cb4bc1..0994493ff553b1ed856cb54a0db1648f56d550bc 100644
+--- a/dist/changesets-assemble-release-plan.esm.js
++++ b/dist/changesets-assemble-release-plan.esm.js
+@@ -205,7 +205,7 @@ function determineDependents({
+             onlyUpdatePeerDependentsWhenOutOfRange: config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.onlyUpdatePeerDependentsWhenOutOfRange
+           })) {
+             type = "major";
+-          } else if ((!releases.has(dependent) || releases.get(dependent).type === "none") && (config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.updateInternalDependents === "always" || !semverSatisfies(incrementVersion(nextRelease, preInfo), versionRange))) {
++          } else if ((!releases.has(dependent) || releases.get(dependent).type === "none") && (config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.updateInternalDependents === "always" || !semverSatisfies(incrementVersion(nextRelease, preInfo), versionRange, preInfo ? { includePrerelease: true } : undefined))) {
+             switch (depType) {
+               case "dependencies":
+               case "optionalDependencies":
+@@ -310,7 +310,7 @@ function shouldBumpMajor({
+   return depType === "peerDependencies" && nextRelease.type !== "none" && nextRelease.type !== "patch" && (
+   // 1. If onlyUpdatePeerDependentsWhenOutOfRange set to true, bump major if the version is leaving the range.
+   // 2. If onlyUpdatePeerDependentsWhenOutOfRange set to false, bump major regardless whether or not the version is leaving the range.
+-  !onlyUpdatePeerDependentsWhenOutOfRange || !semverSatisfies(incrementVersion(nextRelease, preInfo), versionRange)) && (
++  !onlyUpdatePeerDependentsWhenOutOfRange || !semverSatisfies(incrementVersion(nextRelease, preInfo), versionRange, preInfo ? { includePrerelease: true } : undefined)) && (
+   // bump major only if the dependent doesn't already has a major release.
+   !releases.has(dependent) || releases.has(dependent) && releases.get(dependent).type !== "major");
+ }

@@ -16,6 +16,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { PACKAGE_VERSION } from "../../version";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -58,6 +59,7 @@ async function getAnonUserEmail(
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
 		id: "anonymous",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			signInAnonymous: createAuthEndpoint(
 				"/sign-in/anonymous",
@@ -238,7 +240,6 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							ctx.path?.startsWith("/sign-in") ||
 							ctx.path?.startsWith("/sign-up") ||
 							ctx.path?.startsWith("/callback") ||
-							ctx.path?.startsWith("/oauth2/callback") ||
 							ctx.path?.startsWith("/magic-link/verify") ||
 							ctx.path?.startsWith("/email-otp/verify-email") ||
 							ctx.path?.startsWith("/one-tap/callback") ||

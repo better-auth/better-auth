@@ -2,8 +2,8 @@ import type { DynamicBaseURLConfig } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import {
 	getBaseURL,
-	getHostFromRequest,
-	getProtocolFromRequest,
+	getHostFromSource,
+	getProtocolFromSource,
 	isDynamicBaseURLConfig,
 	matchesHostPattern,
 	resolveBaseURL,
@@ -361,8 +361,8 @@ describe("matchesHostPattern", () => {
 	});
 });
 
-describe("getHostFromRequest", () => {
-	it("should prefer x-forwarded-host over host header", () => {
+describe("getHostFromSource", () => {
+	it("should prefer x-forwarded-host over host header when trustedProxyHeaders is true", () => {
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
 				"x-forwarded-host": "myapp.vercel.app",
@@ -370,7 +370,18 @@ describe("getHostFromRequest", () => {
 			},
 		});
 
-		expect(getHostFromRequest(request)).toBe("myapp.vercel.app");
+		expect(getHostFromSource(request, true)).toBe("myapp.vercel.app");
+	});
+
+	it("should ignore x-forwarded-host when trustedProxyHeaders is falsy", () => {
+		const request = new Request("http://localhost:3000/test", {
+			headers: {
+				"x-forwarded-host": "myapp.vercel.app",
+				host: "localhost:3000",
+			},
+		});
+
+		expect(getHostFromSource(request)).toBe("localhost:3000");
 	});
 
 	it("should fall back to host header if x-forwarded-host is not set", () => {
@@ -380,13 +391,13 @@ describe("getHostFromRequest", () => {
 			},
 		});
 
-		expect(getHostFromRequest(request)).toBe("localhost:3000");
+		expect(getHostFromSource(request, true)).toBe("localhost:3000");
 	});
 
 	it("should fall back to request URL if no headers", () => {
 		const request = new Request("http://example.com:8080/test");
 
-		expect(getHostFromRequest(request)).toBe("example.com:8080");
+		expect(getHostFromSource(request)).toBe("example.com:8080");
 	});
 
 	it("should reject malicious x-forwarded-host and fall back", () => {
@@ -397,38 +408,48 @@ describe("getHostFromRequest", () => {
 			},
 		});
 
-		expect(getHostFromRequest(request)).toBe("localhost:3000");
+		expect(getHostFromSource(request, true)).toBe("localhost:3000");
 	});
 });
 
-describe("getProtocolFromRequest", () => {
+describe("getProtocolFromSource", () => {
 	it("should use explicit protocol config", () => {
 		const request = new Request("http://localhost:3000/test");
 
-		expect(getProtocolFromRequest(request, "https")).toBe("https");
-		expect(getProtocolFromRequest(request, "http")).toBe("http");
+		expect(getProtocolFromSource(request, "https")).toBe("https");
+		expect(getProtocolFromSource(request, "http")).toBe("http");
 	});
 
-	it("should use x-forwarded-proto when set to auto", () => {
+	it("should use x-forwarded-proto when trustedProxyHeaders is true", () => {
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
 				"x-forwarded-proto": "https",
 			},
 		});
 
-		expect(getProtocolFromRequest(request, "auto")).toBe("https");
+		expect(getProtocolFromSource(request, "auto", true)).toBe("https");
+	});
+
+	it("should ignore x-forwarded-proto when trustedProxyHeaders is falsy", () => {
+		const request = new Request("http://localhost:3000/test", {
+			headers: {
+				"x-forwarded-proto": "https",
+			},
+		});
+
+		expect(getProtocolFromSource(request, "auto")).toBe("http");
 	});
 
 	it("should fall back to request URL protocol", () => {
 		const request = new Request("https://example.com/test");
 
-		expect(getProtocolFromRequest(request, "auto")).toBe("https");
+		expect(getProtocolFromSource(request, "auto")).toBe("https");
 	});
 
 	it("should use request URL protocol as fallback", () => {
 		const request = new Request("http://localhost:3000/test");
 
-		expect(getProtocolFromRequest(request, "auto")).toBe("http");
+		expect(getProtocolFromSource(request, "auto")).toBe("http");
 	});
 });
 
@@ -457,9 +478,10 @@ describe("isDynamicBaseURLConfig", () => {
 describe("resolveDynamicBaseURL", () => {
 	const config: DynamicBaseURLConfig = {
 		allowedHosts: ["myapp.com", "*.vercel.app", "preview-*.myapp.com"],
+		protocol: "https",
 	};
 
-	it("should resolve allowed host from x-forwarded-host", () => {
+	it("should resolve allowed host from x-forwarded-host when trustedProxyHeaders is true", () => {
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
 				"x-forwarded-host": "preview-123.vercel.app",
@@ -467,16 +489,15 @@ describe("resolveDynamicBaseURL", () => {
 			},
 		});
 
-		const result = resolveDynamicBaseURL(config, request, "/api/auth");
+		const result = resolveDynamicBaseURL(config, request, "/api/auth", true);
 
 		expect(result).toBe("https://preview-123.vercel.app/api/auth");
 	});
 
-	it("should resolve allowed exact match host", () => {
+	it("should resolve allowed exact match host from host header", () => {
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
-				"x-forwarded-host": "myapp.com",
-				"x-forwarded-proto": "https",
+				host: "myapp.com",
 			},
 		});
 
@@ -488,8 +509,7 @@ describe("resolveDynamicBaseURL", () => {
 	it("should resolve preview wildcard pattern", () => {
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
-				"x-forwarded-host": "preview-abc123.myapp.com",
-				"x-forwarded-proto": "https",
+				host: "preview-abc123.myapp.com",
 			},
 		});
 
@@ -501,8 +521,7 @@ describe("resolveDynamicBaseURL", () => {
 	it("should throw for disallowed host without fallback", () => {
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
-				"x-forwarded-host": "evil.com",
-				"x-forwarded-proto": "https",
+				host: "evil.com",
 			},
 		});
 
@@ -519,8 +538,7 @@ describe("resolveDynamicBaseURL", () => {
 
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
-				"x-forwarded-host": "evil.com",
-				"x-forwarded-proto": "https",
+				host: "evil.com",
 			},
 		});
 
@@ -541,8 +559,7 @@ describe("resolveDynamicBaseURL", () => {
 
 		const request = new Request("http://localhost:3000/test", {
 			headers: {
-				"x-forwarded-host": "myapp.com",
-				"x-forwarded-proto": "http", // This should be overridden
+				host: "myapp.com",
 			},
 		});
 
@@ -554,6 +571,19 @@ describe("resolveDynamicBaseURL", () => {
 
 		expect(result).toBe("https://myapp.com/api/auth");
 	});
+
+	it("should ignore x-forwarded-host when trustedProxyHeaders is falsy", () => {
+		const request = new Request("http://preview.vercel.app/test", {
+			headers: {
+				"x-forwarded-host": "myapp.com",
+				host: "preview.vercel.app",
+			},
+		});
+
+		const result = resolveDynamicBaseURL(config, request, "/api/auth");
+
+		expect(result).toBe("https://preview.vercel.app/api/auth");
+	});
 });
 
 describe("resolveBaseURL", () => {
@@ -563,7 +593,7 @@ describe("resolveBaseURL", () => {
 		expect(result).toBe("https://myapp.com/api/auth");
 	});
 
-	it("should handle dynamic config with request", () => {
+	it("should handle dynamic config with request when trustedProxyHeaders is true", () => {
 		const config: DynamicBaseURLConfig = {
 			allowedHosts: ["myapp.com", "*.vercel.app"],
 		};
@@ -575,7 +605,13 @@ describe("resolveBaseURL", () => {
 			},
 		});
 
-		const result = resolveBaseURL(config, "/api/auth", request);
+		const result = resolveBaseURL(
+			config,
+			"/api/auth",
+			request,
+			undefined,
+			true,
+		);
 
 		expect(result).toBe("https://preview.vercel.app/api/auth");
 	});

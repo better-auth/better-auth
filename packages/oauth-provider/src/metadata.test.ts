@@ -6,6 +6,10 @@ import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
+import {
+	oauthProviderAuthServerMetadata,
+	oauthProviderOpenIdConfigMetadata,
+} from "./metadata";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
 
@@ -90,14 +94,17 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
@@ -147,14 +154,17 @@ describe("oauth metadata", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			introspection_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			revocation_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 			],
 			code_challenge_methods_supported: ["S256"],
 			authorization_response_iss_parameter_supported: true,
@@ -257,6 +267,55 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9105
+ */
+describe("dynamic baseURL metadata wrappers", async () => {
+	const host = "tenant.example.com";
+	const expectedBaseURL = `https://${host}/api/auth`;
+
+	// Fallback is required because `getTestInstance` internally invokes
+	// `signUpEmail` with no Request during setup.
+	const { auth } = await getTestInstance({
+		baseURL: {
+			allowedHosts: [host],
+			protocol: "https",
+			fallback: "https://fallback.example.com",
+		},
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+
+	it("oauthProviderAuthServerMetadata resolves baseURL from the incoming request", async () => {
+		const request = new Request(
+			`https://${host}/.well-known/oauth-authorization-server`,
+		);
+		const response = await oauthProviderAuthServerMetadata(auth)(request);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { issuer: string };
+		expect(body.issuer).toBe(expectedBaseURL);
+	});
+
+	it("oauthProviderOpenIdConfigMetadata resolves baseURL from the incoming request", async () => {
+		const request = new Request(
+			`https://${host}/.well-known/openid-configuration`,
+		);
+		const response = await oauthProviderOpenIdConfigMetadata(auth)(request);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { issuer: string };
+		expect(body.issuer).toBe(expectedBaseURL);
 	});
 });
 

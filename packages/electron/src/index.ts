@@ -18,6 +18,7 @@ import {
 	electronTransferUser,
 } from "./routes";
 import type { ElectronOptions } from "./types";
+import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -41,7 +42,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			ctx.path?.startsWith("/sign-in") ||
 			ctx.path?.startsWith("/sign-up") ||
 			ctx.path?.startsWith("/callback") ||
-			ctx.path?.startsWith("/oauth2/callback") ||
 			ctx.path?.startsWith("/magic-link/verify") ||
 			ctx.path?.startsWith("/email-otp/verify-email") ||
 			ctx.path?.startsWith("/verify-email") ||
@@ -109,6 +109,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 	return {
 		id: "electron",
+		version: PACKAGE_VERSION,
 		async onRequest(request, _ctx) {
 			if (opts.disableOriginOverride || request.headers.get("origin")) {
 				return;

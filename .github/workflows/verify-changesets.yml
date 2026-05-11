@@ -1,0 +1,179 @@
+name: Verify Changesets
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled, edited]
+    branches:
+      - main
+      - next
+      - 'release/**'
+  merge_group:
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Evaluate exemptions
+        id: gate
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          UPSTREAM_REPO: ${{ github.repository }}
+        run: |
+          exempt=false
+          reason=""
+
+          if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+            exempt=true
+            reason="merge_group event (verification ran on the source PR)"
+          elif [ "$HEAD_REPO" = "$UPSTREAM_REPO" ]; then
+            case "$HEAD_REF" in
+              changeset-release/*)
+                exempt=true
+                reason="release PR from changeset-release/* branch"
+                ;;
+            esac
+
+            if [ "$exempt" = "false" ]; then
+              if [ "$HEAD_REF" = "next" ] && [ "$BASE_REF" = "main" ]; then
+                exempt=true
+                reason="next -> main promotion PR"
+              elif [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "next" ]; then
+                exempt=true
+                reason="main -> next sync PR"
+              fi
+            fi
+          fi
+
+          {
+            echo "exempt=$exempt"
+            echo "reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$exempt" = "true" ]; then
+            echo "Verification exempt: $reason"
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.exempt == 'false'
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Block pre.json on main
+        if: steps.gate.outputs.exempt == 'false' && github.base_ref == 'main'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git diff --diff-filter=d --name-only "origin/$BASE_REF"...HEAD | grep -q '^\.changeset/pre\.json$'; then
+            echo "::error::.changeset/pre.json must not be committed to main. Pre-release mode belongs on the 'next' branch only."
+            exit 1
+          fi
+
+      - name: Get changed changeset files
+        id: changed
+        if: steps.gate.outputs.exempt == 'false'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          FILES=$(git diff --diff-filter=dr --name-only "origin/$BASE_REF"...HEAD -- '.changeset/*.md' | grep -v 'README.md' || true)
+          COUNT=$(echo "$FILES" | grep -c '.' || true)
+          {
+            echo "files<<EOF"
+            echo "$FILES"
+            echo "EOF"
+            echo "count=$COUNT"
+            echo "has_changesets=$( [ "$COUNT" -gt 0 ] && echo true || echo false )"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check package changes require changeset
+        if: steps.gate.outputs.exempt == 'false' && steps.changed.outputs.has_changesets == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+          if echo "$LABELS" | grep -q "skip-changeset"; then
+            echo "Changeset not required (skip-changeset label present)"
+            exit 0
+          fi
+
+          PKG_CHANGES=$(git diff --name-only "origin/$BASE_REF"...HEAD -- 'packages/' | grep -c '.' || true)
+          if [ "$PKG_CHANGES" -eq 0 ]; then
+            echo "Changeset not required (no package changes)"
+            exit 0
+          fi
+
+          echo "::error::Missing changeset. Add one with 'pnpm changeset' or add the 'skip-changeset' label."
+          exit 1
+
+      - name: Validate changeset files
+        if: steps.gate.outputs.exempt == 'false' && steps.changed.outputs.has_changesets == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+          CHANGESET_FILES: ${{ steps.changed.outputs.files }}
+        run: |
+          HAS_ERROR=0
+
+          for f in $CHANGESET_FILES; do
+            if [ -L "$f" ]; then
+              echo "::error::Changeset $f is a symlink, which is not allowed."
+              HAS_ERROR=1
+              continue
+            fi
+
+            BASENAME=$(basename "$f")
+            if ! echo "$BASENAME" | grep -qE '^[a-z][a-z0-9-]*\.md$'; then
+              echo "::error::Changeset $f has an invalid filename. Use only lowercase letters, digits, and hyphens."
+              HAS_ERROR=1
+              continue
+            fi
+
+            if ! head -1 "$f" | grep -q '^---$'; then
+              echo "::error::Changeset $f is missing YAML frontmatter opening fence."
+              HAS_ERROR=1
+              continue
+            fi
+            if ! sed -n '2,$ p' "$f" | grep -q '^---$'; then
+              echo "::error::Changeset $f is missing YAML frontmatter closing fence."
+              HAS_ERROR=1
+              continue
+            fi
+            BODY=$(sed -n '2,/^---$/p' "$f" | head -n -1)
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              if ! echo "$line" | grep -qE '^"[^"]+"\s*:\s*(major|minor|patch|none)\s*$'; then
+                echo "::error::Changeset $f has invalid entry: $line (expected '\"package-name\": patch|minor|major|none')"
+                HAS_ERROR=1
+              fi
+            done <<< "$BODY"
+          done
+
+          [ "$HAS_ERROR" -ne 0 ] && exit 1
+
+          if [ "$BASE_REF" = "main" ] || echo "$BASE_REF" | grep -q '^release/'; then
+            for f in $CHANGESET_FILES; do
+              BUMPS=$(sed -n '/^---$/,/^---$/p' "$f" | grep -oE '(major|minor|patch)' | sort -u)
+              if echo "$BUMPS" | grep -q "major"; then
+                echo "::error::Changeset $f contains a 'major' bump. Only 'patch' bumps are allowed on '$BASE_REF'. PRs with minor/major bumps should target 'next' (auto-retarget may not have run yet)."
+                exit 1
+              fi
+              if echo "$BUMPS" | grep -q "minor"; then
+                echo "::error::Changeset $f contains a 'minor' bump. Only 'patch' bumps are allowed on '$BASE_REF'. PRs with minor/major bumps should target 'next' (auto-retarget may not have run yet)."
+                exit 1
+              fi
+            done
+            echo "All changesets are patch-only ($BASE_REF branch policy)"
+          else
+            echo "Target is $BASE_REF, all bump types allowed"
+          fi

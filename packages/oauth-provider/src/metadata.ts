@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { ASSERTION_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
@@ -8,7 +9,11 @@ import type {
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import { getJwtPlugin } from "./utils";
+import {
+	getJwtPlugin,
+	mergeDiscoveryMetadata,
+	toClientDiscoveryArray,
+} from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -50,14 +55,26 @@ export function authServerMetadata(
 				: []),
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
+		],
+		token_endpoint_auth_signing_alg_values_supported: [
+			...ASSERTION_SIGNING_ALGORITHMS,
 		],
 		introspection_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
+		],
+		introspection_endpoint_auth_signing_alg_values_supported: [
+			...ASSERTION_SIGNING_ALGORITHMS,
 		],
 		revocation_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
+		],
+		revocation_endpoint_auth_signing_alg_values_supported: [
+			...ASSERTION_SIGNING_ALGORITHMS,
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
@@ -75,7 +92,13 @@ export function oidcServerMetadata(
 		: getJwtPlugin(ctx.context).options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-		public_client_supported: opts.allowUnauthenticatedClientRegistration,
+		// `public_client_supported` flips `"none"` into the advertised auth
+		// methods. Any configured `clientDiscovery` implicitly produces public
+		// clients (CIMD, wallet attestation, etc.), so the flag must reflect
+		// that in addition to unauthenticated DCR.
+		public_client_supported:
+			opts.allowUnauthenticatedClientRegistration ||
+			toClientDiscoveryArray(opts.clientDiscovery).length > 0,
 		grant_types_supported: opts.grantTypes,
 		jwt_disabled: opts.disableJwtPlugin,
 	});
@@ -108,7 +131,23 @@ export function oidcServerMetadata(
 			"none",
 		],
 	};
-	return metadata;
+	return {
+		...metadata,
+		...mergeDiscoveryMetadata(opts.clientDiscovery),
+	};
+}
+
+// Cache for 15s with a short stale window; metadata rarely changes.
+const METADATA_CACHE_CONTROL =
+	"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400";
+
+function metadataResponse(body: unknown, extraHeaders?: HeadersInit): Response {
+	const headers = new Headers(extraHeaders);
+	if (!headers.has("Cache-Control")) {
+		headers.set("Cache-Control", METADATA_CACHE_CONTROL);
+	}
+	headers.set("Content-Type", "application/json");
+	return new Response(JSON.stringify(body), { status: 200, headers });
 }
 
 /**
@@ -127,24 +166,14 @@ export const oauthProviderAuthServerMetadata = <
 	},
 >(
 	auth: Auth,
-	opts?: {
-		headers?: HeadersInit;
-	},
+	opts?: { headers?: HeadersInit },
 ) => {
-	return async (_request: Request) => {
-		const res = await auth.api.getOAuthServerConfig();
-		return new Response(JSON.stringify(res), {
-			status: 200,
-			headers: {
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...opts?.headers,
-				"Content-Type": "application/json",
-			},
+	return async (request: Request) => {
+		const res = await auth.api.getOAuthServerConfig({
+			request,
+			asResponse: false,
 		});
+		return metadataResponse(res, opts?.headers);
 	};
 };
 
@@ -164,23 +193,13 @@ export const oauthProviderOpenIdConfigMetadata = <
 	},
 >(
 	auth: Auth,
-	opts?: {
-		headers?: HeadersInit;
-	},
+	opts?: { headers?: HeadersInit },
 ) => {
-	return async (_request: Request) => {
-		const res = await auth.api.getOpenIdConfig();
-		return new Response(JSON.stringify(res), {
-			status: 200,
-			headers: {
-				// We should cache here because it is unlikely this will
-				// change frequently and if it does shouldn't be more than
-				// for 15 seconds in a change period
-				"Cache-Control":
-					"public, max-age=15, stale-while-revalidate=15, stale-if-error=86400", // 15 sec
-				...opts?.headers,
-				"Content-Type": "application/json",
-			},
+	return async (request: Request) => {
+		const res = await auth.api.getOpenIdConfig({
+			request,
+			asResponse: false,
 		});
+		return metadataResponse(res, opts?.headers);
 	};
 };

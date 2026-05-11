@@ -22,7 +22,7 @@ interface UpgradeEntry {
 	depType: "prod" | "dev";
 }
 
-export async function upgradeAction(opts: unknown) {
+async function upgradeAction(opts: unknown) {
 	const options = z
 		.object({
 			cwd: z.string(),

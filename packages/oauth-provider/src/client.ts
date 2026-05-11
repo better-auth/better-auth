@@ -1,6 +1,7 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthProvider } from "./oauth";
+import { PACKAGE_VERSION } from "./version";
 
 function parseSignedQuery(search: string) {
 	const params = new URLSearchParams(search);
@@ -17,6 +18,7 @@ function parseSignedQuery(search: string) {
 export const oauthProviderClient = () => {
 	return {
 		id: "oauth-provider-client",
+		version: PACKAGE_VERSION,
 		fetchPlugins: [
 			{
 				id: "oauth-provider-signin",

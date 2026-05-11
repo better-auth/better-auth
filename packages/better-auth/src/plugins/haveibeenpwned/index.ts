@@ -5,6 +5,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -93,6 +94,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 
 	return {
 		id: "have-i-been-pwned",
+		version: PACKAGE_VERSION,
 		init(ctx) {
 			const originalHash = ctx.password.hash;
 			return {

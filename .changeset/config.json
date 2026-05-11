@@ -1,0 +1,43 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.3/schema.json",
+  "changelog": [
+    "@changesets/changelog-github",
+    { "repo": "better-auth/better-auth" }
+  ],
+  "commit": false,
+  "fixed": [
+    [
+      "better-auth",
+      "@better-auth/core",
+      "auth",
+      "@better-auth/api-key",
+      "@better-auth/cimd",
+      "@better-auth/drizzle-adapter",
+      "@better-auth/electron",
+      "@better-auth/expo",
+      "@better-auth/i18n",
+      "@better-auth/kysely-adapter",
+      "@better-auth/memory-adapter",
+      "@better-auth/mongo-adapter",
+      "@better-auth/oauth-provider",
+      "@better-auth/passkey",
+      "@better-auth/prisma-adapter",
+      "@better-auth/redis-storage",
+      "@better-auth/scim",
+      "@better-auth/sso",
+      "@better-auth/stripe",
+      "@better-auth/telemetry",
+      "@better-auth/test-utils"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "privatePackages": false,
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "bumpVersionsWithWorkspaceProtocolOnly": true,
+  "ignore": [],
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
+}
