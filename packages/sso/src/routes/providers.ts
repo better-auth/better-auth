@@ -25,6 +25,10 @@ interface SSOProviderRecord {
 
 const ADMIN_ROLES = ["owner", "admin"];
 
+export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
+	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
+}
+
 async function isOrgAdmin(
 	ctx: {
 		context: {
@@ -46,9 +50,7 @@ async function isOrgAdmin(
 			{ field: "organizationId", value: organizationId },
 		],
 	});
-	if (!member) return false;
-	const roles = member.role.split(",");
-	return roles.some((r) => ADMIN_ROLES.includes(r.trim()));
+	return member ? hasOrgAdminRole(member) : false;
 }
 
 async function batchCheckOrgAdmin(
@@ -72,8 +74,7 @@ async function batchCheckOrgAdmin(
 
 	const adminOrgIds = new Set<string>();
 	for (const member of members) {
-		const roles = member.role.split(",");
-		if (roles.some((r: string) => ADMIN_ROLES.includes(r.trim()))) {
+		if (hasOrgAdminRole(member)) {
 			adminOrgIds.add(member.organizationId);
 		}
 	}
