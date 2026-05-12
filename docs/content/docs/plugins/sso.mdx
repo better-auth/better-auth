@@ -759,6 +759,10 @@ const auth = betterAuth({
 
 When registering an SSO provider, you can link it to a specific organization:
 
+<Callout type="info">
+  When the `organization` plugin is enabled and `organizationId` is supplied, the caller must be an organization `owner` or `admin`. Regular members receive a `403 FORBIDDEN`. SSO deployments without the `organization` plugin keep the prior behavior (membership lookup only).
+</Callout>
+
 ```ts title="register-org-provider.ts"
 import { auth } from "@/lib/auth"
 

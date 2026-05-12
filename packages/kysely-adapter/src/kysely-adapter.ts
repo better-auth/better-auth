@@ -59,6 +59,7 @@ export const kyselyAdapter = (
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter = (
 		db: Kysely<any>,
+		inTransaction = false,
 	): AdapterFactoryCustomizeAdapterCreator => {
 		return ({
 			getFieldName,
@@ -662,6 +663,81 @@ export const kyselyAdapter = (
 						? Number.MAX_SAFE_INTEGER
 						: Number(res);
 				},
+				async claimOne({ model, where }) {
+					const { and, or } = convertWhereClause(model, where);
+					const applyWhere = (query: any) => {
+						if (and) {
+							query = query.where((eb: any) =>
+								eb.and(and.map((expr) => expr(eb))),
+							);
+						}
+						if (or) {
+							query = query.where((eb: any) =>
+								eb.or(or.map((expr) => expr(eb))),
+							);
+						}
+						return query;
+					};
+					const idField = getFieldName({ model, field: "id" });
+					const deleteSelectedRow = async (db: any, row: any) => {
+						const targetId = row[idField] ?? row.id;
+						if (targetId === undefined || targetId === null) {
+							return null;
+						}
+						const query: any = db
+							.deleteFrom(model)
+							.where(`${model}.${idField}`, "=", targetId);
+
+						if (config?.type === "mysql") {
+							const result = await query.executeTakeFirst();
+							return Number(result.numDeletedRows) > 0 ? row : null;
+						}
+
+						if (config?.type === "mssql") {
+							return (
+								(await query.outputAll("deleted").executeTakeFirst()) ?? null
+							);
+						}
+
+						return (await query.returningAll().executeTakeFirst()) ?? null;
+					};
+					const deleteWithReturning = async (query: any) => {
+						if (config?.type === "mssql") {
+							return (
+								(await query.outputAll("deleted").executeTakeFirst()) ?? null
+							);
+						}
+						return (await query.returningAll().executeTakeFirst()) ?? null;
+					};
+
+					if (config?.type === "mysql") {
+						// MySQL does not support `DELETE ... RETURNING`. Hold the row
+						// under `SELECT ... FOR UPDATE`, then delete inside the same
+						// transaction. Concurrent claimants block until the lock
+						// releases, at which point the row is gone and they observe
+						// nothing.
+						const claimFromTransaction = async (trx: any) => {
+							const row = await applyWhere(
+								trx.selectFrom(model).selectAll().forUpdate(),
+							)
+								.limit(1)
+								.executeTakeFirst();
+							if (!row) return null;
+							return deleteSelectedRow(trx, row);
+						};
+						return inTransaction
+							? claimFromTransaction(db)
+							: db.transaction().execute(claimFromTransaction);
+					}
+
+					const targetIds = applyWhere(
+						db.selectFrom(model).select(`${model}.${idField}`),
+					).limit(1);
+					const query = db
+						.deleteFrom(model)
+						.where(`${model}.${idField}`, "in", targetIds);
+					return deleteWithReturning(query);
+				},
 				options: config,
 			};
 		};
@@ -694,8 +770,11 @@ export const kyselyAdapter = (
 				? (cb) =>
 						db.transaction().execute((trx) => {
 							const adapter = createAdapterFactory({
-								config: adapterOptions!.config,
-								adapter: createCustomAdapter(trx),
+								config: {
+									...adapterOptions!.config,
+									transaction: false,
+								},
+								adapter: createCustomAdapter(trx, true),
 							})(lazyOptions!);
 							return cb(adapter);
 						})
