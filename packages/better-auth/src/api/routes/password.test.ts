@@ -456,6 +456,26 @@ describe("forgot password", async () => {
 		});
 		expect(existing.data).toEqual(unknown.data);
 	});
+
+	it("should not reveal failure of email sending in the no-account branch", async () => {
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+				sendResetPasswordNoAccount: async () => {
+					throw new Error("Failed to send email");
+				},
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: "non-existent-user@email.com",
+			redirectTo: "http://localhost:3000",
+		});
+		expect(res.data?.status).toBe(true);
+		expect(res.data?.message).toBe(
+			"If this email exists in our system, check your email for the reset link",
+		);
+	});
 });
 
 describe("revoke sessions on password reset", async () => {
