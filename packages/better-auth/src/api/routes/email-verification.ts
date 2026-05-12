@@ -338,7 +338,7 @@ export const verifyEmail = createAuthEndpoint(
 									url,
 									token: newToken,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}
@@ -437,7 +437,7 @@ export const verifyEmail = createAuthEndpoint(
 									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 									token: newToken,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}

@@ -360,9 +360,9 @@ describe("Email Verification", async () => {
 				sendVerificationEmail: async ({ user, url }, request) => {
 					try {
 						if (request) {
-							// Simulates what the user in #8969 was doing
-							// This crashed before the fix with locked body error
-							await request.text();
+							void request.url;
+							void request.method;
+							void request.headers;
 						}
 					} catch (e) {
 						errorThrown = e as Error;
