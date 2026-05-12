@@ -120,12 +120,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							state: data.state,
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							scopes: c.scopes || [],
-							redirectURI: (() => {
-								const idx = data.redirectURI.lastIndexOf("/callback/");
-								const base =
-									idx !== -1 ? data.redirectURI.slice(0, idx) : ctx.baseURL;
-								return `${base}/oauth2/callback/${c.providerId}`;
-							})(),
+							redirectURI: `${new URL(data.redirectURI).origin}${ctx.options.basePath}/oauth2/callback/${c.providerId}`,
 						});
 					},
 					async validateAuthorizationCode(data: {
