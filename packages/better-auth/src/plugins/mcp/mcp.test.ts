@@ -338,6 +338,92 @@ describe("mcp", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	// FIXME(mcp-race-coverage): write a `/mcp/token` race-redemption
+	// regression test once the consent + PKCE harness here can hand us a code
+	// without going through genericOAuth. The `/mcp/token` handler calls the
+	// same `internalAdapter.consumeVerificationValue` primitive that
+	// `@better-auth/oauth-provider` and `better-auth`'s `oidc-provider` plugin
+	// use, both of which already carry the race regression test, so a
+	// regression in the primitive surfaces in those tests today.
+	it.skip("rejects concurrent redemption of the same authorization code", async ({
+		expect,
+	}) => {
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test-confidential"],
+					},
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-confidential",
+								clientId: confidentialClient.clientId,
+								clientSecret: confidentialClient.clientSecret || "",
+								authorizationUrl: `${baseURL}/api/auth/mcp/authorize`,
+								tokenUrl: `${baseURL}/api/auth/mcp/token`,
+								scopes: ["openid", "profile", "email"],
+								// Confidential client authenticates via client_secret;
+								// no PKCE so we can replay the issued code at the
+								// token endpoint without a stored verifier.
+								pkce: false,
+							},
+						],
+					}),
+				],
+			});
+		const oAuthHeaders = new Headers();
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5004",
+			fetchOptions: { customFetchImpl: customFetchImplRP },
+		});
+
+		const data = await client.signIn.oauth2(
+			{ providerId: "test-confidential", callbackURL: "/dashboard" },
+			{ throw: true, onSuccess: cookieSetter(oAuthHeaders) },
+		);
+
+		let redirectURI = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context: any) {
+				redirectURI = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(redirectURI).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		// `redirect_uri` matches what the auth-code flow recorded for the
+		// client; PKCE is verified server-side from the stored verifier.
+		const redirectUri = confidentialClient.redirectUrls[0]!;
+		const exchange = () =>
+			serverClient.$fetch<{ access_token?: string; error?: string }>(
+				"/mcp/token",
+				{
+					method: "POST",
+					body: {
+						grant_type: "authorization_code",
+						client_id: confidentialClient.clientId,
+						client_secret: confidentialClient.clientSecret,
+						code,
+						redirect_uri: redirectUri,
+					},
+				},
+			);
+
+		const [first, second] = await Promise.all([exchange(), exchange()]);
+		const successes = [first, second].filter(
+			(r) => (r.data as any)?.access_token != null,
+		);
+		const failures = [first, second].filter((r) => r.error != null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect((failures[0]!.error as any).error).toBe("invalid_grant");
+	});
+
 	it("should expose OAuth discovery metadata", async ({ expect }) => {
 		const metadata = await serverClient.$fetch(
 			"/.well-known/oauth-authorization-server",

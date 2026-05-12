@@ -389,6 +389,51 @@ describe("oauth token - authorization_code", async () => {
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
+
+	/**
+	 * Concurrent redemption of the same authorization code must mint
+	 * tokens for exactly one caller. Before the atomic-consume primitive,
+	 * two requests could both pass the find step before either delete
+	 * completed and both proceeded to issue token pairs.
+	 *
+	 * The interleaving relies on the in-memory adapter yielding control at
+	 * each `await` boundary; reverting `consumeVerificationValue` to the old
+	 * find/delete pair makes this test fail with two successes (verified
+	 * empirically), so a synthetic scheduling barrier is unnecessary.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-7w99-5wm4-3g79
+	 */
+	it("rejects concurrent redemption of the same authorization code", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid", "offline_access"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const [first, second] = await Promise.all([
+			validateAuthCode({ code: code!, codeVerifier }),
+			validateAuthCode({ code: code!, codeVerifier }),
+		]);
+
+		const successes = [first, second].filter((r) => r.error === null);
+		const failures = [first, second].filter((r) => r.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(successes[0]?.data?.access_token).toBeDefined();
+		expect(successes[0]?.data?.id_token).toBeDefined();
+		expect(failures[0]?.error?.error).toBe("invalid_grant");
+	});
 });
 
 describe("oauth token - refresh_token", async () => {

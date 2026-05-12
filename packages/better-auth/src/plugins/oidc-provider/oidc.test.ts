@@ -1442,6 +1442,52 @@ describe("oidc token response format", async () => {
 
 		await server.close();
 	});
+
+	/**
+	 * Concurrent redemption of the same authorization code must mint tokens
+	 * for exactly one caller. Reverting `consumeVerificationValue` back to a
+	 * `findVerificationValue` + `deleteVerificationByIdentifier` pair makes
+	 * this test fail with two successes.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-7w99-5wm4-3g79
+	 */
+	it("rejects concurrent redemption of the same authorization code", async () => {
+		const { server, customFetchImpl, application, code } =
+			await setupOAuthFlowAndGetCode(["openid", "profile", "email"]);
+
+		const exchange = () =>
+			customFetchImpl("http://localhost:3000/api/auth/oauth2/token", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					grant_type: "authorization_code",
+					code,
+					redirect_uri: "http://localhost:3000/api/auth/oauth2/callback/test",
+					client_id: application.clientId,
+					client_secret: application.clientSecret,
+				}),
+			});
+
+		const [first, second] = await Promise.all([exchange(), exchange()]);
+		const firstBody = (await first.json()) as {
+			access_token?: string;
+			error?: string;
+		};
+		const secondBody = (await second.json()) as {
+			access_token?: string;
+			error?: string;
+		};
+
+		const successes = [firstBody, secondBody].filter(
+			(b) => b.access_token != null,
+		);
+		const failures = [firstBody, secondBody].filter((b) => b.error != null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(failures[0]?.error).toBe("invalid_grant");
+
+		await server.close();
+	});
 });
 
 describe("oidc-jwt", async () => {

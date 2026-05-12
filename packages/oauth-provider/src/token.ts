@@ -636,26 +636,25 @@ async function checkVerificationValue(
 	client_id: string,
 	redirect_uri?: string,
 ) {
-	const verification = await ctx.context.internalAdapter.findVerificationValue(
-		await storeToken(opts.storeTokens, code, "authorization_code"),
-	);
+	// Atomic single-use redemption per RFC 6749 §4.1.2. The first caller
+	// receives the row and mints tokens; concurrent racers receive `null`
+	// and fall through to the `invalid_grant` error path (RFC 6749 §5.2).
+	const verification =
+		await ctx.context.internalAdapter.consumeVerificationValue(
+			await storeToken(opts.storeTokens, code, "authorization_code"),
+		);
 
 	if (!verification) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "Invalid code",
-			error: "invalid_verification",
+			error: "invalid_grant",
 		});
 	}
-
-	// Delete used code (single-use per RFC 6749 §4.1.2)
-	await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-		await storeToken(opts.storeTokens, code, "authorization_code"),
-	);
 
 	if (!verification.expiresAt || verification.expiresAt < new Date()) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "code expired",
-			error: "invalid_verification",
+			error: "invalid_grant",
 		});
 	}
 
@@ -665,14 +664,14 @@ async function checkVerificationValue(
 	} catch {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "malformed verification value",
-			error: "invalid_verification",
+			error: "invalid_grant",
 		});
 	}
 	const parsed = verificationValueSchema.safeParse(rawValue);
 	if (!parsed.success) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "malformed verification value",
-			error: "invalid_verification",
+			error: "invalid_grant",
 		});
 	}
 	// Zod's passthrough adds index signature; the schema already validates the structure
