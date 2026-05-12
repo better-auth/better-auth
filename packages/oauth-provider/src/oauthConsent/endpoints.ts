@@ -121,6 +121,9 @@ export async function updateConsentEndpoint(
 			error: "not_found",
 		});
 	}
+	if (consent.userId !== session.user.id) {
+		throw new APIError("UNAUTHORIZED");
+	}
 
 	const client = await getClient(ctx, opts, consent.clientId);
 	if (!client) {
@@ -128,9 +131,6 @@ export async function updateConsentEndpoint(
 			error_description: "client not found",
 			error: "not_found",
 		});
-	}
-	if (consent.userId !== session.user.id) {
-		throw new APIError("UNAUTHORIZED");
 	}
 
 	const allowedScopes = client?.scopes ?? opts.scopes ?? [];
