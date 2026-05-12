@@ -249,7 +249,16 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 											[kAPIErrorHeaderSymbol]?: Headers;
 										}
 									)[kAPIErrorHeaderSymbol];
-									const errHeaders = e.headers ? new Headers(e.headers) : null;
+									/**
+									 * `c.redirect()` (and similar APIError throws) reuse
+									 * `ctx.responseHeaders` as `e.headers`, so when both sources
+									 * reference the same Headers, iterating both duplicates every
+									 * `set-cookie`. Skip the `errHeaders` copy in that case.
+									 */
+									const errHeaders =
+										e.headers && e.headers !== ctxHeaders
+											? new Headers(e.headers)
+											: null;
 									let headers: Headers | null = null;
 									if (ctxHeaders || errHeaders) {
 										headers = new Headers();

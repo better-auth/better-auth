@@ -1,7 +1,0 @@
-allowBuilds:
-  '@swc/core': true
-  esbuild: true
-  sharp: true
-
-overrides:
-  next: ^16.2.3

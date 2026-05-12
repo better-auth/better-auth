@@ -38,6 +38,8 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 		"You are not the recipient of the invitation",
 	EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION:
 		"Email verification required before accepting or rejecting invitation",
+	EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION:
+		"Email verification required to view or list invitations for the session email",
 	YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION:
 		"You are not allowed to cancel this invitation",
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:
