@@ -60,7 +60,7 @@ ignoredBuiltDependencies:
 
 linkWorkspacePackages: true
 
-minimumReleaseAge: 0
+minimumReleaseAge: 1440
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
