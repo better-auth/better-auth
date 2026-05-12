@@ -122,7 +122,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 			| "updateMany"
 			| "delete"
 			| "deleteMany"
-			| "claimOne"
+			| "consumeOne"
 			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;

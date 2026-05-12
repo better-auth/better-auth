@@ -1322,7 +1322,7 @@ export const createInternalAdapter = (
 							"verification",
 							hookWhere,
 							async () => {
-								const claimed = await txAdapter.claimOne<Verification>({
+								const claimed = await txAdapter.consumeOne<Verification>({
 									model: "verification",
 									where: hookWhere,
 								});

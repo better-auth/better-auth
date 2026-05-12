@@ -836,7 +836,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 					return count;
 				},
-				async claimOne({ model, where }) {
+				async consumeOne({ model, where }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 					const idField = getFieldName({ model, field: "id" });

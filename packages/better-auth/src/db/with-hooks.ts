@@ -419,7 +419,7 @@ export function getWithHooks(
 	 * Wraps an atomic claim operation in the plugin `delete.before` and
 	 * `delete.after` hook lifecycle. The caller supplies a `claimFn` that
 	 * performs the actual single-row delete-and-return (typically the
-	 * adapter's `claimOne`). The first concurrent caller wins, subsequent
+	 * adapter's `consumeOne`). The first concurrent caller wins, subsequent
 	 * racers resolve to `null` without firing `delete.after` hooks.
 	 *
 	 * `preSnapshot` lets the caller hand in a row it already fetched so
