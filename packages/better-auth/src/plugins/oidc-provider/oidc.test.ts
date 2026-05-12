@@ -22,6 +22,18 @@ import type { OidcClientPlugin } from "./client";
 import { oidcClient } from "./client";
 import type { Client } from "./types";
 
+// Pre-verifies any user the RP creates via OAuth signup so the existing-user
+// path on the RP side does not trip the local-emailVerified gate.
+const autoVerifyUserHook = {
+	user: {
+		create: {
+			before: async (user: Record<string, unknown>) => ({
+				data: { ...user, emailVerified: true },
+			}),
+		},
+	},
+} as const;
+
 // Type for the server client with OIDC plugin
 type ServerClient = AuthClient<{
 	plugins: [OidcClientPlugin];
@@ -200,6 +212,7 @@ describe("oidc", async () => {
 						trustedProviders: ["test"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -286,6 +299,7 @@ describe("oidc", async () => {
 						trustedProviders: ["test"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -375,6 +389,7 @@ describe("oidc", async () => {
 						trustedProviders: ["test"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -1147,6 +1162,7 @@ describe("oidc storage", async () => {
 						trustedProviders: ["test"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -1268,6 +1284,7 @@ describe("oidc token response format", async () => {
 
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await getTestInstance({
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -1527,6 +1544,7 @@ describe("oidc-jwt", async () => {
 						trustedProviders: ["test"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [

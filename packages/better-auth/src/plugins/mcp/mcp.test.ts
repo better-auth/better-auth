@@ -9,6 +9,18 @@ import { jwt } from "../jwt";
 import type { Client } from "../oidc-provider/types";
 import { mcp, withMcpAuth } from ".";
 
+// Pre-verifies any user the RP creates via OAuth signup so the existing-user
+// path on the RP side does not trip the local-emailVerified gate.
+const autoVerifyUserHook = {
+	user: {
+		create: {
+			before: async (user: Record<string, unknown>) => ({
+				data: { ...user, emailVerified: true },
+			}),
+		},
+	},
+} as const;
+
 describe("mcp", async () => {
 	// Start server on ephemeral port first to get available port
 	const tempServer = await listen(
@@ -168,6 +180,7 @@ describe("mcp", async () => {
 						trustedProviders: ["test-public"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -264,6 +277,7 @@ describe("mcp", async () => {
 						trustedProviders: ["test-confidential"],
 					},
 				},
+				databaseHooks: autoVerifyUserHook,
 				plugins: [
 					genericOAuth({
 						config: [
@@ -445,6 +459,7 @@ describe("mcp", async () => {
 					trustedProviders: ["test-userinfo"],
 				},
 			},
+			databaseHooks: autoVerifyUserHook,
 			plugins: [
 				genericOAuth({
 					config: [
