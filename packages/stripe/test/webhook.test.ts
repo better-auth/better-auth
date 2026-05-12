@@ -1055,7 +1055,7 @@ describe("stripe webhook", () => {
 				onSubscriptionDeleted,
 			},
 			stripeWebhookSecret: "test_secret",
-		} as unknown as StripeOptions;
+		} satisfies StripeOptions;
 
 		// Test subscription complete handler
 		const completeEvent = {
@@ -1349,7 +1349,7 @@ describe("stripe webhook", () => {
 				...stripeOptions.subscription,
 				onSubscriptionUpdate,
 			},
-		} as unknown as StripeOptions;
+		} satisfies StripeOptions;
 
 		const { auth: testAuth } = await getTestInstance(
 			{
@@ -1454,7 +1454,7 @@ describe("stripe webhook", () => {
 			...stripeOptions,
 			stripeClient: stripeForTest as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
-		} as unknown as StripeOptions;
+		} satisfies StripeOptions;
 
 		const { auth: testAuth } = await getTestInstance(
 			{
@@ -1537,7 +1537,7 @@ describe("stripe webhook", () => {
 			...stripeOptions,
 			stripeClient: stripeForTest as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
-		} as unknown as StripeOptions;
+		} satisfies StripeOptions;
 
 		const { auth: testAuth } = await getTestInstance(
 			{
@@ -1610,7 +1610,7 @@ describe("stripe webhook", () => {
 			...stripeOptions,
 			stripeClient: stripeForTest as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
-		} as unknown as StripeOptions;
+		} satisfies StripeOptions;
 
 		const { auth: testAuth } = await getTestInstance(
 			{
@@ -2389,7 +2389,7 @@ describe("stripe webhook", () => {
 					...stripeOptions.subscription,
 					onSubscriptionUpdate,
 				},
-			} as unknown as StripeOptions;
+			} satisfies StripeOptions;
 
 			const { auth: webhookAuth } = await getTestInstance(
 				{ database: memory, plugins: [stripe(testOptions)] },
@@ -2481,7 +2481,7 @@ describe("stripe webhook", () => {
 					...stripeOptions.subscription,
 					onSubscriptionCancel,
 				},
-			} as unknown as StripeOptions;
+			} satisfies StripeOptions;
 
 			const { auth: webhookAuth } = await getTestInstance(
 				{

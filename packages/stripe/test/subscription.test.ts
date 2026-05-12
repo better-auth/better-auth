@@ -974,7 +974,7 @@ describe("stripe subscription", () => {
 				...stripeOptions.subscription,
 				authorizeReference: async () => true,
 			},
-		} as unknown as StripeOptions;
+		} satisfies StripeOptions;
 
 		const {
 			auth: testAuth,
@@ -1051,7 +1051,7 @@ describe("stripe subscription", () => {
 				...stripeOptions.subscription,
 				authorizeReference: async () => true,
 			},
-		} as unknown as StripeOptions;
+		} satisfies StripeOptions;
 
 		const {
 			auth: testAuth,
