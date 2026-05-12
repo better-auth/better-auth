@@ -2513,3 +2513,54 @@ describe("oauth2", async () => {
 		});
 	});
 });
+
+describe("generic-oauth with allowedHosts dynamic baseURL", async () => {
+	const dynamicServer = new OAuth2Server();
+	await dynamicServer.start();
+	const dynamicPort = Number(dynamicServer.issuer.url?.split(":")[2]!);
+
+	afterAll(async () => {
+		await dynamicServer.stop();
+	});
+
+	const { auth: dynamicAuth } = await getTestInstance({
+		baseURL: {
+			allowedHosts: ["localhost:3000"],
+		},
+		plugins: [
+			genericOAuth({
+				config: [
+					{
+						providerId: "dynamic-oauth-test",
+						discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+						clientId: "test-client-id",
+						clientSecret: "test-client-secret",
+					},
+				],
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		await dynamicServer.issuer.keys.generate("RS256");
+	});
+
+	it("should produce an absolute redirect_uri in the authorization URL", async () => {
+		const response = await dynamicAuth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					provider: "dynamic-oauth-test",
+					callbackURL: "/dashboard",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		const json = (await response.json()) as { url?: string };
+		expect(json.url).toBeDefined();
+		const authUrl = new URL(json.url!);
+		const redirectUri = authUrl.searchParams.get("redirect_uri");
+		expect(redirectUri).toMatch(/^https?:\/\//);
+	});
+});
