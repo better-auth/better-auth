@@ -474,6 +474,7 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
+		storeStateStrategy: "database", // Store OAuth state payload in verification storage
 		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
@@ -495,6 +496,15 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
+
+### `storeStateStrategy`
+
+Controls where OAuth state data is stored during the authentication flow.
+
+* `"cookie"`: Store the state payload in an encrypted cookie. This keeps OAuth state stateless and avoids a database write during the start of the flow.
+* `"database"`: Store the state payload in the verification storage/table, set a signed state cookie when starting the flow, and validate the stored state against the signed cookie sent by the browser on the OAuth callback request.
+
+Defaults to `"database"` when a database is configured and `"cookie"` for database-less/stateless setups. If you only provide `secondaryStorage`, set this to `"database"` to store OAuth state there instead of in the cookie.
 
 ### `storeAccountCookie`
 

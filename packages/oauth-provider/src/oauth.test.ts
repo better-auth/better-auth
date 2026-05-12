@@ -304,38 +304,47 @@ describe("oauth", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-		return await getTestInstance({
-			// Used to trust callbackUrl in test
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
+		return await getTestInstance(
+			{
+				// Used to trust callbackUrl in test
+				account: {
+					accountLinking: {
+						trustedProviders: [providerId],
+					},
 				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								scopes: ["openid", "profile", "email"],
+								...config,
+								providerId,
+								redirectURI: redirectUri,
+								authorizationUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+								tokenUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/token`,
+								userInfoUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+								clientId: oauthClient.client_id,
+								clientSecret: oauthClient.client_secret,
+								pkce: true,
+							},
+						],
+					}),
+				],
 			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							scopes: ["openid", "profile", "email"],
-							...config,
-							providerId,
-							redirectURI: redirectUri,
-							authorizationUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-							tokenUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/token`,
-							userInfoUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
-							clientId: oauthClient.client_id,
-							clientSecret: oauthClient.client_secret,
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+			{
+				// The OAuth flow creates the RP-side user on first sign-in. Skipping
+				// the default test-user prevents a same-email collision that would
+				// otherwise route through the existing-user-no-link branch and trip
+				// the local-emailVerified gate.
+				disableTestUser: true,
+			},
+		);
 	}
 
 	// Tests if it is oauth2 compatible
@@ -1139,38 +1148,47 @@ describe("oauth - prompt", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-		return await getTestInstance({
-			// Used to trust callbackUrl in test
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
+		return await getTestInstance(
+			{
+				// Used to trust callbackUrl in test
+				account: {
+					accountLinking: {
+						trustedProviders: [providerId],
+					},
 				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								scopes: ["openid", "profile", "email"],
+								...config,
+								providerId,
+								redirectURI: redirectUri,
+								authorizationUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+								tokenUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/token`,
+								userInfoUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+								clientId: oauthClient.client_id,
+								clientSecret: oauthClient.client_secret,
+								pkce: true,
+							},
+						],
+					}),
+				],
 			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							scopes: ["openid", "profile", "email"],
-							...config,
-							providerId,
-							redirectURI: redirectUri,
-							authorizationUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-							tokenUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/token`,
-							userInfoUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
-							clientId: oauthClient.client_id,
-							clientSecret: oauthClient.client_secret,
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+			{
+				// The OAuth flow creates the RP-side user on first sign-in. Skipping
+				// the default test-user prevents a same-email collision that would
+				// otherwise route through the existing-user-no-link branch and trip
+				// the local-emailVerified gate.
+				disableTestUser: true,
+			},
+		);
 	}
 
 	it("login - should always redirect to login", async () => {
@@ -2665,38 +2683,47 @@ describe("oauth - config", () => {
 		if (!oauthClient?.client_id) {
 			throw Error("beforeAll not run properly");
 		}
-		return await getTestInstance({
-			// Used to trust callbackUrl in test
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
+		return await getTestInstance(
+			{
+				// Used to trust callbackUrl in test
+				account: {
+					accountLinking: {
+						trustedProviders: [providerId],
+					},
 				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								scopes: ["openid", "profile", "email"],
+								...config,
+								providerId,
+								redirectURI: redirectUri,
+								authorizationUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+								tokenUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/token`,
+								userInfoUrl: config?.discoveryUrl
+									? undefined
+									: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+								clientId: oauthClient.client_id,
+								clientSecret: oauthClient?.client_secret,
+								pkce: true,
+							},
+						],
+					}),
+				],
 			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							scopes: ["openid", "profile", "email"],
-							...config,
-							providerId,
-							redirectURI: redirectUri,
-							authorizationUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-							tokenUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/token`,
-							userInfoUrl: config?.discoveryUrl
-								? undefined
-								: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
-							clientId: oauthClient.client_id,
-							clientSecret: oauthClient?.client_secret,
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
+			{
+				// The OAuth flow creates the RP-side user on first sign-in. Skipping
+				// the default test-user prevents a same-email collision that would
+				// otherwise route through the existing-user-no-link branch and trip
+				// the local-emailVerified gate.
+				disableTestUser: true,
+			},
+		);
 	}
 
 	/**

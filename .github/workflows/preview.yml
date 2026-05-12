@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: starsling-ubuntu-24.04
+    runs-on: ${{ github.repository == 'better-auth/better-auth' && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
 
