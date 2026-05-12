@@ -95,9 +95,7 @@ export const getMetadata = (
 			? jwtPlugin.options.jwt.issuer
 			: (ctx.context.options.baseURL as string);
 	const baseURL = ctx.context.baseURL;
-	const supportedAlgs = options?.useJWTPlugin
-		? ["RS256", "EdDSA", "none"]
-		: ["HS256", "none"];
+	const supportedAlgs = options?.useJWTPlugin ? ["RS256", "EdDSA"] : ["HS256"];
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
@@ -309,7 +307,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		defaultScope: "openid",
 		accessTokenExpiresIn: DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
 		refreshTokenExpiresIn: DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
-		allowPlainCodeChallengeMethod: true,
+		allowPlainCodeChallengeMethod: false,
 		storeClientSecret: "plain" as const,
 		...options,
 		scopes: [
@@ -983,18 +981,20 @@ export const oidcProvider = (options: OIDCOptions) => {
 							});
 						}
 					}
-					const challenge =
-						value.codeChallengeMethod === "plain"
-							? code_verifier
-							: await createHash("SHA-256", "base64urlnopad").digest(
-									code_verifier,
-								);
+					if (value.codeChallenge) {
+						const challenge =
+							value.codeChallengeMethod === "plain"
+								? code_verifier
+								: await createHash("SHA-256", "base64urlnopad").digest(
+										code_verifier,
+									);
 
-					if (challenge !== value.codeChallenge) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code verification failed",
-							error: "invalid_request",
-						});
+						if (challenge !== value.codeChallenge) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "code verification failed",
+								error: "invalid_request",
+							});
+						}
 					}
 
 					const requestedScopes = value.scope;
