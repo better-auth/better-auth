@@ -89,6 +89,8 @@ function validateSecret(
 	}
 }
 
+let baseURLWarnEmitted = false;
+
 export async function createAuthContext<Options extends BetterAuthOptions>(
 	adapter: DBAdapter,
 	options: Options,
@@ -134,9 +136,15 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 				options.basePath,
 			);
 
-	if (!baseURL && !isDynamicConfig) {
+	if (
+		!baseURL &&
+		!isDynamicConfig &&
+		!baseURLWarnEmitted &&
+		!options.advanced?.trustedProxyHeaders
+	) {
+		baseURLWarnEmitted = true;
 		logger.warn(
-			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+			`[better-auth] Base URL could not be determined at startup. It will be inferred from the first incoming request. For reliable redirects and callbacks, set the BETTER_AUTH_URL environment variable or the baseURL option.`,
 		);
 	}
 

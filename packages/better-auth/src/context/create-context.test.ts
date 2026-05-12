@@ -1921,4 +1921,62 @@ describe("base context creation", () => {
 			expect(ctx.hasPlugin("plugin-4")).toBe(false);
 		});
 	});
+
+	describe("base URL warning deduplication", () => {
+		it("should only emit the missing-base-URL warning once across multiple createAuthContext calls", async () => {
+			vi.resetModules();
+
+			const { createAuthContext: freshCreateAuthContext } = await import(
+				"../context/create-context"
+			);
+			const { getAdapter: freshGetAdapter } = await import(
+				"../db/adapter-kysely"
+			);
+
+			const log = vi.fn();
+			const opts: BetterAuthOptions = {
+				logger: { level: "warn", log } as any,
+			};
+			const adapter = await freshGetAdapter(opts);
+			const getDatabaseType = () => "memory";
+
+			await freshCreateAuthContext(adapter, opts, getDatabaseType);
+			await freshCreateAuthContext(adapter, opts, getDatabaseType);
+
+			const baseURLWarnings = log.mock.calls.filter((args) =>
+				String(args[1]).includes("Base URL could not be determined"),
+			);
+			expect(baseURLWarnings).toHaveLength(1);
+
+			vi.resetModules();
+		});
+
+		it("should not warn about missing base URL when trustedProxyHeaders is enabled", async () => {
+			vi.resetModules();
+
+			const { createAuthContext: freshCreateAuthContext } = await import(
+				"../context/create-context"
+			);
+			const { getAdapter: freshGetAdapter } = await import(
+				"../db/adapter-kysely"
+			);
+
+			const log = vi.fn();
+			const opts: BetterAuthOptions = {
+				logger: { level: "warn", log } as any,
+				advanced: { trustedProxyHeaders: true },
+			};
+			const adapter = await freshGetAdapter(opts);
+			const getDatabaseType = () => "memory";
+
+			await freshCreateAuthContext(adapter, opts, getDatabaseType);
+
+			const baseURLWarnings = log.mock.calls.filter((args) =>
+				String(args[1]).includes("Base URL could not be determined"),
+			);
+			expect(baseURLWarnings).toHaveLength(0);
+
+			vi.resetModules();
+		});
+	});
 });
