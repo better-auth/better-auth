@@ -48,6 +48,12 @@ export interface PrismaConfig {
 
 interface PrismaClient {}
 
+function isPrismaNotFoundError(e: any): boolean {
+	return (
+		e?.code === "P2025" || e?.meta?.cause === "Record to delete does not exist."
+	);
+}
+
 type PrismaClientInternal = {
 	$transaction: (
 		callback: (db: PrismaClient) => Awaitable<any>,
@@ -67,7 +73,10 @@ type PrismaClientInternal = {
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
-		(prisma: PrismaClient): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			prisma: PrismaClient,
+			inTransaction = false,
+		): AdapterFactoryCustomizeAdapterCreator =>
 		({
 			getFieldName,
 			getModelName,
@@ -593,9 +602,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
-						// If the record doesn't exist, we don't want to throw an error
-						if (e?.meta?.cause === "Record to delete does not exist.") return;
-						if (e?.code === "P2025") return; // Prisma 7+
+						if (isPrismaNotFoundError(e)) return;
 						// otherwise if it's an unknown error, we want to just log it for debugging.
 						console.log(e);
 					}
@@ -610,6 +617,74 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where: whereClause,
 					});
 					return result ? (result.count as number) : 0;
+				},
+				async claimOne({ model, where }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+
+					// `prisma.model.delete` requires a WhereUniqueInput. When the
+					// caller keys on the primary key we get a single round trip;
+					// otherwise we fall back to find-then-deleteMany inside a
+					// transaction. deleteMany rechecks the original predicate with the
+					// selected id so we do not delete a row that stopped matching.
+					// FIXME(claim-one-prisma-locking): Prisma has no portable
+					// row-locking API for findFirst. Add provider-specific locking
+					// when a breaking adapter contract can expose it cleanly.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (hasIdField) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "delete",
+						});
+						try {
+							const row = await db[model]!.delete({ where: whereClause });
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					}
+
+					const findWhere = convertWhereClause({
+						model,
+						where,
+						action: "findOne",
+					});
+					const claimFromTransaction = async (tx: PrismaClient) => {
+						const target = await (tx as any)[model].findFirst({
+							where: findWhere,
+						});
+						if (!target) return null;
+						try {
+							const result = await (tx as any)[model].deleteMany({
+								where: convertWhereClause({
+									model,
+									where: [
+										...(where ?? []),
+										{
+											field: "id",
+											value: (target as any).id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "deleteMany",
+								}),
+							});
+							return result?.count > 0 ? (target as any) : null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					};
+					return inTransaction || typeof db.$transaction !== "function"
+						? claimFromTransaction(db)
+						: db.$transaction(claimFromTransaction);
 				},
 				options: config,
 			};
@@ -632,8 +707,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					? (cb) =>
 							(prisma as PrismaClientInternal).$transaction((tx) => {
 								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
-									adapter: createCustomAdapter(tx),
+									config: {
+										...adapterOptions!.config,
+										transaction: false,
+									},
+									adapter: createCustomAdapter(tx, true),
 								})(lazyOptions!);
 								return cb(adapter);
 							})

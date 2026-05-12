@@ -270,4 +270,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/ejirocodes.png",
 		},
 	},
+	{
+		name: "better-near-auth",
+		url: "https://github.com/elliotBraem/better-near-auth",
+		description:
+			"Sign in with NEAR plugin with built-in gasless relay for on-chain delegate actions.",
+		author: {
+			name: "efiz.near",
+			github: "elliotBraem",
+			avatar: "https://github.com/elliotBraem.png",
+		},
+	},
 ];

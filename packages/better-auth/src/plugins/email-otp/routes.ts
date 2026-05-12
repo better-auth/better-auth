@@ -750,7 +750,7 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
-			const email = ctx.body.email;
+			const email = ctx.body.email.toLowerCase();
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -842,7 +842,7 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 		},
 		async (ctx) => {
 			warnDeprecation();
-			const email = ctx.body.email;
+			const email = ctx.body.email.toLowerCase();
 			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -929,7 +929,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
-			const email = ctx.body.email;
+			const email = ctx.body.email.toLowerCase();
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(
