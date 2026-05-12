@@ -138,6 +138,69 @@ export const username = (options?: UsernameOptions | undefined) => {
 			: displayUsername;
 	};
 
+	const minUsernameLength = options?.minUsernameLength || 3;
+	const maxUsernameLength = options?.maxUsernameLength || 30;
+	const validator = options?.usernameValidator || defaultUsernameValidator;
+
+	const pathsWithHttpHookValidation = ["/sign-up/email", "/update-user"];
+
+	async function validateUsername(
+		username: string,
+		displayUsername: string | null,
+		adapter: { findOne: <T>(opts: any) => Promise<T | null> },
+		currentUserId?: string | null,
+	) {
+		const usernameToValidate =
+			options?.validationOrder?.username === "post-normalization"
+				? normalizer(username)
+				: username;
+
+		if (usernameToValidate.length < minUsernameLength) {
+			throw APIError.from("BAD_REQUEST", ERROR_CODES.USERNAME_TOO_SHORT);
+		}
+
+		if (usernameToValidate.length > maxUsernameLength) {
+			throw APIError.from("BAD_REQUEST", ERROR_CODES.USERNAME_TOO_LONG);
+		}
+
+		const valid = await validator(usernameToValidate);
+		if (!valid) {
+			throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_USERNAME);
+		}
+
+		const normalizedUsername = normalizer(username);
+		const existingUser = await adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "username", value: normalizedUsername }],
+		});
+
+		if (existingUser) {
+			if (!currentUserId || existingUser.id !== currentUserId) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+				);
+			}
+		}
+
+		if (displayUsername && options?.displayUsernameValidator) {
+			const displayUsernameToValidate =
+				options?.validationOrder?.displayUsername === "post-normalization"
+					? displayUsernameNormalizer(displayUsername)
+					: displayUsername;
+
+			const validDisplayUsername = await options.displayUsernameValidator(
+				displayUsernameToValidate,
+			);
+			if (!validDisplayUsername) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ERROR_CODES.INVALID_DISPLAY_USERNAME,
+				);
+			}
+		}
+	}
+
 	return {
 		id: "username",
 		version: PACKAGE_VERSION,
@@ -155,10 +218,34 @@ export const username = (options?: UsernameOptions | undefined) => {
 											? (user.displayUsername as string)
 											: null;
 
+									const currentPath = context?.path;
+									const skipValidation =
+										currentPath &&
+										pathsWithHttpHookValidation.includes(currentPath);
+
+									if (username) {
+										if (!skipValidation) {
+											await validateUsername(
+												username,
+												displayUsername,
+												ctx.adapter,
+											);
+										}
+
+										return {
+											data: {
+												...user,
+												username: normalizer(username),
+												displayUsername: displayUsername
+													? displayUsernameNormalizer(displayUsername)
+													: username,
+											},
+										};
+									}
+
 									return {
 										data: {
 											...user,
-											...(username ? { username: normalizer(username) } : {}),
 											...(displayUsername
 												? {
 														displayUsername:
@@ -178,10 +265,41 @@ export const username = (options?: UsernameOptions | undefined) => {
 											? (user.displayUsername as string)
 											: null;
 
+									const currentPath = context?.path;
+									const skipValidation =
+										currentPath &&
+										pathsWithHttpHookValidation.includes(currentPath);
+
+									if (username) {
+										if (!skipValidation) {
+											const currentUserId =
+												context?.context?.session?.user?.id ||
+												("id" in user ? (user.id as string) : null);
+											await validateUsername(
+												username,
+												displayUsername,
+												ctx.adapter,
+												currentUserId,
+											);
+										}
+
+										return {
+											data: {
+												...user,
+												username: normalizer(username),
+												...(displayUsername
+													? {
+															displayUsername:
+																displayUsernameNormalizer(displayUsername),
+														}
+													: {}),
+											},
+										};
+									}
+
 									return {
 										data: {
 											...user,
-											...(username ? { username: normalizer(username) } : {}),
 											...(displayUsername
 												? {
 														displayUsername:
