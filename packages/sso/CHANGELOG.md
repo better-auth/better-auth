@@ -1,5 +1,48 @@
 # @better-auth/sso
 
+## 1.6.11
+
+### Patch Changes
+
+- [#9220](https://github.com/better-auth/better-auth/pull/9220) [`86765f1`](https://github.com/better-auth/better-auth/commit/86765f1597378f5c3deed1b80ca91faac0a6bf00) Thanks [@stewartjarod](https://github.com/stewartjarod)! - fix(sso): require org admin role to register SSO providers
+
+  `POST /sso/register` previously allowed any organization member to register an
+  SSO provider for the organization when `organizationId` was supplied, only
+  checking membership and not role. This brings it in line with the other
+  provider endpoints (`get`/`update`/`delete`), which go through
+  `checkProviderAccess` → `isOrgAdmin` and restrict access to `owner` or `admin`
+  roles.
+
+  Closes [#9133](https://github.com/better-auth/better-auth/issues/9133).
+
+- [#9574](https://github.com/better-auth/better-auth/pull/9574) [`37f60cb`](https://github.com/better-auth/better-auth/commit/37f60cb176cb53147da7dfd5ec15afa5b486e81e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(sso): validate user-supplied OIDC endpoint URLs at provider registration and update
+
+  When `skipDiscovery: true` was passed to `POST /sso/register`, or any
+  `oidcConfig` URL was passed to `POST /sso/update-provider`, the supplied
+  `authorizationEndpoint`, `tokenEndpoint`, `userInfoEndpoint`, `jwksEndpoint`,
+  and `discoveryEndpoint` values were persisted on the provider row without
+  origin validation, then fetched server-side at OIDC callback time. An
+  authenticated user could register or update an SSO provider with internal
+  URLs (RFC 1918, link-local, cloud-metadata FQDNs like `169.254.169.254`,
+  loopback) and use the callback handler to coerce the server into making
+  requests to those hosts.
+
+  Both endpoints now run user-supplied OIDC URLs through a layered gate:
+  1. URL parsing + `http(s)` scheme requirement
+  2. `isPublicRoutableHost` from `@better-auth/core/utils/host` (rejects
+     loopback, RFC 1918, link-local, ULA, cloud-metadata FQDNs, multicast,
+     broadcast, and reserved ranges per RFC 6890)
+  3. `trustedOrigins` allowlist as the documented escape hatch for customers
+     running internal IdPs on private networks
+
+  A request that fails the gate is rejected with `BAD_REQUEST` and the new
+  `discovery_private_host` error code (or `discovery_invalid_url` for
+  malformed URLs / non-`http(s)` schemes).
+
+- Updated dependencies [[`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a), [`a26333b`](https://github.com/better-auth/better-auth/commit/a26333b5fb1a044e76c18385441d3ecc2240ab70), [`99a254a`](https://github.com/better-auth/better-auth/commit/99a254a79b59d5a3f5ca2123260118cddb5beed7), [`ee93485`](https://github.com/better-auth/better-auth/commit/ee934854999390ee5ca73592fe205a470a810b83), [`5f09d56`](https://github.com/better-auth/better-auth/commit/5f09d566a64ac9a0499d9664ce700edbf0630cea), [`b4bc65a`](https://github.com/better-auth/better-auth/commit/b4bc65a007784b2eb0efb459e5fa6fd8055d3ec9), [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563), [`a1c9f3c`](https://github.com/better-auth/better-auth/commit/a1c9f3c08e7398e900e099839aa6dcc8d1d0b816), [`23094a6`](https://github.com/better-auth/better-auth/commit/23094a628f007f801be6d26e5b15dc5fc6fc4eb8), [`142b86c`](https://github.com/better-auth/better-auth/commit/142b86c43d2e6b258236a298a31237e97f87d64d), [`1f2ff42`](https://github.com/better-auth/better-auth/commit/1f2ff4215c4affff0b140b0c0a712c0dde35659c), [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10), [`699b09a`](https://github.com/better-auth/better-auth/commit/699b09a2064dcb7d37046b5a90626c0b6f57af90), [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22)]:
+  - @better-auth/core@1.6.11
+  - better-auth@1.6.11
+
 ## 1.6.10
 
 ### Patch Changes

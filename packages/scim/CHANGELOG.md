@@ -1,5 +1,21 @@
 # @better-auth/scim
 
+## 1.6.11
+
+### Patch Changes
+
+- [#9162](https://github.com/better-auth/better-auth/pull/9162) [`a26333b`](https://github.com/better-auth/better-auth/commit/a26333b5fb1a044e76c18385441d3ecc2240ab70) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - fix: cleanup sessions when admin, anonymous, or SCIM deletes a user
+
+- [#9579](https://github.com/better-auth/better-auth/pull/9579) [`2f5d91c`](https://github.com/better-auth/better-auth/commit/2f5d91c5bb7d0e22f07533b40c9905ef97e3a9e9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `POST /scim/generate-token` accepted a `providerId` that collided with a built-in `account.providerId` value (`credential`, `email-otp`, `magic-link`, `phone-number`, `anonymous`, `siwe`, or any configured social provider key), so a SCIM caller could mint a token that authenticated against accounts it never provisioned.
+
+  `generateSCIMToken` now rejects `providerId` values that collide with the built-in account provider list, returning `BAD_REQUEST` at issuance. The configured-social-provider check reads from `options.socialProviders` rather than the resolved provider list so that providers disabled with `enabled: false` are still rejected: their account rows can persist from when the provider was enabled.
+
+  `providerOwnership.enabled` stays default `false` on this patch release so existing SQL deployments do not need a schema migration mid-upgrade. The follow-up on `next` flips the default to `true` and ships the corresponding `scimProvider.userId` schema column so non-organization SCIM tokens are owner-locked by default. Operators who need owner-locking immediately can opt in today with `scim({ providerOwnership: { enabled: true } })` and add the `userId` column manually.
+
+- Updated dependencies [[`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a), [`a26333b`](https://github.com/better-auth/better-auth/commit/a26333b5fb1a044e76c18385441d3ecc2240ab70), [`99a254a`](https://github.com/better-auth/better-auth/commit/99a254a79b59d5a3f5ca2123260118cddb5beed7), [`ee93485`](https://github.com/better-auth/better-auth/commit/ee934854999390ee5ca73592fe205a470a810b83), [`5f09d56`](https://github.com/better-auth/better-auth/commit/5f09d566a64ac9a0499d9664ce700edbf0630cea), [`b4bc65a`](https://github.com/better-auth/better-auth/commit/b4bc65a007784b2eb0efb459e5fa6fd8055d3ec9), [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563), [`a1c9f3c`](https://github.com/better-auth/better-auth/commit/a1c9f3c08e7398e900e099839aa6dcc8d1d0b816), [`23094a6`](https://github.com/better-auth/better-auth/commit/23094a628f007f801be6d26e5b15dc5fc6fc4eb8), [`142b86c`](https://github.com/better-auth/better-auth/commit/142b86c43d2e6b258236a298a31237e97f87d64d), [`1f2ff42`](https://github.com/better-auth/better-auth/commit/1f2ff4215c4affff0b140b0c0a712c0dde35659c), [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10), [`699b09a`](https://github.com/better-auth/better-auth/commit/699b09a2064dcb7d37046b5a90626c0b6f57af90), [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22)]:
+  - @better-auth/core@1.6.11
+  - better-auth@1.6.11
+
 ## 1.6.10
 
 ### Patch Changes
